@@ -194,11 +194,11 @@ item is documented.
    as the MSRV floor. A bump is `nix flake update nixpkgs`, confirm the
    versions, adjust the floor if needed, then `./dev.sh check`. *(ADR 0006)*
 5. **Building outside the dev shell — resolved.** It is forbidden, not merely
-   unsupported: the dev shell exports `NEPTUNE_DEV_SHELL=1` and `dev.sh`
-   refuses to run `build`, `check` or `clean` without it, failing fast with
-   exit 7. Commands that manage an already-built binary still work outside the
-   shell. A direct `cargo` invocation outside the shell is forbidden by policy.
-   *(ADR 0007)*
+   unsupported: the dev shell exports `NEPTUNE_DEV_SHELL=1`, `dev.sh` refuses
+   to run `build`, `check` or `clean` without it (exit 7, the fast path), and
+   `crates/neptune/build.rs` refuses to compile without it, so a direct
+   `cargo build`/`check`/`test`/`clippy` is caught too. Commands that manage an
+   already-built binary still work outside the shell. *(ADR 0007)*
 6. **`Physical`/`Buffer` are both `i32` and both integer.** They are distinct
    only at the type level. Whether the scene graph ever needs them to carry
    different numeric types (for example `u32` for buffer extents) is not yet

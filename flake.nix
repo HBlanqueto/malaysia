@@ -34,6 +34,11 @@
             lockFile = ./Cargo.lock;
           };
 
+          # The per-crate build script refuses to compile without this marker
+          # (ADR 0007). The package build is a sanctioned, hermetic build path,
+          # so it sets the marker deliberately; it does not use mold.
+          NEPTUNE_DEV_SHELL = "1";
+
           nativeBuildInputs = with pkgs; [ pkg-config ];
 
           buildInputs = nativeDeps pkgs;
