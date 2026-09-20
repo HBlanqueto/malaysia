@@ -62,10 +62,12 @@ require_devshell() {
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 # Runtime files live under XDG_RUNTIME_DIR, or a UID-scoped directory in /tmp
-# when it is not set.
+# when it is not set. The directory is "neptune-dev", not "neptune": a running
+# compositor may create $XDG_RUNTIME_DIR/neptune as its Wayland socket, and a
+# socket and a directory cannot share a path.
 runtime_dir() {
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
-        printf '%s\n' "$XDG_RUNTIME_DIR/neptune"
+        printf '%s\n' "$XDG_RUNTIME_DIR/neptune-dev"
     else
         printf '%s\n' "/tmp/neptune-$(id -u)"
     fi

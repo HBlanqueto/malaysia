@@ -78,8 +78,10 @@ A POSIX shell wrapper around cargo and a background instance of the binary.
 Run `./dev.sh --help` for the list; the commands are `build [--release]`,
 `run [--release]`, `stop`, `restart`, `status`, `log [-f]`, `clean` and
 `check`. It uses only coreutils and cargo, is clean under `shellcheck`, and
-keeps runtime files under `$XDG_RUNTIME_DIR/neptune/` (falling back to
-`/tmp/neptune-$(id -u)`). Exit codes are grouped so callers can branch:
+keeps runtime files under `$XDG_RUNTIME_DIR/neptune-dev/` (falling back to
+`/tmp/neptune-$(id -u)`); the directory avoids the name `neptune`, which a
+running compositor may use for its Wayland socket. Exit codes are grouped so
+callers can branch:
 
 | Code | Meaning |
 | ---- | ------- |

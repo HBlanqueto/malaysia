@@ -63,8 +63,11 @@ Several development decisions interact:
 - `status` follows the LSB init-script exit codes (0 running, 1 dead with a
   PID file, 3 not running) so it can be used as a boolean, while `restart` is
   `stop` followed by `run` and never consults `status`.
-- Runtime files live under `$XDG_RUNTIME_DIR/neptune/`, falling back to
-  `/tmp/neptune-$(id -u)` when `XDG_RUNTIME_DIR` is unset or missing.
+- Runtime files live under `$XDG_RUNTIME_DIR/neptune-dev/`, falling back to
+  `/tmp/neptune-$(id -u)` when `XDG_RUNTIME_DIR` is unset or missing. The
+  directory is not named `neptune` because a running compositor may create
+  `$XDG_RUNTIME_DIR/neptune` as its Wayland socket, and a socket and a
+  directory cannot share a path.
 
 ## Consequences
 
