@@ -29,6 +29,15 @@ tracing-subscriber = "0.3"     # Installs the global subscriber that emits `trac
 # Process lifetime.
 signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and this block forbids `unsafe`.
 
+# Compositor framework. Default features are off so only the nested winit
+# backend and the GLES2 renderer are compiled (ADR 0009); `wayland_frontend`
+# is needed for the protocol handlers that follow.
+smithay = { version = "0.7", default-features = false, features = [
+    "backend_winit",
+    "renderer_gl",
+    "wayland_frontend",
+] }
+
 # Fast-compiling development build. Dependencies get light optimisation while
 # Neptune's own crates stay unoptimised, so incremental rebuilds of our code
 # are cheap but the third-party code we lean on is not painfully slow.

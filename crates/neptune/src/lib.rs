@@ -11,7 +11,10 @@
 //! must not depend on Smithay; conversion happens at that one boundary. See
 //! ADR 0001.
 //!
-//! Block 0 therefore exposes no public modules yet.
+//! Block 1 adds the nested session: a calloop event loop around a winit
+//! window with a GLES2 renderer.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod session;

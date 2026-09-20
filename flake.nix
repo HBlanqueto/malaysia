@@ -63,6 +63,7 @@
             pkg-config
             mold
             shellcheck
+            cargo-watch
           ];
 
           buildInputs = deps;
