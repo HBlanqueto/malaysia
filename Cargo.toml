@@ -1,0 +1,55 @@
+# Neptune is a Wayland compositor built on Smithay.
+#
+# This file is the workspace root: it holds no crate of its own, only the
+# shared settings and build profiles for the crates under `crates/`.
+[workspace]
+resolver = "3"
+members = [
+    "crates/neptune",
+    "crates/neptune-design",
+    "crates/neptune-scene",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/HBlanqueto/neptune"
+
+[workspace.dependencies]
+# Error handling.
+anyhow = "1"           # Ergonomic error context in `main` only.
+thiserror = "2"        # Typed error enums in library-shaped modules.
+
+# Logging and diagnostics.
+tracing = "0.1"                # Structured logging and spans, needed for later measurement.
+tracing-subscriber = "0.3"     # Installs the global subscriber that emits `tracing` events.
+
+# Process lifetime.
+signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and this block forbids `unsafe`.
+
+# Fast-compiling development build. Dependencies get light optimisation while
+# Neptune's own crates stay unoptimised, so incremental rebuilds of our code
+# are cheap but the third-party code we lean on is not painfully slow.
+[profile.dev]
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 1
+
+# Same trade-off as `dev`, with debug info disabled for quicker links. Build
+# with `cargo build --profile dev-fast`. Use when iterating on compile errors
+# and the extra debug info is not needed.
+[profile.dev-fast]
+inherits = "dev"
+debug = false
+incremental = true
+
+# Shipping build: thin LTO and a single codegen unit for cross-crate
+# optimisation, abort on panic (no unwinding machinery), symbols stripped.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

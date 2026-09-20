@@ -1,0 +1,8 @@
+# Build artifacts.
+/target
+
+# dev.sh writes its PID and log files under $XDG_RUNTIME_DIR/neptune or
+# /tmp/neptune-$(id -u), neither of which is inside the repository. These
+# patterns only guard against stray copies if that ever changes.
+/neptune-*.pid
+/neptune-*.log

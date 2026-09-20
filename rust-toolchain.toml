@@ -1,0 +1,7 @@
+# Pinned, exact toolchain. `channel` must be a specific version rather than a
+# channel name so that every checkout builds with identical compiler output.
+# Honoured by rustup; ignored (harmlessly) when building with a system Rust.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
