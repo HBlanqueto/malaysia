@@ -15,6 +15,7 @@ EXIT_ALREADY_RUNNING=3
 EXIT_MISSING_TOOL=4
 EXIT_RUN_FAILED=5
 EXIT_NO_LOG=6
+EXIT_NOT_DEVSHELL=7
 # status follows the LSB init-script conventions: 0 running, 1 dead with a
 # leftover pid file, 3 not running.
 EXIT_STATUS_DEAD=1
@@ -48,6 +49,14 @@ fail() {
 require() {
     command -v "$1" >/dev/null 2>&1 ||
         fail "$EXIT_MISSING_TOOL" "missing required tool: $1"
+}
+
+# require_devshell - compiling outside `nix develop` would omit the mold
+# linker flag and produce a differently linked binary, so it is forbidden. The
+# dev shell sets the marker (ADR 0007).
+require_devshell() {
+    [ "${NEPTUNE_DEV_SHELL:-}" = "1" ] ||
+        fail "$EXIT_NOT_DEVSHELL" "not inside the dev shell; run 'nix develop' first (see ADR 0007)"
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -96,6 +105,7 @@ is_running() {
 }
 
 build() {
+    require_devshell
     require cargo
     _release=
     if [ "${1:-}" = "--release" ]; then
@@ -205,6 +215,7 @@ show_log() {
 }
 
 clean() {
+    require_devshell
     require cargo
     stop
     cargo clean
@@ -212,6 +223,7 @@ clean() {
 }
 
 check() {
+    require_devshell
     require cargo
     require cargo-fmt
     require cargo-clippy

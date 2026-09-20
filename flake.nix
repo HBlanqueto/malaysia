@@ -68,6 +68,11 @@
           # the cargo cache warm. The `cc` driver understands -fuse-ld.
           RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
 
+          # Explicit marker so dev.sh can refuse to build outside this shell,
+          # where the linker flag above would be missing and the binary would
+          # be linked differently (ADR 0007).
+          NEPTUNE_DEV_SHELL = "1";
+
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.
           shellHook = ''

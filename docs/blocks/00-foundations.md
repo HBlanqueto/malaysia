@@ -90,6 +90,7 @@ keeps runtime files under `$XDG_RUNTIME_DIR/neptune/` (falling back to
 | 4 | a required tool is missing |
 | 5 | the binary failed to start |
 | 6 | `log`: no log file |
+| 7 | `build`/`check`/`clean`: not inside the dev shell |
 
 `status` follows the LSB init-script convention (running = 0, dead with PID
 file = 1, not running = 3), so it can be used as a boolean in scripts.
@@ -187,22 +188,26 @@ item is documented.
    between logical and the integer spaces only. A direct physical-to-buffer
    path, and buffer transforms, will be needed once clients' buffers are mapped
    onto outputs; the current API does not express a surface transform at all.
-4. **Toolchain outside rustup.** `rust-toolchain.toml` is honoured by rustup
-   but inert when building with the dev shell's compiler. If the shell's
-   rustc ever diverges from the pinned version, builds become
-   environment-dependent; the pin is a useful signal, not an enforcement.
-5. **Linker outside the dev shell.** mold is configured only for `nix
-   develop`. A plain `cargo build` uses the system linker and a different cache;
-   the native package build (`nix build`) also does not use mold. This is
-   accepted for a single-machine project but is worth revisiting if CI is
-   added. *(ADR 0005)*
+4. **Toolchain source of truth — resolved.** The flake is the one source:
+   `rust-toolchain.toml` is removed and the dev shell's nixpkgs `cargo`/`rustc`
+   (pinned by `flake.lock`) are what build. `Cargo.toml` keeps `rust-version`
+   as the MSRV floor. A bump is `nix flake update nixpkgs`, confirm the
+   versions, adjust the floor if needed, then `./dev.sh check`. *(ADR 0006)*
+5. **Building outside the dev shell — resolved.** It is forbidden, not merely
+   unsupported: the dev shell exports `NEPTUNE_DEV_SHELL=1` and `dev.sh`
+   refuses to run `build`, `check` or `clean` without it, failing fast with
+   exit 7. Commands that manage an already-built binary still work outside the
+   shell. A direct `cargo` invocation outside the shell is forbidden by policy.
+   *(ADR 0007)*
 6. **`Physical`/`Buffer` are both `i32` and both integer.** They are distinct
    only at the type level. Whether the scene graph ever needs them to carry
    different numeric types (for example `u32` for buffer extents) is not yet
    known.
-7. **Design tokens and `design/v1.nix`.** The crate and the Nix file are two
-   declarations of the same tokens. Keeping them in sync is a manual,
-   unresolved problem until a token is actually consumed.
+7. **Design tokens — resolved (contract defined).** `design/v1.nix` is the one
+   authored source; a not-yet-written generator will emit a committed module
+   inside `neptune-design`, the only crate allowed to read or re-export tokens,
+   and hand-written design constants are forbidden everywhere else. No tokens
+   are populated and the generator is not written yet. *(ADR 0008)*
 8. **Packaging and the session entry.** `share/wayland-sessions/neptune.desktop`
    is present and the flake's `packages.default` still points at `./`, so the
    package would install a session entry whose `Exec` launches the Block 0
@@ -228,3 +233,9 @@ item is documented.
 - `docs/decisions/0004-surface-rect-rounding.md` — rounding, left open.
 - `docs/decisions/0005-development-environment.md` — one machine, one shell,
   one linker.
+- `docs/decisions/0006-toolchain-source-of-truth.md` — the flake owns the
+  toolchain version.
+- `docs/decisions/0007-building-outside-the-devshell.md` — outside builds are
+  forbidden and fail fast.
+- `docs/decisions/0008-design-token-contract.md` — tokens flow from Nix into
+  Rust, one way.
