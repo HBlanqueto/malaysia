@@ -156,6 +156,10 @@ start() {
     rm -f "$PID_FILE"
     ensure_runtime_dir
     require setsid
+    # Each run writes a fresh log. Otherwise a failed start prints the tail of a
+    # file that still holds earlier successful runs, and the actual failure is
+    # buried among stale lines. `log` shows the current run for the same reason.
+    : >"$LOG_FILE"
     # setsid puts the compositor in its own session, so a watcher that kills its
     # own children (cargo-watch does) or a closing terminal does not take the
     # running instance down with it. It execs without forking here, so $! is the
