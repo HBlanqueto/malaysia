@@ -8,6 +8,18 @@ members = [
     "crates/neptune",
     "crates/neptune-design",
     "crates/neptune-scene",
+    "tools/sctk-probe",
+]
+
+# The probe clients under `tools/` are development tools, not part of the
+# compositor: a plain `cargo build`/`cargo test` at the root does not build
+# them. Name the package (`-p sctk-probe`) to build one on purpose. `cargo
+# test --workspace` still covers them, which keeps them clippy- and
+# rustfmt-clean alongside the crates.
+default-members = [
+    "crates/neptune",
+    "crates/neptune-design",
+    "crates/neptune-scene",
 ]
 
 [workspace.package]
@@ -31,6 +43,11 @@ signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and
 
 # Neptune's own crates.
 neptune-design = { path = "crates/neptune-design" }   # The one place every visual value lives.
+
+# Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
+# Neptune while developing. Only the probe package uses this, and the package
+# is excluded from the default build; winit already pulls it into the graph.
+smithay-client-toolkit = "0.19.2"
 
 # Compositor framework. Default features are off so only the nested winit
 # backend and the GLES2 renderer are compiled (ADR 0009); `wayland_frontend`

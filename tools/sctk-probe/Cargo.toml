@@ -1,0 +1,11 @@
+[package]
+name = "sctk-probe"
+description = "Dev-only probe clients that drive Neptune as a Wayland client."
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+smithay-client-toolkit.workspace = true
