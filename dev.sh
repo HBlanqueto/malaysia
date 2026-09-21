@@ -16,8 +16,10 @@ EXIT_MISSING_TOOL=4
 EXIT_RUN_FAILED=5
 EXIT_NO_LOG=6
 EXIT_NOT_DEVSHELL=7
+EXIT_WATCH=8
 # status follows the LSB init-script conventions: 0 running, 1 dead with a
-# leftover pid file, 3 not running.
+# leftover pid file, 3 not running. Interrupting `watch` with Ctrl-C exits 130
+# (128 + SIGINT).
 EXIT_STATUS_DEAD=1
 EXIT_STATUS_NOT_RUNNING=3
 
@@ -28,6 +30,7 @@ Usage: dev.sh <command> [options]
 Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
+    watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
     restart             Stop, then run (no rebuild)
     status              Report whether the background instance is running
@@ -147,7 +150,12 @@ start() {
     # A stale pid file is not an error.
     rm -f "$PID_FILE"
     ensure_runtime_dir
-    "$_bin" >>"$LOG_FILE" 2>&1 &
+    require setsid
+    # Start the compositor in its own session. It is not a child of the caller's
+    # process group, so a watcher that kills its own children (cargo-watch does)
+    # or a terminal closing does not take the running instance down with it.
+    # setsid execs without forking here, so $! is the compositor's real PID.
+    setsid "$_bin" >>"$LOG_FILE" 2>&1 &
     _saved=$!
     printf '%s\n' "$_saved" >"$PID_FILE"
     sleep 0.2
@@ -158,6 +166,59 @@ start() {
             tail -n 20 "$LOG_FILE" >&2
         fi
         exit "$EXIT_RUN_FAILED"
+    fi
+}
+
+# watch - rebuild and relaunch on every source change, in the foreground.
+#
+# Each change runs a build and then restarts the background instance. A failed
+# build aborts the cycle before the restart, so the instance on screen is left
+# alone and the compiler output stays on the terminal. Ctrl-C exits the watcher
+# and the EXIT trap stops the compositor, so nothing outlives the watcher.
+watch() {
+    require_devshell
+    require cargo
+    require cargo-watch
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for watch: $1"
+    fi
+
+    # Watch the source trees. cargo-watch requires each path to exist, and the
+    # workspace has no top-level src/ yet.
+    set -- -w "$script_dir/crates" --ignore "$script_dir/target"
+    if [ -d "$script_dir/src" ]; then
+        set -- "$@" -w "$script_dir/src"
+    fi
+
+    # `&&` is deliberate: a failed build must not reach the restart.
+    _cycle="$script_dir/dev.sh build"
+    if [ -n "$_release" ]; then
+        _cycle="$_cycle --release"
+    fi
+    _cycle="$_cycle && $script_dir/dev.sh restart"
+    if [ -n "$_release" ]; then
+        _cycle="$_cycle --release"
+    fi
+
+    # A signal only raises a flag. `stop` is left to the EXIT trap so it runs
+    # to completion; exiting from inside a signal trap can cut it short before
+    # the compositor is signalled.
+    trap 'stop' EXIT
+    _interrupted=0
+    trap '_interrupted=1' INT TERM
+
+    _status=0
+    cargo watch "$@" -s "$_cycle" || _status=$?
+    if [ "$_interrupted" -ne 0 ]; then
+        exit 130
+    fi
+    if [ "$_status" -ne 0 ]; then
+        fail "$EXIT_WATCH" "cargo-watch exited unexpectedly (status $_status)"
     fi
 }
 
@@ -245,10 +306,11 @@ shift
 case "$command_name" in
     build) build "$@" ;;
     run) start "$@" ;;
+    watch) watch "$@" ;;
     stop) stop ;;
     restart)
         stop
-        start
+        start "$@"
         ;;
     status) status ;;
     log) show_log "$@" ;;

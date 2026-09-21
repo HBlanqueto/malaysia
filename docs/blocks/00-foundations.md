@@ -92,7 +92,8 @@ callers can branch:
 | 4 | a required tool is missing |
 | 5 | the binary failed to start |
 | 6 | `log`: no log file |
-| 7 | `build`/`check`/`clean`: not inside the dev shell |
+| 7 | `build`/`check`/`clean`/`watch`: not inside the dev shell |
+| 8 | `watch`: the watcher exited unexpectedly |
 
 `status` follows the LSB init-script convention (running = 0, dead with PID
 file = 1, not running = 3), so it can be used as a boolean in scripts.
@@ -217,12 +218,13 @@ item is documented.
    session at a display manager yields a black screen. Neither the package nor
    the entry has been exercised against a real session. Recorded here, not
    fixed, until there is a compositor worth launching.
-9. **A `watch` subcommand for `dev.sh` (blocked).** The intent is to rebuild and
-   relaunch Neptune in a nested window on every source change. It cannot be
-   built in Block 0: the binary has no winit backend, no event loop and no
-   rendering, so there is nothing to show in a window, and `cargo-watch` is
-   absent from the dev shell. When a winit backend lands, `cargo-watch` joins
-   the dev shell at that same moment — not before — and `watch` is built on it.
+9. **A `watch` subcommand for `dev.sh` — resolved (Block 1).** The winit
+   backend now exists, so there is a window to relaunch, and `cargo-watch`
+   joined the dev shell at that same moment. `./dev.sh watch [--release]`
+   rebuilds on change and restarts the background instance through the existing
+   PID handling; a failed build leaves the running instance alone, Ctrl-C stops
+   both, and the watcher exits 8 if it fails unexpectedly. It is documented in
+   `docs/blocks/01-session.md`.
 
 ## Decision records
 
