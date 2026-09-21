@@ -17,15 +17,27 @@ use smithay::backend::input::{
     KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
 };
 use smithay::input::keyboard::FilterResult;
-use smithay::input::pointer::{AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, MotionEvent};
+use smithay::input::pointer::{
+    AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, GrabStartData, MotionEvent,
+};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER, Serial};
 
-use crate::state::{Grab, State};
+use crate::state::{Grab, State, TestPress};
 use crate::window::RESIZE_BORDER;
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
+/// The number of motions the scripted input sends after its press.
+///
+/// A real drag gesture does not ask for a move on the press: GTK's, for one,
+/// waits until the pointer has passed a threshold. Following the press with
+/// several motions lets such a client send its request while the button is
+/// still held, which is what the protocol requires.
+const TEST_DRAG_STEPS: usize = 4;
+/// The pointer movement of each scripted pre-threshold motion, in logical
+/// pixels.
+const TEST_DRAG_STEP: (f64, f64) = (12.0, 8.0);
 
 impl State {
     /// Handles one input event from the backend.
@@ -57,7 +69,6 @@ impl State {
                 let state = event.state();
 
                 if state == ButtonState::Pressed {
-                    self.pointer_press_serial = Some(serial);
                     if let Some(location) = self
                         .seat
                         .get_pointer()
@@ -96,20 +107,24 @@ impl State {
     /// press just raises and focuses the window.
     fn pointer_press(&mut self, button: u32, location: Point<f64, Logical>) {
         if let Some((id, edge)) = self.windows.edge_under(location, RESIZE_BORDER) {
+            tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");
             self.raise_and_focus(id);
             self.start_resize(id, edge, location);
             return;
         }
 
         let Some(id) = self.windows.window_under(location) else {
+            tracing::info!(?location, "press landed outside every window");
             return;
         };
         self.raise_and_focus(id);
 
         if self.windows.surface_under(location).is_some() {
+            tracing::info!(?location, window = ?id, "press landed on the client surface");
             return;
         }
         if button == BUTTON_LEFT {
+            tracing::info!(?location, window = ?id, "press started a move on the decoration");
             self.start_move(id, location);
         }
     }
@@ -181,12 +196,26 @@ impl State {
         self.request_redraw();
     }
 
-    /// Consumes the remembered button press serial if `serial` is it.
+    /// The implicit grab a client's move or resize request may act on.
     ///
-    /// Used to validate `xdg_toplevel.move`/`resize`: a request must name a
-    /// press this compositor actually saw, and can only be used once.
-    pub(crate) fn take_pointer_press(&mut self, serial: Serial) -> bool {
-        consume(&mut self.pointer_press_serial, serial)
+    /// The protocol ties `xdg_toplevel.move`/`resize` to the pointer's
+    /// implicit grab: the serial must name a button press that is still held.
+    /// Smithay tracks exactly that: `DefaultGrab::button` installs a
+    /// [`ClickGrab`] keyed by the press serial and drops it when the last
+    /// button is released (`smithay-0.7.0/src/input/pointer/grab.rs:238-252`
+    /// and `:374-380`). The check is therefore `has_grab(serial)` plus the
+    /// grab's start data, as the reference compositor does
+    /// (`smithay-0.7.0/anvil/src/shell/xdg.rs:152-160`).
+    ///
+    /// Focus changes, raises, configures and keyboard enter do not touch the
+    /// grab, so none of them can invalidate a request made while the button is
+    /// held. A request after the release names no grab and is rejected.
+    pub(crate) fn held_grab(&self, serial: Serial) -> Option<GrabStartData<State>> {
+        let pointer = self.seat.get_pointer()?;
+        if !pointer.has_grab(serial) {
+            return None;
+        }
+        pointer.grab_start_data()
     }
 
     /// Test-only: leave one window (and with it its surface) behind.
@@ -216,43 +245,51 @@ impl State {
         true
     }
 
-    /// Test-only: inject one pointer press and release over a window.
+    /// Test-only: press the primary button on the first window that maps.
     ///
     /// Only when `NEPTUNE_TEST_INPUT` is set. The client-initiated
     /// move/resize path needs a real button press to supply a serial, which a
-    /// probe cannot make on its own; this moves the pointer over the window,
-    /// presses and releases, and remembers the press serial so a client request
-    /// can be validated against it.
+    /// probe cannot make on its own; this moves the pointer onto the window (at
+    /// the fraction named by `NEPTUNE_TEST_PRESS_AT`, the center by default),
+    /// runs the compositor's real press path so click-to-focus happens, presses
+    /// and holds. Several motions follow, so a client whose drag gesture waits
+    /// for a threshold still sends its request while the button is held. The
+    /// release is sent by [`Self::inject_test_release`].
     pub(crate) fn inject_test_press(&mut self, id: WindowId) {
-        if std::env::var_os("NEPTUNE_TEST_INPUT").is_none() {
+        if std::env::var_os("NEPTUNE_TEST_INPUT").is_none() || self.test_press.is_some() {
             return;
         }
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
-        let center = Point::new(
-            outer.x() + outer.width() / 2.0,
-            outer.y() + outer.height() / 2.0,
+        let (fx, fy) = test_press_fraction();
+        let location = Point::new(
+            outer.x() + outer.width() * fx,
+            outer.y() + outer.height() * fy,
         );
-        let Some((surface, local)) = self.windows.surface_under(center) else {
+        let Some((surface, local)) = self.windows.surface_under(location) else {
             return;
         };
-        let origin = Point::new(center.x - local.x, center.y - local.y);
+        let origin = Point::new(location.x - local.x, location.y - local.y);
         let time = 0;
-        let serial = SERIAL_COUNTER.next_serial();
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
+        let serial = SERIAL_COUNTER.next_serial();
         pointer.motion(
             self,
             Some((surface, origin)),
             &MotionEvent {
-                location: center,
+                location,
                 serial,
                 time,
             },
         );
         pointer.frame(self);
+        // The compositor's own press logic runs before the protocol event, as in
+        // `process_input_event`: click-to-focus, and a move grab when the press
+        // lands on Neptune's decoration rather than the client's surface.
+        self.pointer_press(BUTTON_LEFT, location);
         let press = SERIAL_COUNTER.next_serial();
         pointer.button(
             self,
@@ -264,6 +301,70 @@ impl State {
             },
         );
         pointer.frame(self);
+        self.test_press = Some(TestPress {
+            window: id,
+            location,
+        });
+        let mut location = location;
+        for _ in 0..TEST_DRAG_STEPS {
+            location = Point::new(location.x + TEST_DRAG_STEP.0, location.y + TEST_DRAG_STEP.1);
+            self.pointer_motion(location, time);
+            if let Some(press) = self.test_press.as_mut() {
+                press.location = location;
+            }
+        }
+    }
+
+    /// Test-only: drag the pressed window by `NEPTUNE_TEST_DRAG`.
+    ///
+    /// Called when the compositor accepts a client's move or resize request.
+    /// The motion goes through the normal input path, so the grab that just
+    /// started drives it, and the window's outer rectangle before and after is
+    /// logged for a harness to assert. The button stays held, so a client can
+    /// still make a second request with the same serial.
+    pub(crate) fn inject_test_drag(&mut self, id: WindowId) {
+        if std::env::var_os("NEPTUNE_TEST_INPUT").is_none() {
+            return;
+        }
+        let Some(press) = self.test_press else {
+            return;
+        };
+        if press.window != id {
+            return;
+        }
+        let (dx, dy) = test_drag_delta();
+        let location = Point::new(press.location.x + dx, press.location.y + dy);
+        let before = self.windows.outer(id);
+        self.pointer_motion(location, 0);
+        if let Some(press) = self.test_press.as_mut() {
+            press.location = location;
+        }
+        let after = self.windows.outer(id);
+        if let (Some(before), Some(after)) = (before, after) {
+            tracing::info!(
+                from_x = before.x(),
+                from_y = before.y(),
+                from_width = before.width(),
+                from_height = before.height(),
+                to_x = after.x(),
+                to_y = after.y(),
+                to_width = after.width(),
+                to_height = after.height(),
+                "test drag applied"
+            );
+        }
+    }
+
+    /// Test-only: release the scripted press, ending any grab it started.
+    pub(crate) fn inject_test_release(&mut self) {
+        if self.test_press.take().is_none() {
+            return;
+        }
+        self.end_grab();
+        let time = 0;
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
         pointer.button(
             self,
             &ButtonEvent {
@@ -274,7 +375,6 @@ impl State {
             },
         );
         pointer.frame(self);
-        self.pointer_press_serial = Some(press);
     }
 
     /// Starts dragging a window from its decoration.
@@ -428,34 +528,46 @@ fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-/// Consumes `remembered` when it holds `serial`, clearing it either way.
+/// The window fraction the scripted press lands on, from `NEPTUNE_TEST_PRESS_AT`
+/// (`x,y` as fractions of the window's outer size), the center by default.
 ///
-/// This is the whole of the `xdg_toplevel.move`/`resize` serial check: a
-/// request is honoured only if its serial is the last press seen, and that press
-/// cannot authorise a second request.
-fn consume(remembered: &mut Option<Serial>, serial: Serial) -> bool {
-    if *remembered == Some(serial) {
-        *remembered = None;
-        true
-    } else {
-        false
-    }
+/// The Nautilus drag needs the press on its headerbar, a few percent below the
+/// top edge; the probes press the center.
+fn test_press_fraction() -> (f64, f64) {
+    parse_pair("NEPTUNE_TEST_PRESS_AT").unwrap_or((0.5, 0.5))
+}
+
+/// The pointer delta the scripted drag applies once a grab starts, from
+/// `NEPTUNE_TEST_DRAG` (`dx,dy` in logical pixels), `(60, 40)` by default.
+fn test_drag_delta() -> (f64, f64) {
+    parse_pair("NEPTUNE_TEST_DRAG").unwrap_or((60.0, 40.0))
+}
+
+/// Reads an `x,y` pair of numbers from the environment.
+///
+/// Any missing or unparsable value is `None`, so a malformed variable falls
+/// back to the default rather than failing a run.
+fn parse_pair(name: &str) -> Option<(f64, f64)> {
+    let value = std::env::var(name).ok()?;
+    let (x, y) = value.split_once(',')?;
+    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
+    use smithay::backend::input::ButtonState;
     use smithay::backend::input::{
         AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
         PointerMotionAbsoluteEvent, UnusedEvent,
     };
-    use smithay::input::pointer::CursorIcon;
+    use smithay::input::pointer::{ButtonEvent, CursorIcon};
     use smithay::reexports::calloop::EventLoop;
     use smithay::reexports::wayland_server::Display;
-    use smithay::utils::{Point, Serial, Size};
+    use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
 
-    use super::{Edge, consume, edge_cursor};
+    use super::{BUTTON_LEFT, Edge, edge_cursor};
     use crate::state::State;
 
     #[test]
@@ -470,25 +582,63 @@ mod tests {
         assert_eq!(edge_cursor(Edge::BottomLeft), CursorIcon::NeswResize);
     }
 
-    #[test]
-    fn a_matching_press_serial_is_accepted_once() {
-        let mut remembered = Some(Serial::from(7u32));
-        assert!(consume(&mut remembered, Serial::from(7u32)));
-        assert_eq!(remembered, None);
-        assert!(!consume(&mut remembered, Serial::from(7u32)));
+    /// Sends one button event through the pointer.
+    fn press_button(state: &mut State, state_: ButtonState, serial: Serial) {
+        let pointer = state.seat.get_pointer().expect("the seat has a pointer");
+        pointer.button(
+            state,
+            &ButtonEvent {
+                button: BUTTON_LEFT,
+                state: state_,
+                serial,
+                time: 0,
+            },
+        );
+        pointer.frame(state);
     }
 
     #[test]
-    fn a_foreign_press_serial_is_rejected_and_kept() {
-        let mut remembered = Some(Serial::from(7u32));
-        assert!(!consume(&mut remembered, Serial::from(8u32)));
-        assert_eq!(remembered, Some(Serial::from(7u32)));
+    fn a_request_without_a_held_press_is_rejected() {
+        let (_display, state) = test_state((1280, 720));
+        assert!(
+            state.held_grab(Serial::from(1u32)).is_none(),
+            "no button was pressed, so no serial can name a grab"
+        );
     }
 
     #[test]
-    fn a_request_with_no_press_behind_it_is_rejected() {
-        let mut remembered = None;
-        assert!(!consume(&mut remembered, Serial::from(1u32)));
+    fn a_fabricated_serial_does_not_name_the_held_press() {
+        let (_display, mut state) = test_state((1280, 720));
+        press_button(&mut state, ButtonState::Pressed, Serial::from(7u32));
+        assert!(state.held_grab(Serial::from(8u32)).is_none());
+        assert!(
+            state.held_grab(Serial::from(7u32)).is_some(),
+            "the real press must still name the grab"
+        );
+    }
+
+    #[test]
+    fn a_released_press_no_longer_names_a_grab() {
+        let (_display, mut state) = test_state((1280, 720));
+        press_button(&mut state, ButtonState::Pressed, Serial::from(7u32));
+        assert!(state.held_grab(Serial::from(7u32)).is_some());
+        press_button(&mut state, ButtonState::Released, Serial::from(8u32));
+        assert!(
+            state.held_grab(Serial::from(7u32)).is_none(),
+            "the release must end the grab the press started"
+        );
+    }
+
+    #[test]
+    fn a_held_press_survives_other_serial_traffic() {
+        let (_display, mut state) = test_state((1280, 720));
+        press_button(&mut state, ButtonState::Pressed, Serial::from(7u32));
+        // Serials allocated for other events, as click-to-focus, a configure or
+        // a keyboard enter would, do not touch the grab.
+        for _ in 0..5 {
+            let _ = SERIAL_COUNTER.next_serial();
+        }
+        assert!(state.held_grab(Serial::from(7u32)).is_some());
     }
 
     /// The virtual device of the test backend.

@@ -25,8 +25,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 /// The compositor lines this harness requires, in the order it requires them.
 const ACCEPTED_MOVE: &str = "accepted move request";
 const ACCEPTED_RESIZE: &str = "accepted resize request";
-const REJECTED_MOVE: &str = "rejected move request for a stale serial";
-const REJECTED_RESIZE: &str = "rejected resize request for a stale serial";
+const REJECTED_MOVE: &str = "rejected move request";
+const REJECTED_RESIZE: &str = "rejected resize request";
 
 fn main() -> ExitCode {
     match run() {

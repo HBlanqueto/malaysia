@@ -270,21 +270,21 @@ impl PointerHandler for App {
                 continue;
             };
             self.presses += 1;
+            if self.presses > 1 {
+                continue;
+            }
             let Some(seat) = &self.seat else {
                 continue;
             };
-            match self.presses {
-                1 => {
-                    self.window.move_(seat, serial);
-                    println!("move_client: sent move with press serial {serial}");
-                }
-                2 => {
-                    self.window.resize(seat, serial, ResizeEdge::BottomRight);
-                    println!("move_client: sent resize with press serial {serial}");
-                    self.send_stale();
-                }
-                _ => {}
-            }
+            self.window.move_(seat, serial);
+            println!("move_client: sent move with press serial {serial}");
+            // The same held press authorises the resize too: the protocol ties
+            // both requests to the implicit grab, not to one request each.
+            self.window.resize(seat, serial, ResizeEdge::BottomRight);
+            println!(
+                "move_client: sent resize with press serial {serial} while the button is held"
+            );
+            self.send_stale();
         }
     }
 }

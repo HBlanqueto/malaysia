@@ -30,7 +30,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
-use smithay::utils::{Logical, Physical, Serial, Size, Transform};
+use smithay::utils::{Logical, Physical, Point, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
@@ -115,12 +115,10 @@ pub struct State {
     pub windows: Windows,
     /// An interactive move or resize, if one is in progress.
     pub(crate) grab: Option<Grab>,
-    /// The serial of the last pointer button press.
+    /// Test-only: the press the scripted input is holding, if any.
     ///
-    /// `xdg_toplevel.move`/`resize` must name a valid, recent interaction; a
-    /// request whose serial is not this exact press is ignored. The serial comes
-    /// from the one counter in `input.rs`; no second counter exists.
-    pub(crate) pointer_press_serial: Option<Serial>,
+    /// Only when `NEPTUNE_TEST_INPUT` is set. See [`TestPress`].
+    pub(crate) test_press: Option<TestPress>,
     /// Test-only: the window left behind by `NEPTUNE_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
 }
@@ -214,7 +212,7 @@ impl State {
             output_size: size,
             windows: Windows::new(),
             grab: None,
-            pointer_press_serial: None,
+            test_press: None,
             leaked_window: None,
         })
     }
@@ -287,6 +285,22 @@ impl Grab {
             Grab::Move { window, .. } | Grab::Resize { window, .. } => window,
         }
     }
+}
+
+/// Test-only: a pointer press the scripted input is holding.
+///
+/// Only when `NEPTUNE_TEST_INPUT` is set. The scripted input presses once, on
+/// the first window that maps, and holds the button so a client's
+/// `xdg_toplevel.move`/`resize` can be validated against a real press. The
+/// window and location are remembered so the follow-up drag is aimed at the
+/// same window and the release ends the same press.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TestPress {
+    /// The window the press landed on.
+    pub(crate) window: WindowId,
+    /// The pointer's location at the last scripted motion, in logical output
+    /// coordinates.
+    pub(crate) location: Point<f64, Logical>,
 }
 
 /// Data attached to every connected Wayland client.

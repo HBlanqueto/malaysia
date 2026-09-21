@@ -27,6 +27,7 @@ use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_k
     Mode as KdeMode, OrgKdeKwinServerDecoration,
 };
 use smithay::reexports::wayland_server::Client;
+use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -152,15 +153,32 @@ impl XdgShellHandler for State {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, serial: Serial) {
-        // The serial must name the pointer press this compositor last saw, and
-        // comes from the one serial counter. A request with any other serial is
-        // ignored rather than starting a drag.
-        if !self.take_pointer_press(serial) {
-            tracing::info!("rejected move request for a stale serial");
+        // The serial must name the pointer's implicit grab: a button press
+        // that is still held, made on this client's surface. A request with
+        // any other serial is ignored rather than starting a drag.
+        let Some(start) = self.held_grab(serial) else {
+            tracing::info!(
+                serial = ?serial,
+                "rejected move request: no button press with this serial is held"
+            );
+            return;
+        };
+        if !start
+            .focus
+            .as_ref()
+            .is_some_and(|(focus, _)| focus.id().same_client_as(&surface.wl_surface().id()))
+        {
+            tracing::info!(
+                serial = ?serial,
+                "rejected move request: the press was not on this client's surface"
+            );
             return;
         }
-        tracing::info!("accepted move request");
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            tracing::info!(
+                serial = ?serial,
+                "rejected move request: the surface is not a tracked window"
+            );
             return;
         };
         if let Some(location) = self
@@ -168,9 +186,9 @@ impl XdgShellHandler for State {
             .get_pointer()
             .map(|pointer| pointer.current_location())
         {
+            tracing::info!(serial = ?serial, "accepted move request");
             self.start_move(id, location);
-            // Give a probe the next serial for its resize request.
-            self.inject_test_press(id);
+            self.inject_test_drag(id);
         }
     }
 
@@ -181,23 +199,44 @@ impl XdgShellHandler for State {
         serial: Serial,
         edges: xdg_toplevel::ResizeEdge,
     ) {
-        if !self.take_pointer_press(serial) {
-            tracing::info!("rejected resize request for a stale serial");
+        let Some(start) = self.held_grab(serial) else {
+            tracing::info!(
+                serial = ?serial,
+                "rejected resize request: no button press with this serial is held"
+            );
+            return;
+        };
+        if !start
+            .focus
+            .as_ref()
+            .is_some_and(|(focus, _)| focus.id().same_client_as(&surface.wl_surface().id()))
+        {
+            tracing::info!(
+                serial = ?serial,
+                "rejected resize request: the press was not on this client's surface"
+            );
             return;
         }
         let Some(edge) = crate::window::from_xdg_resize_edge(edges) else {
             return;
         };
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            tracing::info!(
+                serial = ?serial,
+                "rejected resize request: the surface is not a tracked window"
+            );
             return;
         };
-        tracing::info!("accepted resize request");
         if let Some(location) = self
             .seat
             .get_pointer()
             .map(|pointer| pointer.current_location())
         {
+            tracing::info!(serial = ?serial, "accepted resize request");
             self.start_resize(id, edge, location);
+            // No drag motion for a resize: the probe asserts the request was
+            // accepted and the resizing configure, not a new size.
+            self.inject_test_release();
         }
     }
 
