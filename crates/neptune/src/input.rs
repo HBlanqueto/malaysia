@@ -444,10 +444,19 @@ fn consume(remembered: &mut Option<Serial>, serial: Serial) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use smithay::utils::Serial;
+    use std::path::PathBuf;
+
+    use smithay::backend::input::{
+        AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
+        PointerMotionAbsoluteEvent, UnusedEvent,
+    };
+    use smithay::input::pointer::CursorIcon;
+    use smithay::reexports::calloop::EventLoop;
+    use smithay::reexports::wayland_server::Display;
+    use smithay::utils::{Logical, Point, Serial, Size};
 
     use super::{Edge, consume, edge_cursor};
-    use smithay::input::pointer::CursorIcon;
+    use crate::state::State;
 
     #[test]
     fn each_edge_gets_its_own_resize_cursor() {
@@ -480,5 +489,160 @@ mod tests {
     fn a_request_with_no_press_behind_it_is_rejected() {
         let mut remembered = None;
         assert!(!consume(&mut remembered, Serial::from(1u32)));
+    }
+
+    /// The virtual device of the test backend.
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    struct TestDevice;
+
+    impl Device for TestDevice {
+        fn id(&self) -> String {
+            "test".to_string()
+        }
+
+        fn name(&self) -> String {
+            "test pointer".to_string()
+        }
+
+        fn has_capability(&self, _capability: DeviceCapability) -> bool {
+            false
+        }
+
+        fn usb_id(&self) -> Option<(u32, u32)> {
+            None
+        }
+
+        fn syspath(&self) -> Option<PathBuf> {
+            None
+        }
+    }
+
+    /// A backend whose only real event is an absolute pointer motion.
+    ///
+    /// The compositor's input handling is generic over [`InputBackend`], and the
+    /// winit backend's event type cannot be constructed outside Smithay, so this
+    /// backend stands in for it. Its motion event mirrors the winit contract
+    /// exactly: the position is a fraction of the window with a top-left origin
+    /// (`smithay-0.7.0/src/backend/winit/mod.rs:481-490`) and `x_transformed`
+    /// multiplies that fraction by the target width
+    /// (`smithay-0.7.0/src/backend/winit/input.rs:100-110`).
+    struct TestBackend;
+
+    impl InputBackend for TestBackend {
+        type Device = TestDevice;
+        type KeyboardKeyEvent = UnusedEvent;
+        type PointerAxisEvent = UnusedEvent;
+        type PointerButtonEvent = UnusedEvent;
+        type PointerMotionEvent = UnusedEvent;
+        type PointerMotionAbsoluteEvent = TestMouseMove;
+        type GestureSwipeBeginEvent = UnusedEvent;
+        type GestureSwipeUpdateEvent = UnusedEvent;
+        type GestureSwipeEndEvent = UnusedEvent;
+        type GesturePinchBeginEvent = UnusedEvent;
+        type GesturePinchUpdateEvent = UnusedEvent;
+        type GesturePinchEndEvent = UnusedEvent;
+        type GestureHoldBeginEvent = UnusedEvent;
+        type GestureHoldEndEvent = UnusedEvent;
+        type TouchDownEvent = UnusedEvent;
+        type TouchUpEvent = UnusedEvent;
+        type TouchMotionEvent = UnusedEvent;
+        type TouchCancelEvent = UnusedEvent;
+        type TouchFrameEvent = UnusedEvent;
+        type TabletToolAxisEvent = UnusedEvent;
+        type TabletToolProximityEvent = UnusedEvent;
+        type TabletToolTipEvent = UnusedEvent;
+        type TabletToolButtonEvent = UnusedEvent;
+        type SwitchToggleEvent = UnusedEvent;
+        type SpecialEvent = ();
+    }
+
+    /// An absolute motion carrying winit's normalized, top-left-origin position.
+    struct TestMouseMove {
+        /// Position as a fraction of the window, `(x, y)`, top-left origin.
+        fraction: (f64, f64),
+    }
+
+    impl Event<TestBackend> for TestMouseMove {
+        fn time(&self) -> u64 {
+            0
+        }
+
+        fn device(&self) -> TestDevice {
+            TestDevice
+        }
+    }
+
+    impl PointerMotionAbsoluteEvent<TestBackend> for TestMouseMove {}
+
+    impl AbsolutePositionEvent<TestBackend> for TestMouseMove {
+        fn x(&self) -> f64 {
+            0.0
+        }
+
+        fn y(&self) -> f64 {
+            0.0
+        }
+
+        fn x_transformed(&self, width: i32) -> f64 {
+            f64::max(self.fraction.0 * f64::from(width), 0.0)
+        }
+
+        fn y_transformed(&self, height: i32) -> f64 {
+            f64::max(self.fraction.1 * f64::from(height), 0.0)
+        }
+    }
+
+    /// A compositor state with one output of `size`, built without a backend.
+    fn test_state(size: (i32, i32)) -> (Display<State>, State) {
+        let event_loop = EventLoop::<()>::try_new().expect("the test needs an event loop");
+        let display = Display::<State>::new().expect("the test needs a display");
+        let state = State::new(event_loop.get_signal(), &display.handle(), Size::from(size))
+            .expect("the test state should build");
+        (display, state)
+    }
+
+    /// Sends one absolute motion event with the given window fraction.
+    fn move_pointer(state: &mut State, fraction: (f64, f64)) {
+        state.process_input_event(InputEvent::<TestBackend>::PointerMotionAbsolute {
+            event: TestMouseMove { fraction },
+        });
+    }
+
+    #[test]
+    fn host_pointer_corners_map_to_logical_corners() {
+        let (_display, mut state) = test_state((1280, 720));
+        let pointer = state.seat.get_pointer().expect("the seat has a pointer");
+        assert_eq!(state.logical_output_size(), Size::from((1280, 720)));
+
+        move_pointer(&mut state, (0.0, 0.0));
+        assert_eq!(
+            pointer.current_location(),
+            Point::from((0.0, 0.0)),
+            "the host's top-left must be logical (0, 0)"
+        );
+
+        move_pointer(&mut state, (1.0, 1.0));
+        assert_eq!(
+            pointer.current_location(),
+            Point::from((1280.0, 720.0)),
+            "the host's bottom-right must be the logical output size"
+        );
+    }
+
+    #[test]
+    fn host_pointer_moves_down_in_logical_space() {
+        let (_display, mut state) = test_state((1280, 720));
+        let pointer = state.seat.get_pointer().expect("the seat has a pointer");
+
+        move_pointer(&mut state, (0.5, 0.25));
+        let first = pointer.current_location();
+        move_pointer(&mut state, (0.5, 0.75));
+        let second = pointer.current_location();
+
+        assert!(
+            second.y > first.y,
+            "moving the host pointer down must increase logical y ({first:?} -> {second:?})"
+        );
+        assert_eq!(first.x, second.x);
     }
 }
