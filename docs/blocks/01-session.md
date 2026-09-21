@@ -87,7 +87,10 @@ dev shell and a host display.
 
 Not verified by a command, and left to hand-checking: that typing reaches the
 client with the correct layout, that the pointer responds, and that the client's
-output is legible.
+output and the drawn cursor are legible. The smoke harness cannot move the host
+pointer, so it cannot make a client set a cursor live; it checks the compositor's
+default pointer and the client's `set_cursor`/enter serial pairing, not the
+finished pixels.
 
 ## Open questions
 

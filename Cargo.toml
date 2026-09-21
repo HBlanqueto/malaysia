@@ -41,6 +41,10 @@ tracing-subscriber = "0.3"     # Installs the global subscriber that emits `trac
 # Process lifetime.
 signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and unsafe is forbidden.
 
+# Pointer cursor. The default arrow is read from the user's Xcursor theme; a
+# built-in arrow is drawn when no theme can be read.
+xcursor = "0.3"        # Parses Xcursor theme files; smithay ships no cursor loader.
+
 # Neptune's own crates.
 neptune-design = { path = "crates/neptune-design" }   # The one place every visual value lives.
 

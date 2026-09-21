@@ -15,8 +15,8 @@ the command after it starts that block's behaviour.
       lists every global.
 - [x] **Block 2 — A window on screen.** `./dev.sh run`, checked by
       `./dev.sh smoke`.
-- [ ] **Block 3 — Input.** Partly runnable: keyboard, pointer and serials work;
-      the cursor is not implemented.
+- [x] **Block 3 — Input.** `./dev.sh run`, checked by `./dev.sh smoke`; typing
+      and the rendered cursor are hand-checked.
 - [ ] **Block 4 — Manipulable windows.** Not yet runnable.
 - [ ] **Block 5 — Popups.** Not yet runnable.
 - [ ] **Block 6 — Clipboard.** Not yet runnable.

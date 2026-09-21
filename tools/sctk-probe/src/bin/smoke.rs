@@ -45,6 +45,13 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The compositor log line emitted exactly when a window becomes mapped.
 const MAPPED_LOG_LINE: &str = "giving keyboard focus to a mapped window";
+/// The compositor log line emitted when it draws its own default pointer.
+///
+/// There is no client cursor until the host pointer moves and the client
+/// receives `wl_pointer.enter`, which this harness cannot cause, so the default
+/// pointer is the cursor path it can exercise live. The line is a `debug` event,
+/// so the compositor is run at `--log-level=debug`.
+const DEFAULT_CURSOR_LOG_LINE: &str = "drawing the default pointer";
 
 fn main() -> ExitCode {
     match run() {
@@ -80,7 +87,7 @@ fn run() -> Result<(), String> {
 
     let mut compositor = ChildGuard::spawn(
         Command::new(&binary)
-            .arg("--log-level=info")
+            .arg("--log-level=debug")
             .env("XDG_RUNTIME_DIR", runtime.path()),
         host_display.as_deref(),
     )?;
@@ -299,14 +306,57 @@ fn analyze(lines: &[String], compositor_log: &[String]) -> Result<(), String> {
         ));
     };
 
+    check_pointer_cursor(&trace)?;
+
+    if !compositor_log
+        .iter()
+        .any(|line| line.contains(DEFAULT_CURSOR_LOG_LINE))
+    {
+        return Err(format!(
+            "the compositor never reported drawing its default pointer; compositor log:\n{}",
+            compositor_log.join("\n")
+        ));
+    }
+
     println!(
         "smoke: configure(serial {}) -> ack({}) -> attach/commit -> keyboard.enter -> \
-         frame callback #{} done at line {}",
+         frame callback #{} done at line {}; cursor surfaces set: {}",
         surface_configure.serial,
         ack.serial,
         frame.callback,
-        done.index + 1
+        done.index + 1,
+        trace
+            .set_cursors
+            .iter()
+            .filter(|set| set.surface.is_some())
+            .count(),
     );
+    Ok(())
+}
+
+/// Checks that every `wl_pointer.set_cursor` used the serial of a pointer enter
+/// the client had already received.
+///
+/// This is the client half of the cursor contract: the compositor's own serial
+/// check is Smithay's, against the pointer's last enter serial, which the
+/// compositor generated from its single counter. A trace with no pointer enter
+/// (the smoke cannot move the host pointer) has nothing to check and passes.
+fn check_pointer_cursor(trace: &Trace) -> Result<(), String> {
+    for set in &trace.set_cursors {
+        let matched = trace
+            .pointer_enters
+            .iter()
+            .any(|enter| enter.index < set.index && enter.serial == set.serial);
+        if !matched {
+            return Err(format!(
+                "wl_pointer.set_cursor at line {} used serial {}, which matches no preceding \
+                 wl_pointer.enter; a client may only set a cursor for the serial of an enter it \
+                 received",
+                set.index + 1,
+                set.serial
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -364,6 +414,8 @@ struct Trace {
     frames: Vec<Frame>,
     callback_dones: Vec<CallbackDone>,
     keyboard_enters: Vec<KeyboardEnter>,
+    pointer_enters: Vec<PointerEnter>,
+    set_cursors: Vec<SetCursor>,
 }
 
 struct Configure {
@@ -397,6 +449,18 @@ struct CallbackDone {
 struct KeyboardEnter {
     index: usize,
     surface: u64,
+}
+
+struct PointerEnter {
+    index: usize,
+    serial: u64,
+}
+
+struct SetCursor {
+    index: usize,
+    serial: u64,
+    /// The cursor surface, or `None` for `nil` (hide the cursor).
+    surface: Option<u64>,
 }
 
 impl Trace {
@@ -460,6 +524,19 @@ impl Trace {
             } else if object_id(body, "wl_keyboard").is_some() && body.contains(".enter(") {
                 if let Some(surface) = find_id_after(body, "wl_surface#") {
                     trace.keyboard_enters.push(KeyboardEnter { index, surface });
+                }
+            } else if object_id(body, "wl_pointer").is_some() {
+                if !line.request && body.contains(".enter(") {
+                    trace.pointer_enters.push(PointerEnter {
+                        index,
+                        serial: first_argument(body).unwrap_or(0),
+                    });
+                } else if line.request && body.contains(".set_cursor(") {
+                    trace.set_cursors.push(SetCursor {
+                        index,
+                        serial: first_argument(body).unwrap_or(0),
+                        surface: find_id_after(body, "wl_surface#"),
+                    });
                 }
             }
         }
@@ -659,7 +736,7 @@ impl Drop for TempDir {
 
 #[cfg(test)]
 mod tests {
-    use super::{analyze, MAPPED_LOG_LINE};
+    use super::{analyze, check_pointer_cursor, Trace, DEFAULT_CURSOR_LOG_LINE, MAPPED_LOG_LINE};
 
     /// Wraps a body in the framing libwayland's debug output uses.
     fn line(body: &str) -> String {
@@ -683,7 +760,10 @@ mod tests {
     }
 
     fn compositor_log() -> Vec<String> {
-        vec![format!("INFO {MAPPED_LOG_LINE}")]
+        vec![
+            format!("INFO {MAPPED_LOG_LINE}"),
+            format!("DEBUG {DEFAULT_CURSOR_LOG_LINE}"),
+        ]
     }
 
     #[test]
@@ -753,6 +833,56 @@ mod tests {
         let error = analyze(&complete_trace(), &log).expect_err("no mapping report should fail");
         assert!(
             error.contains("never reported a mapping"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn a_set_cursor_that_matches_a_preceding_enter_is_accepted() {
+        let trace = vec![
+            line("wl_pointer#16.enter(7, wl_surface#3, 0.0, 0.0)"),
+            line(" -> wl_pointer#16.set_cursor(7, wl_surface#25, 6, 19)"),
+        ];
+        assert_eq!(check_pointer_cursor(&Trace::parse(&trace)), Ok(()));
+    }
+
+    #[test]
+    fn a_set_cursor_with_a_serial_no_enter_carried_is_rejected() {
+        let trace = vec![
+            line("wl_pointer#16.enter(7, wl_surface#3, 0.0, 0.0)"),
+            line(" -> wl_pointer#16.set_cursor(8, wl_surface#25, 6, 19)"),
+        ];
+        let error =
+            check_pointer_cursor(&Trace::parse(&trace)).expect_err("a foreign serial should fail");
+        assert!(error.contains("serial 8"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn a_set_cursor_before_any_enter_is_rejected() {
+        let trace = vec![line(
+            " -> wl_pointer#16.set_cursor(7, wl_surface#25, 6, 19)",
+        )];
+        let error = check_pointer_cursor(&Trace::parse(&trace)).expect_err("no enter should fail");
+        assert!(error.contains("no preceding"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn a_null_cursor_surface_is_recognized_as_hiding_the_cursor() {
+        let trace = vec![
+            line("wl_pointer#16.enter(7, wl_surface#3, 0.0, 0.0)"),
+            line(" -> wl_pointer#16.set_cursor(7, nil, 0, 0)"),
+        ];
+        let parsed = Trace::parse(&trace);
+        assert_eq!(check_pointer_cursor(&parsed), Ok(()));
+        assert_eq!(parsed.set_cursors[0].surface, None);
+    }
+
+    #[test]
+    fn the_default_pointer_draw_must_be_reported() {
+        let log = vec![format!("INFO {MAPPED_LOG_LINE}")];
+        let error = analyze(&complete_trace(), &log).expect_err("no default pointer draw");
+        assert!(
+            error.contains("default pointer"),
             "unexpected error: {error}"
         );
     }

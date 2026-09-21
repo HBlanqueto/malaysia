@@ -22,11 +22,13 @@ use std::time::{Duration, Instant};
 use smithay::backend::SwapBuffersError;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
 use smithay::backend::renderer::element::Kind;
+use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
+use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::Mode as OutputMode;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction};
@@ -34,11 +36,13 @@ use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::utils::{IsAlive, Logical, Point};
 use smithay::wayland::compositor::{
-    SurfaceAttributes, TraversalAction, with_surface_tree_downward,
+    SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
 use smithay::wayland::socket::ListeningSocketSource;
 
+use crate::cursor::{DefaultCursor, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 
 /// Failures that can stop the session from starting.
@@ -87,6 +91,8 @@ struct Session {
     backend: WinitGraphicsBackend<GlesRenderer>,
     /// Tracks damage between frames for the one output.
     damage_tracker: OutputDamageTracker,
+    /// The default arrow, drawn when no client cursor is active.
+    cursor: DefaultCursor,
     /// When the session started, used as the frame callback timestamp base.
     start_time: Instant,
 }
@@ -110,11 +116,13 @@ pub fn run() -> Result<(), SessionError> {
         backend.window_size(),
     )?;
     let damage_tracker = OutputDamageTracker::from_output(&state.output);
+    let cursor = DefaultCursor::load(State::OUTPUT_SCALE);
     let mut session = Session {
         display,
         state,
         backend,
         damage_tracker,
+        cursor,
         start_time: Instant::now(),
     };
     session.backend.window().request_redraw();
@@ -253,6 +261,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         state,
         damage_tracker,
         display,
+        cursor,
         start_time,
     } = session;
 
@@ -261,25 +270,31 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     let damage = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
-        let mut elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = Vec::new();
+        let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
         for window in state.windows.iter() {
             if !window.is_mapped() {
                 continue;
             }
             let location =
                 (window.location() + window.surface_location()).to_physical(State::OUTPUT_SCALE);
-            elements.extend(render_elements_from_surface_tree::<
-                GlesRenderer,
-                WaylandSurfaceRenderElement<GlesRenderer>,
-            >(
-                renderer,
-                window.surface(),
-                location,
-                f64::from(State::OUTPUT_SCALE),
-                1.0,
-                Kind::Unspecified,
-            ));
+            elements.extend(
+                render_elements_from_surface_tree::<
+                    GlesRenderer,
+                    WaylandSurfaceRenderElement<GlesRenderer>,
+                >(
+                    renderer,
+                    window.surface(),
+                    location,
+                    f64::from(State::OUTPUT_SCALE),
+                    1.0,
+                    Kind::Unspecified,
+                )
+                .into_iter()
+                .map(OutputRenderElement::from),
+            );
         }
+        reset_dead_cursor(state);
+        append_cursor(renderer, &mut elements, state, cursor);
 
         let result = damage_tracker
             .render_output(
@@ -309,6 +324,95 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         .submit(damage.as_deref())
         .map_err(DrawError::Submit)?;
     Ok(())
+}
+
+/// Returns the pointer to the default arrow once a client cursor surface dies.
+///
+/// A `wl_pointer.set_cursor` surface can be destroyed while it is still the
+/// pointer's image; the protocol then says the cursor is gone, so the compositor
+/// falls back to its own arrow rather than drawing a dead surface.
+fn reset_dead_cursor(state: &mut State) {
+    if let CursorImageStatus::Surface(surface) = &state.cursor_status
+        && !surface.alive()
+    {
+        state.cursor_status = CursorImageStatus::default_named();
+    }
+}
+
+/// Appends the pointer to the frame: the client's cursor surface, or the
+/// default arrow, at the pointer position minus its hotspot.
+fn append_cursor(
+    renderer: &mut GlesRenderer,
+    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    state: &State,
+    cursor: &DefaultCursor,
+) {
+    let Some(location) = state
+        .seat
+        .get_pointer()
+        .map(|pointer| pointer.current_location())
+    else {
+        return;
+    };
+
+    match &state.cursor_status {
+        CursorImageStatus::Hidden => {}
+        CursorImageStatus::Named(_) => {
+            let position =
+                (location - cursor.hotspot().to_f64()).to_physical(f64::from(State::OUTPUT_SCALE));
+            match MemoryRenderBufferRenderElement::from_buffer(
+                renderer,
+                position.to_f64(),
+                cursor.buffer(),
+                None,
+                None,
+                None,
+                Kind::Cursor,
+            ) {
+                Ok(element) => {
+                    tracing::debug!("drawing the default pointer");
+                    elements.push(OutputRenderElement::from(element));
+                }
+                Err(error) => tracing::warn!(?error, "could not draw the default cursor"),
+            }
+        }
+        CursorImageStatus::Surface(surface) => {
+            let position = (location - cursor_surface_hotspot(surface))
+                .to_physical(f64::from(State::OUTPUT_SCALE))
+                .to_i32_round();
+            elements.extend(
+                render_elements_from_surface_tree::<
+                    GlesRenderer,
+                    WaylandSurfaceRenderElement<GlesRenderer>,
+                >(
+                    renderer,
+                    surface,
+                    position,
+                    f64::from(State::OUTPUT_SCALE),
+                    1.0,
+                    Kind::Cursor,
+                )
+                .into_iter()
+                .map(OutputRenderElement::from),
+            );
+        }
+    }
+}
+
+/// The hotspot of a client cursor surface, in logical coordinates.
+///
+/// Smithay stores it on the surface when it accepts `set_cursor`, so it is
+/// present whenever the status is `Surface`; a missing value is treated as the
+/// top-left rather than panicking.
+fn cursor_surface_hotspot(surface: &WlSurface) -> Point<f64, Logical> {
+    with_states(surface, |states| {
+        states
+            .data_map
+            .get::<CursorImageSurfaceData>()
+            .and_then(|data| data.lock().ok().map(|attributes| attributes.hotspot))
+    })
+    .map(|hotspot| hotspot.to_f64())
+    .unwrap_or_else(|| Point::from((0.0, 0.0)))
 }
 
 /// Completes every pending frame callback in a surface tree.

@@ -18,6 +18,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+mod cursor;
 pub mod decoration;
 mod handlers;
 mod input;

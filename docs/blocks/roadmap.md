@@ -84,11 +84,12 @@ including any deliberate divergence from the brief.
   Toplevels are tracked in `crates/neptune/src/window.rs` with no
   `desktop::Space` wrapper (ADR 0009; the choice is now a written decision, ADR
   0015). The acceptance client is `foot`, since weston is not installed.
-- **Block 3 — partial.** Keyboard focus, keymap/repeat, pointer motion/button/
-  axis and central serial accounting are implemented. **Cursor support is
-  missing**: `wl_pointer.set_cursor` and a default cursor are not handled.
-  Acceptance is partly asserted by `./dev.sh smoke`; typing, pointer response
-  and legible output remain hand-checked.
+- **Block 3 — done, with hand-checked gaps.** Keyboard focus, keymap/repeat,
+  pointer motion/button/axis, cursor support and central serial accounting are
+  implemented. `./dev.sh smoke` asserts that the compositor draws its default
+  pointer and checks any client `set_cursor` against the pointer enter it
+  answers. Typing, pointer response, legible output and the rendered cursor's
+  pixels remain hand-checked.
 - **Block 4 — not started.**
 - **Block 5 — not started.** Popups are configured with raw geometry only.
 - **Block 6 — not started.** `wl_data_device_manager` is advertised, but no

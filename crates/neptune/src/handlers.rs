@@ -16,8 +16,10 @@ use smithay::delegate_output;
 use smithay::delegate_seat;
 use smithay::delegate_shm;
 use smithay::delegate_xdg_shell;
+use smithay::input::Seat;
 use smithay::input::SeatHandler;
 use smithay::input::SeatState;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::reexports::wayland_server::Client;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat;
@@ -86,6 +88,15 @@ impl SeatHandler for State {
 
     fn seat_state(&mut self) -> &mut SeatState<Self> {
         &mut self.seat_state
+    }
+
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        // Smithay only reaches here for a `wl_pointer.set_cursor` whose serial
+        // matches the pointer's last enter serial, which this compositor
+        // generated from its single serial counter (see `cursor.rs`). No second
+        // counter is involved. Store the image; the draw path renders it.
+        self.cursor_status = image;
+        self.request_redraw();
     }
 }
 

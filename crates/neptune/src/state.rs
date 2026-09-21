@@ -21,6 +21,7 @@
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
 use smithay::input::keyboard::XkbConfig;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopSignal;
@@ -69,6 +70,15 @@ pub struct State {
     pub seat_state: SeatState<State>,
     /// The one seat Neptune offers.
     pub seat: Seat<State>,
+    /// The cursor image the pointer should draw.
+    ///
+    /// Smithay updates this through `SeatHandler::cursor_image`, and only for a
+    /// `wl_pointer.set_cursor` whose serial matches the pointer's last enter
+    /// serial — the one generated from the single serial counter in
+    /// `input.rs`. `Named` means no client cursor is active, so the
+    /// compositor's own default arrow is drawn; `Hidden` means the client
+    /// cleared the cursor and nothing is drawn.
+    pub cursor_status: CursorImageStatus,
     /// The `xdg_wm_base` state.
     pub xdg_shell_state: XdgShellState,
     /// The `wl_data_device_manager` state.
@@ -159,6 +169,7 @@ impl State {
             shm_state,
             seat_state,
             seat,
+            cursor_status: CursorImageStatus::default_named(),
             xdg_shell_state,
             data_device_state,
             output_manager_state,
