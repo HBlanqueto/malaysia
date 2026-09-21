@@ -1,11 +1,19 @@
-//! Block 4 acceptance harness for the client-initiated move and resize path.
+//! Acceptance harness for the client-initiated move and resize path.
 //!
-//! It launches a compositor with `NEPTUNE_TEST_INPUT=1` (so the compositor
-//! injects the button presses a probe cannot make itself) and runs
-//! `move_client`, which sends `xdg_toplevel.move`/`resize` with valid serials
-//! and again with a fabricated serial. The compositor reports each accept and
-//! reject; this harness asserts all four, and the client asserts it saw the
-//! resizing configure. Both must pass.
+//! It runs two cases, each with a fresh compositor and `NEPTUNE_TEST_INPUT=1`
+//! (so the compositor injects the button press, motions and release a probe
+//! cannot make itself):
+//!
+//! 1. `move_client` repeats a GTK-shaped gesture: press, motions past a
+//!    threshold, a second window that takes focus, then `xdg_toplevel.move`
+//!    and `resize` with the original press serial while the button is held.
+//!    The harness asserts both were accepted, that the window moved by the
+//!    injected pointer delta, and that the released and fabricated serials
+//!    were rejected.
+//! 2. Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar
+//!    drag. The harness asserts its window moved by the injected delta. If
+//!    Nautilus is not installed, or never maps a window, the case is reported
+//!    UNVERIFIED rather than failed.
 //!
 //! Run from the dev shell, or `./dev.sh move` which builds and runs it.
 
@@ -19,14 +27,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// How long to wait for the compositor to create its socket.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long to wait for the client, which has its own shorter timeout.
+/// How long to wait for the move client, which has its own shorter timeout.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
-
-/// The compositor lines this harness requires, in the order it requires them.
-const ACCEPTED_MOVE: &str = "accepted move request";
-const ACCEPTED_RESIZE: &str = "accepted resize request";
-const REJECTED_MOVE: &str = "rejected move request";
-const REJECTED_RESIZE: &str = "rejected resize request";
+/// How long Nautilus gets to start, map and be dragged.
+const NAUTILUS_TIMEOUT: Duration = Duration::from_secs(12);
+/// The pointer delta the scripted drag applies, matching `NEPTUNE_TEST_DRAG`.
+const DRAG: (f64, f64) = (60.0, 40.0);
 
 fn main() -> ExitCode {
     match run() {
@@ -70,22 +76,29 @@ fn run() -> Result<(), String> {
         ));
     }
 
+    run_move_case(&binary, &client)?;
+    println!("move_probe: the GTK-shaped sequence was accepted, the window moved by the delta");
+    run_nautilus_case(&binary)?;
+    Ok(())
+}
+
+/// The GTK-shaped sequence through `move_client`.
+fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
-
     let mut compositor = ChildGuard::spawn(
-        Command::new(&binary)
+        Command::new(binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_INPUT", "1"),
+            .env("NEPTUNE_TEST_INPUT", "1")
+            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
-
     let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
 
     let mut move_client = ChildGuard::spawn(
-        Command::new(&client)
+        Command::new(client)
             .env("XDG_RUNTIME_DIR", runtime.path())
             .env("WAYLAND_DISPLAY", &socket)
             .stdin(Stdio::null()),
@@ -93,50 +106,161 @@ fn run() -> Result<(), String> {
     )
     .map_err(|error| format!("failed to start the move client: {error}"))?;
     let client_log = move_client.capture()?;
-
     wait_for_client(&mut move_client, &client_log)?;
 
-    let lines = snapshot(&compositor_log);
-    for required in [
-        ACCEPTED_MOVE,
-        ACCEPTED_RESIZE,
-        REJECTED_MOVE,
-        REJECTED_RESIZE,
-    ] {
-        if !lines.iter().any(|line| line.contains(required)) {
+    let compositor_lines = stripped(&compositor_log);
+    let client_lines = stripped(&client_log);
+
+    for required in ["accepted move request", "accepted resize request"] {
+        if !compositor_lines.iter().any(|line| line.contains(required)) {
             return Err(format!(
                 "the compositor never reported `{required}`; compositor log:\n{}",
-                lines.join("\n")
+                compositor_lines.join("\n")
             ));
         }
     }
-
     for required in [
-        "sent move with press serial",
-        "sent resize with press serial",
-        "fabricated serial",
+        "got the press serial",
+        "mapped a second window",
+        "after a threshold and a focus change, while held",
+        "after the release",
+        "(fabricated)",
         "resizing state",
     ] {
-        if !snapshot(&client_log)
-            .iter()
-            .any(|line| line.contains(required))
-        {
+        if !client_lines.iter().any(|line| line.contains(required)) {
             return Err(format!(
                 "the move client never reported `{required}`; client output:\n{}",
-                snapshot(&client_log).join("\n")
+                client_lines.join("\n")
             ));
         }
     }
 
-    for line in snapshot(&client_log)
+    let rejected_move = compositor_lines
+        .iter()
+        .filter(|line| line.contains("rejected move request"))
+        .count();
+    let rejected_resize = compositor_lines
+        .iter()
+        .filter(|line| line.contains("rejected resize request"))
+        .count();
+    if rejected_move < 2 || rejected_resize < 2 {
+        return Err(format!(
+            "expected the released and fabricated serials to be rejected for both requests, saw \
+             {rejected_move} move and {rejected_resize} resize rejections; compositor log:\n{}",
+            compositor_lines.join("\n")
+        ));
+    }
+
+    let released = client_lines
+        .iter()
+        .find(|line| line.contains("after the release"))
+        .and_then(|line| number_after(line, "with serial "))
+        .ok_or_else(|| "the move client never logged the released serial".to_string())?;
+    for (kind, serial) in [
+        ("move", released),
+        ("resize", released),
+        ("move", 0xdead_0001),
+        ("resize", 0xdead_0001),
+    ] {
+        let wanted = format!("rejected {kind} request");
+        let serial = format!("Serial({serial})");
+        if !compositor_lines
+            .iter()
+            .any(|line| line.contains(&wanted) && line.contains(&serial))
+        {
+            return Err(format!(
+                "the compositor never rejected a {kind} with {serial}; compositor log:\n{}",
+                compositor_lines.join("\n")
+            ));
+        }
+    }
+
+    let drag = compositor_lines
+        .iter()
+        .find(|line| line.contains("test drag applied"))
+        .ok_or_else(|| "the compositor never applied the scripted drag".to_string())?;
+    assert_delta(drag, "from_x", "to_x", DRAG.0)?;
+    assert_delta(drag, "from_y", "to_y", DRAG.1)?;
+
+    for line in client_lines
         .iter()
         .filter(|line| line.contains("move_client:"))
     {
         println!("{line}");
     }
+    println!("move_probe: compositor accepted move and resize after a focus change, rejected the released and fabricated serials, and moved the window by the pointer delta");
+    Ok(())
+}
+
+/// A scripted headerbar drag on a real Nautilus window.
+fn run_nautilus_case(binary: &Path) -> Result<(), String> {
+    let Some(nautilus) = resolve("NEPTUNE_APP_NAUTILUS", "nautilus") else {
+        println!("move_probe: nautilus UNVERIFIED (not installed)");
+        return Ok(());
+    };
+    let runtime = TempDir::create()?;
+    let host_display = host_wayland_display()?;
+    let mut compositor = ChildGuard::spawn(
+        Command::new(binary)
+            .arg("--log-level=info")
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("NEPTUNE_TEST_INPUT", "1")
+            // The headerbar is a few percent below the window's top edge.
+            .env("NEPTUNE_TEST_PRESS_AT", "0.5,0.05")
+            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
+        host_display.as_deref(),
+    )?;
+    let compositor_log = compositor.capture()?;
+    let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+
+    let mut app = ChildGuard::spawn(
+        Command::new(&nautilus)
+            .arg("--no-desktop")
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("WAYLAND_DISPLAY", &socket)
+            .env("WAYLAND_DEBUG", "1")
+            .env("GDK_BACKEND", "wayland")
+            .env_remove("DISPLAY")
+            .stdin(Stdio::null()),
+        None,
+    )
+    .map_err(|error| format!("failed to start nautilus: {error}"))?;
+    let _app_log = app.capture()?;
+
+    let deadline = Instant::now() + NAUTILUS_TIMEOUT;
+    let drag = loop {
+        let lines = stripped(&compositor_log);
+        if let Some(drag) = lines
+            .iter()
+            .find(|line| line.contains("test drag applied"))
+            .cloned()
+        {
+            break drag;
+        }
+        if Instant::now() >= deadline {
+            if lines.iter().any(|line| line.contains("window mapped")) {
+                return Err(format!(
+                    "nautilus mapped a window but its headerbar drag never moved it; compositor \
+                     log:\n{}",
+                    lines.join("\n")
+                ));
+            }
+            println!("move_probe: nautilus UNVERIFIED (it never mapped a window)");
+            return Ok(());
+        }
+        if let Some(status) = compositor.poll()? {
+            return Err(format!(
+                "the compositor exited ({status}) during the nautilus drag; log:\n{}",
+                lines.join("\n")
+            ));
+        }
+        thread::sleep(Duration::from_millis(100));
+    };
+
+    assert_delta(&drag, "from_x", "to_x", DRAG.0)?;
+    assert_delta(&drag, "from_y", "to_y", DRAG.1)?;
     println!(
-        "move_probe: compositor accepted move and resize, rejected the fabricated serials; client \
-         saw the resizing configure"
+        "move_probe: nautilus PASS (its headerbar drag moved the window by the pointer delta)"
     );
     Ok(())
 }
@@ -162,6 +286,75 @@ fn wait_for_client(client: &mut ChildGuard, log: &Sink) -> Result<(), String> {
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Asserts that `to - from` equals `expected` in a `test drag applied` line.
+fn assert_delta(line: &str, from: &str, to: &str, expected: f64) -> Result<(), String> {
+    let start = field(line, from).ok_or_else(|| format!("`{from}` is missing from `{line}`"))?;
+    let end = field(line, to).ok_or_else(|| format!("`{to}` is missing from `{line}`"))?;
+    let delta = end - start;
+    if (delta - expected).abs() > f64::EPSILON {
+        return Err(format!(
+            "the scripted drag moved the window by {delta} on `{to}`, expected {expected}; line: \
+             `{line}`"
+        ));
+    }
+    Ok(())
+}
+
+/// Reads `name=<number>` from a tracing line.
+fn field(line: &str, name: &str) -> Option<f64> {
+    let rest = line.split_once(&format!("{name}="))?.1;
+    rest.split_whitespace().next()?.parse().ok()
+}
+
+/// The first number after `marker` on a client line.
+fn number_after(line: &str, marker: &str) -> Option<u32> {
+    let rest = line.split_once(marker)?.1;
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().ok()
+}
+
+/// A copy of the captured lines with ANSI colour escapes removed.
+fn stripped(sink: &Sink) -> Vec<String> {
+    snapshot(sink).iter().map(|line| strip_ansi(line)).collect()
+}
+
+/// Removes ANSI escape sequences, so tracing's coloured fields can be parsed.
+fn strip_ansi(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            for c in chars.by_ref() {
+                if c == 'm' {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Resolves a client from its environment variable or `PATH`.
+fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os(variable) {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    which(fallback)
+}
+
+/// Looks a command up on `PATH`.
+fn which(command: &str) -> Option<PathBuf> {
+    let paths = std::env::var_os("PATH")?;
+    std::env::split_paths(&paths)
+        .map(|dir| dir.join(command))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Spawns the compositor with its own runtime directory, reaching the host

@@ -45,8 +45,7 @@ and the interaction.
   and focuses. Motion drives the grab or updates focus and the edge cursor;
   release ends it. `forget_window` removes a destroyed window from the scene and
   any grab, and moves keyboard focus to the new topmost window or clears it.
-- **`state.rs`** holds `Grab` (move or resize), the remembered pointer-press
-  serial, and the seat focus handshake.
+- **`state.rs`** holds `Grab` (move or resize) and the seat focus handshake.
 - **`handlers.rs`** answers `move_request` and `resize_request` after the serial
   check, and routes `toplevel_destroyed` to `forget_window`.
 - **`cursor.rs`** loads the `ew`/`ns`/`nwse`/`nesw` resize shapes from the
@@ -98,28 +97,34 @@ The machine-checked acceptance is a command whose exit code is the result:
   asserted. The leak check is proved fallible: with `NEPTUNE_TEST_LEAK_WINDOW`
   set, the compositor deliberately leaves one window behind and `block4` fails
   with `last seen Some(LiveObjects { clients: 0, surfaces: 0, toplevels: 1 })`.
-- **`./dev.sh move`** — launches a compositor with `NEPTUNE_TEST_INPUT=1` and a
-  `move_client` probe. The compositor injects the button presses a probe cannot
-  make, so the client can send `xdg_toplevel.move` and `xdg_toplevel.resize` with
-  valid serials, then repeats both with a fabricated serial. The harness asserts
-  the compositor accepted the valid requests and rejected the fabricated ones,
-  and the client asserts it received a configure carrying the `resizing` state.
+- **`./dev.sh move`** — launches a compositor with `NEPTUNE_TEST_INPUT=1` and
+  runs `move_client`, which repeats a GTK-shaped gesture: press, three motions
+  past a drag threshold, a second window that takes focus, then
+  `xdg_toplevel.move` and `xdg_toplevel.resize` with the original press serial
+  while the button is held. The harness asserts the compositor accepted both,
+  moved the window by the injected pointer delta, and rejected the released and
+  fabricated serials; the client asserts it received a configure carrying the
+  `resizing` state. It then drags a real Nautilus headerbar and asserts its
+  window moved by the same delta (UNVERIFIED if Nautilus is not installed).
   Observed:
 
   ```
-  move_client: sent move with press serial 4
-  move_client: sent resize with press serial 7
-  move_client: sent move/resize with fabricated serial 3735879681
+  move_client: got the press serial 7
+  move_client: mapped a second window to take focus
+  move_client: sent move/resize with serial 7 after a threshold and a focus change, while held
+  move_client: sent move/resize with serial 3735879681 (fabricated)
   move_client: received a configure with the resizing state
+  move_client: sent move/resize with serial 7 after the release
   move_client: PASS
+  move_probe: nautilus PASS (its headerbar drag moved the window by the pointer delta)
   move_probe: PASS
   ```
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
-  hit-testing, edge zones and `resized` clamping; the one-shot pointer-press
-  serial (`consume`); the edge-to-cursor mapping; the host-pointer corner
-  mapping; the decoration mode mappings and scene storage; and the offscreen
-  pixel tests that assert the frame is upright and the cursor lands on its
-  hotspot-adjusted position (ADR 0018).
+  hit-testing, edge zones and `resized` clamping; the held-grab serial check
+  (`held_grab`); the edge-to-cursor mapping; the host-pointer corner mapping;
+  the decoration mode mappings and scene storage; and the offscreen pixel tests
+  that assert the frame is upright and the cursor lands on its hotspot-adjusted
+  position (ADR 0018).
 - **`./dev.sh smoke`** — asserts the mapping sequence and that a client
   (`foot`) receives the server-side decoration configure before its first
   buffer attach, so the rebuild of `window.rs` did not regress mapping and the
@@ -187,10 +192,12 @@ shadow yet.
    its own surface cursor keeps it, which is correct over its content but not
    over Neptune's decoration.
 5. **`NEPTUNE_TEST_INPUT` is test-only but lives in production code.** The
-   compositor injects a pointer press on map and after an accepted move, so a
-   probe can exercise the client-initiated path. It is off unless the variable
-   is set, and it is the one test seam in the compositor itself rather than in
-   the dev-only probes.
+   compositor presses once, on the first window that maps, holds the button,
+   follows the press with motions and applies a drag once a request is
+   accepted, so a probe can exercise the client-initiated path. It is off
+   unless the variable is set, and it is the one test seam in the compositor
+   itself rather than in the dev-only probes. `NEPTUNE_TEST_PRESS_AT` and
+   `NEPTUNE_TEST_DRAG` aim the press and size the drag.
 
 ## Decision records
 

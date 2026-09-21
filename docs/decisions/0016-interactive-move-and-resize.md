@@ -34,9 +34,17 @@ request, advanced by pointer motion, and cleared on pointer release or when the
 window is destroyed.
 
 The client requests are serial-checked, not trusted: `xdg_toplevel.move` and
-`resize` are honoured only when their serial is the last pointer button press
-`input.rs` generated from the single `SERIAL_COUNTER`, and that press is
-consumed so it cannot authorise a second request.
+`resize` are honoured only when their serial names the pointer's **implicit
+grab** — a button press that is still held, made on the requesting client's
+surface. Smithay installs that grab itself, keyed by the press serial
+(`DefaultGrab::button` sets a `ClickGrab`:
+`smithay-0.7.0/src/input/pointer/grab.rs:238-252`) and drops it when the last
+button is released (`:374-380`), so the check is `has_grab(serial)` plus the
+grab's start data, exactly as the reference compositor does
+(`smithay-0.7.0/anvil/src/shell/xdg.rs:152-160`). Focus changes, raises,
+configures and keyboard enter do not touch the grab and cannot invalidate a
+request; a released, fabricated or foreign serial names no valid grab and is
+rejected.
 
 ## Consequences
 
@@ -51,11 +59,15 @@ consumed so it cannot authorise a second request.
   (`Scene::edge_at`), not the client surface, because the two do not coincide
   (ADR 0014). The resize cursor shapes are drawn from the Xcursor theme
   (`ew`/`ns`/`nwse`/`nesw`), with the default arrow as fallback.
-- The serial check is one function, `consume`, with unit tests for a matching
-  press, a foreign serial, no press, and single use. `./dev.sh move` exercises
-  the live path: `NEPTUNE_TEST_INPUT` makes the compositor inject the button
-  presses a probe cannot make, so `move_client` can send valid requests and then
-  fabricated ones.
+- The serial check is one function, `State::held_grab`, with unit tests for no
+  press, a fabricated serial, a released press, and a held press surviving
+  other serial traffic. `./dev.sh move` exercises the live path:
+  `NEPTUNE_TEST_INPUT` makes the compositor press once, hold, and follow the
+  press with motions and a release, so `move_client` can repeat a GTK-shaped
+  gesture — threshold motions, a second window that takes focus, then move and
+  resize with the original serial — and then send released and fabricated
+  serials that must be rejected. The same command drags a real Nautilus
+  headerbar and asserts its window moved by the injected delta.
 - Block 5 cannot reuse this for popups: a popup grab must move keyboard and
   pointer focus and restore it, which is exactly what the `desktop`-gated
   `PopupKeyboardGrab`/`PopupPointerGrab` do. Block 4's grab deliberately does not
@@ -63,10 +75,12 @@ consumed so it cannot authorise a second request.
 
 ## References
 
-- `crates/neptune/src/input.rs` — `pointer_press`, `drag`, `consume`, the edge
+- `crates/neptune/src/input.rs` — `pointer_press`, `drag`, `held_grab`, the edge
   cursor.
 - `crates/neptune/src/state.rs` — `Grab`.
 - `crates/neptune/src/window.rs` — `resize`, `set_resizing`, `send_close`,
   `minimum_outer_size`/`maximum_outer_size`.
 - `crates/neptune-scene/src/scene.rs` — `Scene::edge_at`, `resized`.
-- Smithay `src/input/pointer/mod.rs` — `PointerGrab`, the framework not adopted.
+- Smithay `src/input/pointer/mod.rs` — `PointerGrab`, the framework not adopted;
+  `src/input/pointer/grab.rs` — `ClickGrab` and `GrabStartData`, the implicit
+  grab the serial check reads.

@@ -1,20 +1,26 @@
-//! Exercises the client-initiated move and resize path.
+//! Exercises the client-initiated move and resize path the way a real gesture
+//! does.
 //!
-//! A Wayland client can ask the compositor to move or resize a toplevel with
-//! `xdg_toplevel.move` and `xdg_toplevel.resize`, but only with the serial of a
-//! pointer button press it received. `NEPTUNE_TEST_INPUT=1` makes the compositor
-//! press once when the window maps and once more when it accepts the move, so
-//! this client can obtain two valid serials without real input.
+//! A GTK headerbar drag does not ask for a move on the button press: the
+//! gesture waits for the pointer to pass a threshold, and a focus change can
+//! happen before the request. This client repeats that shape:
 //!
-//! The sequence, all asserted by exit code and the harness:
+//! 1. on the first injected press, remember the serial and wait;
+//! 2. after three motions, map a second window (the compositor focuses it),
+//!    then send `move` and `resize` with the original press serial, both while
+//!    the button is held;
+//! 3. after the compositor releases the button, send `move` and `resize` with
+//!    the same serial again (now released), and both with a fabricated serial;
+//! 4. the valid resize makes the compositor send a configure carrying the
+//!    `resizing` state, which is the success signal.
 //!
-//! 1. on the first injected press, send `move` with that serial;
-//! 2. on the second, send `resize` (bottom-right) with that serial, then send
-//!    `move` and `resize` again with a fabricated serial;
-//! 3. the valid resize makes the compositor send a configure carrying the
-//!    `resizing` state, which this client observes as success.
+//! The released and fabricated requests must be rejected; the valid ones must
+//! be accepted even though a raise, a focus change and a keyboard enter
+//! happened in between.
 //!
-//! If no resizing configure arrives within the deadline, it exits non-zero.
+//! `NEPTUNE_TEST_INPUT=1` makes the compositor press once, on the first window
+//! that maps, and hold the button; the motions and the release come from the
+//! same scripted input. Run from the dev shell, or `./dev.sh move`.
 
 use std::time::Duration;
 
@@ -41,7 +47,10 @@ use smithay_client_toolkit::{
         },
         WaylandSurface,
     },
-    shm::{slot::SlotPool, Shm, ShmHandler},
+    shm::{
+        slot::{Buffer, SlotPool},
+        Shm, ShmHandler,
+    },
 };
 use wayland_client::protocol::{
     wl_output::{self, WlOutput},
@@ -55,6 +64,8 @@ use wayland_client::protocol::{
 const FABRICATED_SERIAL: u32 = 0xdead_0001;
 /// Buffer side, in pixels.
 const SIDE: i32 = 64;
+/// How many motions the gesture waits for before it asks for a move.
+const THRESHOLD_MOTIONS: usize = 3;
 /// How long to wait for the resizing configure.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -76,9 +87,6 @@ fn main() {
     window.attach(Some(buffer.wl_buffer()), 0, 0);
     window.commit();
 
-    // The buffer must outlive the run, or the surface loses its content.
-    let _keep_buffer = buffer;
-
     let mut app = App {
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
@@ -86,8 +94,16 @@ fn main() {
         seat_state,
         seat: None,
         pointer: None,
+        compositor,
+        xdg_shell,
+        pool,
         window,
-        presses: 0,
+        second: None,
+        _first_buffer: buffer,
+        _second_buffer: None,
+        press_serial: None,
+        motions: 0,
+        requested: false,
         saw_resizing: false,
         failed: false,
         loop_signal: event_loop.get_signal(),
@@ -129,23 +145,57 @@ struct App {
     seat_state: SeatState,
     seat: Option<WlSeat>,
     pointer: Option<WlPointer>,
+    compositor: CompositorState,
+    xdg_shell: XdgShell,
+    pool: SlotPool,
     window: Window,
-    presses: usize,
+    second: Option<Window>,
+    _first_buffer: Buffer,
+    _second_buffer: Option<Buffer>,
+    press_serial: Option<u32>,
+    motions: usize,
+    requested: bool,
     saw_resizing: bool,
     failed: bool,
     loop_signal: calloop::LoopSignal,
 }
 
 impl App {
-    /// Sends move and resize with the fabricated serial, after the valid ones.
-    fn send_stale(&self) {
+    /// Maps a second window, so the compositor raises and focuses it between
+    /// the press and the requests.
+    fn map_second_window(&mut self, qh: &QueueHandle<Self>) {
+        if self.second.is_some() {
+            return;
+        }
+        let surface = self.compositor.create_surface(qh);
+        let window = self
+            .xdg_shell
+            .create_window(surface, WindowDecorations::RequestServer, qh);
+        let (buffer, canvas) = self
+            .pool
+            .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
+            .expect("failed to create a second buffer");
+        canvas.fill(0x20);
+        window.attach(Some(buffer.wl_buffer()), 0, 0);
+        window.commit();
+        println!("move_client: mapped a second window to take focus");
+        self.second = Some(window);
+        self._second_buffer = Some(buffer);
+    }
+
+    /// Sends move and resize with `serial`, the requests the gesture makes.
+    fn request_move_and_resize(&self, serial: u32, note: &str) {
         let Some(seat) = &self.seat else {
             return;
         };
-        self.window.move_(seat, FABRICATED_SERIAL);
-        self.window
-            .resize(seat, FABRICATED_SERIAL, ResizeEdge::TopLeft);
-        println!("move_client: sent move/resize with fabricated serial {FABRICATED_SERIAL}");
+        self.window.move_(seat, serial);
+        self.window.resize(seat, serial, ResizeEdge::BottomRight);
+        println!("move_client: sent move/resize with serial {serial} {note}");
+    }
+
+    /// Sends move and resize with the fabricated serial.
+    fn send_fabricated(&self) {
+        self.request_move_and_resize(FABRICATED_SERIAL, "(fabricated)");
     }
 }
 
@@ -261,30 +311,44 @@ impl PointerHandler for App {
     fn pointer_frame(
         &mut self,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &WlPointer,
         events: &[PointerEvent],
     ) {
         for event in events {
-            let PointerEventKind::Press { serial, .. } = event.kind else {
-                continue;
-            };
-            self.presses += 1;
-            if self.presses > 1 {
-                continue;
+            match event.kind {
+                PointerEventKind::Press { serial, .. } => {
+                    if self.press_serial.is_none() {
+                        self.press_serial = Some(serial);
+                        println!("move_client: got the press serial {serial}");
+                    }
+                }
+                PointerEventKind::Motion { .. } => {
+                    let Some(serial) = self.press_serial else {
+                        continue;
+                    };
+                    if self.requested {
+                        continue;
+                    }
+                    self.motions += 1;
+                    if self.motions < THRESHOLD_MOTIONS {
+                        continue;
+                    }
+                    self.requested = true;
+                    self.map_second_window(qh);
+                    self.request_move_and_resize(
+                        serial,
+                        "after a threshold and a focus change, while held",
+                    );
+                    self.send_fabricated();
+                }
+                PointerEventKind::Release { .. } => {
+                    if let Some(serial) = self.press_serial {
+                        self.request_move_and_resize(serial, "after the release");
+                    }
+                }
+                _ => {}
             }
-            let Some(seat) = &self.seat else {
-                continue;
-            };
-            self.window.move_(seat, serial);
-            println!("move_client: sent move with press serial {serial}");
-            // The same held press authorises the resize too: the protocol ties
-            // both requests to the implicit grab, not to one request each.
-            self.window.resize(seat, serial, ResizeEdge::BottomRight);
-            println!(
-                "move_client: sent resize with press serial {serial} while the button is held"
-            );
-            self.send_stale();
         }
     }
 }
