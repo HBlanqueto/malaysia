@@ -17,7 +17,9 @@ the command after it starts that block's behaviour.
       `./dev.sh smoke`.
 - [x] **Block 3 — Input.** `./dev.sh run`, checked by `./dev.sh smoke`; typing
       and the rendered cursor are hand-checked.
-- [ ] **Block 4 — Manipulable windows.** Not yet runnable.
+- [x] **Block 4 — Manipulable windows.** `./dev.sh block4` opens and closes 50
+      windows and asserts the scene empties; drag feel and resize visuals are
+      hand-checked.
 - [ ] **Block 5 — Popups.** Not yet runnable.
 - [ ] **Block 6 — Clipboard.** Not yet runnable.
 

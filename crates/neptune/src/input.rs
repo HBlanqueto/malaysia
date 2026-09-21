@@ -176,6 +176,9 @@ impl State {
                 None => self.clear_keyboard_focus(),
             }
         }
+        if self.windows.is_empty() {
+            tracing::info!("scene empty");
+        }
         self.request_redraw();
     }
 
@@ -184,12 +187,7 @@ impl State {
     /// Used to validate `xdg_toplevel.move`/`resize`: a request must name a
     /// press this compositor actually saw, and can only be used once.
     pub(crate) fn take_pointer_press(&mut self, serial: Serial) -> bool {
-        if self.pointer_press_serial == Some(serial) {
-            self.pointer_press_serial = None;
-            true
-        } else {
-            false
-        }
+        consume(&mut self.pointer_press_serial, serial)
     }
 
     /// Starts dragging a window from its decoration.
@@ -344,11 +342,26 @@ fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
+/// Consumes `remembered` when it holds `serial`, clearing it either way.
+///
+/// This is the whole of the `xdg_toplevel.move`/`resize` serial check: a
+/// request is honoured only if its serial is the last press seen, and that press
+/// cannot authorise a second request.
+fn consume(remembered: &mut Option<Serial>, serial: Serial) -> bool {
+    if *remembered == Some(serial) {
+        *remembered = None;
+        true
+    } else {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use smithay::input::pointer::CursorIcon;
+    use smithay::utils::Serial;
 
-    use super::{Edge, edge_cursor};
+    use super::{Edge, consume, edge_cursor};
+    use smithay::input::pointer::CursorIcon;
 
     #[test]
     fn each_edge_gets_its_own_resize_cursor() {
@@ -360,5 +373,26 @@ mod tests {
         assert_eq!(edge_cursor(Edge::BottomRight), CursorIcon::NwseResize);
         assert_eq!(edge_cursor(Edge::TopRight), CursorIcon::NeswResize);
         assert_eq!(edge_cursor(Edge::BottomLeft), CursorIcon::NeswResize);
+    }
+
+    #[test]
+    fn a_matching_press_serial_is_accepted_once() {
+        let mut remembered = Some(Serial::from(7u32));
+        assert!(consume(&mut remembered, Serial::from(7u32)));
+        assert_eq!(remembered, None);
+        assert!(!consume(&mut remembered, Serial::from(7u32)));
+    }
+
+    #[test]
+    fn a_foreign_press_serial_is_rejected_and_kept() {
+        let mut remembered = Some(Serial::from(7u32));
+        assert!(!consume(&mut remembered, Serial::from(8u32)));
+        assert_eq!(remembered, Some(Serial::from(7u32)));
+    }
+
+    #[test]
+    fn a_request_with_no_press_behind_it_is_rejected() {
+        let mut remembered = None;
+        assert!(!consume(&mut remembered, Serial::from(1u32)));
     }
 }

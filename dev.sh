@@ -39,6 +39,7 @@ Commands:
     clean               Remove build artifacts and runtime files
     check               Run formatting, clippy and tests
     smoke [--release]   Build and run the toplevel mapping smoke test
+    block4 [--release]  Build and run the 50-window open/close acceptance test
 EOF
 }
 
@@ -390,6 +391,36 @@ smoke() {
         fail "$EXIT_SMOKE" "smoke test failed"
 }
 
+# block4 - open and close fifty windows and assert the scene returns to empty.
+#
+# Like smoke, the harness launches its own compositor and the stress client, so
+# it must run in the graphical session. The harness's exit code is the verdict.
+block4() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for block4: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    else
+        _profile=debug
+        cargo build -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    fi
+    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+        NEPTUNE_STRESS_BIN="$script_dir/target/$_profile/window_stress" \
+        "$script_dir/target/$_profile/block4" ||
+        fail "$EXIT_SMOKE" "block4 test failed"
+}
+
 if [ "$#" -eq 0 ]; then
     usage >&2
     exit "$EXIT_USAGE"
@@ -412,6 +443,7 @@ case "$command_name" in
     clean) clean ;;
     check) check ;;
     smoke) smoke "$@" ;;
+    block4) block4 "$@" ;;
     -h | --help) usage ;;
     *)
         usage >&2

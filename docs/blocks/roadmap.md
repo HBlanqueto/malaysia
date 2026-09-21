@@ -96,7 +96,13 @@ including any deliberate divergence from the brief.
   pointer and checks any client `set_cursor` against the pointer enter it
   answers. Typing, pointer response, legible output and the rendered cursor's
   pixels remain hand-checked.
-- **Block 4 — not started.**
+- **Block 4 — done, with hand-checked gaps.** Move (titlebar drag and
+  `xdg_toplevel.move`), resize (edge zones and `xdg_toplevel.resize`, all edges,
+  min/max honoured), close, stacking, click-to-focus and edge resize cursors are
+  implemented in `neptune-scene` and the compositor. `xdg_toplevel.move`/`resize`
+  serials are validated against the last pointer press. `./dev.sh block4` opens
+  and closes 50 windows and asserts the scene returns to empty; drag feel, resize
+  visuals and the cursor shape changing under the pointer are hand-checked.
 - **Block 5 — not started.** Popups are configured with raw geometry only.
 - **Block 6 — not started.** `wl_data_device_manager` is advertised, but no
   clipboard behaviour is implemented.
