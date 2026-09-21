@@ -40,6 +40,10 @@ each dependency carries a one-line justification in `Cargo.toml`.
     `#![forbid(unsafe_code)]`, no dependencies.
   - `neptune-design` — the system design defaults, as documented compile-time
     constants. `#![forbid(unsafe_code)]`, no dependencies.
+
+  Block 1 added a fourth, dev-only member at `tools/sctk-probe`: the probe
+  clients used to verify the compositor. It lives outside `crates/` and is
+  excluded from the default build, so it is not part of the compositor.
 - **Toolchain from the flake.** There is no `rust-toolchain.toml`: the dev
   shell's nixpkgs `cargo`/`rustc`, pinned by `flake.lock`, are what build, and
   `Cargo.toml`'s `rust-version` is the floor (ADR 0006).
@@ -105,7 +109,8 @@ format (ADR 0011).
 A POSIX shell wrapper around cargo and a background instance of the binary.
 Run `./dev.sh --help` for the list; the commands are `build [--release]`,
 `run [--release]`, `watch [--release]`, `stop`, `restart`, `status`, `log [-f]`,
-`clean` and `check`. It uses only coreutils, cargo, `setsid` and `cargo-watch`,
+`clean`, `check` and `smoke [--release]`. It uses only coreutils, cargo, `setsid`
+and `cargo-watch`,
 is clean under `shellcheck`, and keeps runtime files under
 `$XDG_RUNTIME_DIR/neptune-dev/` (falling back to `/tmp/neptune-$(id -u)`); the
 directory avoids the name `neptune`, which a running compositor may use for its
@@ -120,8 +125,9 @@ Wayland socket. Exit codes are grouped so callers can branch:
 | 4 | a required tool is missing |
 | 5 | the binary failed to start |
 | 6 | `log`: no log file |
-| 7 | `build`/`check`/`clean`/`watch`: not inside the dev shell |
+| 7 | `build`/`check`/`clean`/`watch`/`smoke`: not inside the dev shell |
 | 8 | `watch`: the watcher exited unexpectedly |
+| 9 | `smoke`: the build or the smoke test failed |
 
 `status` follows the LSB init-script convention (running = 0, dead with PID
 file = 1, not running = 3), so it can be used as a boolean in scripts.
@@ -187,8 +193,10 @@ justification. The runtime dependencies added in Block 0, in full:
 
 Block 1 added `smithay` (only the winit backend, GLES2 renderer and Wayland
 frontend features) as the compositor framework, pinned to the crates.io 0.7.0
-release (ADR 0009, ADR 0010). `neptune-scene` and `neptune-design` still have
-no dependencies. Transitive dependencies are locked in `Cargo.lock`. The
+release (ADR 0009, ADR 0010). It also added one dev-only dependency,
+`smithay-client-toolkit`, used only by `tools/sctk-probe`; it was already in the
+graph through winit. `neptune-scene` and `neptune-design` still have no
+dependencies. Transitive dependencies are locked in `Cargo.lock`. The
 standard library is preferred wherever it is sufficient; an argument-parsing
 and a globbing crate were both considered and rejected.
 
@@ -216,13 +224,14 @@ build script (ADR 0007).
 
 ### Verification
 
-`./dev.sh check` is the acceptance command. It runs 12 tests in `neptune`
-(argument parsing and log-level mapping), 16 in `neptune-scene` (coordinate
-conversions and same-space arithmetic), one `compile_fail` doctest proving
-cross-space point arithmetic does not compile, then rustfmt and
-`clippy -D warnings`. `cargo doc` builds without warnings because every public
-item is documented; `neptune-design` is where that is exercised most, since it
-is almost entirely public data.
+Block 0 was accepted on `./dev.sh check`: 12 tests in `neptune` (argument
+parsing and log-level mapping), 16 in `neptune-scene` (coordinate conversions
+and same-space arithmetic), one `compile_fail` doctest proving cross-space point
+arithmetic does not compile, then rustfmt and `clippy -D warnings`. Block 1 grew
+the same command with its own tests and the probe harness; its document records
+what the command now covers. `cargo doc` builds without warnings because every
+public item is documented; `neptune-design` is where that is exercised most,
+since it is almost entirely public data.
 
 ## Open questions
 

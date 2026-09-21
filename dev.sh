@@ -17,6 +17,7 @@ EXIT_RUN_FAILED=5
 EXIT_NO_LOG=6
 EXIT_NOT_DEVSHELL=7
 EXIT_WATCH=8
+EXIT_SMOKE=9
 # status follows the LSB init-script conventions: 0 running, 1 dead with a
 # leftover pid file, 3 not running. Interrupting `watch` with Ctrl-C exits 130
 # (128 + SIGINT).
@@ -37,6 +38,7 @@ Commands:
     log [-f]            Print the log, or follow it with -f
     clean               Remove build artifacts and runtime files
     check               Run formatting, clippy and tests
+    smoke [--release]   Build and run the toplevel mapping smoke test
 EOF
 }
 
@@ -308,6 +310,39 @@ check() {
     cargo test --workspace
 }
 
+# smoke - build the compositor and the probe harness, then run the mapping
+# smoke test.
+#
+# The harness launches its own compositor and a real client, so it must run in
+# the graphical session the compositor runs in; it fails loudly when there is no
+# host display. The harness's exit code is the verdict.
+smoke() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for smoke: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
+    else
+        _profile=debug
+        cargo build -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
+    fi
+    # NEPTUNE_BIN pins the binary just built, so the harness does not fall back
+    # to a different profile's compositor.
+    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+        "$script_dir/target/$_profile/smoke" ||
+        fail "$EXIT_SMOKE" "smoke test failed"
+}
+
 if [ "$#" -eq 0 ]; then
     usage >&2
     exit "$EXIT_USAGE"
@@ -329,6 +364,7 @@ case "$command_name" in
     log) show_log "$@" ;;
     clean) clean ;;
     check) check ;;
+    smoke) smoke "$@" ;;
     -h | --help) usage ;;
     *)
         usage >&2

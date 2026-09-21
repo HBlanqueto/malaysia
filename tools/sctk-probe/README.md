@@ -10,13 +10,16 @@ The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
 at, so they can be run against Neptune or the host session without any change.
 `smoke` is different: it launches Neptune itself and drives a client against it.
 
-Everything here runs inside the dev shell (`nix develop`). The compositor must
-be built first:
+Everything here runs inside the dev shell (`nix develop`). The simplest way to
+run the smoke test is the project script, which builds both the compositor and
+this harness and propagates the result:
 
 ```sh
-nix develop
-cargo build -p neptune
+./dev.sh smoke
 ```
+
+The sections below are the underlying `cargo` commands, for when you want to run
+one binary directly.
 
 ## `parent_probe`
 
@@ -31,12 +34,14 @@ parent on the child while both are tracked:
 The probe checks the three configure sizes and exits non-zero if the cycle is
 not reproduced, so it is a pass/fail check rather than output to read by eye.
 
-Run it against a compositor started with its own runtime directory (the socket
-must be the one Neptune created). For example, while Neptune runs under
-`./dev.sh run`, point the probe at the same socket it uses:
+Run it against a running compositor. While Neptune runs under `./dev.sh run`,
+its socket is in the dev runtime directory; Smithay deliberately starts at
+`wayland-1`, so find the socket rather than assuming a name:
 
 ```sh
-XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR/neptune-dev" WAYLAND_DISPLAY=wayland-0 \
+runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/neptune-dev"
+sock=$(ls "$runtime"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n 1)
+XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="${sock##*/}" \
     cargo run -p sctk-probe --bin parent_probe
 ```
 
@@ -54,7 +59,8 @@ accepted, so a `wl_display.sync` round-trip cannot be mistaken for a frame.
 It exits non-zero if any step is missing or out of order.
 
 ```sh
-cargo run -p sctk-probe --bin smoke
+./dev.sh smoke          # builds neptune and the harness, then runs it
+cargo run -p sctk-probe --bin smoke   # run it directly, if already built
 ```
 
 Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
