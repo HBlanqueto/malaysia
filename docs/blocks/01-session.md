@@ -21,6 +21,16 @@ The block is built in parts, each reviewed on its own:
 
 Out of scope: popups, move/resize, clipboard, XWayland, DRM/KMS.
 
+## Divergences from the block spec
+
+1. **Mapping is on the first buffered commit, not on `ack_configure`.** Part 5's
+   wording says "ack_configure → map". The protocol maps a surface when it has a
+   committed non-null buffer, not when a configure is acked; mapping on the ack
+   would show a surface with no content. The window is marked ready by the ack
+   (and only by the matching serial, see ADR/Part 6) and mapped by the first
+   commit that carries a buffer. The block spec's literal wording is wrong on
+   this point and is overridden here, deliberately.
+
 ## Open questions
 
 1. **The `deny(unsafe_code)` policy must be redefined before Block 2.** It is
