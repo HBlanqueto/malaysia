@@ -94,6 +94,22 @@ The machine-checked acceptance is a command whose exit code is the result:
   asserted. The leak check is proved fallible: with `NEPTUNE_TEST_LEAK_WINDOW`
   set, the compositor deliberately leaves one window behind and `block4` fails
   with `last seen Some(LiveObjects { clients: 0, surfaces: 0, toplevels: 1 })`.
+- **`./dev.sh move`** — launches a compositor with `NEPTUNE_TEST_INPUT=1` and a
+  `move_client` probe. The compositor injects the button presses a probe cannot
+  make, so the client can send `xdg_toplevel.move` and `xdg_toplevel.resize` with
+  valid serials, then repeats both with a fabricated serial. The harness asserts
+  the compositor accepted the valid requests and rejected the fabricated ones,
+  and the client asserts it received a configure carrying the `resizing` state.
+  Observed:
+
+  ```
+  move_client: sent move with press serial 4
+  move_client: sent resize with press serial 7
+  move_client: sent move/resize with fabricated serial 3735879681
+  move_client: received a configure with the resizing state
+  move_client: PASS
+  move_probe: PASS
+  ```
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
   hit-testing, edge zones and `resized` clamping; the one-shot pointer-press
   serial (`consume`); and the edge-to-cursor mapping.
@@ -103,8 +119,7 @@ The machine-checked acceptance is a command whose exit code is the result:
 Not verified by a command, and left to hand-checking: drag feel and whether the
 window keeps the grab offset under the pointer; resize visuals and whether the
 minimum and maximum feel right; the cursor shape actually changing as the
-pointer crosses an edge; click-to-focus and stacking as seen; and the live
-client-initiated `move`/`resize` path.
+pointer crosses an edge; and click-to-focus and stacking as seen.
 
 ## Open questions
 
@@ -119,10 +134,11 @@ client-initiated `move`/`resize` path.
    restored to the default when the active status is `Named`; a client that set
    its own surface cursor keeps it, which is correct over its content but not
    over Neptune's decoration.
-5. **Client-initiated move/resize is untested live.** The serial check is unit
-   tested and the request handlers compile against Smithay's trait, but no probe
-   sends the requests, so the path is exercised only by a real application's
-   titlebar.
+5. **`NEPTUNE_TEST_INPUT` is test-only but lives in production code.** The
+   compositor injects a pointer press on map and after an accepted move, so a
+   probe can exercise the client-initiated path. It is off unless the variable
+   is set, and it is the one test seam in the compositor itself rather than in
+   the dev-only probes.
 
 ## Decision records
 

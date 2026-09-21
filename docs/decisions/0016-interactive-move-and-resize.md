@@ -52,7 +52,10 @@ consumed so it cannot authorise a second request.
   (ADR 0014). The resize cursor shapes are drawn from the Xcursor theme
   (`ew`/`ns`/`nwse`/`nesw`), with the default arrow as fallback.
 - The serial check is one function, `consume`, with unit tests for a matching
-  press, a foreign serial, no press, and single use.
+  press, a foreign serial, no press, and single use. `./dev.sh move` exercises
+  the live path: `NEPTUNE_TEST_INPUT` makes the compositor inject the button
+  presses a probe cannot make, so `move_client` can send valid requests and then
+  fabricated ones.
 - Block 5 cannot reuse this for popups: a popup grab must move keyboard and
   pointer focus and restore it, which is exactly what the `desktop`-gated
   `PopupKeyboardGrab`/`PopupPointerGrab` do. Block 4's grab deliberately does not

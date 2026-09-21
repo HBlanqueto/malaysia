@@ -92,3 +92,25 @@ exits. On its own it is only useful to watch a compositor's teardown:
 ```sh
 cargo run -p sctk-probe --bin window_stress
 ```
+
+## `move_probe`
+
+Exercises the client-initiated `xdg_toplevel.move`/`resize` path. It launches a
+compositor with `NEPTUNE_TEST_INPUT=1` (the compositor injects the button
+presses a probe cannot make) and runs `move_client`, which sends move and resize
+with valid serials and again with a fabricated one. It asserts the compositor
+accepted the valid requests and rejected the fabricated ones, and that the
+client received a configure carrying the `resizing` state.
+
+```sh
+./dev.sh move                          # builds neptune and the probes, then runs it
+cargo run -p sctk-probe --bin move_probe   # run it directly, if already built
+```
+
+Environment overrides: `NEPTUNE_BIN` and `NEPTUNE_MOVE_BIN`.
+
+## `move_client`
+
+The client `move_probe` drives: it maps one toplevel, then on each injected
+button press sends `move` or `resize`, followed by both with a fabricated
+serial. It exits non-zero if no resizing configure arrives.

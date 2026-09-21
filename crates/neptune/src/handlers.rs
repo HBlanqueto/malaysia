@@ -61,6 +61,7 @@ impl CompositorHandler for State {
         on_commit_buffer_handler::<Self>(surface);
         if let Some(mapped) = self.windows.commit(surface) {
             self.focus_window(mapped);
+            self.inject_test_press(mapped);
         }
         self.request_redraw();
     }
@@ -144,8 +145,10 @@ impl XdgShellHandler for State {
         // comes from the one serial counter. A request with any other serial is
         // ignored rather than starting a drag.
         if !self.take_pointer_press(serial) {
+            tracing::info!("rejected move request for a stale serial");
             return;
         }
+        tracing::info!("accepted move request");
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
@@ -155,6 +158,8 @@ impl XdgShellHandler for State {
             .map(|pointer| pointer.current_location())
         {
             self.start_move(id, location);
+            // Give a probe the next serial for its resize request.
+            self.inject_test_press(id);
         }
     }
 
@@ -166,6 +171,7 @@ impl XdgShellHandler for State {
         edges: xdg_toplevel::ResizeEdge,
     ) {
         if !self.take_pointer_press(serial) {
+            tracing::info!("rejected resize request for a stale serial");
             return;
         }
         let Some(edge) = crate::window::from_xdg_resize_edge(edges) else {
@@ -174,6 +180,7 @@ impl XdgShellHandler for State {
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
+        tracing::info!("accepted resize request");
         if let Some(location) = self
             .seat
             .get_pointer()

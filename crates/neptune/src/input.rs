@@ -216,6 +216,67 @@ impl State {
         true
     }
 
+    /// Test-only: inject one pointer press and release over a window.
+    ///
+    /// Only when `NEPTUNE_TEST_INPUT` is set. The client-initiated
+    /// move/resize path needs a real button press to supply a serial, which a
+    /// probe cannot make on its own; this moves the pointer over the window,
+    /// presses and releases, and remembers the press serial so a client request
+    /// can be validated against it.
+    pub(crate) fn inject_test_press(&mut self, id: WindowId) {
+        if std::env::var_os("NEPTUNE_TEST_INPUT").is_none() {
+            return;
+        }
+        let Some(outer) = self.windows.outer(id) else {
+            return;
+        };
+        let center = Point::new(
+            outer.x() + outer.width() / 2.0,
+            outer.y() + outer.height() / 2.0,
+        );
+        let Some((surface, local)) = self.windows.surface_under(center) else {
+            return;
+        };
+        let origin = Point::new(center.x - local.x, center.y - local.y);
+        let time = 0;
+        let serial = SERIAL_COUNTER.next_serial();
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        pointer.motion(
+            self,
+            Some((surface, origin)),
+            &MotionEvent {
+                location: center,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
+        let press = SERIAL_COUNTER.next_serial();
+        pointer.button(
+            self,
+            &ButtonEvent {
+                button: BUTTON_LEFT,
+                state: ButtonState::Pressed,
+                serial: press,
+                time,
+            },
+        );
+        pointer.frame(self);
+        pointer.button(
+            self,
+            &ButtonEvent {
+                button: BUTTON_LEFT,
+                state: ButtonState::Released,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        pointer.frame(self);
+        self.pointer_press_serial = Some(press);
+    }
+
     /// Starts dragging a window from its decoration.
     pub(crate) fn start_move(&mut self, id: WindowId, location: Point<f64, Logical>) {
         let Some(outer) = self.windows.outer(id) else {

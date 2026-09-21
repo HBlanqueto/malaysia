@@ -40,6 +40,7 @@ Commands:
     check               Run formatting, clippy and tests
     smoke [--release]   Build and run the toplevel mapping smoke test
     block4 [--release]  Build and run the 50-window open/close acceptance test
+    move [--release]    Build and run the client-initiated move/resize probe
 EOF
 }
 
@@ -421,6 +422,34 @@ block4() {
         fail "$EXIT_SMOKE" "block4 test failed"
 }
 
+# move - exercise client-initiated xdg_toplevel.move/resize with valid and
+# fabricated serials. Like the other harnesses it launches its own compositor.
+move() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for move: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    else
+        _profile=debug
+        cargo build -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    fi
+    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+        NEPTUNE_MOVE_BIN="$script_dir/target/$_profile/move_client" \
+        "$script_dir/target/$_profile/move_probe" ||
+        fail "$EXIT_SMOKE" "move probe failed"
+}
+
 if [ "$#" -eq 0 ]; then
     usage >&2
     exit "$EXIT_USAGE"
@@ -444,6 +473,7 @@ case "$command_name" in
     check) check ;;
     smoke) smoke "$@" ;;
     block4) block4 "$@" ;;
+    move) move "$@" ;;
     -h | --help) usage ;;
     *)
         usage >&2

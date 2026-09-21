@@ -113,8 +113,8 @@ format (ADR 0011).
 A POSIX shell wrapper around cargo and a background instance of the binary.
 Run `./dev.sh --help` for the list; the commands are `build [--release]`,
 `run [--release]`, `watch [--release]`, `stop`, `restart`, `status`, `log [-f]`,
-`clean`, `check`, `smoke [--release]` and `block4 [--release]`. It uses only
-coreutils, cargo, `setsid`
+`clean`, `check`, `smoke [--release]`, `block4 [--release]` and
+`move [--release]`. It uses only coreutils, cargo, `setsid`
 and `cargo-watch`,
 is clean under `shellcheck`, and keeps runtime files under
 `$XDG_RUNTIME_DIR/neptune-dev/` (falling back to `/tmp/neptune-$(id -u)`); the
@@ -132,7 +132,7 @@ Wayland socket. Exit codes are grouped so callers can branch:
 | 6 | `log`: no log file |
 | 7 | `build`/`check`/`clean`/`watch`/`smoke`: not inside the dev shell |
 | 8 | `watch`: the watcher exited unexpectedly |
-| 9 | `smoke`/`block4`: the build or the test failed |
+| 9 | `smoke`/`block4`/`move`: the build or the test failed |
 
 `status` follows the LSB init-script convention (running = 0, dead with PID
 file = 1, not running = 3), so it can be used as a boolean in scripts.
