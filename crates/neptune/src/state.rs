@@ -96,6 +96,12 @@ impl State {
     /// conversion names it rather than writing `1`, so when fractional scale
     /// lands there is a single value to replace and a single set of call sites
     /// to revisit.
+    // TODO(scale): this must not stay a literal. On a HiDPI output the integer
+    // scale is 2, not 1, and fractional scaling wants a per-surface value, not
+    // one global integer. Both call sites change together: [`Self::logical_output_size`]
+    // below, and the render-element placement in `session::draw` (the location
+    // converted with `to_physical` and the element scale, both of which read
+    // this constant).
     pub const OUTPUT_SCALE: i32 = 1;
 
     /// Creates the state for one session and publishes its globals.
