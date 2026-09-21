@@ -11,34 +11,122 @@
 //! that wrapper into the calloop event loop; `State` itself stays free of the
 //! display so that its borrow is clean when clients are dispatched (ADR 0013).
 //!
-//! Block 1 builds the state up one part at a time. Today it carries the loop
-//! signal. The protocol state structs — `CompositorState`, `ShmState`,
-//! `SeatState`, `XdgShellState` and `OutputManagerState` — join it as the
-//! parts that create their globals land, because Smithay refuses to create a
-//! global until its `Dispatch`/`GlobalDispatch` traits are implemented.
+//! The protocol state structs are created here, with the globals they own:
+//! `wl_compositor` and `wl_subcompositor` via `CompositorState`, `wl_shm` via
+//! `ShmState`, `xdg_wm_base` via `XdgShellState`, the output globals via
+//! `OutputManagerState` and `Output`, and the seat via `SeatState`. Smithay
+//! will not create a global until the state type implements its dispatch
+//! traits, so those impls live in crate::handlers beside this module.
 //!
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
+use smithay::input::keyboard::XkbConfig;
+use smithay::input::{Seat, SeatState};
+use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopSignal;
+use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
+use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::utils::{Physical, Size, Transform};
+use smithay::wayland::compositor::{CompositorClientState, CompositorState};
+use smithay::wayland::output::OutputManagerState;
+use smithay::wayland::shell::xdg::XdgShellState;
+use smithay::wayland::shm::ShmState;
+
+/// Failures while building the compositor state.
+#[derive(Debug, thiserror::Error)]
+pub enum StateError {
+    /// The seat's keyboard could not be created.
+    ///
+    /// This is nearly always a missing or unreadable xkb keymap rather than
+    /// anything the compositor did.
+    #[error("failed to set up the seat keyboard")]
+    Keyboard(#[from] smithay::input::keyboard::Error),
+}
 
 /// The shared compositor state.
 ///
 /// One instance is created per session and held by the session beside the
-/// Wayland display; every protocol handler borrows it as `&mut State`.
+/// Wayland display; every protocol handler borrows it as `&mut State`. The
+/// fields are public because the handlers in crate::handlers are the
+/// consumers.
 pub struct State {
-    /// Wakes and stops the event loop.
-    ///
-    /// The session's shutdown paths (window close, `SIGTERM`, `SIGINT`) use
-    /// this, and later handlers that need a frame drawn will use it to reach
-    /// the loop without holding a reference to the backend. See [`State::stop`].
+    /// Wakes and stops the event loop, and later triggers a redraw.
     loop_signal: LoopSignal,
+    /// The `wl_compositor` and `wl_subcompositor` state.
+    pub compositor_state: CompositorState,
+    /// The `wl_shm` state and its advertised pixel formats.
+    pub shm_state: ShmState,
+    /// The factory for `wl_seat` globals.
+    pub seat_state: SeatState<State>,
+    /// The one seat Neptune offers.
+    pub seat: Seat<State>,
+    /// The `xdg_wm_base` state.
+    pub xdg_shell_state: XdgShellState,
+    /// The `wl_output` and `zxdg_output_manager_v1` state.
+    pub output_manager_state: OutputManagerState,
+    /// The one output, backed by the winit window.
+    pub output: Output,
 }
 
 impl State {
-    /// Creates the state for one session.
-    pub fn new(loop_signal: LoopSignal) -> Self {
-        Self { loop_signal }
+    /// Creates the state for one session and publishes its globals.
+    ///
+    /// `size` is the initial size of the output, which the session takes from
+    /// the backend's window and updates when that window is resized.
+    pub fn new(
+        loop_signal: LoopSignal,
+        display_handle: &DisplayHandle,
+        size: Size<i32, Physical>,
+    ) -> Result<Self, StateError> {
+        let compositor_state = CompositorState::new::<Self>(display_handle);
+        let shm_state = ShmState::new::<Self>(
+            display_handle,
+            [wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
+        );
+        let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
+        let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
+
+        let mut seat_state: SeatState<Self> = SeatState::new();
+        let mut seat = seat_state.new_wl_seat(display_handle, "neptune");
+        // A seat with no keymap is worse than no seat: clients that accepted
+        // the capability then get no keymap and misbehave. The keyboard must be
+        // added before the seat is useful, so its error is fatal here.
+        seat.add_keyboard(XkbConfig::default(), 200, 25)?;
+        let _ = seat.add_pointer();
+
+        let output = Output::new(
+            "neptune".to_string(),
+            PhysicalProperties {
+                size: (0, 0).into(),
+                subpixel: Subpixel::Unknown,
+                make: "Neptune".to_string(),
+                model: "Winit".to_string(),
+            },
+        );
+        let mode = Mode {
+            size,
+            refresh: 60_000,
+        };
+        output.change_current_state(
+            Some(mode),
+            Some(Transform::Normal),
+            Some(Scale::Integer(1)),
+            Some((0, 0).into()),
+        );
+        output.set_preferred(mode);
+        let _ = output.create_global::<Self>(display_handle);
+
+        Ok(Self {
+            loop_signal,
+            compositor_state,
+            shm_state,
+            seat_state,
+            seat,
+            xdg_shell_state,
+            output_manager_state,
+            output,
+        })
     }
 
     /// Asks the event loop to stop and return from its `run` call.
@@ -53,9 +141,12 @@ impl State {
 /// Data attached to every connected Wayland client.
 ///
 /// Smithay stores per-client protocol state behind this type; a handler
-/// retrieves it with `Client::get_data`. It starts empty and grows as the
-/// globals that need per-client state land — the compositor's
-/// `CompositorClientState` arrives with `wl_compositor` in Part 3.
-pub struct ClientState;
+/// retrieves it with `Client::get_data`. The compositor's `CompositorClientState`
+/// holds the per-client surface bookkeeping that `wl_compositor` needs.
+#[derive(Default)]
+pub struct ClientState {
+    /// Per-client compositor bookkeeping, created by Smithay on first use.
+    pub compositor_state: CompositorClientState,
+}
 
 impl ClientData for ClientState {}

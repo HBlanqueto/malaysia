@@ -18,6 +18,7 @@ use smithay::backend::SwapBuffersError;
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
 use smithay::backend::renderer::{Frame as _, Renderer as _};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
+use smithay::output::Mode as OutputMode;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction};
 use smithay::reexports::wayland_server::BindError;
@@ -26,7 +27,7 @@ use smithay::reexports::wayland_server::backend::InitError;
 use smithay::utils::{Rectangle, Transform};
 use smithay::wayland::socket::ListeningSocketSource;
 
-use crate::state::{ClientState, State};
+use crate::state::{ClientState, State, StateError};
 
 /// Failures that can stop the session from starting.
 #[derive(Debug, thiserror::Error)]
@@ -52,6 +53,10 @@ pub enum SessionError {
     /// The display's file descriptor could not be duplicated for polling.
     #[error("failed to duplicate the display file descriptor")]
     Fd(#[source] std::io::Error),
+    /// The compositor state could not be built: its globals could not be
+    /// published, or the seat has no usable keymap.
+    #[error("failed to build the compositor state")]
+    State(#[from] StateError),
 }
 
 /// Everything the event loop's sources share.
@@ -76,12 +81,18 @@ pub fn run() -> Result<(), SessionError> {
     let loop_signal = event_loop.get_signal();
 
     let display = Display::<State>::new()?;
-    let state = State::new(loop_signal.clone());
-    let mut session = Session { display, state };
 
     let (mut backend, winit_events) =
         winit::init::<GlesRenderer>().map_err(|error| SessionError::Backend(error.to_string()))?;
     backend.window().request_redraw();
+
+    let state = State::new(
+        loop_signal.clone(),
+        &display.handle(),
+        backend.window_size(),
+    )?;
+    let mut session = Session { display, state };
+
     watch_for_shutdown(loop_signal)?;
 
     let loop_handle = event_loop.handle();
@@ -99,7 +110,7 @@ pub fn run() -> Result<(), SessionError> {
     );
     loop_handle
         .insert_source(listening_socket, |stream, _, session: &mut Session| {
-            let data = Arc::new(ClientState);
+            let data = Arc::new(ClientState::default());
             let mut handle = session.display.handle();
             match handle.insert_client(stream, data) {
                 Ok(_) => tracing::info!("client connected"),
@@ -175,7 +186,18 @@ fn handle_event(
 ) {
     match event {
         WinitEvent::Redraw => redraw(backend),
-        WinitEvent::Resized { .. } => backend.window().request_redraw(),
+        WinitEvent::Resized { size, .. } => {
+            state.output.change_current_state(
+                Some(OutputMode {
+                    size,
+                    refresh: 60_000,
+                }),
+                None,
+                None,
+                None,
+            );
+            backend.window().request_redraw();
+        }
         WinitEvent::CloseRequested => {
             tracing::info!("window close requested");
             state.stop();
