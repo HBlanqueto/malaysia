@@ -51,8 +51,9 @@ The split is by crate, not by taste:
 
 - **`crates/neptune`** (the compositor) uses `smithay::utils` directly. No
   wrapper, no conversion layer.
-- **`neptune-scene`** (Block 2, does not exist yet) will own its own geometry,
-  because the scene graph must not depend on Smithay.
+- **`neptune-scene`** (created in Block 0 for this geometry; the scene graph
+  itself is a later block) owns its own geometry, because the scene graph must
+  not depend on Smithay.
 - **Conversion happens at exactly one boundary**: where the compositor feeds
   the scene graph.
 

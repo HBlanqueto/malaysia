@@ -1,6 +1,10 @@
 # 0008 — Design tokens flow one way, from Nix into Rust
 
-Status: accepted (closes Block 0 open question 7)
+Status: **superseded by ADR 0011.** This contract was written before any design
+value existed. Block 0 later populated `neptune-design` with hand-written Rust
+constants and no Nix generation, which reverses the decision below; the
+reasoning is in `docs/decisions/0011-design-values-are-rust-constants.md`. The
+text is kept as the record of what was considered and rejected.
 
 ## Context
 
