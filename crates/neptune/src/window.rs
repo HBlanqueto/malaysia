@@ -25,6 +25,8 @@ use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
+use smithay::reexports::wayland_server::Resource;
+use smithay::reexports::wayland_server::backend::ObjectId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Serial, Size};
 use smithay::wayland::compositor::with_states;
@@ -176,6 +178,13 @@ pub struct Windows {
     scene: Scene,
     /// The surface and configure bookkeeping, in creation order.
     windows: Vec<WindowData>,
+    /// Decoration modes requested for a surface whose toplevel is not tracked
+    /// yet, by surface object id.
+    ///
+    /// GTK4 creates its KDE decoration object during realize, before it creates
+    /// the xdg_toplevel at map time, so the request can arrive first. The id is
+    /// stored rather than the surface so a dead surface is not kept alive.
+    pending_decorations: Vec<(ObjectId, Decoration)>,
     /// The next scene id to hand out.
     next_id: u64,
 }
@@ -218,6 +227,17 @@ impl Windows {
     pub fn add_toplevel(&mut self, toplevel: ToplevelSurface, size: Size<i32, Logical>) {
         let id = WindowId::new(self.next_id);
         self.next_id += 1;
+        // A mode negotiated before the toplevel existed is applied now, so the
+        // initial configure already carries it and the right usable size.
+        let object = toplevel.wl_surface().id();
+        if let Some(index) = self
+            .pending_decorations
+            .iter()
+            .position(|(pending, _)| *pending == object)
+        {
+            let (_, decoration) = self.pending_decorations.remove(index);
+            self.scene.set_decoration(id, decoration);
+        }
         self.windows.push(WindowData {
             id,
             toplevel,
@@ -287,7 +307,13 @@ impl Windows {
     }
 
     /// Stops tracking the toplevel for `surface`, returning its scene id.
+    ///
+    /// A decoration requested for a surface that never became a toplevel is
+    /// dropped too, so a dead surface is not remembered.
     pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
+        let object = surface.id();
+        self.pending_decorations
+            .retain(|(pending, _)| *pending != object);
         let index = self.index_of(surface)?;
         let id = self.windows.remove(index).id;
         self.scene.remove(id);
@@ -420,6 +446,9 @@ impl Windows {
     /// sent: the mode is always stored, but an effective no-op sends nothing.
     pub fn set_decoration(&mut self, surface: &WlSurface, decoration: Decoration) -> bool {
         let Some(index) = self.index_of(surface) else {
+            // The toplevel may not exist yet (GTK4 requests through the KDE
+            // protocol in realize); remember it for when it is created.
+            self.remember_decoration(surface, decoration);
             return false;
         };
         let id = self.windows[index].id;
@@ -432,6 +461,19 @@ impl Windows {
         }
         self.send_configure(index);
         true
+    }
+
+    /// Remembers a mode for a surface whose toplevel is not tracked yet.
+    fn remember_decoration(&mut self, surface: &WlSurface, decoration: Decoration) {
+        let object = surface.id();
+        match self
+            .pending_decorations
+            .iter_mut()
+            .find(|(pending, _)| *pending == object)
+        {
+            Some((_, stored)) => *stored = decoration,
+            None => self.pending_decorations.push((object, decoration)),
+        }
     }
 
     /// The decoration mode of a window, or client-side when none was stored.
