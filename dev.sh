@@ -41,6 +41,7 @@ Commands:
     smoke [--release]   Build and run the toplevel mapping smoke test
     block4 [--release]  Build and run the 50-window open/close acceptance test
     move [--release]    Build and run the client-initiated move/resize probe
+    decoration          Build and run the decoration-policy probe over real apps
 EOF
 }
 
@@ -422,6 +423,37 @@ block4() {
         fail "$EXIT_SMOKE" "block4 test failed"
 }
 
+# decoration - run real applications inside Neptune and assert the decoration
+# protocol and mode each one negotiated (ADR 0019).
+#
+# Applications are found through NEPTUNE_APP_* variables (see the sctk-probe
+# README); one that is not available is reported UNVERIFIED and does not fail
+# the run, so the command works on a machine with no GTK or Qt demos.
+decoration() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for decoration: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    else
+        _profile=debug
+        cargo build -p neptune -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    fi
+    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+        "$script_dir/target/$_profile/decoration_probe" ||
+        fail "$EXIT_SMOKE" "decoration probe failed"
+}
+
 # move - exercise client-initiated xdg_toplevel.move/resize with valid and
 # fabricated serials. Like the other harnesses it launches its own compositor.
 move() {
@@ -474,6 +506,7 @@ case "$command_name" in
     smoke) smoke "$@" ;;
     block4) block4 "$@" ;;
     move) move "$@" ;;
+    decoration) decoration "$@" ;;
     -h | --help) usage ;;
     *)
         usage >&2

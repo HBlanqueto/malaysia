@@ -93,6 +93,46 @@ exits. On its own it is only useful to watch a compositor's teardown:
 cargo run -p sctk-probe --bin window_stress
 ```
 
+## `decoration_probe`
+
+The Phase 6 acceptance harness for the decoration policy (ADR 0019). It launches
+one Neptune and, for each real application, runs it inside that compositor with
+`WAYLAND_DEBUG=1`, captures the client's trace and asserts what it negotiated:
+the decoration protocol it bound (xdg-decoration, the KDE one, or none), the
+mode Neptune configured, and whether the surface was inset by the titlebar. The
+inset is read from the configure width against the output width, so it holds
+even when the first configure already carries it (GTK4 asks before its toplevel
+exists). Configures after a client-initiated resize or state change are ignored,
+because a host pointer can click into a window and resize it.
+
+Applications are located through `NEPTUNE_APP_<NAME>` variables; one with no
+binary is reported `UNVERIFIED` rather than skipped silently, and an application
+that exits before mapping a window is reported the same way. Whether two
+titlebars are *visible* needs a pixel comparison, so it stays manual.
+
+```sh
+./dev.sh decoration                        # builds neptune and the probes, then runs it
+cargo run -p sctk-probe --bin decoration_probe   # run it directly, if already built
+```
+
+Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_APP_NAUTILUS`,
+`NEPTUNE_APP_GTK3_DEMO`, `NEPTUNE_APP_GTK3_WIDGET_FACTORY`,
+`NEPTUNE_APP_GTK3_PLAIN`, `NEPTUNE_APP_GTK4_DEMO`,
+`NEPTUNE_APP_GTK4_WIDGET_FACTORY`, `NEPTUNE_APP_GTK4_PLAIN`, `NEPTUNE_APP_QT6`
+(with `NEPTUNE_APP_QT6_QML_IMPORT_PATH`), `NEPTUNE_APP_QT5` and
+`NEPTUNE_APP_ONLYOFFICE`.
+
+`gtk3_plain.c` and `gtk4_plain.c` under `gtk/` are minimal plain-window clients
+for the server-side branch, because the GTK demos all use a headerbar. Build
+them against the same GTK the probe runs against:
+
+```sh
+cc gtk/gtk3_plain.c -o /tmp/gtk3_plain $(pkg-config --cflags --libs gtk+-3.0)
+cc gtk/gtk4_plain.c -o /tmp/gtk4_plain $(pkg-config --cflags --libs gtk4-wayland)
+NEPTUNE_APP_GTK3_PLAIN=/tmp/gtk3_plain NEPTUNE_APP_GTK4_PLAIN=/tmp/gtk4_plain \
+    ./dev.sh decoration
+```
+
 ## `move_probe`
 
 Exercises the client-initiated `xdg_toplevel.move`/`resize` path. It launches a

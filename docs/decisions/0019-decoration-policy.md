@@ -79,7 +79,13 @@ server-side against an explicit client-side request.
   `default_mode` preference logic
   (`gdk/wayland/gdkdisplay-wayland.c:445-463,1273-1282`,
   `gtk/gtkwindow.c:3975-4006`). A plain GTK4 window therefore accepts server-side
-  when the manager says `server`; a window with a headerbar keeps CSD.
+  when the manager says `server` (verified with a minimal client, and this is
+  what makes GTK4 special: it creates the KDE object **during realize, before
+  the xdg_toplevel exists**); a window with a headerbar keeps CSD. GTK4 does not
+  install a listener on the per-surface decoration object, so the compositor's
+  `mode` reply is discarded client-side and only the configure geometry matters.
+  `gtk4-demo` keeps CSD of its own accord (it never creates a decoration
+  object), which the policy leaves alone.
 - **libadwaita** windows always have a headerbar: `AdwWindow` and
   `AdwApplicationWindow` call `gtk_window_set_titlebar` with it
   (`src/adw-window.c:328`, `src/adw-application-window.c:280`) and error if an
@@ -114,7 +120,10 @@ server-side (the client asked the compositor to choose), and `request_mode` with
 the mode the client asked for. The KDE manager advertises `default_mode =
 server`, so plain GTK3/GTK4 windows prefer server-side, and answers each request
 with the requested mode; a client that creates the object but never requests a
-mode is treated as self-decorating.
+mode is treated as self-decorating. Because GTK4 requests the mode before its
+toplevel exists, a mode for an untracked surface is remembered and applied when
+the toplevel is created, so its initial configure already carries the mode and
+the inset.
 
 The mode is stored per window in `neptune-scene`, next to the geometry, and the
 insets, hit-testing and edge zones read it from there.
@@ -130,11 +139,16 @@ spawns, never in the session environment.
 - GTK3/GTK4 windows with a headerbar, libadwaita windows and frameless Qt
   windows keep their own chrome; plain GTK3/GTK4 and ordinary Qt windows get
   Neptune's.
+- **Neptune reserves the titlebar band but does not paint chrome yet.** There is
+  no titlebar, hairline or shadow renderer; "server-side" today means the client
+  surface is inset and the mode is negotiated. Until that renderer exists, a
+  server-decorated window shows an empty band where its titlebar will be. The
+  policy here is what the renderer will draw into.
+- A shadow for self-decorating windows is deliberately out of scope; if it is
+  wanted later it needs the surface shape, which the protocol does not provide.
 - Neptune has no client-spawn path yet, so the Qt variable is not set anywhere
   today; the rule above takes effect when one exists. The test harness sets it
   for the Qt clients it launches and says so.
-- A shadow for self-decorating windows is deliberately out of scope; if it is
-  wanted later it needs the surface shape, which the protocol does not provide.
 
 ## References
 
