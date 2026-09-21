@@ -49,6 +49,20 @@ pub enum Edge {
     BottomRight,
 }
 
+/// Who draws a window's decorations.
+///
+/// This is stored with the window, keyed by [`WindowId`], and is the one value
+/// the compositor reads for drawing, hit-testing and decoration insets. What a
+/// window's mode *is* — negotiation, defaults, changes — is the compositor's
+/// policy (ADR 0019); this crate only stores it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decoration {
+    /// The compositor draws the window's chrome.
+    Server,
+    /// The client draws its own chrome, or asked not to be decorated.
+    Client,
+}
+
 /// A stack of windows, back to front.
 ///
 /// The last window is on top. Every query considers windows in stacking order,
@@ -57,6 +71,12 @@ pub enum Edge {
 pub struct Scene {
     /// Back-to-front entries; the last is topmost.
     windows: Vec<Entry>,
+    /// Decoration modes, by window id.
+    ///
+    /// A separate table because a window negotiates its decorations *before* it
+    /// maps, and a scene entry only exists once it does: the mode must be
+    /// storable for an id that has no rectangle yet.
+    decorations: Vec<(WindowId, Decoration)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -87,10 +107,39 @@ impl Scene {
     }
 
     /// Removes a window, returning whether it was present.
+    ///
+    /// The stored decoration goes with it.
     pub fn remove(&mut self, id: WindowId) -> bool {
         let before = self.windows.len();
         self.windows.retain(|entry| entry.id != id);
+        self.decorations.retain(|(entry, _)| *entry != id);
         self.windows.len() != before
+    }
+
+    /// Stores a window's decoration mode, returning whether it changed.
+    ///
+    /// The window does not need a scene entry yet: a client negotiates before
+    /// it maps, and the mode has to be readable from the first configure on.
+    pub fn set_decoration(&mut self, id: WindowId, decoration: Decoration) -> bool {
+        match self.decorations.iter_mut().find(|(entry, _)| *entry == id) {
+            Some((_, stored)) if *stored == decoration => false,
+            Some((_, stored)) => {
+                *stored = decoration;
+                true
+            }
+            None => {
+                self.decorations.push((id, decoration));
+                true
+            }
+        }
+    }
+
+    /// The decoration mode stored for a window, if one was set.
+    pub fn decoration(&self, id: WindowId) -> Option<Decoration> {
+        self.decorations
+            .iter()
+            .find(|(entry, _)| *entry == id)
+            .map(|(_, decoration)| *decoration)
     }
 
     /// Moves a window to the top of the stack.
@@ -258,7 +307,7 @@ fn clamp_axis(
 mod tests {
     use crate::geometry::{Logical, Point, Rect, Size};
 
-    use super::{Edge, Scene, WindowId, resized};
+    use super::{Decoration, Edge, Scene, WindowId, resized};
 
     fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect<f64, Logical> {
         Rect::new(Point::new(x, y), Size::new(w, h))
@@ -348,6 +397,37 @@ mod tests {
         assert_eq!(scene.len(), 1);
         assert_eq!(scene.topmost(), Some(second));
         assert_eq!(scene.outer(first), None);
+    }
+
+    #[test]
+    fn a_decoration_can_be_stored_before_the_window_is_inserted() {
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        assert_eq!(scene.decoration(window), None);
+        assert!(scene.set_decoration(window, Decoration::Server));
+        assert_eq!(scene.decoration(window), Some(Decoration::Server));
+        scene.insert(window, rect(0.0, 0.0, 10.0, 10.0));
+        assert_eq!(scene.decoration(window), Some(Decoration::Server));
+    }
+
+    #[test]
+    fn setting_the_same_decoration_reports_no_change() {
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        assert!(scene.set_decoration(window, Decoration::Client));
+        assert!(!scene.set_decoration(window, Decoration::Client));
+        assert!(scene.set_decoration(window, Decoration::Server));
+        assert_eq!(scene.decoration(window), Some(Decoration::Server));
+    }
+
+    #[test]
+    fn removing_a_window_drops_its_decoration() {
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        scene.insert(window, rect(0.0, 0.0, 10.0, 10.0));
+        scene.set_decoration(window, Decoration::Server);
+        assert!(scene.remove(window));
+        assert_eq!(scene.decoration(window), None);
     }
 
     #[test]
