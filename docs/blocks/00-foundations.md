@@ -320,7 +320,10 @@ unverified corner is question 4 above.
   the compositor's own state, serial-checked (Block 4).
 - `docs/decisions/0017-xdg-decoration-is-server-side.md` — the
   `zxdg_decoration_manager_v1` global is served and always selects server-side
-  (Block 4).
+  (Block 4). Superseded by 0019.
 - `docs/decisions/0018-winit-render-transform.md` — the winit output flips at
   render time through the damage tracker's mode source; `wl_output` stays
   `normal` (Block 4 follow-up).
+- `docs/decisions/0019-decoration-policy.md` — server-side is the default and
+  the answer to an unset mode, but an explicit client-side request is honoured
+  (Block 4 follow-up).

@@ -1,6 +1,6 @@
 # 0017 — xdg-decoration is served, and always server-side
 
-Status: **accepted** (Block 4 follow-up)
+Status: **superseded by ADR 0019** (was accepted as a Block 4 follow-up)
 
 ## Context
 
