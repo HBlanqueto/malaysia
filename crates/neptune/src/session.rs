@@ -2,10 +2,12 @@
 //!
 //! Block 1 hosts Neptune inside a winit window so a Wayland client (later in
 //! the block) has somewhere to be shown. This module owns the calloop event
-//! loop, the single winit window and the GLES2 renderer, and stops the loop
-//! when the window is closed or a termination signal arrives. Protocol
-//! handlers and client rendering are added by later parts of the block; for
-//! now the loop draws a solid background.
+//! loop, the single winit window and the GLES2 renderer — the backend sits
+//! beside the shared [`State`] rather than inside it, so replacing it later
+//! touches no protocol handler (ADR 0012). It stops the loop when the window
+//! is closed or a termination signal arrives. Protocol handlers and client
+//! rendering are added by later parts of the block; for now the loop draws a
+//! solid background.
 
 use smithay::backend::SwapBuffersError;
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
@@ -13,6 +15,8 @@ use smithay::backend::renderer::{Frame as _, Renderer as _};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::reexports::calloop::{EventLoop, LoopSignal};
 use smithay::utils::{Rectangle, Transform};
+
+use crate::state::State;
 
 /// Failures that can stop the session from starting.
 #[derive(Debug, thiserror::Error)]
@@ -31,12 +35,6 @@ pub enum SessionError {
     Signals(#[source] std::io::Error),
 }
 
-/// Shared data for the event loop.
-struct State {
-    /// Used to stop the loop from a signal thread or a window close.
-    loop_signal: LoopSignal,
-}
-
 /// Runs the nested session until the window is closed or a signal arrives.
 ///
 /// This blocks the calling thread, driving the calloop event loop. It returns
@@ -44,9 +42,7 @@ struct State {
 pub fn run() -> Result<(), SessionError> {
     let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
     let loop_signal = event_loop.get_signal();
-    let mut state = State {
-        loop_signal: loop_signal.clone(),
-    };
+    let mut state = State::new(loop_signal.clone());
 
     let (mut backend, winit_events) =
         winit::init::<GlesRenderer>().map_err(|error| SessionError::Backend(error.to_string()))?;
@@ -94,7 +90,7 @@ fn handle_event(
         WinitEvent::Resized { .. } => backend.window().request_redraw(),
         WinitEvent::CloseRequested => {
             tracing::info!("window close requested");
-            state.loop_signal.stop();
+            state.stop();
         }
         WinitEvent::Input(_) | WinitEvent::Focus(_) => {}
     }

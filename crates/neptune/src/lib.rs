@@ -12,9 +12,11 @@
 //! ADR 0001.
 //!
 //! Block 1 adds the nested session: a calloop event loop around a winit
-//! window with a GLES2 renderer.
+//! window with a GLES2 renderer. The compositor's shared state lives in
+//! [`state`]; the loop and the backend live in [`session`] beside it.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod session;
+pub mod state;
