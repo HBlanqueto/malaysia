@@ -27,7 +27,9 @@ The per-block documents live in `docs/blocks/`, decisions in `docs/decisions/`.
 
 ## Development
 
-Everything runs inside the dev shell, on the machine's graphical session:
+Building and testing run inside the dev shell, on the machine's graphical
+session (`run`, `stop`, `restart`, `status` and `log` also work from a plain
+shell — ADR 0007):
 
 ```sh
 nix develop

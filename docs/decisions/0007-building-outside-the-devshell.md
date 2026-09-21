@@ -60,6 +60,14 @@ mold.
 - A direct `cargo build`, `cargo check`, `cargo test` or `cargo clippy` with
   the marker unset now fails with the intended message instead of producing a
   differently linked binary.
+- `run` works outside the shell because the dev shell also bakes its runtime
+  library search path into the binary's `RUNPATH`. winit loads
+  `libwayland-client` through `dlopen`, which only consults `RUNPATH` or
+  `LD_LIBRARY_PATH`; without the entry the binary exited with
+  `The wayland library could not be loaded` — the one case where "does not
+  compile, so it keeps working outside the shell" did not hold. The baked paths
+  are the same store paths the shell exports in `LD_LIBRARY_PATH`, which it
+  still sets for the tools that run as child processes (the probes).
 - `cargo:rerun-if-env-changed` means the guard cannot be defeated by a cached
   successful build: unsetting the marker re-runs the script and fails.
 - `dev.sh` remains the earlier, cheaper failure for the common path; the two

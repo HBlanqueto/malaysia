@@ -74,7 +74,14 @@
           # than in .cargo/config.toml or through PATH probing in dev.sh: a
           # fixed value keeps every in-shell build byte-for-byte identical and
           # the cargo cache warm. The `cc` driver understands -fuse-ld.
-          RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
+          #
+          # The runtime search path is baked in for the same reason it is
+          # fixed: winit loads libwayland-client through dlopen, which only
+          # searches the caller's RUNPATH or LD_LIBRARY_PATH, so a binary
+          # without it cannot start outside the shell (ADR 0007 keeps `run`
+          # working there). The paths are the same store paths the shell
+          # exports, so nothing runs that the shell could not run.
+          RUSTFLAGS = "-C link-arg=-fuse-ld=mold -C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath deps}";
 
           # Explicit marker so dev.sh can refuse to build outside this shell,
           # where the linker flag above would be missing and the binary would
