@@ -1,22 +1,31 @@
 //! The nested compositor session: event loop, winit window and GLES2 output.
 //!
-//! Block 1 hosts Neptune inside a winit window so a Wayland client (later in
-//! the block) has somewhere to be shown. This module owns the calloop event
-//! loop, the single winit window and the GLES2 renderer — the backend sits
-//! beside the shared [`State`] rather than inside it, so replacing it later
-//! touches no protocol handler (ADR 0012). It also owns the Wayland display,
-//! the listening socket clients connect to, and the event source that
-//! dispatches their requests (ADR 0013). It stops the loop when the window is
-//! closed or a termination signal arrives. Protocol handlers and client
-//! rendering are added by later parts of the block; for now the loop draws a
-//! solid background.
+//! Block 1 hosts Neptune inside a winit window so a Wayland client has
+//! somewhere to be shown. This module owns the calloop event loop, the single
+//! winit window and the GLES2 renderer — the backend sits beside the shared
+//! [`State`] rather than inside it, so replacing it later touches no protocol
+//! handler (ADR 0012). It also owns the Wayland display, the listening socket
+//! clients connect to, and the event source that dispatches their requests
+//! (ADR 0013). It stops the loop when the window is closed or a termination
+//! signal arrives.
+//!
+//! Rendering happens in the redraw path: mapped windows' surfaces are turned
+//! into render elements, drawn through a damage tracker, and their frame
+//! callbacks are sent afterwards. Frame callbacks are only sent here, after a
+//! frame has actually been drawn, so a client that commits cannot make the
+//! compositor draw faster than the output refreshes.
 
 use std::os::fd::AsFd;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use smithay::backend::SwapBuffersError;
+use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
+use smithay::backend::renderer::element::Kind;
+use smithay::backend::renderer::element::surface::{
+    WaylandSurfaceRenderElement, render_elements_from_surface_tree,
+};
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
-use smithay::backend::renderer::{Frame as _, Renderer as _};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::output::Mode as OutputMode;
 use smithay::reexports::calloop::generic::Generic;
@@ -24,7 +33,10 @@ use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAct
 use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
-use smithay::utils::{Rectangle, Transform};
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::wayland::compositor::{
+    SurfaceAttributes, TraversalAction, with_surface_tree_downward,
+};
 use smithay::wayland::socket::ListeningSocketSource;
 
 use crate::state::{ClientState, State, StateError};
@@ -64,12 +76,17 @@ pub enum SessionError {
 /// The Wayland display is held here, next to `State`, rather than inside it.
 /// Dispatching clients needs a mutable borrow of both, and two disjoint fields
 /// of one value can be borrowed at once while a display stored inside `State`
-/// could not (ADR 0013).
+/// could not (ADR 0013). The damage tracker is backend state, so it lives here
+/// too rather than in `State` (ADR 0012).
 struct Session {
     /// The Wayland display: owns the clients and their protocol objects.
     display: Display<State>,
     /// The compositor state handlers mutate.
     state: State,
+    /// Tracks damage between frames for the one output.
+    damage_tracker: OutputDamageTracker,
+    /// When the session started, used as the frame callback timestamp base.
+    start_time: Instant,
 }
 
 /// Runs the nested session until the window is closed or a signal arrives.
@@ -91,7 +108,13 @@ pub fn run() -> Result<(), SessionError> {
         &display.handle(),
         backend.window_size(),
     )?;
-    let mut session = Session { display, state };
+    let damage_tracker = OutputDamageTracker::from_output(&state.output);
+    let mut session = Session {
+        display,
+        state,
+        damage_tracker,
+        start_time: Instant::now(),
+    };
 
     watch_for_shutdown(loop_signal)?;
 
@@ -99,7 +122,7 @@ pub fn run() -> Result<(), SessionError> {
 
     loop_handle
         .insert_source(winit_events, move |event, _, session: &mut Session| {
-            handle_event(event, &mut backend, &mut session.state);
+            handle_event(event, &mut backend, session);
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
@@ -149,7 +172,7 @@ pub fn run() -> Result<(), SessionError> {
 /// cannot hold up the loop. A client error is logged and the loop continues:
 /// one misbehaving client should not take the compositor down.
 fn dispatch_clients(session: &mut Session) {
-    let Session { display, state } = session;
+    let Session { display, state, .. } = session;
 
     if let Err(error) = display.dispatch_clients(state) {
         tracing::error!(%error, "failed to dispatch client requests");
@@ -182,13 +205,13 @@ fn watch_for_shutdown(loop_signal: LoopSignal) -> Result<(), SessionError> {
 fn handle_event(
     event: WinitEvent,
     backend: &mut WinitGraphicsBackend<GlesRenderer>,
-    state: &mut State,
+    session: &mut Session,
 ) {
     match event {
-        WinitEvent::Redraw => redraw(backend),
+        WinitEvent::Redraw => redraw(backend, session),
         WinitEvent::Resized { size, .. } => {
-            state.output_size = size;
-            state.output.change_current_state(
+            session.state.output_size = size;
+            session.state.output.change_current_state(
                 Some(OutputMode {
                     size,
                     refresh: 60_000,
@@ -201,7 +224,7 @@ fn handle_event(
         }
         WinitEvent::CloseRequested => {
             tracing::info!("window close requested");
-            state.stop();
+            session.state.stop();
         }
         WinitEvent::Input(_) | WinitEvent::Focus(_) => {}
     }
@@ -210,31 +233,95 @@ fn handle_event(
 /// Draws one frame, logging rather than propagating a failure.
 ///
 /// A lost EGL context cannot be recovered from here; the loop keeps running so
-/// a later event can try again. Frames are drawn on demand — once at startup
-/// and after each resize — rather than in a continuous loop.
-fn redraw(backend: &mut WinitGraphicsBackend<GlesRenderer>) {
-    if let Err(error) = draw(backend) {
+/// a later event can try again. Frames are drawn on demand — after a commit, a
+/// resize or input — rather than in a continuous loop, and the frame callbacks
+/// are sent only after the frame has been submitted.
+fn redraw(backend: &mut WinitGraphicsBackend<GlesRenderer>, session: &mut Session) {
+    if let Err(error) = draw(backend, session) {
         tracing::error!(%error, "failed to draw a frame");
     }
 }
 
-/// Clears the window to the session background colour.
-fn draw(backend: &mut WinitGraphicsBackend<GlesRenderer>) -> Result<(), DrawError> {
-    let size = backend.window_size();
-    let damage = [Rectangle::from_size(size)];
-
-    {
+/// Renders every mapped window over the session background.
+fn draw(
+    backend: &mut WinitGraphicsBackend<GlesRenderer>,
+    session: &mut Session,
+) -> Result<(), DrawError> {
+    // Everything that borrows the renderer or the framebuffer is scoped so the
+    // frame is submitted after the framebuffer is released.
+    let damage = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
-        let mut frame = renderer
-            .render(&mut framebuffer, size, Transform::Normal)
-            .map_err(DrawError::Render)?;
-        frame
-            .clear([0.06, 0.06, 0.09, 1.0].into(), &damage)
-            .map_err(DrawError::Render)?;
-        let _ = frame.finish().map_err(DrawError::Render)?;
+
+        let mut elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = Vec::new();
+        for window in session.state.windows.iter() {
+            if !window.is_mapped() {
+                continue;
+            }
+            let location =
+                (window.location() + window.surface_location()).to_physical(State::OUTPUT_SCALE);
+            elements.extend(render_elements_from_surface_tree::<
+                GlesRenderer,
+                WaylandSurfaceRenderElement<GlesRenderer>,
+            >(
+                renderer,
+                window.surface(),
+                location,
+                f64::from(State::OUTPUT_SCALE),
+                1.0,
+                Kind::Unspecified,
+            ));
+        }
+
+        let result = session
+            .damage_tracker
+            .render_output(
+                renderer,
+                &mut framebuffer,
+                0,
+                &elements,
+                [0.06, 0.06, 0.09, 1.0],
+            )
+            .map_err(DrawError::Output)?;
+        result.damage.cloned()
+    };
+
+    // Send frame callbacks only once the frame has been drawn, so a client
+    // cannot drive the compositor faster than the output refreshes.
+    let now = session.start_time.elapsed();
+    for window in session.state.windows.iter() {
+        if window.is_mapped() {
+            send_frame_callbacks(window.surface(), now);
+        }
     }
-    backend.submit(Some(&damage)).map_err(DrawError::Submit)?;
+    if let Err(error) = session.display.flush_clients() {
+        tracing::warn!(%error, "failed to flush clients after a frame");
+    }
+
+    backend
+        .submit(damage.as_deref())
+        .map_err(DrawError::Submit)?;
     Ok(())
+}
+
+/// Completes every pending frame callback in a surface tree.
+///
+/// There is one output, so every mapped surface is on its scan-out path and no
+/// throttling is needed; with more outputs this is where visibility would be
+/// decided.
+fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
+    let time_ms = time.as_millis() as u32;
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, &()| TraversalAction::DoChildren(()),
+        |_, states, &()| {
+            let mut cached = states.cached_state.get::<SurfaceAttributes>();
+            for callback in cached.current().frame_callbacks.drain(..) {
+                callback.done(time_ms);
+            }
+        },
+        |_, _, &()| true,
+    );
 }
 
 /// Failures while drawing a single frame.
@@ -243,9 +330,9 @@ enum DrawError {
     /// Binding the renderer to the window failed.
     #[error("could not bind the renderer to the window")]
     Bind(#[source] SwapBuffersError),
-    /// A GLES2 draw call failed.
-    #[error("GLES2 rendering failed")]
-    Render(#[source] GlesError),
+    /// Rendering the output failed.
+    #[error("failed to render the output")]
+    Output(#[source] DamageError<GlesError>),
     /// Presenting the frame to the window failed.
     #[error("could not present the frame")]
     Submit(#[source] SwapBuffersError),

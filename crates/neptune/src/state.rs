@@ -85,6 +85,14 @@ pub struct State {
 }
 
 impl State {
+    /// The output scale, as an integer.
+    ///
+    /// This is the one literal that stands in for scale. Every physical/logical
+    /// conversion names it rather than writing `1`, so when fractional scale
+    /// lands there is a single value to replace and a single set of call sites
+    /// to revisit.
+    pub const OUTPUT_SCALE: i32 = 1;
+
     /// Creates the state for one session and publishes its globals.
     ///
     /// `size` is the initial size of the output, which the session takes from
@@ -163,7 +171,7 @@ impl State {
     /// site, not one per user. The output runs at scale 1, so today this is the
     /// identity; when fractional scale lands, this method is what changes.
     pub fn logical_output_size(&self) -> Size<i32, Logical> {
-        self.output_size.to_logical(1)
+        self.output_size.to_logical(Self::OUTPUT_SCALE)
     }
 }
 
