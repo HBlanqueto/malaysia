@@ -27,7 +27,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
-use smithay::utils::{Physical, Size, Transform};
+use smithay::utils::{Logical, Physical, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
@@ -154,6 +154,16 @@ impl State {
     /// as well; the signal itself is cloned at startup.
     pub fn stop(&self) {
         self.loop_signal.stop();
+    }
+
+    /// The output size in logical coordinates.
+    ///
+    /// Every conversion from the output's physical mode size to logical
+    /// coordinates goes through here — there is deliberately one such call
+    /// site, not one per user. The output runs at scale 1, so today this is the
+    /// identity; when fractional scale lands, this method is what changes.
+    pub fn logical_output_size(&self) -> Size<i32, Logical> {
+        self.output_size.to_logical(1)
     }
 }
 

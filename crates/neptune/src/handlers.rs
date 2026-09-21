@@ -115,7 +115,7 @@ impl XdgShellHandler for State {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         // Send the initial configure now, before the client attaches a buffer:
         // a toplevel that never receives one waits forever, with no error.
-        let size = self.output_size.to_logical(1);
+        let size = self.logical_output_size();
         self.windows.add_toplevel(surface, size);
     }
 
