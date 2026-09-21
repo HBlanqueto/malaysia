@@ -52,8 +52,10 @@ and the interaction.
 - **`cursor.rs`** loads the `ew`/`ns`/`nwse`/`nesw` resize shapes from the
   Xcursor theme, alongside the default, and the draw path picks the shape
   Smithay reports. A missing shape or theme falls back to the default arrow.
-- **`handlers.rs`** also serves `zxdg_decoration_manager_v1` and always configures
-  server-side, so a client stops drawing its own chrome (ADR 0017).
+- **`handlers.rs`** serves both decoration protocols: `zxdg_decoration_manager_v1`
+  and `org_kde_kwin_server_decoration_manager`. The mode each client negotiates
+  is stored per window in `neptune-scene` and read for insets, hit-testing and
+  drawing (ADR 0019).
 
 ### Closing
 
@@ -114,16 +116,62 @@ The machine-checked acceptance is a command whose exit code is the result:
   ```
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
   hit-testing, edge zones and `resized` clamping; the one-shot pointer-press
-  serial (`consume`); and the edge-to-cursor mapping.
+  serial (`consume`); the edge-to-cursor mapping; the host-pointer corner
+  mapping; the decoration mode mappings and scene storage; and the offscreen
+  pixel tests that assert the frame is upright and the cursor lands on its
+  hotspot-adjusted position (ADR 0018).
 - **`./dev.sh smoke`** — asserts the mapping sequence and that a client
   (`foot`) receives the server-side decoration configure before its first
   buffer attach, so the rebuild of `window.rs` did not regress mapping and the
   decoration mode is settled in time.
+- **`./dev.sh decoration`** — runs real applications inside Neptune and asserts
+  the decoration protocol and mode each one negotiated, plus the mode-change
+  client (ADR 0019). See the follow-up below.
 
 Not verified by a command, and left to hand-checking: drag feel and whether the
 window keeps the grab offset under the pointer; resize visuals and whether the
 minimum and maximum feel right; the cursor shape actually changing as the
 pointer crosses an edge; and click-to-focus and stacking as seen.
+
+## Follow-up: the inverted frame and the decoration policy
+
+Two defects found after Block 4 was accepted are fixed here, each with its own
+decision record:
+
+- **The frame rendered upside down.** The winit output's transform stays
+  `Normal` and the damage tracker's static mode source carries `Flipped180`, so
+  the flip happens only in the projection matrix and no client sees
+  `flipped_180` in `wl_output.geometry` (ADR 0018). The offscreen pixel tests
+  in `./dev.sh check` fail with the old transform and pass with the fix; they
+  assert the quadrant orientation and the cursor's hotspot-adjusted position.
+- **Forcing server-side mode put Neptune's titlebar on self-decorating
+  clients.** ADR 0017 is superseded by ADR 0019: a client that negotiates and
+  accepts server-side gets compositor decorations, one that explicitly asks for
+  client-side or never negotiates keeps its own chrome and gets no shadow, the
+  mode is settled before the first attach, and a change after mapping
+  reconfigures mode and geometry. Both decoration protocols are served, and the
+  mode lives per window in `neptune-scene`.
+
+`./dev.sh decoration` is the record of the per-application verification, and
+`decoration_client` pins the mode-change rule. What it showed:
+
+| Application | Protocol | Mode | Chrome | Result |
+| ----------- | -------- | ---- | ------ | ------ |
+| nautilus (GTK4 + libadwaita) | KDE | none negotiated | none | verified |
+| gtk3-demo, gtk3-widget-factory | KDE | client | none | verified |
+| gtk4-demo | KDE | none negotiated | none | verified |
+| gtk3-plain, gtk4-plain (built) | KDE | server | 32 px inset | verified |
+| qt6 (`qml`) | xdg-decoration | server | 32 px inset | verified |
+| gtk4-widget-factory | KDE | — | — | unverified: the demo binary aborts before mapping |
+| qt5 | — | — | — | unverified: not installed |
+| onlyoffice-desktopeditors | none | none | none | unverified: the bundle ships only the XCB platform plugin |
+
+GTK4 asks through the KDE protocol **before its xdg_toplevel exists**, so a mode
+for an untracked surface is remembered and applied when the toplevel is created;
+`gtk4-plain` pins that ordering. Whether two titlebars are visible is not
+machine-checkable here and stays manual — and is moot until a chrome painter
+exists: Neptune reserves the titlebar band but draws no titlebar, hairline or
+shadow yet.
 
 ## Open questions
 
@@ -151,4 +199,9 @@ pointer crosses an edge; and click-to-focus and stacking as seen.
 - `docs/decisions/0016-interactive-move-and-resize.md` — moves and resizes are
   the compositor's own state, with serial validation.
 - `docs/decisions/0017-xdg-decoration-is-server-side.md` — xdg-decoration is
-  served and always server-side.
+  served and always server-side. Superseded by 0019.
+- `docs/decisions/0018-winit-render-transform.md` — the winit output flips at
+  render time through the damage tracker's mode source; `wl_output` stays
+  `normal`.
+- `docs/decisions/0019-decoration-policy.md` — server-side is the default and
+  the answer to an unset mode, but an explicit client-side request is honoured.

@@ -113,8 +113,8 @@ format (ADR 0011).
 A POSIX shell wrapper around cargo and a background instance of the binary.
 Run `./dev.sh --help` for the list; the commands are `build [--release]`,
 `run [--release]`, `watch [--release]`, `stop`, `restart`, `status`, `log [-f]`,
-`clean`, `check`, `smoke [--release]`, `block4 [--release]` and
-`move [--release]`. It uses only coreutils, cargo, `setsid`
+`clean`, `check`, `smoke [--release]`, `block4 [--release]`,
+`move [--release]` and `decoration`. It uses only coreutils, cargo, `setsid`
 and `cargo-watch`,
 is clean under `shellcheck`, and keeps runtime files under
 `$XDG_RUNTIME_DIR/neptune-dev/` (falling back to `/tmp/neptune-$(id -u)`); the
@@ -132,7 +132,7 @@ Wayland socket. Exit codes are grouped so callers can branch:
 | 6 | `log`: no log file |
 | 7 | `build`/`check`/`clean`/`watch`/`smoke`: not inside the dev shell |
 | 8 | `watch`: the watcher exited unexpectedly |
-| 9 | `smoke`/`block4`/`move`: the build or the test failed |
+| 9 | `smoke`/`block4`/`move`/`decoration`: the build or the test failed |
 
 `status` follows the LSB init-script convention (running = 0, dead with PID
 file = 1, not running = 3), so it can be used as a boolean in scripts.
@@ -257,12 +257,11 @@ since it is almost entirely public data.
    `run`, and bad-argument rejection is tested, but no real `--release` rebuild
    was run through the watcher, because a release rebuild of the whole tree is
    long. It is believed correct by construction, not verified by a run.
-5. **GTK4/libadwaita draws its own corners and shadow.** A client that paints
-   its own decorations ignores `xdg_decoration`, so Neptune's titlebar and
-   shadow would be drawn on top of the client's — double chrome. This needs a
-   per-window opt-out, and it changes how the decoration protocol is designed:
-   the client's intent has to be read before Neptune commits to drawing a
-   frame.
+5. **GTK4/libadwaita draws its own corners and shadow.** Resolved by ADR 0019:
+   the client's negotiation decides — an explicit client-side request (which a
+   headerbar window makes) is honoured, and such a window gets no compositor
+   titlebar, hairline or shadow. Neptune still draws no chrome at all, so the
+   renderer that consumes the mode is future work.
 6. **`setsid` and the saved PID.** `start` relies on `setsid` execing without
    forking, so `$!` is the compositor's real PID. That holds when the caller is
    not already a process-group leader, which is true under the watcher; it was

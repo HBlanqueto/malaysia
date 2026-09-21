@@ -105,7 +105,10 @@ including any deliberate divergence from the brief.
   counts) with no per-batch memory growth; `./dev.sh move` exercises
   client-initiated move/resize with valid and fabricated serials. Drag feel,
   resize visuals and the cursor shape changing under the pointer are
-  hand-checked. See `docs/blocks/04-manipulable-windows.md`.
+  hand-checked. See `docs/blocks/04-manipulable-windows.md`. Two follow-ups
+  after acceptance fixed the vertically inverted frame and replaced the
+  always-server-side decoration policy (ADRs 0018 and 0019); `./dev.sh
+  decoration` verifies the policy against real applications.
 - **Block 5 — not started.** Popups are configured with raw geometry only.
 - **Block 6 — not started.** `wl_data_device_manager` is advertised, but no
   clipboard behaviour is implemented.
