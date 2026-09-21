@@ -29,7 +29,7 @@ use smithay::backend::renderer::element::surface::{
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
-use smithay::output::Mode as OutputMode;
+use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction};
 use smithay::reexports::wayland_server::BindError;
@@ -37,7 +37,7 @@ use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
 use smithay::reexports::wayland_server::backend::{ClientId, ObjectId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{IsAlive, Logical, Point};
+use smithay::utils::{IsAlive, Logical, Physical, Point, Scale, Size, Transform};
 use smithay::wayland::compositor::{
     SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
@@ -181,6 +181,41 @@ fn describe_chain(error: &dyn std::error::Error) -> String {
     description
 }
 
+/// The transform that makes Smithay's render space land upright in the winit
+/// framebuffer.
+///
+/// OpenGL's framebuffer origin is bottom-left, so Smithay's y-down render space
+/// arrives inverted unless the render transform flips it. The damage tracker
+/// inverts whatever transform it is given before handing it to the renderer
+/// (`smithay-0.7.0/src/backend/renderer/damage/mod.rs:333-335`), and the GLES
+/// renderer composes that with its own OpenGL correction
+/// (`smithay-0.7.0/src/backend/renderer/gles/mod.rs:2087-2089`): with
+/// `Transform::Normal` the frame lands upside down, with `Flipped180` render
+/// y = 0 is the top of the window.
+///
+/// It is deliberately **not** set on the `Output`. `Output::change_current_state`
+/// sends the output's transform to clients in `wl_output.geometry`
+/// (`smithay-0.7.0/src/wayland/output/mod.rs:164-177`), and `flipped_180` there
+/// would tell a client to pre-rotate its buffers. The tracker's
+/// [`OutputModeSource::Static`] carries the render transform on its own, so the
+/// flip stays at render time (`smithay-0.7.0/src/output.rs:496-536`).
+pub(crate) const fn winit_render_transform() -> Transform {
+    Transform::Flipped180
+}
+
+/// The damage tracker mode source for the winit output.
+///
+/// A static source, because the render transform is not the output's: it pins
+/// the size the session already tracks and the transform above. A resize builds
+/// a new tracker with the new size.
+pub(crate) fn winit_mode_source(size: Size<i32, Physical>) -> OutputModeSource {
+    OutputModeSource::Static {
+        size,
+        scale: Scale::from(f64::from(State::OUTPUT_SCALE)),
+        transform: winit_render_transform(),
+    }
+}
+
 /// Runs the nested session until the window is closed or a signal arrives.
 ///
 /// This blocks the calling thread, driving the calloop event loop. It returns
@@ -199,7 +234,8 @@ pub fn run() -> Result<(), SessionError> {
         &display.handle(),
         backend.window_size(),
     )?;
-    let damage_tracker = OutputDamageTracker::from_output(&state.output);
+    let damage_tracker =
+        OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
     let cursor = Cursors::load(State::OUTPUT_SCALE);
     let track_objects = std::env::var_os("NEPTUNE_TEST_OBJECTS").is_some();
     let mut session = Session {
@@ -329,6 +365,10 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
                 None,
                 None,
             );
+            // The tracker's mode source is static, so the new size is carried
+            // by a fresh tracker. Resetting the damage history on a resize is
+            // what the whole surface needs anyway.
+            session.damage_tracker = OutputDamageTracker::from_mode_source(winit_mode_source(size));
             session.backend.window().request_redraw();
         }
         WinitEvent::CloseRequested => {

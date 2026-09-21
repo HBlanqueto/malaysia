@@ -172,6 +172,12 @@ impl State {
             size,
             refresh: 60_000,
         };
+        // The advertised transform stays `Normal` on purpose. The winit
+        // framebuffer's bottom-left origin is corrected at render time by the
+        // damage tracker's mode source, never by telling clients to pre-rotate:
+        // this transform reaches clients in `wl_output.geometry`
+        // (`smithay-0.7.0/src/wayland/output/mod.rs:164-177`). See
+        // `session::winit_render_transform`.
         output.change_current_state(
             Some(mode),
             Some(Transform::Normal),
