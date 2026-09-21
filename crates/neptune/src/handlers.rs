@@ -37,11 +37,12 @@ impl CompositorHandler for State {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        // Every client is accepted with `ClientState` (see `session.rs`), and a
-        // client in this display cannot be dispatched before it is inserted.
+        // The invariant: session.rs inserts every accepted client with
+        // ClientState, so a client being dispatched cannot lack it. If this
+        // fires, look at the socket handler, not at this call site.
         &client
             .get_data::<ClientState>()
-            .expect("clients are inserted with ClientState")
+            .expect("every client is inserted with ClientState in the socket handler")
             .compositor_state
     }
 
@@ -91,8 +92,18 @@ impl XdgShellHandler for State {
         // The initial configure and mapping arrive in Part 5.
     }
 
-    fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
-        // Popups are out of scope for Block 1.
+    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+        // Constraint adjustment and grabs are out of scope for Block 1. Sending
+        // a configure with the positioner's raw geometry keeps the client from
+        // waiting forever; the popup lands in the wrong place, which is visible
+        // and debuggable rather than a silent stall.
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+            state.positioner = positioner;
+        });
+        if let Err(error) = surface.send_configure() {
+            tracing::warn!(%error, "failed to configure a popup");
+        }
     }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {

@@ -18,6 +18,7 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod decoration;
 mod handlers;
 pub mod session;
 pub mod state;
