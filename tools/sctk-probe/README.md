@@ -8,6 +8,7 @@ package to build it on purpose.
 
 The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
 at, so they can be run against Neptune or the host session without any change.
+`smoke` is different: it launches Neptune itself and drives a client against it.
 
 Everything here runs inside the dev shell (`nix develop`). The compositor must
 be built first:
@@ -38,3 +39,23 @@ must be the one Neptune created). For example, while Neptune runs under
 XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR/neptune-dev" WAYLAND_DISPLAY=wayland-0 \
     cargo run -p sctk-probe --bin parent_probe
 ```
+
+## `smoke`
+
+An assertion-based smoke test for the toplevel mapping sequence. It launches the
+compositor, starts a real client (`foot` by default) with `WAYLAND_DEBUG=1`,
+captures the client's trace, and checks, in order: `xdg_toplevel.configure`
+before the first non-null attach; a matching `ack_configure` serial before that
+attach; a non-null buffered commit that the compositor reports as mapped;
+`wl_keyboard.enter` on the mapped surface; and completion of the *specific*
+callback id requested by `wl_surface.frame`. A bare `wl_callback.done` is not
+accepted, so a `wl_display.sync` round-trip cannot be mistaken for a frame.
+
+It exits non-zero if any step is missing or out of order.
+
+```sh
+cargo run -p sctk-probe --bin smoke
+```
+
+Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
+`NEPTUNE_SMOKE_CLIENT` (the client to drive).

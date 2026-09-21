@@ -2,9 +2,14 @@
 //!
 //! `tools/sctk-probe` is **not** part of the compositor. It is a workspace
 //! member excluded from the default build, used to drive Neptune as a Wayland
-//! client while developing. Its `parent_probe` binary maps two toplevels and
-//! toggles a parent on the child to check that the server recomputes decoration
-//! insets and reconfigures. See the crate README for the command.
+//! client while developing. Its binaries are:
+//!
+//! - `parent_probe` — maps two toplevels and toggles a parent on the child to
+//!   check that the server recomputes decoration insets and reconfigures.
+//! - `smoke` — launches the compositor and a real client, captures the client's
+//!   `WAYLAND_DEBUG` trace and asserts the toplevel mapping sequence.
+//!
+//! See the crate README for the commands.
 
 use smithay_client_toolkit::reexports::{
     calloop,
