@@ -12,6 +12,7 @@
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::delegate_compositor;
 use smithay::delegate_data_device;
+use smithay::delegate_kde_decoration;
 use smithay::delegate_output;
 use smithay::delegate_seat;
 use smithay::delegate_shm;
@@ -22,10 +23,14 @@ use smithay::input::SeatHandler;
 use smithay::input::SeatState;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::{
+    Mode as KdeMode, OrgKdeKwinServerDecoration,
+};
 use smithay::reexports::wayland_server::Client;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::WEnum;
 use smithay::utils::Serial;
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{CompositorClientState, CompositorHandler, CompositorState};
@@ -35,11 +40,14 @@ use smithay::wayland::selection::data_device::{
     ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
 };
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+use smithay::wayland::shell::kde::decoration::{KdeDecorationHandler, KdeDecorationState};
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::wayland::shell::xdg::{
     Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
+
+use neptune_scene::scene::Decoration;
 
 use crate::state::{ClientState, State};
 
@@ -227,27 +235,120 @@ impl XdgShellHandler for State {
 
 delegate_xdg_shell!(State);
 
+/// The decoration a client asks for with an xdg-decoration mode.
+///
+/// The protocol has no "unset" value here: `request_mode` carries one of the
+/// two, and the compositor answers with the one it chose.
+fn decoration_for_xdg_mode(mode: Mode) -> Decoration {
+    match mode {
+        Mode::ClientSide => Decoration::Client,
+        // Server-side, and any value this build does not know: the compositor
+        // chooses, and it chooses server-side.
+        _ => Decoration::Server,
+    }
+}
+
+/// The decoration a client asks for with a KDE decoration mode.
+///
+/// `None` means "do not decorate me at all", which for Neptune is the same as
+/// self-decorating: no chrome. `Server` and `Client` map directly.
+fn decoration_for_kde_mode(mode: KdeMode) -> Decoration {
+    match mode {
+        KdeMode::Server => Decoration::Server,
+        // Client-side, undecorated, and any unknown value: no compositor
+        // chrome, so an odd client cannot end up with a second titlebar.
+        _ => Decoration::Client,
+    }
+}
+
 impl XdgDecorationHandler for State {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
-        // The client offered to let the compositor decorate it. Neptune always
-        // chooses server-side; the configure is sent before the client attaches
-        // so it never draws a client-side titlebar.
+        // The client created the decoration object but has not chosen a mode;
+        // the protocol leaves the choice to the compositor, which chooses
+        // server-side. The configure goes out before the client attaches, so it
+        // never draws a titlebar of its own.
         self.windows
-            .confirm_server_decoration(toplevel.wl_surface());
+            .set_decoration(toplevel.wl_surface(), Decoration::Server);
     }
 
-    fn request_mode(&mut self, toplevel: ToplevelSurface, _mode: Mode) {
-        // The protocol lets the compositor keep server-side even when the client
-        // asks for client-side, so the request is answered with server-side
-        // rather than honoured.
+    fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
+        // An explicit choice is honoured: a client that asks for client-side
+        // chrome keeps it, and one that accepts server-side gets Neptune's.
         self.windows
-            .confirm_server_decoration(toplevel.wl_surface());
+            .set_decoration(toplevel.wl_surface(), decoration_for_xdg_mode(mode));
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        // The client withdrew its choice, so the compositor chooses again:
+        // server-side, as for a fresh decoration object.
         self.windows
-            .confirm_server_decoration(toplevel.wl_surface());
+            .set_decoration(toplevel.wl_surface(), Decoration::Server);
     }
 }
 
 delegate_xdg_decoration!(State);
+
+impl KdeDecorationHandler for State {
+    fn kde_decoration_state(&self) -> &KdeDecorationState {
+        &self.kde_decoration_state
+    }
+
+    fn request_mode(
+        &mut self,
+        surface: &WlSurface,
+        decoration: &OrgKdeKwinServerDecoration,
+        mode: WEnum<KdeMode>,
+    ) {
+        let WEnum::Value(mode) = mode else {
+            return;
+        };
+        // GTK3 and GTK4 ask through this protocol; an explicit client-side
+        // request means the window has its own headerbar and must keep it. The
+        // reply repeats the client's mode, because that is the mode chosen.
+        decoration.mode(mode);
+        self.windows
+            .set_decoration(surface, decoration_for_kde_mode(mode));
+    }
+}
+
+delegate_kde_decoration!(State);
+
+#[cfg(test)]
+mod tests {
+    use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+    use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode as KdeMode;
+
+    use super::{decoration_for_kde_mode, decoration_for_xdg_mode};
+    use neptune_scene::scene::Decoration;
+
+    #[test]
+    fn an_xdg_client_that_accepts_server_side_gets_server_chrome() {
+        assert_eq!(
+            decoration_for_xdg_mode(Mode::ServerSide),
+            Decoration::Server
+        );
+    }
+
+    #[test]
+    fn an_xdg_client_that_requests_client_side_keeps_its_own_chrome() {
+        assert_eq!(
+            decoration_for_xdg_mode(Mode::ClientSide),
+            Decoration::Client
+        );
+    }
+
+    #[test]
+    fn a_kde_client_that_requests_server_side_gets_server_chrome() {
+        assert_eq!(decoration_for_kde_mode(KdeMode::Server), Decoration::Server);
+    }
+
+    #[test]
+    fn a_kde_client_that_requests_client_side_keeps_its_own_chrome() {
+        assert_eq!(decoration_for_kde_mode(KdeMode::Client), Decoration::Client);
+    }
+
+    #[test]
+    fn a_kde_client_that_asks_for_no_decoration_gets_none_from_neptune() {
+        assert_eq!(decoration_for_kde_mode(KdeMode::None), Decoration::Client);
+    }
+}

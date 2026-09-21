@@ -34,6 +34,8 @@ use smithay::utils::{Logical, Physical, Serial, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
+use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode as KdeDefaultMode;
+use smithay::wayland::shell::kde::decoration::KdeDecorationState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
@@ -86,9 +88,15 @@ pub struct State {
     pub xdg_shell_state: XdgShellState,
     /// The `zxdg_decoration_manager_v1` state.
     ///
-    /// Neptune always configures server-side decorations; this advertises that
-    /// so a client stops drawing its own.
+    /// The per-window mode lives in the scene; this only serves the protocol
+    /// (ADR 0019).
     pub decoration_state: XdgDecorationState,
+    /// The `org_kde_kwin_server_decoration_manager` state.
+    ///
+    /// GTK3 and GTK4 negotiate decorations only through this protocol; the
+    /// advertised default mode is server-side so a plain GTK window accepts
+    /// Neptune's chrome (ADR 0019).
+    pub kde_decoration_state: KdeDecorationState,
     /// The `wl_data_device_manager` state.
     ///
     /// Advertising the global completes the seat's protocol surface; no
@@ -149,6 +157,8 @@ impl State {
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
         let decoration_state = XdgDecorationState::new::<Self>(display_handle);
+        let kde_decoration_state =
+            KdeDecorationState::new::<Self>(display_handle, KdeDefaultMode::Server);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
 
         let mut seat_state: SeatState<Self> = SeatState::new();
@@ -197,6 +207,7 @@ impl State {
             cursor_status: CursorImageStatus::default_named(),
             xdg_shell_state,
             decoration_state,
+            kde_decoration_state,
             data_device_state,
             output_manager_state,
             output,

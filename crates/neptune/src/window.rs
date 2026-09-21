@@ -20,7 +20,7 @@ use neptune_design::TITLEBAR;
 use neptune_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
-use neptune_scene::scene::{Edge, Scene, WindowId};
+use neptune_scene::scene::{Decoration, Edge, Scene, WindowId};
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -30,7 +30,7 @@ use smithay::utils::{Logical, Point, Serial, Size};
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg::{Configure, SurfaceCachedState, ToplevelSurface};
 
-use crate::decoration::{Chrome, Insets, Role, WindowState};
+use crate::decoration::{Insets, Role, WindowState};
 
 /// The grab band along each edge, in logical pixels.
 pub const RESIZE_BORDER: f64 = 8.0;
@@ -45,6 +45,8 @@ pub struct Window<'a> {
     data: &'a WindowData,
     /// The window's decorated outer rectangle.
     outer: SceneRect<f64, SceneLogical>,
+    /// Who draws the window's chrome, from the scene (ADR 0019).
+    decoration: Decoration,
 }
 
 impl Window<'_> {
@@ -78,12 +80,12 @@ impl Window<'_> {
         Size::from((round(self.outer.width()), round(self.outer.height())))
     }
 
-    /// The insets for the window's current role, state and chrome.
+    /// The insets for the window's current role, state and decoration.
     pub fn insets(&self) -> Insets {
         Insets::for_window(
             self.data.role(),
             self.data.state(),
-            self.data.chrome(),
+            self.decoration,
             &TITLEBAR,
         )
     }
@@ -149,18 +151,9 @@ impl WindowData {
         }
     }
 
-    /// Who draws the chrome. Until xdg_decoration is served, this is always the
-    /// server: clients cannot have negotiated anything else.
-    fn chrome(&self) -> Chrome {
-        match self.toplevel.current_state().decoration_mode {
-            Some(zxdg_toplevel_decoration_v1::Mode::ClientSide) => Chrome::Client,
-            _ => Chrome::Server,
-        }
-    }
-
-    /// The insets for the window's current role, state and chrome.
-    fn insets(&self) -> Insets {
-        Insets::for_window(self.role(), self.state(), self.chrome(), &TITLEBAR)
+    /// The insets for the window's current role, state and decoration.
+    fn insets(&self, decoration: Decoration) -> Insets {
+        Insets::for_window(self.role(), self.state(), decoration, &TITLEBAR)
     }
 
     /// The client's minimum and maximum usable size, in logical coordinates.
@@ -209,7 +202,11 @@ impl Windows {
             self.windows
                 .iter()
                 .find(|data| data.id == id)
-                .map(|data| Window { data, outer })
+                .map(|data| Window {
+                    data,
+                    outer,
+                    decoration: self.decoration_of(id),
+                })
         })
     }
 
@@ -242,8 +239,12 @@ impl Windows {
     /// time it becomes mapped, so the caller can give it keyboard focus.
     pub fn commit(&mut self, surface: &WlSurface) -> Option<WindowId> {
         let index = self.index_of(surface)?;
+        let decoration = self.decoration_of(self.windows[index].id);
 
-        let usable = usable(self.windows[index].outer_size, self.windows[index].insets());
+        let usable = usable(
+            self.windows[index].outer_size,
+            self.windows[index].insets(decoration),
+        );
         if self.windows[index].configured != Some(usable) {
             self.send_configure(index);
         }
@@ -331,7 +332,7 @@ impl Windows {
         let id = self.scene.topmost_at(scene_point(point))?;
         let index = self.index(id)?;
         let outer = self.scene.outer(id)?;
-        let insets = self.windows[index].insets();
+        let insets = self.windows[index].insets(self.decoration_of(id));
         let origin: ScenePoint<f64, SceneLogical> =
             ScenePoint::new(outer.x() + insets.left, outer.y() + insets.top);
         let local: Point<f64, Logical> = Point::new(point.x - origin.x, point.y - origin.y);
@@ -410,27 +411,53 @@ impl Windows {
         }
     }
 
-    /// Re-configures a window so the client learns the server-side mode.
+    /// Stores a window's decoration mode and re-configures it if it changed.
     ///
-    /// Called when the client creates or changes its decoration object: every
-    /// configure already asks for server-side decorations, so this simply sends
-    /// one in reply.
-    pub fn confirm_server_decoration(&mut self, surface: &WlSurface) {
-        if let Some(index) = self.index_of(surface) {
-            self.send_configure(index);
+    /// This is how a client's negotiation reaches the scene (ADR 0019). A new
+    /// configure carries both the mode and the usable size for the new mode, so
+    /// a client that maps later gets the right surface size and a client that
+    /// changes mode after mapping is resized. Returns whether a configure was
+    /// sent: the mode is always stored, but an effective no-op sends nothing.
+    pub fn set_decoration(&mut self, surface: &WlSurface, decoration: Decoration) -> bool {
+        let Some(index) = self.index_of(surface) else {
+            return false;
+        };
+        let id = self.windows[index].id;
+        let previous = self.decoration_of(id);
+        // Store even when the effective mode does not change, so an explicit
+        // client-side request is recorded rather than left unset.
+        self.scene.set_decoration(id, decoration);
+        if previous == decoration {
+            return false;
         }
+        self.send_configure(index);
+        true
+    }
+
+    /// The decoration mode of a window, or client-side when none was stored.
+    ///
+    /// A window that never negotiated has no stored mode; treating it as
+    /// self-decorating is the policy ADR 0019 sets.
+    fn decoration_of(&self, id: WindowId) -> Decoration {
+        self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
     /// Sends a configure carrying the usable size for the current state.
     fn send_configure(&mut self, index: usize) {
+        let id = self.windows[index].id;
+        let decoration = self.decoration_of(id);
         let data = &mut self.windows[index];
-        let usable = usable(data.outer_size, data.insets());
+        let usable = usable(data.outer_size, data.insets(decoration));
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
             state.size = Some(usable);
-            // Neptune always decorates server-side; saying so in every configure
-            // means a client never falls back to drawing its own chrome.
-            state.decoration_mode = Some(zxdg_toplevel_decoration_v1::Mode::ServerSide);
+            // The configure carries the mode the client negotiated; a client
+            // with no decoration object ignores the field, and one with an
+            // object learns the choice before its first attach (ADR 0019).
+            state.decoration_mode = Some(match decoration {
+                Decoration::Server => zxdg_toplevel_decoration_v1::Mode::ServerSide,
+                Decoration::Client => zxdg_toplevel_decoration_v1::Mode::ClientSide,
+            });
             if resizing {
                 state.states.set(xdg_toplevel::State::Resizing);
             } else {
@@ -453,7 +480,7 @@ impl Windows {
         let data = &self.windows[index];
         let (min, max) = data.size_bounds();
         let bound = pick(min, max);
-        let insets = data.insets();
+        let insets = data.insets(self.decoration_of(id));
         let width = if bound.w > 0 {
             f64::from(bound.w) + insets.horizontal()
         } else {

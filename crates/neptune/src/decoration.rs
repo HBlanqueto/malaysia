@@ -25,6 +25,7 @@
 //! maximized or tiled window may change them later.
 
 use neptune_design::{Titlebar, TitlebarPosition};
+use neptune_scene::scene::Decoration;
 
 /// The space reserved around a client's surface, in logical pixels.
 ///
@@ -68,14 +69,18 @@ impl Insets {
     /// window reserves nothing; a client that draws its own chrome reserves
     /// nothing; only a normal or maximized toplevel with server-side chrome
     /// gets the titlebar inset on the edge [`neptune_design`] configures.
+    ///
+    /// `decoration` is the mode stored in the scene (ADR 0019): the negotiation
+    /// happened in a protocol handler, and this function only consumes its
+    /// result.
     pub fn for_window(
         role: Role,
         window: WindowState,
-        chrome: Chrome,
+        decoration: Decoration,
         titlebar: &Titlebar,
     ) -> Insets {
-        match (role, window, chrome) {
-            (Role::Toplevel, WindowState::Normal | WindowState::Maximized, Chrome::Server) => {
+        match (role, window, decoration) {
+            (Role::Toplevel, WindowState::Normal | WindowState::Maximized, Decoration::Server) => {
                 titlebar_inset(titlebar)
             }
             _ => Insets::ZERO,
@@ -103,15 +108,6 @@ pub enum WindowState {
     Maximized,
     /// Fullscreen: covers the output, so nothing is reserved.
     Fullscreen,
-}
-
-/// Who draws the window's chrome.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Chrome {
-    /// Neptune draws the titlebar; the client's surface is inset.
-    Server,
-    /// The client draws its own chrome, or asked not to be decorated.
-    Client,
 }
 
 /// The inset that a titlebar occupies on the edge it is configured on.
@@ -142,7 +138,8 @@ fn titlebar_inset(titlebar: &Titlebar) -> Insets {
 mod tests {
     use neptune_design::{TITLEBAR, Titlebar, TitlebarPosition};
 
-    use super::{Chrome, Insets, Role, WindowState};
+    use super::{Insets, Role, WindowState};
+    use neptune_scene::scene::Decoration;
 
     /// A titlebar on `position` with `thickness`, reusing the real metrics.
     fn titlebar(position: TitlebarPosition, thickness: u32) -> Titlebar {
@@ -171,7 +168,12 @@ mod tests {
     #[test]
     fn a_normal_toplevel_gets_a_top_inset() {
         let bar = titlebar(TitlebarPosition::Top, 24);
-        let insets = Insets::for_window(Role::Toplevel, WindowState::Normal, Chrome::Server, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Normal,
+            Decoration::Server,
+            &bar,
+        );
         assert_eq!(insets.top, 24.0);
         assert_eq!(insets.left, 0.0);
         assert_eq!(insets.right, 0.0);
@@ -183,13 +185,23 @@ mod tests {
     #[test]
     fn the_titlebar_side_follows_the_configuration() {
         let bar = titlebar(TitlebarPosition::Left, 32);
-        let insets = Insets::for_window(Role::Toplevel, WindowState::Normal, Chrome::Server, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Normal,
+            Decoration::Server,
+            &bar,
+        );
         assert_eq!(insets.left, 32.0);
         assert_eq!(insets.top, 0.0);
         assert_eq!(insets.horizontal(), 32.0);
 
         let bar = titlebar(TitlebarPosition::Bottom, 20);
-        let insets = Insets::for_window(Role::Toplevel, WindowState::Normal, Chrome::Server, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Normal,
+            Decoration::Server,
+            &bar,
+        );
         assert_eq!(insets.bottom, 20.0);
         assert_eq!(insets.vertical(), 20.0);
     }
@@ -197,21 +209,27 @@ mod tests {
     #[test]
     fn no_titlebar_reserves_nothing() {
         let bar = titlebar(TitlebarPosition::None, 32);
-        let insets = Insets::for_window(Role::Toplevel, WindowState::Normal, Chrome::Server, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Normal,
+            Decoration::Server,
+            &bar,
+        );
         assert_eq!(insets, Insets::ZERO);
     }
 
     #[test]
     fn a_dialog_is_never_decorated() {
         let bar = titlebar(TitlebarPosition::Top, 32);
-        let insets = Insets::for_window(Role::Dialog, WindowState::Normal, Chrome::Server, &bar);
+        let insets =
+            Insets::for_window(Role::Dialog, WindowState::Normal, Decoration::Server, &bar);
         assert_eq!(insets, Insets::ZERO);
     }
 
     #[test]
     fn a_popup_is_never_decorated() {
         let bar = titlebar(TitlebarPosition::Top, 32);
-        let insets = Insets::for_window(Role::Popup, WindowState::Normal, Chrome::Server, &bar);
+        let insets = Insets::for_window(Role::Popup, WindowState::Normal, Decoration::Server, &bar);
         assert_eq!(insets, Insets::ZERO);
     }
 
@@ -221,7 +239,7 @@ mod tests {
         let insets = Insets::for_window(
             Role::Toplevel,
             WindowState::Fullscreen,
-            Chrome::Server,
+            Decoration::Server,
             &bar,
         );
         assert_eq!(insets, Insets::ZERO);
@@ -230,15 +248,24 @@ mod tests {
     #[test]
     fn client_side_chrome_reserves_nothing() {
         let bar = titlebar(TitlebarPosition::Top, 32);
-        let insets = Insets::for_window(Role::Toplevel, WindowState::Normal, Chrome::Client, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Normal,
+            Decoration::Client,
+            &bar,
+        );
         assert_eq!(insets, Insets::ZERO);
     }
 
     #[test]
     fn a_maximized_window_keeps_its_titlebar_for_now() {
         let bar = titlebar(TitlebarPosition::Top, 32);
-        let insets =
-            Insets::for_window(Role::Toplevel, WindowState::Maximized, Chrome::Server, &bar);
+        let insets = Insets::for_window(
+            Role::Toplevel,
+            WindowState::Maximized,
+            Decoration::Server,
+            &bar,
+        );
         assert_eq!(insets.top, 32.0);
     }
 }
