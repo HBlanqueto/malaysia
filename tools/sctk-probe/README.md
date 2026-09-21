@@ -76,12 +76,26 @@ toplevels) return to the startup baseline after every batch, and that resident
 memory does not grow from batch 2 to batch 3 by more than 1 MiB (the first batch
 is warm-up). Both are asserted; the three measurements are printed.
 
+It then runs three resize scenarios, each with a fresh compositor, a fresh
+`resize_client` and `NEPTUNE_TEST_INPUT=1`: the compositor presses a corner or
+an edge of the mapped window and its scripted motions drive the grab. The
+harness asserts the final configured size — corner growth with no client
+maximum, the same growth clamped to a client maximum, and a shrunk width held
+by a client minimum:
+
+```
+block4: resize grow PASS (initial 1280x800, final 1328x832, expected 1328x832)
+block4: resize maximum PASS (initial 1280x800, final 1290x810, expected 1290x810)
+block4: resize minimum PASS (initial 1280x800, final 1270x800, expected 1270x800)
+```
+
 ```sh
 ./dev.sh block4                        # builds neptune and the probes, then runs it
 cargo run -p sctk-probe --bin block4   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN` and `NEPTUNE_STRESS_BIN`.
+Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_STRESS_BIN` and
+`NEPTUNE_RESIZE_BIN`.
 
 ## `window_stress`
 
@@ -92,6 +106,24 @@ exits. On its own it is only useful to watch a compositor's teardown:
 ```sh
 cargo run -p sctk-probe --bin window_stress
 ```
+
+## `resize_client`
+
+The client `block4` drives for the resize assertions. It maps a
+client-decorated toplevel, applies a bound from `NEPTUNE_RESIZE_MIN` or
+`NEPTUNE_RESIZE_MAX` (an `x,y` offset from the initial configure, in surface
+coordinates, before it maps), and prints every configure it receives, then the
+size once the stream settles:
+
+```
+resize_client: configure width=1280 height=800 resizing=false
+resize_client: configure width=1328 height=832 resizing=true
+resize_client: final width=1328 height=832
+```
+
+It is client-decorated so its configured size is its window size, with no
+decoration reconfigure racing the first configure. It exits non-zero if it is
+never configured or if no resize settles.
 
 ## `decoration_probe`
 

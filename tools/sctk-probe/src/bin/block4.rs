@@ -1,5 +1,6 @@
 //! Block 4 acceptance harness: open and close many windows, assert the scene
-//! returns to empty, and report the compositor's resident-memory delta.
+//! returns to empty, report the compositor's resident-memory delta, and resize
+//! windows from an edge and a corner.
 //!
 //! It launches a single nested compositor and the `window_stress` client, which
 //! opens fifty toplevels and then destroys them. The compositor logs
@@ -9,15 +10,23 @@
 //! reported as a delta; it is **measured, not asserted** (a threshold would be
 //! flaky), so the numbers are printed for inspection.
 //!
+//! It then runs three resize scenarios, each with a fresh compositor, a fresh
+//! `resize_client` and `NEPTUNE_TEST_INPUT=1`: the compositor presses an edge
+//! or corner of the mapped window and its scripted motions drive the grab. The
+//! harness asserts the final size the client was configured to — unbounded
+//! growth from a corner, a client maximum clamping that growth, and a client
+//! minimum holding a shrunk width.
+//!
 //! Run from the dev shell, after building the compositor and probes:
 //!
 //! ```sh
 //! cargo build -p neptune -p sctk-probe
 //! NEPTUNE_BIN=target/debug/neptune NEPTUNE_STRESS_BIN=target/debug/window_stress \
-//!   target/debug/block4
+//!   NEPTUNE_RESIZE_BIN=target/debug/resize_client target/debug/block4
 //! ```
 //!
-//! Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_STRESS_BIN`.
+//! Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_STRESS_BIN`,
+//! `NEPTUNE_RESIZE_BIN`.
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
@@ -46,6 +55,13 @@ const BATCHES: usize = 3;
 /// ~20 kB per window over 50 windows is ~1 MB, so 1 MiB catches a real leak
 /// while staying well above noise.
 const GROWTH_THRESHOLD_KB: u64 = 1024;
+/// The pointer delta the compositor's scripted pre-threshold motions apply.
+///
+/// The seam follows the press with `TEST_DRAG_STEPS` motions of
+/// `TEST_DRAG_STEP` each: 4 × (12, 8).
+const EDGE_DRAG: (u32, u32) = (48, 32);
+/// How far the resize cases set a client bound from the initial size, in pixels.
+const BOUND_MARGIN: u32 = 10;
 
 /// Live-object counts reported by the compositor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,18 +149,18 @@ fn run() -> Result<(), String> {
             binary.display()
         ));
     }
-    let stress = std::env::var_os("NEPTUNE_STRESS_BIN")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|dir| dir.join("window_stress")))
-                .unwrap_or_else(|| repo.join("target/debug/window_stress"))
-        });
+    let stress = probe_binary(repo, "NEPTUNE_STRESS_BIN", "window_stress");
     if !stress.is_file() {
         return Err(format!(
             "stress client not found at {}; run `cargo build -p sctk-probe` first",
             stress.display()
+        ));
+    }
+    let resize = probe_binary(repo, "NEPTUNE_RESIZE_BIN", "resize_client");
+    if !resize.is_file() {
+        return Err(format!(
+            "resize client not found at {}; run `cargo build -p sctk-probe` first",
+            resize.display()
         ));
     }
 
@@ -179,9 +195,9 @@ fn run() -> Result<(), String> {
             None,
         )
         .map_err(|error| format!("failed to start the stress client: {error}"))?;
-        let _client_log = client.capture()?;
+        let client_log = client.capture()?;
 
-        wait_for_client_exit(&mut client)?;
+        wait_for_client_exit(&mut client, &client_log, "stress client")?;
         wait_for_batch(&compositor_log, baseline, batch * WINDOWS)?;
 
         let kb = resident_kb(compositor.id());
@@ -210,7 +226,146 @@ fn run() -> Result<(), String> {
          baseline; resident memory warm-up {warm_up} kB, batch 2 {second} kB, batch 3 {third} kB, \
          batch 2->3 growth {growth} kB (asserted below {GROWTH_THRESHOLD_KB} kB)"
     );
+
+    run_resize_cases(&binary, &resize)?;
     Ok(())
+}
+
+/// Resizes a window from a corner and an edge and asserts the final size.
+///
+/// The three scenarios cover the bound logic `resized` applies: no client
+/// maximum must leave the size unbounded (so the corner drag grows it), a
+/// client maximum must clamp that growth, and a client minimum must hold a
+/// shrunk width.
+fn run_resize_cases(binary: &Path, client: &Path) -> Result<(), String> {
+    run_resize_case(
+        binary,
+        client,
+        "grow",
+        "0.999,0.999",
+        None,
+        |width, height| (width + EDGE_DRAG.0, height + EDGE_DRAG.1),
+    )?;
+    run_resize_case(
+        binary,
+        client,
+        "maximum",
+        "0.999,0.999",
+        Some(("NEPTUNE_RESIZE_MAX", BOUND_MARGIN)),
+        |width, height| (width + BOUND_MARGIN, height + BOUND_MARGIN),
+    )?;
+    run_resize_case(
+        binary,
+        client,
+        "minimum",
+        "0.0,0.5",
+        Some(("NEPTUNE_RESIZE_MIN", BOUND_MARGIN)),
+        |width, height| (width - BOUND_MARGIN, height),
+    )?;
+    Ok(())
+}
+
+/// Runs one resize scenario and asserts the final configured size.
+///
+/// `expect` maps the initial configured size to the expected final one. The
+/// press fraction aims the compositor's scripted press, and `bound` is the
+/// client's minimum or maximum offset from the initial size.
+fn run_resize_case(
+    binary: &Path,
+    client: &Path,
+    name: &str,
+    press_at: &str,
+    bound: Option<(&str, u32)>,
+    expect: impl Fn(u32, u32) -> (u32, u32),
+) -> Result<(), String> {
+    let runtime = TempDir::create()?;
+    let host_display = host_wayland_display()?;
+    let mut compositor = ChildGuard::spawn(
+        Command::new(binary)
+            .arg("--log-level=info")
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("NEPTUNE_TEST_INPUT", "1")
+            .env("NEPTUNE_TEST_PRESS_AT", press_at),
+        host_display.as_deref(),
+    )?;
+    let compositor_log = compositor.capture()?;
+    let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+
+    // The bound is the client's: it sets min_size/max_size from it before it
+    // maps, and the compositor's resize clamps to them.
+    let mut command = Command::new(client);
+    command
+        .env("XDG_RUNTIME_DIR", runtime.path())
+        .env("WAYLAND_DISPLAY", &socket)
+        .stdin(Stdio::null());
+    if let Some((variable, margin)) = bound {
+        command.env(variable, format!("{margin},{margin}"));
+    }
+    let mut resize_client = ChildGuard::spawn(&mut command, None)
+        .map_err(|error| format!("failed to start the resize client: {error}"))?;
+    let client_log = resize_client.capture()?;
+    wait_for_client_exit(&mut resize_client, &client_log, "resize client")?;
+
+    let lines = stripped(&client_log);
+    let initial = lines
+        .iter()
+        .find(|line| line.contains("resize_client: configure"))
+        .ok_or_else(|| {
+            format!(
+                "the resize client for `{name}` was never configured; output:\n{}",
+                lines.join("\n")
+            )
+        })?;
+    let (initial_width, initial_height) = size_of(initial)?;
+    let last = lines
+        .iter()
+        .find(|line| line.contains("resize_client: final"))
+        .ok_or_else(|| {
+            format!(
+                "the resize client for `{name}` never reported a final size; output:\n{}",
+                lines.join("\n")
+            )
+        })?;
+    let (final_width, final_height) = size_of(last)?;
+
+    let (expected_width, expected_height) = expect(initial_width, initial_height);
+    if (final_width, final_height) != (expected_width, expected_height) {
+        return Err(format!(
+            "resize `{name}` ended at {final_width}x{final_height} after starting at \
+             {initial_width}x{initial_height}, expected {expected_width}x{expected_height}; client \
+             output:\n{}",
+            lines.join("\n")
+        ));
+    }
+    println!(
+        "block4: resize {name} PASS (initial {initial_width}x{initial_height}, final \
+         {final_width}x{final_height}, expected {expected_width}x{expected_height})"
+    );
+    Ok(())
+}
+
+/// The `width` and `height` fields of a `resize_client` size line.
+fn size_of(line: &str) -> Result<(u32, u32), String> {
+    let width = field(line, "width")
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| format!("`width` is missing from `{line}`"))?;
+    let height = field(line, "height")
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| format!("`height` is missing from `{line}`"))?;
+    Ok((width, height))
+}
+
+/// Resolves one of this package's probe binaries from its environment variable,
+/// the directory of this executable, or the debug target directory.
+fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
+    std::env::var_os(variable)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
+                .unwrap_or_else(|| repo.join("target/debug").join(name))
+        })
 }
 
 /// The first live-object line seen, used as the baseline.
@@ -252,18 +407,24 @@ fn wait_for_batch(log: &Sink, baseline: LiveObjects, min_removed: usize) -> Resu
     }
 }
 
-/// Waits until the stress client has exited, failing on a non-zero status.
-fn wait_for_client_exit(client: &mut ChildGuard) -> Result<(), String> {
+/// Waits until a client has exited, failing on a non-zero status.
+fn wait_for_client_exit(client: &mut ChildGuard, log: &Sink, what: &str) -> Result<(), String> {
     let deadline = Instant::now() + STRESS_TIMEOUT;
     loop {
         if let Some(status) = client.poll()? {
             if status.success() {
                 return Ok(());
             }
-            return Err(format!("the stress client exited with {status}"));
+            return Err(format!(
+                "the {what} exited with {status}; output:\n{}",
+                snapshot(log).join("\n")
+            ));
         }
         if Instant::now() >= deadline {
-            return Err("the stress client did not exit in time".to_string());
+            return Err(format!(
+                "the {what} did not exit in time; output:\n{}",
+                snapshot(log).join("\n")
+            ));
         }
         thread::sleep(Duration::from_millis(50));
     }
@@ -410,6 +571,11 @@ fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
 /// A copy of the lines captured so far.
 fn snapshot(sink: &Sink) -> Vec<String> {
     sink.lock().expect("capture sink poisoned").clone()
+}
+
+/// A copy of the captured lines with ANSI colour escapes removed.
+fn stripped(sink: &Sink) -> Vec<String> {
+    snapshot(sink).iter().map(|line| strip_ansi(line)).collect()
 }
 
 /// A runtime directory that is removed when it drops.

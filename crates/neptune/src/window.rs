@@ -405,8 +405,11 @@ impl Windows {
 
     /// The smallest decorated outer size this window allows, from the client's
     /// minimum size plus the insets.
+    ///
+    /// A client minimum of zero means no constraint on that axis, but the outer
+    /// size still never collapses below one pixel.
     pub fn minimum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {
-        self.outer_size_bounds(id, |min, _| min)
+        at_least_one_pixel(self.outer_size_bounds(id, |min, _| min))
     }
 
     /// The largest decorated outer size, or zero where the client left it
@@ -511,6 +514,10 @@ impl Windows {
     }
 
     /// The outer size bounds from the client's usable minimum and maximum.
+    ///
+    /// A zero axis stays zero: the client set no bound on it, and for a maximum
+    /// that means unbounded. `resized` reads a zero maximum that way
+    /// (`neptune-scene/src/scene.rs:283-304`).
     fn outer_size_bounds(
         &self,
         id: WindowId,
@@ -523,17 +530,7 @@ impl Windows {
         let (min, max) = data.size_bounds();
         let bound = pick(min, max);
         let insets = data.insets(self.decoration_of(id));
-        let width = if bound.w > 0 {
-            f64::from(bound.w) + insets.horizontal()
-        } else {
-            0.0
-        };
-        let height = if bound.h > 0 {
-            f64::from(bound.h) + insets.vertical()
-        } else {
-            0.0
-        };
-        SceneSize::new(width.max(1.0), height.max(1.0))
+        outer_size(bound, insets)
     }
 
     /// The index of the window for `surface`.
@@ -569,6 +566,31 @@ fn scene_point(point: Point<f64, Logical>) -> ScenePoint<f64, SceneLogical> {
     ScenePoint::new(point.x, point.y)
 }
 
+/// The decorated outer size for a client bound.
+///
+/// The insets are added to a bound the client set; a zero axis stays zero,
+/// because zero means the client set no bound there. `resized` reads a zero
+/// maximum as unbounded, so turning it into one pixel would collapse every
+/// pointer-driven resize.
+fn outer_size(bound: Size<i32, Logical>, insets: Insets) -> SceneSize<f64, SceneLogical> {
+    let width = if bound.w > 0 {
+        f64::from(bound.w) + insets.horizontal()
+    } else {
+        0.0
+    };
+    let height = if bound.h > 0 {
+        f64::from(bound.h) + insets.vertical()
+    } else {
+        0.0
+    };
+    SceneSize::new(width, height)
+}
+
+/// Keeps an outer size from collapsing below one pixel on an axis.
+fn at_least_one_pixel(size: SceneSize<f64, SceneLogical>) -> SceneSize<f64, SceneLogical> {
+    SceneSize::new(size.width.max(1.0), size.height.max(1.0))
+}
+
 /// The configured size: the outer size minus the insets, never below one pixel.
 fn usable(window: Size<i32, Logical>, insets: Insets) -> Size<i32, Logical> {
     let width = (f64::from(window.w) - insets.horizontal()).max(1.0).round();
@@ -594,11 +616,20 @@ fn has_buffer(surface: &WlSurface) -> bool {
 mod tests {
     use smithay::utils::{Logical, Size};
 
-    use super::usable;
+    use super::{at_least_one_pixel, outer_size, usable};
     use crate::decoration::Insets;
+    use neptune_scene::geometry::Size as SceneSize;
 
     fn size(width: i32, height: i32) -> Size<i32, Logical> {
         Size::from((width, height))
+    }
+
+    /// The inset a server-decorated window reserves for its titlebar.
+    fn titlebar() -> Insets {
+        Insets {
+            top: 32.0,
+            ..Insets::ZERO
+        }
     }
 
     #[test]
@@ -634,5 +665,28 @@ mod tests {
             ..Insets::ZERO
         };
         assert_eq!(usable(size(800, 600), insets), size(800, 1));
+    }
+
+    #[test]
+    fn an_unset_client_maximum_stays_unbounded() {
+        // A maximum of zero means the client set none. Reading it as one pixel
+        // clamped every pointer-driven resize to 1x1.
+        assert_eq!(outer_size(size(0, 0), titlebar()), SceneSize::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn a_client_bound_carries_the_insets() {
+        assert_eq!(
+            outer_size(size(800, 600), titlebar()),
+            SceneSize::new(800.0, 632.0)
+        );
+    }
+
+    #[test]
+    fn a_zero_minimum_still_leaves_a_pixel() {
+        assert_eq!(
+            at_least_one_pixel(outer_size(size(0, 0), Insets::ZERO)),
+            SceneSize::new(1.0, 1.0)
+        );
     }
 }

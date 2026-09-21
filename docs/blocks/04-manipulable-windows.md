@@ -38,8 +38,8 @@ and the interaction.
   view joins it to the scene geometry for readers. `Windows` exposes stacking,
   `raise`, `topmost`, hit-testing (`window_under`, `edge_under`, `surface_under`),
   `move_to`, `resize`, `set_resizing`, `send_close`, `id_of`/`surface_of`,
-  `minimum_outer_size`/`maximum_outer_size`, and `outer`. Mapping inserts the
-  window into the scene and logs `window mapped`.
+  `minimum_outer_size`/`maximum_outer_size` (a zero maximum is unbounded), and
+  `outer`. Mapping inserts the window into the scene and logs `window mapped`.
 - **`input.rs`** owns the interaction: an edge band starts a resize, the primary
   button on the decorated band starts a move, and a click over the client raises
   and focuses. Motion drives the grab or updates focus and the edge cursor;
@@ -97,6 +97,20 @@ The machine-checked acceptance is a command whose exit code is the result:
   asserted. The leak check is proved fallible: with `NEPTUNE_TEST_LEAK_WINDOW`
   set, the compositor deliberately leaves one window behind and `block4` fails
   with `last seen Some(LiveObjects { clients: 0, surfaces: 0, toplevels: 1 })`.
+
+  The same command then resizes windows through the test backend: each scenario
+  gets a fresh compositor, which presses a corner or the left edge
+  (`NEPTUNE_TEST_PRESS_AT`) of a fresh `resize_client` window and drives the grab
+  with its scripted motions. The harness asserts the final size from the client's
+  own report — unbounded corner growth, the same growth clamped to a client
+  maximum, and a shrunk width held by a client minimum. Observed:
+
+  ```
+  block4: resize grow PASS (initial 1280x800, final 1328x832, expected 1328x832)
+  block4: resize maximum PASS (initial 1280x800, final 1290x810, expected 1290x810)
+  block4: resize minimum PASS (initial 1280x800, final 1270x800, expected 1270x800)
+  block4: PASS
+  ```
 - **`./dev.sh move`** — launches a compositor with `NEPTUNE_TEST_INPUT=1` and
   runs three cases. `move_client` repeats a GTK-shaped gesture: press, three
   motions past a drag threshold, a second window that takes focus, then
@@ -130,10 +144,12 @@ The machine-checked acceptance is a command whose exit code is the result:
   ```
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
   hit-testing, edge zones and `resized` clamping; the held-grab serial check
-  (`held_grab`); the edge-to-cursor mapping; the host-pointer corner mapping;
-  the decoration mode mappings and scene storage; and the offscreen pixel tests
-  that assert the frame is upright and the cursor lands on its hotspot-adjusted
-  position (ADR 0018).
+  (`held_grab`); the outer size bounds (an unset client maximum stays unbounded,
+  a set bound carries the insets, a zero minimum still leaves one pixel); the
+  edge-to-cursor mapping; the host-pointer corner mapping; the decoration mode
+  mappings and scene storage; and the offscreen pixel tests that assert the
+  frame is upright and the cursor lands on its hotspot-adjusted position
+  (ADR 0018).
 - **`./dev.sh smoke`** — asserts the mapping sequence and that a client
   (`foot`) receives the server-side decoration configure before its first
   buffer attach, so the rebuild of `window.rs` did not regress mapping and the
@@ -143,15 +159,22 @@ The machine-checked acceptance is a command whose exit code is the result:
   client (ADR 0019). See the follow-up below.
 
 Not verified by a command, and left to hand-checking: drag feel and whether the
-window keeps the grab offset under the pointer; resize visuals and whether the
-minimum and maximum feel right; the cursor shape actually changing as the
+window keeps the grab offset under the pointer; resize visuals and how the
+clamped minimum and maximum feel; the cursor shape actually changing as the
 pointer crosses an edge; and click-to-focus and stacking as seen.
 
-## Follow-up: the inverted frame and the decoration policy
+## Follow-up: defects found after Block 4 was accepted
 
-Two defects found after Block 4 was accepted are fixed here, each with its own
-decision record:
-
+- **An unset client maximum collapsed every resize to 1×1.**
+  `outer_size_bounds` read the client's `max_size` of zero — set no maximum —
+  through a `max(1.0)` floor meant for the minimum, so
+  `maximum_outer_size` reported one pixel and `resized` clamped every
+  pointer-driven resize, from an edge or a corner, to 1×1. Block 4 was accepted
+  with this because the 50-window stress test never resizes. The fix keeps a
+  zero bound zero (unbounded, as `resized` reads it) and applies the one-pixel
+  floor to the minimum alone. The three resize scenarios in `./dev.sh block4`
+  fail with the old bounds (`grow` and `minimum` end at 1×1) and pass with the
+  fix; `./dev.sh check` pins the mapping.
 - **The frame rendered upside down.** The winit output's transform stays
   `Normal` and the damage tracker's static mode source carries `Flipped180`, so
   the flip happens only in the projection matrix and no client sees

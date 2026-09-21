@@ -304,6 +304,15 @@ impl State {
                 press.location = location;
             }
         }
+        // A press on an edge band or the decorated band starts a compositor
+        // grab, and the scripted gesture is complete: end it now, or the grab
+        // would stay held and a real host pointer moving over the window would
+        // drag the window with it. A press on the client's surface starts no
+        // grab, and the client's own move or resize request is still to come,
+        // so the button stays held for it.
+        if self.grab.is_some() {
+            self.inject_test_release();
+        }
     }
 
     /// Test-only: drag the pressed window by `NEPTUNE_TEST_DRAG`.

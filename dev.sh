@@ -419,6 +419,7 @@ block4() {
     fi
     NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
         NEPTUNE_STRESS_BIN="$script_dir/target/$_profile/window_stress" \
+        NEPTUNE_RESIZE_BIN="$script_dir/target/$_profile/resize_client" \
         "$script_dir/target/$_profile/block4" ||
         fail "$EXIT_SMOKE" "block4 test failed"
 }
