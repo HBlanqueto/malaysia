@@ -56,7 +56,10 @@ impl CompositorHandler for State {
         // Let Smithay move the pending buffer into the surface's current state
         // first; the window tracker then reads that state to decide on mapping.
         on_commit_buffer_handler::<Self>(surface);
-        self.windows.commit(surface);
+        if let Some(mapped) = self.windows.commit(surface) {
+            self.focus_surface(mapped);
+        }
+        self.request_redraw();
     }
 }
 
@@ -117,6 +120,7 @@ impl XdgShellHandler for State {
         // a toplevel that never receives one waits forever, with no error.
         let size = self.logical_output_size();
         self.windows.add_toplevel(surface, size);
+        self.request_redraw();
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {

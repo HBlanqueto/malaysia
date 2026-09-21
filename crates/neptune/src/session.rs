@@ -83,6 +83,8 @@ struct Session {
     display: Display<State>,
     /// The compositor state handlers mutate.
     state: State,
+    /// The winit window and its GLES2 renderer.
+    backend: WinitGraphicsBackend<GlesRenderer>,
     /// Tracks damage between frames for the one output.
     damage_tracker: OutputDamageTracker,
     /// When the session started, used as the frame callback timestamp base.
@@ -99,9 +101,8 @@ pub fn run() -> Result<(), SessionError> {
 
     let display = Display::<State>::new()?;
 
-    let (mut backend, winit_events) =
+    let (backend, winit_events) =
         winit::init::<GlesRenderer>().map_err(|error| SessionError::Backend(error.to_string()))?;
-    backend.window().request_redraw();
 
     let state = State::new(
         loop_signal.clone(),
@@ -112,9 +113,11 @@ pub fn run() -> Result<(), SessionError> {
     let mut session = Session {
         display,
         state,
+        backend,
         damage_tracker,
         start_time: Instant::now(),
     };
+    session.backend.window().request_redraw();
 
     watch_for_shutdown(loop_signal)?;
 
@@ -122,7 +125,7 @@ pub fn run() -> Result<(), SessionError> {
 
     loop_handle
         .insert_source(winit_events, move |event, _, session: &mut Session| {
-            handle_event(event, &mut backend, session);
+            handle_event(event, session);
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
@@ -162,7 +165,11 @@ pub fn run() -> Result<(), SessionError> {
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
     tracing::info!("winit window open; close it or send SIGTERM to exit");
-    event_loop.run(None, &mut session, |_| {})?;
+    event_loop.run(None, &mut session, |session| {
+        if session.state.take_redraw_request() {
+            session.backend.window().request_redraw();
+        }
+    })?;
     Ok(())
 }
 
@@ -202,13 +209,9 @@ fn watch_for_shutdown(loop_signal: LoopSignal) -> Result<(), SessionError> {
 }
 
 /// Reacts to one event from the host window.
-fn handle_event(
-    event: WinitEvent,
-    backend: &mut WinitGraphicsBackend<GlesRenderer>,
-    session: &mut Session,
-) {
+fn handle_event(event: WinitEvent, session: &mut Session) {
     match event {
-        WinitEvent::Redraw => redraw(backend, session),
+        WinitEvent::Redraw => redraw(session),
         WinitEvent::Resized { size, .. } => {
             session.state.output_size = size;
             session.state.output.change_current_state(
@@ -220,13 +223,14 @@ fn handle_event(
                 None,
                 None,
             );
-            backend.window().request_redraw();
+            session.backend.window().request_redraw();
         }
         WinitEvent::CloseRequested => {
             tracing::info!("window close requested");
             session.state.stop();
         }
-        WinitEvent::Input(_) | WinitEvent::Focus(_) => {}
+        WinitEvent::Input(event) => session.state.process_input_event(event),
+        WinitEvent::Focus(_) => {}
     }
 }
 
@@ -236,24 +240,29 @@ fn handle_event(
 /// a later event can try again. Frames are drawn on demand — after a commit, a
 /// resize or input — rather than in a continuous loop, and the frame callbacks
 /// are sent only after the frame has been submitted.
-fn redraw(backend: &mut WinitGraphicsBackend<GlesRenderer>, session: &mut Session) {
-    if let Err(error) = draw(backend, session) {
+fn redraw(session: &mut Session) {
+    if let Err(error) = draw(session) {
         tracing::error!(%error, "failed to draw a frame");
     }
 }
 
 /// Renders every mapped window over the session background.
-fn draw(
-    backend: &mut WinitGraphicsBackend<GlesRenderer>,
-    session: &mut Session,
-) -> Result<(), DrawError> {
+fn draw(session: &mut Session) -> Result<(), DrawError> {
+    let Session {
+        backend,
+        state,
+        damage_tracker,
+        display,
+        start_time,
+    } = session;
+
     // Everything that borrows the renderer or the framebuffer is scoped so the
     // frame is submitted after the framebuffer is released.
     let damage = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
         let mut elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = Vec::new();
-        for window in session.state.windows.iter() {
+        for window in state.windows.iter() {
             if !window.is_mapped() {
                 continue;
             }
@@ -272,8 +281,7 @@ fn draw(
             ));
         }
 
-        let result = session
-            .damage_tracker
+        let result = damage_tracker
             .render_output(
                 renderer,
                 &mut framebuffer,
@@ -287,13 +295,13 @@ fn draw(
 
     // Send frame callbacks only once the frame has been drawn, so a client
     // cannot drive the compositor faster than the output refreshes.
-    let now = session.start_time.elapsed();
-    for window in session.state.windows.iter() {
+    let now = start_time.elapsed();
+    for window in state.windows.iter() {
         if window.is_mapped() {
             send_frame_callbacks(window.surface(), now);
         }
     }
-    if let Err(error) = session.display.flush_clients() {
+    if let Err(error) = display.flush_clients() {
         tracing::warn!(%error, "failed to flush clients after a frame");
     }
 

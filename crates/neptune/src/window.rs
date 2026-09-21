@@ -19,11 +19,11 @@
 //!   be wrong from then on (ADR 0014).
 
 use neptune_design::TITLEBAR;
+use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Serial, Size};
-use smithay::wayland::compositor::{BufferAssignment, SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{Configure, ToplevelSurface};
 
 use crate::decoration::{Chrome, Insets, Role, WindowState};
@@ -82,6 +82,16 @@ impl Window {
     pub fn surface_location(&self) -> Point<i32, Logical> {
         let insets = self.insets();
         Point::from((round(insets.left), round(insets.top)))
+    }
+
+    /// Whether a logical point falls inside the window's outer rectangle.
+    fn contains(&self, point: Point<f64, Logical>) -> bool {
+        let location = self.location();
+        let size = self.size();
+        point.x >= f64::from(location.x)
+            && point.x < f64::from(location.x + size.w)
+            && point.y >= f64::from(location.y)
+            && point.y < f64::from(location.y + size.h)
     }
 
     /// A toplevel with a parent is a dialog; otherwise an ordinary toplevel.
@@ -161,20 +171,21 @@ impl Windows {
     ///
     /// Recomputes the insets from current state and sends a fresh configure if
     /// they changed, then maps the window once the initial configure has been
-    /// acked and a buffer has been attached.
-    pub fn commit(&mut self, surface: &WlSurface) {
-        let Some(window) = self.find_mut(surface) else {
-            return;
-        };
+    /// acked and a buffer has been attached. Returns the surface the first time
+    /// the window becomes mapped, so the caller can give it keyboard focus.
+    pub fn commit(&mut self, surface: &WlSurface) -> Option<WlSurface> {
+        let window = self.find_mut(surface)?;
 
         let usable = usable(window.size, window.insets());
         if window.configured != Some(usable) {
             window.send_configure();
         }
 
-        if window.acked && has_buffer(surface) {
+        if !window.mapped && window.acked && has_buffer(surface) {
             window.mapped = true;
+            return Some(window.surface().clone());
         }
+        None
     }
 
     /// Records that the client acknowledged a configure for `surface`.
@@ -209,6 +220,26 @@ impl Windows {
         self.windows.iter()
     }
 
+    /// The surface under a logical point, with the point in surface-local
+    /// coordinates.
+    ///
+    /// Only mapped toplevel surfaces are considered; popups and subsurfaces are
+    /// not tracked in Block 1. Later windows are on top, so the search runs
+    /// back to front.
+    pub fn surface_under(
+        &self,
+        point: Point<f64, Logical>,
+    ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        self.windows
+            .iter()
+            .rev()
+            .find(|window| window.is_mapped() && window.contains(point))
+            .map(|window| {
+                let origin = (window.location() + window.surface_location()).to_f64();
+                (window.surface().clone(), point - origin)
+            })
+    }
+
     fn find_mut(&mut self, surface: &WlSurface) -> Option<&mut Window> {
         self.windows
             .iter_mut()
@@ -230,16 +261,11 @@ fn round(value: f64) -> i32 {
 
 /// Whether the surface currently has a buffer attached.
 ///
-/// A commit may attach a buffer or remove one (a `NULL` attach), so this checks
-/// for an actual new buffer rather than for the presence of an entry.
+/// This reads the renderer's surface state, which `on_commit_buffer_handler`
+/// populates, because that call *consumes* the compositor's own buffer
+/// assignment, so `SurfaceAttributes` can no longer answer this.
 fn has_buffer(surface: &WlSurface) -> bool {
-    with_states(surface, |states| {
-        let mut cached = states.cached_state.get::<SurfaceAttributes>();
-        matches!(
-            cached.current().buffer.as_ref(),
-            Some(BufferAssignment::NewBuffer(_))
-        )
-    })
+    with_renderer_surface_state(surface, |state| state.buffer().is_some()).unwrap_or(false)
 }
 
 #[cfg(test)]

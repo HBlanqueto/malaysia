@@ -56,6 +56,11 @@ pub enum StateError {
 pub struct State {
     /// Wakes and stops the event loop, and later triggers a redraw.
     loop_signal: LoopSignal,
+    /// Set when state changed in a way that needs a new frame.
+    ///
+    /// Handlers cannot reach the backend, so they raise this and the session
+    /// turns it into a redraw request (ADR 0012).
+    needs_redraw: bool,
     /// The `wl_compositor` and `wl_subcompositor` state.
     pub compositor_state: CompositorState,
     /// The `wl_shm` state and its advertised pixel formats.
@@ -143,6 +148,7 @@ impl State {
 
         Ok(Self {
             loop_signal,
+            needs_redraw: false,
             compositor_state,
             shm_state,
             seat_state,
@@ -162,6 +168,20 @@ impl State {
     /// as well; the signal itself is cloned at startup.
     pub fn stop(&self) {
         self.loop_signal.stop();
+    }
+
+    /// Marks that a new frame is needed.
+    ///
+    /// Handlers call this instead of reaching for the backend, which they
+    /// cannot see (ADR 0012); the session turns it into a redraw request once
+    /// the current batch of events has been dispatched.
+    pub fn request_redraw(&mut self) {
+        self.needs_redraw = true;
+    }
+
+    /// Takes the pending redraw request, clearing it.
+    pub fn take_redraw_request(&mut self) -> bool {
+        std::mem::take(&mut self.needs_redraw)
     }
 
     /// The output size in logical coordinates.

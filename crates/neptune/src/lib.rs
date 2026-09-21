@@ -20,6 +20,7 @@
 
 pub mod decoration;
 mod handlers;
+mod input;
 pub mod session;
 pub mod state;
 pub mod window;
