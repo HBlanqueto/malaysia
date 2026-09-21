@@ -117,9 +117,11 @@ Run `./dev.sh --help` for the list; the commands are `build [--release]`,
 `move [--release]` and `decoration`. It uses only coreutils, cargo, `setsid`
 and `cargo-watch`,
 is clean under `shellcheck`, and keeps runtime files under
-`$XDG_RUNTIME_DIR/neptune-dev/` (falling back to `/tmp/neptune-$(id -u)`); the
-directory avoids the name `neptune`, which a running compositor may use for its
-Wayland socket. Exit codes are grouped so callers can branch:
+`$XDG_RUNTIME_DIR/neptune-dev/` (falling back to `/tmp/neptune-$(id -u)`). The
+compositor's Wayland socket is not there — Smithay auto-names it `wayland-N` in
+the compositor's own `XDG_RUNTIME_DIR`, which `run` passes through from the
+caller (`tools/sctk-probe/README.md` has the recipe for connecting a client).
+Exit codes are grouped so callers can branch:
 
 | Code | Meaning |
 | ---- | ------- |

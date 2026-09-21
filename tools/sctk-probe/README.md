@@ -36,13 +36,17 @@ The probe checks the three configure sizes and exits non-zero if the cycle is
 not reproduced, so it is a pass/fail check rather than output to read by eye.
 
 Run it against a running compositor. While Neptune runs under `./dev.sh run`,
-its socket is in the dev runtime directory; Smithay deliberately starts at
-`wayland-1`, so find the socket rather than assuming a name:
+the compositor inherits the caller's `XDG_RUNTIME_DIR` and auto-names its socket
+there (Smithay picks the first free `wayland-N`, `wayland-1` when the host
+already holds `wayland-0`); `neptune-dev` holds the pid and the log, not the
+socket. Read the name the compositor logged rather than assuming one:
 
 ```sh
-runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/neptune-dev"
-sock=$(ls "$runtime"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n 1)
-XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="${sock##*/}" \
+runtime="${XDG_RUNTIME_DIR:?the compositor inherits this for its socket}"
+# The compositor logs the name it bound, inside ANSI colour codes.
+sock=$(sed 's/\x1b\[[0-9;]*m//g' "$runtime/neptune-dev/neptune.log" |
+    sed -n 's/.*socket=\(wayland-[0-9]*\).*/\1/p' | tail -n 1)
+XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$sock" \
     cargo run -p sctk-probe --bin parent_probe
 ```
 

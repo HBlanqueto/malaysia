@@ -65,9 +65,9 @@ Several development decisions interact:
   `stop` followed by `run` and never consults `status`.
 - Runtime files live under `$XDG_RUNTIME_DIR/neptune-dev/`, falling back to
   `/tmp/neptune-$(id -u)` when `XDG_RUNTIME_DIR` is unset or missing. The
-  directory is not named `neptune` because a running compositor may create
-  `$XDG_RUNTIME_DIR/neptune` as its Wayland socket, and a socket and a
-  directory cannot share a path.
+  dev-specific directory keeps the pid and the log out of the session's socket
+  namespace; the compositor's own socket is auto-named `wayland-N` in the
+  caller's `XDG_RUNTIME_DIR`, which `run` passes through unchanged (ADR 0013).
 
 ## Consequences
 
