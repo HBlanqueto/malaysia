@@ -142,9 +142,12 @@ start() {
         _saved=$(read_pid)
         fail "$EXIT_ALREADY_RUNNING" "neptune is already running (pid $_saved)"
     fi
-    _bin="$script_dir/target/debug/neptune"
-    if [ -n "$_release" ]; then
+    if [ -n "${NEPTUNE_BIN:-}" ]; then
+        _bin=$NEPTUNE_BIN
+    elif [ -n "$_release" ]; then
         _bin="$script_dir/target/release/neptune"
+    else
+        _bin="$script_dir/target/debug/neptune"
     fi
     if [ ! -x "$_bin" ]; then
         fail "$EXIT_RUN_FAILED" "binary not built; run './dev.sh build' first"
@@ -158,19 +161,16 @@ start() {
     # running instance down with it. It execs without forking here, so $! is the
     # compositor's real PID.
     #
-    # Give the compositor its own XDG_RUNTIME_DIR, so its Wayland socket cannot
-    # be confused with the host session's. The nested winit client still has to
-    # reach the host compositor, so when the host is Wayland its socket is
-    # passed as an absolute path, which libwayland accepts independently of
-    # XDG_RUNTIME_DIR. When the host is X11, DISPLAY is left for winit to use.
-    _host_xdg=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-    if [ -n "${WAYLAND_DISPLAY:-}" ] && [ "${WAYLAND_DISPLAY#/}" = "${WAYLAND_DISPLAY}" ]; then
-        XDG_RUNTIME_DIR="$RUNTIME_DIR" \
-            WAYLAND_DISPLAY="$_host_xdg/$WAYLAND_DISPLAY" \
-            setsid "$_bin" >>"$LOG_FILE" 2>&1 &
-    else
-        XDG_RUNTIME_DIR="$RUNTIME_DIR" setsid "$_bin" >>"$LOG_FILE" 2>&1 &
-    fi
+    # The compositor is itself a client of the host session, so winit must
+    # resolve the host display exactly as the calling shell does: the caller's
+    # environment is passed through unchanged, including XDG_RUNTIME_DIR and
+    # WAYLAND_DISPLAY. Rewriting either here broke startup, because a relative
+    # WAYLAND_DISPLAY then resolved against this script's runtime directory
+    # instead of the host's. `WAYLAND_DISPLAY` is only ever assigned for a
+    # client the compositor spawns, and nothing here spawns one. The compositor
+    # picks its own server socket with `ListeningSocketSource`, which binds the
+    # first free `wayland-1` (never the host's `wayland-0`).
+    setsid "$_bin" >>"$LOG_FILE" 2>&1 &
     _saved=$!
     printf '%s\n' "$_saved" >"$PID_FILE"
     sleep 0.2
@@ -300,11 +300,54 @@ clean() {
     rm -rf "$RUNTIME_DIR"
 }
 
+# check_display_env - fail unless `run` hands the compositor the caller's
+# display environment unchanged.
+#
+# A stub binary records what it inherited and sleeps, so this needs no display
+# and no real compositor. `NEPTUNE_BIN` points `run` at the stub. The values are
+# deliberately synthetic: if `run` rewrites either, the recorded pair differs
+# and the check fails.
+check_display_env() {
+    _sentinel=$(mktemp -d)
+    _probe="$_sentinel/probe"
+    _record="$_sentinel/record"
+    cat >"$_probe" <<'PROBE'
+#!/bin/sh
+printf '%s\n%s\n' "${WAYLAND_DISPLAY-}" "${XDG_RUNTIME_DIR-}" >"$NEPTUNE_ENV_RECORD"
+sleep 5
+PROBE
+    chmod +x "$_probe"
+    _want_display="neptune-check-wayland"
+    _want_runtime="$_sentinel"
+    if ! NEPTUNE_BIN="$_probe" NEPTUNE_ENV_RECORD="$_record" \
+        WAYLAND_DISPLAY="$_want_display" XDG_RUNTIME_DIR="$_want_runtime" \
+        "$script_dir/dev.sh" run >/dev/null 2>&1
+    then
+        rm -rf "$_sentinel"
+        fail "$EXIT_RUN_FAILED" "display-environment check: 'run' could not start its stub"
+    fi
+    XDG_RUNTIME_DIR="$_want_runtime" "$script_dir/dev.sh" stop >/dev/null 2>&1 || true
+    _got_display=
+    _got_runtime=
+    if [ -f "$_record" ]; then
+        {
+            IFS= read -r _got_display || _got_display=
+            IFS= read -r _got_runtime || _got_runtime=
+        } <"$_record"
+    fi
+    rm -rf "$_sentinel"
+    if [ "$_got_display" != "$_want_display" ] || [ "$_got_runtime" != "$_want_runtime" ]; then
+        fail "$EXIT_RUN_FAILED" \
+            "display-environment check: 'run' changed it (WAYLAND_DISPLAY='${_got_display}', XDG_RUNTIME_DIR='${_got_runtime}')"
+    fi
+}
+
 check() {
     require_devshell
     require cargo
     require cargo-fmt
     require cargo-clippy
+    check_display_env
     cargo fmt --all -- --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace

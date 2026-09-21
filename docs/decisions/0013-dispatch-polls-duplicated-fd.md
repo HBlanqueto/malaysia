@@ -78,6 +78,10 @@ compositor.
   test harness passes `WAYLAND_DISPLAY` explicitly.
 - `wayland-info` (from `wayland-utils`) and `foot` join the dev shell so the
   nested-session acceptance checks run against pinned tools.
-- `dev.sh` gives the compositor its own `XDG_RUNTIME_DIR`, so its socket is not
-  created next to the host session's. The nested winit client still reaches the
-  host by being given the host socket as an absolute `WAYLAND_DISPLAY`.
+- `dev.sh` passes the calling shell's environment through to the compositor
+  unchanged. The compositor is itself a client of the host session, so winit
+  must resolve the host display exactly as the caller does; an earlier attempt
+  to give it a private `XDG_RUNTIME_DIR` (with `WAYLAND_DISPLAY` absolutised)
+  broke startup whenever the two disagreed. The compositor's own server socket
+  is chosen by `ListeningSocketSource::new_auto`, which binds the first free
+  `wayland-1` (never the host's `wayland-0`).
