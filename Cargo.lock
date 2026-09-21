@@ -681,6 +681,7 @@ name = "neptune"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "neptune-design",
  "signal-hook",
  "smithay",
  "thiserror 2.0.20",
