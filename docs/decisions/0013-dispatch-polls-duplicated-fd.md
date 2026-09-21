@@ -67,12 +67,17 @@ compositor.
 - When Block 2 replaces the backend, this source is untouched: the backend
   reaches into `Session.state` the same way, and the display is not
   backend-specific.
-- `WAYLAND_DISPLAY` is **not** set in the compositor's own environment. In
+- `WAYLAND_DISPLAY` is **never set in the compositor's own environment**. In
   edition 2024 `std::env::set_var` is `unsafe` because a concurrent reader is
-  undefined behaviour, and this crate forbids unsafe. The socket name is logged
-  at startup, and clients are given `WAYLAND_DISPLAY` explicitly — by the test
-  harness now, and by `Command::env` (which is safe) when the compositor spawns
-  a child later. This is a deviation from the part's wording, forced by the
-  unsafe policy.
+  undefined behaviour, and this crate forbids unsafe — but mutating the whole
+  process environment is also wrong on its own terms: a nested compositor that
+  exports its own socket name can then confuse itself or a sibling for the
+  host. The socket name is logged at startup, and a child the compositor spawns
+  is given the variable with `Command::env`, which is safe and scoped to that
+  child. The first spawn (Block 1, Part 6) implements it; until then the test
+  harness passes `WAYLAND_DISPLAY` explicitly.
 - `wayland-info` (from `wayland-utils`) and `foot` join the dev shell so the
   Part 2 and later acceptance checks run against pinned tools.
+- `dev.sh` gives the compositor its own `XDG_RUNTIME_DIR`, so its socket is not
+  created next to the host session's. The nested winit client still reaches the
+  host by being given the host socket as an absolute `WAYLAND_DISPLAY`.

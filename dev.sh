@@ -151,11 +151,24 @@ start() {
     rm -f "$PID_FILE"
     ensure_runtime_dir
     require setsid
-    # Start the compositor in its own session. It is not a child of the caller's
-    # process group, so a watcher that kills its own children (cargo-watch does)
-    # or a terminal closing does not take the running instance down with it.
-    # setsid execs without forking here, so $! is the compositor's real PID.
-    setsid "$_bin" >>"$LOG_FILE" 2>&1 &
+    # setsid puts the compositor in its own session, so a watcher that kills its
+    # own children (cargo-watch does) or a closing terminal does not take the
+    # running instance down with it. It execs without forking here, so $! is the
+    # compositor's real PID.
+    #
+    # Give the compositor its own XDG_RUNTIME_DIR, so its Wayland socket cannot
+    # be confused with the host session's. The nested winit client still has to
+    # reach the host compositor, so when the host is Wayland its socket is
+    # passed as an absolute path, which libwayland accepts independently of
+    # XDG_RUNTIME_DIR. When the host is X11, DISPLAY is left for winit to use.
+    _host_xdg=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+    if [ -n "${WAYLAND_DISPLAY:-}" ] && [ "${WAYLAND_DISPLAY#/}" = "${WAYLAND_DISPLAY}" ]; then
+        XDG_RUNTIME_DIR="$RUNTIME_DIR" \
+            WAYLAND_DISPLAY="$_host_xdg/$WAYLAND_DISPLAY" \
+            setsid "$_bin" >>"$LOG_FILE" 2>&1 &
+    else
+        XDG_RUNTIME_DIR="$RUNTIME_DIR" setsid "$_bin" >>"$LOG_FILE" 2>&1 &
+    fi
     _saved=$!
     printf '%s\n' "$_saved" >"$PID_FILE"
     sleep 0.2
