@@ -323,6 +323,32 @@ impl<N: Copy, Space> Rect<N, Space> {
     }
 }
 
+impl<N, Space> Rect<N, Space>
+where
+    N: PartialOrd + Add<Output = N> + Copy,
+{
+    /// Whether `point` lies inside the rectangle.
+    ///
+    /// The right and bottom edges are exclusive, so two adjacent rectangles
+    /// never both claim a point on the boundary between them.
+    pub fn contains(&self, point: Point<N, Space>) -> bool {
+        point.x >= self.location.x
+            && point.x < self.location.x + self.size.width
+            && point.y >= self.location.y
+            && point.y < self.location.y + self.size.height
+    }
+
+    /// The x coordinate just past the rectangle's right edge.
+    pub fn right(&self) -> N {
+        self.location.x + self.size.width
+    }
+
+    /// The y coordinate just past the rectangle's bottom edge.
+    pub fn bottom(&self) -> N {
+        self.location.y + self.size.height
+    }
+}
+
 /// Scales a logical coordinate up and rounds it to the nearest integer pixel.
 ///
 /// Called only when entering an integer space, so the fractional value is
@@ -453,6 +479,23 @@ mod tests {
         assert_eq!(rect.height(), 20.0);
         assert_eq!(rect.location(), Point::<f64, Logical>::new(1.0, 2.0));
         assert_eq!(rect.size(), Size::<f64, Logical>::new(10.0, 20.0));
+    }
+
+    #[test]
+    fn contains_includes_the_top_left_and_excludes_the_bottom_right() {
+        let rect = Rect::<f64, Logical>::new(Point::new(1.0, 2.0), Size::new(10.0, 20.0));
+        assert!(rect.contains(Point::new(1.0, 2.0)));
+        assert!(rect.contains(Point::new(10.9, 21.9)));
+        assert!(!rect.contains(Point::new(11.0, 5.0)));
+        assert!(!rect.contains(Point::new(5.0, 22.0)));
+        assert!(!rect.contains(Point::new(0.9, 5.0)));
+    }
+
+    #[test]
+    fn right_and_bottom_are_just_past_the_far_edges() {
+        let rect = Rect::<f64, Logical>::new(Point::new(1.0, 2.0), Size::new(10.0, 20.0));
+        assert_eq!(rect.right(), 11.0);
+        assert_eq!(rect.bottom(), 22.0);
     }
 
     #[test]

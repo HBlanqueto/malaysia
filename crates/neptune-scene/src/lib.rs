@@ -5,10 +5,11 @@
 //! types here at a single boundary, so the scene graph stays testable without
 //! a running compositor. See ADR 0001.
 //!
-//! Block 0 exposes only [`geometry`]; the graph itself arrives in a later
-//! milestone.
+//! [`geometry`] is the coordinate vocabulary. [`scene`] is the ordered set of
+//! windows and the hit-testing over it (ADR 0015).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod geometry;
+pub mod scene;
