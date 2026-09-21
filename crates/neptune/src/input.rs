@@ -155,6 +155,9 @@ impl State {
     /// If it held keyboard focus, the focus passes to the new topmost window,
     /// or nowhere when none is left.
     pub(crate) fn forget_window(&mut self, surface: &WlSurface) {
+        if self.leak_window(surface) {
+            return;
+        }
         let focused = self
             .seat
             .get_keyboard()
@@ -188,6 +191,33 @@ impl State {
     /// press this compositor actually saw, and can only be used once.
     pub(crate) fn take_pointer_press(&mut self, serial: Serial) -> bool {
         consume(&mut self.pointer_press_serial, serial)
+    }
+
+    /// Test-only: leave one window (and with it its surface) behind.
+    ///
+    /// Only when `NEPTUNE_TEST_LEAK_WINDOW` is set. The first destroyed window,
+    /// and every repeat of that same surface's destruction, is not removed, so
+    /// the live-object counts cannot return to their baseline. The Block 4
+    /// harness runs it once to show that its teardown assertion can fail.
+    fn leak_window(&mut self, surface: &WlSurface) -> bool {
+        if std::env::var_os("NEPTUNE_TEST_LEAK_WINDOW").is_none() {
+            return false;
+        }
+        let Some(id) = self.windows.id_of(surface) else {
+            return false;
+        };
+        match self.leaked_window {
+            None => self.leaked_window = Some(id),
+            Some(leaked) if leaked == id => {}
+            Some(_) => return false,
+        }
+        tracing::warn!("NEPTUNE_TEST_LEAK_WINDOW: deliberately leaving a window behind");
+        tracing::info!(
+            windows = self.windows.len(),
+            topmost = ?self.windows.topmost(),
+            "window removed"
+        );
+        true
     }
 
     /// Starts dragging a window from its decoration.
@@ -336,7 +366,6 @@ fn edge_cursor(edge: Edge) -> CursorIcon {
         Edge::TopRight | Edge::BottomLeft => CursorIcon::NeswResize,
     }
 }
-
 /// Rounds a logical position to whole pixels.
 fn round(value: f64) -> i32 {
     value.round() as i32

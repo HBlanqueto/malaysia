@@ -35,6 +35,7 @@ use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAct
 use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
+use smithay::reexports::wayland_server::backend::{ClientId, ObjectId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{IsAlive, Logical, Point};
 use smithay::wayland::compositor::{
@@ -98,6 +99,71 @@ struct Session {
     cursor: Cursors,
     /// When the session started, used as the frame callback timestamp base.
     start_time: Instant,
+    /// Whether live-object counts are tracked and logged.
+    ///
+    /// Off unless `NEPTUNE_TEST_OBJECTS` is set, so a normal run pays nothing;
+    /// the Block 4 harness turns it on to assert teardown.
+    track_objects: bool,
+    /// The last live-object counts logged, so only changes are emitted.
+    last_objects: LiveObjects,
+}
+
+/// How many live Wayland objects the compositor is holding.
+///
+/// Counted from the backend's own client and object tables, not from a
+/// hand-rolled counter, so it cannot drift from reality: a client or surface
+/// that is still alive is still counted, and one that is gone is not.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct LiveObjects {
+    /// Connected clients.
+    clients: usize,
+    /// `wl_surface` objects across every client.
+    surfaces: usize,
+    /// Toplevels tracked by the scene.
+    toplevels: usize,
+}
+
+impl LiveObjects {
+    /// Emits the counts as one log line the harness can parse.
+    fn log(self) {
+        tracing::info!(
+            clients = self.clients,
+            surfaces = self.surfaces,
+            toplevels = self.toplevels,
+            "live objects"
+        );
+    }
+}
+
+/// Counts the live clients, `wl_surface` objects and tracked toplevels.
+///
+/// The backend holds a lock while enumerating, so the ids are collected first
+/// and inspected afterwards; calling back into the handle inside the closures
+/// would deadlock.
+fn live_objects(display: &Display<State>, state: &State) -> LiveObjects {
+    let handle = display.handle().backend_handle();
+
+    let mut clients: Vec<ClientId> = Vec::new();
+    handle.with_all_clients(|client| clients.push(client));
+
+    let mut surfaces = 0;
+    for client in &clients {
+        let mut objects: Vec<ObjectId> = Vec::new();
+        let _ = handle.with_all_objects_for(client.clone(), |object| objects.push(object));
+        for object in objects {
+            if let Ok(info) = handle.object_info(object)
+                && info.interface.name == "wl_surface"
+            {
+                surfaces += 1;
+            }
+        }
+    }
+
+    LiveObjects {
+        clients: clients.len(),
+        surfaces,
+        toplevels: state.windows.len(),
+    }
 }
 
 /// Flattens an error and every `source()` below it into one line.
@@ -135,6 +201,7 @@ pub fn run() -> Result<(), SessionError> {
     )?;
     let damage_tracker = OutputDamageTracker::from_output(&state.output);
     let cursor = Cursors::load(State::OUTPUT_SCALE);
+    let track_objects = std::env::var_os("NEPTUNE_TEST_OBJECTS").is_some();
     let mut session = Session {
         display,
         state,
@@ -142,7 +209,13 @@ pub fn run() -> Result<(), SessionError> {
         damage_tracker,
         cursor,
         start_time: Instant::now(),
+        track_objects,
+        last_objects: LiveObjects::default(),
     };
+    if session.track_objects {
+        session.last_objects = live_objects(&session.display, &session.state);
+        session.last_objects.log();
+    }
     session.backend.window().request_redraw();
 
     watch_for_shutdown(loop_signal)?;
@@ -194,6 +267,13 @@ pub fn run() -> Result<(), SessionError> {
     event_loop.run(None, &mut session, |session| {
         if session.state.take_redraw_request() {
             session.backend.window().request_redraw();
+        }
+        if session.track_objects {
+            let now = live_objects(&session.display, &session.state);
+            if now != session.last_objects {
+                session.last_objects = now;
+                now.log();
+            }
         }
     })?;
     Ok(())
@@ -286,6 +366,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         display,
         cursor,
         start_time,
+        ..
     } = session;
 
     // Everything that borrows the renderer or the framebuffer is scoped so the

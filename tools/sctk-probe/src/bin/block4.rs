@@ -31,12 +31,71 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long to wait for the stress client to run and the scene to empty.
 const STRESS_TIMEOUT: Duration = Duration::from_secs(30);
-/// The compositor log line emitted when the last window is gone.
-const SCENE_EMPTY_LOG_LINE: &str = "scene empty";
+/// The compositor log line carrying the live-object counts.
+const LIVE_OBJECTS_LOG_LINE: &str = "live objects";
 /// The compositor log line emitted for each destroyed window.
 const WINDOW_REMOVED_LOG_LINE: &str = "window removed";
 /// How many windows the stress client opens and closes.
 const WINDOWS: usize = 50;
+
+/// Live-object counts reported by the compositor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LiveObjects {
+    /// Connected clients.
+    clients: i64,
+    /// Live `wl_surface` objects.
+    surfaces: i64,
+    /// Tracked toplevels.
+    toplevels: i64,
+}
+
+impl LiveObjects {
+    /// The counts from a `live objects` log line, if it is one.
+    fn parse(line: &str) -> Option<Self> {
+        let line = strip_ansi(line);
+        if !line.contains(LIVE_OBJECTS_LOG_LINE) {
+            return None;
+        }
+        Some(Self {
+            clients: field(&line, "clients")?,
+            surfaces: field(&line, "surfaces")?,
+            toplevels: field(&line, "toplevels")?,
+        })
+    }
+}
+
+/// Removes ANSI escape sequences, whose digits would otherwise be mistaken for
+/// field values.
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.next() == Some('[') {
+                for c in chars.by_ref() {
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The first integer after `key` in a log line, skipping any formatting between
+/// the key and its value.
+fn field(line: &str, key: &str) -> Option<i64> {
+    let start = line.find(key)? + key.len();
+    let digits: String = line[start..]
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
 
 fn main() -> ExitCode {
     match run() {
@@ -86,12 +145,16 @@ fn run() -> Result<(), String> {
     let mut compositor = ChildGuard::spawn(
         Command::new(&binary)
             .arg("--log-level=info")
-            .env("XDG_RUNTIME_DIR", runtime.path()),
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("NEPTUNE_TEST_OBJECTS", "1"),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
 
     let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+    let baseline = wait_for_baseline(&compositor_log, Duration::from_secs(5))
+        .ok_or_else(|| "the compositor never logged its live-object baseline".to_string())?;
+    println!("block4: baseline {baseline:?}");
     let before_kb = resident_kb(compositor.id());
 
     let mut client = ChildGuard::spawn(
@@ -104,7 +167,8 @@ fn run() -> Result<(), String> {
     .map_err(|error| format!("failed to start the stress client: {error}"))?;
     let _client_log = client.capture()?;
 
-    wait_for_scene_empty(&compositor_log, &mut client)?;
+    wait_for_client_exit(&mut client)?;
+    wait_for_objects_restored(&compositor_log, baseline)?;
 
     let lines = snapshot(&compositor_log);
     let removed = lines
@@ -120,38 +184,78 @@ fn run() -> Result<(), String> {
     let after_kb = resident_kb(compositor.id());
     let delta = after_kb.saturating_sub(before_kb);
     println!(
-        "block4: {removed} windows removed, scene empty; resident memory {before_kb} kB -> \
-         {after_kb} kB (delta {delta} kB, measured, not asserted)"
+        "block4: {removed} windows removed, live objects restored to baseline; resident memory \
+         {before_kb} kB -> {after_kb} kB (delta {delta} kB, measured, not asserted)",
     );
     Ok(())
 }
 
-/// Waits until the compositor reports an empty scene, or the client or deadline
-/// fails the run.
-fn wait_for_scene_empty(log: &Sink, client: &mut ChildGuard) -> Result<(), String> {
+/// The first live-object line seen, used as the baseline.
+fn wait_for_baseline(log: &Sink, timeout: Duration) -> Option<LiveObjects> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if let Some(objects) = latest_objects(log) {
+            return Some(objects);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Waits until the live-object counts return to `baseline`, failing with the
+/// last counts seen if they do not.
+fn wait_for_objects_restored(log: &Sink, baseline: LiveObjects) -> Result<(), String> {
     let deadline = Instant::now() + STRESS_TIMEOUT;
     loop {
-        if snapshot(log)
+        let lines = snapshot(log);
+        // The log is drained on another thread, so the startup baseline can
+        // still be the latest line when this is first called. Require evidence
+        // in the log that the run actually raised the counts, then their return
+        // to the baseline, or the check could pass without having seen the run.
+        let saw_run = lines
             .iter()
-            .any(|line| line.contains(SCENE_EMPTY_LOG_LINE))
-        {
+            .filter_map(|line| LiveObjects::parse(line))
+            .any(|objects| objects != baseline);
+        let latest = lines.iter().rev().find_map(|line| LiveObjects::parse(line));
+        if saw_run && latest == Some(baseline) {
             return Ok(());
-        }
-        if let Some(status) = client.poll()? {
-            if !status.success() {
-                return Err(format!("the stress client exited with {status}"));
-            }
-            // The client may exit before the compositor finishes tearing the
-            // windows down; keep waiting for the log within the deadline.
         }
         if Instant::now() >= deadline {
             return Err(format!(
-                "timed out waiting for an empty scene; compositor log:\n{}",
-                snapshot(log).join("\n")
+                "live objects never returned to the baseline {baseline:?}; last seen {latest:?}; \
+                 compositor log:\n{}",
+                lines.join("\n")
             ));
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Waits until the stress client has exited, failing on a non-zero status.
+fn wait_for_client_exit(client: &mut ChildGuard) -> Result<(), String> {
+    let deadline = Instant::now() + STRESS_TIMEOUT;
+    loop {
+        if let Some(status) = client.poll()? {
+            if status.success() {
+                return Ok(());
+            }
+            return Err(format!("the stress client exited with {status}"));
+        }
+        if Instant::now() >= deadline {
+            return Err("the stress client did not exit in time".to_string());
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// The most recent live-object counts in the log.
+fn latest_objects(log: &Sink) -> Option<LiveObjects> {
+    snapshot(log)
+        .iter()
+        .rev()
+        .find_map(|line| LiveObjects::parse(line))
 }
 
 /// The compositor's resident set size in kB, from `/proc/<pid>/status`.

@@ -107,6 +107,8 @@ pub struct State {
     /// request whose serial is not this exact press is ignored. The serial comes
     /// from the one counter in `input.rs`; no second counter exists.
     pub(crate) pointer_press_serial: Option<Serial>,
+    /// Test-only: the window left behind by `NEPTUNE_TEST_LEAK_WINDOW`.
+    pub(crate) leaked_window: Option<WindowId>,
 }
 
 impl State {
@@ -188,6 +190,7 @@ impl State {
             windows: Windows::new(),
             grab: None,
             pointer_press_serial: None,
+            leaked_window: None,
         })
     }
 
