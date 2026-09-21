@@ -60,6 +60,7 @@ paths are not compiled. One window, one output.
   0012's state split already assumes the toplevel is tracked directly. The
   toplevel is therefore tracked by hand, behind a module boundary, so the Direct
   Session milestone rewrites one module rather than every call site. The
-  `desktop` feature stays off through the nested session.
+  `desktop` feature stays off through the nested session; ADR 0015 records why
+  it stays off for the window layout as well, not just for this block.
 - The default-feature trimming is a build-surface decision that can be widened
   one feature at a time when a milestone needs another backend.

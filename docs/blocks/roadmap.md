@@ -82,8 +82,8 @@ including any deliberate divergence from the brief.
 - **Block 2 — done, with divergences.** Mapping happens on the first buffered
   commit, not on `ack_configure` (`docs/blocks/01-session.md`, Divergences 1).
   Toplevels are tracked in `crates/neptune/src/window.rs` with no
-  `desktop::Space` wrapper (ADR 0009). The acceptance client is `foot`, since
-  weston is not installed.
+  `desktop::Space` wrapper (ADR 0009; the choice is now a written decision, ADR
+  0015). The acceptance client is `foot`, since weston is not installed.
 - **Block 3 — partial.** Keyboard focus, keymap/repeat, pointer motion/button/
   axis and central serial accounting are implemented. **Cursor support is
   missing**: `wl_pointer.set_cursor` and a default cursor are not handled.
