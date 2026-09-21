@@ -15,6 +15,7 @@ use smithay::delegate_data_device;
 use smithay::delegate_output;
 use smithay::delegate_seat;
 use smithay::delegate_shm;
+use smithay::delegate_xdg_decoration;
 use smithay::delegate_xdg_shell;
 use smithay::input::Seat;
 use smithay::input::SeatHandler;
@@ -33,6 +34,8 @@ use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::selection::data_device::{
     ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
 };
+use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::wayland::shell::xdg::{
     Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
@@ -223,3 +226,28 @@ impl XdgShellHandler for State {
 }
 
 delegate_xdg_shell!(State);
+
+impl XdgDecorationHandler for State {
+    fn new_decoration(&mut self, toplevel: ToplevelSurface) {
+        // The client offered to let the compositor decorate it. Neptune always
+        // chooses server-side; the configure is sent before the client attaches
+        // so it never draws a client-side titlebar.
+        self.windows
+            .confirm_server_decoration(toplevel.wl_surface());
+    }
+
+    fn request_mode(&mut self, toplevel: ToplevelSurface, _mode: Mode) {
+        // The protocol lets the compositor keep server-side even when the client
+        // asks for client-side, so the request is answered with server-side
+        // rather than honoured.
+        self.windows
+            .confirm_server_decoration(toplevel.wl_surface());
+    }
+
+    fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        self.windows
+            .confirm_server_decoration(toplevel.wl_surface());
+    }
+}
+
+delegate_xdg_decoration!(State);

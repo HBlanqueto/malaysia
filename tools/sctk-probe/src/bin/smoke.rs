@@ -265,6 +265,20 @@ fn analyze(lines: &[String], compositor_log: &[String]) -> Result<(), String> {
         ));
     }
 
+    let decoration = trace.first_server_side_decoration().ok_or_else(|| {
+        "no zxdg_toplevel_decoration_v1.configure(server_side) was received; the client did not          negotiate server-side decorations"
+            .to_string()
+    })?;
+    if decoration.index >= attach.index {
+        return Err(format!(
+            "out of order: the server-side decoration configure (line {}) must precede the first \
+             non-null attach (line {}), or the client attaches a buffer believing it must draw its \
+             own chrome",
+            decoration.index + 1,
+            attach.index + 1
+        ));
+    }
+
     let commit = trace
         .first_commit_after(surface, attach.index)
         .ok_or_else(|| {
@@ -414,6 +428,7 @@ struct Trace {
     frames: Vec<Frame>,
     callback_dones: Vec<CallbackDone>,
     keyboard_enters: Vec<KeyboardEnter>,
+    decoration_configures: Vec<DecorationConfigure>,
     pointer_enters: Vec<PointerEnter>,
     set_cursors: Vec<SetCursor>,
 }
@@ -449,6 +464,11 @@ struct CallbackDone {
 struct KeyboardEnter {
     index: usize,
     surface: u64,
+}
+
+struct DecorationConfigure {
+    index: usize,
+    mode: u64,
 }
 
 struct PointerEnter {
@@ -500,6 +520,14 @@ impl Trace {
                         serial: first_argument(body).unwrap_or(0),
                     });
                 }
+            } else if !line.request
+                && object_id(body, "zxdg_toplevel_decoration_v1").is_some()
+                && body.contains(".configure(")
+            {
+                trace.decoration_configures.push(DecorationConfigure {
+                    index,
+                    mode: first_argument(body).unwrap_or(0),
+                });
             } else if line.request && object_id(body, "wl_surface").is_some() {
                 let surface = object_id(body, "wl_surface").expect("checked above");
                 if body.contains(".attach(") {
@@ -569,6 +597,13 @@ impl Trace {
         self.commits
             .iter()
             .find(|commit| commit.surface == surface && commit.index > index)
+    }
+
+    /// The first server-side decoration configure.
+    fn first_server_side_decoration(&self) -> Option<&DecorationConfigure> {
+        self.decoration_configures
+            .iter()
+            .find(|configure| configure.mode == 2)
     }
 
     fn first_keyboard_enter(&self, surface: u64) -> Option<&KeyboardEnter> {
@@ -751,6 +786,7 @@ mod tests {
             line("xdg_toplevel#19.configure(1248, 800, array[0])"),
             line("xdg_surface#18.configure(2)"),
             line(" -> xdg_surface#18.ack_configure(2)"),
+            line("zxdg_toplevel_decoration_v1#21.configure(2)"),
             line(" -> wl_surface#3.attach(wl_buffer#48, 0, 0)"),
             line(" -> wl_surface#3.commit()"),
             line(" -> wl_surface#3.frame(new id wl_callback#49)"),
@@ -833,6 +869,22 @@ mod tests {
         let error = analyze(&complete_trace(), &log).expect_err("no mapping report should fail");
         assert!(
             error.contains("never reported a mapping"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn the_server_side_decoration_must_precede_the_first_attach() {
+        let mut trace = complete_trace();
+        let decoration = trace
+            .iter()
+            .position(|l| l.contains("zxdg_toplevel_decoration_v1#21.configure"))
+            .expect("the complete trace carries a decoration configure");
+        let line = trace.remove(decoration);
+        trace.push(line);
+        let error = analyze(&trace, &compositor_log()).expect_err("late decoration should fail");
+        assert!(
+            error.contains("server-side decoration configure"),
             "unexpected error: {error}"
         );
     }

@@ -35,6 +35,7 @@ use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
+use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
 
 use crate::window::Windows;
@@ -83,6 +84,11 @@ pub struct State {
     pub cursor_status: CursorImageStatus,
     /// The `xdg_wm_base` state.
     pub xdg_shell_state: XdgShellState,
+    /// The `zxdg_decoration_manager_v1` state.
+    ///
+    /// Neptune always configures server-side decorations; this advertises that
+    /// so a client stops drawing its own.
+    pub decoration_state: XdgDecorationState,
     /// The `wl_data_device_manager` state.
     ///
     /// Advertising the global completes the seat's protocol surface; no
@@ -142,6 +148,7 @@ impl State {
         );
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
+        let decoration_state = XdgDecorationState::new::<Self>(display_handle);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
 
         let mut seat_state: SeatState<Self> = SeatState::new();
@@ -183,6 +190,7 @@ impl State {
             seat,
             cursor_status: CursorImageStatus::default_named(),
             xdg_shell_state,
+            decoration_state,
             data_device_state,
             output_manager_state,
             output,

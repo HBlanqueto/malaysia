@@ -410,6 +410,17 @@ impl Windows {
         }
     }
 
+    /// Re-configures a window so the client learns the server-side mode.
+    ///
+    /// Called when the client creates or changes its decoration object: every
+    /// configure already asks for server-side decorations, so this simply sends
+    /// one in reply.
+    pub fn confirm_server_decoration(&mut self, surface: &WlSurface) {
+        if let Some(index) = self.index_of(surface) {
+            self.send_configure(index);
+        }
+    }
+
     /// Sends a configure carrying the usable size for the current state.
     fn send_configure(&mut self, index: usize) {
         let data = &mut self.windows[index];
@@ -417,6 +428,9 @@ impl Windows {
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
             state.size = Some(usable);
+            // Neptune always decorates server-side; saying so in every configure
+            // means a client never falls back to drawing its own chrome.
+            state.decoration_mode = Some(zxdg_toplevel_decoration_v1::Mode::ServerSide);
             if resizing {
                 state.states.set(xdg_toplevel::State::Resizing);
             } else {

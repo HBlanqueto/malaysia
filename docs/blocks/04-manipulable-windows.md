@@ -52,6 +52,8 @@ and the interaction.
 - **`cursor.rs`** loads the `ew`/`ns`/`nwse`/`nesw` resize shapes from the
   Xcursor theme, alongside the default, and the draw path picks the shape
   Smithay reports. A missing shape or theme falls back to the default arrow.
+- **`handlers.rs`** also serves `zxdg_decoration_manager_v1` and always configures
+  server-side, so a client stops drawing its own chrome (ADR 0017).
 
 ### Closing
 
@@ -113,8 +115,10 @@ The machine-checked acceptance is a command whose exit code is the result:
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
   hit-testing, edge zones and `resized` clamping; the one-shot pointer-press
   serial (`consume`); and the edge-to-cursor mapping.
-- **`./dev.sh smoke`** — still asserts the mapping sequence, so the rebuild of
-  `window.rs` did not regress mapping.
+- **`./dev.sh smoke`** — asserts the mapping sequence and that a client
+  (`foot`) receives the server-side decoration configure before its first
+  buffer attach, so the rebuild of `window.rs` did not regress mapping and the
+  decoration mode is settled in time.
 
 Not verified by a command, and left to hand-checking: drag feel and whether the
 window keeps the grab offset under the pointer; resize visuals and whether the
@@ -146,3 +150,5 @@ pointer crosses an edge; and click-to-focus and stacking as seen.
   window layout.
 - `docs/decisions/0016-interactive-move-and-resize.md` — moves and resizes are
   the compositor's own state, with serial validation.
+- `docs/decisions/0017-xdg-decoration-is-server-side.md` — xdg-decoration is
+  served and always server-side.
