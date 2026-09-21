@@ -363,10 +363,82 @@ fn run() -> Result<(), String> {
         );
     }
 
+    match run_mode_change(&socket, runtime.path()) {
+        Ok(lines) => {
+            for line in lines
+                .iter()
+                .filter(|line| line.contains("decoration_client:"))
+            {
+                println!("{line}");
+            }
+            println!("mode change after mapping: PASS");
+        }
+        Err(reason) => failed.push(format!("mode change after mapping: {reason}")),
+    }
+
     if failed.is_empty() {
         Ok(())
     } else {
         Err(failed.join("; "))
+    }
+}
+
+/// Runs the mode-change client against the same compositor.
+///
+/// This is the one policy rule the real applications cannot be made to
+/// exercise: a window that changes its decoration mode while it is mapped must
+/// be reconfigured with the new mode and the new usable size, leaving no stale
+/// titlebar (ADR 0019, rule 4).
+fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> {
+    let client = std::env::var_os("NEPTUNE_DECORATION_CLIENT")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("decoration_client")))
+        })
+        .filter(|path| path.is_file())
+        .ok_or_else(|| {
+            "decoration_client not found next to the probe; run `cargo build -p sctk-probe` first"
+                .to_string()
+        })?;
+
+    let mut child = ChildGuard::spawn(
+        Command::new(&client)
+            .env("XDG_RUNTIME_DIR", runtime)
+            .env("WAYLAND_DISPLAY", socket)
+            .stdin(Stdio::null()),
+        None,
+    )?;
+    let log = child.capture()?;
+    let deadline = Instant::now() + APP_TIMEOUT * 3;
+    loop {
+        if let Some(status) = child.poll()? {
+            let lines = snapshot(&log);
+            if !status.success() {
+                return Err(format!(
+                    "the mode-change client exited with {status}; output:\n{}",
+                    lines.join("\n")
+                ));
+            }
+            for required in [
+                "server configure",
+                "requested client-side after mapping",
+                "client configure",
+            ] {
+                if !lines.iter().any(|line| line.contains(required)) {
+                    return Err(format!(
+                        "the mode-change client never reported `{required}`; output:\n{}",
+                        lines.join("\n")
+                    ));
+                }
+            }
+            return Ok(lines);
+        }
+        if Instant::now() >= deadline {
+            return Err("the mode-change client did not exit in time".to_string());
+        }
+        thread::sleep(Duration::from_millis(50));
     }
 }
 

@@ -115,7 +115,8 @@ titlebars are *visible* needs a pixel comparison, so it stays manual.
 cargo run -p sctk-probe --bin decoration_probe   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_APP_NAUTILUS`,
+Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_DECORATION_CLIENT` (the
+mode-change client, found next to the probe by default), `NEPTUNE_APP_NAUTILUS`,
 `NEPTUNE_APP_GTK3_DEMO`, `NEPTUNE_APP_GTK3_WIDGET_FACTORY`,
 `NEPTUNE_APP_GTK3_PLAIN`, `NEPTUNE_APP_GTK4_DEMO`,
 `NEPTUNE_APP_GTK4_WIDGET_FACTORY`, `NEPTUNE_APP_GTK4_PLAIN`, `NEPTUNE_APP_QT6`
@@ -132,6 +133,15 @@ cc gtk/gtk4_plain.c -o /tmp/gtk4_plain $(pkg-config --cflags --libs gtk4-wayland
 NEPTUNE_APP_GTK3_PLAIN=/tmp/gtk3_plain NEPTUNE_APP_GTK4_PLAIN=/tmp/gtk4_plain \
     ./dev.sh decoration
 ```
+
+## `decoration_client`
+
+The client `decoration_probe` runs for the one policy rule real applications
+cannot be made to exercise: a mode change after mapping (ADR 0019, rule 4). It
+maps a window asking for server-side decorations, waits for the compositor's
+server-side configure (one titlebar narrower), asks for client-side on the first
+frame, and asserts the compositor then configures it one titlebar wider. It
+exits non-zero if the second configure never arrives or the sizes are wrong.
 
 ## `move_probe`
 
