@@ -33,6 +33,8 @@ use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
+use crate::window::Windows;
+
 /// Failures while building the compositor state.
 #[derive(Debug, thiserror::Error)]
 pub enum StateError {
@@ -67,6 +69,12 @@ pub struct State {
     pub output_manager_state: OutputManagerState,
     /// The one output, backed by the winit window.
     pub output: Output,
+    /// The output's current size, in physical pixels, mirroring its current
+    /// mode. New toplevels are sized from it; the session updates it on resize.
+    pub output_size: Size<i32, Physical>,
+    /// The tracked toplevels. All window geometry goes through this; Block 2
+    /// replaces it with `neptune-scene` (see [`crate::window`]).
+    pub windows: Windows,
 }
 
 impl State {
@@ -126,6 +134,8 @@ impl State {
             xdg_shell_state,
             output_manager_state,
             output,
+            output_size: size,
+            windows: Windows::new(),
         })
     }
 

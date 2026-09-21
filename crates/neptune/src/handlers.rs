@@ -9,6 +9,7 @@
 //! compositor's behaviour, the `delegate_*` macro is the plumbing that turns
 //! client requests into calls on that behaviour.
 
+use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::delegate_compositor;
 use smithay::delegate_output;
 use smithay::delegate_seat;
@@ -25,7 +26,7 @@ use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{CompositorClientState, CompositorHandler, CompositorState};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::shell::xdg::{
-    PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
+    Configure, PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
@@ -46,8 +47,11 @@ impl CompositorHandler for State {
             .compositor_state
     }
 
-    fn commit(&mut self, _surface: &WlSurface) {
-        // Surface commits are handled when surfaces are rendered (Part 6).
+    fn commit(&mut self, surface: &WlSurface) {
+        // Let Smithay move the pending buffer into the surface's current state
+        // first; the window tracker then reads that state to decide on mapping.
+        on_commit_buffer_handler::<Self>(surface);
+        self.windows.commit(surface);
     }
 }
 
@@ -88,8 +92,19 @@ impl XdgShellHandler for State {
         &mut self.xdg_shell_state
     }
 
-    fn new_toplevel(&mut self, _surface: ToplevelSurface) {
-        // The initial configure and mapping arrive in Part 5.
+    fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        // Send the initial configure now, before the client attaches a buffer:
+        // a toplevel that never receives one waits forever, with no error.
+        let size = self.output_size.to_logical(1);
+        self.windows.add_toplevel(surface, size);
+    }
+
+    fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
+        self.windows.ack_configure(&surface, configure);
+    }
+
+    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        self.windows.remove(surface.wl_surface());
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

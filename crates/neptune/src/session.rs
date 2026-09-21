@@ -187,6 +187,7 @@ fn handle_event(
     match event {
         WinitEvent::Redraw => redraw(backend),
         WinitEvent::Resized { size, .. } => {
+            state.output_size = size;
             state.output.change_current_state(
                 Some(OutputMode {
                     size,
