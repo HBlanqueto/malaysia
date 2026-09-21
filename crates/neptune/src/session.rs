@@ -4,19 +4,29 @@
 //! the block) has somewhere to be shown. This module owns the calloop event
 //! loop, the single winit window and the GLES2 renderer — the backend sits
 //! beside the shared [`State`] rather than inside it, so replacing it later
-//! touches no protocol handler (ADR 0012). It stops the loop when the window
-//! is closed or a termination signal arrives. Protocol handlers and client
+//! touches no protocol handler (ADR 0012). It also owns the Wayland display,
+//! the listening socket clients connect to, and the event source that
+//! dispatches their requests (ADR 0013). It stops the loop when the window is
+//! closed or a termination signal arrives. Protocol handlers and client
 //! rendering are added by later parts of the block; for now the loop draws a
 //! solid background.
+
+use std::os::fd::AsFd;
+use std::sync::Arc;
 
 use smithay::backend::SwapBuffersError;
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
 use smithay::backend::renderer::{Frame as _, Renderer as _};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
-use smithay::reexports::calloop::{EventLoop, LoopSignal};
+use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction};
+use smithay::reexports::wayland_server::BindError;
+use smithay::reexports::wayland_server::Display;
+use smithay::reexports::wayland_server::backend::InitError;
 use smithay::utils::{Rectangle, Transform};
+use smithay::wayland::socket::ListeningSocketSource;
 
-use crate::state::State;
+use crate::state::{ClientState, State};
 
 /// Failures that can stop the session from starting.
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +43,28 @@ pub enum SessionError {
     /// Signal handling could not be installed.
     #[error("failed to install signal handling")]
     Signals(#[source] std::io::Error),
+    /// The Wayland display could not be created.
+    #[error("failed to create the Wayland display")]
+    Display(#[from] InitError),
+    /// The listening socket could not be created.
+    #[error("failed to create the Wayland listening socket")]
+    Socket(#[from] BindError),
+    /// The display's file descriptor could not be duplicated for polling.
+    #[error("failed to duplicate the display file descriptor")]
+    Fd(#[source] std::io::Error),
+}
+
+/// Everything the event loop's sources share.
+///
+/// The Wayland display is held here, next to `State`, rather than inside it.
+/// Dispatching clients needs a mutable borrow of both, and two disjoint fields
+/// of one value can be borrowed at once while a display stored inside `State`
+/// could not (ADR 0013).
+struct Session {
+    /// The Wayland display: owns the clients and their protocol objects.
+    display: Display<State>,
+    /// The compositor state handlers mutate.
+    state: State,
 }
 
 /// Runs the nested session until the window is closed or a signal arrives.
@@ -40,25 +72,81 @@ pub enum SessionError {
 /// This blocks the calling thread, driving the calloop event loop. It returns
 /// once the loop has stopped and is safe to call after the logger is set up.
 pub fn run() -> Result<(), SessionError> {
-    let mut event_loop: EventLoop<State> = EventLoop::try_new()?;
+    let mut event_loop: EventLoop<Session> = EventLoop::try_new()?;
     let loop_signal = event_loop.get_signal();
-    let mut state = State::new(loop_signal.clone());
+
+    let display = Display::<State>::new()?;
+    let state = State::new(loop_signal.clone());
+    let mut session = Session { display, state };
 
     let (mut backend, winit_events) =
         winit::init::<GlesRenderer>().map_err(|error| SessionError::Backend(error.to_string()))?;
     backend.window().request_redraw();
     watch_for_shutdown(loop_signal)?;
 
-    event_loop
-        .handle()
-        .insert_source(winit_events, move |event, _, state: &mut State| {
-            handle_event(event, &mut backend, state);
+    let loop_handle = event_loop.handle();
+
+    loop_handle
+        .insert_source(winit_events, move |event, _, session: &mut Session| {
+            handle_event(event, &mut backend, &mut session.state);
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
+    let listening_socket = ListeningSocketSource::new_auto()?;
+    tracing::info!(
+        socket = %listening_socket.socket_name().to_string_lossy(),
+        "listening on the Wayland socket"
+    );
+    loop_handle
+        .insert_source(listening_socket, |stream, _, session: &mut Session| {
+            let data = Arc::new(ClientState);
+            let mut handle = session.display.handle();
+            match handle.insert_client(stream, data) {
+                Ok(_) => tracing::info!("client connected"),
+                Err(error) => tracing::warn!(%error, "rejected a client"),
+            }
+        })
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
+
+    // The display's own file descriptor is moved into the source; poll a
+    // duplicate so the display keeps the original (ADR 0013). Client requests
+    // only arrive when this is readable, and `dispatch_clients` never blocks,
+    // so a slow client cannot stall the loop.
+    let display_fd = session
+        .display
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(SessionError::Fd)?;
+    loop_handle
+        .insert_source(
+            Generic::new(display_fd, Interest::READ, Mode::Level),
+            |_, _, session: &mut Session| {
+                dispatch_clients(session);
+                Ok(PostAction::Continue)
+            },
+        )
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
+
     tracing::info!("winit window open; close it or send SIGTERM to exit");
-    event_loop.run(None, &mut state, |_| {})?;
+    event_loop.run(None, &mut session, |_| {})?;
     Ok(())
+}
+
+/// Reads and handles whatever the connected clients have sent.
+///
+/// Both calls are non-blocking, so a client that is slow to read or write
+/// cannot hold up the loop. A client error is logged and the loop continues:
+/// one misbehaving client should not take the compositor down.
+fn dispatch_clients(session: &mut Session) {
+    let Session { display, state } = session;
+
+    if let Err(error) = display.dispatch_clients(state) {
+        tracing::error!(%error, "failed to dispatch client requests");
+        return;
+    }
+    if let Err(error) = display.flush_clients() {
+        tracing::error!(%error, "failed to flush events to clients");
+    }
 }
 
 /// Stops the loop when `SIGTERM` or `SIGINT` is delivered.

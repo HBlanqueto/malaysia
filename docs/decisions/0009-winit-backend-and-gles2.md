@@ -51,7 +51,13 @@ paths are not compiled. One window, one output.
   Neptune in Block 1, matching the scope. A later block that needs custom
   drawing may revisit this.
 - Because `desktop` is not enabled, Smithay's `Space` window-management helper
-  is not available and the single toplevel is tracked directly. That keeps the
-  scene minimal until Block 2 owns it.
+  is not available. That is a deliberate choice for Block 1, not an accident of
+  the feature list: `Space` is replaced by `neptune-scene` in Block 2, so
+  enabling it now would add a dependency that gets deleted almost immediately.
+  `Space` earns its keep with many windows across several outputs; Block 1 has
+  one window on one output, and ADR 0012's state split already assumes the
+  toplevel is tracked directly. The toplevel is therefore tracked by hand,
+  behind a module boundary, so Block 2 rewrites one module rather than every
+  call site. The `desktop` feature stays off through Block 1.
 - The default-feature trimming is a build-surface decision that can be widened
   one feature at a time when a block needs another backend.

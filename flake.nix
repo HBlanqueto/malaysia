@@ -64,6 +64,8 @@
             mold
             shellcheck
             cargo-watch
+            foot
+            wayland-utils
           ];
 
           buildInputs = deps;
