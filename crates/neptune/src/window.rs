@@ -22,7 +22,7 @@ use neptune_design::TITLEBAR;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Point, Size};
+use smithay::utils::{Logical, Point, Serial, Size};
 use smithay::wayland::compositor::{BufferAssignment, SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{Configure, ToplevelSurface};
 
@@ -38,6 +38,8 @@ pub struct Window {
     size: Size<i32, Logical>,
     /// Whether the client has acknowledged the initial configure.
     acked: bool,
+    /// The serial of the configure most recently sent, awaiting an ack.
+    pending_configure: Option<Serial>,
     /// Whether the window is mapped and should be shown.
     mapped: bool,
     /// The usable size last sent, so a state change can be noticed.
@@ -118,7 +120,7 @@ impl Window {
         self.toplevel.with_pending_state(|state| {
             state.size = Some(usable);
         });
-        let _ = self.toplevel.send_configure();
+        self.pending_configure = Some(self.toplevel.send_configure());
         self.configured = Some(usable);
     }
 }
@@ -147,6 +149,7 @@ impl Windows {
             location: Point::from((0, 0)),
             size,
             acked: false,
+            pending_configure: None,
             mapped: false,
             configured: None,
         };
@@ -176,12 +179,23 @@ impl Windows {
 
     /// Records that the client acknowledged a configure for `surface`.
     ///
-    /// With one window there is no need to match the acked serial to a
-    /// specific configure; acknowledging any configure means the client is
-    /// ready to be mapped after it attaches a buffer.
-    pub fn ack_configure(&mut self, surface: &WlSurface, _configure: Configure) {
-        if let Some(window) = self.find_mut(surface) {
+    /// Only the serial of the configure most recently sent is accepted. An ack
+    /// for any other serial is stale — the client is acknowledging a configure
+    /// Neptune has already replaced — so it is discarded rather than marking
+    /// the window ready, which would let a reconfiguration race a stale ack
+    /// into wrong geometry once there is more than one window.
+    pub fn ack_configure(&mut self, surface: &WlSurface, configure: Configure) {
+        let Configure::Toplevel(configure) = configure else {
+            return;
+        };
+        let Some(window) = self.find_mut(surface) else {
+            return;
+        };
+        if window.pending_configure == Some(configure.serial) {
+            window.pending_configure = None;
             window.acked = true;
+        } else {
+            tracing::debug!("ignoring an ack for a configure no longer pending");
         }
     }
 
