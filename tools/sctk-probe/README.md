@@ -69,11 +69,12 @@ Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
 
 ## `block4`
 
-The Block 4 acceptance harness. It launches the compositor and `window_stress`,
-which opens fifty decorated toplevels and then destroys them. It asserts the
-compositor reported at least fifty `window removed` lines and then `scene empty`,
-and it reads the compositor's `VmRSS` before and after, reporting the delta. The
-delta is **measured, not asserted**: a threshold would be flaky.
+The Block 4 acceptance harness. It launches the compositor and three batches of
+`window_stress`, each opening and destroying fifty decorated toplevels. It
+asserts the compositor's live-object counts (clients, `wl_surface`s, tracked
+toplevels) return to the startup baseline after every batch, and that resident
+memory does not grow from batch 2 to batch 3 by more than 1 MiB (the first batch
+is warm-up). Both are asserted; the three measurements are printed.
 
 ```sh
 ./dev.sh block4                        # builds neptune and the probes, then runs it

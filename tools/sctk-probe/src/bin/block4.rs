@@ -35,8 +35,17 @@ const STRESS_TIMEOUT: Duration = Duration::from_secs(30);
 const LIVE_OBJECTS_LOG_LINE: &str = "live objects";
 /// The compositor log line emitted for each destroyed window.
 const WINDOW_REMOVED_LOG_LINE: &str = "window removed";
-/// How many windows the stress client opens and closes.
+/// How many windows each stress batch opens and closes.
 const WINDOWS: usize = 50;
+/// How many batches to run; the first is warm-up.
+const BATCHES: usize = 3;
+/// The largest batch-2-to-batch-3 resident-memory growth allowed, in kB.
+///
+/// After warm-up a batch should reuse the same allocations, so the growth is
+/// allocator noise (tens of kB). A per-window leak would be far larger: even
+/// ~20 kB per window over 50 windows is ~1 MB, so 1 MiB catches a real leak
+/// while staying well above noise.
+const GROWTH_THRESHOLD_KB: u64 = 1024;
 
 /// Live-object counts reported by the compositor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,37 +164,51 @@ fn run() -> Result<(), String> {
     let baseline = wait_for_baseline(&compositor_log, Duration::from_secs(5))
         .ok_or_else(|| "the compositor never logged its live-object baseline".to_string())?;
     println!("block4: baseline {baseline:?}");
-    let before_kb = resident_kb(compositor.id());
 
-    let mut client = ChildGuard::spawn(
-        Command::new(&stress)
-            .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("WAYLAND_DISPLAY", &socket)
-            .stdin(Stdio::null()),
-        None,
-    )
-    .map_err(|error| format!("failed to start the stress client: {error}"))?;
-    let _client_log = client.capture()?;
+    // Three batches: the first is warm-up (allocators, GL objects, the damage
+    // tracker), and only the growth from the second to the third is compared
+    // against the threshold. Each batch is a fresh stress client that opens and
+    // closes WINDOWS toplevels.
+    let mut resident = Vec::new();
+    for batch in 1..=BATCHES {
+        let mut client = ChildGuard::spawn(
+            Command::new(&stress)
+                .env("XDG_RUNTIME_DIR", runtime.path())
+                .env("WAYLAND_DISPLAY", &socket)
+                .stdin(Stdio::null()),
+            None,
+        )
+        .map_err(|error| format!("failed to start the stress client: {error}"))?;
+        let _client_log = client.capture()?;
 
-    wait_for_client_exit(&mut client)?;
-    wait_for_objects_restored(&compositor_log, baseline)?;
+        wait_for_client_exit(&mut client)?;
+        wait_for_batch(&compositor_log, baseline, batch * WINDOWS)?;
+
+        let kb = resident_kb(compositor.id());
+        resident.push(kb);
+        println!("block4: batch {batch} settled at {kb} kB");
+    }
+
+    let warm_up = resident[0];
+    let second = resident[1];
+    let third = resident[2];
+    let growth = third.saturating_sub(second);
+    if growth >= GROWTH_THRESHOLD_KB {
+        return Err(format!(
+            "resident memory grew {growth} kB from batch 2 to batch 3, at or above the {GROWTH_THRESHOLD_KB} kB \
+             threshold: warm-up {warm_up} kB, batch 2 {second} kB, batch 3 {third} kB"
+        ));
+    }
 
     let lines = snapshot(&compositor_log);
     let removed = lines
         .iter()
         .filter(|line| line.contains(WINDOW_REMOVED_LOG_LINE))
         .count();
-    if removed < WINDOWS {
-        return Err(format!(
-            "the compositor reported only {removed} window removals; expected at least {WINDOWS}"
-        ));
-    }
-
-    let after_kb = resident_kb(compositor.id());
-    let delta = after_kb.saturating_sub(before_kb);
     println!(
-        "block4: {removed} windows removed, live objects restored to baseline; resident memory \
-         {before_kb} kB -> {after_kb} kB (delta {delta} kB, measured, not asserted)",
+        "block4: {removed} windows removed over {BATCHES} batches, live objects restored to \
+         baseline; resident memory warm-up {warm_up} kB, batch 2 {second} kB, batch 3 {third} kB, \
+         batch 2->3 growth {growth} kB (asserted below {GROWTH_THRESHOLD_KB} kB)"
     );
     Ok(())
 }
@@ -204,28 +227,24 @@ fn wait_for_baseline(log: &Sink, timeout: Duration) -> Option<LiveObjects> {
     }
 }
 
-/// Waits until the live-object counts return to `baseline`, failing with the
-/// last counts seen if they do not.
-fn wait_for_objects_restored(log: &Sink, baseline: LiveObjects) -> Result<(), String> {
+/// Waits until a batch has finished: at least `min_removed` windows have been
+/// removed and the live-object counts are back at the baseline.
+fn wait_for_batch(log: &Sink, baseline: LiveObjects, min_removed: usize) -> Result<(), String> {
     let deadline = Instant::now() + STRESS_TIMEOUT;
     loop {
         let lines = snapshot(log);
-        // The log is drained on another thread, so the startup baseline can
-        // still be the latest line when this is first called. Require evidence
-        // in the log that the run actually raised the counts, then their return
-        // to the baseline, or the check could pass without having seen the run.
-        let saw_run = lines
+        let removed = lines
             .iter()
-            .filter_map(|line| LiveObjects::parse(line))
-            .any(|objects| objects != baseline);
+            .filter(|line| line.contains(WINDOW_REMOVED_LOG_LINE))
+            .count();
         let latest = lines.iter().rev().find_map(|line| LiveObjects::parse(line));
-        if saw_run && latest == Some(baseline) {
+        if removed >= min_removed && latest == Some(baseline) {
             return Ok(());
         }
         if Instant::now() >= deadline {
             return Err(format!(
-                "live objects never returned to the baseline {baseline:?}; last seen {latest:?}; \
-                 compositor log:\n{}",
+                "batch did not settle: {removed} of {min_removed} removals, last live objects \
+                 {latest:?} (baseline {baseline:?}); compositor log:\n{}",
                 lines.join("\n")
             ));
         }

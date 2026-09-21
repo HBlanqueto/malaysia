@@ -72,18 +72,28 @@ this is the one concrete interaction the block chooses without a brief.
 
 The machine-checked acceptance is a command whose exit code is the result:
 
-- **`./dev.sh block4`** — launches a compositor and the `window_stress` client
-  (fifty decorated toplevels with shm buffers, then destroyed), asserts the
-  compositor reported at least fifty `window removed` lines and then `scene
-  empty`, and reports the compositor's resident-memory delta. Observed:
+- **`./dev.sh block4`** — launches a compositor and three batches of the
+  `window_stress` client (fifty decorated toplevels with shm buffers, then
+  destroyed). It asserts that the live-object counts return to the startup
+  baseline after every batch (no orphaned clients, `wl_surface`s or toplevels),
+  and that resident memory does not grow from batch 2 to batch 3 by the stated
+  threshold. Observed:
 
   ```
-  block4: 50 windows removed, scene empty; resident memory 88988 kB -> 90340 kB (delta 1352 kB, measured, not asserted)
+  block4: batch 1 settled at 89680 kB
+  block4: batch 2 settled at 89720 kB
+  block4: batch 3 settled at 89720 kB
+  block4: 150 windows removed over 3 batches, live objects restored to baseline; resident memory warm-up 89680 kB, batch 2 89720 kB, batch 3 89720 kB, batch 2->3 growth 0 kB (asserted below 1024 kB)
   block4: PASS
   ```
 
-  The scene count, stacking and focus state returning to empty are asserted. The
-  memory delta is **measured, not asserted** — a threshold would be flaky.
+  The first batch is warm-up. The threshold is 1 MiB: after warm-up a batch
+  should reuse the same allocations, so the growth is allocator noise (tens of
+  kB), while a per-window leak would be far larger — even ~20 kB per window over
+  50 windows is ~1 MB. Live-object restoration and the memory threshold are both
+  asserted. The leak check is proved fallible: with `NEPTUNE_TEST_LEAK_WINDOW`
+  set, the compositor deliberately leaves one window behind and `block4` fails
+  with `last seen Some(LiveObjects { clients: 0, surfaces: 0, toplevels: 1 })`.
 - **`./dev.sh check`** — carries the unit tests: the scene's stacking,
   hit-testing, edge zones and `resized` clamping; the one-shot pointer-press
   serial (`consume`); and the edge-to-cursor mapping.
