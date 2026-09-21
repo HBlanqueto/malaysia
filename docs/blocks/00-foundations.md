@@ -318,3 +318,6 @@ unverified corner is question 4 above.
   in `neptune-scene`; `desktop::Space` is not adopted (Block 4).
 - `docs/decisions/0016-interactive-move-and-resize.md` — moves and resizes are
   the compositor's own state, serial-checked (Block 4).
+- `docs/decisions/0017-xdg-decoration-is-server-side.md` — the
+  `zxdg_decoration_manager_v1` global is served and always selects server-side
+  (Block 4).
