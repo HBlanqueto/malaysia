@@ -98,15 +98,18 @@ The machine-checked acceptance is a command whose exit code is the result:
   set, the compositor deliberately leaves one window behind and `block4` fails
   with `last seen Some(LiveObjects { clients: 0, surfaces: 0, toplevels: 1 })`.
 - **`./dev.sh move`** — launches a compositor with `NEPTUNE_TEST_INPUT=1` and
-  runs `move_client`, which repeats a GTK-shaped gesture: press, three motions
-  past a drag threshold, a second window that takes focus, then
+  runs three cases. `move_client` repeats a GTK-shaped gesture: press, three
+  motions past a drag threshold, a second window that takes focus, then
   `xdg_toplevel.move` and `xdg_toplevel.resize` with the original press serial
   while the button is held. The harness asserts the compositor accepted both,
   moved the window by the injected pointer delta, and rejected the released and
   fabricated serials; the client asserts it received a configure carrying the
-  `resizing` state. It then drags a real Nautilus headerbar and asserts its
-  window moved by the same delta (UNVERIFIED if Nautilus is not installed).
-  Observed:
+  `resizing` state. `hover_client` then asserts the surface-local coordinates of
+  a buttonless hover: the drag moves the window to a non-zero origin and the
+  release ends the grab, the compositor hovers the pointer, and the harness
+  asserts the enter and motion the client read. Finally it drags a real Nautilus
+  headerbar and asserts its window moved by the same delta (UNVERIFIED if
+  Nautilus is not installed). Observed:
 
   ```
   move_client: got the press serial 7
@@ -116,6 +119,12 @@ The machine-checked acceptance is a command whose exit code is the result:
   move_client: received a configure with the resizing state
   move_client: sent move/resize with serial 7 after the release
   move_client: PASS
+  hover_client: got the press serial 7
+  hover_client: sent move/resize with serial 7
+  hover_client: enter x=32 y=32
+  hover_client: motion x=40 y=40
+  hover_client: PASS
+  move_probe: the hovered client read the pointer at the surface-local positions
   move_probe: nautilus PASS (its headerbar drag moved the window by the pointer delta)
   move_probe: PASS
   ```
@@ -156,6 +165,15 @@ decision record:
   mode is settled before the first attach, and a change after mapping
   reconfigures mode and geometry. Both decoration protocols are served, and the
   mode lives per window in `neptune-scene`.
+- **Pointer hover coordinates were offset by the window origin.** `pointer_motion`
+  passed `surface_under`'s surface-local point where Smithay expects the
+  surface's origin in global coordinates
+  (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`), so a client read the window
+  origin for every hover motion — and a press could land on a widget nowhere near
+  the pointer. The fix passes `location - local`. `hover_client` through
+  `./dev.sh move` asserts the surface-local positions end to end; with the old
+  mapping it fails reading `enter x=60 y=40` (the origin) where `x=32 y=32` is
+  expected.
 
 `./dev.sh decoration` is the record of the per-application verification, and
 `decoration_client` pins the mode-change rule. What it showed:
@@ -197,7 +215,9 @@ shadow yet.
    accepted, so a probe can exercise the client-initiated path. It is off
    unless the variable is set, and it is the one test seam in the compositor
    itself rather than in the dev-only probes. `NEPTUNE_TEST_PRESS_AT` and
-   `NEPTUNE_TEST_DRAG` aim the press and size the drag.
+   `NEPTUNE_TEST_DRAG` aim the press and size the drag, and
+   `NEPTUNE_TEST_HOVER` hovers buttonless points after the release so a client
+   can assert the coordinates it receives.
 
 ## Decision records
 

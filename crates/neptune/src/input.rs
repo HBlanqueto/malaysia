@@ -267,29 +267,20 @@ impl State {
             outer.x() + outer.width() * fx,
             outer.y() + outer.height() * fy,
         );
-        let Some((surface, local)) = self.windows.surface_under(location) else {
+        if self.windows.surface_under(location).is_none() {
             return;
-        };
-        let origin = Point::new(location.x - local.x, location.y - local.y);
+        }
         let time = 0;
-        let Some(pointer) = self.seat.get_pointer() else {
-            return;
-        };
-        let serial = SERIAL_COUNTER.next_serial();
-        pointer.motion(
-            self,
-            Some((surface, origin)),
-            &MotionEvent {
-                location,
-                serial,
-                time,
-            },
-        );
-        pointer.frame(self);
+        // The hover goes through the real motion path, as a host pointer's
+        // would, so the seam exercises the same focus-origin computation.
+        self.pointer_motion(location, time);
         // The compositor's own press logic runs before the protocol event, as in
         // `process_input_event`: click-to-focus, and a move grab when the press
         // lands on Neptune's decoration rather than the client's surface.
         self.pointer_press(BUTTON_LEFT, location);
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
         let press = SERIAL_COUNTER.next_serial();
         pointer.button(
             self,
@@ -375,6 +366,20 @@ impl State {
             },
         );
         pointer.frame(self);
+        self.inject_test_hovers();
+    }
+
+    /// Test-only: hover the pointer over the points in `NEPTUNE_TEST_HOVER`.
+    ///
+    /// The value is a `;`-separated list of global `x,y` points. They are
+    /// injected with no button held, through the same motion path a host
+    /// pointer takes, so a client can assert the surface-local coordinates it
+    /// receives. They land after the scripted release, when a grab can no
+    /// longer mask the focus.
+    fn inject_test_hovers(&mut self) {
+        for (x, y) in test_hover_points() {
+            self.pointer_motion(Point::new(x, y), 0);
+        }
     }
 
     /// Starts dragging a window from its decoration.
@@ -409,6 +414,11 @@ impl State {
     }
 
     /// Moves the pointer, driving a grab or updating focus and the edge cursor.
+    ///
+    /// The focus Smithay gets is the surface's origin in global coordinates,
+    /// not the surface-local point `surface_under` reports: Smithay subtracts
+    /// the origin itself before sending the client the surface-local position
+    /// (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`).
     fn pointer_motion(&mut self, location: Point<f64, Logical>, time: u32) {
         if let Some(grab) = self.grab {
             self.drag(grab, location);
@@ -419,7 +429,13 @@ impl State {
         self.update_edge_cursor(location);
 
         let serial = SERIAL_COUNTER.next_serial();
-        let focus = self.windows.surface_under(location);
+        let focus = self
+            .windows
+            .surface_under(location)
+            .map(|(surface, local)| {
+                let origin = Point::new(location.x - local.x, location.y - local.y);
+                (surface, origin)
+            });
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.motion(
                 self,
@@ -543,12 +559,28 @@ fn test_drag_delta() -> (f64, f64) {
     parse_pair("NEPTUNE_TEST_DRAG").unwrap_or((60.0, 40.0))
 }
 
+/// The global points the scripted hover visits, from `NEPTUNE_TEST_HOVER`
+/// (`x,y` points separated by `;`), none by default.
+fn test_hover_points() -> Vec<(f64, f64)> {
+    let Ok(value) = std::env::var("NEPTUNE_TEST_HOVER") else {
+        return Vec::new();
+    };
+    value
+        .split(';')
+        .filter_map(parse_pair_value)
+        .collect::<Vec<_>>()
+}
+
 /// Reads an `x,y` pair of numbers from the environment.
 ///
 /// Any missing or unparsable value is `None`, so a malformed variable falls
 /// back to the default rather than failing a run.
 fn parse_pair(name: &str) -> Option<(f64, f64)> {
-    let value = std::env::var(name).ok()?;
+    parse_pair_value(&std::env::var(name).ok()?)
+}
+
+/// Reads an `x,y` pair of numbers from a string.
+fn parse_pair_value(value: &str) -> Option<(f64, f64)> {
     let (x, y) = value.split_once(',')?;
     Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
 }

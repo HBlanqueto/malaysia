@@ -478,6 +478,7 @@ move() {
     fi
     NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
         NEPTUNE_MOVE_BIN="$script_dir/target/$_profile/move_client" \
+        NEPTUNE_HOVER_BIN="$script_dir/target/$_profile/hover_client" \
         "$script_dir/target/$_profile/move_probe" ||
         fail "$EXIT_SMOKE" "move probe failed"
 }

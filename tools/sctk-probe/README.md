@@ -145,16 +145,24 @@ exits non-zero if the second configure never arrives or the sizes are wrong.
 
 ## `move_probe`
 
-Exercises the client-initiated `xdg_toplevel.move`/`resize` path. It runs two
-cases, each with a fresh compositor and `NEPTUNE_TEST_INPUT=1` (the compositor
-presses once, holds the button, follows the press with motions and releases it,
-which a probe cannot make itself):
+Exercises the client-initiated `xdg_toplevel.move`/`resize` path and the
+surface-local coordinates a client sees for pointer motion. It runs three cases,
+each with a fresh compositor and `NEPTUNE_TEST_INPUT=1` (the compositor presses
+once, holds the button, follows the press with motions and releases it, which a
+probe cannot make itself):
 
 - `move_client` repeats a GTK-shaped gesture: press, three motions past a drag
   threshold, a second window that takes focus, then `move` and `resize` with the
   original press serial while the button is held. The harness asserts both were
   accepted, that the window moved by the injected pointer delta, and that the
   released and fabricated serials were rejected for both requests.
+- `hover_client` asserts the surface-local coordinates of a buttonless hover:
+  the scripted drag moves the window to a non-zero origin and the release ends
+  the grab, then the compositor hovers the pointer over the global points in
+  `NEPTUNE_TEST_HOVER` and the client must read each at the position it holds
+  over the surface. A compositor that hands Smithay the surface-local point
+  where it expects the surface origin makes every client read the window origin,
+  which fails here.
 - Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar drag; the
   harness asserts its window moved by the same delta. If Nautilus is not
   installed, or never maps a window, the case is reported UNVERIFIED rather than
@@ -165,8 +173,8 @@ which a probe cannot make itself):
 cargo run -p sctk-probe --bin move_probe   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_MOVE_BIN` and
-`NEPTUNE_APP_NAUTILUS`.
+Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_MOVE_BIN`, `NEPTUNE_HOVER_BIN`
+and `NEPTUNE_APP_NAUTILUS`.
 
 ## `move_client`
 
@@ -175,3 +183,14 @@ and three motions, maps a second window so the compositor raises and focuses it
 in between, then sends `move` and `resize` with the original press serial. After
 the compositor's release it sends both again with that serial and both with a
 fabricated one. It exits non-zero if no resizing configure arrives.
+
+## `hover_client`
+
+The client `move_probe` drives for the coordinate assertion. It maps a
+client-decorated window, so its surface origin is exactly its window origin, and
+sends the `move` and `resize` the scripted gesture answers: the move makes the
+compositor's scripted drag move the window to a non-zero origin, the resize
+makes it release the button. It then asserts that the `wl_pointer.enter` and
+`wl_pointer.motion` it receives for the buttonless hover carry the surface-local
+positions in `NEPTUNE_EXPECT_HOVER` (an `x,y` list separated by `;`), and exits
+non-zero on a mismatch or if the hover never arrives.

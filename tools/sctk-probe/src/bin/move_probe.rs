@@ -1,6 +1,6 @@
 //! Acceptance harness for the client-initiated move and resize path.
 //!
-//! It runs two cases, each with a fresh compositor and `NEPTUNE_TEST_INPUT=1`
+//! It runs three cases, each with a fresh compositor and `NEPTUNE_TEST_INPUT=1`
 //! (so the compositor injects the button press, motions and release a probe
 //! cannot make itself):
 //!
@@ -10,7 +10,11 @@
 //!    The harness asserts both were accepted, that the window moved by the
 //!    injected pointer delta, and that the released and fabricated serials
 //!    were rejected.
-//! 2. Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar
+//! 2. `hover_client` asserts the surface-local coordinates of a buttonless
+//!    hover: after the scripted drag moves the window to a non-zero origin and
+//!    the release, the compositor hovers the pointer and the client must read
+//!    each point at the position it holds over the surface.
+//! 3. Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar
 //!    drag. The harness asserts its window moved by the injected delta. If
 //!    Nautilus is not installed, or never maps a window, the case is reported
 //!    UNVERIFIED rather than failed.
@@ -33,6 +37,12 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 const NAUTILUS_TIMEOUT: Duration = Duration::from_secs(12);
 /// The pointer delta the scripted drag applies, matching `NEPTUNE_TEST_DRAG`.
 const DRAG: (f64, f64) = (60.0, 40.0);
+/// The global points the scripted hover visits, matching `NEPTUNE_TEST_HOVER`.
+///
+/// The first is outside the window (the client gets a leave, so the next point
+/// enters); the other two are inside it, so the client sees an enter and then a
+/// motion. The window maps at (0, 0) and the drag moves it by `DRAG`.
+const HOVER: [(f64, f64); 3] = [(10.0, 10.0), (92.0, 72.0), (100.0, 80.0)];
 
 fn main() -> ExitCode {
     match run() {
@@ -61,14 +71,7 @@ fn run() -> Result<(), String> {
             binary.display()
         ));
     }
-    let client = std::env::var_os("NEPTUNE_MOVE_BIN")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|dir| dir.join("move_client")))
-                .unwrap_or_else(|| repo.join("target/debug/move_client"))
-        });
+    let client = probe_binary(repo, "NEPTUNE_MOVE_BIN", "move_client");
     if !client.is_file() {
         return Err(format!(
             "move client not found at {}; run `cargo build -p sctk-probe` first",
@@ -78,8 +81,22 @@ fn run() -> Result<(), String> {
 
     run_move_case(&binary, &client)?;
     println!("move_probe: the GTK-shaped sequence was accepted, the window moved by the delta");
+    run_hover_case(&binary, repo)?;
     run_nautilus_case(&binary)?;
     Ok(())
+}
+
+/// Resolves one of this package's probe binaries from its environment variable,
+/// the directory of this executable, or the debug target directory.
+fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
+    std::env::var_os(variable)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
+                .unwrap_or_else(|| repo.join("target/debug").join(name))
+        })
 }
 
 /// The GTK-shaped sequence through `move_client`.
@@ -106,7 +123,7 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
     )
     .map_err(|error| format!("failed to start the move client: {error}"))?;
     let client_log = move_client.capture()?;
-    wait_for_client(&mut move_client, &client_log)?;
+    wait_for_client(&mut move_client, &client_log, "move client")?;
 
     let compositor_lines = stripped(&compositor_log);
     let client_lines = stripped(&client_log);
@@ -192,6 +209,98 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The buttonless hover through `hover_client`, asserting where it arrived.
+fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
+    let client = probe_binary(repo, "NEPTUNE_HOVER_BIN", "hover_client");
+    if !client.is_file() {
+        return Err(format!(
+            "hover client not found at {}; run `cargo build -p sctk-probe` first",
+            client.display()
+        ));
+    }
+    let runtime = TempDir::create()?;
+    let host_display = host_wayland_display()?;
+    let hover = points(HOVER);
+    let mut compositor = ChildGuard::spawn(
+        Command::new(binary)
+            .arg("--log-level=info")
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("NEPTUNE_TEST_INPUT", "1")
+            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1))
+            .env("NEPTUNE_TEST_HOVER", &hover),
+        host_display.as_deref(),
+    )?;
+    let compositor_log = compositor.capture()?;
+    let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+
+    // The window maps at (0, 0), the scripted drag moves it by DRAG, and the
+    // client is client-decorated, so its surface origin is exactly DRAG.
+    let expect = points([HOVER[1], HOVER[2]].map(|(x, y)| (x - DRAG.0, y - DRAG.1)));
+    let mut hover_client = ChildGuard::spawn(
+        Command::new(&client)
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("WAYLAND_DISPLAY", &socket)
+            .env("NEPTUNE_EXPECT_HOVER", &expect)
+            .stdin(Stdio::null()),
+        None,
+    )
+    .map_err(|error| format!("failed to start the hover client: {error}"))?;
+    let client_log = hover_client.capture()?;
+    wait_for_client(&mut hover_client, &client_log, "hover client")?;
+
+    let client_lines = stripped(&client_log);
+    let enter = client_lines
+        .iter()
+        .find(|line| line.contains("hover_client: enter"))
+        .ok_or_else(|| {
+            format!(
+                "the hover client never reported an enter; output:\n{}",
+                client_lines.join("\n")
+            )
+        })?;
+    assert_position(enter, HOVER[1].0 - DRAG.0, HOVER[1].1 - DRAG.1)?;
+    let motion = client_lines
+        .iter()
+        .find(|line| line.contains("hover_client: motion"))
+        .ok_or_else(|| {
+            format!(
+                "the hover client never reported a motion; output:\n{}",
+                client_lines.join("\n")
+            )
+        })?;
+    assert_position(motion, HOVER[2].0 - DRAG.0, HOVER[2].1 - DRAG.1)?;
+
+    for line in client_lines
+        .iter()
+        .filter(|line| line.contains("hover_client:"))
+    {
+        println!("{line}");
+    }
+    println!("move_probe: the hovered client read the pointer at the surface-local positions");
+    Ok(())
+}
+
+/// Renders points as the `x,y` list separated by `;` the probes parse.
+fn points(list: impl IntoIterator<Item = (f64, f64)>) -> String {
+    list.into_iter()
+        .map(|(x, y)| format!("{x},{y}"))
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+/// Asserts that a `hover_client` line reports a position.
+fn assert_position(line: &str, expected_x: f64, expected_y: f64) -> Result<(), String> {
+    for (axis, expected) in [("x", expected_x), ("y", expected_y)] {
+        let got = field(line, axis).ok_or_else(|| format!("`{axis}` is missing from `{line}`"))?;
+        if (got - expected).abs() > f64::EPSILON {
+            return Err(format!(
+                "the client read {axis}={got}, expected {expected}; line: `{line}`"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// A scripted headerbar drag on a real Nautilus window.
 fn run_nautilus_case(binary: &Path) -> Result<(), String> {
     let Some(nautilus) = resolve("NEPTUNE_APP_NAUTILUS", "nautilus") else {
@@ -265,8 +374,8 @@ fn run_nautilus_case(binary: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Waits until the move client exits, failing on a non-zero status.
-fn wait_for_client(client: &mut ChildGuard, log: &Sink) -> Result<(), String> {
+/// Waits until a probe client exits, failing on a non-zero status.
+fn wait_for_client(client: &mut ChildGuard, log: &Sink, what: &str) -> Result<(), String> {
     let deadline = Instant::now() + CLIENT_TIMEOUT;
     loop {
         if let Some(status) = client.poll()? {
@@ -274,13 +383,13 @@ fn wait_for_client(client: &mut ChildGuard, log: &Sink) -> Result<(), String> {
                 return Ok(());
             }
             return Err(format!(
-                "the move client exited with {status}; output:\n{}",
+                "the {what} exited with {status}; output:\n{}",
                 snapshot(log).join("\n")
             ));
         }
         if Instant::now() >= deadline {
             return Err(format!(
-                "the move client did not exit in time; output:\n{}",
+                "the {what} did not exit in time; output:\n{}",
                 snapshot(log).join("\n")
             ));
         }
