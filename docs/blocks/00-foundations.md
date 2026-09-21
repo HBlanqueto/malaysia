@@ -321,3 +321,6 @@ unverified corner is question 4 above.
 - `docs/decisions/0017-xdg-decoration-is-server-side.md` — the
   `zxdg_decoration_manager_v1` global is served and always selects server-side
   (Block 4).
+- `docs/decisions/0018-winit-render-transform.md` — the winit output flips at
+  render time through the damage tracker's mode source; `wl_output` stays
+  `normal` (Block 4 follow-up).
