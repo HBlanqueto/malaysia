@@ -53,8 +53,11 @@ pub enum SessionError {
     EventLoop(#[from] smithay::reexports::calloop::Error),
     /// The winit backend could not open a window or create its EGL context.
     ///
-    /// The message is flattened to a `String` because winit's error type is
-    /// not `Sync`, and this error reaches `main` through `anyhow`.
+    /// The message carries the whole `source()` chain, flattened into a
+    /// `String`: the outer "Failed to initialize an event loop" is useless on
+    /// its own, while the winit error underneath names the real reason. It is a
+    /// `String` because winit's error type is not `Sync`, and this error reaches
+    /// `main` through `anyhow`.
     #[error("failed to initialise the winit backend: {0}")]
     Backend(String),
     /// Signal handling could not be installed.
@@ -97,6 +100,21 @@ struct Session {
     start_time: Instant,
 }
 
+/// Flattens an error and every `source()` below it into one line.
+///
+/// Startup failures are usually two errors deep — Smithay's wrapper plus the
+/// winit error it wraps — and the outer message alone hides the real reason.
+fn describe_chain(error: &dyn std::error::Error) -> String {
+    let mut description = error.to_string();
+    let mut cause = error.source();
+    while let Some(error) = cause {
+        description.push_str(": ");
+        description.push_str(&error.to_string());
+        cause = error.source();
+    }
+    description
+}
+
 /// Runs the nested session until the window is closed or a signal arrives.
 ///
 /// This blocks the calling thread, driving the calloop event loop. It returns
@@ -107,8 +125,8 @@ pub fn run() -> Result<(), SessionError> {
 
     let display = Display::<State>::new()?;
 
-    let (backend, winit_events) =
-        winit::init::<GlesRenderer>().map_err(|error| SessionError::Backend(error.to_string()))?;
+    let (backend, winit_events) = winit::init::<GlesRenderer>()
+        .map_err(|error| SessionError::Backend(describe_chain(&error)))?;
 
     let state = State::new(
         loop_signal.clone(),
@@ -448,4 +466,53 @@ enum DrawError {
     /// Presenting the frame to the window failed.
     #[error("could not present the frame")]
     Submit(#[source] SwapBuffersError),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+    use std::fmt;
+
+    use super::describe_chain;
+
+    /// The innermost error, with no cause of its own.
+    #[derive(Debug)]
+    struct Leaf;
+
+    impl fmt::Display for Leaf {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("the inner cause")
+        }
+    }
+
+    impl Error for Leaf {}
+
+    /// An error that wraps [`Leaf`], like Smithay wraps winit.
+    #[derive(Debug)]
+    struct Wrapper(Leaf);
+
+    impl fmt::Display for Wrapper {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("the outer message")
+        }
+    }
+
+    impl Error for Wrapper {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            Some(&self.0)
+        }
+    }
+
+    #[test]
+    fn the_chain_reports_every_cause() {
+        assert_eq!(
+            describe_chain(&Wrapper(Leaf)),
+            "the outer message: the inner cause"
+        );
+    }
+
+    #[test]
+    fn a_lone_error_is_its_own_description() {
+        assert_eq!(describe_chain(&Leaf), "the inner cause");
+    }
 }
