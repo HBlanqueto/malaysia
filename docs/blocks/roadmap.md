@@ -102,7 +102,8 @@ including any deliberate divergence from the brief.
   implemented in `neptune-scene` and the compositor. `xdg_toplevel.move`/`resize`
   serials are validated against the last pointer press. `./dev.sh block4` opens
   and closes 50 windows and asserts the scene returns to empty; drag feel, resize
-  visuals and the cursor shape changing under the pointer are hand-checked.
+  visuals and the cursor shape changing under the pointer are hand-checked. See
+  `docs/blocks/04-manipulable-windows.md`.
 - **Block 5 — not started.** Popups are configured with raw geometry only.
 - **Block 6 — not started.** `wl_data_device_manager` is advertised, but no
   clipboard behaviour is implemented.

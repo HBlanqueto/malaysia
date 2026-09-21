@@ -8,7 +8,8 @@ package to build it on purpose.
 
 The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
 at, so they can be run against Neptune or the host session without any change.
-`smoke` is different: it launches Neptune itself and drives a client against it.
+`smoke` and `block4` are different: they launch Neptune itself and drive clients
+against it.
 
 Everything here runs inside the dev shell (`nix develop`). The simplest way to
 run the smoke test is the project script, which builds both the compositor and
@@ -65,3 +66,28 @@ cargo run -p sctk-probe --bin smoke   # run it directly, if already built
 
 Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
 `NEPTUNE_SMOKE_CLIENT` (the client to drive).
+
+## `block4`
+
+The Block 4 acceptance harness. It launches the compositor and `window_stress`,
+which opens fifty decorated toplevels and then destroys them. It asserts the
+compositor reported at least fifty `window removed` lines and then `scene empty`,
+and it reads the compositor's `VmRSS` before and after, reporting the delta. The
+delta is **measured, not asserted**: a threshold would be flaky.
+
+```sh
+./dev.sh block4                        # builds neptune and the probes, then runs it
+cargo run -p sctk-probe --bin block4   # run it directly, if already built
+```
+
+Environment overrides: `NEPTUNE_BIN` and `NEPTUNE_STRESS_BIN`.
+
+## `window_stress`
+
+The client `block4` drives. It opens fifty decorated toplevels with
+shared-memory buffers, waits for a configure on each, then closes every one and
+exits. On its own it is only useful to watch a compositor's teardown:
+
+```sh
+cargo run -p sctk-probe --bin window_stress
+```

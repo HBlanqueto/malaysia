@@ -308,3 +308,13 @@ unverified corner is question 4 above.
   0.7.0 (nested session).
 - `docs/decisions/0011-design-values-are-rust-constants.md` — design values are
   hand-written constants in `neptune-design`.
+- `docs/decisions/0012-backend-beside-state.md` — the backend lives beside
+  `State` (nested session).
+- `docs/decisions/0013-dispatch-polls-duplicated-fd.md` — client dispatch polls
+  a duplicated display fd (nested session).
+- `docs/decisions/0014-decoration-insets.md` — decoration insets are a function
+  of a window's current state (nested session).
+- `docs/decisions/0015-desktop-space-and-neptune-scene.md` — window layout lives
+  in `neptune-scene`; `desktop::Space` is not adopted (Block 4).
+- `docs/decisions/0016-interactive-move-and-resize.md` — moves and resizes are
+  the compositor's own state, serial-checked (Block 4).
