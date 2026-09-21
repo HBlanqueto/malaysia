@@ -33,6 +33,22 @@ Out of scope: popups, move/resize, clipboard, XWayland, DRM/KMS.
    commit that carries a buffer. The block spec's literal wording is wrong on
    this point and is overridden here, deliberately.
 
+## Part 5 review rulings
+
+The Part 5 review produced six rulings. Five changed code and are recorded in
+their own commits: advertising `wl_data_device_manager`, one accessor for
+logical output conversion, matching configure serials before marking a window
+ready, mapping on the first buffered commit (Divergences 1), and a live
+`set_parent` probe. The sixth changed nothing, so it is recorded here.
+
+**Ruling 6 — the window tracker keeps `Window::location` and `Windows::iter`.**
+Both were questioned as API with no consumer yet. They have consumers today:
+the render path reads each `Window::location` to place its surface and iterates
+`Windows` to collect the surfaces to draw. The tracker itself is a placeholder
+for `neptune-scene` in Block 2 — this module is what gets rewritten then — so
+the two methods are the smallest surface that serves the draw path and nothing
+is built on top of them.
+
 ## Open questions
 
 1. **The `deny(unsafe_code)` policy must be redefined before Block 2.** It is
