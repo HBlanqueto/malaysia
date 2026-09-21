@@ -14,9 +14,11 @@ the command after it starts that block's behaviour.
 - [x] **Block 1 — Getting a client to connect.** `./dev.sh run`; `wayland-info`
       lists every global.
 - [x] **Block 2 — A window on screen.** `./dev.sh run`, checked by
-      `./dev.sh smoke`.
+      `./dev.sh smoke`. See
+      [`docs/blocks/02-a-window-on-screen.md`](docs/blocks/02-a-window-on-screen.md).
 - [x] **Block 3 — Input.** `./dev.sh run`, checked by `./dev.sh smoke`; typing
-      and the rendered cursor are hand-checked.
+      and the rendered cursor are hand-checked. See
+      [`docs/blocks/03-input.md`](docs/blocks/03-input.md).
 - [x] **Block 4 — Manipulable windows.** `./dev.sh block4` opens and closes 50
       windows and asserts the scene empties; drag feel and resize visuals are
       hand-checked.

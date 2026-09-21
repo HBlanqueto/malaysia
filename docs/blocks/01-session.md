@@ -29,14 +29,14 @@ The session is built in parts, each reviewed on its own:
    ("ack_configure → map") is wrong; see Divergences 1, which is authoritative.
 6. Rendering client surfaces and forwarding input from winit to the seat.
 
-The parts cover three roadmap blocks, which is why this one document describes
-all three; roadmap Block 2 is the rendering work in Parts 4–6:
+The parts cover three roadmap blocks; this document is the session-level record
+and Block 1's record, and Blocks 2 and 3 have their own:
 
-| Roadmap block | Parts |
-| --- | --- |
-| 1 — Getting a client to connect | 1–3 |
-| 2 — A window on screen | 4–6 (rendering) |
-| 3 — Input | 6 (input), extended later by cursor support |
+| Roadmap block | Parts | Record |
+| --- | --- | --- |
+| 1 — Getting a client to connect | 1–3 | this document |
+| 2 — A window on screen | 4–6 (rendering) | `docs/blocks/02-a-window-on-screen.md` |
+| 3 — Input | 6 (input), extended later by cursor support | `docs/blocks/03-input.md` |
 
 Later blocks have their own documents: `docs/blocks/04-manipulable-windows.md`
 for Block 4. Block 5 is not started.

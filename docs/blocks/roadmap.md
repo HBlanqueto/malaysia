@@ -83,19 +83,20 @@ including any deliberate divergence from the brief.
   with `desktop` on (ADR 0009, ADR 0010). The log level is set by `--log-level`,
   not env-based filtering. `neptune-design` is not empty.
 - **Block 1 — done.** `wayland-info` (the dev shell has no `weston-info`) lists
-  every global. See `docs/blocks/00-foundations.md` and, for the later parts,
+  every global. See `docs/blocks/00-foundations.md` and the session-level record
   `docs/blocks/01-session.md`, which covers Blocks 1–3 together.
 - **Block 2 — done, with divergences.** Mapping happens on the first buffered
   commit, not on `ack_configure` (`docs/blocks/01-session.md`, Divergences 1).
   Toplevels are tracked in `crates/neptune/src/window.rs` with no
   `desktop::Space` wrapper (ADR 0009; the choice is now a written decision, ADR
-  0015). The acceptance client is `foot`, since weston is not installed.
+  0015). The acceptance client is `foot`, since weston is not installed. See
+  `docs/blocks/02-a-window-on-screen.md`.
 - **Block 3 — done, with hand-checked gaps.** Keyboard focus, keymap/repeat,
   pointer motion/button/axis, cursor support and central serial accounting are
   implemented. `./dev.sh smoke` asserts that the compositor draws its default
   pointer and checks any client `set_cursor` against the pointer enter it
   answers. Typing, pointer response, legible output and the rendered cursor's
-  pixels remain hand-checked.
+  pixels remain hand-checked. See `docs/blocks/03-input.md`.
 - **Block 4 — done, with hand-checked gaps.** Move (titlebar drag and
   `xdg_toplevel.move`), resize (edge zones and `xdg_toplevel.resize`, all edges,
   min/max honoured), close, stacking, click-to-focus and edge resize cursors are
