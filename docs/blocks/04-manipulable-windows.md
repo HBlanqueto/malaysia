@@ -40,12 +40,11 @@ and the interaction.
   `move_to`, `resize`, `set_resizing`, `send_close`, `id_of`/`surface_of`,
   `minimum_outer_size`/`maximum_outer_size`, and `outer`. Mapping inserts the
   window into the scene and logs `window mapped`.
-- **`input.rs`** owns the interaction: an edge band starts a resize, the
-  decorated band starts a move (the middle button asks the client to close), and
-  a click over the client raises and focuses. Motion drives the grab or updates
-  focus and the edge cursor; release ends it. `forget_window` removes a destroyed
-  window from the scene and any grab, and moves keyboard focus to the new
-  topmost window or clears it.
+- **`input.rs`** owns the interaction: an edge band starts a resize, the primary
+  button on the decorated band starts a move, and a click over the client raises
+  and focuses. Motion drives the grab or updates focus and the edge cursor;
+  release ends it. `forget_window` removes a destroyed window from the scene and
+  any grab, and moves keyboard focus to the new topmost window or clears it.
 - **`state.rs`** holds `Grab` (move or resize), the remembered pointer-press
   serial, and the seat focus handshake.
 - **`handlers.rs`** answers `move_request` and `resize_request` after the serial
@@ -54,11 +53,12 @@ and the interaction.
   Xcursor theme, alongside the default, and the draw path picks the shape
   Smithay reports. A missing shape or theme falls back to the default arrow.
 
-### The compositor-initiated close
+### Closing
 
-`xdg_toplevel.close` is sent by `Windows::send_close`. Neptune draws no close
-button, so the gesture bound to it is the **middle button on the titlebar**;
-this is the one concrete interaction the block chooses without a brief.
+`Windows::send_close` sends `xdg_toplevel.close`, and a client that exits
+tears its window out through `toplevel_destroyed`. Neptune draws no close
+button and binds no gesture to close; a compositor-initiated close is left for a
+later block, so closing is driven by the client (or by killing it).
 
 ## Decisions
 
@@ -103,9 +103,8 @@ The machine-checked acceptance is a command whose exit code is the result:
 Not verified by a command, and left to hand-checking: drag feel and whether the
 window keeps the grab offset under the pointer; resize visuals and whether the
 minimum and maximum feel right; the cursor shape actually changing as the
-pointer crosses an edge; click-to-focus and stacking as seen; the middle-button
-close; and the live client-initiated `move`/`resize` path, which no probe calls
-yet.
+pointer crosses an edge; click-to-focus and stacking as seen; and the live
+client-initiated `move`/`resize` path.
 
 ## Open questions
 

@@ -26,8 +26,6 @@ use crate::window::RESIZE_BORDER;
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
-/// The Linux button code for the middle pointer button.
-const BUTTON_MIDDLE: u32 = 0x112;
 
 impl State {
     /// Handles one input event from the backend.
@@ -93,9 +91,9 @@ impl State {
 
     /// Handles a pointer button press at `location`.
     ///
-    /// An edge band starts a resize; the decorated band off the client surface
-    /// starts a move (or asks the client to close on the middle button); over
-    /// the client's own surface the press just raises and focuses the window.
+    /// An edge band starts a resize; the primary button on the decorated band
+    /// off the client surface starts a move; over the client's own surface the
+    /// press just raises and focuses the window.
     fn pointer_press(&mut self, button: u32, location: Point<f64, Logical>) {
         if let Some((id, edge)) = self.windows.edge_under(location, RESIZE_BORDER) {
             self.raise_and_focus(id);
@@ -111,9 +109,7 @@ impl State {
         if self.windows.surface_under(location).is_some() {
             return;
         }
-        if button == BUTTON_MIDDLE {
-            self.windows.send_close(id);
-        } else if button == BUTTON_LEFT {
+        if button == BUTTON_LEFT {
             self.start_move(id, location);
         }
     }
