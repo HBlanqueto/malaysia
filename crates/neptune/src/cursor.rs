@@ -1,4 +1,4 @@
-//! The pointer cursor: the client's surface, or a default arrow.
+//! The pointer cursor: the client's surface, or a compositor-drawn one.
 //!
 //! A client chooses its pointer with `wl_pointer.set_cursor`. Smithay handles
 //! that request and, before it calls [`SeatHandler::cursor_image`], validates
@@ -12,9 +12,10 @@
 //!
 //! - a client surface is drawn at the pointer position minus its hotspot;
 //! - `Hidden` (a null surface) draws nothing;
-//! - the default arrow, loaded from the Xcursor theme once at startup, is drawn
-//!   when no client surface is active. If no theme can be read, a built-in
-//!   arrow is used instead.
+//! - a named cursor — the default arrow, or the resize shape over an edge zone —
+//!   is loaded once from the Xcursor theme and drawn. A shape the theme does
+//!   not have falls back to the default arrow, and if no theme can be read at
+//!   all a built-in arrow is used.
 //!
 //! [`State::cursor_status`]: crate::state::State::cursor_status
 //! [`SERIAL_COUNTER`]: smithay::utils::SERIAL_COUNTER
@@ -29,57 +30,84 @@ use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::input::pointer::CursorIcon;
 use smithay::utils::{Logical, Point, Transform};
 use xcursor::CursorTheme;
 use xcursor::parser::{Image, parse_xcursor};
 
-/// The compositor's own pointer, used when no client has set one.
-pub struct DefaultCursor {
-    /// The arrow's pixels, ready to upload as a render element.
+/// The compositor-drawn cursors, one per shape the compositor uses itself.
+///
+/// Client cursor surfaces do not pass through here; this is only what Neptune
+/// draws when no client has set a cursor, including the resize shapes it shows
+/// over its own edge zones.
+pub struct Cursors {
+    /// The shapes the theme provided, other than the default.
+    icons: Vec<(CursorIcon, LoadedCursor)>,
+    /// The default arrow, used for every shape the theme did not provide.
+    fallback: LoadedCursor,
+}
+
+/// One decoded cursor image and its hotspot.
+pub struct LoadedCursor {
+    /// The image, ready to upload as a render element.
     buffer: MemoryRenderBuffer,
-    /// The pixel inside the arrow that sits on the pointer position.
+    /// The pixel inside the image that sits on the pointer position.
     hotspot: Point<i32, Logical>,
 }
 
-impl DefaultCursor {
-    /// Loads the default arrow from the Xcursor theme, or a built-in one.
+impl Cursors {
+    /// Loads the cursor shapes from the Xcursor theme, with built-ins as a
+    /// fallback.
     ///
     /// `scale` is the output's integer scale, so a HiDPI output gets a larger
-    /// arrow. The theme is `XCURSOR_THEME` or `default`, and the size is
-    /// `XCURSOR_SIZE` or 24. Any failure — no theme, no `default` icon, an
-    /// unreadable or unparsable file — is not fatal: the built-in arrow is used
-    /// and the reason is logged.
+    /// pointer. The theme is `XCURSOR_THEME` or `default`, and the size is
+    /// `XCURSOR_SIZE` or 24. A shape that cannot be read falls back to the
+    /// default arrow, and if no theme can be read at all the built-in arrow is
+    /// used.
     pub fn load(scale: i32) -> Self {
-        let data = theme_image(scale).unwrap_or_else(|| {
+        let fallback = load_icon(CursorIcon::Default, scale).unwrap_or_else(|| {
             tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
-            fallback_image()
+            builtin_cursor(scale)
         });
-        let buffer = MemoryRenderBuffer::from_slice(
-            &data.pixels,
-            Fourcc::Argb8888,
-            (data.width, data.height),
-            scale,
-            Transform::Normal,
-            None,
-        );
-        Self {
-            buffer,
-            hotspot: Point::from((data.hot_x, data.hot_y)),
+
+        let mut icons = Vec::new();
+        for icon in [
+            CursorIcon::EwResize,
+            CursorIcon::NsResize,
+            CursorIcon::NwseResize,
+            CursorIcon::NeswResize,
+        ] {
+            if let Some(cursor) = load_icon(icon, scale) {
+                icons.push((icon, cursor));
+            }
         }
+
+        Self { icons, fallback }
     }
 
-    /// The arrow's pixels.
+    /// The cursor for a shape, or the default arrow when the theme lacks it.
+    pub fn get(&self, icon: CursorIcon) -> &LoadedCursor {
+        self.icons
+            .iter()
+            .find(|(name, _)| *name == icon)
+            .map(|(_, cursor)| cursor)
+            .unwrap_or(&self.fallback)
+    }
+}
+
+impl LoadedCursor {
+    /// The image to upload.
     pub fn buffer(&self) -> &MemoryRenderBuffer {
         &self.buffer
     }
 
-    /// The arrow's hotspot, in logical coordinates relative to its top-left.
+    /// The hotspot, in logical coordinates relative to the image's top-left.
     pub fn hotspot(&self) -> Point<i32, Logical> {
         self.hotspot
     }
 }
 
-/// One decoded cursor image and its hotspot.
+/// One decoded cursor image and its hotspot, before it becomes a buffer.
 struct ImageData {
     /// Pixels in the byte order Xcursor and `Fourcc::Argb8888` share.
     pixels: Vec<u8>,
@@ -93,17 +121,17 @@ struct ImageData {
     hot_y: i32,
 }
 
-/// Reads the `default` icon from the Xcursor theme, if it can be read.
-fn theme_image(scale: i32) -> Option<ImageData> {
-    let name = std::env::var("XCURSOR_THEME").unwrap_or_else(|_| "default".to_string());
+/// Reads a named icon from the Xcursor theme, if it can be read.
+fn theme_image(name: &str, scale: i32) -> Option<ImageData> {
+    let theme_name = std::env::var("XCURSOR_THEME").unwrap_or_else(|_| "default".to_string());
     let size = std::env::var("XCURSOR_SIZE")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
         .unwrap_or(24);
     let target = size.saturating_mul(scale.max(1) as u32);
 
-    let theme = CursorTheme::load(&name);
-    let path = theme.load_icon("default")?;
+    let theme = CursorTheme::load(&theme_name);
+    let path = theme.load_icon(name)?;
     let mut data = Vec::new();
     std::fs::File::open(path)
         .ok()?
@@ -119,6 +147,36 @@ fn theme_image(scale: i32) -> Option<ImageData> {
         hot_x: image.xhot as i32,
         hot_y: image.yhot as i32,
     })
+}
+
+/// Loads one named cursor into an uploadable buffer.
+fn load_icon(icon: CursorIcon, scale: i32) -> Option<LoadedCursor> {
+    let data = theme_image(icon.name(), scale)?;
+    Some(LoadedCursor {
+        buffer: memory_buffer(&data, scale),
+        hotspot: Point::from((data.hot_x, data.hot_y)),
+    })
+}
+
+/// The built-in arrow, as an uploadable buffer.
+fn builtin_cursor(scale: i32) -> LoadedCursor {
+    let data = fallback_image();
+    LoadedCursor {
+        buffer: memory_buffer(&data, scale),
+        hotspot: Point::from((data.hot_x, data.hot_y)),
+    }
+}
+
+/// Uploads decoded pixels as a memory buffer at `scale`.
+fn memory_buffer(data: &ImageData, scale: i32) -> MemoryRenderBuffer {
+    MemoryRenderBuffer::from_slice(
+        &data.pixels,
+        Fourcc::Argb8888,
+        (data.width, data.height),
+        scale,
+        Transform::Normal,
+        None,
+    )
 }
 
 /// The image whose nominal size is closest to `target`.
@@ -167,7 +225,7 @@ fn fallback_image() -> ImageData {
 
 smithay::render_elements! {
     /// Any element the output's frame can contain: a window, a client cursor or
-    /// the default arrow.
+    /// a compositor-drawn cursor.
     pub(crate) OutputRenderElement<R> where R: ImportAll + ImportMem;
     Surface = WaylandSurfaceRenderElement<R>,
     Memory = MemoryRenderBufferRenderElement<R>,

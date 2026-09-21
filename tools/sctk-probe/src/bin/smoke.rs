@@ -45,13 +45,13 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The compositor log line emitted exactly when a window becomes mapped.
 const MAPPED_LOG_LINE: &str = "window mapped";
-/// The compositor log line emitted when it draws its own default pointer.
+/// The compositor log line emitted when it draws its own pointer.
 ///
 /// There is no client cursor until the host pointer moves and the client
-/// receives `wl_pointer.enter`, which this harness cannot cause, so the default
-/// pointer is the cursor path it can exercise live. The line is a `debug` event,
-/// so the compositor is run at `--log-level=debug`.
-const DEFAULT_CURSOR_LOG_LINE: &str = "drawing the default pointer";
+/// receives `wl_pointer.enter`, which this harness cannot cause, so the
+/// compositor-drawn pointer is the cursor path it can exercise live. The line
+/// is a `debug` event, so the compositor is run at `--log-level=debug`.
+const DEFAULT_CURSOR_LOG_LINE: &str = "drawing a pointer cursor";
 
 fn main() -> ExitCode {
     match run() {

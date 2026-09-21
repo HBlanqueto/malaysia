@@ -42,7 +42,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::socket::ListeningSocketSource;
 
-use crate::cursor::{DefaultCursor, OutputRenderElement};
+use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 
 /// Failures that can stop the session from starting.
@@ -94,8 +94,8 @@ struct Session {
     backend: WinitGraphicsBackend<GlesRenderer>,
     /// Tracks damage between frames for the one output.
     damage_tracker: OutputDamageTracker,
-    /// The default arrow, drawn when no client cursor is active.
-    cursor: DefaultCursor,
+    /// The compositor-drawn cursors, shown when no client cursor is active.
+    cursor: Cursors,
     /// When the session started, used as the frame callback timestamp base.
     start_time: Instant,
 }
@@ -134,7 +134,7 @@ pub fn run() -> Result<(), SessionError> {
         backend.window_size(),
     )?;
     let damage_tracker = OutputDamageTracker::from_output(&state.output);
-    let cursor = DefaultCursor::load(State::OUTPUT_SCALE);
+    let cursor = Cursors::load(State::OUTPUT_SCALE);
     let mut session = Session {
         display,
         state,
@@ -368,7 +368,7 @@ fn append_cursor(
     renderer: &mut GlesRenderer,
     elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
     state: &State,
-    cursor: &DefaultCursor,
+    cursor: &Cursors,
 ) {
     let Some(location) = state
         .seat
@@ -380,23 +380,24 @@ fn append_cursor(
 
     match &state.cursor_status {
         CursorImageStatus::Hidden => {}
-        CursorImageStatus::Named(_) => {
+        CursorImageStatus::Named(icon) => {
+            let shape = cursor.get(*icon);
             let position =
-                (location - cursor.hotspot().to_f64()).to_physical(f64::from(State::OUTPUT_SCALE));
+                (location - shape.hotspot().to_f64()).to_physical(f64::from(State::OUTPUT_SCALE));
             match MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
                 position.to_f64(),
-                cursor.buffer(),
+                shape.buffer(),
                 None,
                 None,
                 None,
                 Kind::Cursor,
             ) {
                 Ok(element) => {
-                    tracing::debug!("drawing the default pointer");
+                    tracing::debug!("drawing a pointer cursor");
                     elements.push(OutputRenderElement::from(element));
                 }
-                Err(error) => tracing::warn!(?error, "could not draw the default cursor"),
+                Err(error) => tracing::warn!(?error, "could not draw a pointer cursor"),
             }
         }
         CursorImageStatus::Surface(surface) => {
