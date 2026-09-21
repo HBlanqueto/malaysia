@@ -503,11 +503,14 @@ fn append_cursor(
         CursorImageStatus::Hidden => {}
         CursorImageStatus::Named(icon) => {
             let shape = cursor.get(*icon);
-            let position =
-                (location - shape.hotspot().to_f64()).to_physical(f64::from(State::OUTPUT_SCALE));
+            let position = cursor_origin(
+                location,
+                shape.hotspot().to_f64(),
+                f64::from(State::OUTPUT_SCALE),
+            );
             match MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
-                position.to_f64(),
+                position,
                 shape.buffer(),
                 None,
                 None,
@@ -522,9 +525,12 @@ fn append_cursor(
             }
         }
         CursorImageStatus::Surface(surface) => {
-            let position = (location - cursor_surface_hotspot(surface))
-                .to_physical(f64::from(State::OUTPUT_SCALE))
-                .to_i32_round();
+            let position = cursor_origin(
+                location,
+                cursor_surface_hotspot(surface),
+                f64::from(State::OUTPUT_SCALE),
+            )
+            .to_i32_round();
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
@@ -542,6 +548,19 @@ fn append_cursor(
             );
         }
     }
+}
+
+/// The physical position of a cursor image's top-left.
+///
+/// The pointer sits on the image's hotspot, so the image's top-left is the
+/// pointer position minus the hotspot. One helper for both the client's cursor
+/// surface and the compositor's own shapes keeps the two in step.
+fn cursor_origin(
+    location: Point<f64, Logical>,
+    hotspot: Point<f64, Logical>,
+    scale: f64,
+) -> Point<f64, Physical> {
+    (location - hotspot).to_physical(scale)
 }
 
 /// The hotspot of a client cursor surface, in logical coordinates.
@@ -600,7 +619,19 @@ mod tests {
     use std::error::Error;
     use std::fmt;
 
-    use super::describe_chain;
+    use smithay::backend::allocator::Fourcc;
+    use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+    use smithay::backend::renderer::damage::OutputDamageTracker;
+    use smithay::backend::renderer::element::Kind;
+    use smithay::backend::renderer::element::memory::{
+        MemoryRenderBuffer, MemoryRenderBufferRenderElement,
+    };
+    use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+    use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
+    use smithay::utils::{Buffer as BufferCoord, Physical, Point, Rectangle, Size, Transform};
+
+    use super::{cursor_origin, describe_chain, winit_mode_source};
+    use crate::cursor::OutputRenderElement;
 
     /// The innermost error, with no cause of its own.
     #[derive(Debug)]
@@ -641,5 +672,188 @@ mod tests {
     #[test]
     fn a_lone_error_is_its_own_description() {
         assert_eq!(describe_chain(&Leaf), "the inner cause");
+    }
+
+    /// Red, in `Argb8888`'s in-memory byte order (B, G, R, A).
+    const RED: [u8; 4] = [0, 0, 255, 255];
+    /// Green, in `Argb8888`'s in-memory byte order.
+    const GREEN: [u8; 4] = [0, 255, 0, 255];
+    /// The frame's clear color, in `Argb8888`'s in-memory byte order.
+    const CLEAR: [u8; 4] = [0, 0, 0, 255];
+
+    /// A GLES renderer on the first EGL device, with no window.
+    ///
+    /// EGL context creation is unsafe by API: `EGLDisplay::new` and
+    /// `GlesRenderer::new` both require the caller to uphold that the display
+    /// and context are used on one thread and not shared behind its back. This
+    /// is the only place the crate allows it, it is compiled only for tests,
+    /// and it uses a render node rather than the host session, so the pixel
+    /// test needs no display.
+    #[allow(unsafe_code)]
+    fn offscreen_renderer() -> GlesRenderer {
+        let device = EGLDevice::enumerate()
+            .expect("EGL device enumeration should work")
+            .next()
+            .expect("the pixel test needs an EGL device");
+        let display = unsafe { EGLDisplay::new(device) }.expect("the test needs an EGL display");
+        let context = EGLContext::new(&display).expect("the test needs an EGL context");
+        unsafe { GlesRenderer::new(context) }.expect("the test needs a GLES renderer")
+    }
+
+    /// Renders `elements` through the session's own damage tracker setup and
+    /// returns the pixels in window order: row 0 is the top.
+    ///
+    /// The tracker is built from [`winit_mode_source`], the same call the
+    /// session makes, so a wrong render transform fails here exactly as it
+    /// would on screen. `copy_framebuffer` returns OpenGL order (row 0 at the
+    /// bottom), so the rows are flipped back before asserting.
+    fn render_and_read(
+        renderer: &mut GlesRenderer,
+        size: Size<i32, Physical>,
+        elements: &[OutputRenderElement<GlesRenderer>],
+    ) -> Vec<u8> {
+        let buffer_size: Size<i32, BufferCoord> = Size::from((size.w, size.h));
+        let mut target =
+            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Argb8888, buffer_size)
+                .expect("the test needs an offscreen buffer");
+        let mut framebuffer = renderer.bind(&mut target).expect("the buffer should bind");
+
+        let mut tracker = OutputDamageTracker::from_mode_source(winit_mode_source(size));
+        tracker
+            .render_output(
+                renderer,
+                &mut framebuffer,
+                0,
+                elements,
+                [0.0, 0.0, 0.0, 1.0],
+            )
+            .expect("the frame should render");
+
+        let mapping = renderer
+            .copy_framebuffer(
+                &framebuffer,
+                Rectangle::from_size(buffer_size),
+                Fourcc::Argb8888,
+            )
+            .expect("the framebuffer should be readable");
+        let pixels = renderer
+            .map_texture(&mapping)
+            .expect("the mapping should read");
+        let mut window_order = pixels.to_vec();
+        let stride = (size.w * 4) as usize;
+        for row in 0..(size.h as usize) / 2 {
+            let top = row * stride;
+            let bottom = (size.h as usize - 1 - row) * stride;
+            for byte in 0..stride {
+                window_order.swap(top + byte, bottom + byte);
+            }
+        }
+        window_order
+    }
+
+    /// The pixel at window coordinates, top-left origin.
+    fn pixel(pixels: &[u8], size: Size<i32, Physical>, x: i32, y: i32) -> [u8; 4] {
+        let stride = (size.w * 4) as usize;
+        let offset = (y as usize) * stride + (x as usize) * 4;
+        pixels[offset..offset + 4]
+            .try_into()
+            .expect("the readback should cover the whole frame")
+    }
+
+    /// A solid-color element of `side` by `side` pixels at the origin.
+    fn solid(
+        renderer: &mut GlesRenderer,
+        color: [u8; 4],
+        side: i32,
+    ) -> OutputRenderElement<GlesRenderer> {
+        let buffer = MemoryRenderBuffer::from_slice(
+            &color.repeat((side * side) as usize),
+            Fourcc::Argb8888,
+            (side, side),
+            1,
+            Transform::Normal,
+            None,
+        );
+        let element = MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            (0.0, 0.0),
+            &buffer,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        )
+        .expect("the element should build");
+        OutputRenderElement::from(element)
+    }
+
+    #[test]
+    fn a_top_left_quadrant_stays_in_the_top_left() {
+        let size = Size::from((64, 64));
+        let mut renderer = offscreen_renderer();
+        let quadrant = solid(&mut renderer, RED, 32);
+        let pixels = render_and_read(&mut renderer, size, &[quadrant]);
+
+        assert_eq!(
+            pixel(&pixels, size, 4, 4),
+            RED,
+            "the element is at render (0, 0), so its pixels must appear at the window's top-left"
+        );
+        assert_eq!(
+            pixel(&pixels, size, 4, 60),
+            CLEAR,
+            "the bottom-left must stay clear: an inverted frame puts the element there"
+        );
+        assert_eq!(
+            pixel(&pixels, size, 60, 4),
+            CLEAR,
+            "the top-right must stay clear"
+        );
+    }
+
+    #[test]
+    fn the_cursor_lands_at_the_hotspot_adjusted_position() {
+        let size = Size::from((64, 64));
+        let mut renderer = offscreen_renderer();
+
+        // A 4x4 cursor whose hotspot is (3, 4), pointed at logical (10, 10):
+        // its top-left belongs at physical (7, 6).
+        let cursor = MemoryRenderBuffer::from_slice(
+            &GREEN.repeat(16),
+            Fourcc::Argb8888,
+            (4, 4),
+            1,
+            Transform::Normal,
+            None,
+        );
+        let origin = cursor_origin(Point::from((10.0, 10.0)), Point::from((3.0, 4.0)), 1.0);
+        assert_eq!(origin, Point::from((7.0, 6.0)));
+        let element = MemoryRenderBufferRenderElement::from_buffer(
+            &mut renderer,
+            origin,
+            &cursor,
+            None,
+            None,
+            None,
+            Kind::Cursor,
+        )
+        .expect("the cursor element should build");
+        let pixels = render_and_read(&mut renderer, size, &[OutputRenderElement::from(element)]);
+
+        assert_eq!(
+            pixel(&pixels, size, 7, 6),
+            GREEN,
+            "the cursor image's top-left must land at the pointer minus the hotspot"
+        );
+        assert_eq!(
+            pixel(&pixels, size, 6, 6),
+            CLEAR,
+            "nothing may be drawn left of the hotspot-adjusted origin"
+        );
+        assert_eq!(
+            pixel(&pixels, size, 7, 5),
+            CLEAR,
+            "nothing may be drawn above the hotspot-adjusted origin"
+        );
     }
 }
