@@ -20,6 +20,8 @@
 //!
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
+use neptune_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
+use neptune_scene::scene::{Edge, WindowId};
 use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
@@ -28,7 +30,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
-use smithay::utils::{Logical, Physical, Size, Transform};
+use smithay::utils::{Logical, Physical, Serial, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
@@ -97,6 +99,14 @@ pub struct State {
     /// The tracked toplevels. All window geometry goes through this; the Direct
     /// Session milestone replaces it with `neptune-scene` (see [`crate::window`]).
     pub windows: Windows,
+    /// An interactive move or resize, if one is in progress.
+    pub(crate) grab: Option<Grab>,
+    /// The serial of the last pointer button press.
+    ///
+    /// `xdg_toplevel.move`/`resize` must name a valid, recent interaction; a
+    /// request whose serial is not this exact press is ignored. The serial comes
+    /// from the one counter in `input.rs`; no second counter exists.
+    pub(crate) pointer_press_serial: Option<Serial>,
 }
 
 impl State {
@@ -176,6 +186,8 @@ impl State {
             output,
             output_size: size,
             windows: Windows::new(),
+            grab: None,
+            pointer_press_serial: None,
         })
     }
 
@@ -209,6 +221,43 @@ impl State {
     /// identity; when fractional scale lands, this method is what changes.
     pub fn logical_output_size(&self) -> Size<i32, Logical> {
         self.output_size.to_logical(Self::OUTPUT_SCALE)
+    }
+}
+
+/// An interactive move or resize in progress.
+///
+/// A grab belongs to one window and ends on pointer release or when that window
+/// is destroyed. It is not a Smithay `PointerGrab`: the compositor already sees
+/// every motion event, so it simply stops forwarding them while a grab is set.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Grab {
+    /// Dragging a window by the pointer.
+    Move {
+        /// The window being dragged.
+        window: WindowId,
+        /// The pointer's position relative to the window's top-left, so the
+        /// window does not jump under the pointer.
+        offset: ScenePoint<f64, SceneLogical>,
+    },
+    /// Dragging an edge or corner to resize.
+    Resize {
+        /// The window being resized.
+        window: WindowId,
+        /// The edge or corner being dragged.
+        edge: Edge,
+        /// Where the pointer was when the resize began.
+        start_pointer: ScenePoint<f64, SceneLogical>,
+        /// The window's outer rectangle when the resize began.
+        start_outer: SceneRect<f64, SceneLogical>,
+    },
+}
+
+impl Grab {
+    /// The window this grab acts on.
+    pub(crate) fn window(self) -> WindowId {
+        match self {
+            Grab::Move { window, .. } | Grab::Resize { window, .. } => window,
+        }
     }
 }
 

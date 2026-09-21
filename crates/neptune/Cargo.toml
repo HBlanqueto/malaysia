@@ -16,3 +16,4 @@ signal-hook.workspace = true
 xcursor.workspace = true
 smithay.workspace = true
 neptune-design.workspace = true
+neptune-scene.workspace = true

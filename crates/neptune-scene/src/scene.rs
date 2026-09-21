@@ -10,7 +10,7 @@
 //! zones that start a resize are measured against the decorated bounds, so a
 //! grab near the titlebar works even though no client surface is there.
 
-use crate::geometry::{Logical, Point, Rect};
+use crate::geometry::{Logical, Point, Rect, Size};
 
 /// Identifies one window in a [`Scene`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -172,11 +172,93 @@ fn edge_in(outer: Rect<f64, Logical>, point: Point<f64, Logical>, border: f64) -
     }
 }
 
+/// The outer rectangle produced by dragging one edge or corner of `start`.
+///
+/// `dx` and `dy` are the pointer's movement since the drag began, in logical
+/// pixels. Dragging a left or top edge moves the origin and keeps the opposite
+/// edge fixed. The size is clamped to `minimum` on both axes and to `maximum`
+/// where a maximum axis is non-zero (zero means unbounded); clamping a left or
+/// top edge again keeps the opposite edge fixed.
+pub fn resized(
+    start: Rect<f64, Logical>,
+    edge: Edge,
+    dx: f64,
+    dy: f64,
+    minimum: Size<f64, Logical>,
+    maximum: Size<f64, Logical>,
+) -> Rect<f64, Logical> {
+    let left = matches!(edge, Edge::Left | Edge::TopLeft | Edge::BottomLeft);
+    let right = matches!(edge, Edge::Right | Edge::TopRight | Edge::BottomRight);
+    let top = matches!(edge, Edge::Top | Edge::TopLeft | Edge::TopRight);
+    let bottom = matches!(edge, Edge::Bottom | Edge::BottomLeft | Edge::BottomRight);
+
+    let mut x = start.x();
+    let mut y = start.y();
+    let mut width = start.width();
+    let mut height = start.height();
+    if left {
+        x += dx;
+        width -= dx;
+    }
+    if right {
+        width += dx;
+    }
+    if top {
+        y += dy;
+        height -= dy;
+    }
+    if bottom {
+        height += dy;
+    }
+
+    width = clamp_axis(
+        width,
+        minimum.width,
+        maximum.width,
+        left,
+        start.right(),
+        &mut x,
+    );
+    height = clamp_axis(
+        height,
+        minimum.height,
+        maximum.height,
+        top,
+        start.bottom(),
+        &mut y,
+    );
+
+    Rect::new(Point::new(x, y), Size::new(width, height))
+}
+
+/// Clamps one axis' extent, moving `origin` so a leading-edge drag keeps the
+/// opposite edge fixed.
+fn clamp_axis(
+    extent: f64,
+    minimum: f64,
+    maximum: f64,
+    leading: bool,
+    far_edge: f64,
+    origin: &mut f64,
+) -> f64 {
+    let extent = if extent < minimum {
+        minimum
+    } else if maximum > 0.0 && extent > maximum {
+        maximum
+    } else {
+        extent
+    };
+    if leading {
+        *origin = far_edge - extent;
+    }
+    extent
+}
+
 #[cfg(test)]
 mod tests {
     use crate::geometry::{Logical, Point, Rect, Size};
 
-    use super::{Edge, Scene, WindowId};
+    use super::{Edge, Scene, WindowId, resized};
 
     fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect<f64, Logical> {
         Rect::new(Point::new(x, y), Size::new(w, h))
@@ -276,5 +358,75 @@ mod tests {
         assert!(scene.set_outer(window, rect(200.0, 200.0, 100.0, 100.0)));
         assert_eq!(scene.topmost_at(point(50.0, 50.0)), None);
         assert_eq!(scene.topmost_at(point(250.0, 250.0)), Some(window));
+    }
+
+    #[test]
+    fn dragging_a_right_edge_grows_the_width_from_a_fixed_left() {
+        let start = rect(10.0, 10.0, 100.0, 100.0);
+        let new = resized(
+            start,
+            Edge::Right,
+            20.0,
+            0.0,
+            Size::new(1.0, 1.0),
+            Size::new(0.0, 0.0),
+        );
+        assert_eq!(new, rect(10.0, 10.0, 120.0, 100.0));
+    }
+
+    #[test]
+    fn dragging_a_left_edge_keeps_the_right_edge_fixed() {
+        let start = rect(10.0, 10.0, 100.0, 100.0);
+        let new = resized(
+            start,
+            Edge::Left,
+            20.0,
+            0.0,
+            Size::new(1.0, 1.0),
+            Size::new(0.0, 0.0),
+        );
+        assert_eq!(new, rect(30.0, 10.0, 80.0, 100.0));
+    }
+
+    #[test]
+    fn a_corner_drag_changes_both_axes() {
+        let start = rect(10.0, 10.0, 100.0, 100.0);
+        let new = resized(
+            start,
+            Edge::BottomRight,
+            10.0,
+            5.0,
+            Size::new(1.0, 1.0),
+            Size::new(0.0, 0.0),
+        );
+        assert_eq!(new, rect(10.0, 10.0, 110.0, 105.0));
+    }
+
+    #[test]
+    fn resizing_respects_a_minimum_and_keeps_the_opposite_edge_fixed() {
+        let start = rect(10.0, 10.0, 100.0, 100.0);
+        let new = resized(
+            start,
+            Edge::Left,
+            200.0,
+            0.0,
+            Size::new(50.0, 50.0),
+            Size::new(0.0, 0.0),
+        );
+        assert_eq!(new, rect(60.0, 10.0, 50.0, 100.0));
+    }
+
+    #[test]
+    fn resizing_respects_a_maximum() {
+        let start = rect(10.0, 10.0, 100.0, 100.0);
+        let new = resized(
+            start,
+            Edge::Right,
+            500.0,
+            0.0,
+            Size::new(1.0, 1.0),
+            Size::new(200.0, 0.0),
+        );
+        assert_eq!(new, rect(10.0, 10.0, 200.0, 100.0));
     }
 }

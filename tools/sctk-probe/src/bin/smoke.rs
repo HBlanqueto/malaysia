@@ -44,7 +44,7 @@ const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The compositor log line emitted exactly when a window becomes mapped.
-const MAPPED_LOG_LINE: &str = "giving keyboard focus to a mapped window";
+const MAPPED_LOG_LINE: &str = "window mapped";
 /// The compositor log line emitted when it draws its own default pointer.
 ///
 /// There is no client cursor until the host pointer moves and the client

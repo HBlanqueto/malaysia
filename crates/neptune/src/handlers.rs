@@ -20,6 +20,7 @@ use smithay::input::Seat;
 use smithay::input::SeatHandler;
 use smithay::input::SeatState;
 use smithay::input::pointer::CursorImageStatus;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::Client;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat;
@@ -59,7 +60,7 @@ impl CompositorHandler for State {
         // first; the window tracker then reads that state to decide on mapping.
         on_commit_buffer_handler::<Self>(surface);
         if let Some(mapped) = self.windows.commit(surface) {
-            self.focus_surface(mapped);
+            self.focus_window(mapped);
         }
         self.request_redraw();
     }
@@ -138,8 +139,52 @@ impl XdgShellHandler for State {
         self.windows.ack_configure(&surface, configure);
     }
 
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, serial: Serial) {
+        // The serial must name the pointer press this compositor last saw, and
+        // comes from the one serial counter. A request with any other serial is
+        // ignored rather than starting a drag.
+        if !self.take_pointer_press(serial) {
+            return;
+        }
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        if let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        {
+            self.start_move(id, location);
+        }
+    }
+
+    fn resize_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _seat: wl_seat::WlSeat,
+        serial: Serial,
+        edges: xdg_toplevel::ResizeEdge,
+    ) {
+        if !self.take_pointer_press(serial) {
+            return;
+        }
+        let Some(edge) = crate::window::from_xdg_resize_edge(edges) else {
+            return;
+        };
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        if let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        {
+            self.start_resize(id, edge, location);
+        }
+    }
+
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        self.windows.remove(surface.wl_surface());
+        self.forget_window(surface.wl_surface());
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

@@ -255,7 +255,12 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
             tracing::info!("window close requested");
             session.state.stop();
         }
-        WinitEvent::Input(event) => session.state.process_input_event(event),
+        WinitEvent::Input(event) => {
+            session.state.process_input_event(event);
+            // Motion moves the cursor and any dragged window; a button changes
+            // focus and stacking. Both are visible, so a frame is needed.
+            session.state.request_redraw();
+        }
         WinitEvent::Focus(_) => {}
     }
 }

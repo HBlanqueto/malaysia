@@ -1,12 +1,9 @@
 //! The tracked toplevels, behind one boundary.
 //!
-//! The nested session has one output and one window, and no scene graph yet.
-//! This module tracks toplevels directly rather than depending on Smithay's
-//! `desktop::Space`: `Space` is replaced by `neptune-scene` in the Direct
-//! Session milestone, so pulling it in would add a dependency that gets deleted
-//! almost immediately (ADR 0009). No other module reaches for a window's
-//! geometry — when the Direct Session milestone lands, this file is what is
-//! rewritten, and the rest of the compositor is untouched.
+//! Geometry — where a window is and how it stacks — lives in
+//! [`neptune_scene::scene`]; this module owns what the scene cannot: the
+//! protocol surface and the configure handshake. A [`Window`] view joins the
+//! two for readers. See ADR 0015.
 //!
 //! Two things this module is careful about:
 //!
@@ -20,62 +17,80 @@
 //!   be wrong from then on (ADR 0014).
 
 use neptune_design::TITLEBAR;
+use neptune_scene::geometry::{
+    Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
+};
+use neptune_scene::scene::{Edge, Scene, WindowId};
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Serial, Size};
-use smithay::wayland::shell::xdg::{Configure, ToplevelSurface};
+use smithay::wayland::compositor::with_states;
+use smithay::wayland::shell::xdg::{Configure, SurfaceCachedState, ToplevelSurface};
 
 use crate::decoration::{Chrome, Insets, Role, WindowState};
 
-/// One tracked toplevel and where it sits.
-pub struct Window {
-    /// The client's toplevel surface.
-    toplevel: ToplevelSurface,
-    /// The outer top-left of the window, in logical coordinates.
-    location: Point<i32, Logical>,
-    /// The outer window size, in logical coordinates, excluding nothing.
-    size: Size<i32, Logical>,
-    /// Whether the client has acknowledged the initial configure.
-    acked: bool,
-    /// The serial of the configure most recently sent, awaiting an ack.
-    pending_configure: Option<Serial>,
-    /// Whether the window is mapped and should be shown.
-    mapped: bool,
-    /// The usable size last sent, so a state change can be noticed.
-    configured: Option<Size<i32, Logical>>,
+/// The grab band along each edge, in logical pixels.
+pub const RESIZE_BORDER: f64 = 8.0;
+
+/// A read-only view of one tracked window.
+///
+/// It borrows the window's data and its current scene geometry, so callers see
+/// one consistent snapshot without the scene and the surface bookkeeping being
+/// two separate lookups.
+pub struct Window<'a> {
+    /// The window's surface and configure state.
+    data: &'a WindowData,
+    /// The window's decorated outer rectangle.
+    outer: SceneRect<f64, SceneLogical>,
 }
 
-impl Window {
+impl Window<'_> {
+    /// The window's scene identity.
+    pub fn id(&self) -> WindowId {
+        self.data.id
+    }
+
     /// The client's surface.
     pub fn surface(&self) -> &WlSurface {
-        self.toplevel.wl_surface()
-    }
-
-    /// The outer top-left of the window, in logical coordinates.
-    pub fn location(&self) -> Point<i32, Logical> {
-        self.location
-    }
-
-    /// The outer window size, in logical coordinates.
-    pub fn size(&self) -> Size<i32, Logical> {
-        self.size
+        self.data.toplevel.wl_surface()
     }
 
     /// Whether the window is mapped and should be shown.
     pub fn is_mapped(&self) -> bool {
-        self.mapped
+        self.data.mapped
+    }
+
+    /// The decorated outer rectangle, in logical coordinates.
+    pub fn outer(&self) -> SceneRect<f64, SceneLogical> {
+        self.outer
+    }
+
+    /// The outer top-left of the window, in logical coordinates.
+    pub fn location(&self) -> Point<i32, Logical> {
+        Point::from((round(self.outer.x()), round(self.outer.y())))
+    }
+
+    /// The outer window size, in logical coordinates.
+    pub fn size(&self) -> Size<i32, Logical> {
+        Size::from((round(self.outer.width()), round(self.outer.height())))
     }
 
     /// The insets for the window's current role, state and chrome.
     pub fn insets(&self) -> Insets {
-        Insets::for_window(self.role(), self.state(), self.chrome(), &TITLEBAR)
+        Insets::for_window(
+            self.data.role(),
+            self.data.state(),
+            self.data.chrome(),
+            &TITLEBAR,
+        )
     }
 
     /// The size configured to the client: the window minus its insets.
     pub fn usable_size(&self) -> Size<i32, Logical> {
-        usable(self.size, self.insets())
+        usable(self.size(), self.insets())
     }
 
     /// Where the client's surface sits inside the window, past the left and top
@@ -86,15 +101,33 @@ impl Window {
     }
 
     /// Whether a logical point falls inside the window's outer rectangle.
-    fn contains(&self, point: Point<f64, Logical>) -> bool {
-        let location = self.location();
-        let size = self.size();
-        point.x >= f64::from(location.x)
-            && point.x < f64::from(location.x + size.w)
-            && point.y >= f64::from(location.y)
-            && point.y < f64::from(location.y + size.h)
+    pub fn contains(&self, point: Point<f64, Logical>) -> bool {
+        self.outer.contains(ScenePoint::new(point.x, point.y))
     }
+}
 
+/// One tracked toplevel: its identity, surface and configure bookkeeping.
+struct WindowData {
+    /// The window's identity in the scene.
+    id: WindowId,
+    /// The client's toplevel surface.
+    toplevel: ToplevelSurface,
+    /// The decorated outer size, in logical coordinates.
+    outer_size: Size<i32, Logical>,
+    /// Whether the client has acknowledged a configure.
+    acked: bool,
+    /// The serial of the configure most recently sent, awaiting an ack.
+    pending_configure: Option<Serial>,
+    /// Whether the window is mapped and should be shown.
+    mapped: bool,
+    /// The usable size last sent, so a state change can be noticed.
+    configured: Option<Size<i32, Logical>>,
+    /// Whether the user is currently resizing, so the configure carries the
+    /// xdg `resizing` state.
+    resizing: bool,
+}
+
+impl WindowData {
     /// A toplevel with a parent is a dialog; otherwise an ordinary toplevel.
     fn role(&self) -> Role {
         if self.toplevel.parent().is_some() {
@@ -125,22 +158,33 @@ impl Window {
         }
     }
 
-    /// Sends a configure carrying the usable size for the current state.
-    fn send_configure(&mut self) {
-        let usable = usable(self.size, self.insets());
-        self.toplevel.with_pending_state(|state| {
-            state.size = Some(usable);
-        });
-        self.pending_configure = Some(self.toplevel.send_configure());
-        self.configured = Some(usable);
+    /// The insets for the window's current role, state and chrome.
+    fn insets(&self) -> Insets {
+        Insets::for_window(self.role(), self.state(), self.chrome(), &TITLEBAR)
+    }
+
+    /// The client's minimum and maximum usable size, in logical coordinates.
+    ///
+    /// A zero on an axis means the client did not constrain it.
+    fn size_bounds(&self) -> (Size<i32, Logical>, Size<i32, Logical>) {
+        let surface = self.toplevel.wl_surface();
+        with_states(surface, |states| {
+            let mut cached = states.cached_state.get::<SurfaceCachedState>();
+            let state = cached.current();
+            (state.min_size, state.max_size)
+        })
     }
 }
 
 /// The toplevels being tracked.
 #[derive(Default)]
 pub struct Windows {
-    /// Tracked windows, in creation order.
-    windows: Vec<Window>,
+    /// Where the windows are and how they stack.
+    scene: Scene,
+    /// The surface and configure bookkeeping, in creation order.
+    windows: Vec<WindowData>,
+    /// The next scene id to hand out.
+    next_id: u64,
 }
 
 impl Windows {
@@ -149,42 +193,73 @@ impl Windows {
         Self::default()
     }
 
+    /// How many windows are tracked.
+    pub fn len(&self) -> usize {
+        self.windows.len()
+    }
+
+    /// Whether no windows are tracked.
+    pub fn is_empty(&self) -> bool {
+        self.windows.is_empty()
+    }
+
+    /// The tracked windows, back to front, so the last is drawn on top.
+    pub fn iter(&self) -> impl Iterator<Item = Window<'_>> {
+        self.scene.iter().filter_map(|(id, outer)| {
+            self.windows
+                .iter()
+                .find(|data| data.id == id)
+                .map(|data| Window { data, outer })
+        })
+    }
+
     /// Starts tracking `toplevel` at `size` and sends its initial configure.
     ///
     /// `size` is the outer window size; the configure carries it minus the
     /// insets, so the client can size its surface for the decorated window from
     /// the start.
     pub fn add_toplevel(&mut self, toplevel: ToplevelSurface, size: Size<i32, Logical>) {
-        let mut window = Window {
+        let id = WindowId::new(self.next_id);
+        self.next_id += 1;
+        self.windows.push(WindowData {
+            id,
             toplevel,
-            location: Point::from((0, 0)),
-            size,
+            outer_size: size,
             acked: false,
             pending_configure: None,
             mapped: false,
             configured: None,
-        };
-        window.send_configure();
-        self.windows.push(window);
+            resizing: false,
+        });
+        self.send_configure(self.windows.len() - 1);
     }
 
     /// Handles a surface commit.
     ///
     /// Recomputes the insets from current state and sends a fresh configure if
     /// they changed, then maps the window once the initial configure has been
-    /// acked and a buffer has been attached. Returns the surface the first time
-    /// the window becomes mapped, so the caller can give it keyboard focus.
-    pub fn commit(&mut self, surface: &WlSurface) -> Option<WlSurface> {
-        let window = self.find_mut(surface)?;
+    /// acked and a buffer has been attached. Returns the window's id the first
+    /// time it becomes mapped, so the caller can give it keyboard focus.
+    pub fn commit(&mut self, surface: &WlSurface) -> Option<WindowId> {
+        let index = self.index_of(surface)?;
 
-        let usable = usable(window.size, window.insets());
-        if window.configured != Some(usable) {
-            window.send_configure();
+        let usable = usable(self.windows[index].outer_size, self.windows[index].insets());
+        if self.windows[index].configured != Some(usable) {
+            self.send_configure(index);
         }
 
-        if !window.mapped && window.acked && has_buffer(surface) {
-            window.mapped = true;
-            return Some(window.surface().clone());
+        if !self.windows[index].mapped && self.windows[index].acked && has_buffer(surface) {
+            self.windows[index].mapped = true;
+            let data = &self.windows[index];
+            let size = data.outer_size;
+            let outer = SceneRect::new(
+                ScenePoint::new(0.0, 0.0),
+                SceneSize::new(f64::from(size.w), f64::from(size.h)),
+            );
+            let id = data.id;
+            self.scene.insert(id, outer);
+            tracing::info!(window = id.get(), "window mapped");
+            return Some(id);
         }
         None
     }
@@ -194,58 +269,221 @@ impl Windows {
     /// Only the serial of the configure most recently sent is accepted. An ack
     /// for any other serial is stale — the client is acknowledging a configure
     /// Neptune has already replaced — so it is discarded rather than marking
-    /// the window ready, which would let a reconfiguration race a stale ack
-    /// into wrong geometry once there is more than one window.
+    /// the window ready.
     pub fn ack_configure(&mut self, surface: &WlSurface, configure: Configure) {
         let Configure::Toplevel(configure) = configure else {
             return;
         };
-        let Some(window) = self.find_mut(surface) else {
+        let Some(index) = self.index_of(surface) else {
             return;
         };
-        if window.pending_configure == Some(configure.serial) {
-            window.pending_configure = None;
-            window.acked = true;
+        if self.windows[index].pending_configure == Some(configure.serial) {
+            self.windows[index].pending_configure = None;
+            self.windows[index].acked = true;
         } else {
             tracing::debug!("ignoring an ack for a configure no longer pending");
         }
     }
 
-    /// Stops tracking the toplevel for `surface`.
-    pub fn remove(&mut self, surface: &WlSurface) {
-        self.windows.retain(|window| window.surface() != surface);
+    /// Stops tracking the toplevel for `surface`, returning its scene id.
+    pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
+        let index = self.index_of(surface)?;
+        let id = self.windows.remove(index).id;
+        self.scene.remove(id);
+        Some(id)
     }
 
-    /// The tracked windows, in creation order.
-    pub fn iter(&self) -> impl Iterator<Item = &Window> {
-        self.windows.iter()
+    /// The scene id of the window for `surface`.
+    pub fn id_of(&self, surface: &WlSurface) -> Option<WindowId> {
+        self.windows
+            .iter()
+            .find(|data| data.toplevel.wl_surface() == surface)
+            .map(|data| data.id)
+    }
+
+    /// The client surface of the window with `id`.
+    pub fn surface_of(&self, id: WindowId) -> Option<&WlSurface> {
+        self.windows
+            .iter()
+            .find(|data| data.id == id)
+            .map(|data| data.toplevel.wl_surface())
+    }
+
+    /// The scene id of the topmost window under a logical point.
+    pub fn window_under(&self, point: Point<f64, Logical>) -> Option<WindowId> {
+        self.scene.topmost_at(scene_point(point))
+    }
+
+    /// The topmost window under `point` and its resize edge zone, if any.
+    pub fn edge_under(&self, point: Point<f64, Logical>, border: f64) -> Option<(WindowId, Edge)> {
+        self.scene.edge_at(scene_point(point), border)
     }
 
     /// The surface under a logical point, with the point in surface-local
     /// coordinates.
     ///
-    /// Only mapped toplevel surfaces are considered; popups and subsurfaces are
-    /// not tracked in the nested session. Later windows are on top, so the
-    /// search runs back to front.
+    /// Only the client's own surface counts: a point over the decorated band
+    /// around it is over the window but not over the client.
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
-        self.windows
-            .iter()
-            .rev()
-            .find(|window| window.is_mapped() && window.contains(point))
-            .map(|window| {
-                let origin = (window.location() + window.surface_location()).to_f64();
-                (window.surface().clone(), point - origin)
-            })
+        let id = self.scene.topmost_at(scene_point(point))?;
+        let index = self.index(id)?;
+        let outer = self.scene.outer(id)?;
+        let insets = self.windows[index].insets();
+        let origin: ScenePoint<f64, SceneLogical> =
+            ScenePoint::new(outer.x() + insets.left, outer.y() + insets.top);
+        let local: Point<f64, Logical> = Point::new(point.x - origin.x, point.y - origin.y);
+        Some((self.windows[index].toplevel.wl_surface().clone(), local))
     }
 
-    fn find_mut(&mut self, surface: &WlSurface) -> Option<&mut Window> {
-        self.windows
-            .iter_mut()
-            .find(|window| window.surface() == surface)
+    /// Moves a window's top-left corner, keeping its size.
+    pub fn move_to(&mut self, id: WindowId, location: Point<i32, Logical>) -> bool {
+        let Some(outer) = self.scene.outer(id) else {
+            return false;
+        };
+        let moved = SceneRect::new(
+            ScenePoint::new(f64::from(location.x), f64::from(location.y)),
+            outer.size(),
+        );
+        self.scene.set_outer(id, moved)
     }
+
+    /// Applies a new decorated outer rectangle and configures the client.
+    ///
+    /// Used by an in-progress resize; the configure carries the `resizing`
+    /// state until the grab ends.
+    pub fn resize(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if !self.scene.set_outer(id, outer) {
+            return false;
+        }
+        self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
+        self.send_configure(index);
+        true
+    }
+
+    /// Sets whether the window is being resized and re-configures it.
+    pub fn set_resizing(&mut self, id: WindowId, resizing: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        self.windows[index].resizing = resizing;
+        self.send_configure(index);
+        true
+    }
+
+    /// The smallest decorated outer size this window allows, from the client's
+    /// minimum size plus the insets.
+    pub fn minimum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {
+        self.outer_size_bounds(id, |min, _| min)
+    }
+
+    /// The largest decorated outer size, or zero where the client left it
+    /// unbounded.
+    pub fn maximum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {
+        self.outer_size_bounds(id, |_, max| max)
+    }
+
+    /// Raises a window to the top of the stack.
+    pub fn raise(&mut self, id: WindowId) -> bool {
+        self.scene.raise(id)
+    }
+
+    /// The topmost window, if any.
+    pub fn topmost(&self) -> Option<WindowId> {
+        self.scene.topmost()
+    }
+
+    /// A window's decorated outer rectangle.
+    pub fn outer(&self, id: WindowId) -> Option<SceneRect<f64, SceneLogical>> {
+        self.scene.outer(id)
+    }
+
+    /// Asks the client to close the window.
+    pub fn send_close(&self, id: WindowId) {
+        if let Some(index) = self.index(id) {
+            self.windows[index].toplevel.send_close();
+        }
+    }
+
+    /// Sends a configure carrying the usable size for the current state.
+    fn send_configure(&mut self, index: usize) {
+        let data = &mut self.windows[index];
+        let usable = usable(data.outer_size, data.insets());
+        let resizing = data.resizing;
+        data.toplevel.with_pending_state(|state| {
+            state.size = Some(usable);
+            if resizing {
+                state.states.set(xdg_toplevel::State::Resizing);
+            } else {
+                state.states.unset(xdg_toplevel::State::Resizing);
+            }
+        });
+        data.pending_configure = Some(data.toplevel.send_configure());
+        data.configured = Some(usable);
+    }
+
+    /// The outer size bounds from the client's usable minimum and maximum.
+    fn outer_size_bounds(
+        &self,
+        id: WindowId,
+        pick: impl Fn(Size<i32, Logical>, Size<i32, Logical>) -> Size<i32, Logical>,
+    ) -> SceneSize<f64, SceneLogical> {
+        let Some(index) = self.index(id) else {
+            return SceneSize::new(0.0, 0.0);
+        };
+        let data = &self.windows[index];
+        let (min, max) = data.size_bounds();
+        let bound = pick(min, max);
+        let insets = data.insets();
+        let width = if bound.w > 0 {
+            f64::from(bound.w) + insets.horizontal()
+        } else {
+            0.0
+        };
+        let height = if bound.h > 0 {
+            f64::from(bound.h) + insets.vertical()
+        } else {
+            0.0
+        };
+        SceneSize::new(width.max(1.0), height.max(1.0))
+    }
+
+    /// The index of the window for `surface`.
+    fn index_of(&self, surface: &WlSurface) -> Option<usize> {
+        self.windows
+            .iter()
+            .position(|data| data.toplevel.wl_surface() == surface)
+    }
+
+    /// The index of the window with `id`.
+    fn index(&self, id: WindowId) -> Option<usize> {
+        self.windows.iter().position(|data| data.id == id)
+    }
+}
+
+/// Maps an xdg resize edge to a scene edge, if it names one.
+pub(crate) fn from_xdg_resize_edge(edge: ResizeEdge) -> Option<Edge> {
+    match edge {
+        ResizeEdge::Top => Some(Edge::Top),
+        ResizeEdge::Bottom => Some(Edge::Bottom),
+        ResizeEdge::Left => Some(Edge::Left),
+        ResizeEdge::Right => Some(Edge::Right),
+        ResizeEdge::TopLeft => Some(Edge::TopLeft),
+        ResizeEdge::TopRight => Some(Edge::TopRight),
+        ResizeEdge::BottomLeft => Some(Edge::BottomLeft),
+        ResizeEdge::BottomRight => Some(Edge::BottomRight),
+        _ => None,
+    }
+}
+
+/// A logical point in the scene's coordinate types.
+fn scene_point(point: Point<f64, Logical>) -> ScenePoint<f64, SceneLogical> {
+    ScenePoint::new(point.x, point.y)
 }
 
 /// The configured size: the outer size minus the insets, never below one pixel.

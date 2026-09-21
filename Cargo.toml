@@ -47,6 +47,7 @@ xcursor = "0.3"        # Parses Xcursor theme files; smithay ships no cursor loa
 
 # Neptune's own crates.
 neptune-design = { path = "crates/neptune-design" }   # The one place every visual value lives.
+neptune-scene = { path = "crates/neptune-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
 
 # Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
 # Neptune while developing. Only the probe package uses this, and the package
