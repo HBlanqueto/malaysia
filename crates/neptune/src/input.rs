@@ -453,7 +453,7 @@ mod tests {
     use smithay::input::pointer::CursorIcon;
     use smithay::reexports::calloop::EventLoop;
     use smithay::reexports::wayland_server::Display;
-    use smithay::utils::{Logical, Point, Serial, Size};
+    use smithay::utils::{Point, Serial, Size};
 
     use super::{Edge, consume, edge_cursor};
     use crate::state::State;
