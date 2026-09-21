@@ -54,11 +54,17 @@ including any deliberate divergence from the brief.
 
 ## Block 5 — Popups
 
-- `PopupManager` and `XdgShellHandler::new_popup`
-- Position against the parent in your own space
-- Constraint adjustments (flip, slide, resize) against the monitor's usable area
-- Popup `configure` before mapping
-- `PopupKeyboardGrab` / `PopupPointerGrab` with serial validation
+- `XdgShellHandler::new_popup` and `PopupSurface` (`wayland_frontend`)
+- A popup tree owned by `neptune-scene`; Smithay's `desktop::PopupManager` is
+  behind the `desktop` feature, which ADR 0015 keeps off
+- Position against the parent's decorated rectangle from that tree
+- Constraint adjustments (flip, slide, resize) against the monitor's usable
+  area, by passing the parent-relative target rectangle to
+  `PositionerState::get_unconstrained_geometry` (`wayland_frontend`); the
+  unadjusted `get_geometry` is also available
+- Popup `configure` before mapping, carrying the adjusted geometry
+- Keyboard and pointer grabs owned by the compositor, with serial validation;
+  Smithay's `PopupKeyboardGrab`/`PopupPointerGrab` are behind `desktop`
 - A click outside closes from leaf to root; `Esc` closes one level
 - Nested submenus
 - Acceptance: a `foot` menu against the bottom edge flips upward; a submenu plus a

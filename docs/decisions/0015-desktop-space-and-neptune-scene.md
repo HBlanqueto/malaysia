@@ -89,15 +89,36 @@ Block 5 (popups) needs two things the brief names:
    report the parent's `element_geometry`/`bbox_with_popups`; it does not place
    the popup.
 2. **Constraint adjustments** (flip, slide, resize) against the monitor's usable
-   area. Neither `Space` nor `desktop`'s `PopupManager` performs this: the
-   manager tracks popup trees and manages grabs, and the constraint math is left
-   to the compositor using the `PositionerState` and `send_configure` that the
-   `wayland_frontend` code already exposes. Neptune would write this logic
-   whether or not `desktop` is enabled.
+   area. These *are* available under the current feature set:
+   `smithay::wayland::shell::xdg::PositionerState::get_unconstrained_geometry`
+   (`src/wayland/shell/xdg/mod.rs`, gated by `wayland_frontend`, which Neptune
+   enables) implements the flip/slide/resize order and takes the target
+   rectangle the compositor supplies. `PositionerState::get_geometry` is the
+   unadjusted variant; `get_anchor_point` is also public there. So the
+   constraint math is not lost by keeping `desktop` off; only the caller's
+   target rectangle — the parent's decorated bounds and the output's usable
+   area — is Neptune's to compute.
 
-So `desktop` buys Block 5 little: the piece it would add (popup lifecycle and
-grabs) is real, but the piece Block 5 is *about* (placement and constraints) is
-ours on either path.
+What keeping `desktop` off does cost Block 5 is the popup bookkeeping and the
+grabs, all of which live behind that feature:
+
+- `PopupManager` (`src/desktop/wayland/popup/manager.rs`), which tracks the
+  popup tree, maps popups on commit and sends `popup_done`.
+- `PopupGrab`, `PopupGrabError`, `PopupUngrabStrategy` and the default grabs
+  `PopupKeyboardGrab`/`PopupPointerGrab` (`src/desktop/wayland/popup/grab.rs`),
+  which implement the `KeyboardGrab`/`PointerGrab` behaviours and the
+  click-outside/Esc dismissal order.
+- `PopupKind` (`src/desktop/wayland/popup/mod.rs`), the xdg/input-method popup
+  wrapper.
+
+All three are gated by `#[cfg(feature = "desktop")]` on
+`pub mod desktop` (`src/lib.rs`). With it off, Neptune must own a popup tree in
+`neptune-scene` and write its own keyboard and pointer grabs, while still using
+Smithay's `PopupSurface`, `XdgPopupSurfaceData` and `PositionerState` from
+`wayland_frontend`.
+
+So `desktop` buys Block 5 the tree and the grabs — real work — but not the
+placement or constraint adjustment, which Smithay already provides.
 
 ## How the decoration requirements affect geometry ownership
 
@@ -148,8 +169,9 @@ ordered set of windows, each owning its outer geometry and deriving its client
 rectangle, input region and visual bounds from the decoration insets, exposing
 point hit-testing, stacking and raises. Use Smithay's `wayland_frontend` types
 (`ToplevelSurface`, `PopupSurface`, `PositionerState`) directly for protocol
-work, and implement Block 5's constraint math against the output's usable area
-as the compositor's own code.
+work. For Block 5, compute the target rectangle in `neptune-scene` and feed it
+to `PositionerState::get_unconstrained_geometry`; own the popup tree and the
+keyboard/pointer grabs that `desktop` would otherwise supply.
 
 **Recommendation:** keep `desktop` off. `Space`'s central abstraction — an
 element whose geometry is its client surface — is the wrong unit for a
@@ -169,9 +191,11 @@ should be written before Block 4 rather than after it.
 - Block 4 must add to `neptune-scene` what `Space` would have given: an ordered
   window set, outer-rectangle storage, rectangle containment/intersection, and
   the conversion from outer geometry and insets to client and input rectangles.
-- Block 5 implements popup constraint adjustment itself, using `PositionerState`
-  and `send_configure`; `desktop::PopupManager` and its grabs are not available
-  and are replaced by the project's own popup bookkeeping when that block lands.
+- Block 5 owns its popup tree and its keyboard/pointer grabs, because
+  `desktop::PopupManager` and `PopupKeyboardGrab`/`PopupPointerGrab` are behind
+  the feature this decision keeps off. Its constraint adjustment uses Smithay's
+  `PositionerState::get_unconstrained_geometry` (available under
+  `wayland_frontend`), with a target rectangle the scene supplies.
 - The `desktop` feature stays off; if a later milestone needs layer-shell or
   multi-output overlap, this decision can be revisited from the position of a
   concrete, written requirement rather than from the Block 2 brief's wording.
@@ -187,4 +211,9 @@ should be written before Block 4 rather than after it.
 - `docs/decisions/0009-winit-backend-and-gles2.md` — the `desktop` feature is
   deliberately off.
 - Smithay `src/desktop/space/mod.rs`, `src/desktop/space/element/mod.rs`,
-  `src/desktop/wayland/popup/manager.rs` — the API this decision does not adopt.
+  `src/desktop/wayland/popup/manager.rs`,
+  `src/desktop/wayland/popup/grab.rs` — the `desktop`-gated API this decision
+  does not adopt.
+- Smithay `src/wayland/shell/xdg/mod.rs` — `PositionerState::get_geometry`,
+  `get_unconstrained_geometry` and `get_anchor_point`, available under
+  `wayland_frontend`.
