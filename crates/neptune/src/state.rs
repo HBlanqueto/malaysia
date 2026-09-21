@@ -30,6 +30,7 @@ use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::utils::{Physical, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::output::OutputManagerState;
+use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 
@@ -65,6 +66,12 @@ pub struct State {
     pub seat: Seat<State>,
     /// The `xdg_wm_base` state.
     pub xdg_shell_state: XdgShellState,
+    /// The `wl_data_device_manager` state.
+    ///
+    /// Advertising the global completes the seat's protocol surface; no
+    /// clipboard behavior is implemented and none is intended here. Clients
+    /// that assume a conformant seat (foot among them) tear down without it.
+    pub data_device_state: DataDeviceState,
     /// The `wl_output` and `zxdg_output_manager_v1` state.
     pub output_manager_state: OutputManagerState,
     /// The one output, backed by the winit window.
@@ -94,6 +101,7 @@ impl State {
         );
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
+        let data_device_state = DataDeviceState::new::<Self>(display_handle);
 
         let mut seat_state: SeatState<Self> = SeatState::new();
         let mut seat = seat_state.new_wl_seat(display_handle, "neptune");
@@ -132,6 +140,7 @@ impl State {
             seat_state,
             seat,
             xdg_shell_state,
+            data_device_state,
             output_manager_state,
             output,
             output_size: size,
