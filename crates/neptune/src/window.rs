@@ -1,10 +1,11 @@
 //! The tracked toplevels, behind one boundary.
 //!
-//! Block 1 has one output and one window, and no scene graph yet. This module
-//! tracks toplevels directly rather than depending on Smithay's `desktop::Space`:
-//! `Space` is replaced by `neptune-scene` in Block 2, so pulling it in would add
-//! a dependency that gets deleted almost immediately (ADR 0009). No other module
-//! reaches for a window's geometry — when Block 2 lands, this file is what is
+//! The nested session has one output and one window, and no scene graph yet.
+//! This module tracks toplevels directly rather than depending on Smithay's
+//! `desktop::Space`: `Space` is replaced by `neptune-scene` in the Direct
+//! Session milestone, so pulling it in would add a dependency that gets deleted
+//! almost immediately (ADR 0009). No other module reaches for a window's
+//! geometry — when the Direct Session milestone lands, this file is what is
 //! rewritten, and the rest of the compositor is untouched.
 //!
 //! Two things this module is careful about:
@@ -224,8 +225,8 @@ impl Windows {
     /// coordinates.
     ///
     /// Only mapped toplevel surfaces are considered; popups and subsurfaces are
-    /// not tracked in Block 1. Later windows are on top, so the search runs
-    /// back to front.
+    /// not tracked in the nested session. Later windows are on top, so the
+    /// search runs back to front.
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,

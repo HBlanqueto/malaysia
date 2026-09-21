@@ -39,7 +39,7 @@ tracing = "0.1"                # Structured logging and spans, needed for later 
 tracing-subscriber = "0.3"     # Installs the global subscriber that emits `tracing` events.
 
 # Process lifetime.
-signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and this block forbids `unsafe`.
+signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and unsafe is forbidden.
 
 # Neptune's own crates.
 neptune-design = { path = "crates/neptune-design" }   # The one place every visual value lives.

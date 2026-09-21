@@ -78,7 +78,7 @@ including any deliberate divergence from the brief.
   not env-based filtering. `neptune-design` is not empty.
 - **Block 1 — done.** `wayland-info` (the dev shell has no `weston-info`) lists
   every global. See `docs/blocks/00-foundations.md` and, for the later parts,
-  `docs/blocks/01-session.md`.
+  `docs/blocks/01-session.md`, which covers Blocks 1–3 together.
 - **Block 2 — done, with divergences.** Mapping happens on the first buffered
   commit, not on `ack_configure` (`docs/blocks/01-session.md`, Divergences 1).
   Toplevels are tracked in `crates/neptune/src/window.rs` with no
@@ -94,13 +94,19 @@ including any deliberate divergence from the brief.
 - **Block 6 — not started.** `wl_data_device_manager` is advertised, but no
   clipboard behaviour is implemented.
 
-## Numbering conflict, unresolved
+## Block numbering
 
-The repository's own documents and code comments already use "Block 2" to mean
-the DRM/KMS backend that replaces winit (ADR 0012, `state.rs`, `session.rs`,
-`window.rs`, `docs/hardware.md`). That is **not** this roadmap's Block 2, which
-is the already-built window-on-screen increment, and DRM/KMS does not appear in
-this roadmap at all. `docs/blocks/01-session.md` likewise calls the whole
-nested-session work "Block 1", spanning this roadmap's Blocks 1–3. The numbering
-must be reconciled before it is used for planning; it is flagged here rather
-than silently rewritten.
+This file is the only authority on block numbers. Two bodies of work are
+deliberately named rather than numbered, so they cannot be mistaken for a
+roadmap block:
+
+- **The nested session** — the work recorded in `docs/blocks/01-session.md`
+  (winit nesting, toplevel mapping and input). It spans roadmap Blocks 1–3 of
+  this roadmap, and the Parts 1–6 that document uses are Parts of that session,
+  never block numbers.
+- **The Direct Session milestone** — the DRM/KMS backend that replaces winit.
+  It is planned, but it is not on this roadmap's numbered path, so it carries a
+  name and no number.
+
+No document or comment in this repository uses "Block N" for anything other
+than block N of this roadmap.

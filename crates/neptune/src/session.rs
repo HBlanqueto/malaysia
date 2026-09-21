@@ -1,7 +1,7 @@
 //! The nested compositor session: event loop, winit window and GLES2 output.
 //!
-//! Block 1 hosts Neptune inside a winit window so a Wayland client has
-//! somewhere to be shown. This module owns the calloop event loop, the single
+//! The nested session hosts Neptune inside a winit window so a Wayland client
+//! has somewhere to be shown. This module owns the calloop event loop, the single
 //! winit window and the GLES2 renderer — the backend sits beside the shared
 //! [`State`] rather than inside it, so replacing it later touches no protocol
 //! handler (ADR 0012). It also owns the Wayland display, the listening socket

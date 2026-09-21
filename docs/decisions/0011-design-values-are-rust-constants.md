@@ -61,4 +61,4 @@ consumer to justify it.
 - `neptune-design` still has no dependencies and no runtime behaviour; it is
   only data and the constructors that make the literals readable.
 - Per-app rules and runtime theming remain explicitly out of scope and unmade
-  decisions, as recorded in the Block 0 document.
+  decisions, as recorded in the Foundations document.

@@ -5,7 +5,8 @@
 //! types here at a single boundary, so the scene graph stays testable without
 //! a running compositor. See ADR 0001.
 //!
-//! Block 0 exposes only [`geometry`]; the graph itself arrives in Block 2.
+//! Block 0 exposes only [`geometry`]; the graph itself arrives in a later
+//! milestone.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

@@ -1,6 +1,6 @@
 # 0014 — Decoration insets are a function of window state
 
-Status: accepted (Block 1, Part 4)
+Status: accepted (nested session, Part 4)
 
 ## Context
 

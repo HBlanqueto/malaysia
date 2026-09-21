@@ -52,8 +52,8 @@ The split is by crate, not by taste:
 - **`crates/neptune`** (the compositor) uses `smithay::utils` directly. No
   wrapper, no conversion layer.
 - **`neptune-scene`** (created in Block 0 for this geometry; the scene graph
-  itself is a later block) owns its own geometry, because the scene graph must
-  not depend on Smithay.
+  itself is a later milestone) owns its own geometry, because the scene graph
+  must not depend on Smithay.
 - **Conversion happens at exactly one boundary**: where the compositor feeds
   the scene graph.
 
@@ -61,7 +61,7 @@ The split is by crate, not by taste:
 
 1. The compositor uses `smithay::utils` for all coordinate types. A Smithay
    dependency is added when the first module actually needs geometry, not
-   before, so Block 0/Part 3 introduces none.
+   before, so Block 0 introduces none.
 2. The homegrown types move to `crates/neptune-scene/src/geometry.rs` now,
    with `neptune-scene` created as a workspace member holding only that
    module. The crate is declared from the start so the types are compiled and
@@ -81,7 +81,8 @@ The split is by crate, not by taste:
   scattered through the compositor, so the conversion surface is small and
   locateable.
 - `neptune-scene` exists before the scene graph does, with no dependencies,
-  so that its geometry is validated while Block 2 is still being designed.
+  so that its geometry is validated while the scene graph is still being
+  designed.
 - The compositor has no geometry of its own, so it cannot accidentally depend
   on the scene crate's types instead of Smithay's.
 - When the first Smithay-consuming module lands, the dependency and its

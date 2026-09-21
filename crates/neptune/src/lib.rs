@@ -11,9 +11,9 @@
 //! must not depend on Smithay; conversion happens at that one boundary. See
 //! ADR 0001.
 //!
-//! Block 1 adds the nested session: a calloop event loop around a winit
-//! window with a GLES2 renderer. The compositor's shared state lives in
-//! [`state`]; the loop and the backend live in [`session`] beside it.
+//! The nested session adds a calloop event loop around a winit window with a
+//! GLES2 renderer. The compositor's shared state lives in [`state`]; the loop
+//! and the backend live in [`session`] beside it.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]

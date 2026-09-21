@@ -1,18 +1,18 @@
 # 0012 — The backend lives beside the compositor State
 
-Status: accepted (Block 1, Part 1)
+Status: accepted (nested session, Part 1)
 
 ## Context
 
-Block 1 turns the private `State` stub in `session.rs` into the real
+The nested session turns the private `State` stub in `session.rs` into the real
 compositor state. It currently holds one thing, the calloop `LoopSignal`, and
 the winit window, the `GlesRenderer` and the damage tracker live in locals
 inside `session::run`.
 
-Block 2 replaces winit with DRM/KMS. The question this record settles is where
-the backend's handles go: inside `State`, where protocol handlers can reach
-them, or beside it, where they cannot. Get it wrong and every handler has to be
-edited when the backend changes.
+The Direct Session milestone replaces winit with DRM/KMS. The question this
+record settles is where the backend's handles go: inside `State`, where protocol
+handlers can reach them, or beside it, where they cannot. Get it wrong and every
+handler has to be edited when the backend changes.
 
 Two references in the same Smithay version show the two poles:
 
@@ -29,7 +29,7 @@ Two references in the same Smithay version show the two poles:
 1. **Concrete backend fields in `State`.** `state.backend: WinitGraphicsBackend<GlesRenderer>`,
    `state.renderer`, `state.damage_tracker`. Simplest today, but every handler
    that requests a frame or imports a buffer names the winit types, so Part 2 of
-   Block 2 edits handlers across the tree. Rejected.
+   the Direct Session milestone edits handlers across the tree. Rejected.
 2. **niri's `Backend` enum in `State`.** The swap point is a type, and the
    compiler keeps handlers honest across variants. But niri needs it because it
    ships TTY, winit and headless *simultaneously*; Neptune has exactly one
@@ -66,9 +66,9 @@ first, and those impls are the handlers themselves.
 
 - Swapping winit for DRM/KMS is surgery on `session.rs` (and, when it grows,
   a `backend` module beside `state.rs`) plus the scene. No handler changes.
-- `session.rs` remains the single owner of the loop and the window. When Block 2
-  arrives and there are two real backends, option 2 can be reconsidered from a
-  position of evidence rather than guessing.
+- `session.rs` remains the single owner of the loop and the window. When the
+  Direct Session milestone arrives and there are two real backends, option 2 can
+  be reconsidered from a position of evidence rather than guessing.
 - Handlers are testable and readable without a graphics stack, because they
   depend only on `State`.
 - The cost is one indirection in the draw path: the loop must read what changed

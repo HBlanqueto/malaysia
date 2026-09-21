@@ -132,7 +132,7 @@ impl XdgShellHandler for State {
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
-        // Constraint adjustment and grabs are out of scope for Block 1. Sending
+        // Constraint adjustment and grabs are out of scope for the nested session. Sending
         // a configure with the positioner's raw geometry keeps the client from
         // waiting forever; the popup lands in the wrong place, which is visible
         // and debuggable rather than a silent stall.
@@ -146,7 +146,7 @@ impl XdgShellHandler for State {
     }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
-        // Popup grabs are out of scope for Block 1.
+        // Popup grabs are out of scope for the nested session.
     }
 
     fn reposition_request(
@@ -155,7 +155,7 @@ impl XdgShellHandler for State {
         _positioner: PositionerState,
         _token: u32,
     ) {
-        // Popups are out of scope for Block 1.
+        // Popups are out of scope for the nested session.
     }
 }
 

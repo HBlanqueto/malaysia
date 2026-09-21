@@ -46,7 +46,7 @@ pixel damage or scissor region.
 
 **Open.** Block 0 keeps round-to-nearest because nothing places surfaces yet
 and there is no evidence to act on. The known rendering requirement is
-recorded here so that the first block which places or damages surfaces
+recorded here so that the first milestone which places or damages surfaces
 evaluates option 2 (floor position, ceil size) rather than rediscovering the
 seam problem.
 

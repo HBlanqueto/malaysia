@@ -3,9 +3,9 @@
 //! [`State`] is the value every protocol handler receives as `&mut State`. It
 //! is deliberately backend-agnostic: the winit window, the GLES renderer and
 //! the damage tracker live *beside* it, in [`crate::session`], never inside it.
-//! A handler therefore cannot reach the backend, and Block 2 can replace winit
-//! with DRM/KMS without editing a handler. The reasoning is recorded in
-//! ADR 0012.
+//! A handler therefore cannot reach the backend, and the Direct Session
+//! milestone can replace winit with DRM/KMS without editing a handler. The
+//! reasoning is recorded in ADR 0012.
 //!
 //! The session wraps `State` together with the Wayland [`Display`] and moves
 //! that wrapper into the calloop event loop; `State` itself stays free of the
@@ -84,8 +84,8 @@ pub struct State {
     /// The output's current size, in physical pixels, mirroring its current
     /// mode. New toplevels are sized from it; the session updates it on resize.
     pub output_size: Size<i32, Physical>,
-    /// The tracked toplevels. All window geometry goes through this; Block 2
-    /// replaces it with `neptune-scene` (see [`crate::window`]).
+    /// The tracked toplevels. All window geometry goes through this; the Direct
+    /// Session milestone replaces it with `neptune-scene` (see [`crate::window`]).
     pub windows: Windows,
 }
 

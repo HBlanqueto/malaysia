@@ -1,13 +1,13 @@
 # 0013 — Client dispatch polls a duplicated display file descriptor
 
-Status: accepted (Block 1, Part 2)
+Status: accepted (nested session, Part 2)
 
 ## Context
 
-Block 1 Part 2 gives Neptune a `Display<State>`, a listening socket and a way
-to feed client requests into the calloop loop without ever blocking it. The
-calloop bridge is the only real choice in this part, and the obvious answers
-are blocked in this tree.
+The nested session's Part 2 gives Neptune a `Display<State>`, a listening socket
+and a way to feed client requests into the calloop loop without ever blocking
+it. The calloop bridge is the only real choice in this part, and the obvious
+answers are blocked in this tree.
 
 The canonical Smithay pattern, used by both references, wraps the display
 itself in a `Generic` and takes it back out to dispatch:
@@ -64,9 +64,9 @@ compositor.
   0012's guarantee is unchanged.
 - Registering the display costs one `fcntl` duplicate at startup. This is the
   price of not using unsafe; it is paid once, not per event.
-- When Block 2 replaces the backend, this source is untouched: the backend
-  reaches into `Session.state` the same way, and the display is not
-  backend-specific.
+- When the Direct Session milestone replaces the backend, this source is
+  untouched: the backend reaches into `Session.state` the same way, and the
+  display is not backend-specific.
 - `WAYLAND_DISPLAY` is **never set in the compositor's own environment**. In
   edition 2024 `std::env::set_var` is `unsafe` because a concurrent reader is
   undefined behaviour, and this crate forbids unsafe — but mutating the whole
@@ -74,10 +74,10 @@ compositor.
   exports its own socket name can then confuse itself or a sibling for the
   host. The socket name is logged at startup, and a child the compositor spawns
   is given the variable with `Command::env`, which is safe and scoped to that
-  child. The first spawn (Block 1, Part 6) implements it; until then the test
-  harness passes `WAYLAND_DISPLAY` explicitly.
+  child. The first spawn (nested session, Part 6) implements it; until then the
+  test harness passes `WAYLAND_DISPLAY` explicitly.
 - `wayland-info` (from `wayland-utils`) and `foot` join the dev shell so the
-  Part 2 and later acceptance checks run against pinned tools.
+  nested-session acceptance checks run against pinned tools.
 - `dev.sh` gives the compositor its own `XDG_RUNTIME_DIR`, so its socket is not
   created next to the host session's. The nested winit client still reaches the
   host by being given the host socket as an absolute `WAYLAND_DISPLAY`.

@@ -1,8 +1,9 @@
 //! Translating backend input events into seat events.
 //!
 //! The winit backend reports input in Smithay's unified [`InputEvent`] form, so
-//! this module is backend-agnostic and will keep working when Block 2 replaces
-//! winit. Every serial comes from Smithay's single counter; none is invented.
+//! this module is backend-agnostic and will keep working when the Direct
+//! Session milestone replaces winit. Every serial comes from Smithay's single
+//! counter; none is invented.
 
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,

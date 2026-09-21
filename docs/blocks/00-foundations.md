@@ -1,4 +1,9 @@
-# Block 0 — Foundations
+# Roadmap Block 0 — Scaffolding (Foundations)
+
+> **Roadmap mapping.** This is the detailed record of roadmap **Block 0**
+> (Scaffolding), which it calls "Foundations". Work after it is named, not
+> numbered: the **nested session** (`docs/blocks/01-session.md`, roadmap Blocks
+> 1–3) and the **Direct Session milestone** (the DRM/KMS backend, unnumbered).
 
 Status: **complete.** Block 0 is six parts:
 
@@ -10,7 +15,7 @@ Status: **complete.** Block 0 is six parts:
 6. this document.
 
 This document describes what the block contains, what it deliberately does not,
-the decisions behind it, and the questions left open for later blocks.
+the decisions behind it, and the questions left open for later milestones.
 
 ## Purpose
 
@@ -18,8 +23,8 @@ Block 0 builds the skeleton every later block stands on: a workspace, a
 consistent way to build and run it, a coordinate model that makes the three
 kinds of position a compositor deals with distinct types, and a minimal binary
 that starts, logs, and shuts down. It does **not** implement a compositor. The
-event loop, protocol handlers and rendering are the work of Block 1, the nested
-session.
+event loop, protocol handlers and rendering are the work of the nested session
+(roadmap Blocks 1–3).
 
 The guiding rule for the block is that nothing is added without a consumer. A
 type, dependency, trait, or API is introduced only when real code needs it, and
@@ -36,12 +41,12 @@ each dependency carries a one-line justification in `Cargo.toml`.
   - `neptune` — the compositor, as both a library and a binary (ADR 0002).
     `#![deny(unsafe_code)]`.
   - `neptune-scene` — the scene graph's home. Block 0 contains only its
-    geometry module; the graph itself is a later block.
+    geometry module; the graph itself is a later milestone.
     `#![forbid(unsafe_code)]`, no dependencies.
   - `neptune-design` — the system design defaults, as documented compile-time
     constants. `#![forbid(unsafe_code)]`, no dependencies.
 
-  Block 1 added a fourth, dev-only member at `tools/sctk-probe`: the probe
+  The nested session added a fourth, dev-only member at `tools/sctk-probe`: the probe
   clients used to verify the compositor. It lives outside `crates/` and is
   excluded from the default build, so it is not part of the compositor.
 - **Toolchain from the flake.** There is no `rust-toolchain.toml`: the dev
@@ -49,7 +54,7 @@ each dependency carries a one-line justification in `Cargo.toml`.
   `Cargo.toml`'s `rust-version` is the floor (ADR 0006).
 - **Nix dev shell** (`flake.nix`) — the single supported build environment. It
   provides the Rust tools, `cargo-watch`, mold and shellcheck, and the native
-  libraries later blocks need (libinput, libglvnd, seatd, libxkbcommon, mesa,
+  libraries later milestones need (libinput, libglvnd, seatd, libxkbcommon, mesa,
   wayland, udev). It sets `RUSTFLAGS` to request the mold linker and exports
   `NEPTUNE_DEV_SHELL=1` (ADR 0005, ADR 0007).
 - **Cargo configuration** (`.cargo/config.toml`) — `git-fetch-with-cli` for
@@ -82,9 +87,8 @@ the unfinished question of rounding rectangles into integer space.
 and understands `--log-level`, `--help` and `--version`. Argument parsing is
 hand-written against `std::env::args`: a single option does not justify a
 parsing dependency. Tests cover the parser (8) and the log-level mapping (4).
-Block 0's process lifetime was "wait for `SIGTERM`/`SIGINT`"; Block 1 replaced
-that wait with the nested session's event loop, and the signal handling moved
-with it.
+Block 0's process lifetime was "wait for `SIGTERM`/`SIGINT`"; the nested session
+replaced that wait with its event loop, and the signal handling moved with it.
 
 ### `neptune-design`
 
@@ -146,20 +150,21 @@ terminal. Ctrl-C stops both.
 
 ### `docs/hardware.md`
 
-The machine's first GPU contact, recorded from Block 1's nested run: CPU, GPU,
-kernel, Mesa 26.2.3, OpenGL ES 3.2, EGL 1.5, `PLATFORM_WAYLAND_KHR` and the
-verbatim renderer string. It exists as the known-good point to compare against
-when Block 2 moves to direct DRM/KMS and the EGL platform changes.
+The machine's first GPU contact, recorded from the nested session's first run:
+CPU, GPU, kernel, Mesa 26.2.3, OpenGL ES 3.2, EGL 1.5, `PLATFORM_WAYLAND_KHR`
+and the verbatim renderer string. It exists as the known-good point to compare
+against when the Direct Session milestone moves to direct DRM/KMS and the EGL
+platform changes.
 
 ## What was deliberately not built
 
 The following are out of scope for Block 0: the event loop; a `State` struct;
 protocol handlers; global registration; rendering and shaders; input handling;
 window management (`xdg-shell` and friends); the scene graph itself;
-configuration loading; session/logind integration; and any layout logic. Block
-1, the nested session, began the first of these with the winit backend; the
-rest remain for the blocks that require them. There is no `design/v1.nix` and
-no token generator (ADR 0011).
+configuration loading; session/logind integration; and any layout logic. The
+nested session (roadmap Blocks 1–3) began the first of these with the winit
+backend; the rest remain for the milestones that require them. There is no
+`design/v1.nix` and no token generator (ADR 0011).
 
 ## Coordinate spaces
 
@@ -191,9 +196,9 @@ justification. The runtime dependencies added in Block 0, in full:
 | `tracing-subscriber` | Installs the global subscriber that emits `tracing` events. |
 | `signal-hook` | Safe SIGTERM/SIGINT handling; std has no signal API and the block forbids `unsafe`. |
 
-Block 1 added `smithay` (only the winit backend, GLES2 renderer and Wayland
-frontend features) as the compositor framework, pinned to the crates.io 0.7.0
-release (ADR 0009, ADR 0010). It also added one dev-only dependency,
+The nested session added `smithay` (only the winit backend, GLES2 renderer and
+Wayland frontend features) as the compositor framework, pinned to the crates.io
+0.7.0 release (ADR 0009, ADR 0010). It also added one dev-only dependency,
 `smithay-client-toolkit`, used only by `tools/sctk-probe`; it was already in the
 graph through winit. `neptune-scene` and `neptune-design` still have no
 dependencies. Transitive dependencies are locked in `Cargo.lock`. The
@@ -227,9 +232,9 @@ build script (ADR 0007).
 Block 0 was accepted on `./dev.sh check`: 12 tests in `neptune` (argument
 parsing and log-level mapping), 16 in `neptune-scene` (coordinate conversions
 and same-space arithmetic), one `compile_fail` doctest proving cross-space point
-arithmetic does not compile, then rustfmt and `clippy -D warnings`. Block 1 grew
-the same command with its own tests and the probe harness; its document records
-what the command now covers. `cargo doc` builds without warnings because every
+arithmetic does not compile, then rustfmt and `clippy -D warnings`. The nested
+session grew the same command with its own tests and the probe harness; its
+document records what the command now covers. `cargo doc` builds without warnings because every
 public item is documented; `neptune-design` is where that is exercised most,
 since it is almost entirely public data.
 
@@ -263,10 +268,10 @@ since it is almost entirely public data.
    not tested from a direct interactive-shell invocation, where job control
    could change the disposition.
 7. **ADR 0001's Smithay boundary is untested.** No Block 0 code consumes
-   geometry, and Smithay only entered in Block 1 as the winit backend, not as a
-   geometry consumer. The first module that both uses Smithay and converts into
-   `neptune-scene`'s types will show whether the one-boundary split is as small
-   as ADR 0001 claims.
+   geometry, and Smithay only entered with the nested session as the winit
+   backend, not as a geometry consumer. The first module that both uses Smithay
+   and converts into `neptune-scene`'s types will show whether the one-boundary
+   split is as small as ADR 0001 claims.
 8. **Packaging and the session entry.** `share/wayland-sessions/neptune.desktop`
    is present and the flake's `packages.default` still points at `./`, so the
    package would install a session entry whose `Exec` launches the binary.
@@ -297,8 +302,8 @@ unverified corner is question 4 above.
 - `docs/decisions/0008-design-token-contract.md` — the Nix-to-Rust token
   contract, superseded by 0011.
 - `docs/decisions/0009-winit-backend-and-gles2.md` — the nested backend and
-  renderer (Block 1).
+  renderer (nested session).
 - `docs/decisions/0010-smithay-source-pin.md` — Smithay pinned to crates.io
-  0.7.0 (Block 1).
+  0.7.0 (nested session).
 - `docs/decisions/0011-design-values-are-rust-constants.md` — design values are
   hand-written constants in `neptune-design`.

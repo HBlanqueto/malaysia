@@ -1,15 +1,16 @@
 # 0010 — Smithay is pinned to the crates.io 0.7.0 release
 
-Status: accepted (Block 1, Part 1)
+Status: accepted (nested session, Part 1)
 
 ## Context
 
 Smithay is the one large dependency the project is built on. It is published to
 crates.io, and its `master` branch (which niri, smallvil in-tree and Otto
-follow) moves ahead of the releases. Block 1 uses a small, stable slice of the
-API: a winit event source, an EGL/GLES2 renderer, and the Wayland protocol
-handlers for compositor, shm, seat and xdg-shell. The project builds inside a
-single Nix dev shell and values reproducible builds (ADR 0005, ADR 0006).
+follow) moves ahead of the releases. The nested session uses a small, stable
+slice of the API: a winit event source, an EGL/GLES2 renderer, and the Wayland
+protocol handlers for compositor, shm, seat and xdg-shell. The project builds
+inside a single Nix dev shell and values reproducible builds (ADR 0005,
+ADR 0006).
 
 ## Options considered
 
@@ -25,7 +26,8 @@ single Nix dev shell and values reproducible builds (ADR 0005, ADR 0006).
 ## Decision
 
 Pin Smithay to the crates.io `0.7.0` release. Bump it deliberately when a later
-block needs something newer, the same way the toolchain is bumped (ADR 0006).
+milestone needs something newer, the same way the toolchain is bumped
+(ADR 0006).
 
 ## Consequences
 

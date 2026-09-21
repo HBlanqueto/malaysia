@@ -6,13 +6,13 @@ requirement: nothing here is promised to remain true.
 
 ## Why this exists
 
-Block 1 runs Neptune nested on the winit backend, which lets the host session's
-EGL/GLES2 stack drive the window. Block 2 moves to the udev/DRM backend, where
-Neptune owns the device directly and the EGL platform changes from
-`PLATFORM_WAYLAND_KHR` to a GBM/DRM surface. When something behaves differently
-there, this file is the known-good point to compare against: the same GPU, the
-same Mesa, the same kernel, and the exact renderer string Block 1 displayed
-successfully.
+The nested session runs Neptune nested on the winit backend, which lets the host
+session's EGL/GLES2 stack drive the window. The Direct Session milestone moves
+to the udev/DRM backend, where Neptune owns the device directly and the EGL
+platform changes from `PLATFORM_WAYLAND_KHR` to a GBM/DRM surface. When
+something behaves differently there, this file is the known-good point to
+compare against: the same GPU, the same Mesa, the same kernel, and the exact
+renderer string the nested session displayed successfully.
 
 ## Machine
 
@@ -36,7 +36,7 @@ successfully.
 The renderer string is copied verbatim from the Part 1 startup log; it is what
 `GlesRenderer` reported.
 
-## What changes in Block 2, and what to compare
+## What changes in the Direct Session milestone, and what to compare
 
 - **EGL platform.** Nested winit uses `PLATFORM_WAYLAND_KHR` because the window
   is a Wayland surface of the host. Direct DRM/KMS uses a GBM surface and the
@@ -45,8 +45,9 @@ The renderer string is copied verbatim from the Part 1 startup log; it is what
 - **Renderer.** The same `GlesRenderer` is expected. If the GL renderer or GL
   version differs under DRM, that is worth recording before debugging anything
   else.
-- **Scanout and formats.** The nested backend composites through the host;
-  Block 2 picks formats and modifiers itself. The Mesa version above is the
-  first thing to hold constant when comparing.
-- **Input and seat.** Block 1 receives input through winit; Block 2 reads
-  libinput from a seat. Different source, same target.
+- **Scanout and formats.** The nested backend composites through the host; the
+  Direct Session milestone picks formats and modifiers itself. The Mesa version
+  above is the first thing to hold constant when comparing.
+- **Input and seat.** The nested session receives input through winit; the
+  Direct Session milestone reads libinput from a seat. Different source, same
+  target.
