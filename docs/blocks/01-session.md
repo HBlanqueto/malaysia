@@ -16,7 +16,9 @@ The block is built in parts, each reviewed on its own:
 3. Globals: `wl_compositor`, `wl_subcompositor`, `wl_shm`, `wl_output`,
    `wl_seat` and `xdg_wm_base`.
 4. The decoration type, written before the first window is mapped.
-5. `xdg_shell` toplevel lifecycle: initial configure, ack, map.
+5. `xdg_shell` toplevel lifecycle: initial configure, ack, and map on the
+   first buffered commit — *not* on the ack. The block spec's Part 5 wording
+   ("ack_configure → map") is wrong; see Divergences 1, which is authoritative.
 6. Rendering client surfaces and forwarding input from winit to the seat.
 
 Out of scope: popups, move/resize, clipboard, XWayland, DRM/KMS.
