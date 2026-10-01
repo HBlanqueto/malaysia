@@ -64,6 +64,22 @@
       devShells = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
+        # weston with its simple test clients enabled. nixpkgs builds weston
+        # with `-Dsimple-clients=`, so `weston-simple-egl`, `weston-simple-shm`
+        # and `weston-simple-dmabuf-feedback` do not exist; Bloque 7 drives
+        # Yuki's dmabuf/EGL path with them, so this override turns them on.
+        weston = pkgs.weston.overrideAttrs (final: prev: {
+          mesonFlags =
+            builtins.filter
+            (flag: flag != pkgs.lib.mesonOption "simple-clients" "")
+            (prev.mesonFlags
+              ++ [
+                (pkgs.lib.mesonOption "simple-clients"
+                  "damage,im,egl,shm,touch,dmabuf-feedback,dmabuf-egl")
+              ]);
+          # `weston-simple-dmabuf-feedback` links pixman-1.
+          buildInputs = prev.buildInputs ++ [ pkgs.pixman ];
+        });
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
@@ -77,6 +93,12 @@
             cargo-watch
             foot
             wayland-utils
+            # Test tools for the GPU-acceleration blocks (Bloque 7): the weston
+            # simple clients drive dmabuf/EGL against Yuki, and amdgpu_top
+            # watches VRAM on the Vega iGPU. They are shell-only; they are never
+            # installed on the system.
+            weston
+            amdgpu_top
           ];
 
           buildInputs = deps;
