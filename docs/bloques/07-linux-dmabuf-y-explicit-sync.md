@@ -118,7 +118,75 @@ implícito · **7c** la shell presenta por EGL.
 
 ## 7b — explicit sync y sync implícito
 
-(pendiente)
+### Qué se construyó
+
+- **`wp_linux_drm_syncobj_manager_v1` anunciado solo si el dispositivo lo
+  soporta.** `session.rs` abre el render node como `DrmDeviceFd`
+  (`open_render_node`) y comprueba `supports_syncobj_eventfd`; solo entonces
+  pasa el dispositivo a `State::new`, que crea `DrmSyncobjState`. Sin soporte,
+  el global no se anuncia y los clientes caen al sync implícito. El global
+  `wp_linux_drm_syncobj_manager_v1` se anuncia en esta máquina (radeonsi).
+- **Un solo camino de blocker en el commit.** `CompositorHandler::new_surface`
+  añade un pre-commit hook: si el commit adjunta un dmabuf, se genera un
+  blocker — con el **acquire point** explícito cuando el cliente lo puso
+  (`DrmSyncobjCachedState`), con la **fence implícita** del dmabuf en caso
+  contrario. La decisión es `pending_blocker`: el explícito gana sobre el
+  implícito; sin dmabuf no hay blocker (un acquire point sin buffer ya es un
+  error de protocolo de Smithay).
+- **El commit se reanuda desde el loop, nunca bloqueando al compositor.** El
+  blocker trae una source one-shot; `insert_blocker_source` la inserta en el
+  loop de calloop (vía `State::loop_handle`, un `LoopHandle<'static, Session>`
+  como en anvil) y `add_blocker` retiene el commit. Cuando la source dispara,
+  el callback llama a `CompositorClientState::blocker_cleared` y el commit se
+  aplica. El callback tolera que el cliente muera bloqueado (su data ya no
+  existe), así que matar a un cliente con commits pendientes no deja sources,
+  fds ni syncobjs huérfanos.
+- **El punto de release lo señala Smithay.** El `on_commit_buffer_handler` que
+  ya usaba el compositor (mismo camino que shm) guarda el `release_point` del
+  commit y lo señala exactamente una vez cuando el buffer se suelta o se
+  destruye (`InnerBuffer::drop`, feature `backend_drm`), igual que el `wl_buffer.release`.
+- **Interacción con la cola de imports (7a).** El blocker espera a que el
+  buffer sea legible *antes* de aplicar el commit; la importación en el renderer
+  ocurre después, en el drenado de `dispatch_clients`. El orden no cambió: el
+  commit bloqueado no llega a la cola de imports hasta que el blocker se
+  libera, y la importación sigue precediendo a cualquier frame.
+
+### Verificación (7b)
+
+- `wayland-info` lista `wp_linux_drm_syncobj_manager_v1`.
+- `vkcube --wsi wayland` corre fluido dentro de Yuki: **RADV RENOIR**
+  (Vulkan por hardware), ventana mapeada y renderizada; Vulkan usa el sync
+  explícito con Mesa.
+- `mpv --vo=gpu-next --gpu-context=wayland` reproduce un vídeo (`VO: [gpu-next]`)
+  dentro de Yuki sin errores; el tearing/daño visual queda como comprobación
+  manual.
+- Matar 4 instancias de `vkcube` con `SIGKILL` (con imports/commits pendientes
+  posibles): descriptores del compositor **28 → 28**, RSS estable — no quedan
+  blockers, fds ni syncobjs huérfanos.
+- Sin regresiones en 7a: `zwp_linux_dmabuf_v1` v5 con feedback sigue servido y
+  `weston-simple-egl`/`weston-simple-shm` siguen funcionando.
+- **Tests unitarios de la lógica propia:** `pending_blocker` (un commit sin
+  dmabuf nunca bloquea; el explícito gana sobre el implícito) y
+  `without_a_syncobj_device_no_explicit_sync_global_is_announced` (sin
+  dispositivo, el global no se anuncia). El señalado del release y la limpieza
+  al destruir la superficie son maquinaria de Smithay, cubierta por la prueba
+  de fds en vivo.
+- `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` (0
+  warnings) y `cargo test --workspace` (**115 tests**) en verde.
+
+### Divergencias (7b)
+
+- **La cola de imports (7a) y el blocker conviven sin unificarse más allá del
+  orden documentado.** El prompt pedía "un solo camino interno" para el sync
+  implícito y el explícito (se cumple: ambos terminan en `add_blocker` a través
+  de `pending_blocker`); la importación en el renderer sigue siendo la cola de
+  7a porque es otra frontera (ADR 0012, el renderer no llega a los handlers).
+- **`State::loop_handle`** guarda `LoopHandle<'static, Session>` — como anvil —
+  para que los blockers inserten su source; es una extensión pequeña del ADR
+  0012 (el handle no es un tipo de backend), documentada en `state.rs`.
+- **El release se delega en Smithay** en lugar de señalarse a mano desde el
+  compositor: `on_commit_buffer_handler` ya lo hace de forma exacta (una sola
+  vez) con la feature `backend_drm` activada.
 
 ## 7c — la shell presenta por EGL
 

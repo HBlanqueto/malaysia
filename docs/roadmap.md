@@ -166,12 +166,12 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   (verificado: `wl-copy` → `wl-paste` entre clientes). La aceptación de copiar y
   pegar entre dos instancias de `foot` se comprueba a mano. Véase
   `bloques/06-portapapeles.md`.
-- **Bloque 7 — en curso.** El sub-bloque 7a (linux-dmabuf v5 con feedback) está
-  hecho: `zwp_linux_dmabuf_v1` con el render node como `main_device` y los
-  formatos del renderer, rechazo de importes no importables en el commit, y
-  wezterm/Firefox acelerados dentro de Yuki anidado. Pendientes: 7b (explicit
-  sync + sync implícito) y 7c (la shell presenta por EGL). Véase
-  `bloques/07-linux-dmabuf-y-explicit-sync.md`.
+- **Bloque 7 — en curso.** 7a (linux-dmabuf v5 con feedback) y 7b (explicit
+  sync + sync implícito) hechos: `zwp_linux_dmabuf_v1` con el render node como
+  `main_device`, `wp_linux_drm_syncobj_manager_v1` solo si el dispositivo lo
+  soporta, y un solo camino de blocker en el commit. vkcube (RADV) y mpv
+  (gpu-next) corren acelerados. Pendiente: 7c (la shell presenta por EGL).
+  Véase `bloques/07-linux-dmabuf-y-explicit-sync.md` y el ADR 0026.
 
 ## Numeración de bloques
 

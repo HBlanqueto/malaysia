@@ -57,7 +57,7 @@ docs/
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
 5. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0025, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0026, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 6. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
