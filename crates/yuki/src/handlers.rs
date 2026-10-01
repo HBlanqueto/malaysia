@@ -84,6 +84,11 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        // At `debug` level, name the buffer type each committed surface uses.
+        // This is how a GPU client (wezterm, Firefox) is verified from the
+        // compositor side: `--log-level debug` and look for `Dma` against
+        // `Shm` (Bloque 7a).
+        log_committed_buffer_type(surface);
         // Let Smithay move the pending buffer into the surface's current state
         // first; the window tracker then reads that state to decide on mapping.
         on_commit_buffer_handler::<Self>(surface);
@@ -100,6 +105,33 @@ impl CompositorHandler for State {
 }
 
 delegate_compositor!(State);
+
+/// Logs the buffer type of the surface's just-committed buffer, at `debug`.
+///
+/// The pending buffer is read *before* `on_commit_buffer_handler` consumes it.
+/// Only buffers that were actually attached (a new buffer assignment) produce
+/// a line, so a `--log-level debug` run names which clients present through
+/// dmabuf and which through shm — the verification for the GPU clients of
+/// Bloque 7a.
+fn log_committed_buffer_type(surface: &WlSurface) {
+    use smithay::backend::renderer::buffer_type;
+    use smithay::wayland::compositor::{BufferAssignment, SurfaceAttributes, with_states};
+    let buffer_type = with_states(surface, |states| {
+        states
+            .cached_state
+            .get::<SurfaceAttributes>()
+            .current()
+            .buffer
+            .as_ref()
+            .and_then(|assignment| match assignment {
+                BufferAssignment::NewBuffer(buffer) => buffer_type(buffer),
+                _ => None,
+            })
+    });
+    if let Some(buffer_type) = buffer_type {
+        tracing::debug!(surface = ?surface.id(), ?buffer_type, "surface committed a buffer");
+    }
+}
 
 impl BufferHandler for State {
     fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {
