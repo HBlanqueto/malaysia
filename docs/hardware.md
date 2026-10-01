@@ -1,28 +1,28 @@
-# Hardware and graphics baseline
+# Hardware y línea base gráfica
 
-This records the machine Neptune's first GPU contact happened on, and the
-graphics stack as it reported itself. It is a reference point, not a
-requirement: nothing here is promised to remain true.
+Esto registra la máquina donde tuvo lugar el primer contacto con la GPU de Yuki y
+el stack gráfico tal y como se reportó a sí mismo. Es un punto de referencia, no un
+requisito: nada de lo que hay aquí se promete que siga siendo cierto.
 
-## Why this exists
+## Por qué existe
 
-The nested session runs Neptune nested on the winit backend, which lets the host
-session's EGL/GLES2 stack drive the window. The Direct Session milestone moves
-to the udev/DRM backend, where Neptune owns the device directly and the EGL
-platform changes from `PLATFORM_WAYLAND_KHR` to a GBM/DRM surface. When
-something behaves differently there, this file is the known-good point to
-compare against: the same GPU, the same Mesa, the same kernel, and the exact
-renderer string the nested session displayed successfully.
+La sesión anidada ejecuta Yuki anidado sobre el backend winit, que deja que el
+stack EGL/GLES2 de la sesión anfitriona maneje la ventana. El hito Direct Session
+pasa al backend udev/DRM, donde Yuki es dueño del dispositivo directamente y la
+plataforma EGL cambia de `PLATFORM_WAYLAND_KHR` a una superficie GBM/DRM. Cuando algo
+se comporte distinto allí, este archivo es el punto conocido-bueno con el que
+comparar: la misma GPU, el mismo Mesa, el mismo kernel, y la cadena del renderer
+exacta que la sesión anidada mostró correctamente.
 
-## Machine
+## Máquina
 
 | | |
 | --- | --- |
-| CPU | AMD Ryzen 5 PRO 5650U with Radeon Graphics |
-| GPU | AMD Radeon integrated (Vega, "renoir"), Ryzen 5 PRO 5650U |
+| CPU | AMD Ryzen 5 PRO 5650U con Radeon Graphics |
+| GPU | AMD Radeon integrada (Vega, "renoir"), Ryzen 5 PRO 5650U |
 | Kernel | 7.2.4-cachyos-lto |
 
-## Graphics stack observed by the Part 1 live run
+## Stack gráfico observado por la ejecución en vivo de la Parte 1
 
 | | |
 | --- | --- |
@@ -31,23 +31,21 @@ renderer string the nested session displayed successfully.
 | GL version | OpenGL ES 3.2 Mesa 26.2.3 |
 | EGL version | 1.5 |
 | EGL platform | `PLATFORM_WAYLAND_KHR` |
-| Window system | Wayland client of the host session (winit backend) |
+| Window system | Cliente Wayland de la sesión anfitriona (backend winit) |
 
-The renderer string is copied verbatim from the Part 1 startup log; it is what
-`GlesRenderer` reported.
+La cadena del renderer está copiada textualmente del log de arranque de la Parte 1;
+es lo que reportó `GlesRenderer`.
 
-## What changes in the Direct Session milestone, and what to compare
+## Qué cambia en el hito Direct Session y qué comparar
 
-- **EGL platform.** Nested winit uses `PLATFORM_WAYLAND_KHR` because the window
-  is a Wayland surface of the host. Direct DRM/KMS uses a GBM surface and the
-  `EGL_MESA_platform_gbm` path. A failure there is not evidence of a hardware
-  difference; it is the first time that path is exercised.
-- **Renderer.** The same `GlesRenderer` is expected. If the GL renderer or GL
-  version differs under DRM, that is worth recording before debugging anything
-  else.
-- **Scanout and formats.** The nested backend composites through the host; the
-  Direct Session milestone picks formats and modifiers itself. The Mesa version
-  above is the first thing to hold constant when comparing.
-- **Input and seat.** The nested session receives input through winit; the
-  Direct Session milestone reads libinput from a seat. Different source, same
-  target.
+- **Plataforma EGL.** El winit anidado usa `PLATFORM_WAYLAND_KHR` porque la ventana
+  es una superficie Wayland del anfitrión. El DRM/KMS directo usa una superficie GBM
+  y la ruta `EGL_MESA_platform_gbm`. Un fallo ahí no es evidencia de una diferencia
+  de hardware; es la primera vez que se ejercita esa ruta.
+- **Renderer.** Se espera el mismo `GlesRenderer`. Si el renderer GL o la versión GL
+  difieren bajo DRM, vale la pena registrarlo antes de depurar cualquier otra cosa.
+- **Scanout y formatos.** El backend anidado compone a través del anfitrión; el hito
+  Direct Session elige formatos y modificadores por sí mismo. La versión de Mesa de
+  arriba es lo primero que hay que mantener constante al comparar.
+- **Input y seat.** La sesión anidada recibe input a través de winit; el hito Direct
+  Session lee libinput desde un seat. Fuente distinta, mismo destino.

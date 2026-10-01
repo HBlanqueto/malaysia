@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="840" viewBox="0 0 1100 840" font-family="DejaVu Sans, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#616161"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1e88e5"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e35b1"/>
+    </marker>
+  </defs>
+
+  <!-- Título -->
+  <text x="550" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">Yuki + yuki-shell — división de trabajo</text>
+  <text x="550" y="68" text-anchor="middle" font-size="14" fill="#555">la shell dibuja el contenido · Yuki decide dónde, en qué capa y cómo se rodea</text>
+
+  <!-- ============ LA SHELL (arriba) ============ -->
+  <rect x="40" y="90" width="1020" height="190" rx="14" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2"/>
+  <text x="60" y="118" font-size="18" font-weight="bold" fill="#0d47a1">YUKI-SHELL — la shell (un proceso por componente, ADR 0023)</text>
+  <text x="60" y="140" font-size="13" fill="#1565c0">Dibuja el CONTENIDO de las superficies de la shell (celestial-kit → píxeles). Solo pide colocación; nunca decide el orden.</text>
+
+  <!-- Wallpaper -->
+  <rect x="60" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="75" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Wallpaper</text>
+  <text x="75" y="196" font-size="12" fill="#333">capa Background · a pantalla completa</text>
+  <text x="75" y="214" font-size="12" fill="#333">lee wallpaper.domain → pinta la imagen</text>
+  <text x="75" y="232" font-size="11" fill="#777">(los Solid Colors de share/wallpapers)</text>
+
+  <!-- Menu bar -->
+  <rect x="390" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="405" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Menu bar</text>
+  <text x="405" y="196" font-size="12" fill="#333">capa Top · exclusive zone</text>
+  <text x="405" y="214" font-size="12" fill="#333">lee menubar.domain (autohide, ...)</text>
+  <text x="405" y="232" font-size="11" fill="#777">reloj, bandeja, menús</text>
+
+  <!-- Dock -->
+  <rect x="720" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="735" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Dock</text>
+  <text x="735" y="196" font-size="12" fill="#333">capa Top · exclusive zone</text>
+  <text x="735" y="214" font-size="12" fill="#333">lee dock.domain (autohide, mineffect...)</text>
+  <text x="735" y="232" font-size="11" fill="#777">apps fijadas, minimizadas</text>
+
+  <!-- Flecha: la shell pide -->
+  <line x1="70" y1="282" x2="70" y2="318" stroke="#1e88e5" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+  <text x="84" y="304" font-size="12" font-weight="bold" fill="#1e88e5">layer-shell: crea superficie y pide capa / anclas / tamaño / exclusive zone</text>
+
+  <!-- ============ PANTALLA (medio) ============ -->
+  <rect x="40" y="322" width="1020" height="200" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
+  <text x="60" y="350" font-size="17" font-weight="bold" fill="#333">PANTALLA — el orden de composición (lo fija Yuki)</text>
+
+  <!-- Overlay -->
+  <rect x="60" y="364" width="980" height="26" rx="6" fill="#fff3e0" stroke="#ffb74d"/>
+  <text x="78" y="382" font-size="13" fill="#e65100">Overlay — OSD, lock screen (yuki-shell lock)</text>
+  <!-- Top -->
+  <rect x="60" y="398" width="980" height="26" rx="6" fill="#ffe0b2" stroke="#ffa726"/>
+  <text x="78" y="416" font-size="13" fill="#ef6c00">Top — menu bar + dock (yuki-shell)</text>
+  <!-- Ventanas -->
+  <rect x="60" y="432" width="980" height="26" rx="6" fill="#eceff1" stroke="#90a4ae"/>
+  <text x="78" y="450" font-size="13" fill="#37474f">Ventanas — apps (wezterm, nautilus, ...)</text>
+  <!-- Bottom -->
+  <rect x="60" y="466" width="980" height="26" rx="6" fill="#e0e0e0" stroke="#9e9e9e"/>
+  <text x="78" y="484" font-size="13" fill="#616161">Bottom — widgets de escritorio (opcional)</text>
+  <!-- Background -->
+  <rect x="60" y="500" width="980" height="26" rx="6" fill="#cfd8dc" stroke="#78909c"/>
+  <text x="78" y="518" font-size="13" fill="#37474f">Background — wallpaper (yuki-shell wallpaper)</text>
+
+  <!-- Flecha: Yuki coloca/compone -->
+  <line x1="1030" y1="524" x2="1030" y2="560" stroke="#5e35b1" stroke-width="2.5" marker-end="url(#arrow-purple)"/>
+  <text x="900" y="546" font-size="12" font-weight="bold" fill="#5e35b1">Yuki coloca, compone y configura cada superficie</text>
+
+  <!-- ============ YUKI (abajo) ============ -->
+  <rect x="40" y="564" width="1020" height="210" rx="14" fill="#ede7f6" stroke="#5e35b1" stroke-width="2"/>
+  <text x="60" y="592" font-size="18" font-weight="bold" fill="#311b92">YUKI — el compositor (display server). Decide dónde, en qué capa y cómo se rodea.</text>
+
+  <!-- Items -->
+  <rect x="60" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="75" y="628" font-size="13" font-weight="bold" fill="#4527a0">Display server</text>
+  <text x="75" y="648" font-size="11" fill="#333">wl_surface, xdg_shell, layer-shell, ...</text>
+  <text x="75" y="666" font-size="11" fill="#333">todo pasa por Yuki</text>
+
+  <rect x="225" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="240" y="628" font-size="13" font-weight="bold" fill="#4527a0">Geometría y capas</text>
+  <text x="240" y="648" font-size="11" fill="#333">calcula posición/tamaño</text>
+  <text x="240" y="666" font-size="11" fill="#333">asigna la capa</text>
+
+  <rect x="390" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="405" y="628" font-size="13" font-weight="bold" fill="#4527a0">Composición</text>
+  <text x="405" y="648" font-size="11" fill="#333">scene + damage</text>
+  <text x="405" y="666" font-size="11" fill="#333">repinta solo el daño</text>
+
+  <rect x="555" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="570" y="628" font-size="13" font-weight="bold" fill="#4527a0">Input</text>
+  <text x="570" y="648" font-size="11" fill="#333">enruta eventos al</text>
+  <text x="570" y="666" font-size="11" fill="#333">cliente correcto</text>
+
+  <rect x="720" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="735" y="628" font-size="13" font-weight="bold" fill="#4527a0">Efectos (ADR 0020)</text>
+  <text x="735" y="648" font-size="11" fill="#333">sombra · blur · borde</text>
+  <text x="735" y="666" font-size="11" fill="#333">envuelven toda superficie</text>
+
+  <rect x="885" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="900" y="628" font-size="13" font-weight="bold" fill="#4527a0">Almacén .domain</text>
+  <text x="900" y="648" font-size="11" fill="#333">dueño de la config</text>
+  <text x="900" y="666" font-size="11" fill="#333">la shell lo lee</text>
+
+  <!-- Futuro D-Bus -->
+  <text x="60" y="744" font-size="12" fill="#555">
+    <tspan x="60" dy="0" font-weight="bold" fill="#333">Futuro (ADR 0021):</tspan>
+    <tspan dx="8">D-Bus <tspan font-family="monospace">org.yuki.Compositor1</tspan> — la app de ajustes y el comando <tspan font-family="monospace">domain</tspan> piden cambios a Yuki; Yuki aplica y notifica (OptionChanged) para que la shell y la app se mantengan al día.</tspan>
+  </text>
+</svg>
