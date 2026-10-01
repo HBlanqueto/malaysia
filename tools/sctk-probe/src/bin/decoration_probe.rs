@@ -1,20 +1,20 @@
-//! Phase 6 acceptance harness: real applications under Neptune.
+//! Phase 6 acceptance harness: real applications under Yuki.
 //!
 //! For each application in the table below it launches the application inside a
-//! fresh Neptune, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
+//! fresh Yuki, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
 //! and asserts what the client negotiated:
 //!
 //! - which decoration protocol it bound (xdg-decoration, the KDE one, or none);
-//! - the mode Neptune configured (server-side or client-side);
+//! - the mode Yuki configured (server-side or client-side);
 //! - whether the client surface was inset by the titlebar: the xdg configure
-//!   width drops by the titlebar thickness exactly when Neptune reserves chrome.
+//!   width drops by the titlebar thickness exactly when Yuki reserves chrome.
 //!
 //! The expectations are derived from the toolkits' sources (ADR 0019): Qt
 //! defers to the compositor, GTK3/GTK4 ask through the KDE protocol and keep
 //! their own chrome when they have a headerbar, libadwaita windows always have
 //! one, and a client that never negotiates is left alone.
 //!
-//! Applications are located through `NEPTUNE_APP_<NAME>` environment variables
+//! Applications are located through `YUKI_APP_<NAME>` environment variables
 //! (see the crate README); a name with no binary is reported UNVERIFIED rather
 //! than skipped silently. Whether two titlebars are *visible* is not machine
 //! checkable here: it needs a pixel comparison against the decoration region,
@@ -34,8 +34,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long each application gets to start, negotiate and be killed.
 const APP_TIMEOUT: Duration = Duration::from_secs(6);
-/// The titlebar thickness Neptune reserves, in logical pixels
-/// (`neptune_design::TITLEBAR.thickness`).
+/// The titlebar thickness Yuki reserves, in logical pixels
+/// (`yuki_design::TITLEBAR.thickness`).
 const TITLEBAR: i32 = 32;
 
 fn main() -> ExitCode {
@@ -62,7 +62,7 @@ enum Protocol {
     None,
 }
 
-/// The mode Neptune is expected to end up configuring.
+/// The mode Yuki is expected to end up configuring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Client,
@@ -77,7 +77,7 @@ struct Expectation {
     /// The final decoration mode, or `None` when no mode is negotiated.
     mode: Option<Mode>,
     /// How much the xdg configure width should shrink below its maximum: the
-    /// titlebar thickness when Neptune reserves chrome, zero when it does not.
+    /// titlebar thickness when Yuki reserves chrome, zero when it does not.
     inset: i32,
 }
 
@@ -85,7 +85,7 @@ struct Expectation {
 struct Case {
     /// The name in the report.
     name: &'static str,
-    /// The `NEPTUNE_APP_<NAME>` variable that points at the binary.
+    /// The `YUKI_APP_<NAME>` variable that points at the binary.
     variable: &'static str,
     /// A command to fall back to when the variable is unset.
     fallback: &'static str,
@@ -277,18 +277,18 @@ fn nth_integer(body: &str, n: usize) -> Option<i32> {
         .nth(n)
 }
 
-/// Runs every case against one Neptune.
+/// Runs every case against one Yuki.
 fn run() -> Result<(), String> {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("NEPTUNE_BIN")
+    let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/neptune"));
+        .unwrap_or_else(|| repo.join("target/debug/yuki"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p neptune` first",
+            "compositor binary not found at {}; run `cargo build -p yuki` first",
             binary.display()
         ));
     }
@@ -322,7 +322,7 @@ fn run() -> Result<(), String> {
             .env("WAYLAND_DEBUG", "1")
             .env("GDK_BACKEND", "wayland")
             .env("QT_QPA_PLATFORM", "wayland")
-            // Clients under test must reach this Neptune, not the host session.
+            // Clients under test must reach this Yuki, not the host session.
             .env_remove("DISPLAY")
             .stdin(Stdio::null());
         for (key, value) in &case.env {
@@ -390,7 +390,7 @@ fn run() -> Result<(), String> {
 /// be reconfigured with the new mode and the new usable size, leaving no stale
 /// titlebar (ADR 0019, rule 4).
 fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> {
-    let client = std::env::var_os("NEPTUNE_DECORATION_CLIENT")
+    let client = std::env::var_os("YUKI_DECORATION_CLIENT")
         .map(PathBuf::from)
         .or_else(|| {
             std::env::current_exe()
@@ -504,14 +504,14 @@ fn cases(runtime: &Path) -> Vec<Case> {
     );
     let mut qt6 = vec![(
         "QML_IMPORT_PATH".to_string(),
-        std::env::var("NEPTUNE_APP_QT6_QML_IMPORT_PATH").unwrap_or_default(),
+        std::env::var("YUKI_APP_QT6_QML_IMPORT_PATH").unwrap_or_default(),
     )];
     qt6.retain(|(_, value)| !value.is_empty());
 
     vec![
         Case {
             name: "nautilus",
-            variable: "NEPTUNE_APP_NAUTILUS",
+            variable: "YUKI_APP_NAUTILUS",
             fallback: "nautilus",
             args: vec!["--no-desktop".to_string()],
             env: Vec::new(),
@@ -525,7 +525,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-demo",
-            variable: "NEPTUNE_APP_GTK3_DEMO",
+            variable: "YUKI_APP_GTK3_DEMO",
             fallback: "gtk3-demo",
             args: Vec::new(),
             env: Vec::new(),
@@ -538,7 +538,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-widget-factory",
-            variable: "NEPTUNE_APP_GTK3_WIDGET_FACTORY",
+            variable: "YUKI_APP_GTK3_WIDGET_FACTORY",
             fallback: "gtk3-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
@@ -551,12 +551,12 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-plain",
-            variable: "NEPTUNE_APP_GTK3_PLAIN",
+            variable: "YUKI_APP_GTK3_PLAIN",
             fallback: "gtk3_plain",
             args: Vec::new(),
             env: Vec::new(),
             // A plain GtkWindow with no headerbar: GTK3 requests server-side
-            // through the KDE protocol and Neptune insets the surface.
+            // through the KDE protocol and Yuki insets the surface.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Server),
@@ -565,7 +565,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-demo",
-            variable: "NEPTUNE_APP_GTK4_DEMO",
+            variable: "YUKI_APP_GTK4_DEMO",
             fallback: "gtk4-demo",
             args: Vec::new(),
             env: Vec::new(),
@@ -579,7 +579,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-widget-factory",
-            variable: "NEPTUNE_APP_GTK4_WIDGET_FACTORY",
+            variable: "YUKI_APP_GTK4_WIDGET_FACTORY",
             fallback: "gtk4-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
@@ -592,7 +592,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-plain",
-            variable: "NEPTUNE_APP_GTK4_PLAIN",
+            variable: "YUKI_APP_GTK4_PLAIN",
             fallback: "gtk4_plain",
             args: Vec::new(),
             env: Vec::new(),
@@ -606,12 +606,12 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "qt6",
-            variable: "NEPTUNE_APP_QT6",
+            variable: "YUKI_APP_QT6",
             fallback: "qml",
             args: vec![qml.to_string_lossy().into_owned()],
             env: qt6,
             // Qt creates the xdg-decoration object, unset_mode, and defers to
-            // the compositor: Neptune chooses server-side.
+            // the compositor: Yuki chooses server-side.
             expectation: Expectation {
                 protocol: Protocol::Xdg,
                 mode: Some(Mode::Server),
@@ -620,7 +620,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "qt5",
-            variable: "NEPTUNE_APP_QT5",
+            variable: "YUKI_APP_QT5",
             fallback: "qmlscene",
             args: vec![qml.to_string_lossy().into_owned()],
             env: Vec::new(),
@@ -633,7 +633,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "onlyoffice",
-            variable: "NEPTUNE_APP_ONLYOFFICE",
+            variable: "YUKI_APP_ONLYOFFICE",
             fallback: "onlyoffice-desktopeditors",
             args: Vec::new(),
             env: Vec::new(),
@@ -799,10 +799,8 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "neptune-decoration-{}-{unique}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("yuki-decoration-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         Ok(Self(path))

@@ -1,14 +1,14 @@
 # sctk-probe
 
-Dev-only Wayland clients for driving Neptune while developing. This package is
+Dev-only Wayland clients for driving Yuki while developing. This package is
 **not** part of the compositor: it is a workspace member excluded from the
 default build (`default-members` in the root `Cargo.toml`). A plain
 `cargo build`/`cargo test` at the repository root will not build it; name the
 package to build it on purpose.
 
 The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
-at, so they can be run against Neptune or the host session without any change.
-`smoke` and `block4` are different: they launch Neptune itself and drive clients
+at, so they can be run against Yuki or the host session without any change.
+`smoke` and `block4` are different: they launch Yuki itself and drive clients
 against it.
 
 Everything here runs inside the dev shell (`nix develop`). The simplest way to
@@ -35,16 +35,16 @@ parent on the child while both are tracked:
 The probe checks the three configure sizes and exits non-zero if the cycle is
 not reproduced, so it is a pass/fail check rather than output to read by eye.
 
-Run it against a running compositor. While Neptune runs under `./dev.sh run`,
+Run it against a running compositor. While Yuki runs under `./dev.sh run`,
 the compositor inherits the caller's `XDG_RUNTIME_DIR` and auto-names its socket
 there (Smithay picks the first free `wayland-N`, `wayland-1` when the host
-already holds `wayland-0`); `neptune-dev` holds the pid and the log, not the
+already holds `wayland-0`); `yuki-dev` holds the pid and the log, not the
 socket. Read the name the compositor logged rather than assuming one:
 
 ```sh
 runtime="${XDG_RUNTIME_DIR:?the compositor inherits this for its socket}"
 # The compositor logs the name it bound, inside ANSI colour codes.
-sock=$(sed 's/\x1b\[[0-9;]*m//g' "$runtime/neptune-dev/neptune.log" |
+sock=$(sed 's/\x1b\[[0-9;]*m//g' "$runtime/yuki-dev/yuki.log" |
     sed -n 's/.*socket=\(wayland-[0-9]*\).*/\1/p' | tail -n 1)
 XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$sock" \
     cargo run -p sctk-probe --bin parent_probe
@@ -64,12 +64,12 @@ accepted, so a `wl_display.sync` round-trip cannot be mistaken for a frame.
 It exits non-zero if any step is missing or out of order.
 
 ```sh
-./dev.sh smoke          # builds neptune and the harness, then runs it
+./dev.sh smoke          # builds yuki and the harness, then runs it
 cargo run -p sctk-probe --bin smoke   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
-`NEPTUNE_SMOKE_CLIENT` (the client to drive).
+Environment overrides: `YUKI_BIN` (path to the compositor binary) and
+`YUKI_SMOKE_CLIENT` (the client to drive).
 
 ## `block4`
 
@@ -81,7 +81,7 @@ memory does not grow from batch 2 to batch 3 by more than 1 MiB (the first batch
 is warm-up). Both are asserted; the three measurements are printed.
 
 It then runs three resize scenarios, each with a fresh compositor, a fresh
-`resize_client` and `NEPTUNE_TEST_INPUT=1`: the compositor presses a corner or
+`resize_client` and `YUKI_TEST_INPUT=1`: the compositor presses a corner or
 an edge of the mapped window and its scripted motions drive the grab. The
 harness asserts the final configured size — corner growth with no client
 maximum, the same growth clamped to a client maximum, and a shrunk width held
@@ -94,12 +94,12 @@ block4: resize minimum PASS (initial 1280x800, final 1270x800, expected 1270x800
 ```
 
 ```sh
-./dev.sh block4                        # builds neptune and the probes, then runs it
+./dev.sh block4                        # builds yuki and the probes, then runs it
 cargo run -p sctk-probe --bin block4   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_STRESS_BIN` and
-`NEPTUNE_RESIZE_BIN`.
+Environment overrides: `YUKI_BIN`, `YUKI_STRESS_BIN` and
+`YUKI_RESIZE_BIN`.
 
 ## `window_stress`
 
@@ -114,8 +114,8 @@ cargo run -p sctk-probe --bin window_stress
 ## `resize_client`
 
 The client `block4` drives for the resize assertions. It maps a
-client-decorated toplevel, applies a bound from `NEPTUNE_RESIZE_MIN` or
-`NEPTUNE_RESIZE_MAX` (an `x,y` offset from the initial configure, in surface
+client-decorated toplevel, applies a bound from `YUKI_RESIZE_MIN` or
+`YUKI_RESIZE_MAX` (an `x,y` offset from the initial configure, in surface
 coordinates, before it maps), and prints every configure it receives, then the
 size once the stream settles:
 
@@ -132,32 +132,32 @@ never configured or if no resize settles.
 ## `decoration_probe`
 
 The Phase 6 acceptance harness for the decoration policy (ADR 0019). It launches
-one Neptune and, for each real application, runs it inside that compositor with
+one Yuki and, for each real application, runs it inside that compositor with
 `WAYLAND_DEBUG=1`, captures the client's trace and asserts what it negotiated:
 the decoration protocol it bound (xdg-decoration, the KDE one, or none), the
-mode Neptune configured, and whether the surface was inset by the titlebar. The
+mode Yuki configured, and whether the surface was inset by the titlebar. The
 inset is read from the configure width against the output width, so it holds
 even when the first configure already carries it (GTK4 asks before its toplevel
 exists). Configures after a client-initiated resize or state change are ignored,
 because a host pointer can click into a window and resize it.
 
-Applications are located through `NEPTUNE_APP_<NAME>` variables; one with no
+Applications are located through `YUKI_APP_<NAME>` variables; one with no
 binary is reported `UNVERIFIED` rather than skipped silently, and an application
 that exits before mapping a window is reported the same way. Whether two
 titlebars are *visible* needs a pixel comparison, so it stays manual.
 
 ```sh
-./dev.sh decoration                        # builds neptune and the probes, then runs it
+./dev.sh decoration                        # builds yuki and the probes, then runs it
 cargo run -p sctk-probe --bin decoration_probe   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_DECORATION_CLIENT` (the
-mode-change client, found next to the probe by default), `NEPTUNE_APP_NAUTILUS`,
-`NEPTUNE_APP_GTK3_DEMO`, `NEPTUNE_APP_GTK3_WIDGET_FACTORY`,
-`NEPTUNE_APP_GTK3_PLAIN`, `NEPTUNE_APP_GTK4_DEMO`,
-`NEPTUNE_APP_GTK4_WIDGET_FACTORY`, `NEPTUNE_APP_GTK4_PLAIN`, `NEPTUNE_APP_QT6`
-(with `NEPTUNE_APP_QT6_QML_IMPORT_PATH`), `NEPTUNE_APP_QT5` and
-`NEPTUNE_APP_ONLYOFFICE`.
+Environment overrides: `YUKI_BIN`, `YUKI_DECORATION_CLIENT` (the
+mode-change client, found next to the probe by default), `YUKI_APP_NAUTILUS`,
+`YUKI_APP_GTK3_DEMO`, `YUKI_APP_GTK3_WIDGET_FACTORY`,
+`YUKI_APP_GTK3_PLAIN`, `YUKI_APP_GTK4_DEMO`,
+`YUKI_APP_GTK4_WIDGET_FACTORY`, `YUKI_APP_GTK4_PLAIN`, `YUKI_APP_QT6`
+(with `YUKI_APP_QT6_QML_IMPORT_PATH`), `YUKI_APP_QT5` and
+`YUKI_APP_ONLYOFFICE`.
 
 `gtk3_plain.c` and `gtk4_plain.c` under `gtk/` are minimal plain-window clients
 for the server-side branch, because the GTK demos all use a headerbar. Build
@@ -166,7 +166,7 @@ them against the same GTK the probe runs against:
 ```sh
 cc gtk/gtk3_plain.c -o /tmp/gtk3_plain $(pkg-config --cflags --libs gtk+-3.0)
 cc gtk/gtk4_plain.c -o /tmp/gtk4_plain $(pkg-config --cflags --libs gtk4-wayland)
-NEPTUNE_APP_GTK3_PLAIN=/tmp/gtk3_plain NEPTUNE_APP_GTK4_PLAIN=/tmp/gtk4_plain \
+YUKI_APP_GTK3_PLAIN=/tmp/gtk3_plain YUKI_APP_GTK4_PLAIN=/tmp/gtk4_plain \
     ./dev.sh decoration
 ```
 
@@ -183,7 +183,7 @@ exits non-zero if the second configure never arrives or the sizes are wrong.
 
 Exercises the client-initiated `xdg_toplevel.move`/`resize` path and the
 surface-local coordinates a client sees for pointer motion. It runs three cases,
-each with a fresh compositor and `NEPTUNE_TEST_INPUT=1` (the compositor presses
+each with a fresh compositor and `YUKI_TEST_INPUT=1` (the compositor presses
 once, holds the button, follows the press with motions and releases it, which a
 probe cannot make itself):
 
@@ -195,7 +195,7 @@ probe cannot make itself):
 - `hover_client` asserts the surface-local coordinates of a buttonless hover:
   the scripted drag moves the window to a non-zero origin and the release ends
   the grab, then the compositor hovers the pointer over the global points in
-  `NEPTUNE_TEST_HOVER` and the client must read each at the position it holds
+  `YUKI_TEST_HOVER` and the client must read each at the position it holds
   over the surface. A compositor that hands Smithay the surface-local point
   where it expects the surface origin makes every client read the window origin,
   which fails here.
@@ -205,12 +205,12 @@ probe cannot make itself):
   failed.
 
 ```sh
-./dev.sh move                          # builds neptune and the probes, then runs it
+./dev.sh move                          # builds yuki and the probes, then runs it
 cargo run -p sctk-probe --bin move_probe   # run it directly, if already built
 ```
 
-Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_MOVE_BIN`, `NEPTUNE_HOVER_BIN`
-and `NEPTUNE_APP_NAUTILUS`.
+Environment overrides: `YUKI_BIN`, `YUKI_MOVE_BIN`, `YUKI_HOVER_BIN`
+and `YUKI_APP_NAUTILUS`.
 
 ## `move_client`
 
@@ -228,5 +228,5 @@ sends the `move` and `resize` the scripted gesture answers: the move makes the
 compositor's scripted drag move the window to a non-zero origin, the resize
 makes it release the button. It then asserts that the `wl_pointer.enter` and
 `wl_pointer.motion` it receives for the buttonless hover carry the surface-local
-positions in `NEPTUNE_EXPECT_HOVER` (an `x,y` list separated by `;`), and exits
+positions in `YUKI_EXPECT_HOVER` (an `x,y` list separated by `;`), and exits
 non-zero on a mismatch or if the hover never arrives.

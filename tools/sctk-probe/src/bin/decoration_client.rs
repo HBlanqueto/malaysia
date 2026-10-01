@@ -47,7 +47,7 @@ use smithay_client_toolkit::{
 /// Buffer side, in pixels.
 const SIDE: i32 = 64;
 /// The titlebar thickness the compositor reserves, in logical pixels
-/// (`neptune_design::TITLEBAR.thickness`).
+/// (`yuki_design::TITLEBAR.thickness`).
 const TITLEBAR: u32 = 32;
 /// How long to wait for both configures.
 const TIMEOUT: Duration = Duration::from_secs(5);

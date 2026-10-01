@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Yuki
+Comment=Yuki Wayland compositor
+Exec=yuki
+Type=Application
+DesktopNames=Yuki

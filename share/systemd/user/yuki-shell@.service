@@ -1,0 +1,21 @@
+# One unit per shell component (ADR 0023): `%i` is the component name
+# (wallpaper, menubar, dock, ...). A component must be able to crash and
+# restart without taking any other component (or the compositor) down.
+#
+# Installed by the flake with the `@out@` placeholder replaced by the store
+# path of the package.
+[Unit]
+Description=Yuki shell component (%i)
+PartOf=yuki-session.target
+After=yuki-session.target
+
+[Service]
+Type=simple
+ExecStart=@out@/bin/yuki-shell %i
+Restart=on-failure
+RestartSec=2
+StartLimitBurst=10
+StartLimitIntervalSec=30
+
+[Install]
+WantedBy=yuki-session.target

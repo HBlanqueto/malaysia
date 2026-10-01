@@ -1,6 +1,0 @@
-[Desktop Entry]
-Name=Neptune
-Comment=Neptune Wayland compositor
-Exec=neptune
-Type=Application
-DesktopNames=Neptune

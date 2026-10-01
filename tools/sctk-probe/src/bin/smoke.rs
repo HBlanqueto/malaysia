@@ -23,12 +23,12 @@
 //! Run from the dev shell, after building the compositor:
 //!
 //! ```sh
-//! cargo build -p neptune
+//! cargo build -p yuki
 //! cargo run -p sctk-probe --bin smoke
 //! ```
 //!
-//! Environment overrides: `NEPTUNE_BIN` (path to the compositor binary) and
-//! `NEPTUNE_SMOKE_CLIENT` (the client to drive; defaults to `foot`).
+//! Environment overrides: `YUKI_BIN` (path to the compositor binary) and
+//! `YUKI_SMOKE_CLIENT` (the client to drive; defaults to `foot`).
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
@@ -71,16 +71,16 @@ fn run() -> Result<(), String> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("NEPTUNE_BIN")
+    let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/neptune"));
+        .unwrap_or_else(|| repo.join("target/debug/yuki"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p neptune` first",
+            "compositor binary not found at {}; run `cargo build -p yuki` first",
             binary.display()
         ));
     }
-    let client = std::env::var("NEPTUNE_SMOKE_CLIENT").unwrap_or_else(|_| "foot".to_string());
+    let client = std::env::var("YUKI_SMOKE_CLIENT").unwrap_or_else(|_| "foot".to_string());
 
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
@@ -744,8 +744,7 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("neptune-smoke-{}-{unique}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("yuki-smoke-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         #[cfg(unix)]

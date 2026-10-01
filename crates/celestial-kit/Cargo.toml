@@ -1,0 +1,15 @@
+[package]
+name = "celestial-kit"
+description = "CelestialKit (≈ AppKit): the toolkit for the shell and Yuki's own apps (glossary, ADR 0024)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+cosmic-text.workspace = true
+grade-graphics.workspace = true
+glow.workspace = true
+khronos-egl = { workspace = true, features = ["dynamic"] }
+thiserror.workspace = true

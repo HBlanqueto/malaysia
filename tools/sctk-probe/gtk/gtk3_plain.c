@@ -2,7 +2,7 @@
  * A minimal GTK3 window with a plain titlebar: no GtkHeaderBar, so GTK asks
  * the compositor to decorate it through org_kde_kwin_server_decoration.
  *
- * Used by decoration_probe (NEPTUNE_APP_GTK3_PLAIN) to verify the server-side
+ * Used by decoration_probe (YUKI_APP_GTK3_PLAIN) to verify the server-side
  * branch of the decoration policy. Build it against the same GTK the probe
  * runs against, for example:
  *

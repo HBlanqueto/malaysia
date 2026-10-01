@@ -1,5 +1,5 @@
 {
-  description = "Neptune, a fixed Wayland compositor built on Smithay.";
+  description = "Yuki, a fixed Wayland compositor built on Smithay.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -26,7 +26,7 @@
         pkgs = import nixpkgs { inherit system; };
       in rec {
         default = pkgs.rustPlatform.buildRustPackage {
-          pname = "neptune";
+          pname = "yuki";
           version = "0.1.0";
           src = ./.;
 
@@ -37,15 +37,26 @@
           # The per-crate build script refuses to compile without this marker
           # (ADR 0007). The package build is a sanctioned, hermetic build path,
           # so it sets the marker deliberately; it does not use mold.
-          NEPTUNE_DEV_SHELL = "1";
+          YUKI_DEV_SHELL = "1";
 
           nativeBuildInputs = with pkgs; [ pkg-config ];
 
           buildInputs = nativeDeps pkgs;
 
           postInstall = ''
-            install -Dm644 share/wayland-sessions/neptune.desktop \
-              $out/share/wayland-sessions/neptune.desktop
+            install -Dm644 share/wayland-sessions/yuki.desktop \
+              $out/share/wayland-sessions/yuki.desktop
+            # Ship the system wallpapers, like GNOME installs its own to
+            # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
+            mkdir -p $out/share/wallpapers
+            cp -r share/wallpapers/solid-colors $out/share/wallpapers/
+            # Ship the systemd user units that supervise the shell components
+            # (ADR 0023), with the package's binary path substituted in.
+            mkdir -p $out/lib/systemd/user
+            for unit in yuki-shell@.service yuki-session.target; do
+              sed "s|@out@|$out|g" "share/systemd/user/$unit" \
+                > "$out/lib/systemd/user/$unit"
+            done
           '';
         };
       });
@@ -86,7 +97,7 @@
           # Explicit marker so dev.sh can refuse to build outside this shell,
           # where the linker flag above would be missing and the binary would
           # be linked differently (ADR 0007).
-          NEPTUNE_DEV_SHELL = "1";
+          YUKI_DEV_SHELL = "1";
 
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.

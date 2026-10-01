@@ -1,0 +1,10 @@
+[package]
+name = "grade-graphics"
+description = "Grade Graphics (≈ Core Graphics + Core Text): the shared GLSL shaders and parameters (glossary)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

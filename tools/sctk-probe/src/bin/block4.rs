@@ -11,7 +11,7 @@
 //! flaky), so the numbers are printed for inspection.
 //!
 //! It then runs three resize scenarios, each with a fresh compositor, a fresh
-//! `resize_client` and `NEPTUNE_TEST_INPUT=1`: the compositor presses an edge
+//! `resize_client` and `YUKI_TEST_INPUT=1`: the compositor presses an edge
 //! or corner of the mapped window and its scripted motions drive the grab. The
 //! harness asserts the final size the client was configured to — unbounded
 //! growth from a corner, a client maximum clamping that growth, and a client
@@ -20,13 +20,13 @@
 //! Run from the dev shell, after building the compositor and probes:
 //!
 //! ```sh
-//! cargo build -p neptune -p sctk-probe
-//! NEPTUNE_BIN=target/debug/neptune NEPTUNE_STRESS_BIN=target/debug/window_stress \
-//!   NEPTUNE_RESIZE_BIN=target/debug/resize_client target/debug/block4
+//! cargo build -p yuki -p sctk-probe
+//! YUKI_BIN=target/debug/yuki YUKI_STRESS_BIN=target/debug/window_stress \
+//!   YUKI_RESIZE_BIN=target/debug/resize_client target/debug/block4
 //! ```
 //!
-//! Environment overrides: `NEPTUNE_BIN`, `NEPTUNE_STRESS_BIN`,
-//! `NEPTUNE_RESIZE_BIN`.
+//! Environment overrides: `YUKI_BIN`, `YUKI_STRESS_BIN`,
+//! `YUKI_RESIZE_BIN`.
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
@@ -140,23 +140,23 @@ fn run() -> Result<(), String> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("NEPTUNE_BIN")
+    let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/neptune"));
+        .unwrap_or_else(|| repo.join("target/debug/yuki"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p neptune` first",
+            "compositor binary not found at {}; run `cargo build -p yuki` first",
             binary.display()
         ));
     }
-    let stress = probe_binary(repo, "NEPTUNE_STRESS_BIN", "window_stress");
+    let stress = probe_binary(repo, "YUKI_STRESS_BIN", "window_stress");
     if !stress.is_file() {
         return Err(format!(
             "stress client not found at {}; run `cargo build -p sctk-probe` first",
             stress.display()
         ));
     }
-    let resize = probe_binary(repo, "NEPTUNE_RESIZE_BIN", "resize_client");
+    let resize = probe_binary(repo, "YUKI_RESIZE_BIN", "resize_client");
     if !resize.is_file() {
         return Err(format!(
             "resize client not found at {}; run `cargo build -p sctk-probe` first",
@@ -171,7 +171,7 @@ fn run() -> Result<(), String> {
         Command::new(&binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_OBJECTS", "1"),
+            .env("YUKI_TEST_OBJECTS", "1"),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
@@ -251,7 +251,7 @@ fn run_resize_cases(binary: &Path, client: &Path) -> Result<(), String> {
         client,
         "maximum",
         "0.999,0.999",
-        Some(("NEPTUNE_RESIZE_MAX", BOUND_MARGIN)),
+        Some(("YUKI_RESIZE_MAX", BOUND_MARGIN)),
         |width, height| (width + BOUND_MARGIN, height + BOUND_MARGIN),
     )?;
     run_resize_case(
@@ -259,7 +259,7 @@ fn run_resize_cases(binary: &Path, client: &Path) -> Result<(), String> {
         client,
         "minimum",
         "0.0,0.5",
-        Some(("NEPTUNE_RESIZE_MIN", BOUND_MARGIN)),
+        Some(("YUKI_RESIZE_MIN", BOUND_MARGIN)),
         |width, height| (width - BOUND_MARGIN, height),
     )?;
     Ok(())
@@ -284,8 +284,8 @@ fn run_resize_case(
         Command::new(binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_INPUT", "1")
-            .env("NEPTUNE_TEST_PRESS_AT", press_at),
+            .env("YUKI_TEST_INPUT", "1")
+            .env("YUKI_TEST_PRESS_AT", press_at),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
@@ -588,7 +588,7 @@ impl TempDir {
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
         let path =
-            std::env::temp_dir().join(format!("neptune-block4-{}-{unique}", std::process::id()));
+            std::env::temp_dir().join(format!("yuki-block4-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         #[cfg(unix)]

@@ -5,7 +5,7 @@
  * GTK4 creates that decoration object in realize, before it creates the
  * xdg_toplevel, so this client also exercises the ordering where the mode
  * request arrives before the toplevel exists. Used by decoration_probe
- * (NEPTUNE_APP_GTK4_PLAIN). Build it against the same GTK the probe runs
+ * (YUKI_APP_GTK4_PLAIN). Build it against the same GTK the probe runs
  * against, for example:
  *
  *   cc gtk4_plain.c -o gtk4_plain $(pkg-config --cflags --libs gtk4-wayland)

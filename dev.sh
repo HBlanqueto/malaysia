@@ -1,5 +1,5 @@
 #!/bin/sh
-# dev.sh - build, run and inspect Neptune during development.
+# dev.sh - build, run and inspect Yuki during development.
 #
 # Wraps `cargo` for the common actions and manages a background instance of
 # the compositor through a PID file and a log file. It adds nothing else.
@@ -63,7 +63,7 @@ require() {
 # linker flag and produce a differently linked binary, so it is forbidden. The
 # dev shell sets the marker (ADR 0007).
 require_devshell() {
-    [ "${NEPTUNE_DEV_SHELL:-}" = "1" ] ||
+    [ "${YUKI_DEV_SHELL:-}" = "1" ] ||
         fail "$EXIT_NOT_DEVSHELL" "not inside the dev shell; run 'nix develop' first (see ADR 0007)"
 }
 
@@ -77,15 +77,15 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # passes through from the caller.
 runtime_dir() {
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
-        printf '%s\n' "$XDG_RUNTIME_DIR/neptune-dev"
+        printf '%s\n' "$XDG_RUNTIME_DIR/yuki-dev"
     else
-        printf '%s\n' "/tmp/neptune-$(id -u)"
+        printf '%s\n' "/tmp/yuki-$(id -u)"
     fi
 }
 
 RUNTIME_DIR=$(runtime_dir)
-PID_FILE="$RUNTIME_DIR/neptune.pid"
-LOG_FILE="$RUNTIME_DIR/neptune.log"
+PID_FILE="$RUNTIME_DIR/yuki.pid"
+LOG_FILE="$RUNTIME_DIR/yuki.log"
 
 ensure_runtime_dir() {
     mkdir -p "$RUNTIME_DIR"
@@ -103,17 +103,17 @@ read_pid() {
     printf '%s\n' "$_saved"
 }
 
-# pid_is_neptune PID - succeed only if the PID is alive and its comm is
-# "neptune". Linux /proc is assumed: this project is single-machine.
-pid_is_neptune() {
+# pid_is_yuki PID - succeed only if the PID is alive and its comm is
+# "yuki". Linux /proc is assumed: this project is single-machine.
+pid_is_yuki() {
     kill -0 "$1" 2>/dev/null || return 1
-    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "neptune" ]
+    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "yuki" ]
 }
 
-# is_running - succeed only if the saved PID is a live Neptune process.
+# is_running - succeed only if the saved PID is a live Yuki process.
 is_running() {
     _saved=$(read_pid) || return 1
-    pid_is_neptune "$_saved"
+    pid_is_yuki "$_saved"
 }
 
 build() {
@@ -145,14 +145,14 @@ start() {
     fi
     if is_running; then
         _saved=$(read_pid)
-        fail "$EXIT_ALREADY_RUNNING" "neptune is already running (pid $_saved)"
+        fail "$EXIT_ALREADY_RUNNING" "yuki is already running (pid $_saved)"
     fi
-    if [ -n "${NEPTUNE_BIN:-}" ]; then
-        _bin=$NEPTUNE_BIN
+    if [ -n "${YUKI_BIN:-}" ]; then
+        _bin=$YUKI_BIN
     elif [ -n "$_release" ]; then
-        _bin="$script_dir/target/release/neptune"
+        _bin="$script_dir/target/release/yuki"
     else
-        _bin="$script_dir/target/debug/neptune"
+        _bin="$script_dir/target/debug/yuki"
     fi
     if [ ! -x "$_bin" ]; then
         fail "$EXIT_RUN_FAILED" "binary not built; run './dev.sh build' first"
@@ -185,7 +185,7 @@ start() {
     sleep 0.2
     if ! kill -0 "$_saved" 2>/dev/null; then
         rm -f "$PID_FILE"
-        printf 'dev.sh: neptune exited immediately; log follows:\n' >&2
+        printf 'dev.sh: yuki exited immediately; log follows:\n' >&2
         if [ -f "$LOG_FILE" ]; then
             tail -n 20 "$LOG_FILE" >&2
         fi
@@ -250,7 +250,7 @@ watch() {
 # the process group, so an invoking shell is never caught in the blast radius.
 stop() {
     _saved=$(read_pid) || return 0
-    if ! pid_is_neptune "$_saved"; then
+    if ! pid_is_yuki "$_saved"; then
         rm -f "$PID_FILE"
         return 0
     fi
@@ -270,15 +270,15 @@ stop() {
 status() {
     if is_running; then
         _saved=$(read_pid)
-        printf 'neptune is running (pid %s)\n' "$_saved"
+        printf 'yuki is running (pid %s)\n' "$_saved"
         return 0
     fi
     if [ -f "$PID_FILE" ]; then
         rm -f "$PID_FILE"
-        printf 'neptune is not running (removed stale pid file)\n'
+        printf 'yuki is not running (removed stale pid file)\n'
         return "$EXIT_STATUS_DEAD"
     fi
-    printf 'neptune is not running\n'
+    printf 'yuki is not running\n'
     return "$EXIT_STATUS_NOT_RUNNING"
 }
 
@@ -313,7 +313,7 @@ clean() {
 # display environment unchanged.
 #
 # A stub binary records what it inherited and sleeps, so this needs no display
-# and no real compositor. `NEPTUNE_BIN` points `run` at the stub. The values are
+# and no real compositor. `YUKI_BIN` points `run` at the stub. The values are
 # deliberately synthetic: if `run` rewrites either, the recorded pair differs
 # and the check fails.
 check_display_env() {
@@ -322,13 +322,13 @@ check_display_env() {
     _record="$_sentinel/record"
     cat >"$_probe" <<'PROBE'
 #!/bin/sh
-printf '%s\n%s\n' "${WAYLAND_DISPLAY-}" "${XDG_RUNTIME_DIR-}" >"$NEPTUNE_ENV_RECORD"
+printf '%s\n%s\n' "${WAYLAND_DISPLAY-}" "${XDG_RUNTIME_DIR-}" >"$YUKI_ENV_RECORD"
 sleep 5
 PROBE
     chmod +x "$_probe"
-    _want_display="neptune-check-wayland"
+    _want_display="yuki-check-wayland"
     _want_runtime="$_sentinel"
-    if ! NEPTUNE_BIN="$_probe" NEPTUNE_ENV_RECORD="$_record" \
+    if ! YUKI_BIN="$_probe" YUKI_ENV_RECORD="$_record" \
         WAYLAND_DISPLAY="$_want_display" XDG_RUNTIME_DIR="$_want_runtime" \
         "$script_dir/dev.sh" run >/dev/null 2>&1
     then
@@ -381,16 +381,16 @@ smoke() {
     fi
     if [ -n "$_release" ]; then
         _profile=release
-        cargo build --release -p neptune -p sctk-probe ||
+        cargo build --release -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
     else
         _profile=debug
-        cargo build -p neptune -p sctk-probe ||
+        cargo build -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
     fi
-    # NEPTUNE_BIN pins the binary just built, so the harness does not fall back
+    # YUKI_BIN pins the binary just built, so the harness does not fall back
     # to a different profile's compositor.
-    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+    YUKI_BIN="$script_dir/target/$_profile/yuki" \
         "$script_dir/target/$_profile/smoke" ||
         fail "$EXIT_SMOKE" "smoke test failed"
 }
@@ -412,24 +412,24 @@ block4() {
     fi
     if [ -n "$_release" ]; then
         _profile=release
-        cargo build --release -p neptune -p sctk-probe ||
+        cargo build --release -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     else
         _profile=debug
-        cargo build -p neptune -p sctk-probe ||
+        cargo build -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     fi
-    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
-        NEPTUNE_STRESS_BIN="$script_dir/target/$_profile/window_stress" \
-        NEPTUNE_RESIZE_BIN="$script_dir/target/$_profile/resize_client" \
+    YUKI_BIN="$script_dir/target/$_profile/yuki" \
+        YUKI_STRESS_BIN="$script_dir/target/$_profile/window_stress" \
+        YUKI_RESIZE_BIN="$script_dir/target/$_profile/resize_client" \
         "$script_dir/target/$_profile/block4" ||
         fail "$EXIT_SMOKE" "block4 test failed"
 }
 
-# decoration - run real applications inside Neptune and assert the decoration
+# decoration - run real applications inside Yuki and assert the decoration
 # protocol and mode each one negotiated (ADR 0019).
 #
-# Applications are found through NEPTUNE_APP_* variables (see the sctk-probe
+# Applications are found through YUKI_APP_* variables (see the sctk-probe
 # README); one that is not available is reported UNVERIFIED and does not fail
 # the run, so the command works on a machine with no GTK or Qt demos.
 decoration() {
@@ -445,14 +445,14 @@ decoration() {
     fi
     if [ -n "$_release" ]; then
         _profile=release
-        cargo build --release -p neptune -p sctk-probe ||
+        cargo build --release -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     else
         _profile=debug
-        cargo build -p neptune -p sctk-probe ||
+        cargo build -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     fi
-    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
+    YUKI_BIN="$script_dir/target/$_profile/yuki" \
         "$script_dir/target/$_profile/decoration_probe" ||
         fail "$EXIT_SMOKE" "decoration probe failed"
 }
@@ -472,16 +472,16 @@ move() {
     fi
     if [ -n "$_release" ]; then
         _profile=release
-        cargo build --release -p neptune -p sctk-probe ||
+        cargo build --release -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     else
         _profile=debug
-        cargo build -p neptune -p sctk-probe ||
+        cargo build -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     fi
-    NEPTUNE_BIN="$script_dir/target/$_profile/neptune" \
-        NEPTUNE_MOVE_BIN="$script_dir/target/$_profile/move_client" \
-        NEPTUNE_HOVER_BIN="$script_dir/target/$_profile/hover_client" \
+    YUKI_BIN="$script_dir/target/$_profile/yuki" \
+        YUKI_MOVE_BIN="$script_dir/target/$_profile/move_client" \
+        YUKI_HOVER_BIN="$script_dir/target/$_profile/hover_client" \
         "$script_dir/target/$_profile/move_probe" ||
         fail "$EXIT_SMOKE" "move probe failed"
 }

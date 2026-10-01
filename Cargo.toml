@@ -1,13 +1,16 @@
-# Neptune is a Wayland compositor built on Smithay.
+# Yuki is a Wayland compositor built on Smithay.
 #
 # This file is the workspace root: it holds no crate of its own, only the
 # shared settings and build profiles for the crates under `crates/`.
 [workspace]
 resolver = "3"
 members = [
-    "crates/neptune",
-    "crates/neptune-design",
-    "crates/neptune-scene",
+    "crates/yuki",
+    "crates/yuki-design",
+    "crates/yuki-scene",
+    "crates/grade-graphics",
+    "crates/celestial-kit",
+    "crates/yuki-shell",
     "tools/sctk-probe",
 ]
 
@@ -17,9 +20,12 @@ members = [
 # test --workspace` still covers them, which keeps them clippy- and
 # rustfmt-clean alongside the crates.
 default-members = [
-    "crates/neptune",
-    "crates/neptune-design",
-    "crates/neptune-scene",
+    "crates/yuki",
+    "crates/yuki-design",
+    "crates/yuki-scene",
+    "crates/grade-graphics",
+    "crates/celestial-kit",
+    "crates/yuki-shell",
 ]
 
 [workspace.package]
@@ -27,7 +33,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
-repository = "https://github.com/HBlanqueto/neptune"
+repository = "https://github.com/HBlanqueto/yuki"
 
 [workspace.dependencies]
 # Error handling.
@@ -45,14 +51,49 @@ signal-hook = "0.3"    # Safe SIGTERM/SIGINT handling; std has no signal API and
 # built-in arrow is drawn when no theme can be read.
 xcursor = "0.3"        # Parses Xcursor theme files; smithay ships no cursor loader.
 
-# Neptune's own crates.
-neptune-design = { path = "crates/neptune-design" }   # The one place every visual value lives.
-neptune-scene = { path = "crates/neptune-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
+# Runtime configuration. `serde` + `toml` back the compositor's config file and
+# the documented option catalog (ADR 0021); the same structs will back the
+# future D-Bus surface and the settings app.
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Keyboard handling (Esc closes a popup level): xkb keysym lookup. Pinned to
+# the same major smithay uses, so the Keysym type is the same crate.
+xkbcommon = "0.8"
+
+# Shell clock (yuki-shell menubar): local time formatting.
+chrono = "0.4"
+
+# Yuki's own crates.
+yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.
+yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
+grade-graphics = { path = "crates/grade-graphics" }  # Shared GLSL shaders + parameters (glossary).
+celestial-kit = { path = "crates/celestial-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
+
+# Wayland client stack for `yuki-shell` and the probe clients.
+# `system` enables `ObjectId::as_ptr`, which is how the EGL setup hands the
+# raw `wl_display*`/`wl_surface*` to libwayland-egl (see celestial-kit).
+wayland-client = { version = "0.31", features = ["system"] }
+wayland-egl = "0.32"
+
+# Shell graphics (celestial-kit): a GLES renderer over EGL, like the
+# compositor's own renderer (ADR 0024).
+khronos-egl = "6"
+glow = "0.14"
+
+# Shell text (celestial-kit): shaping with cosmic-text (harfrust) and glyph
+# rasterization with swash (ADR 0024).
+cosmic-text = "0.19"
+
+# Wallpaper decoding (yuki-shell): the system wallpapers are PNGs.
+png = "0.17"
 
 # Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
-# Neptune while developing. Only the probe package uses this, and the package
+# Yuki while developing. Only the probe package uses this, and the package
 # is excluded from the default build; winit already pulls it into the graph.
 smithay-client-toolkit = "0.19.2"
+# Same package, under the shorter name the shell uses (`sctk::...`).
+sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 
 # Compositor framework. Default features are off so only the nested winit
 # backend and the GLES2 renderer are compiled (ADR 0009); `wayland_frontend`
@@ -64,7 +105,7 @@ smithay = { version = "0.7", default-features = false, features = [
 ] }
 
 # Fast-compiling development build. Dependencies get light optimisation while
-# Neptune's own crates stay unoptimised, so incremental rebuilds of our code
+# Yuki's own crates stay unoptimised, so incremental rebuilds of our code
 # are cheap but the third-party code we lean on is not painfully slow.
 [profile.dev]
 opt-level = 0

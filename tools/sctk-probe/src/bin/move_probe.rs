@@ -1,6 +1,6 @@
 //! Acceptance harness for the client-initiated move and resize path.
 //!
-//! It runs three cases, each with a fresh compositor and `NEPTUNE_TEST_INPUT=1`
+//! It runs three cases, each with a fresh compositor and `YUKI_TEST_INPUT=1`
 //! (so the compositor injects the button press, motions and release a probe
 //! cannot make itself):
 //!
@@ -35,9 +35,9 @@ const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long Nautilus gets to start, map and be dragged.
 const NAUTILUS_TIMEOUT: Duration = Duration::from_secs(12);
-/// The pointer delta the scripted drag applies, matching `NEPTUNE_TEST_DRAG`.
+/// The pointer delta the scripted drag applies, matching `YUKI_TEST_DRAG`.
 const DRAG: (f64, f64) = (60.0, 40.0);
-/// The global points the scripted hover visits, matching `NEPTUNE_TEST_HOVER`.
+/// The global points the scripted hover visits, matching `YUKI_TEST_HOVER`.
 ///
 /// The first is outside the window (the client gets a leave, so the next point
 /// enters); the other two are inside it, so the client sees an enter and then a
@@ -62,16 +62,16 @@ fn run() -> Result<(), String> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("NEPTUNE_BIN")
+    let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/neptune"));
+        .unwrap_or_else(|| repo.join("target/debug/yuki"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p neptune` first",
+            "compositor binary not found at {}; run `cargo build -p yuki` first",
             binary.display()
         ));
     }
-    let client = probe_binary(repo, "NEPTUNE_MOVE_BIN", "move_client");
+    let client = probe_binary(repo, "YUKI_MOVE_BIN", "move_client");
     if !client.is_file() {
         return Err(format!(
             "move client not found at {}; run `cargo build -p sctk-probe` first",
@@ -107,8 +107,8 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
         Command::new(binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_INPUT", "1")
-            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
+            .env("YUKI_TEST_INPUT", "1")
+            .env("YUKI_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
@@ -211,7 +211,7 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
 
 /// The buttonless hover through `hover_client`, asserting where it arrived.
 fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
-    let client = probe_binary(repo, "NEPTUNE_HOVER_BIN", "hover_client");
+    let client = probe_binary(repo, "YUKI_HOVER_BIN", "hover_client");
     if !client.is_file() {
         return Err(format!(
             "hover client not found at {}; run `cargo build -p sctk-probe` first",
@@ -225,9 +225,9 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
         Command::new(binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_INPUT", "1")
-            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1))
-            .env("NEPTUNE_TEST_HOVER", &hover),
+            .env("YUKI_TEST_INPUT", "1")
+            .env("YUKI_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1))
+            .env("YUKI_TEST_HOVER", &hover),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
@@ -240,7 +240,7 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
         Command::new(&client)
             .env("XDG_RUNTIME_DIR", runtime.path())
             .env("WAYLAND_DISPLAY", &socket)
-            .env("NEPTUNE_EXPECT_HOVER", &expect)
+            .env("YUKI_EXPECT_HOVER", &expect)
             .stdin(Stdio::null()),
         None,
     )
@@ -303,7 +303,7 @@ fn assert_position(line: &str, expected_x: f64, expected_y: f64) -> Result<(), S
 
 /// A scripted headerbar drag on a real Nautilus window.
 fn run_nautilus_case(binary: &Path) -> Result<(), String> {
-    let Some(nautilus) = resolve("NEPTUNE_APP_NAUTILUS", "nautilus") else {
+    let Some(nautilus) = resolve("YUKI_APP_NAUTILUS", "nautilus") else {
         println!("move_probe: nautilus UNVERIFIED (not installed)");
         return Ok(());
     };
@@ -313,10 +313,10 @@ fn run_nautilus_case(binary: &Path) -> Result<(), String> {
         Command::new(binary)
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("NEPTUNE_TEST_INPUT", "1")
+            .env("YUKI_TEST_INPUT", "1")
             // The headerbar is a few percent below the window's top edge.
-            .env("NEPTUNE_TEST_PRESS_AT", "0.5,0.05")
-            .env("NEPTUNE_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
+            .env("YUKI_TEST_PRESS_AT", "0.5,0.05")
+            .env("YUKI_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
         host_display.as_deref(),
     )?;
     let compositor_log = compositor.capture()?;
@@ -593,8 +593,7 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("neptune-move-{}-{unique}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("yuki-move-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         Ok(Self(path))
