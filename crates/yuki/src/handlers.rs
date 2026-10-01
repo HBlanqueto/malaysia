@@ -14,6 +14,7 @@ use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::delegate_compositor;
 use smithay::delegate_data_device;
 use smithay::delegate_dmabuf;
+use smithay::delegate_drm_syncobj;
 use smithay::delegate_foreign_toplevel_list;
 use smithay::delegate_fractional_scale;
 use smithay::delegate_kde_decoration;
@@ -26,7 +27,9 @@ use smithay::delegate_shm;
 use smithay::delegate_viewporter;
 use smithay::delegate_xdg_decoration;
 use smithay::delegate_xdg_shell;
-use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
+use smithay::reexports::calloop::Interest;
+use smithay::wayland::dmabuf::{get_dmabuf, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
+use smithay::wayland::drm_syncobj::{DrmSyncobjCachedState, DrmSyncobjHandler, DrmSyncobjState};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelListHandler, ForeignToplevelListState};
 use smithay::input::Seat;
 use smithay::input::SeatHandler;
@@ -44,7 +47,10 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::WEnum;
 use smithay::utils::Serial;
 use smithay::wayland::buffer::BufferHandler;
-use smithay::wayland::compositor::{CompositorClientState, CompositorHandler, CompositorState};
+use smithay::wayland::compositor::{
+    Blocker, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
+    SurfaceAttributes, add_blocker, add_pre_commit_hook, with_states,
+};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::selection::data_device::{
@@ -83,6 +89,60 @@ impl CompositorHandler for State {
             .compositor_state
     }
 
+    fn new_surface(&mut self, surface: &WlSurface) {
+        // A commit that attaches a dmabuf is held until the buffer is ready to
+        // read (Bloque 7b). One blocker path serves both syncs: the explicit
+        // acquire point when the client set one, otherwise the implicit fence.
+        // The resume happens from the event loop, so the compositor never
+        // blocks on a client; a frame is never shown half-rendered.
+        add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
+            let (has_dmabuf, dmabuf, acquire) = with_states(surface, |states| {
+                let acquire = states
+                    .cached_state
+                    .get::<DrmSyncobjCachedState>()
+                    .pending()
+                    .acquire_point
+                    .clone();
+                let dmabuf = states
+                    .cached_state
+                    .get::<SurfaceAttributes>()
+                    .pending()
+                    .buffer
+                    .as_ref()
+                    .and_then(|assignment| match assignment {
+                        BufferAssignment::NewBuffer(buffer) => get_dmabuf(buffer).cloned().ok(),
+                        _ => None,
+                    });
+                let has_dmabuf = dmabuf.is_some();
+                (has_dmabuf, dmabuf, acquire)
+            });
+            let Some(client) = surface.client() else {
+                return;
+            };
+
+            match pending_blocker(has_dmabuf, acquire.is_some()) {
+                // Explicit sync wins when present; the acquire point names
+                // exactly when the client finished writing. Otherwise the
+                // dmabuf's own implicit fence.
+                Some(BlockerKind::Explicit) => {
+                    if let Some(acquire) = acquire
+                        && let Ok((blocker, source)) = acquire.generate_blocker()
+                    {
+                        insert_blocker_source(state, surface, client, source, blocker);
+                    }
+                }
+                Some(BlockerKind::Implicit) => {
+                    if let Some(dmabuf) = dmabuf
+                        && let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ)
+                    {
+                        insert_blocker_source(state, surface, client, source, blocker);
+                    }
+                }
+                None => {}
+            }
+        });
+    }
+
     fn commit(&mut self, surface: &WlSurface) {
         // At `debug` level, name the buffer type each committed surface uses.
         // This is how a GPU client (wezterm, Firefox) is verified from the
@@ -105,6 +165,82 @@ impl CompositorHandler for State {
 }
 
 delegate_compositor!(State);
+
+/// Which commit blocker a pending dmabuf needs, if any (Bloque 7b).
+///
+/// This is the single decision that both syncs share: a commit only blocks
+/// when it attaches a dmabuf, and the explicit acquire point wins over the
+/// implicit fence when both are present. (An acquire point without a buffer is
+/// a protocol error smithay already rejects.)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockerKind {
+    /// Wait on the client's explicit acquire point (`wp_linux_drm_syncobj`).
+    Explicit,
+    /// Wait on the dmabuf's own implicit fence.
+    Implicit,
+}
+
+/// The blocker kind for a commit with `has_dmabuf` and `has_acquire_point`.
+fn pending_blocker(has_dmabuf: bool, has_acquire_point: bool) -> Option<BlockerKind> {
+    if !has_dmabuf {
+        return None;
+    }
+    Some(if has_acquire_point {
+        BlockerKind::Explicit
+    } else {
+        BlockerKind::Implicit
+    })
+}
+
+/// Inserts a blocker's event source into the loop and, on success, blocks the
+/// surface's commit until the source fires.
+///
+/// The source is one-shot: when the dmabuf (implicit) or the acquire point
+/// (explicit) becomes readable, the callback resumes the commit with
+/// `CompositorClientState::blocker_cleared`. The callback's data is the
+/// [`Session`](crate::session::Session), whose loop owns the source.
+///
+/// Returns whether the source was inserted; a failed insertion (e.g. the loop
+/// is shutting down) leaves the commit unblocked rather than forever blocked.
+fn insert_blocker_source<M, S>(
+    state: &mut State,
+    surface: &WlSurface,
+    client: Client,
+    source: S,
+    blocker: impl Blocker + Send + 'static,
+) -> bool
+where
+    S: smithay::reexports::calloop::EventSource<
+            Event = (),
+            Metadata = M,
+            Ret = Result<(), std::io::Error>,
+            Error = std::io::Error,
+        > + 'static,
+{
+    let inserted = state.loop_handle.insert_source(
+        source,
+        move |_, _: &mut M, session: &mut crate::session::Session| {
+            // The client may have died while the commit was blocked (its surface was
+            // destroyed and the transaction cancelled); its data is then gone
+            // and the source just cleans itself up. This is what keeps killing
+            // a blocked client from leaving orphan sources or fds (Bloque 7b).
+            let Some(client_state) = client.get_data::<ClientState>() else {
+                return Ok(());
+            };
+            let dh = session.state.display_handle.clone();
+            client_state
+                .compositor_state
+                .blocker_cleared(&mut session.state, &dh);
+            Ok(())
+        },
+    );
+    if inserted.is_ok() {
+        add_blocker(surface, blocker);
+        true
+    } else {
+        false
+    }
+}
 
 /// Logs the buffer type of the surface's just-committed buffer, at `debug`.
 ///
@@ -160,6 +296,14 @@ impl DmabufHandler for State {
 }
 
 delegate_dmabuf!(State);
+
+impl DrmSyncobjHandler for State {
+    fn drm_syncobj_state(&mut self) -> Option<&mut DrmSyncobjState> {
+        self.syncobj_state.as_mut()
+    }
+}
+
+delegate_drm_syncobj!(State);
 
 impl ShmHandler for State {
     fn shm_state(&self) -> &ShmState {
@@ -539,7 +683,10 @@ mod tests {
     use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
     use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode as KdeMode;
 
-    use super::{apply_decoration_policy, decoration_for_kde_mode, decoration_for_xdg_mode};
+    use super::{
+        BlockerKind, apply_decoration_policy, decoration_for_kde_mode, decoration_for_xdg_mode,
+        pending_blocker,
+    };
     use crate::config::DecorationPolicy;
     use yuki_scene::scene::Decoration;
 
@@ -600,5 +747,21 @@ mod tests {
             apply_decoration_policy(DecorationPolicy::ForceClient, Decoration::Server),
             Decoration::Client
         );
+    }
+
+    #[test]
+    fn a_commit_without_a_dmabuf_never_blocks() {
+        assert_eq!(pending_blocker(false, false), None, "no dmabuf, no blocker");
+        assert_eq!(
+            pending_blocker(false, true),
+            None,
+            "an acquire point without a buffer is a protocol error, not a blocker"
+        );
+    }
+
+    #[test]
+    fn explicit_sync_wins_over_the_implicit_fence() {
+        assert_eq!(pending_blocker(true, true), Some(BlockerKind::Explicit));
+        assert_eq!(pending_blocker(true, false), Some(BlockerKind::Implicit));
     }
 }

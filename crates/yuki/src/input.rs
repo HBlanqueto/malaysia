@@ -872,7 +872,10 @@ mod tests {
         use smithay::backend::allocator::{Format, Fourcc, Modifier};
         use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 
-        let event_loop = EventLoop::<()>::try_new().expect("the test needs an event loop");
+        // The loop's data type is the session's; only the handle is needed
+        // here (it is a phantom in the type), so no session is constructed.
+        let event_loop =
+            EventLoop::<crate::session::Session>::try_new().expect("the test needs an event loop");
         let display = Display::<State>::new().expect("the test needs a display");
         // A fake device and one linear format: `State` requires a feedback
         // (there is no v3 fallback), but the tests never bind a client to it.
@@ -890,6 +893,8 @@ mod tests {
             &display.handle(),
             Size::from(size),
             feedback,
+            None,
+            event_loop.handle(),
         )
         .expect("the test state should build");
         (display, state)

@@ -24,10 +24,12 @@
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::drm::DrmDeviceFd;
 use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
+use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
@@ -35,6 +37,7 @@ use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
+use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
@@ -98,6 +101,19 @@ pub struct State {
     /// clients (see `session::dispatch_clients`). A buffer that cannot be
     /// imported is rejected there, never at render time.
     pub pending_dmabuf_imports: Vec<PendingDmabufImport>,
+    /// The `wp_linux_drm_syncobj_manager_v1` state (Bloque 7b).
+    ///
+    /// `Some` only when the render node supports `syncobj_eventfd`; without
+    /// that the global is not announced and clients fall back to the implicit
+    /// sync blocker.
+    pub syncobj_state: Option<DrmSyncobjState>,
+    /// The calloop loop handle, for the pre-commit blockers (Bloque 7b).
+    ///
+    /// The implicit-sync and explicit-sync commit blockers insert a one-shot
+    /// event source into the loop and resume the commit when it fires. The
+    /// loop's data type is [`Session`](crate::session::Session); anvil keeps
+    /// the same handle in its state.
+    pub(crate) loop_handle: LoopHandle<'static, crate::session::Session>,
     /// The factory for `wl_seat` globals.
     pub seat_state: SeatState<State>,
     /// The one seat Yuki offers.
@@ -226,11 +242,19 @@ impl State {
     /// global is always created with feedback (version 5), never the v3
     /// fallback. The feedback comes from the winit renderer, which `State`
     /// never sees (ADR 0012).
-    pub fn new(
+    ///
+    /// `syncobj_device` is the opened render node, passed only when it supports
+    /// `syncobj_eventfd` (the session tests it); `State` announces the
+    /// `wp_linux_drm_syncobj_manager_v1` global then. `loop_handle` is the
+    /// calloop handle whose data type is the session, used by the commit
+    /// blockers (Bloque 7b).
+    pub(crate) fn new(
         loop_signal: LoopSignal,
         display_handle: &DisplayHandle,
         size: Size<i32, Physical>,
         dmabuf_feedback: DmabufFeedback,
+        syncobj_device: Option<DrmDeviceFd>,
+        loop_handle: LoopHandle<'static, crate::session::Session>,
     ) -> Result<Self, StateError> {
         let compositor_state = CompositorState::new::<Self>(display_handle);
         let shm_state = ShmState::new::<Self>(
@@ -241,6 +265,10 @@ impl State {
         // One path: version 5 with the default feedback (Bloque 7a). The main
         // device and formats come from the renderer; there is no v3 fallback.
         dmabuf_state.create_global_with_default_feedback::<Self>(display_handle, &dmabuf_feedback);
+        // Explicit sync only when the device supports syncobj eventfds; the
+        // global is announced exactly then (Bloque 7b).
+        let syncobj_state =
+            syncobj_device.map(|device| DrmSyncobjState::new::<Self>(display_handle, device));
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
         let decoration_state = XdgDecorationState::new::<Self>(display_handle);
@@ -299,6 +327,8 @@ impl State {
             shm_state,
             dmabuf_state,
             pending_dmabuf_imports: Vec::new(),
+            syncobj_state,
+            loop_handle,
             seat_state,
             seat,
             cursor_status: CursorImageStatus::default_named(),

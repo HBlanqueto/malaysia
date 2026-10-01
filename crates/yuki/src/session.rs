@@ -15,11 +15,12 @@
 //! frame has actually been drawn, so a client that commits cannot make the
 //! compositor draw faster than the output refreshes.
 
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use smithay::backend::SwapBuffersError;
+use smithay::backend::drm::{DrmDeviceFd, DrmNode};
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
@@ -39,11 +40,12 @@ use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
 use smithay::reexports::wayland_server::backend::{ClientId, ObjectId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{IsAlive, Logical, Physical, Point, Scale, Size, Transform};
+use smithay::utils::{DeviceFd, IsAlive, Logical, Physical, Point, Scale, Size, Transform};
 use smithay::wayland::compositor::{
     SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -98,11 +100,14 @@ pub enum SessionError {
 /// of one value can be borrowed at once while a display stored inside `State`
 /// could not (ADR 0013). The damage tracker is backend state, so it lives here
 /// too rather than in `State` (ADR 0012).
-struct Session {
+pub(crate) struct Session {
     /// The Wayland display: owns the clients and their protocol objects.
     display: Display<State>,
     /// The compositor state handlers mutate.
-    state: State,
+    ///
+    /// `pub(crate)` so the blocker callbacks (handlers.rs) can resume commits
+    /// through it; everything else stays private to the session.
+    pub(crate) state: State,
     /// The winit window and its GLES2 renderer.
     backend: WinitGraphicsBackend<GlesRenderer>,
     /// Tracks damage between frames for the one output.
@@ -228,6 +233,23 @@ pub(crate) fn winit_mode_source(size: Size<i32, Physical>) -> OutputModeSource {
     }
 }
 
+/// Opens a render node as a `DrmDeviceFd`, for the explicit-sync protocol.
+///
+/// The `wp_linux_drm_syncobj_manager_v1` global imports the client's syncobj
+/// timelines and waits on them through this device fd (Bloque 7b). The render
+/// node is what the EGL device reported; its path is opened read-write, which
+/// is all a render node needs.
+fn open_render_node(node: &DrmNode) -> std::io::Result<DrmDeviceFd> {
+    use std::fs::OpenOptions;
+
+    let path = node
+        .dev_path()
+        .ok_or_else(|| std::io::Error::other("the render node has no device path"))?;
+    let file = OpenOptions::new().read(true).write(true).open(path)?;
+    let fd = OwnedFd::from(file);
+    Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
+}
+
 /// Runs the nested session until the window is closed or a signal arrives.
 ///
 /// This blocks the calling thread, driving the calloop event loop. It returns
@@ -238,7 +260,7 @@ pub fn run() -> Result<(), SessionError> {
 
     let display = Display::<State>::new()?;
 
-let (mut backend, winit_events) = winit::init::<GlesRenderer>()
+    let (mut backend, winit_events) = winit::init::<GlesRenderer>()
         .map_err(|error| SessionError::Backend(describe_chain(&error)))?;
 
     // The render node of the device the winit renderer runs on, derived from
@@ -255,17 +277,30 @@ let (mut backend, winit_events) = winit::init::<GlesRenderer>()
         .ok_or_else(|| {
             SessionError::DmabufFeedback("the EGL device has no render node".to_string())
         })?;
-    let dmabuf_feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), backend.renderer().dmabuf_formats())
-        .build()
-        .map_err(|error| {
-            SessionError::DmabufFeedback(format!("the feedback could not be built: {error}"))
-        })?;
+    let dmabuf_feedback =
+        DmabufFeedbackBuilder::new(render_node.dev_id(), backend.renderer().dmabuf_formats())
+            .build()
+            .map_err(|error| {
+                SessionError::DmabufFeedback(format!("the feedback could not be built: {error}"))
+            })?;
+
+    // Open the render node as a DRM device fd and, if it supports syncobj
+    // eventfds, announce the explicit-sync global (Bloque 7b). Otherwise the
+    // global is simply not advertised and clients fall back to the implicit
+    // sync blocker; the loop's handle rides into `State` for the blockers.
+    let import_device = open_render_node(&render_node).map_err(|error| {
+        SessionError::DmabufFeedback(format!("the render node could not be opened: {error}"))
+    })?;
+    let syncobj_device = supports_syncobj_eventfd(&import_device).then_some(import_device);
+    let loop_handle = event_loop.handle();
 
     let state = State::new(
         loop_signal.clone(),
         &display.handle(),
         backend.window_size(),
         dmabuf_feedback,
+        syncobj_device,
+        loop_handle.clone(),
     )?;
     let damage_tracker =
         OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
@@ -288,8 +323,6 @@ let (mut backend, winit_events) = winit::init::<GlesRenderer>()
     session.backend.window().request_redraw();
 
     watch_for_shutdown(loop_signal)?;
-
-    let loop_handle = event_loop.handle();
 
     loop_handle
         .insert_source(winit_events, move |event, _, session: &mut Session| {
@@ -1259,8 +1292,9 @@ mod tests {
         use sctk::reexports::client::globals::registry_queue_init;
         use smithay::reexports::wayland_server::Display;
 
-        let event_loop = smithay::reexports::calloop::EventLoop::<()>::try_new()
-            .expect("the test needs an event loop");
+        let event_loop =
+            smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
+                .expect("the test needs an event loop");
         let mut display = Display::<State>::new().expect("the test needs a display");
         let mut renderer = offscreen_renderer();
 
@@ -1282,6 +1316,8 @@ mod tests {
             &display.handle(),
             Size::from((1280, 720)),
             feedback,
+            None,
+            event_loop.handle(),
         )
         .expect("the state should build");
 
@@ -1398,6 +1434,43 @@ mod tests {
         assert!(
             dead,
             "the failed create_immed must kill the client, never leave a black window"
+        );
+    }
+
+    /// Without a syncobj-capable device, `State` must not announce the
+    /// explicit-sync global (Bloque 7b): the session tests
+    /// `supports_syncobj_eventfd` and only then passes the device in.
+    #[test]
+    fn without_a_syncobj_device_no_explicit_sync_global_is_announced() {
+        use smithay::backend::allocator::{Format, Fourcc, Modifier};
+        use smithay::reexports::wayland_server::Display;
+        use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+
+        let event_loop =
+            smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
+                .expect("the test needs an event loop");
+        let display = Display::<State>::new().expect("the test needs a display");
+        let feedback = DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
+        let state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+            None,
+            event_loop.handle(),
+        )
+        .expect("the state should build");
+        assert!(
+            state.syncobj_state.is_none(),
+            "without a device there must be no wp_linux_drm_syncobj_manager_v1 global"
         );
     }
 }
