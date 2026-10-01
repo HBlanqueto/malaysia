@@ -20,6 +20,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use smithay::backend::SwapBuffersError;
+use smithay::backend::allocator::format::FormatSet;
+use smithay::backend::egl::EGLDevice;
+use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
@@ -41,6 +44,7 @@ use smithay::utils::{IsAlive, Logical, Physical, Point, Scale, Size, Transform};
 use smithay::wayland::compositor::{
     SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
+use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -227,13 +231,46 @@ pub fn run() -> Result<(), SessionError> {
 
     let display = Display::<State>::new()?;
 
-let (mut backend, winit_events) = winit::init::<GlesRenderer>()
+    let (mut backend, winit_events) = winit::init::<GlesRenderer>()
         .map_err(|error| SessionError::Backend(describe_chain(&error)))?;
+
+    // The render node of the device the winit renderer runs on, derived from
+    // the EGL device behind that renderer's display (anvil's winit backend does
+    // exactly this). It becomes the `main_device` of the dmabuf feedback, so a
+    // GPU client allocates buffers the compositor can texture from. Without a
+    // render node the dmabuf global falls back to version 3, like anvil.
+    let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
+        .and_then(|device| device.try_get_render_node());
+    let (dmabuf_feedback, dmabuf_formats): (Option<DmabufFeedback>, FormatSet) = match render_node {
+        Ok(Some(node)) => {
+            let formats = backend.renderer().dmabuf_formats();
+            match DmabufFeedbackBuilder::new(node.dev_id(), formats.clone()).build() {
+                Ok(feedback) => (Some(feedback), formats),
+                Err(error) => {
+                    tracing::warn!(%error, "could not build the dmabuf feedback; the global will use v3");
+                    (None, formats)
+                }
+            }
+        }
+        Ok(None) => {
+            tracing::warn!("no render node from the EGL device; the dmabuf global will use v3");
+            (None, backend.renderer().dmabuf_formats())
+        }
+        Err(error) => {
+            tracing::warn!(
+                ?error,
+                "no EGL device for the display; the dmabuf global will use v3"
+            );
+            (None, backend.renderer().dmabuf_formats())
+        }
+    };
 
     let state = State::new(
         loop_signal.clone(),
         &display.handle(),
         backend.window_size(),
+        dmabuf_feedback,
+        dmabuf_formats,
     )?;
     let damage_tracker =
         OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
@@ -321,12 +358,39 @@ let (mut backend, winit_events) = winit::init::<GlesRenderer>()
 /// Both calls are non-blocking, so a client that is slow to read or write
 /// cannot hold up the loop. A client error is logged and the loop continues:
 /// one misbehaving client should not take the compositor down.
+///
+/// Right after dispatching, every dmabuf the handlers queued is imported into
+/// the renderer. The handlers cannot reach the renderer (ADR 0012), so they
+/// queue the buffers in `State::pending_dmabuf_imports` and the session — the
+/// renderer's owner — performs the import here. A buffer that cannot be
+/// imported is rejected at this point, not at render time.
 fn dispatch_clients(session: &mut Session) {
-    let Session { display, state, .. } = session;
+    let Session {
+        display,
+        state,
+        backend,
+        ..
+    } = session;
 
     if let Err(error) = display.dispatch_clients(state) {
         tracing::error!(%error, "failed to dispatch client requests");
         return;
+    }
+    for pending in state.pending_dmabuf_imports.drain(..) {
+        match backend.renderer().import_dmabuf(&pending.dmabuf, None) {
+            Ok(_) => {
+                if let Err(error) = pending.notifier.successful::<State>() {
+                    tracing::warn!(
+                        ?error,
+                        "dmabuf import: the client died before the buffer was created"
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::warn!(%error, "rejecting a dmabuf the renderer cannot import");
+                pending.notifier.failed();
+            }
+        }
     }
     if let Err(error) = display.flush_clients() {
         tracing::error!(%error, "failed to flush events to clients");

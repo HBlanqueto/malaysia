@@ -97,9 +97,14 @@ sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 
 # Compositor framework. Default features are off so only the nested winit
 # backend and the GLES2 renderer are compiled (ADR 0009); `wayland_frontend`
-# is needed for the protocol handlers that follow.
+# is needed for the protocol handlers that follow. `backend_drm` is the module
+# that knows render nodes: `EGLDevice::try_get_render_node` (the dmabuf
+# feedback's main device, Bloque 7a) and the drm-syncobj explicit-sync
+# protocol (Bloque 7b) both live behind it. It adds the `drm`/`drm-ffi`
+# userspace crates, not the kernel driver.
 smithay = { version = "0.7", default-features = false, features = [
     "backend_winit",
+    "backend_drm",
     "renderer_gl",
     "wayland_frontend",
 ] }

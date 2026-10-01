@@ -23,6 +23,8 @@
 
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use yuki_scene::scene::{Edge, WindowId};
+use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::allocator::format::FormatSet;
 use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
@@ -33,6 +35,7 @@ use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
+use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
@@ -81,6 +84,21 @@ pub struct State {
     pub compositor_state: CompositorState,
     /// The `wl_shm` state and its advertised pixel formats.
     pub shm_state: ShmState,
+    /// The `zwp_linux_dmabuf_v1` state (Bloque 7a).
+    ///
+    /// The global is created with a default feedback carrying the render node
+    /// of the device the winit renderer uses and that renderer's dmabuf
+    /// formats, so GPU clients (Mesa EGL/Vulkan) can allocate buffers the
+    /// compositor can texture from.
+    pub dmabuf_state: DmabufState,
+    /// Dmabufs a client committed, waiting for the session to import them.
+    ///
+    /// `DmabufHandler` cannot reach the renderer to test the import — ADR 0012
+    /// keeps every backend type out of [`State`] — so the handler queues the
+    /// buffer here and the session performs the import right after dispatching
+    /// clients (see `session::dispatch_clients`). A buffer that cannot be
+    /// imported is rejected there, never at render time.
+    pub pending_dmabuf_imports: Vec<PendingDmabufImport>,
     /// The factory for `wl_seat` globals.
     pub seat_state: SeatState<State>,
     /// The one seat Yuki offers.
@@ -202,16 +220,38 @@ impl State {
     ///
     /// `size` is the initial size of the output, which the session takes from
     /// the backend's window and updates when that window is resized.
+    ///
+    /// `dmabuf_feedback` is the default feedback the session built from the
+    /// renderer's device and formats; `dmabuf_formats` is that renderer's
+    /// dmabuf format set, used when no feedback could be built (there the
+    /// global falls back to version 3, like anvil). Both come from the winit
+    /// renderer, which `State` never sees (ADR 0012).
     pub fn new(
         loop_signal: LoopSignal,
         display_handle: &DisplayHandle,
         size: Size<i32, Physical>,
+        dmabuf_feedback: Option<DmabufFeedback>,
+        dmabuf_formats: FormatSet,
     ) -> Result<Self, StateError> {
         let compositor_state = CompositorState::new::<Self>(display_handle);
         let shm_state = ShmState::new::<Self>(
             display_handle,
             [wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
         );
+        let mut dmabuf_state = DmabufState::new();
+        match &dmabuf_feedback {
+            // Version 4+ with feedback: the client learns the main device and
+            // the formats the compositor can texture from. This is what Mesa
+            // needs to initialise EGL/Vulkan on Wayland.
+            Some(feedback) => {
+                dmabuf_state.create_global_with_default_feedback::<Self>(display_handle, feedback);
+            }
+            // No render node could be derived from the EGL device: fall back to
+            // version 3 with the renderer's formats, like anvil.
+            None => {
+                dmabuf_state.create_global::<Self>(display_handle, dmabuf_formats);
+            }
+        }
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
         let decoration_state = XdgDecorationState::new::<Self>(display_handle);
@@ -268,6 +308,8 @@ impl State {
             needs_redraw: false,
             compositor_state,
             shm_state,
+            dmabuf_state,
+            pending_dmabuf_imports: Vec::new(),
             seat_state,
             seat,
             cursor_status: CursorImageStatus::default_named(),
@@ -410,3 +452,17 @@ pub struct ClientState {
 }
 
 impl ClientData for ClientState {}
+
+/// A dmabuf a client committed, waiting for the session to import it.
+///
+/// `DmabufHandler` cannot reach the GLES renderer (ADR 0012), so it queues the
+/// buffer here and the session drains the queue after dispatching clients and
+/// performs the import. The notifier's verdict — `successful` or `failed` — is
+/// what answers the client's `create`/`create_immed` request, so a buffer that
+/// cannot be imported is rejected as soon as it is committed, not at render time.
+pub struct PendingDmabufImport {
+    /// The buffer to test-import into the renderer.
+    pub dmabuf: Dmabuf,
+    /// The notifier that answers the client's import request.
+    pub notifier: ImportNotifier,
+}

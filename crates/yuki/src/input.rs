@@ -682,6 +682,7 @@ fn parse_pair_value(value: &str) -> Option<(f64, f64)> {
 mod tests {
     use std::path::PathBuf;
 
+    use smithay::backend::allocator::format::FormatSet;
     use smithay::backend::input::ButtonState;
     use smithay::backend::input::{
         AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
@@ -871,8 +872,14 @@ mod tests {
     fn test_state(size: (i32, i32)) -> (Display<State>, State) {
         let event_loop = EventLoop::<()>::try_new().expect("the test needs an event loop");
         let display = Display::<State>::new().expect("the test needs a display");
-        let state = State::new(event_loop.get_signal(), &display.handle(), Size::from(size))
-            .expect("the test state should build");
+        let state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from(size),
+            None,
+            FormatSet::default(),
+        )
+        .expect("the test state should build");
         (display, state)
     }
 

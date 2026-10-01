@@ -10,8 +10,10 @@
 //! client requests into calls on that behaviour.
 
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
+use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::delegate_compositor;
 use smithay::delegate_data_device;
+use smithay::delegate_dmabuf;
 use smithay::delegate_foreign_toplevel_list;
 use smithay::delegate_fractional_scale;
 use smithay::delegate_kde_decoration;
@@ -24,6 +26,7 @@ use smithay::delegate_shm;
 use smithay::delegate_viewporter;
 use smithay::delegate_xdg_decoration;
 use smithay::delegate_xdg_shell;
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelListHandler, ForeignToplevelListState};
 use smithay::input::Seat;
 use smithay::input::SeatHandler;
@@ -103,6 +106,28 @@ impl BufferHandler for State {
         // Buffers are not retained yet; nothing to release.
     }
 }
+
+impl DmabufHandler for State {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        &mut self.dmabuf_state
+    }
+
+    fn dmabuf_imported(
+        &mut self,
+        _global: &DmabufGlobal,
+        dmabuf: Dmabuf,
+        notifier: ImportNotifier,
+    ) {
+        // The import into the GLES renderer happens in the session, which owns
+        // the renderer (ADR 0012); this handler only queues the buffer. The
+        // session drains the queue right after dispatching clients and answers
+        // the notifier there (see `session::dispatch_clients`).
+        self.pending_dmabuf_imports
+            .push(crate::state::PendingDmabufImport { dmabuf, notifier });
+    }
+}
+
+delegate_dmabuf!(State);
 
 impl ShmHandler for State {
     fn shm_state(&self) -> &ShmState {
