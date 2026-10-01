@@ -77,6 +77,48 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   (`set_data_device_focus` / `set_primary_focus`)
 - Aceptación: copiar en `foot` y pegar en otra instancia
 
+## Bloque 7 — linux-dmabuf y explicit sync
+
+- `zwp_linux_dmabuf_v1` (v4+, con feedback) en el compositor; el `main_device`
+  del feedback es el render node del dispositivo del renderer GLES de winit, y
+  los formatos son los que reporta el propio renderer. Sin `wl_drm`
+- Explicit sync (`wp_linux_drm_syncobj_manager_v1`, solo si el dispositivo
+  soporta `syncobj_eventfd`) más el sync implícito (un *blocker* pre-commit que
+  espera a que el dmabuf sea legible); un solo camino de commit
+- La shell presenta por EGL/dmabuf en lugar de copiar a `wl_shm`
+- Aceptación: wezterm y Firefox acelerados dentro de Yuki anidado; la shell sin
+  copias por CPU. Ver `bloques/07-linux-dmabuf-y-explicit-sync.md`.
+
+## Bloque 8 — Direct Session (DRM/KMS)
+
+- Backend DRM/KMS atómico + libseat + libinput, en paralelo a winit
+- Cambio de VT, hotplug y direct scanout
+- Aceptación: la sesión arranca sobre el panel real (Pendiente)
+
+## Bloque 9 — Escala fraccional
+
+- `wp_fractional_scale_v1` + viewporter validada en el panel real
+- Resolver el `TODO(scale)` en `state.rs` (un valor por superficie, no un
+  literal global)
+- Aceptación: (Pendiente)
+
+## Bloque 10 — Lock con autenticación
+
+- Autenticación del lock con PAM y bloqueo por inactividad
+  (`ext-idle-notify-v1`)
+- Aceptación: (Pendiente)
+
+## Bloque 11 — Protocolos de uso diario
+
+- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`,
+  `zwp_idle_inhibit_manager_v1`, `xdg-output`
+- Aceptación: (Pendiente)
+
+## Después del Bloque 11
+
+- D-Bus de configuración (ADR 0021) y la app de ajustes. XWayland sigue
+  diferido.
+
 ## Dónde está este repositorio
 
 - **Bloque 0 — hecho, con divergencias.** Los tipos de coordenadas viven en el
@@ -124,6 +166,12 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   (verificado: `wl-copy` → `wl-paste` entre clientes). La aceptación de copiar y
   pegar entre dos instancias de `foot` se comprueba a mano. Véase
   `bloques/06-portapapeles.md`.
+- **Bloque 7 — en curso.** El sub-bloque 7a (linux-dmabuf v5 con feedback) está
+  hecho: `zwp_linux_dmabuf_v1` con el render node como `main_device` y los
+  formatos del renderer, rechazo de importes no importables en el commit, y
+  wezterm/Firefox acelerados dentro de Yuki anidado. Pendientes: 7b (explicit
+  sync + sync implícito) y 7c (la shell presenta por EGL). Véase
+  `bloques/07-linux-dmabuf-y-explicit-sync.md`.
 
 ## Numeración de bloques
 
@@ -135,9 +183,8 @@ con un bloque del roadmap:
   (anidamiento de winit, mapeo de toplevels y entrada). Abarca los Bloques 1–3 de este
   roadmap, y las Partes 1–6 que usa el documento son Partes de esa sesión,
   nunca números de bloque.
-- **El hito Direct Session** — el backend DRM/KMS que reemplaza a winit.
-  Está planificado, pero no está en el camino numerado de este roadmap, por lo que lleva
-  un nombre y ningún número.
+- **Direct Session** — el hito de producción sobre DRM/KMS, que ahora es el
+  **Bloque 8** del roadmap.
 
 Ningún documento ni comentario de este repositorio usa "Bloque N" para algo distinto
 del bloque N de este roadmap.

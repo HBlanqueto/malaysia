@@ -12,7 +12,7 @@ docs/
 ├── README.md          ← este índice
 ├── yuki.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
 ├── glossary.md        glosario de nombres (celestial-kit, grade-graphics, ...)
-├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–6 + hito Direct Session)
+├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–11 + lo siguiente)
 ├── bloques/           qué se ha hecho e implementado, bloque por bloque
 │   ├── 00-cimientos.md
 │   ├── 01-sesion.md            (cubre los Bloques 1–3)
@@ -20,8 +20,9 @@ docs/
 │   ├── 03-entrada.md
 │   ├── 04-ventanas-manipulables.md
 │   ├── 05-popups.md
-│   └── 06-portapapeles.md
-├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0025)
+│   ├── 06-portapapeles.md
+│   └── 07-linux-dmabuf-y-explicit-sync.md
+├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0027)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
 │   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
@@ -78,6 +79,8 @@ docs/
 
 Los **Bloques 0–6** están implementados (scaffolding, conexión de clientes,
 ventana en pantalla, input, ventanas manipulables, popups y portapapeles). El
-**hito Direct Session** (backend DRM/KMS) está planificado pero fuera del roadmap
-numerado. La shell es nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**,
-**dock** y **lock** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).
+**Bloque 7** está en curso: **7a** (linux-dmabuf v5 con feedback) hecho — ya
+corren wezterm y Firefox acelerados dentro de Yuki anidado — y 7b/7c pendientes.
+El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
+(`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
+funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).

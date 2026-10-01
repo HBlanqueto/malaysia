@@ -80,11 +80,16 @@ los bloques actuales del roadmap. Lo que el compositor **ya sirve** hoy:
 - `wp_viewporter` y `wp_fractional_scale_manager_v1` — hechos (los necesita el
   render HiDPI de la shell; el wallpaper y los futuros paneles los usan).
 - `xdg_popup` con padre layer-surface (`get_popup`) — hecho (Bloque 5).
+- `ext-session-lock-v1` — hecho (el lock, ADR 0023; garantía de no desbloquear
+  si el cliente muere).
+- `ext-foreign-toplevel-list-v1` y `zwlr_foreign_toplevel_management_v1` —
+  hechos (el dock).
+- `zwp_linux_dmabuf_v1` — hecho (Bloque 7a): v5 con feedback del render node y
+  los formatos del renderer GLES, para clientes con GPU (Mesa EGL/Vulkan).
 
-El resto — `ext-session-lock-v1`, `ext-foreign-toplevel-list-v1`,
-`zwlr_foreign_toplevel_management_v1`, `xdg-activation-v1`, `ext-idle-notify-v1`
-— sigue siendo **trabajo futuro**, y entrará con cada componente que lo necesite
-(menubar, dock, lock).
+Lo que sigue siendo **trabajo futuro**: `xdg-activation-v1`,
+`ext-idle-notify-v1` y, más adelante, el sync explícito `wp_linux_drm_syncobj_v1`
+(Bloque 7b).
 
 ## Fallos esperados y su tratamiento
 

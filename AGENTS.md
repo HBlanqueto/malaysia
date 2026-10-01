@@ -61,7 +61,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 
 - **Índice de documentación**: `docs/README.md`
 - **Roadmap de bloques (fuente de verdad)**: `docs/roadmap.md`
-- **Bloques implementados**: `docs/bloques/` (00-cimientos … 06-portapapeles)
+- **Bloques implementados**: `docs/bloques/` (00-cimientos … 07-linux-dmabuf-y-explicit-sync)
 - **Decisiones (ADRs)**: `docs/decisiones/` — sobre todo **0019** (decoración),
   **0020** (política de diseño), **0021** (superficie de configuración) y
   **0023** (los componentes del shell corren como procesos separados, uno por
@@ -93,13 +93,18 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 
 ## Estado actual
 
-- Bloques 0–6 implementados (popups incluidos: `docs/bloques/05-popups.md`).
+- Bloques 0–6 implementados; **Bloque 7** en curso: **7a** (linux-dmabuf v5 con
+  feedback) hecho, 7b (explicit sync + sync implícito) y 7c (shell por EGL)
+  pendientes (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren
+  wezterm y Firefox acelerados dentro de Yuki anidado.
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +
-  `zwlr_foreign_toplevel_management_v1` (dock) y `ext-session-lock-v1` (lock,
-  con la garantía de no desbloquear si el cliente muere).
-- Backend winit anidado (GLES2); hito Direct Session (DRM/KMS) planificado.
+  `zwlr_foreign_toplevel_management_v1` (dock), `ext-session-lock-v1` (lock,
+  con la garantía de no desbloquear si el cliente muere) y `zwp_linux_dmabuf_v1`
+  v5 (7a).
+- Backend winit anidado (GLES2); **Bloque 8 = Direct Session** (DRM/KMS)
+  planificado.
 - `TODO(scale)` en `crates/yuki/src/state.rs:133` (HiDPI).
 
 ## Cómo compilar y probar
