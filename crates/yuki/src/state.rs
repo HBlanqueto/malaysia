@@ -24,7 +24,6 @@
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::allocator::format::FormatSet;
 use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
@@ -222,16 +221,16 @@ impl State {
     /// the backend's window and updates when that window is resized.
     ///
     /// `dmabuf_feedback` is the default feedback the session built from the
-    /// renderer's device and formats; `dmabuf_formats` is that renderer's
-    /// dmabuf format set, used when no feedback could be built (there the
-    /// global falls back to version 3, like anvil). Both come from the winit
-    /// renderer, which `State` never sees (ADR 0012).
+    /// renderer's device and formats; the session fails startup if it could not
+    /// derive a render node, so there is exactly one path: the linux-dmabuf
+    /// global is always created with feedback (version 5), never the v3
+    /// fallback. The feedback comes from the winit renderer, which `State`
+    /// never sees (ADR 0012).
     pub fn new(
         loop_signal: LoopSignal,
         display_handle: &DisplayHandle,
         size: Size<i32, Physical>,
-        dmabuf_feedback: Option<DmabufFeedback>,
-        dmabuf_formats: FormatSet,
+        dmabuf_feedback: DmabufFeedback,
     ) -> Result<Self, StateError> {
         let compositor_state = CompositorState::new::<Self>(display_handle);
         let shm_state = ShmState::new::<Self>(
@@ -239,19 +238,9 @@ impl State {
             [wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
         );
         let mut dmabuf_state = DmabufState::new();
-        match &dmabuf_feedback {
-            // Version 4+ with feedback: the client learns the main device and
-            // the formats the compositor can texture from. This is what Mesa
-            // needs to initialise EGL/Vulkan on Wayland.
-            Some(feedback) => {
-                dmabuf_state.create_global_with_default_feedback::<Self>(display_handle, feedback);
-            }
-            // No render node could be derived from the EGL device: fall back to
-            // version 3 with the renderer's formats, like anvil.
-            None => {
-                dmabuf_state.create_global::<Self>(display_handle, dmabuf_formats);
-            }
-        }
+        // One path: version 5 with the default feedback (Bloque 7a). The main
+        // device and formats come from the renderer; there is no v3 fallback.
+        dmabuf_state.create_global_with_default_feedback::<Self>(display_handle, &dmabuf_feedback);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
         let decoration_state = XdgDecorationState::new::<Self>(display_handle);

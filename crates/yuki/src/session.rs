@@ -20,7 +20,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use smithay::backend::SwapBuffersError;
-use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
@@ -44,7 +43,7 @@ use smithay::utils::{IsAlive, Logical, Physical, Point, Scale, Size, Transform};
 use smithay::wayland::compositor::{
     SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
-use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
+use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -82,6 +81,14 @@ pub enum SessionError {
     /// published, or the seat has no usable keymap.
     #[error("failed to build the compositor state")]
     State(#[from] StateError),
+    /// The device behind the winit renderer has no usable render node, or the
+    /// dmabuf feedback could not be built from it.
+    ///
+    /// The linux-dmabuf global needs a main device and formats to start
+    /// (Bloque 7a); without a render node there is no v3 fallback, so startup
+    /// fails loudly instead of silently degrading.
+    #[error("cannot set up the dmabuf feedback: {0}")]
+    DmabufFeedback(String),
 }
 
 /// Everything the event loop's sources share.
@@ -231,46 +238,34 @@ pub fn run() -> Result<(), SessionError> {
 
     let display = Display::<State>::new()?;
 
-    let (mut backend, winit_events) = winit::init::<GlesRenderer>()
+let (mut backend, winit_events) = winit::init::<GlesRenderer>()
         .map_err(|error| SessionError::Backend(describe_chain(&error)))?;
 
     // The render node of the device the winit renderer runs on, derived from
     // the EGL device behind that renderer's display (anvil's winit backend does
     // exactly this). It becomes the `main_device` of the dmabuf feedback, so a
-    // GPU client allocates buffers the compositor can texture from. Without a
-    // render node the dmabuf global falls back to version 3, like anvil.
+    // GPU client allocates buffers the compositor can texture from. There is
+    // deliberately no fallback: without a render node the global cannot start,
+    // so this fails startup with a clear message (see [`SessionError::DmabufFeedback`]).
     let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
-        .and_then(|device| device.try_get_render_node());
-    let (dmabuf_feedback, dmabuf_formats): (Option<DmabufFeedback>, FormatSet) = match render_node {
-        Ok(Some(node)) => {
-            let formats = backend.renderer().dmabuf_formats();
-            match DmabufFeedbackBuilder::new(node.dev_id(), formats.clone()).build() {
-                Ok(feedback) => (Some(feedback), formats),
-                Err(error) => {
-                    tracing::warn!(%error, "could not build the dmabuf feedback; the global will use v3");
-                    (None, formats)
-                }
-            }
-        }
-        Ok(None) => {
-            tracing::warn!("no render node from the EGL device; the dmabuf global will use v3");
-            (None, backend.renderer().dmabuf_formats())
-        }
-        Err(error) => {
-            tracing::warn!(
-                ?error,
-                "no EGL device for the display; the dmabuf global will use v3"
-            );
-            (None, backend.renderer().dmabuf_formats())
-        }
-    };
+        .and_then(|device| device.try_get_render_node())
+        .map_err(|error| {
+            SessionError::DmabufFeedback(format!("the EGL device could not be queried: {error}"))
+        })?
+        .ok_or_else(|| {
+            SessionError::DmabufFeedback("the EGL device has no render node".to_string())
+        })?;
+    let dmabuf_feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), backend.renderer().dmabuf_formats())
+        .build()
+        .map_err(|error| {
+            SessionError::DmabufFeedback(format!("the feedback could not be built: {error}"))
+        })?;
 
     let state = State::new(
         loop_signal.clone(),
         &display.handle(),
         backend.window_size(),
         dmabuf_feedback,
-        dmabuf_formats,
     )?;
     let damage_tracker =
         OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
@@ -359,11 +354,14 @@ pub fn run() -> Result<(), SessionError> {
 /// cannot hold up the loop. A client error is logged and the loop continues:
 /// one misbehaving client should not take the compositor down.
 ///
-/// Right after dispatching, every dmabuf the handlers queued is imported into
-/// the renderer. The handlers cannot reach the renderer (ADR 0012), so they
-/// queue the buffers in `State::pending_dmabuf_imports` and the session — the
-/// renderer's owner — performs the import here. A buffer that cannot be
-/// imported is rejected at this point, not at render time.
+/// The dmabuf import queue is drained here, in the same call that dispatched
+/// the clients. That ordering is the guarantee that no frame ever renders an
+/// unimported buffer: a client's `create`/`create_immed` + `attach` + `commit`
+/// can arrive in one write, and dispatch processes all three in this one call
+/// — the import is queued by the handler during dispatch and drained before
+/// this call returns. A frame can only be drawn from a separate winit `Redraw`
+/// event that the loop processes after this source's batch, so the drain
+/// always precedes the next render.
 fn dispatch_clients(session: &mut Session) {
     let Session {
         display,
@@ -376,8 +374,32 @@ fn dispatch_clients(session: &mut Session) {
         tracing::error!(%error, "failed to dispatch client requests");
         return;
     }
+    // The handlers cannot reach the renderer (ADR 0012), so the session — the
+    // renderer's owner — performs the import here, right after dispatching. A
+    // buffer that cannot be imported is rejected at this point, never at
+    // render time (see [`import_pending_dmabufs`]).
+    import_pending_dmabufs(state, backend.renderer());
+    if let Err(error) = display.flush_clients() {
+        tracing::error!(%error, "failed to flush events to clients");
+    }
+}
+
+/// Imports every dmabuf the handlers queued during dispatch, answering each
+/// client's request through its notifier.
+///
+/// A `Dmabuf` that the renderer cannot import is rejected here, at commit
+/// time, never at render time. For a `create` request that is a `failed` event
+/// on the params object; for `create_immed` (whose buffer the client already
+/// holds) `ImportNotifier::failed` posts the protocol's
+/// `InvalidWlBuffer` error, which kills the client — the compositor never
+/// silently accepts a buffer it cannot draw.
+///
+/// The renderer lives in the session (ADR 0012); this function is a free
+/// function rather than a `State` method so `State` stays free of renderer
+/// types, and so the tests can drive it directly.
+fn import_pending_dmabufs(state: &mut State, renderer: &mut GlesRenderer) {
     for pending in state.pending_dmabuf_imports.drain(..) {
-        match backend.renderer().import_dmabuf(&pending.dmabuf, None) {
+        match renderer.import_dmabuf(&pending.dmabuf, None) {
             Ok(_) => {
                 if let Err(error) = pending.notifier.successful::<State>() {
                     tracing::warn!(
@@ -391,9 +413,6 @@ fn dispatch_clients(session: &mut Session) {
                 pending.notifier.failed();
             }
         }
-    }
-    if let Err(error) = display.flush_clients() {
-        tracing::error!(%error, "failed to flush events to clients");
     }
 }
 
@@ -804,7 +823,7 @@ mod tests {
     use std::error::Error;
     use std::fmt;
 
-    use smithay::backend::allocator::Fourcc;
+    use smithay::backend::allocator::{Format, Fourcc, Modifier};
     use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
     use smithay::backend::renderer::damage::OutputDamageTracker;
     use smithay::backend::renderer::element::Kind;
@@ -815,8 +834,17 @@ mod tests {
     use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
     use smithay::utils::{Buffer as BufferCoord, Physical, Point, Rectangle, Size, Transform};
 
-    use super::{cursor_origin, describe_chain, winit_mode_source};
+    use super::{cursor_origin, describe_chain, import_pending_dmabufs, winit_mode_source};
     use crate::cursor::OutputRenderElement;
+    use crate::state::State;
+
+    // Client side for the dmabuf import-queue test: sctk, like the shell.
+    use sctk::output::{OutputHandler, OutputState};
+    use sctk::reexports::client::protocol::{wl_buffer::WlBuffer, wl_output, wl_surface};
+    use sctk::reexports::client::{Connection, QueueHandle};
+    use sctk::reexports::protocols::wp::linux_dmabuf::zv1::client::{
+        zwp_linux_buffer_params_v1, zwp_linux_dmabuf_feedback_v1,
+    };
 
     /// The innermost error, with no cause of its own.
     #[derive(Debug)]
@@ -1039,6 +1067,337 @@ mod tests {
             pixel(&pixels, size, 7, 5),
             CLEAR,
             "nothing may be drawn above the hotspot-adjusted origin"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // The dmabuf import queue: create_immed + attach + commit in one batch.
+    //
+    // `dispatch_clients` must queue the import while processing the batch and
+    // `import_pending_dmabufs` must drain it before any render, and a buffer
+    // the renderer cannot import must end in the protocol's error for
+    // create_immed — a dead client, never a silently accepted black window.
+    // -----------------------------------------------------------------------
+
+    /// A minimal sctk client that binds `wl_compositor` and
+    /// `zwp_linux_dmabuf_v1`, commits one dmabuf, and reports what happened.
+    struct TestClient {
+        registry: sctk::registry::RegistryState,
+        compositor: Option<sctk::compositor::CompositorState>,
+        output: OutputState,
+        dmabuf: sctk::dmabuf::DmabufState,
+    }
+
+    impl TestClient {
+        fn new(
+            globals: &sctk::reexports::client::globals::GlobalList,
+            qh: &QueueHandle<TestClient>,
+        ) -> Self {
+            Self {
+                registry: sctk::registry::RegistryState::new(globals),
+                compositor: sctk::compositor::CompositorState::bind(globals, qh).ok(),
+                output: OutputState::new(globals, qh),
+                dmabuf: sctk::dmabuf::DmabufState::new(globals, qh),
+            }
+        }
+    }
+
+    impl sctk::registry::ProvidesRegistryState for TestClient {
+        fn registry(&mut self) -> &mut sctk::registry::RegistryState {
+            &mut self.registry
+        }
+
+        fn runtime_add_global(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: u32,
+            _: &str,
+            _: u32,
+        ) {
+        }
+
+        fn runtime_remove_global(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: u32,
+            _: &str,
+        ) {
+        }
+    }
+
+    sctk::delegate_registry!(TestClient);
+
+    impl OutputHandler for TestClient {
+        fn output_state(&mut self) -> &mut OutputState {
+            &mut self.output
+        }
+
+        fn new_output(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: wl_output::WlOutput,
+        ) {
+        }
+
+        fn update_output(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: wl_output::WlOutput,
+        ) {
+        }
+
+        fn output_destroyed(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: wl_output::WlOutput,
+        ) {
+        }
+    }
+
+    sctk::delegate_output!(TestClient);
+
+    impl sctk::compositor::CompositorHandler for TestClient {
+        fn scale_factor_changed(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &wl_surface::WlSurface,
+            _: i32,
+        ) {
+        }
+
+        fn transform_changed(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &wl_surface::WlSurface,
+            _: wl_output::Transform,
+        ) {
+        }
+
+        fn frame(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &wl_surface::WlSurface,
+            _: u32,
+        ) {
+        }
+
+        fn surface_enter(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &wl_surface::WlSurface,
+            _: &wl_output::WlOutput,
+        ) {
+        }
+
+        fn surface_leave(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &wl_surface::WlSurface,
+            _: &wl_output::WlOutput,
+        ) {
+        }
+    }
+
+    sctk::delegate_compositor!(TestClient);
+
+    impl sctk::dmabuf::DmabufHandler for TestClient {
+        fn dmabuf_state(&mut self) -> &mut sctk::dmabuf::DmabufState {
+            &mut self.dmabuf
+        }
+
+        fn dmabuf_feedback(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1,
+            _: sctk::dmabuf::DmabufFeedback,
+        ) {
+        }
+
+        fn created(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1,
+            _: WlBuffer,
+        ) {
+        }
+
+        fn failed(
+            &mut self,
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+            _: &zwp_linux_buffer_params_v1::ZwpLinuxBufferParamsV1,
+        ) {
+        }
+
+        fn released(&mut self, _: &Connection, _: &QueueHandle<TestClient>, _: &WlBuffer) {}
+    }
+
+    sctk::delegate_dmabuf!(TestClient);
+
+    /// A real client commits `create_immed` + `attach` + `commit` in one batch
+    /// with an fd that is not a dma-buf, while the compositor imports and
+    /// renders nothing. The import must be queued during the same dispatch and
+    /// drained before a frame, and the failed import must kill the client.
+    #[test]
+    fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
+        use std::os::unix::io::AsFd;
+        use std::sync::mpsc;
+
+        use sctk::reexports::client::Connection;
+        use sctk::reexports::client::globals::registry_queue_init;
+        use smithay::reexports::wayland_server::Display;
+
+        let event_loop = smithay::reexports::calloop::EventLoop::<()>::try_new()
+            .expect("the test needs an event loop");
+        let mut display = Display::<State>::new().expect("the test needs a display");
+        let mut renderer = offscreen_renderer();
+
+        // A v5 global advertising exactly one format, XRGB8888 linear. The
+        // client uses it, so smithay's parameter validation accepts the params
+        // and the failure happens at the renderer import, which is the path the
+        // compositor owns.
+        let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
+        let mut state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+        )
+        .expect("the state should build");
+
+        let (client_side, server_side) =
+            std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (sent_tx, sent_rx) = mpsc::channel::<bool>();
+        let mut handle = display.handle();
+
+        std::thread::spawn(move || {
+            let conn = Connection::from_socket(client_side).expect("the client should connect");
+            let (globals, mut event_queue) =
+                registry_queue_init(&conn).expect("the registry should init");
+            let qh = event_queue.handle();
+            let mut client = TestClient::new(&globals, &qh);
+            event_queue
+                .roundtrip(&mut client)
+                .expect("the bind should roundtrip");
+
+            // A socket is not seekable, so smithay's plane-size checks are
+            // skipped, but it is not a dma-buf either: the renderer's import
+            // fails. This exercises the compositor's import path, not the
+            // client's parameter validation.
+            let (fake_fd, _sink) = std::os::unix::net::UnixStream::pair().expect("a fake plane fd");
+            let params = client
+                .dmabuf
+                .create_params(&qh)
+                .expect("the compositor advertises zwp_linux_dmabuf_v1");
+            params.add(fake_fd.as_fd(), 0, 0, 4 * 16, u64::from(Modifier::Invalid));
+            let (buffer, _params) = params.create_immed(
+                16,
+                16,
+                Fourcc::Xrgb8888 as u32,
+                zwp_linux_buffer_params_v1::Flags::empty(),
+                &qh,
+            );
+
+            // create_immed + attach + commit in the same roundtrip: one write
+            // to the compositor.
+            let surface = client
+                .compositor
+                .as_ref()
+                .expect("compositor bound")
+                .create_surface(&qh);
+            surface.attach(Some(&buffer), 0, 0);
+            surface.commit();
+            event_queue
+                .roundtrip(&mut client)
+                .expect("the batch should reach the compositor");
+            sent_tx
+                .send(false)
+                .expect("the main thread should read the signal");
+
+            // The compositor rejects the import, which for create_immed is a
+            // protocol error: the connection dies on the next roundtrip. The
+            // client reports whether it observed the death.
+            let dead = event_queue.roundtrip(&mut client).is_err();
+            sent_tx
+                .send(dead)
+                .expect("the main thread should read the verdict");
+        });
+
+        // Accept the client into the display.
+        handle
+            .insert_client(
+                server_side,
+                std::sync::Arc::new(crate::state::ClientState::default()),
+            )
+            .expect("the server should accept the client");
+
+        // The client's roundtrips (registry, bind, then the batch) need the
+        // compositor to dispatch, so service the connection while waiting for
+        // the signal that the batch reached the compositor.
+        let mut spins = 0;
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if matches!(sent_rx.try_recv(), Ok(false)) {
+                break;
+            }
+            spins += 1;
+            assert!(spins < 100_000, "the client never signalled its batch");
+        }
+
+        // The client's create_immed must have queued exactly one import, in
+        // the same dispatch that also handled the attach and the commit.
+        while state.pending_dmabuf_imports.is_empty() {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            spins += 1;
+            assert!(spins < 1000, "the import was never queued");
+        }
+        assert_eq!(
+            state.pending_dmabuf_imports.len(),
+            1,
+            "the single create_immed queues exactly one import"
+        );
+
+        // Drain before any frame is drawn: the queue empties, the import
+        // fails, and for create_immed that failure is a protocol error.
+        import_pending_dmabufs(&mut state, &mut renderer);
+        assert!(
+            state.pending_dmabuf_imports.is_empty(),
+            "the queue must be drained before a frame can be drawn"
+        );
+        display
+            .flush_clients()
+            .expect("the error must reach the client");
+
+        // The client's next roundtrip observes the error (the connection is
+        // dead); it reports the verdict through the channel.
+        let dead = sent_rx
+            .recv()
+            .expect("the client should report its verdict");
+        assert!(
+            dead,
+            "the failed create_immed must kill the client, never leave a black window"
         );
     }
 }

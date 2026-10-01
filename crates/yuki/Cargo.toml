@@ -20,3 +20,8 @@ xkbcommon.workspace = true
 smithay.workspace = true
 yuki-design.workspace = true
 yuki-scene.workspace = true
+
+[dev-dependencies]
+# The import-queue test drives a real Wayland client against a real compositor
+# socket (session.rs), using sctk's client side like the shell does.
+sctk.workspace = true

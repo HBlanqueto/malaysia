@@ -682,7 +682,6 @@ fn parse_pair_value(value: &str) -> Option<(f64, f64)> {
 mod tests {
     use std::path::PathBuf;
 
-    use smithay::backend::allocator::format::FormatSet;
     use smithay::backend::input::ButtonState;
     use smithay::backend::input::{
         AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
@@ -870,14 +869,27 @@ mod tests {
 
     /// A compositor state with one output of `size`, built without a backend.
     fn test_state(size: (i32, i32)) -> (Display<State>, State) {
+        use smithay::backend::allocator::{Format, Fourcc, Modifier};
+        use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+
         let event_loop = EventLoop::<()>::try_new().expect("the test needs an event loop");
         let display = Display::<State>::new().expect("the test needs a display");
+        // A fake device and one linear format: `State` requires a feedback
+        // (there is no v3 fallback), but the tests never bind a client to it.
+        let feedback = DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
         let state = State::new(
             event_loop.get_signal(),
             &display.handle(),
             Size::from(size),
-            None,
-            FormatSet::default(),
+            feedback,
         )
         .expect("the test state should build");
         (display, state)
