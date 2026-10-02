@@ -688,6 +688,18 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             append_layers(state, renderer, &mut elements, LayerSide::Back);
         }
 
+        // Debug capture (Bloque 7.1): `SIGUSR1` asked for it. The offscreen readback
+        // makes the GL context surfaceless (`eglMakeCurrent(EGL_NO_SURFACE, ...)`
+        // in smithay's `bind_texture`), so it runs *before* the window pass: the
+        // `render_output` that follows re-binds the window's EGL surface and the
+        // swap in `submit` still targets a current surface (Bloque 7.3).
+        if *capture_requested {
+            *capture_requested = false;
+            if let Err(error) = crate::capture::capture_output(renderer, &elements, capture_size) {
+                tracing::warn!(%error, "debug capture failed");
+            }
+        }
+
         let result = damage_tracker
             .render_output(
                 renderer,
@@ -697,15 +709,6 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 [0.06, 0.06, 0.09, 1.0],
             )
             .map_err(DrawError::Output)?;
-
-        // Debug capture (Bloque 7.1): `SIGUSR1` asked for it, so read the
-        // composited framebuffer now — after the render, before the swap.
-        if *capture_requested {
-            *capture_requested = false;
-            if let Err(error) = crate::capture::capture_output(renderer, &elements, capture_size) {
-                tracing::warn!(%error, "debug capture failed");
-            }
-        }
 
         (result.damage.cloned(), result.sync)
     };
