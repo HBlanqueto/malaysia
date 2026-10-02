@@ -141,10 +141,19 @@ implícito · **7c** la shell presenta por EGL.
   aplica. El callback tolera que el cliente muera bloqueado (su data ya no
   existe), así que matar a un cliente con commits pendientes no deja sources,
   fds ni syncobjs huérfanos.
-- **El punto de release lo señala Smithay.** El `on_commit_buffer_handler` que
-  ya usaba el compositor (mismo camino que shm) guarda el `release_point` del
-  commit y lo señala exactamente una vez cuando el buffer se suelta o se
-  destruye (`InnerBuffer::drop`, feature `backend_drm`), igual que el `wl_buffer.release`.
+- **El punto de release se aplaza hasta que la GPU termina de leer.** Smithay
+  señala el `release_point` (y el `wl_buffer.release`) cuando la superficie
+  cambia de buffer en el *siguiente* commit
+  (`backend/renderer/utils/wayland.rs:145-181`), no cuando el render que lo
+  leyó termina: en el rev fijado, el `Arc<InnerBuffer>` que gobierna la señal
+  se suelta en `update_buffer` (al commit), y el renderer solo retiene la
+  textura (la EGLImage), no el `Buffer`. Si el cliente reutilizase ese buffer
+  al recibir el release mientras la GPU aún lo lee, habría carrera. Para
+  cerrarla, Yuki clona cada buffer dibujado al final del frame y lo retiene
+  hasta que la fence EGL de ese frame señala: se exporta como fd nativo
+  (`EGL_ANDROID_native_fence_sync`) y se registra como source one-shot del
+  loop; al disparar se suelta el clon y la señal de release sale *después* de
+  la lectura de la GPU. El compositor nunca bloquea esperando (ADR 0026).
 - **Interacción con la cola de imports (7a).** El blocker espera a que el
   buffer sea legible *antes* de aplicar el commit; la importación en el renderer
   ocurre después, en el drenado de `dispatch_clients`. El orden no cambió: el
@@ -171,6 +180,17 @@ implícito · **7c** la shell presenta por EGL.
   dispositivo, el global no se anuncia). El señalado del release y la limpieza
   al destruir la superficie son maquinaria de Smithay, cubierta por la prueba
   de fds en vivo.
+- **Ambos caminos de sync con clientes reales (WAYLAND_DEBUG por cliente):**
+  `vkcube --wsi wayland` (WSI de Vulkan/Mesa) bindea
+  `wp_linux_drm_syncobj_manager_v1` y usa **explicit sync**
+  (`set_acquire_point` + `set_release_point` en cada frame);
+  `weston-simple-egl` y `mpv --vo=gpu-next` (EGL de Mesa) **no bindean el
+  manager** y adjuntan dmabufs sin acquire point → **sync implícito**; y
+  `weston-simple-shm` no toca ni dmabuf ni syncobj. Ningún camino necesita
+  hacks para ejercitarse.
+- **El release diferido no filtra fds ni RSS:** 823 releases de frames con
+  vkcube en bucle y fds del compositor **28 → 28**; matar clientes GPU con
+  `SIGKILL` no deja sources ni fds huérfanos.
 - `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` (0
   warnings) y `cargo test --workspace` (**115 tests**) en verde.
 
@@ -182,11 +202,13 @@ implícito · **7c** la shell presenta por EGL.
   de `pending_blocker`); la importación en el renderer sigue siendo la cola de
   7a porque es otra frontera (ADR 0012, el renderer no llega a los handlers).
 - **`State::loop_handle`** guarda `LoopHandle<'static, Session>` — como anvil —
-  para que los blockers inserten su source; es una extensión pequeña del ADR
-  0012 (el handle no es un tipo de backend), documentada en `state.rs`.
-- **El release se delega en Smithay** en lugar de señalarse a mano desde el
-  compositor: `on_commit_buffer_handler` ya lo hace de forma exacta (una sola
-  vez) con la feature `backend_drm` activada.
+  para que los blockers inserten su source; es una enmienda explícita del ADR
+  0012 (el handle no es un tipo de backend), registrada allí y en `state.rs`.
+- **El release se aplaza con la fence del frame en vez de dejarlo al siguiente
+  commit.** Smithay 0.7.0 lo señala al reemplazar el buffer (antes de que la
+  GPU termine); Yuki lo cierra con la fence EGL exportada como fd nativo y una
+  source one-shot del loop. Es el hallazgo del ítem 3 de la revisión de 7b,
+  documentado en el ADR 0026.
 
 ## 7c — la shell presenta por EGL
 

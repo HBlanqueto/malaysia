@@ -42,9 +42,20 @@ y por qué no usa `wl_drm`.
    (`pending_blocker`). La reanudación ocurre desde el loop de calloop
    (source one-shot + `blocker_cleared`), de modo que el compositor nunca
    bloquea esperando a un cliente y nunca muestra un frame a medio renderizar.
-   El **release point** se señala cuando el compositor deja de usar el buffer
-   (una sola vez), a través del manejo de buffers de Smithay que el compositor
-   ya usa para shm.
+6. **El release point se aplaza hasta que la GPU termina de leer.** Smithay
+   0.7.0 señala el release (y el `wl_buffer.release`) cuando la superficie
+   cambia de buffer en el *siguiente* commit, no cuando el render termina: el
+   `Arc<InnerBuffer>` que gobierna la señal se suelta en `update_buffer`
+   (`backend/renderer/utils/wayland.rs:145-181`), y el renderer solo retiene la
+   EGLImage, no el `Buffer`. Como un cliente reutiliza un buffer al recibir el
+   release, señalarlo antes de que la GPU acabe de leer sería una carrera. Yuki
+   cierra ese hueco: al final de cada frame clona los buffers dibujados y los
+   retiene hasta que la fence EGL del frame señala. La fence se exporta como fd
+   nativo (`EGL_ANDROID_native_fence_sync`) y se registra como source one-shot
+   del loop (`session.rs`, `schedule_frame_release`); al disparar, el clon se
+   suelta y el release sale *después* de la lectura. El compositor nunca bloquea
+   en `eglClientWaitSync`, y la source se autodestruye (`PostAction::Remove`),
+   así que no filtra fds ni detiene el loop.
 
 ## Por qué la feature `backend_drm` de Smithay
 
@@ -75,13 +86,20 @@ heurística propia: es exactamente el dispositivo que dibuja.
   tamaño del buffer.
 - Matar a un cliente con commits bloqueados no deja blockers, fds ni syncobjs
   huérfanos (el callback del blocker tolera la muerte del cliente).
+- El release diferido (punto 6) no filtra fds ni RSS: 823 releases de frames
+  con vkcube en bucle y fds del compositor **28 → 28**; matar clientes GPU con
+  `SIGKILL` no deja sources ni fds huérfanos.
+- Ambos caminos de sync se ejercitan con clientes reales (WAYLAND_DEBUG por
+  cliente): `vkcube` usa explicit sync (`set_acquire_point`/`set_release_point`
+  por frame); `weston-simple-egl` y `mpv --vo=gpu-next` van por sync implícito;
+  `weston-simple-shm` ni toca dmabuf.
 - El bloque 7c puede presentar la shell por EGL/dmabuf sin copias por CPU
   (ADR 0027).
 
 ## Relación
 
 - ADR 0012 (el backend vive junto al `State`, no dentro: la importación dmabuf
-  ocurre en la sesión; el `loop_handle` del blocker es una extensión pequeña
-  documentada en `state.rs`).
+  ocurre en la sesión; el `loop_handle` del blocker es una enmienda explícita
+  de ese ADR, registrada allí).
 - ADR 0024 / 0025 (la shell es nativa; 7c presenta por EGL — ADR 0027).
 - `docs/bloques/07-linux-dmabuf-y-explicit-sync.md` — el registro por bloque.

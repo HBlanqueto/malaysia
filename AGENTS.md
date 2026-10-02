@@ -94,9 +94,11 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 ## Estado actual
 
 - Bloques 0–6 implementados; **Bloque 7** en curso: **7a** (linux-dmabuf v5 con
-  feedback) hecho, 7b (explicit sync + sync implícito) y 7c (shell por EGL)
-  pendientes (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren
-  wezterm y Firefox acelerados dentro de Yuki anidado.
+  feedback) y **7b** (explicit sync + sync implícito, con el release diferido
+  por fence) hechos; **7c** (la shell presenta por EGL) pendiente
+  (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren wezterm,
+  Firefox, vkcube (Vulkan) y mpv (gpu-next) acelerados dentro de Yuki anidado.
+  El ADR 0026 fija dmabuf + explicit sync.
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +

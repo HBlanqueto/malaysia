@@ -83,3 +83,19 @@ propios manejadores.
   modos, así que no es extra.
 - `State` es público, así que sus campos forman parte de la API del crate. Eso
   es deliberado — los manejadores en `crates/yuki` son los consumidores.
+## Enmienda (Bloque 7b): el `LoopHandle` en `State`
+
+El Bloque 7b añade a `State` un campo `loop_handle: LoopHandle<'static, Session>`
+(visible `pub(crate)`), como hace anvil. No contradice la decisión: un
+`LoopHandle` no es un tipo de backend ni una ventana, y el estado del protocolo
+ya es la única pieza que los manejadores tocan. Dos usos lo requieren:
+
+- los **blockers** del sync explícito/implícito insertan su source one-shot en
+  el loop desde el hook pre-commit (`handlers.rs::insert_blocker_source`), y
+- el **release diferido** de los buffers del frame exporta la fence EGL del
+  render como fd nativo y lo registra como source one-shot del loop
+  (`session.rs::schedule_frame_release`).
+
+El `Session` (el `Data` del loop) sigue siendo el único dueño del loop y del
+backend; `State` solo guarda el handle para registrar sources desde los
+manejadores. El backend se sustituye en `session.rs` igual que antes.
