@@ -6,12 +6,12 @@
 //! `zwlr_foreign_toplevel_management_v1`. The active app is highlighted from
 //! the compositor's `window.domain` store.
 
-use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use std::{ffi::c_void, path::PathBuf};
 
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm,
+    delegate_compositor, delegate_output, delegate_registry, delegate_seat,
     globals::GlobalData,
     output::{OutputHandler, OutputState},
     reexports::{
@@ -58,14 +58,10 @@ use sctk::{
         Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
         LayerSurfaceConfigure, LayerSurfaceData,
     },
-    shm::Shm,
 };
 
-use sctk::shm::ShmHandler;
-
+use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::text::Text;
-
-use crate::present::ShmPresenter;
 
 /// The tile size, in logical pixels (overridable via `dock.domain` `tilesize`).
 const DEFAULT_TILESIZE: i32 = 48;
@@ -98,7 +94,6 @@ struct Dock {
     registry: RegistryState,
     compositor: CompositorState,
     output: OutputState,
-    shm: Shm,
     layer_shell: Option<LayerShell>,
     viewporter: Option<WpViewporter>,
     fractional: Option<WpFractionalScaleManagerV1>,
@@ -111,7 +106,9 @@ struct Dock {
     layer_surface: Option<LayerSurface>,
     viewport: Option<WpViewport>,
 
-    presenter: ShmPresenter,
+    renderer: Option<GlesRenderer>,
+    presenter: crate::present::EglPresenter,
+    texture: Option<Texture>,
     text: Text,
 
     scale: f64,
@@ -143,7 +140,6 @@ pub fn run() -> anyhow::Result<()> {
         registry: RegistryState::new(&globals),
         compositor: CompositorState::bind(&globals, &qh)?,
         output: OutputState::new(&globals, &qh),
-        shm: Shm::bind(&globals, &qh)?,
         layer_shell: LayerShell::bind(&globals, &qh).ok(),
         viewporter: globals.bind(&qh, 1..=1, ()).ok(),
         fractional: globals.bind(&qh, 1..=1, ()).ok(),
@@ -153,7 +149,9 @@ pub fn run() -> anyhow::Result<()> {
         surface: None,
         layer_surface: None,
         viewport: None,
-        presenter: ShmPresenter::new(),
+        renderer: None,
+        presenter: crate::present::EglPresenter::new(),
+        texture: None,
         text: Text::new(11.0),
         scale: 1.0,
         logical_size: (0, 0),
@@ -230,7 +228,7 @@ impl Dock {
     fn configure(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         configure: LayerSurfaceConfigure,
     ) {
         let (width, height) = configure.new_size;
@@ -255,7 +253,7 @@ impl Dock {
         }
 
         self.layout_tiles();
-        self.render(conn, qh);
+        self.render(conn);
     }
 
     /// Lays the tiles out left to right.
@@ -268,7 +266,7 @@ impl Dock {
     }
 
     /// Rebuilds the frame and presents it.
-    fn render(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    fn render(&mut self, conn: &Connection) {
         let (w, h) = self.buffer_size;
         if w == 0 || h == 0 {
             return;
@@ -301,9 +299,33 @@ impl Dock {
             );
         }
 
-        if let Some(surface) = &self.surface {
-            self.presenter
-                .present(conn, &self.shm, qh, surface, (w, h), &frame);
+        if self.renderer.is_none() {
+            let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
+            // Safety: the display handle is the live Wayland connection's.
+            self.renderer =
+                Some(unsafe { GlesRenderer::new(display_ptr) }.expect("create the GLES renderer"));
+        }
+        let (Some(renderer), Some(surface)) = (&mut self.renderer, &self.surface) else {
+            return;
+        };
+        // One texture per size, re-uploaded in place on each redraw so the
+        // dock does not leak a texture per frame.
+        match &self.texture {
+            Some(texture) if texture.size == (w, h) => {
+                if renderer.upload_texture_rgba(texture, &frame).is_err() {
+                    return;
+                }
+            }
+            _ => match renderer.create_texture_rgba((w, h), &frame) {
+                Ok(texture) => self.texture = Some(texture),
+                Err(_) => return,
+            },
+        }
+        let Some(texture) = &self.texture else {
+            return;
+        };
+        if let Err(error) = self.presenter.present(renderer, surface, texture, (w, h)) {
+            eprintln!("dock: present failed: {error}");
         }
     }
 
@@ -344,7 +366,7 @@ impl Dock {
     }
 
     /// Re-reads `dock.domain` (tile size) and `window.domain` (active app).
-    fn check_stores(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    fn check_stores(&mut self, conn: &Connection, _qh: &QueueHandle<Self>) {
         let dock_modified = std::fs::metadata(&self.dock_store)
             .and_then(|m| m.modified())
             .ok();
@@ -374,7 +396,7 @@ impl Dock {
         }
 
         if self.needs_redraw {
-            self.render(conn, qh);
+            self.render(conn);
             self.needs_redraw = false;
         }
     }
@@ -407,12 +429,6 @@ impl OutputHandler for Dock {
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-}
-
-impl ShmHandler for Dock {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
 }
 
 impl SeatHandler for Dock {
@@ -680,7 +696,6 @@ impl Dispatch<WlBuffer, (), Dock> for Dock {
 delegate_compositor!(Dock);
 delegate_output!(Dock);
 delegate_registry!(Dock);
-delegate_shm!(Dock);
 delegate_seat!(Dock);
 
 delegate_dispatch!(Dock: [zwlr_layer_shell_v1::ZwlrLayerShellV1: GlobalData] => LayerShell);

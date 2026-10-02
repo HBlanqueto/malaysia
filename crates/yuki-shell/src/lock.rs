@@ -10,19 +10,21 @@
 //! The never-unlock guarantee lives on the compositor side (`yuki/src/lock.rs`):
 //! if this process dies while locked, the session stays locked.
 
+use sctk::reexports::client::backend::ObjectId;
 use std::cell::RefCell;
+use std::ffi::c_void;
 
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_output, delegate_registry, delegate_session_lock, delegate_shm,
+    delegate_compositor, delegate_output, delegate_registry, delegate_session_lock,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop,
         calloop_wayland_source::WaylandSource,
         client::{
-            Connection, Dispatch, Proxy, QueueHandle,
+            Connection, Proxy, QueueHandle,
             globals::registry_queue_init,
-            protocol::{wl_buffer::WlBuffer, wl_output, wl_surface::WlSurface},
+            protocol::{wl_output, wl_surface::WlSurface},
         },
     },
     registry::{ProvidesRegistryState, RegistryState},
@@ -30,12 +32,12 @@ use sctk::{
         SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
         SessionLockSurfaceConfigure,
     },
-    shm::{Shm, ShmHandler},
 };
 
+use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::text::Text;
 
-use crate::present::ShmPresenter;
+use crate::present::EglPresenter;
 
 /// The font size, in logical pixels.
 const FONT_SIZE: f32 = 24.0;
@@ -48,7 +50,6 @@ struct Lock {
     registry: RegistryState,
     compositor: CompositorState,
     output: OutputState,
-    shm: Shm,
     /// The bound session-lock manager (missing if not advertised).
     session_lock: Option<SessionLockState>,
     /// The session lock once the compositor accepted it (the `locked` event).
@@ -56,7 +57,10 @@ struct Lock {
     /// The lock surfaces, one per output, kept alive so their events dispatch.
     surfaces: RefCell<Vec<(wl_output::WlOutput, SessionLockSurface)>>,
 
-    presenter: ShmPresenter,
+    renderer: Option<GlesRenderer>,
+    texture: Option<Texture>,
+    /// One EGL presenter per lock surface (each owns its `wl_egl_window`).
+    presenters: Vec<(ObjectId, EglPresenter)>,
     text: Text,
 
     buffer_size: (u32, u32),
@@ -73,11 +77,12 @@ pub fn run() -> anyhow::Result<()> {
         registry: RegistryState::new(&globals),
         compositor: CompositorState::bind(&globals, &qh)?,
         output: OutputState::new(&globals, &qh),
-        shm: Shm::bind(&globals, &qh)?,
         session_lock: Some(SessionLockState::new(&globals, &qh)),
         active: None,
         surfaces: RefCell::new(Vec::new()),
-        presenter: ShmPresenter::new(),
+        renderer: None,
+        texture: None,
+        presenters: Vec::new(),
         text: Text::new(FONT_SIZE),
         buffer_size: (0, 0),
     };
@@ -135,12 +140,12 @@ impl Lock {
             changed = true;
         }
         if changed {
-            self.render(conn, qh);
+            self.render(conn);
         }
     }
 
     /// Renders the lock screen frame and presents it to every lock surface.
-    fn render(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    fn render(&mut self, conn: &Connection) {
         let (w, h) = self.buffer_size;
         if w == 0 || h == 0 {
             return;
@@ -163,10 +168,53 @@ impl Lock {
             TEXT_COLOR,
         );
 
+        if self.renderer.is_none() {
+            let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
+            // Safety: the display handle is the live Wayland connection's.
+            self.renderer =
+                Some(unsafe { GlesRenderer::new(display_ptr) }.expect("create the GLES renderer"));
+        }
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+        if self.texture.as_ref().is_some_and(|t| t.size == (w, h)) {
+            if let Some(texture) = &self.texture
+                && renderer.upload_texture_rgba(texture, &frame).is_err()
+            {
+                return;
+            }
+        } else {
+            match renderer.create_texture_rgba((w, h), &frame) {
+                Ok(texture) => self.texture = Some(texture),
+                Err(_) => return,
+            }
+        }
+        let Some(texture) = &self.texture else {
+            return;
+        };
+
+        // Present the same frame to every lock surface, pruning presenters of
+        // surfaces that are gone.
         let surfaces = self.surfaces.borrow().clone();
+        self.presenters
+            .retain(|(id, _)| surfaces.iter().any(|(_, s)| s.wl_surface().id() == *id));
         for (_, surface) in surfaces {
-            self.presenter
-                .present(conn, &self.shm, qh, surface.wl_surface(), (w, h), &frame);
+            let wl_surface = surface.wl_surface();
+            let id = wl_surface.id();
+            let presenter = match self
+                .presenters
+                .iter_mut()
+                .find(|(existing, _)| *existing == id)
+            {
+                Some((_, presenter)) => presenter,
+                None => {
+                    self.presenters.push((id, EglPresenter::new()));
+                    &mut self.presenters.last_mut().expect("just pushed").1
+                }
+            };
+            if let Err(error) = presenter.present(renderer, wl_surface, texture, (w, h)) {
+                eprintln!("lock: present failed: {error}");
+            }
         }
     }
 }
@@ -208,12 +256,6 @@ impl OutputHandler for Lock {
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-}
-
-impl ShmHandler for Lock {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
 }
 
 impl CompositorHandler for Lock {
@@ -274,7 +316,7 @@ impl SessionLockHandler for Lock {
     fn configure(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _: SessionLockSurface,
         configure: SessionLockSurfaceConfigure,
         _serial: u32,
@@ -286,27 +328,13 @@ impl SessionLockHandler for Lock {
             return;
         }
         self.buffer_size = (w, h);
-        self.render(conn, qh);
-    }
-}
-
-impl Dispatch<WlBuffer, (), Lock> for Lock {
-    fn event(
-        _: &mut Self,
-        _: &WlBuffer,
-        _: <WlBuffer as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        // `wl_buffer.release`: the compositor is done with this buffer.
+        self.render(conn);
     }
 }
 
 delegate_compositor!(Lock);
 delegate_output!(Lock);
 delegate_registry!(Lock);
-delegate_shm!(Lock);
 delegate_session_lock!(Lock);
 
 // --- helpers ---------------------------------------------------------------

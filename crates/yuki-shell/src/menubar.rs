@@ -10,13 +10,14 @@
 //! `wl_shm` — the same path as the wallpaper.
 
 use std::{
+    ffi::c_void,
     path::PathBuf,
     time::{Duration, SystemTime},
 };
 
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_output, delegate_registry, delegate_shm,
+    delegate_compositor, delegate_output, delegate_registry,
     globals::GlobalData,
     output::{OutputHandler, OutputState},
     reexports::{
@@ -41,12 +42,10 @@ use sctk::{
         Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
         LayerSurfaceConfigure, LayerSurfaceData,
     },
-    shm::{Shm, ShmHandler},
 };
 
+use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::text::Text;
-
-use crate::present::ShmPresenter;
 
 /// The bar height, in logical pixels.
 const BAR_HEIGHT: i32 = 28;
@@ -59,11 +58,21 @@ const TEXT_COLOR: [u8; 4] = [0xf2, 0xf2, 0xf5, 0xff];
 /// The margin from the edges, in logical pixels.
 const MARGIN: i32 = 10;
 
+/// Duration until the next minute boundary, for the aligned clock timer.
+fn seconds_to_next_minute() -> Duration {
+    use chrono::Timelike;
+    let seconds = chrono::Local::now().second();
+    Duration::from_secs(if seconds == 0 {
+        60
+    } else {
+        (60 - seconds) as u64
+    })
+}
+
 struct Menubar {
     registry: RegistryState,
     compositor: CompositorState,
     output: OutputState,
-    shm: Shm,
     layer_shell: Option<LayerShell>,
     viewporter: Option<WpViewporter>,
     fractional: Option<WpFractionalScaleManagerV1>,
@@ -72,7 +81,9 @@ struct Menubar {
     layer_surface: Option<LayerSurface>,
     viewport: Option<WpViewport>,
 
-    presenter: ShmPresenter,
+    renderer: Option<GlesRenderer>,
+    presenter: crate::present::EglPresenter,
+    texture: Option<Texture>,
     text: Text,
 
     scale: f64,
@@ -99,15 +110,16 @@ pub fn run() -> anyhow::Result<()> {
         registry: RegistryState::new(&globals),
         compositor: CompositorState::bind(&globals, &qh)?,
         output: OutputState::new(&globals, &qh),
-        shm: Shm::bind(&globals, &qh)?,
         layer_shell: LayerShell::bind(&globals, &qh).ok(),
         viewporter: globals.bind(&qh, 1..=1, ()).ok(),
         fractional: globals.bind(&qh, 1..=1, ()).ok(),
         surface: None,
         layer_surface: None,
         viewport: None,
-        presenter: ShmPresenter::new(),
+        presenter: crate::present::EglPresenter::new(),
         text: Text::new(FONT_SIZE),
+        renderer: None,
+        texture: None,
         scale: 1.0,
         logical_size: (0, 0),
         buffer_size: (0, 0),
@@ -128,26 +140,29 @@ pub fn run() -> anyhow::Result<()> {
     let mut event_loop: calloop::EventLoop<Menubar> = calloop::EventLoop::try_new()?;
     WaylandSource::new(conn.clone(), event_queue).insert(event_loop.handle())?;
     let clock_conn = conn.clone();
-    let clock_qh = qh.clone();
+    // The clock shows minutes only (`%H:%M`), so a frame is committed at most
+    // once per minute, on a timer aligned to the minute boundary.
     event_loop
         .handle()
         .insert_source(
-            calloop::timer::Timer::from_duration(Duration::from_secs(1)),
+            calloop::timer::Timer::from_duration(seconds_to_next_minute()),
             move |_, _, state: &mut Menubar| {
                 state.update_clock();
-                state.render(&clock_conn, &clock_qh);
-                calloop::timer::TimeoutAction::ToDuration(Duration::from_secs(1))
+                if state.needs_redraw {
+                    state.needs_redraw = false;
+                    state.render(&clock_conn);
+                }
+                calloop::timer::TimeoutAction::ToDuration(seconds_to_next_minute())
             },
         )
         .expect("insert the clock timer");
-    let store_qh = qh.clone();
     let store_conn = conn.clone();
     event_loop
         .handle()
         .insert_source(
             calloop::timer::Timer::from_duration(Duration::from_millis(500)),
             move |_, _, state: &mut Menubar| {
-                state.check_window_store(&store_conn, &store_qh);
+                state.check_window_store(&store_conn);
                 calloop::timer::TimeoutAction::ToDuration(Duration::from_millis(500))
             },
         )
@@ -195,7 +210,7 @@ impl Menubar {
     fn configure(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         configure: LayerSurfaceConfigure,
     ) {
         let (width, height) = configure.new_size;
@@ -219,11 +234,12 @@ impl Menubar {
             viewport.set_destination(width as i32, height as i32);
         }
 
-        self.render(conn, qh);
+        self.render(conn);
     }
 
-    /// Rebuilds the frame and presents it.
-    fn render(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    /// Rebuilds the frame and presents it by EGL (Bloque 7c).
+    fn render(&mut self, conn: &Connection) {
+        self.needs_redraw = false;
         let (w, h) = self.buffer_size;
         if w == 0 || h == 0 {
             return;
@@ -260,9 +276,35 @@ impl Menubar {
             TEXT_COLOR,
         );
 
-        if let Some(surface) = &self.surface {
-            self.presenter
-                .present(conn, &self.shm, qh, surface, (w, h), &frame);
+        // Create the GLES renderer on the first render and present the frame
+        // as a texture over the EGL window (Bloque 7c).
+        if self.renderer.is_none() {
+            let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
+            // Safety: the display handle is the live Wayland connection's.
+            self.renderer =
+                Some(unsafe { GlesRenderer::new(display_ptr) }.expect("create the GLES renderer"));
+        }
+        let (Some(renderer), Some(surface)) = (&mut self.renderer, &self.surface) else {
+            return;
+        };
+        // One texture per size, re-uploaded in place on each redraw so the
+        // clock does not leak a texture per second.
+        match &self.texture {
+            Some(texture) if texture.size == (w, h) => {
+                if renderer.upload_texture_rgba(texture, &frame).is_err() {
+                    return;
+                }
+            }
+            _ => match renderer.create_texture_rgba((w, h), &frame) {
+                Ok(texture) => self.texture = Some(texture),
+                Err(_) => return,
+            },
+        }
+        let Some(texture) = &self.texture else {
+            return;
+        };
+        if let Err(error) = self.presenter.present(renderer, surface, texture, (w, h)) {
+            eprintln!("menubar: present failed: {error}");
         }
     }
 
@@ -277,7 +319,7 @@ impl Menubar {
     }
 
     /// Re-reads the active window store if it changed.
-    fn check_window_store(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    fn check_window_store(&mut self, conn: &Connection) {
         let modified = std::fs::metadata(&self.window_store)
             .and_then(|m| m.modified())
             .ok();
@@ -288,7 +330,7 @@ impl Menubar {
         match load_active_window(&self.window_store) {
             Ok(title) if title != self.active_title => {
                 self.active_title = title;
-                self.render(conn, qh);
+                self.render(conn);
             }
             Ok(_) => {}
             Err(error) => eprintln!("menubar: window store: {error}"),
@@ -323,12 +365,6 @@ impl OutputHandler for Menubar {
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-}
-
-impl ShmHandler for Menubar {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
 }
 
 impl CompositorHandler for Menubar {
@@ -459,7 +495,6 @@ impl Dispatch<WlBuffer, (), Menubar> for Menubar {
 delegate_compositor!(Menubar);
 delegate_output!(Menubar);
 delegate_registry!(Menubar);
-delegate_shm!(Menubar);
 
 delegate_dispatch!(
     Menubar: [zwlr_layer_shell_v1::ZwlrLayerShellV1: GlobalData] => LayerShell

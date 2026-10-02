@@ -1,82 +1,64 @@
-//! Presenting a rendered frame to a `wl_surface` via shared memory.
+//! Presenting a rendered frame to a `wl_surface` via EGL (Bloque 7c).
 //!
-//! Every component renders a top-down RGBA8 frame (the wallpaper with GLES,
-//! the menu bar by compositing text) and presents it through `wl_shm`: a pool
-//! sized to the frame, one buffer, attach + commit. The buffer is reused until
-//! the size changes.
+//! Each component renders a texture (the wallpaper with GLES, the menu bar,
+//! dock and lock by uploading their composited RGBA frames) and presents it
+//! over a `wl_egl_window` on its layer surface: Mesa turns the swap into a
+//! dmabuf the compositor textures directly, with no shared-memory copy. This
+//! is the single presentation path of the shell.
 
-use sctk::reexports::client::protocol::{wl_buffer::WlBuffer, wl_shm, wl_surface::WlSurface};
-use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
-use sctk::shm::Shm;
-use sctk::shm::raw::RawPool;
+use std::ffi::c_void;
 
-/// Owns the shared-memory pool and buffer used to present one surface.
-pub struct ShmPresenter {
-    pool: Option<RawPool>,
-    buffer: Option<WlBuffer>,
+use celestial_kit::gl::{GlError, GlesRenderer, Texture, WindowPresenter};
+use sctk::reexports::client::Proxy;
+use sctk::reexports::client::protocol::wl_surface::WlSurface;
+use wayland_egl::WlEglSurface;
+
+/// Presents textures over an EGL window on a `wl_surface` (Bloque 7c).
+///
+/// Owns the `wl_egl_window` (libwayland-egl) and hands its raw pointer to
+/// [`WindowPresenter`], which owns the EGL surface on the renderer's display.
+/// The window is recreated when the size changes.
+#[derive(Default)]
+pub struct EglPresenter {
+    window: Option<WlEglSurface>,
+    inner: WindowPresenter,
 }
 
-impl ShmPresenter {
-    /// Creates an empty presenter.
+impl EglPresenter {
+    /// Creates an empty presenter; the window is created on the first present.
     pub fn new() -> Self {
         Self {
-            pool: None,
-            buffer: None,
+            window: None,
+            inner: WindowPresenter::new(),
         }
     }
 
-    /// Presents `rgba` (top-down RGBA8, `size.0`×`size.1`) on `surface`.
+    /// Renders `texture` covering the surface at `size` and presents it.
     ///
-    /// `conn` is unused for now but kept for the future dmabuf path.
-    pub fn present<D>(
+    /// `surface` must be a live `wl_surface` for as long as the presenter uses
+    /// it. A size change recreates the `wl_egl_window` and the EGL surface.
+    pub fn present(
         &mut self,
-        _conn: &Connection,
-        shm: &Shm,
-        qh: &QueueHandle<D>,
+        renderer: &mut GlesRenderer,
         surface: &WlSurface,
+        texture: &Texture,
         size: (u32, u32),
-        rgba: &[u8],
-    ) where
-        D: Dispatch<WlBuffer, ()> + 'static,
-    {
-        let (w, h) = size;
-        let stride = (w * 4) as usize;
-        let len = rgba.len();
-
-        let needs_pool = match &self.pool {
-            Some(pool) => pool.len() < len,
-            None => true,
-        };
-        if needs_pool {
-            match RawPool::new(len, shm) {
-                Ok(mut pool) => {
-                    self.buffer = Some(pool.create_buffer(
-                        0,
-                        w as i32,
-                        h as i32,
-                        stride as i32,
-                        wl_shm::Format::Argb8888,
-                        (),
-                        qh,
-                    ));
-                    self.pool = Some(pool);
-                }
-                Err(error) => {
-                    eprintln!("present: shm pool failed: {error}");
-                    return;
-                }
-            }
+    ) -> Result<(), GlError> {
+        let resized = self
+            .window
+            .as_ref()
+            .is_some_and(|window| window.get_size() != (size.0 as i32, size.1 as i32));
+        if self.window.is_none() || resized {
+            let window = WlEglSurface::new(surface.id(), size.0 as i32, size.1 as i32)
+                .map_err(|_| GlError::Egl("wl_egl_window_create failed"))?;
+            self.window = Some(window);
         }
-
-        let Some(pool) = self.pool.as_mut() else {
-            return;
-        };
-        pool.mmap()[..len].copy_from_slice(rgba);
-
-        if let Some(buffer) = &self.buffer {
-            surface.attach(Some(buffer), 0, 0);
-            surface.damage_buffer(0, 0, w as i32, h as i32);
-            surface.commit();
+        let window = self.window.as_ref().expect("window created above");
+        // Safety: the `wl_egl_window` is alive and owned by this presenter; it
+        // outlives this call.
+        unsafe {
+            self.inner
+                .present(renderer, window.ptr() as *mut c_void, texture, size)
         }
     }
 }

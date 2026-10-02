@@ -14,7 +14,7 @@ use std::{
 
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_output, delegate_registry, delegate_shm,
+    delegate_compositor, delegate_output, delegate_registry,
     globals::GlobalData,
     output::{OutputHandler, OutputState},
     reexports::{
@@ -39,12 +39,11 @@ use sctk::{
         Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
         LayerSurfaceConfigure, LayerSurfaceData,
     },
-    shm::{Shm, ShmHandler},
 };
 
 use celestial_kit::gl::{GlesRenderer, Texture};
 
-use crate::present::ShmPresenter;
+use crate::present::EglPresenter;
 
 /// The decoded wallpaper, ready to upload as an RGBA8 texture.
 #[derive(Clone)]
@@ -57,7 +56,6 @@ struct Wallpaper {
     registry: RegistryState,
     compositor: CompositorState,
     output: OutputState,
-    shm: Shm,
     layer_shell: Option<LayerShell>,
     viewporter: Option<WpViewporter>,
     fractional: Option<WpFractionalScaleManagerV1>,
@@ -69,7 +67,7 @@ struct Wallpaper {
     renderer: Option<GlesRenderer>,
     texture: Option<Texture>,
     image: Option<DecodedImage>,
-    presenter: ShmPresenter,
+    presenter: crate::present::EglPresenter,
 
     /// The preferred fractional scale of the surface (1.0 until told otherwise).
     scale: f64,
@@ -95,7 +93,6 @@ pub fn run() -> anyhow::Result<()> {
         registry: RegistryState::new(&globals),
         compositor: CompositorState::bind(&globals, &qh)?,
         output: OutputState::new(&globals, &qh),
-        shm: Shm::bind(&globals, &qh)?,
         layer_shell: LayerShell::bind(&globals, &qh).ok(),
         viewporter: globals.bind(&qh, 1..=1, ()).ok(),
         fractional: globals.bind(&qh, 1..=1, ()).ok(),
@@ -105,7 +102,7 @@ pub fn run() -> anyhow::Result<()> {
         renderer: None,
         texture: None,
         image: None,
-        presenter: ShmPresenter::new(),
+        presenter: EglPresenter::new(),
         scale: 1.0,
         logical_size: (0, 0),
         buffer_size: (0, 0),
@@ -119,18 +116,16 @@ pub fn run() -> anyhow::Result<()> {
     }
 
     state.create_surfaces(&qh);
-    state.check_store(&conn, &qh);
+    state.check_store();
 
     let mut event_loop: calloop::EventLoop<Wallpaper> = calloop::EventLoop::try_new()?;
     WaylandSource::new(conn.clone(), event_queue).insert(event_loop.handle())?;
-    let timer_qh = qh.clone();
-    let timer_conn = conn.clone();
     event_loop
         .handle()
         .insert_source(
             calloop::timer::Timer::from_duration(Duration::from_millis(500)),
             move |_, _, state: &mut Wallpaper| {
-                state.check_store(&timer_conn, &timer_qh);
+                state.check_store();
                 calloop::timer::TimeoutAction::ToDuration(Duration::from_millis(500))
             },
         )
@@ -177,13 +172,7 @@ impl Wallpaper {
     }
 
     /// Applies a configure from the compositor and redraws.
-    fn configure(
-        &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        configure: LayerSurfaceConfigure,
-        _serial: u32,
-    ) {
+    fn configure(&mut self, conn: &Connection, configure: LayerSurfaceConfigure, _serial: u32) {
         let Some(_layer_surface) = self.layer_surface.clone() else {
             return;
         };
@@ -212,12 +201,12 @@ impl Wallpaper {
             viewport.set_destination(width as i32, height as i32);
         }
 
-        // Create the offscreen renderer on the first real configure.
+        // Create the GLES renderer on the first real configure.
         if self.renderer.is_none() {
             let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
             // Safety: the display handle is the live Wayland connection's.
-            let renderer = unsafe { GlesRenderer::new(display_ptr, (bw, bh)) }
-                .expect("create the GLES renderer");
+            let renderer =
+                unsafe { GlesRenderer::new(display_ptr) }.expect("create the GLES renderer");
             self.renderer = Some(renderer);
         }
 
@@ -228,7 +217,7 @@ impl Wallpaper {
             self.upload_image(&image);
         }
 
-        self.present(conn, qh);
+        self.present();
     }
 
     /// (Re)uploads the decoded image as a texture.
@@ -239,43 +228,27 @@ impl Wallpaper {
             .and_then(|renderer| renderer.create_texture_rgba(image.size, &image.rgba).ok());
     }
 
-    /// Renders the current texture offscreen and presents it as a `wl_shm`
-    /// buffer (no-op until both the renderer and the texture exist).
+    /// Renders the current texture over an EGL window on the surface and
+    /// presents it (no-op until both the renderer and the texture exist).
     ///
-    /// Rendering is GLES (ADR 0024); presentation goes through shared memory
-    /// until the compositor serves dmabuf for the shell surfaces.
-    fn present(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    /// Rendering is GLES (ADR 0024); presentation goes through EGL (Bloque
+    /// 7c) — the swap becomes a dmabuf the compositor textures directly, so
+    /// nothing is read back or copied through shared memory.
+    fn present(&mut self) {
         let (Some(renderer), Some(texture)) = (&mut self.renderer, &self.texture) else {
             return;
         };
         let (w, h) = self.buffer_size;
-        renderer.resize((w, h));
-        let rgba = match renderer.render_cover_to_rgba(texture) {
-            Ok(rgba) => rgba,
-            Err(error) => {
-                eprintln!("wallpaper: render failed: {error}");
-                return;
-            }
-        };
-
-        // GL readback is bottom-up; wl_shm rows are top-down.
-        let stride = (w * 4) as usize;
-        let mut topdown = vec![0u8; rgba.len()];
-        for row in 0..h as usize {
-            let src = (h as usize - 1 - row) * stride;
-            let dst = row * stride;
-            topdown[dst..dst + stride].copy_from_slice(&rgba[src..src + stride]);
-        }
-
         let Some(surface) = &self.surface else {
             return;
         };
-        self.presenter
-            .present(conn, &self.shm, qh, surface, (w, h), &topdown);
+        if let Err(error) = self.presenter.present(renderer, surface, texture, (w, h)) {
+            eprintln!("wallpaper: present failed: {error}");
+        }
     }
 
     /// Re-reads the wallpaper store if it changed on disk and re-renders.
-    fn check_store(&mut self, conn: &Connection, qh: &QueueHandle<Self>) {
+    fn check_store(&mut self) {
         let modified = std::fs::metadata(&self.store_path)
             .and_then(|m| m.modified())
             .ok();
@@ -295,7 +268,7 @@ impl Wallpaper {
                     Ok(image) => {
                         self.upload_image(&image);
                         self.image = Some(image);
-                        self.present(conn, qh);
+                        self.present();
                     }
                     Err(error) => eprintln!("wallpaper: failed to decode {path:?}: {error:#}"),
                 }
@@ -333,12 +306,6 @@ impl OutputHandler for Wallpaper {
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-}
-
-impl ShmHandler for Wallpaper {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
 }
 
 impl CompositorHandler for Wallpaper {
@@ -390,12 +357,12 @@ impl LayerShellHandler for Wallpaper {
     fn configure(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _: &LayerSurface,
         configure: LayerSurfaceConfigure,
         serial: u32,
     ) {
-        self.configure(conn, qh, configure, serial);
+        self.configure(conn, configure, serial);
     }
 }
 
@@ -470,7 +437,6 @@ impl Dispatch<WlBuffer, (), Wallpaper> for Wallpaper {
 delegate_compositor!(Wallpaper);
 delegate_output!(Wallpaper);
 delegate_registry!(Wallpaper);
-delegate_shm!(Wallpaper);
 
 // The layer-shell protocol has no delegate macro of its own: the app state
 // forwards its events to the `LayerShell` handle (see sctk's `wlr_layer`).

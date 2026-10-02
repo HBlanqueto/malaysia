@@ -44,21 +44,19 @@ pub struct Texture {
     pub size: (u32, u32),
 }
 
-/// The GLES renderer: one EGL display + context and an offscreen framebuffer.
+/// The GLES renderer: one EGL display + context, rendering into a window.
 ///
-/// Each shell component keeps its own instance. Rendering happens offscreen;
-/// [`GlesRenderer::render_cover_to_rgba`] hands the pixels back for the caller
-/// to present (a `wl_shm` buffer, a window surface, ...).
+/// Each shell component keeps its own instance (Bloque 7c). The component
+/// creates a `wl_egl_window` on its layer surface and presents over it with
+/// [`GlesRenderer::render_cover_to_surface`]; Mesa turns the swap into a
+/// dmabuf the compositor textures directly. There is no offscreen readback.
 pub struct GlesRenderer {
     egl: DynamicInstance<egl::EGL1_5>,
     display: egl::Display,
+    config: egl::Config,
     context: egl::Context,
     gl: glow::Context,
     blit: BlitProgram,
-    size: (u32, u32),
-    fbo: Option<glow::Framebuffer>,
-    fbo_texture: Option<glow::Texture>,
-    fbo_size: (u32, u32),
 }
 
 impl GlesRenderer {
@@ -66,13 +64,12 @@ impl GlesRenderer {
     ///
     /// - `display_ptr`: the native display handle (a `wl_display*` for the
     ///   shell, an `EGLNativeDisplayType` in general).
-    /// - `size`: the initial offscreen render target size, in pixels.
     ///
     /// # Safety
     ///
     /// `display_ptr` must be a valid native display handle for the EGL platform
     /// and must remain valid for as long as the renderer exists.
-    pub unsafe fn new(display_ptr: *mut c_void, size: (u32, u32)) -> Result<Self, GlError> {
+    pub unsafe fn new(display_ptr: *mut c_void) -> Result<Self, GlError> {
         let egl = unsafe { DynamicInstance::<egl::EGL1_5>::load_required() }
             .map_err(|e| GlError::EglLoad(e.to_string()))?;
         let display = unsafe {
@@ -127,24 +124,11 @@ impl GlesRenderer {
         Ok(Self {
             egl,
             display,
+            config,
             context,
             gl,
             blit,
-            size,
-            fbo: None,
-            fbo_texture: None,
-            fbo_size: (0, 0),
         })
-    }
-
-    /// Sets the offscreen render target size.
-    pub fn resize(&mut self, size: (u32, u32)) {
-        self.size = size;
-    }
-
-    /// The current render target size.
-    pub fn size(&self) -> (u32, u32) {
-        self.size
     }
 
     /// Uploads an RGBA8 image into a texture.
@@ -198,116 +182,105 @@ impl GlesRenderer {
         }
     }
 
-    /// Renders `texture` covering the render target and returns the pixels as
-    /// **bottom-up** RGBA8 (OpenGL's natural readback order).
+    /// Re-uploads an RGBA8 image into an existing texture of the same size.
     ///
-    /// The image is scaled to cover the target, cropping the excess — the macOS
-    /// default behaviour for a desktop picture.
-    pub fn render_cover_to_rgba(&mut self, texture: &Texture) -> Result<Vec<u8>, GlError> {
-        self.ensure_framebuffer()?;
-        let (w, h) = self.size;
-        unsafe {
-            self.make_current()?;
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, self.fbo);
-            self.gl.viewport(0, 0, w as i32, h as i32);
-            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-            self.draw_texture_cover(texture);
-            let mut pixels = vec![0u8; (w * h * 4) as usize];
-            self.gl.read_pixels(
-                0,
-                0,
-                w as i32,
-                h as i32,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelPackData::Slice(&mut pixels),
-            );
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-            Ok(pixels)
-        }
-    }
-
-    /// Makes the context current on the calling thread (surfaceless).
-    fn make_current(&self) -> Result<(), GlError> {
-        self.egl
-            .make_current(self.display, None, None, Some(self.context))
-            .map_err(|_| GlError::Egl("eglMakeCurrent failed"))
-    }
-
-    /// Creates (or resizes) the offscreen framebuffer for the current size.
-    fn ensure_framebuffer(&mut self) -> Result<(), GlError> {
-        let size = self.size;
-        if self.fbo.is_some() && self.fbo_size == size {
-            return Ok(());
+    /// A component that redraws in place (the menu bar's clock, the dock) keeps
+    /// one texture and refreshes its pixels instead of leaking a texture per
+    /// frame.
+    pub fn upload_texture_rgba(&self, texture: &Texture, data: &[u8]) -> Result<(), GlError> {
+        let expected = texture.size.0 as usize * texture.size.1 as usize * 4;
+        if data.len() != expected {
+            return Err(GlError::Texture(format!(
+                "RGBA buffer is {} bytes, expected {expected}",
+                data.len()
+            )));
         }
         unsafe {
-            if let Some(fbo) = self.fbo.take() {
-                self.gl.delete_framebuffer(fbo);
-            }
-            if let Some(tex) = self.fbo_texture.take() {
-                self.gl.delete_texture(tex);
-            }
-
-            let tex = self
-                .gl
-                .create_texture()
-                .map_err(|e| GlError::Texture(e.to_string()))?;
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(tex));
-            self.gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MIN_FILTER,
-                glow::NEAREST as i32,
-            );
-            self.gl.tex_parameter_i32(
-                glow::TEXTURE_2D,
-                glow::TEXTURE_MAG_FILTER,
-                glow::NEAREST as i32,
-            );
+            self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
             self.gl.tex_image_2d(
                 glow::TEXTURE_2D,
                 0,
                 glow::RGBA8 as i32,
-                size.0 as i32,
-                size.1 as i32,
+                texture.size.0 as i32,
+                texture.size.1 as i32,
                 0,
                 glow::RGBA,
                 glow::UNSIGNED_BYTE,
-                None,
+                Some(data),
             );
             self.gl.bind_texture(glow::TEXTURE_2D, None);
-
-            let fbo = self
-                .gl
-                .create_framebuffer()
-                .map_err(|e| GlError::Texture(e.to_string()))?;
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
-            self.gl.framebuffer_texture_2d(
-                glow::FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::TEXTURE_2D,
-                Some(tex),
-                0,
-            );
-            let status = self.gl.check_framebuffer_status(glow::FRAMEBUFFER);
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-            if status != glow::FRAMEBUFFER_COMPLETE {
-                return Err(GlError::Framebuffer(status));
-            }
-
-            self.fbo = Some(fbo);
-            self.fbo_texture = Some(tex);
-            self.fbo_size = size;
+            Ok(())
         }
-        Ok(())
     }
 
-    /// Draws `texture` covering the current framebuffer (macOS wallpaper `fill`).
+    /// Creates an EGL window surface on a native window (a `wl_egl_window*`).
     ///
-    /// The image is scaled to cover the surface, cropping the excess. The view
-    /// port is set to the render target's size.
-    fn draw_texture_cover(&self, texture: &Texture) {
-        let (vw, vh) = (self.size.0 as f32, self.size.1 as f32);
+    /// The shell presents through the Wayland EGL platform (Bloque 7c): the
+    /// caller creates a `wl_egl_window` on its layer surface (libwayland-egl)
+    /// and hands its raw pointer here; the surface swaps over that window, so
+    /// Mesa presents dmabuf buffers the compositor textures directly.
+    ///
+    /// # Safety
+    ///
+    /// `native_window` must be a valid `wl_egl_window*` for the renderer's
+    /// display and must stay alive until the returned surface is destroyed.
+    pub unsafe fn create_window_surface(
+        &self,
+        native_window: *mut c_void,
+    ) -> Result<egl::Surface, GlError> {
+        unsafe {
+            self.egl
+                .create_window_surface(self.display, self.config, native_window, None)
+        }
+        .map_err(|_| GlError::Egl("eglCreateWindowSurface failed"))
+    }
+
+    /// Destroys an EGL window surface created by [`create_window_surface`].
+    pub fn destroy_window_surface(&self, surface: egl::Surface) -> Result<(), GlError> {
+        self.egl
+            .destroy_surface(self.display, surface)
+            .map_err(|_| GlError::Egl("eglDestroySurface failed"))
+    }
+
+    /// Renders `texture` covering the EGL window `surface` and presents it.
+    ///
+    /// The image is scaled to cover the target, cropping the excess (macOS
+    /// wallpaper `fill`), exactly like the offscreen path. The swap presents
+    /// the frame over the window: Mesa turns it into a dmabuf the compositor
+    /// textures, so nothing is read back or copied through shared memory
+    /// (Bloque 7c). The context returns to surfaceless afterwards.
+    pub fn render_cover_to_surface(
+        &mut self,
+        texture: &Texture,
+        surface: &egl::Surface,
+        size: (u32, u32),
+    ) -> Result<(), GlError> {
+        let (w, h) = size;
+        unsafe {
+            self.egl
+                .make_current(
+                    self.display,
+                    Some(*surface),
+                    Some(*surface),
+                    Some(self.context),
+                )
+                .map_err(|_| GlError::Egl("eglMakeCurrent(window) failed"))?;
+            self.gl.viewport(0, 0, w as i32, h as i32);
+            self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            self.gl.clear(glow::COLOR_BUFFER_BIT);
+            self.draw_texture_cover_to(texture, w as f32, h as f32);
+            self.egl
+                .swap_buffers(self.display, *surface)
+                .map_err(|_| GlError::Egl("eglSwapBuffers failed"))?;
+            self.egl
+                .make_current(self.display, None, None, Some(self.context))
+                .map_err(|_| GlError::Egl("eglMakeCurrent(surfaceless) failed"))?;
+            Ok(())
+        }
+    }
+
+    /// Draws `texture` covering a target of the given size.
+    fn draw_texture_cover_to(&self, texture: &Texture, vw: f32, vh: f32) {
         let (tw, th) = (texture.size.0 as f32, texture.size.1 as f32);
         let scale = (vw / tw).max(vh / th);
         let src_w = vw / scale;
@@ -336,18 +309,66 @@ impl GlesRenderer {
 impl Drop for GlesRenderer {
     fn drop(&mut self) {
         unsafe {
-            if let Some(fbo) = self.fbo.take() {
-                self.gl.delete_framebuffer(fbo);
-            }
-            if let Some(tex) = self.fbo_texture.take() {
-                self.gl.delete_texture(tex);
-            }
             self.gl.delete_vertex_array(self.blit.vao);
             self.gl.delete_buffer(self.blit.vbo);
             self.gl.delete_program(self.blit.program);
         }
         let _ = self.egl.make_current(self.display, None, None, None);
         let _ = self.egl.destroy_context(self.display, self.context);
+    }
+}
+
+/// Owns an EGL window surface and presents textures over it (Bloque 7c).
+///
+/// The caller owns the native window — a `wl_egl_window*` from libwayland-egl —
+/// and hands its raw pointer on every present. This type recreates the EGL
+/// surface when the size changes and renders + swaps the given texture, so a
+/// component presents by EGL without touching shared memory. It is the
+/// Wayland-agnostic half of the path: the shell keeps the `WlEglSurface` next
+/// to this and passes `WlEglSurface::ptr()` here.
+#[derive(Debug, Default)]
+pub struct WindowPresenter {
+    surface: Option<egl::Surface>,
+    size: (u32, u32),
+}
+
+impl WindowPresenter {
+    /// Creates an empty presenter; the surface is created on the first present.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Renders `texture` covering the window and presents it.
+    ///
+    /// On a size change the EGL window surface is recreated at the new size.
+    /// The presenter borrows the renderer because the surface belongs to its
+    /// display and context.
+    ///
+    /// # Safety
+    ///
+    /// `native_window` must be a live `wl_egl_window*` for the renderer's
+    /// display while this call runs.
+    pub unsafe fn present(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        native_window: *mut c_void,
+        texture: &Texture,
+        size: (u32, u32),
+    ) -> Result<(), GlError> {
+        if self.surface.is_none() || self.size != size {
+            if let Some(surface) = self.surface.take() {
+                renderer.destroy_window_surface(surface)?;
+            }
+            // Safety: the caller guarantees `native_window` is a valid
+            // `wl_egl_window*` that outlives this call.
+            self.surface = Some(unsafe { renderer.create_window_surface(native_window)? });
+            self.size = size;
+        }
+        let surface = self
+            .surface
+            .as_ref()
+            .ok_or(GlError::Egl("no window surface"))?;
+        renderer.render_cover_to_surface(texture, surface, size)
     }
 }
 
