@@ -273,6 +273,16 @@ implícito · **7c** la shell presenta por EGL.
   aunque exclusiva por proceso, está en el borde pero no supera el criterio con
   claridad. Se procede con la opción 1 (todo EGL, camino único).
 - **Sin fugas**: GTT estable tras 15 s con el reloj re-renderizando.
+- **Subida parcial verificada**: al cambiar el reloj, el menubar sube solo la
+  franja derecha (90 px) con `glTexSubImage2D`, no el frame entero; el dock
+  sube solo la(s) baldosa(s) que cambian de activa. Si nada cambia no hay
+  commit.
+- **Lock verificado en EGL**: `yuki-shell lock` bloquea la sesión (`session
+  locked` en el compositor) y su superficie commitea `Dma`; con varias salidas
+  crea una superficie por salida. Matar el cliente lock con `SIGKILL` **no
+  desbloquea** la sesión (`session unlocked` sigue ausente) y una ventana normal
+  conecta pero no se renderiza mientras bloqueado — la garantía
+  *never-unlock* se mantiene con la presentación EGL.
 - `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` (0) y
   `cargo test --workspace` (**115 tests**) en verde.
 

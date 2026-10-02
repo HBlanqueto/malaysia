@@ -77,7 +77,8 @@ del sistema en `/run/current-system/sw/share/wallpapers/`, igual que GNOME insta
 los suyos en `/usr/share/backgrounds`. `wallpaper.dir` por defecto apunta ahí; un
 desarrollo puede apuntarlo al repo o a otra carpeta. El componente
 **`yuki-shell wallpaper`** dibuja el wallpaper en la capa `Background` con las
-imágenes de esa carpeta (ADR 0023/0024; render GLES presentado por `wl_shm`).
+imágenes de esa carpeta (ADR 0023/0024; render GLES presentado por **EGL**/dmabuf,
+ADR 0027).
 
 **Como macOS, la selección actual vive en un almacén aparte**:
 `~/.local/share/yuki/wallpaper.domain` (el equivalente a `~/Library/Application

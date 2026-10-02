@@ -78,7 +78,7 @@ docs/
 ## Estado actual en una línea
 
 Los **Bloques 0–6** están implementados (scaffolding, conexión de clientes,
-ventana en pantalla, input, ventanas manipulables, popups y portapapeles). El
+ventana en pantalla, input, ventanas manipulables, popups y portapapeles).
 El **Bloque 7** está hecho: **7a** (linux-dmabuf v5 con feedback), **7b**
 (explicit sync + sync implícito, release diferido por fence) y **7c** (la shell
 presenta por EGL, un solo camino sin `wl_shm`). Ya corren wezterm, Firefox,

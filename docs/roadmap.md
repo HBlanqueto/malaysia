@@ -79,15 +79,27 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 
 ## Bloque 7 — linux-dmabuf y explicit sync
 
-- `zwp_linux_dmabuf_v1` (v4+, con feedback) en el compositor; el `main_device`
+- `zwp_linux_dmabuf_v1` (v5, con feedback) en el compositor; el `main_device`
   del feedback es el render node del dispositivo del renderer GLES de winit, y
-  los formatos son los que reporta el propio renderer. Sin `wl_drm`
+  los formatos son los que reporta el propio renderer. Sin `wl_drm`. Sin
+  fallback a v3: sin render node el arranque falla con un error claro.
 - Explicit sync (`wp_linux_drm_syncobj_manager_v1`, solo si el dispositivo
   soporta `syncobj_eventfd`) más el sync implícito (un *blocker* pre-commit que
-  espera a que el dmabuf sea legible); un solo camino de commit
-- La shell presenta por EGL/dmabuf en lugar de copiar a `wl_shm`
-- Aceptación: wezterm y Firefox acelerados dentro de Yuki anidado; la shell sin
-  copias por CPU. Ver `bloques/07-linux-dmabuf-y-explicit-sync.md`.
+  espera a que el dmabuf sea legible); un solo camino de commit. El **release
+  point se aplaza** hasta que la GPU termina de leer (fence EGL exportada como
+  fd nativo + source one-shot del loop; `EGL_ANDROID_native_fence_sync`
+  obligatorio al arrancar).
+- La shell presenta por EGL/dmabuf (`wl_egl_window`) en lugar de copiar a
+  `wl_shm`; se elimina `wl_shm` de la shell (camino único). Subida de textura
+  **parcial** (`glTexSubImage2D` del rectángulo dañado) en menubar/dock.
+- **Cierre**: memoria en reposo medida con PSS/USS por proceso y GTT/VRAM
+  (antes/después), el wallpaper mejora con EGL y el coste exclusivo de los
+  componentes de texto (≈ 19 MB USS + 22 MiB GPU) es borderline pero no
+  "claramente mayor" que el umbral pactado; el lock bloquea por EGL y matar su
+  cliente no desbloquea la sesión.
+- Aceptación: wezterm y Firefox acelerados dentro de Yuki anidado (más vkcube y
+  mpv); la shell sin copias por CPU. Ver `bloques/07-linux-dmabuf-y-explicit-sync.md`
+  y los ADR 0026/0027.
 
 ## Bloque 8 — Direct Session (DRM/KMS)
 

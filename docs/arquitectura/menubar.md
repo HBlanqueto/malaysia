@@ -14,7 +14,7 @@ window.domain ──► título de la app activa (el compositor lo publica)
                                         │
                                         ▼
   superficie layer-shell Top, 1280×28, exclusive zone 28
-                                        │  wl_shm
+                                        │  eglSwapBuffers (wl_egl_window → dmabuf)
                                         ▼
                         Yuki (compositor) lo compone sobre las ventanas
 ```
@@ -23,9 +23,13 @@ window.domain ──► título de la app activa (el compositor lo publica)
    **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
    debajo de la barra.
 2. **El render** es CPU: `celestial-kit::text` (cosmic-text + swash) compone el
-   texto en un frame RGBA sobre un fondo translúcido; se presenta por `wl_shm`
-   (el mismo presentador compartido que el wallpaper).
-3. **El reloj**: se actualiza cada segundo (timer del event loop).
+   texto en un frame RGBA sobre un fondo translúcido, y la textura se presenta
+   por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
+   dmabuf que el compositor texturiza directo. La subida a la textura es
+   **parcial**: solo la franja del reloj (90 px) o del título (250 px) que
+   cambió, con `glTexSubImage2D`.
+3. **El reloj**: solo muestra minutos (`%H:%M`), así que commitea **al borde de
+   minuto** (timer alineado), no cada segundo.
 4. **La app activa**: el compositor publica la ventana enfocada en el estado
    `window.domain` (`[active] title`/`app_id`) — el mismo patrón de almacén que
    el wallpaper — y la menubar lo vigila.
@@ -56,8 +60,10 @@ el área útil).
 - **App activa por el almacén, no por protocolo**: `ext-foreign-toplevel-list-v1`
   no expresa "activada"; se usa el estado `window.domain`. Documentado arriba.
 - **Render CPU** (cosmic-text a un frame RGBA) en vez de GLES para el texto:
-  los glifos se rasterizan con swash de todos modos; el GPU se usará para los
-  efectos (blur de la barra, ADR 0020/0024) cuando existan.
+  los glifos se rasterizan con swash de todos modos; el contenido es casi
+  estático, así que la subida a la textura es parcial y barata. Las animaciones
+  (blur de la barra, ADR 0020/0024, futuras) deben renderizarse en GPU, nunca
+  CPU + subida por frame (ADR 0027).
 - `menubar.autohide` se lee del catálogo pero aún no se implementa (el
   comportamiento de autohide es trabajo futuro).
 
@@ -66,14 +72,17 @@ el área útil).
 - La menubar se mapea en la capa `Top` a 1280×28 con zona exclusiva.
 - El compositor coloca las ventanas nuevas debajo de la barra (workspace).
 - Al abrir `foot`, `window.domain` pasa a `[active] title = "foot"` y la menubar
-  lo muestra; el reloj avanza cada segundo.
+  lo muestra; el reloj avanza al minuto (1 commit/min, `Dma`).
 - `kill -9` al proceso: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
-- Todo verde: clippy `-D warnings`, fmt, 111 tests.
+- Todo verde: clippy `-D warnings`, fmt, 115 tests.
+- **Bug pre-existente conocido**: en este entorno el texto (cosmic-text) no se
+  rasteriza (`layout_runs()` vacío pese a tener fuentes); la menubar dibuja el
+  fondo sin el texto. Seguimiento en `bloques/07`.
 
 ## Relación
 
 - ADR 0023 (procesos), ADR 0024 (texto con cosmic-text).
-- `wallpaper.md` — el presentador `wl_shm` compartido (`present.rs`).
+- `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
 - `modelo-de-procesos.md` — la distribución de procesos.
 - `configuracion/opciones.md` — `menubar.autohide` (catálogo).

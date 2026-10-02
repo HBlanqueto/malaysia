@@ -18,7 +18,7 @@ window.domain ──► app activa (resaltada)
         │
         ▼
   superficie layer-shell Top, borde inferior, exclusive zone
-        │  wl_shm
+        │  eglSwapBuffers (wl_egl_window → dmabuf)
         ▼
        Yuki (compositor)
 ```
@@ -73,10 +73,14 @@ window.domain ──► app activa (resaltada)
   la menubar (`window.domain` = `foot`).
 - `kill -9` al dock: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
-- Todo verde: clippy `-D warnings`, fmt, 111 tests.
+- Todo verde: clippy `-D warnings`, fmt, 115 tests.
+- **Bug pre-existente conocido**: el texto (cosmic-text) no se rasteriza en
+  este entorno; el dock dibuja los tiles sin el título. Seguimiento en
+  `bloques/07`.
 
 ## Relación
 
 - ADR 0023 (procesos y protocolos), ADR 0024 (texto).
-- `menubar.md` / `wallpaper.md` — componentes hermanos (presentador `wl_shm`).
+- `menubar.md` / `wallpaper.md` — componentes hermanos (presentación EGL,
+  ADR 0027).
 - `configuracion/opciones.md` — `dock.*` (catálogo; `tilesize` en uso).

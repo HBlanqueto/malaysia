@@ -29,10 +29,11 @@ pantalla de bloqueo, ... — todos clientes Wayland de Yuki. Ninguno depende de 
 si el dock muere, la barra sigue funcionando.
 
 **Estado**: cuatro componentes nativos funcionan — **`yuki-shell wallpaper`**
-(render GLES de `celestial-kit`, offscreen, `wl_shm`), **`yuki-shell menubar`**
-(capa `Top`, app activa + reloj), **`yuki-shell dock`** (capa `Top` abajo,
-lista de apps + activar al clic) y **`yuki-shell lock`** (`ext-session-lock-v1`,
-con la garantía de que la sesión no se desbloquea si el cliente muere).
+(render GLES de `celestial-kit`, presentado por **EGL**/dmabuf — Bloque 7c,
+ADR 0027), **`yuki-shell menubar`** (capa `Top`, app activa + reloj),
+**`yuki-shell dock`** (capa `Top` abajo, lista de apps + activar al clic) y
+**`yuki-shell lock`** (`ext-session-lock-v1`, con la garantía de que la sesión
+no se desbloquea si el cliente muere).
 La shell es nativa (ADR 0025); no hay dependencias de shell externas.
 
 ## Qué significa en la práctica

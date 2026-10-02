@@ -62,8 +62,9 @@ No hay dependencias de shell externas; el toolkit es `celestial-kit` (ADR 0024).
 Estado de los componentes:
 
 - **Wallpaper** (`yuki-shell wallpaper`) — hecho. Dibuja la capa `Background` con
-  el render GLES de `celestial-kit`, presentado por `wl_shm` (offscreen), y
-  vigila `wallpaper.domain` (cambio en vivo). Ver
+  el render GLES de `celestial-kit`, presentado por **EGL**/dmabuf sobre un
+  `wl_egl_window` (Bloque 7c, ADR 0027; sin copias por CPU), y vigila
+  `wallpaper.domain` (cambio en vivo). Ver
   [`arquitectura/wallpaper.md`](arquitectura/wallpaper.md).
 - **Menubar** (`yuki-shell menubar`) — hecho. Capa `Top` con zona exclusiva:
   app activa (el compositor la publica en `window.domain`) + reloj. Ver

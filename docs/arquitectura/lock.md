@@ -16,7 +16,7 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
         ▼   ────────────►  crea una ext_session_lock_surface_v1 por output
         │                    │
         │   configure        ▼  (width, height, serial)
-        │  ──────────────►  ack_configure + attach + commit (wl_shm)
+        │  ──────────────►  ack_configure + attach + commit (EGL → dmabuf)
         ▼                    ▼
      el compositor solo renderiza las lock surfaces (y el cursor)
 ```
@@ -28,7 +28,9 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
    reutiliza). El compositor manda `configure` con el tamaño exacto.
 3. **Dibujar**: sobre el fondo sólido, un mensaje centrado (la UI de
    autenticación — contraseña, passphrase, botón de desbloqueo — es trabajo
-   futuro). `ack_configure` antes del primer commit (sctk lo hace solo).
+   futuro). Se presenta por **EGL** (Bloque 7c, ADR 0027) con un
+   `wl_egl_window` por superficie (una por output). `ack_configure` antes del
+   primer commit (sctk lo hace solo).
 4. **Desbloquear**: solo la (futura) autenticación, con `unlock_and_destroy`.
    Este cliente jamás desbloquea por su cuenta.
 
@@ -81,7 +83,7 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
   crear la superficie (toma el control).
 - **Input**: con la sesión bloqueada, una ventana que mapea no toma foco de
   teclado y no se renderiza.
-- Todo verde: clippy `-D warnings`, fmt, 111 tests.
+- Todo verde: clippy `-D warnings`, fmt, 115 tests. Aceptación verificada además con EGL: el lock bloquea (`session locked`) y matar al cliente con `SIGKILL` **no desbloquea** la sesión.
 
 ## Relación
 
