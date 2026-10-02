@@ -56,6 +56,10 @@ y por qué no usa `wl_drm`.
    suelta y el release sale *después* de la lectura. El compositor nunca bloquea
    en `eglClientWaitSync`, y la source se autodestruye (`PostAction::Remove`),
    así que no filtra fds ni detiene el loop.
+   **El arranque exige `EGL_ANDROID_native_fence_sync`** (junto al render node):
+   sin la extensión no hay espera por fd que no bloquee el loop, así que el
+   arranque falla con un error claro (`SessionError::NativeFence`). No hay
+   camino alternativo y no se añade ninguno.
 
 ## Por qué la feature `backend_drm` de Smithay
 

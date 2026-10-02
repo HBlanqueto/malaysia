@@ -52,8 +52,8 @@ implícito · **7c** la shell presenta por EGL.
   (la impl `wayland_frontend` sin `use_system_lib`) ya importa buffers dmabuf
   en el render, y el `import_dmabuf` del handler puebla la caché de texturas
   del renderer para que el render reutilice la textura.
-- **Log del tipo de buffer en el commit (nivel `debug`).** Como wezterm se traga
-  su stderr, `--log-level debug` ahora nombra el tipo de buffer (`Dma`/`Shm`)
+- **Log del tipo de buffer en el commit (nivel `trace`).** Como wezterm se traga
+  su stderr, `--log-level trace` ahora nombra el tipo de buffer (`Dma`/`Shm`)
   de cada superficie que commitea, y así se verifica a los clientes GPU desde
   el lado del compositor (ver "Verificación").
 - **No se expone `wl_drm`.** Mesa actual descubre el dispositivo por dmabuf v4
@@ -70,7 +70,7 @@ implícito · **7c** la shell presenta por EGL.
 - `eglinfo -B` dentro de Yuki: la plataforma **Wayland** reporta el driver
   **radeonsi, renoir, ACO** — no llvmpipe.
 - `wezterm --config 'front_end="OpenGL"'` arranca dentro de Yuki y mapea su
-  ventana. Su GPU se verifica **desde el compositor**: con `--log-level debug`,
+  ventana. Su GPU se verifica **desde el compositor**: con `--log-level trace`,
   el log nombra el tipo de buffer de cada commit y wezterm commitea **`Dma`**
   (dmabuf), nunca `Shm` (el GUI de wezterm se traga su stderr, así que su
   `WAYLAND_DEBUG` no se captura — ver "Divergencias").
@@ -105,7 +105,7 @@ implícito · **7c** la shell presenta por EGL.
 - **`WEZTERM_LOG` de wezterm no se captura.** El GUI de wezterm redirige su
   stderr (aun con `--always-new-process`), así que el `WAYLAND_DEBUG` de
   wezterm no llega a un archivo. La verificación se hace desde el compositor:
-  un `debug!` del tipo de buffer en cada commit (handlers.rs). `about:support`
+  un `trace!` del tipo de buffer en cada commit (handlers.rs). `about:support`
   de Firefox queda pendiente de comprobación manual.
 - **Sin fallback a v3.** El resumen/anvil contemplan caer a v3 si no hay render
   node; aquí un solo camino (v5 con feedback) y error claro al arrancar si no
@@ -154,6 +154,10 @@ implícito · **7c** la shell presenta por EGL.
   (`EGL_ANDROID_native_fence_sync`) y se registra como source one-shot del
   loop; al disparar se suelta el clon y la señal de release sale *después* de
   la lectura de la GPU. El compositor nunca bloquea esperando (ADR 0026).
+  El arranque **exige `EGL_ANDROID_native_fence_sync`** con un error claro si
+  falta (`SessionError::NativeFence`), igual que el render node: sin la
+  extensión no hay espera por fd que no bloquee el loop, y no hay camino
+  alternativo.
 - **Interacción con la cola de imports (7a).** El blocker espera a que el
   buffer sea legible *antes* de aplicar el commit; la importación en el renderer
   ocurre después, en el drenado de `dispatch_clients`. El orden no cambió: el

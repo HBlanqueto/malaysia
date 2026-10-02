@@ -144,9 +144,9 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // At `debug` level, name the buffer type each committed surface uses.
+        // At `trace` level, name the buffer type each committed surface uses.
         // This is how a GPU client (wezterm, Firefox) is verified from the
-        // compositor side: `--log-level debug` and look for `Dma` against
+        // compositor side: `--log-level trace` and look for `Dma` against
         // `Shm` (Bloque 7a).
         log_committed_buffer_type(surface);
         // Let Smithay move the pending buffer into the surface's current state
@@ -242,13 +242,14 @@ where
     }
 }
 
-/// Logs the buffer type of the surface's just-committed buffer, at `debug`.
+/// Logs the buffer type of the surface's just-committed buffer, at `trace`.
 ///
 /// The pending buffer is read *before* `on_commit_buffer_handler` consumes it.
 /// Only buffers that were actually attached (a new buffer assignment) produce
-/// a line, so a `--log-level debug` run names which clients present through
-/// dmabuf and which through shm — the verification for the GPU clients of
-/// Bloque 7a.
+/// a line, so a `--log-level trace` run names which clients present through
+/// dmabuf and which through shm. It is the compositor-side observability of
+/// Bloque 7a; the path coverage itself is verified with WAYLAND_DEBUG per
+/// client (Bloque 7b).
 fn log_committed_buffer_type(surface: &WlSurface) {
     use smithay::backend::renderer::buffer_type;
     use smithay::wayland::compositor::{BufferAssignment, SurfaceAttributes, with_states};
@@ -265,7 +266,7 @@ fn log_committed_buffer_type(surface: &WlSurface) {
             })
     });
     if let Some(buffer_type) = buffer_type {
-        tracing::debug!(surface = ?surface.id(), ?buffer_type, "surface committed a buffer");
+        tracing::trace!(surface = ?surface.id(), ?buffer_type, "surface committed a buffer");
     }
 }
 

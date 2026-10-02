@@ -93,6 +93,15 @@ pub enum SessionError {
     /// fails loudly instead of silently degrading.
     #[error("cannot set up the dmabuf feedback: {0}")]
     DmabufFeedback(String),
+    /// The EGL display behind the winit renderer lacks
+    /// `EGL_ANDROID_native_fence_sync`.
+    ///
+    /// The deferred buffer release of Bloque 7b waits on the frame's EGL fence
+    /// through its native fd (ADR 0026). Without the extension there is no
+    /// fd-based wait that keeps the loop unblocked, and there is deliberately
+    /// no alternative path, so startup fails loudly.
+    #[error("cannot wait on the GPU without EGL_ANDROID_native_fence_sync: {0}")]
+    NativeFence(String),
 }
 
 /// Everything the event loop's sources share.
@@ -284,6 +293,24 @@ pub fn run() -> Result<(), SessionError> {
 
     let (mut backend, winit_events) = winit::init::<GlesRenderer>()
         .map_err(|error| SessionError::Backend(describe_chain(&error)))?;
+
+    // The deferred buffer release of Bloque 7b waits on the frame's EGL fence
+    // through its native fd (ADR 0026). Without `EGL_ANDROID_native_fence_sync`
+    // that wait is impossible without blocking the loop, so — like the render
+    // node — this fails startup with a clear message. There is no alternative
+    // path and none is added.
+    if !backend
+        .renderer()
+        .egl_context()
+        .display()
+        .extensions()
+        .iter()
+        .any(|ext| ext == "EGL_ANDROID_native_fence_sync")
+    {
+        return Err(SessionError::NativeFence(
+            "the EGL display lacks the extension".to_string(),
+        ));
+    }
 
     // The render node of the device the winit renderer runs on, derived from
     // the EGL device behind that renderer's display (anvil's winit backend does
@@ -770,18 +797,20 @@ fn collect_tree_buffers(buffers: &mut Vec<Buffer>, surface: &WlSurface) {
 /// removes itself. The loop keeps running, so the compositor never blocks on
 /// the GPU and a client is never signalled to reuse a buffer still being read.
 fn schedule_frame_release(state: &mut State, release: PendingFrameRelease) {
+    // `EGL_ANDROID_native_fence_sync` is guaranteed at startup, so export only
+    // returns `None` when the fence is already signalled — the GPU finished
+    // this frame before it was exported — and releasing right away is exactly
+    // right. There is no alternative path (ADR 0026).
     let Some(fd) = release.sync.export() else {
-        // Without a native fence there is no fd to wait on. Releasing at the
-        // next commit is the pre-ADR-0026 behaviour; acceptable only on
-        // devices without `EGL_ANDROID_native_fence_sync`, which also lack
-        // explicit-sync clients in practice.
-        tracing::warn!("frame fence is not exportable; releasing its buffers immediately");
+        if !release.sync.is_reached() {
+            tracing::error!("frame fence is neither exportable nor signalled");
+        }
         return;
     };
     // The source takes a duplicate; the release keeps the original until the
     // GPU signals.
     let Ok(fd) = fd.try_clone() else {
-        tracing::warn!("could not duplicate the frame fence fd; releasing its buffers immediately");
+        tracing::error!("could not duplicate the frame fence fd");
         return;
     };
     let source = Generic::new(fd, Interest::READ, Mode::Level);
@@ -796,7 +825,7 @@ fn schedule_frame_release(state: &mut State, release: PendingFrameRelease) {
             Ok(PostAction::Remove)
         })
     {
-        tracing::warn!(%error, "could not arm the frame fence source");
+        tracing::error!(%error, "could not arm the frame fence source");
     }
 }
 
