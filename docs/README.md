@@ -83,7 +83,10 @@ El **Bloque 7** está hecho: **7a** (linux-dmabuf v5 con feedback), **7b**
 (explicit sync + sync implícito, release diferido por fence) y **7c** (la shell
 presenta por EGL, un solo camino sin `wl_shm`). **7.1** (hecho) arregla el
 texto de la shell (`shape_until_scroll` + formato Alpha de swash), mide el daño
-real y añade la **captura de depuración** (volcado PNG por `SIGUSR1`). Ya corren wezterm,
+real y añade la **captura de depuración** (volcado PNG por `SIGUSR1`).
+**7.2** (hecho) corrige el **bug de la matriz UV** del present EGL (column-major
+sin flip) que ocultaba los tiles del dock y el texto del lock, y re-verifica
+los criterios visuales de los bloques 2–6 por captura. Ya corren wezterm,
 Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**

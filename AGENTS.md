@@ -105,6 +105,15 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   protocolo de captura — `ext-image-copy-capture` va al Bloque 11). La captura
   descubrió y corrigió el orden de capas (front-to-back) y el primer render del
   dock.
+  **7.2 hecho**: la captura expuso el **bug de la matriz UV** del present EGL
+  (`uniform_matrix_3_f32_slice` espera column-major y se pasaba row-major →
+  toda la superficie muestreaba la fila 0): el dock no mostraba sus tiles, el
+  lock no mostraba su texto y el menubar repetía una fila. Corregido a
+  column-major sin flip; verificado por captura (lock con texto en la posición
+  del frame, dock con 2 tiles). Los toplevels existentes SÍ se anuncian al
+  bindear (`ext-foreign-toplevel-list` y `zwlr`). Probes nuevos `popup_live` y
+  `decor_live` (sctk-probe). Nota: la captura re-renderiza offscreen, así que
+  no detecta bugs de daño parcial en pantalla.
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +

@@ -352,13 +352,13 @@ La captura validada se usó para verificar la shell:
   presentes en la posición correcta; **sin swap rojo/azul** (el wallpaper
   conserva r=215 b=239) y **sin halo oscuro** (0 píxeles negros junto al
   texto).
-- **dock**: la barra se ve sobre el wallpaper; los **tiles no** — el dock recibe
-  **0 eventos** de `ext-foreign-toplevel-list-v1` (gap pre-existente: sus
-  `entries` quedan vacíos). Seguimiento.
+- **dock**: la barra se ve sobre el wallpaper; los **tiles no**. El dock SÍ
+  recibía los eventos de `ext-foreign-toplevel-list-v1` (2 toplevels, título
+  "simple-shm"); el problema era el **bug de la matriz UV** del present EGL
+  (ver 7.2), que repetía la fila 0 de la textura en toda la superficie.
 - **lock**: el fondo (20,20,24) se ve correcto pero **el texto falta en la
-  captura** (solo el cursor); el frame del lock tiene el texto, así que se
-  pierde en el camino EGL de la superficie full-screen del session-lock (bug
-  pre-existente, el menubar con el mismo motor sí lo presenta). Seguimiento.
+  captura** (solo el cursor); el frame del lock tiene el texto. Era el mismo
+  bug de la matriz UV (7.2): la superficie mostraba la fila 0 (el fondo).
 - **Bug de orden de capas (corregido)**: `render_output` de smithay espera
   elementos en orden **front-to-back** y Yuki los construía back-to-front, así
   que el wallpaper (primero) se dibujaba encima de todo (ventanas, menubar,
@@ -366,6 +366,91 @@ La captura validada se usó para verificar la shell:
 - **Bug del primer render del dock (corregido)**: el rectángulo dañado podía
   ser `None` en el primer frame (sin layout ni título), así que el dock nunca
   presentaba; ahora el primer render siempre es completo.
+
+## 7.2 — causa raíz del texto/tiles ausentes y re-verificación por captura
+
+### El bug de la matriz UV del present EGL (la causa de los ítems 1 y 2)
+
+La captura por `SIGUSR1` expuso que el **menubar repetía una fila de píxeles**
+(17 píxeles claros idénticos en TODAS las filas): `draw_texture_cover_to` de
+`celestial-kit` estaba muestreando solo la **fila 0** de la textura. La causa:
+`uniform_matrix_3_f32_slice` con `transpose=false` espera la matriz en orden
+**column-major**, y el código pasaba la matriz fila-major `[sw 0 sx; 0 -sh
+(1-sy); 0 0 1]`. El shader resolvía `v' = -v`, y `CLAMP_TO_EDGE` clavaba todas
+las filas en `v=0` → toda la superficie = fila 0 de la textura.
+
+Efectos en toda la shell (desde 7c):
+- **dock**: fila 0 = la barra → los tiles (arriba) nunca se veían.
+- **lock**: fila 0 = el fondo (20,20,24) → el texto nunca se veía.
+- **menubar**: fila 0 = la barra + el borde superior del texto → el "texto" en
+  las capturas era la fila 0 repetida verticalmente (se leía como texto real).
+- **wallpaper**: uniforme, indetectable — por eso la validación lavender (±1)
+  de 7.1 no lo detectó.
+
+**Fix**: pasar la matriz en column-major **sin flip vertical** (`[sw 0 0; 0 sh
+0; sx sy 1]`, columnas `[sw,0,0, 0,sh,0, sx,sy,1]`). El `v'=v` mapea la fila 0
+de la textura (arriba del frame) al arriba de la superficie EGL; el compositor
+muestra el buffer tal cual (fila 0 = arriba). Verificado por captura: el texto
+del lock aparece en la posición exacta del frame (y 371..392), el dock muestra
+sus 2 tiles y el menubar su texto en el baseline correcto. Un flip (`v'=1-v`)
+dejaba el texto espejado verticalmente (y 407..428) — el compositor no
+re-invierte el buffer.
+
+### Ítem 1 — dock: los toplevels existentes SÍ se anuncian al bindear
+
+`smithay` anuncia los toplevels ya existentes en el bind del list
+(`ForeignToplevelListState::bind` recorre `toplevels` y
+`ForeignToplevelHandle::init_new_instance` envía identifier/title/app_id/done),
+y `zwlr_foreign_toplevel_management_v1` se sirve manualmente anunciando todos
+los existentes en `bind` (`foreign.rs`). El dock recibía los eventos con
+normalidad (verificado con `WAYLAND_DEBUG=1`: 2 `toplevel` con título
+"simple-shm" en el bind). El problema era solo el bug UV.
+**Aceptación**: captura con 2 ventanas abiertas → **2 tiles** (4232 px de
+tile activo en la captura). PASA.
+
+### Ítem 2 — lock: texto ausente
+
+No era daño del primer frame ni estado `GL_UNPACK_ROW_LENGTH`/`ALIGNMENT`
+(ambos correctos); era el bug UV. **Aceptación**: captura del lock → texto
+"Bloqueado" visible en la posición del frame (y 371..392, 542 px claros).
+PASA.
+
+### Ítem 3 — re-verificación por captura de los criterios 2–6
+
+Capturas en `/tmp/yuki-captures/` verificadas por script (ffmpeg + análisis de
+píxeles, sin ver la imagen):
+
+| Criterio | Captura | Resultado |
+| -------- | ------- | --------- |
+| Wallpaper sólido lavanda | `crit1-wallpaper-solo.png` | PASA (215,207,239 en toda la salida) |
+| simple-shm encima del wallpaper | `crit1-ventana.png` | PASA (la ventana cubre el workspace; dock/menubar encima) |
+| foot con prompt | `crit2-foot.png` | PASA (terminal oscura + 171 px de texto del prompt) |
+| popup junto al borde inferior volteado hacia arriba | `crit3-popup.png` | PASA (popup en y 640..759, anclado abajo → volteado arriba) |
+| titlebar de Yuki (SSD) vs CSD sin rounding/hairline | `crit4-ssd.png`, `crit4-foot-ssd.png` | PASA (SSD: usable baja 32px y la banda reservada muestra el wallpaper sin chrome; foot: contenido limpio, sin rounding/hairline dibujado) |
+
+- El popup se generó con el probe **`popup_live`** (nuevo en `sctk-probe`):
+  ventana anclada al borde inferior + popup `gravity=bottom`, mantenido 8 s
+  para capturarlo. Es el mismo camino de volteo que usaría el menú contextual
+  de foot (no se puede inyectar un click derecho sin acceso a `/dev/uinput`).
+- El SSD con **`decor_live`** (nuevo en `sctk-probe`): ventana `RequestServer`
+  que adjunta su buffer en el primer configure (un buffer pre-configure se
+  descarta) y se mantiene abierta. El configure de decoración pasó de Client
+  (1280×772) a Server (1248×772): la banda de 32 px se reserva y muestra el
+  wallpaper (Yuki no dibuja titlebar/hairline/sombra aún, bloque 4).
+- foot no negocia ningún protocolo de decoración (`WAYLAND_DEBUG` limpio) → se
+  deja como cliente; la verificación visual exacta de "dos titlebars" sigue
+  siendo manual (bloque 4).
+
+### Ítem 4 — la captura re-renderiza offscreen: no detecta daño parcial
+
+La captura (`capture.rs`) re-renderiza los elementos a un buffer offscreen con
+`OutputDamageTracker::render_output`, que **dibuja todo el frame** sin aplicar
+el daño acumulado. Por eso valida colores, posición y contenido, pero **no
+puede detectar un bug de daño parcial en pantalla** (por ejemplo, un rectángulo
+dañado mal calculado que deje basura en el buffer presentado): el offscreen
+siempre dibuja limpio. Los bugs de daño se siguen detectando por
+`upload_texture_region_rgba`/`glTexSubImage2D` en el cliente (que sí suben solo
+el área dañada), no por la captura.
 
 ## Notas
 
