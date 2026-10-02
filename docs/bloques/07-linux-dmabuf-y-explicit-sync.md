@@ -224,6 +224,11 @@ implícito · **7c** la shell presenta por EGL.
   presenta una textura cubriéndola (`render_cover_to_surface`: make_current con
   la window surface, dibuja, `eglSwapBuffers`, y vuelve a surfaceless). El
   `WindowPresenter` retiene la surface EGL y la recrea al cambiar el tamaño.
+- **Subida de textura parcial.** `upload_texture_region_rgba` usa
+  `glTexSubImage2D` con `GL_UNPACK_ROW_LENGTH`, así que menubar y dock suben
+  solo el rectángulo dañado — la franja derecha del reloj (90 px) o de la
+  izquierda del título al cambiar, o la(s) baldosa(s) del dock al cambiar la
+  app activa — y no el frame entero; si nada cambió, no commitean.
 - **`yuki-shell` presenta por EGL en un solo camino.** Un `EglPresenter` por
   superficie guarda el `wl_egl_window` (libwayland-egl, `WlEglSurface::new` con
   el `ObjectId` del `wl_surface` — mismo `wayland-backend 0.3` que sctk) y su
@@ -259,14 +264,14 @@ implícito · **7c** la shell presenta por EGL.
   cambia** (18.9→19.1) y el del compositor tampoco; menubar/dock suben
   **+18 MB** cada uno, el coste real del contexto GLES que necesitan. El
   desglose del USS nuevo es **heap anónimo del driver Mesa** (~19 MB privado,
-  sin mapeos de caché de shaders relevantes); la GPU por proceso (22 MiB) es
-  sobre todo sobrecoste del contexto, no de los buffers (el swapchain de una
-  barra de 1280×28 es sub-MiB).
+  sin mapeos de caché de shaders relevantes); la GPU por proceso (22 MiB) es el
+  contexto del driver + swapchain, **exclusiva por proceso**, no los buffers
+  (el swapchain de una barra de 1280×28 es sub-MiB).
   **Criterio**: coste exclusivo (USS + GPU) ≈ 19 + 22 = **41 MB** por
   componente, **borderline** sobre los 35 MB pactados pero **no "claramente
-  mayor"** (el USS, la medida exclusiva honesta, es ~19 MB, bajo el umbral; el
-  resto es infraestructura de contexto de Mesa semi-compartida). Se procede con
-  la opción 1 (todo EGL, camino único).
+  mayor"**: el USS (la medida exclusiva) es ~19 MB, bajo el umbral, y la GPU,
+  aunque exclusiva por proceso, está en el borde pero no supera el criterio con
+  claridad. Se procede con la opción 1 (todo EGL, camino único).
 - **Sin fugas**: GTT estable tras 15 s con el reloj re-renderizando.
 - `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` (0) y
   `cargo test --workspace` (**115 tests**) en verde.
@@ -282,6 +287,13 @@ implícito · **7c** la shell presenta por EGL.
   porque en reposo no hay flujo continuo que medir.
 - La opción 3 (menubar/dock por dmabuf sin GLES) se descartó explícitamente en
   la revisión; los datos justifican el contexto GLES de los componentes de texto.
+- **Bug pre-existente descubierto: el texto de la shell no se rasteriza.** En
+  este entorno, `cosmic-text 0.19` carga 283 fuentes (incluso con la familia
+  corregida a una real, p. ej. Inter) pero `layout_runs()` no produce glifos,
+  así que menubar, dock y lock dibujan el fondo sin el texto. No lo causa 7c
+  (el mismo `Text` se usaba con `wl_shm`); queda como seguimiento antes de
+  pulir la shell. Por eso el rectángulo dañado usa franjas fijas (90 px reloj /
+  250 px título) en vez de medir el texto.
 
 ## Notas
 

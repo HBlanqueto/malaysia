@@ -37,6 +37,14 @@ memoria explícita como criterio (revisión del usuario).
 5. **Se elimina `wl_shm` de la shell** y, con él, `ShmPresenter` y el readback
    offscreen de `celestial-kit`. El compositor sigue sirviendo `wl_shm` para
    sus clientes.
+6. **El contenido estático puede rasterizarse por CPU; las animaciones, no.**
+   Menubar, dock y lock componen su frame por CPU (cosmic-text) y lo suben a la
+   textura **solo en el rectángulo dañado** (`glTexSubImage2D`, la franja del
+   reloj o la baldosa cambiada), no el frame entero. Eso vale para contenido
+   casi estático; la **magnificación del dock, los efectos de minimizar o
+   cualquier animación deben renderizarse en GPU** (draw calls por frame), nunca
+   CPU + subida por frame: la CPU no produce 60 fps de una barra sin hundir el
+   hilo de dibujo.
 
 ## Por qué la medición (USS + GPU) sostiene el cambio
 
@@ -47,12 +55,12 @@ detenerse y reportar. Medido en reposo (`smaps_rollup` + `amdgpu_top -p`):
 - **El wallpaper MEJORA** con EGL (RSS −4 %, GTT −3 MiB; USS igual): su textura
   va directo por dmabuf y el compositor no re-uploada shm.
 - **menubar/dock**: USS 1.1→19.2 y 1.3→19.5 MB (+18 MB cada uno, el contexto
-  GLES), GPU 22 MiB por proceso (sobre todo infraestructura del contexto de
-  Mesa, no buffers). El RSS (83 MB) era engañoso: casi todo libs compartidas.
+  GLES), GPU 22 MiB por proceso (contexto del driver + swapchain, **exclusiva
+  por proceso**). El RSS (83 MB) era engañoso: casi todo libs compartidas.
 - Suma estricta USS + GPU ≈ **41 MB**, **borderline** sobre los 35 pactados;
   **no "claramente mayor"** (el USS — la medida exclusiva — es ~19 MB, bajo el
-  umbral; la GPU es en su mayoría contexto de Mesa semi-compartido). Por eso se
-  procede con la opción 1.
+  umbral; la GPU, pese a ser exclusiva por proceso, está en el borde pero no
+  supera el criterio de forma clara). Por eso se procede con la opción 1.
 
 El dato que habría detenido el cambio (wallpaper claramente peor con EGL) no se
 dio; al contrario, el wallpaper mejoró.
@@ -60,6 +68,11 @@ dio; al contrario, el wallpaper mejoró.
 ## Consecuencias
 
 - Un solo camino de presentación en la shell; `wl_shm` desaparece de ella.
+- La subida de textura de menubar/dock es **parcial** (la región dañada, con
+  `GL_UNPACK_ROW_LENGTH`), no el frame entero: el coste de redibujar el reloj
+  cada minuto o cambiar una baldosa es mínimo.
+- Las animaciones futuras (magnificación del dock, minimize) son trabajo de
+  GPU en `celestial-kit`, no subidas de CPU.
 - Cada componente de texto (menubar, dock, lock) paga ~18 MB de USS por su
   contexto GLES. Es el coste aceptado de "presentar por EGL".
 - El reloj del menubar commitea al minuto (timer alineado), así que en reposo
