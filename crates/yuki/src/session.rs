@@ -30,6 +30,8 @@ use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
+use smithay::backend::renderer::sync::SyncPoint;
+use smithay::backend::renderer::utils::{Buffer, RendererSurfaceStateUserData};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
@@ -123,6 +125,26 @@ pub(crate) struct Session {
     track_objects: bool,
     /// The last live-object counts logged, so only changes are emitted.
     last_objects: LiveObjects,
+}
+
+/// The buffers a finished frame read, held until their GPU work completes.
+///
+/// Smithay 0.7.0 replaces the buffer of a surface at the *next* commit, which
+/// drops its only reference and signals `wl_buffer.release` (and the
+/// explicit-sync release point) *before* the render that read it has finished
+/// (`backend/renderer/utils/wayland.rs:145-181`, `on_commit_buffer_handler`
+/// called first from `CompositorHandler::commit`). The clone this struct holds
+/// keeps each such buffer alive until the frame's own EGL fence signals; only
+/// then is it dropped, so a client never reuses a buffer the GPU still reads.
+///
+/// The fence is waited on through its native fd (exportable thanks to
+/// `EGL_ANDROID_native_fence_sync`), registered as a one-shot event source,
+/// so the compositor never blocks on the GPU (ADR 0026).
+struct PendingFrameRelease {
+    /// The EGL fence of the render that sampled the buffers.
+    sync: SyncPoint,
+    /// Clones of every buffer that frame drew, in no particular order.
+    buffers: Vec<Buffer>,
 }
 
 /// How many live Wayland objects the compositor is holding.
@@ -528,7 +550,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
 
     // Everything that borrows the renderer or the framebuffer is scoped so the
     // frame is submitted after the framebuffer is released.
-    let damage = {
+    let (damage, sync) = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
         let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
@@ -624,8 +646,15 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 [0.06, 0.06, 0.09, 1.0],
             )
             .map_err(DrawError::Output)?;
-        result.damage.cloned()
+        (result.damage.cloned(), result.sync)
     };
+
+    // The frame just submitted read these buffers; hold them so their release
+    // waits for its fence (ADR 0026, see `PendingFrameRelease`).
+    let buffers = collect_drawn_buffers(state);
+    if !buffers.is_empty() {
+        schedule_frame_release(state, PendingFrameRelease { sync, buffers });
+    }
 
     // Send frame callbacks only once the frame has been drawn, so a client
     // cannot drive the compositor faster than the output refreshes. While the
@@ -673,6 +702,101 @@ fn reset_dead_cursor(state: &mut State) {
         && !surface.alive()
     {
         state.cursor_status = CursorImageStatus::default_named();
+    }
+}
+
+/// Clones the buffer of every surface a frame will draw, so the release of
+/// each waits for the frame's fence (ADR 0026).
+///
+/// Mirrors the surface enumeration of [`draw`]: the lock surfaces when locked,
+/// otherwise the windows, popups and layer-shell surfaces. Subsurfaces are
+/// walked too, since they carry buffers of their own.
+fn collect_drawn_buffers(state: &State) -> Vec<Buffer> {
+    let mut buffers = Vec::new();
+    if state.locked {
+        for lock_surface in &state.lock_surfaces {
+            if lock_surface.alive() {
+                collect_tree_buffers(&mut buffers, lock_surface.wl_surface());
+            }
+        }
+        return buffers;
+    }
+    for window in state.windows.iter() {
+        if window.is_mapped() {
+            collect_tree_buffers(&mut buffers, window.surface());
+        }
+    }
+    for (id, _parent, _rect) in state.windows.iter_popups() {
+        if let Some(surface) = state.popups.surface_of(id) {
+            collect_tree_buffers(&mut buffers, surface);
+        }
+    }
+    for entry in state.layers.all() {
+        collect_tree_buffers(&mut buffers, entry.surface.wl_surface());
+    }
+    buffers
+}
+
+/// Clones the current buffer of `surface` and every subsurface below it.
+///
+/// The renderer's surface state is read through the `states` argument of the
+/// traversal, exactly as `import_surface` does: re-locking it via
+/// `with_renderer_surface_state` inside the walk would deadlock on the same
+/// `SurfaceData` mutex (`backend/renderer/utils/wayland.rs:474` re-locks what
+/// `with_surface_tree_downward` already holds).
+fn collect_tree_buffers(buffers: &mut Vec<Buffer>, surface: &WlSurface) {
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, states, _| {
+            if let Some(state) = states.data_map.get::<RendererSurfaceStateUserData>()
+                && let Some(buffer) = state.lock().unwrap().buffer().cloned()
+            {
+                buffers.push(buffer);
+            }
+            TraversalAction::DoChildren(())
+        },
+        |_, _, _| {},
+        |_, _, _| true,
+    );
+}
+
+/// Holds the buffers a finished frame read until its fence signals (ADR 0026).
+///
+/// The frame's EGL fence is exported as a native fence fd (an eventfd that
+/// becomes readable when the GPU completes the render) and registered as a
+/// one-shot event source: when it fires the release is dropped — signalling
+/// `wl_buffer.release` / the explicit-sync release point — and the source
+/// removes itself. The loop keeps running, so the compositor never blocks on
+/// the GPU and a client is never signalled to reuse a buffer still being read.
+fn schedule_frame_release(state: &mut State, release: PendingFrameRelease) {
+    let Some(fd) = release.sync.export() else {
+        // Without a native fence there is no fd to wait on. Releasing at the
+        // next commit is the pre-ADR-0026 behaviour; acceptable only on
+        // devices without `EGL_ANDROID_native_fence_sync`, which also lack
+        // explicit-sync clients in practice.
+        tracing::warn!("frame fence is not exportable; releasing its buffers immediately");
+        return;
+    };
+    // The source takes a duplicate; the release keeps the original until the
+    // GPU signals.
+    let Ok(fd) = fd.try_clone() else {
+        tracing::warn!("could not duplicate the frame fence fd; releasing its buffers immediately");
+        return;
+    };
+    let source = Generic::new(fd, Interest::READ, Mode::Level);
+    let mut release = Some(release);
+    if let Err(error) = state
+        .loop_handle
+        .insert_source(source, move |_, _, _: &mut Session| {
+            if let Some(release) = release.take() {
+                tracing::trace!(count = release.buffers.len(), "released a frame's buffers");
+                drop(release);
+            }
+            Ok(PostAction::Remove)
+        })
+    {
+        tracing::warn!(%error, "could not arm the frame fence source");
     }
 }
 
