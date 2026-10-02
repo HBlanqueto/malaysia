@@ -86,7 +86,13 @@ texto de la shell (`shape_until_scroll` + formato Alpha de swash), mide el daño
 real y añade la **captura de depuración** (volcado PNG por `SIGUSR1`).
 **7.2** (hecho) corrige el **bug de la matriz UV** del present EGL (column-major
 sin flip) que ocultaba los tiles del dock y el texto del lock, y re-verifica
-los criterios visuales de los bloques 2–6 por captura. Ya corren wezterm,
+los criterios visuales de los bloques 2–6 por captura. **7.3** (hecho) añade la
+**verificación por patrón** (4 cuadrantes), el **test de regresión UV** en
+`celestial-kit`, un **verificador por regiones** (`scripts/verify-captures.py`),
+determina que **la titlebar nunca se implementó** (solo se reserva la banda), y
+corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
+superficie EGL de la ventana; la captura ahora corre antes del render de la
+ventana). Ya corren wezterm,
 Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**

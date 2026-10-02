@@ -452,6 +452,80 @@ siempre dibuja limpio. Los bugs de daño se siguen detectando por
 `upload_texture_region_rgba`/`glTexSubImage2D` en el cliente (que sí suben solo
 el área dañada), no por la captura.
 
+## 7.3 — verificación más fuerte, titlebar y el BAD_ALLOC de la captura
+
+### Regla de entorno (AGENTS.md)
+
+Tras el incidente del socket del host, AGENTS.md fija: no borrar ni modificar
+nada fuera del repo y de `$XDG_RUNTIME_DIR/yuki`; sockets solo los de Yuki por
+nombre exacto; nunca reiniciar servicios del host (mutter, gnome-shell, la
+sesión); si algo del host falla, detenerse y reportar.
+
+### Ítem 1 — el render de la titlebar nunca se implementó
+
+El "PASA" de 7.2 era incorrecto: Yuki **no dibuja la titlebar**. Solo existen
+los tokens de diseño (`yuki-design::Titlebar`, posición/buttons/métricas) y la
+reserva del inset (`decoration::Insets::for_window`, 32 px); el draw() no crea
+ningún elemento de chrome (solo cursor, capas, popups, ventanas y fondo). El
+bloque 4 ya lo documentaba ("Yuki reserva la banda de la titlebar pero aún no
+dibuja titlebar, hairline ni sombra"). **No se arregla en 7.3**: se reporta y
+queda como trabajo futuro del pintor de chrome.
+
+### Ítem 2 — CSD real con GTK4/libadwaita
+
+foot no sirve (pide SSD). Con `gnome-text-editor` (GTK4/libadwaita, vía
+`nix shell nixpkgs#gnome-text-editor`) en el devShell, la captura
+(`crit2-csd-gtk4.png`) muestra su **headerbar intacta** (46,46,50) y el borde
+superior es su propia transparencia de esquinas redondeadas sobre el wallpaper;
+**no hay banda de titlebar de Yuki ni rounding/hairline dibujado encima**.
+PASA.
+
+### Ítem 3 — verificación más fuerte
+
+- **3a (patrón no uniforme)**: probe **`pattern_live`** (sctk-probe) que mapea
+  una ventana con 4 cuadrantes sólidos (rojo/verde/azul/blanco). La captura
+  (`validacion-patron.png`) los sitúa exactos en sus esquinas (±2), lo que
+  detecta flip, espejo y estiramiento (el lavanda uniforme no los detecta).
+  PASA.
+- **3b (test de regresión UV)**: nuevo test en `celestial-kit`
+  (`gl::tests::present_uv_transform_maps_the_texture_exactly`): crea el
+  renderer en una display EGL **surfaceless** (`EGL_PLATFORM_SURFACELESS_MESA`,
+  contexto configless), sube una textura con el patrón de cuadrantes, la dibuja
+  con `draw_texture_cover_to` a un FBO y compara por píxel. Con la matriz UV
+  vieja (row-major con flip) FALLA; con la corregida PASA. 117 tests.
+- **3c (comparar contra valores/regiones)**: nuevo `scripts/verify-captures.py`
+  que verifica cada captura contra colores y regiones esperadas (nunca "hay
+  píxeles no negros"). Revisados los PASA de 7.1/7.2: se corrigió el muestreo
+  del wallpaper (excluye menubar/dock) y se re-capturó la ventana (la anterior
+  estaba obsoleta). Resultados: wallpaper, window, foot, popup, ssd y pattern
+  PASA.
+
+### Ítem 4 — BAD_ALLOC y cierres de la ventana anidada (corregido)
+
+Reproducido: con la shell, cada captura por `SIGUSR1` terminaba en
+`could not present the frame` (`EGL_BAD_SURFACE` en `eglSwapBuffers` +
+`EGL_BAD_ALLOC` en `eglCreatePlatformWindowSurfaceEXT`, la recreación
+automática de la superficie de smithay). No es una fuga del offscreen (el
+`GlesTexture::drop` libera vía callback) ni un crash.
+
+**Causa raíz**: `capture_output` re-renderizaba los elementos a un buffer
+offscreen con el **mismo contexto GL** de la ventana. `create_buffer` /
+`bind_texture` de smithay llaman a `EGLContext::make_current()` que hace
+`eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx)` — **desenlaza la
+superficie de la ventana**. El `submit` posterior (swap) sobre una superficie
+no current falla con `EGL_BAD_SURFACE` y smithay intenta recrearla
+(`EGL_BAD_ALLOC`), dejando el compositor sin poder presentar (y sin redibujar:
+las siguientes capturas no se escribían).
+
+**Fix**: la captura se ejecuta **antes** del `render_output` de la ventana en
+`draw()`; el render de la ventana que sigue re-enlaza la superficie (su
+`GlesTarget::make_current` hace `make_current_with_surface`), así que el swap
+del `submit` vuelve a tener la superficie current. Verificado: 8 capturas
+consecutivas, 0 `could not present`, capturas válidas y el lock sigue correcto.
+Los cierres de la ventana anidada son `WinitEvent::CloseRequested` del host
+GNOME (el compositor anidado se detiene limpiamente al cerrar su ventana); es
+el diseño de la sesión anidada, no un fallo.
+
 ## Notas
 
 - El ADR 0026 documenta la decisión de fondo (dmabuf + explicit sync, por qué

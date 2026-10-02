@@ -134,3 +134,19 @@ nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
 ```
 
 No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).
+
+## Regla de entorno (permanente)
+
+Nunca borres ni modifiques nada fuera del repo y de `$XDG_RUNTIME_DIR/yuki`:
+ni sockets de Wayland del host, ni ficheros de la sesión, ni servicios. En
+concreto:
+
+- **Sockets**: solo los de Yuki (`wayland-N` servidos por el binario `yuki`),
+  y solo por nombre exacto. Nunca borres `wayland-0` del host ni cualquier
+  otro socket que no haya creado Yuki.
+- **Servicios del host**: nunca reinicies mutter, gnome-shell, la sesión ni
+  ningún proceso ajeno al repo. Si algo del host falla o falta (p. ej. un
+  socket de Wayland desaparece), **detente y repórtalo**; no intentes
+  recuperarlo tú.
+- **Ficheros**: solo se escriben capturas y volcados dentro de
+  `$XDG_RUNTIME_DIR/yuki` y de `/tmp` para diagnósticos del propio repo.
