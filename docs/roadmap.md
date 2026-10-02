@@ -166,12 +166,13 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   (verificado: `wl-copy` → `wl-paste` entre clientes). La aceptación de copiar y
   pegar entre dos instancias de `foot` se comprueba a mano. Véase
   `bloques/06-portapapeles.md`.
-- **Bloque 7 — en curso.** 7a (linux-dmabuf v5 con feedback) y 7b (explicit
+- **Bloque 7 — hecho.** 7a (linux-dmabuf v5 con feedback) y 7b (explicit
   sync + sync implícito) hechos: `zwp_linux_dmabuf_v1` con el render node como
   `main_device`, `wp_linux_drm_syncobj_manager_v1` solo si el dispositivo lo
-  soporta, y un solo camino de blocker en el commit. vkcube (RADV) y mpv
-  (gpu-next) corren acelerados. Pendiente: 7c (la shell presenta por EGL).
-  Véase `bloques/07-linux-dmabuf-y-explicit-sync.md` y el ADR 0026.
+  soporta, un solo camino de blocker en el commit y release diferido por fence.
+  7c hecho: la shell presenta por EGL (`wl_egl_window`), sin `wl_shm`. vkcube
+  (RADV), mpv (gpu-next), wezterm y Firefox corren acelerados. Véase
+  `bloques/07-linux-dmabuf-y-explicit-sync.md` y los ADR 0026/0027.
 
 ## Numeración de bloques
 

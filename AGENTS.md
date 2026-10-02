@@ -83,7 +83,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   el dominio `wallpaper.domain` (en `.local/share/yuki/`) lleva el catálogo y la
   selección actual en `[desktops]`, como `com.apple.wallpaper`; lo dibuja el
   componente nativo **`yuki-shell wallpaper`** (ADR 0023/0024, render GLES de
-  `celestial-kit` presentado por `wl_shm`) en la capa `Background`.
+  `celestial-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
 - **Investigación**: `docs/investigacion/` — cómo renderiza macOS y comparación
   con Wayland (contexto de diseño).
 - **Arquitectura**: `docs/arquitectura/yuki-y-shell.md` (+ `yuki-y-shell.svg`)
@@ -93,12 +93,12 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 
 ## Estado actual
 
-- Bloques 0–6 implementados; **Bloque 7** en curso: **7a** (linux-dmabuf v5 con
-  feedback) y **7b** (explicit sync + sync implícito, con el release diferido
-  por fence) hechos; **7c** (la shell presenta por EGL) pendiente
+- Bloques 0–6 implementados; **Bloque 7 hecho**: **7a** (linux-dmabuf v5 con
+  feedback), **7b** (explicit sync + sync implícito, release diferido por
+  fence) y **7c** (la shell presenta por EGL, un solo camino, sin `wl_shm`)
   (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren wezterm,
   Firefox, vkcube (Vulkan) y mpv (gpu-next) acelerados dentro de Yuki anidado.
-  El ADR 0026 fija dmabuf + explicit sync.
+  Los ADR 0026 (dmabuf + explicit sync) y 0027 (shell por EGL) fijan el diseño.
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +

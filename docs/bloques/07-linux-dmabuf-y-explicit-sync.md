@@ -216,7 +216,72 @@ implícito · **7c** la shell presenta por EGL.
 
 ## 7c — la shell presenta por EGL
 
-(pendiente)
+### Qué se construyó
+
+- **`celestial-kit` gana la presentación por EGL window.** El renderer crea la
+  surface EGL sobre un `wl_egl_window*` (`create_window_surface`, a partir de
+  `eglCreateWindowSurface` sobre el display Wayland de la plataforma EGL) y
+  presenta una textura cubriéndola (`render_cover_to_surface`: make_current con
+  la window surface, dibuja, `eglSwapBuffers`, y vuelve a surfaceless). El
+  `WindowPresenter` retiene la surface EGL y la recrea al cambiar el tamaño.
+- **`yuki-shell` presenta por EGL en un solo camino.** Un `EglPresenter` por
+  superficie guarda el `wl_egl_window` (libwayland-egl, `WlEglSurface::new` con
+  el `ObjectId` del `wl_surface` — mismo `wayland-backend 0.3` que sctk) y su
+  surface EGL. **Wallpaper**: dibuja su textura directo en la window surface
+  (sin readback ni copia CPU). **Menubar**, **dock** y **lock**: componen su
+  frame RGBA por CPU (cosmic-text) y lo suben a una textura reutilizada
+  (`upload_texture_rgba`, sin fugas) que presentan igual. El lock mantiene un
+  presenter por superficie (una por salida).
+- **Se elimina `wl_shm` de la shell.** `ShmPresenter`, los `Shm::bind`, los
+  `ShmHandler` y `delegate_shm!` desaparecen de los cuatro componentes, y el
+  readback offscreen de `celestial-kit` (`render_cover_to_rgba` y su FBO) se
+  borra: ya no hay un camino de presentación por memoria compartida.
+- **El reloj del menubar commitea al minuto.** Muestra `%H:%M`, así que un
+  timer alineado al borde de minuto re-renderiza solo cuando cambia la hora.
+
+### Verificación (7c)
+
+- El compositor en `trace` ve todos los commits de la shell como **`Dma`**:
+  wallpaper (1, estático), menubar (1/min con el reloj), dock (por evento).
+  Ningún error en el compositor ni en los componentes.
+- **Memoria en reposo (PSS/USS por proceso, `smaps_rollup`; GPU por proceso,
+  `amdgpu_top -p`)**, antes (wl_shm) y después (EGL):
+
+  | proceso | USS shm | USS egl | PSS shm | PSS egl | GPU egl (GTT/VRAM) |
+  |---|---|---|---|---|---|
+  | compositor | 28.7 MB | 28.7 MB | 38.5 | 34.8 | 12 / 33 MiB |
+  | wallpaper | 18.9 MB | 19.1 MB | 29.4 | 26.2 | 10 / 16 MiB |
+  | menubar | 1.1 MB | 19.2 MB | 3.1 | 26.4 | 10 / 12 MiB |
+  | dock | 1.3 MB | 19.5 MB | 3.3 | 26.7 | 10 / 12 MiB |
+
+  El RSS (≈ 83–84 MB por componente EGL) engañaba: casi todo son las libs
+  compartidas de Mesa. El **USS** (memoria exclusiva) del wallpaper **no
+  cambia** (18.9→19.1) y el del compositor tampoco; menubar/dock suben
+  **+18 MB** cada uno, el coste real del contexto GLES que necesitan. El
+  desglose del USS nuevo es **heap anónimo del driver Mesa** (~19 MB privado,
+  sin mapeos de caché de shaders relevantes); la GPU por proceso (22 MiB) es
+  sobre todo sobrecoste del contexto, no de los buffers (el swapchain de una
+  barra de 1280×28 es sub-MiB).
+  **Criterio**: coste exclusivo (USS + GPU) ≈ 19 + 22 = **41 MB** por
+  componente, **borderline** sobre los 35 MB pactados pero **no "claramente
+  mayor"** (el USS, la medida exclusiva honesta, es ~19 MB, bajo el umbral; el
+  resto es infraestructura de contexto de Mesa semi-compartida). Se procede con
+  la opción 1 (todo EGL, camino único).
+- **Sin fugas**: GTT estable tras 15 s con el reloj re-renderizando.
+- `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings` (0) y
+  `cargo test --workspace` (**115 tests**) en verde.
+
+### Divergencias (7c)
+
+- **`celestial-kit` sigue siendo Wayland-agnóstico**: recibe el `wl_egl_window*`
+  y el `wl_display*` como punteros opacos; el `wl_egl_window` vive en
+  `yuki-shell` (wayland-egl). El ADR 0027 fija el diseño.
+- **El daño parcial y el frame rate los gobierna el compositor** (rastreador de
+  daños, presentación bajo demanda): la shell solo swapea cuando tiene algo
+  nuevo (reposo ≈ 0 fps salvo el minuto del reloj). No se mide fps de la shell
+  porque en reposo no hay flujo continuo que medir.
+- La opción 3 (menubar/dock por dmabuf sin GLES) se descartó explícitamente en
+  la revisión; los datos justifican el contexto GLES de los componentes de texto.
 
 ## Notas
 

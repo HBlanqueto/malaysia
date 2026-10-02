@@ -57,7 +57,7 @@ docs/
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
 5. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0026, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0027, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 6. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
@@ -79,10 +79,10 @@ docs/
 
 Los **Bloques 0–6** están implementados (scaffolding, conexión de clientes,
 ventana en pantalla, input, ventanas manipulables, popups y portapapeles). El
-**Bloque 7** está en curso: **7a** (linux-dmabuf v5 con feedback) y **7b**
-(explicit sync + sync implícito, release diferido por fence) hechos — ya corren
-wezterm, Firefox, vkcube y mpv acelerados dentro de Yuki anidado — y **7c** (la
-shell presenta por EGL) pendiente.
+El **Bloque 7** está hecho: **7a** (linux-dmabuf v5 con feedback), **7b**
+(explicit sync + sync implícito, release diferido por fence) y **7c** (la shell
+presenta por EGL, un solo camino sin `wl_shm`). Ya corren wezterm, Firefox,
+vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
 funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).

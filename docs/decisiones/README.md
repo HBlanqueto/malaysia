@@ -33,6 +33,7 @@ continua.
 | 0024 | Stack de render del toolkit | aceptado (opción A: GLES + cosmic-text + shaders propios) |
 | 0025 | La shell es nativa (`yuki-shell`); se elimina Quickshell | aceptado |
 | 0026 | linux-dmabuf y explicit sync (Bloque 7a/7b) | aceptado |
+| 0027 | La shell presenta por EGL (Bloque 7c) | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
