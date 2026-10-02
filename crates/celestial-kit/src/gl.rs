@@ -14,6 +14,10 @@ use khronos_egl::{self as egl, DynamicInstance};
 
 /// The Wayland EGL platform (`EGL_PLATFORM_WAYLAND_KHR`/`EXT`, both `0x31D8`).
 const EGL_PLATFORM_WAYLAND: egl::Enum = 0x31D8;
+/// The MESA surfaceless platform (`EGL_PLATFORM_SURFACELESS_MESA`, `0x31DD`),
+/// used by the regression tests.
+#[cfg(test)]
+const EGL_PLATFORM_SURFACELESS_MESA: egl::Enum = 0x31DD;
 
 /// An error while setting up or using the renderer.
 #[derive(Debug, thiserror::Error)]
@@ -70,38 +74,75 @@ impl GlesRenderer {
     /// `display_ptr` must be a valid native display handle for the EGL platform
     /// and must remain valid for as long as the renderer exists.
     pub unsafe fn new(display_ptr: *mut c_void) -> Result<Self, GlError> {
-        let egl = unsafe { DynamicInstance::<egl::EGL1_5>::load_required() }
-            .map_err(|e| GlError::EglLoad(e.to_string()))?;
-        let display = unsafe {
-            egl.get_platform_display(
+        // Safety: forwarded to the platform constructor.
+        unsafe {
+            Self::new_with_platform(
                 EGL_PLATFORM_WAYLAND,
                 display_ptr,
-                &[egl::NONE as egl::Attrib],
+                Some(&[
+                    egl::SURFACE_TYPE,
+                    egl::WINDOW_BIT,
+                    egl::RED_SIZE,
+                    8,
+                    egl::GREEN_SIZE,
+                    8,
+                    egl::BLUE_SIZE,
+                    8,
+                    egl::ALPHA_SIZE,
+                    8,
+                    egl::RENDERABLE_TYPE,
+                    egl::OPENGL_ES2_BIT,
+                    egl::NONE,
+                ]),
             )
         }
-        .map_err(|_| GlError::Egl("eglGetPlatformDisplay(wayland) failed"))?;
+    }
+
+    /// Creates the renderer on a surfaceless EGL display (`MESA_surfaceless`).
+    ///
+    /// Used by the regression tests: rendering happens to framebuffer objects,
+    /// no window system is involved, so the context is created configless
+    /// (`EGL_MESA_configless_context`).
+    #[cfg(test)]
+    fn new_surfaceless() -> Result<Self, GlError> {
+        // Safety: a null native display is what the surfaceless platform
+        // expects.
+        unsafe {
+            Self::new_with_platform(EGL_PLATFORM_SURFACELESS_MESA, std::ptr::null_mut(), None)
+        }
+    }
+
+    /// The shared EGL setup for a platform and its native display.
+    ///
+    /// `config_attribs` selects the framebuffer config; `None` creates a
+    /// configless context (`EGL_MESA_configless_context`), for platforms that
+    /// advertise no window/pixmap configs (the surfaceless test display).
+    ///
+    /// # Safety
+    ///
+    /// `display_ptr` must be valid for `platform` and live for the renderer.
+    unsafe fn new_with_platform(
+        platform: egl::Enum,
+        display_ptr: *mut c_void,
+        config_attribs: Option<&[i32]>,
+    ) -> Result<Self, GlError> {
+        let egl = unsafe { DynamicInstance::<egl::EGL1_5>::load_required() }
+            .map_err(|e| GlError::EglLoad(e.to_string()))?;
+        let display =
+            unsafe { egl.get_platform_display(platform, display_ptr, &[egl::NONE as egl::Attrib]) }
+                .map_err(|_| GlError::Egl("eglGetPlatformDisplay failed"))?;
         egl.initialize(display)
             .map_err(|_| GlError::Egl("eglInitialize failed"))?;
 
-        let attribs: [i32; 13] = [
-            egl::SURFACE_TYPE,
-            egl::WINDOW_BIT,
-            egl::RED_SIZE,
-            8,
-            egl::GREEN_SIZE,
-            8,
-            egl::BLUE_SIZE,
-            8,
-            egl::ALPHA_SIZE,
-            8,
-            egl::RENDERABLE_TYPE,
-            egl::OPENGL_ES2_BIT,
-            egl::NONE,
-        ];
-        let config = egl
-            .choose_first_config(display, &attribs)
-            .map_err(|_| GlError::Egl("eglChooseConfig failed"))?
-            .ok_or(GlError::Egl("no suitable EGL config"))?;
+        let config = match config_attribs {
+            Some(attribs) => egl
+                .choose_first_config(display, attribs)
+                .map_err(|_| GlError::Egl("eglChooseConfig failed"))?
+                .ok_or(GlError::Egl("no suitable EGL config"))?,
+            // Safety: a null `EGLConfig` is `EGL_NO_CONFIG_KHR`, the configless
+            // context (`EGL_MESA_configless_context`).
+            None => unsafe { egl::Config::from_ptr(std::ptr::null_mut()) },
+        };
 
         let context_attribs: [i32; 3] = [egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE];
         let context = egl
@@ -532,4 +573,100 @@ fn as_u8(data: &[f32]) -> &[u8] {
     let ptr = data.as_ptr().cast::<u8>();
     // Safety: `f32` has no padding, so reinterpreting the bytes is sound.
     unsafe { std::slice::from_raw_parts(ptr, data.len() * 4) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A 4×4 pattern with a known quadrant in each corner.
+    fn quadrant_pattern(w: u32, h: u32) -> Vec<u8> {
+        let mut buf = vec![0u8; (w * h * 4) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let (r, g, b) = match (x < w / 2, y < h / 2) {
+                    (true, true) => (255u8, 0, 0),
+                    (false, true) => (0, 255, 0),
+                    (true, false) => (0, 0, 255),
+                    (false, false) => (255, 255, 255),
+                };
+                let o = (y * w + x) as usize * 4;
+                buf[o..o + 4].copy_from_slice(&[r, g, b, 255]);
+            }
+        }
+        buf
+    }
+
+    /// Regression test for the UV transform of the present blit (Bloque 7.3).
+    ///
+    /// `draw_texture_cover_to` maps a texture onto the current framebuffer; the
+    /// transform must keep every row in place (no flip) and cover the whole
+    /// surface (the old row-major/column-major confusion made `v' = -v`, which
+    /// `CLAMP_TO_EDGE` pinned to row 0, so a texture rendered as a single
+    /// repeated row). A texture with four solid quadrant colours is drawn onto
+    /// an FBO and read back: every quadrant must land where it was uploaded.
+    #[test]
+    fn present_uv_transform_maps_the_texture_exactly() {
+        let (w, h) = (512u32, 256u32);
+        let renderer = GlesRenderer::new_surfaceless().expect("no surfaceless EGL display");
+        let pattern = quadrant_pattern(w, h);
+        let source = renderer
+            .create_texture_rgba((w, h), &pattern)
+            .expect("no source texture");
+        let target = renderer
+            .create_texture_rgba((w, h), &vec![0u8; (w * h * 4) as usize])
+            .expect("no target texture");
+
+        let fbo = unsafe { renderer.gl.create_framebuffer() }.expect("no framebuffer");
+        unsafe {
+            renderer.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+            renderer.gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(target.id),
+                0,
+            );
+        }
+        renderer.draw_texture_cover_to(&source, w as f32, h as f32);
+
+        let mut readback = vec![0u8; (w * h * 4) as usize];
+        unsafe {
+            renderer.gl.read_pixels(
+                0,
+                0,
+                w as i32,
+                h as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(&mut readback),
+            );
+            renderer.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            renderer.gl.delete_framebuffer(fbo);
+        }
+
+        // `glReadPixels` returns rows bottom-up (GL's origin), so index the
+        // readback with `h - 1 - y` to name screen-top rows.
+        let px = |x: u32, y: u32| -> [u8; 3] {
+            let row = h - 1 - y;
+            let o = (row * w + x) as usize * 4;
+            [readback[o], readback[o + 1], readback[o + 2]]
+        };
+        let expected = [
+            ("top-left", px(16, 16), [255, 0, 0]),
+            ("top-right", px(w - 16, 16), [0, 255, 0]),
+            ("bottom-left", px(16, h - 16), [0, 0, 255]),
+            ("bottom-right", px(w - 16, h - 16), [255, 255, 255]),
+        ];
+        for (name, got, want) in expected {
+            let ok = got
+                .iter()
+                .zip(want)
+                .all(|(g, e)| (*g as i16 - e as i16).abs() <= 2);
+            assert!(
+                ok,
+                "quadrant {name}: got {got:?}, want {want:?} — the UV transform is broken"
+            );
+        }
+    }
 }
