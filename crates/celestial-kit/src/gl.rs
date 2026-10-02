@@ -336,8 +336,11 @@ impl GlesRenderer {
         let sy = (th - src_h) / 2.0 / th;
         let sw = src_w / tw;
         let sh = src_h / th;
-        // UV transform: unit quad -> source rect (y flipped: image is top-down).
-        let uv = [sw, 0.0, sx, 0.0, -sh, 1.0 - sy, 0.0, 0.0, 1.0];
+        // UV transform: unit quad -> source rect. The texture row 0 is the frame's
+        // top row, and the EGL surface row 0 is the buffer's top row, so no
+        // vertical flip: `uniform_matrix_3_f32_slice` takes the columns of the
+        // row-major transform [sw 0 sx; 0 sh sy; 0 0 1].
+        let uv = [sw, 0.0, 0.0, 0.0, sh, 0.0, sx, sy, 1.0];
         unsafe {
             self.gl.viewport(0, 0, vw as i32, vh as i32);
             self.gl.use_program(Some(self.blit.program));
