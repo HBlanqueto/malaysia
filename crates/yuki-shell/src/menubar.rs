@@ -292,9 +292,14 @@ impl Menubar {
             TEXT_COLOR,
         );
 
-        // What changed since the last upload: the measured title run on the
-        // left and the measured clock run on the right.
-        let mut damaged = None;
+        // What changed since the last upload: everything on the first render,
+        // otherwise the measured title run on the left and the measured clock
+        // run on the right.
+        let mut damaged = if self.texture.is_none() {
+            Some((0, 0, w, h))
+        } else {
+            None
+        };
         if self.active_title != self.last_title {
             damaged = Some(rect_union(
                 damaged,

@@ -315,9 +315,9 @@ impl Dock {
             );
         }
 
-        // The damaged region: the whole bar on a layout change, otherwise the
-        // tiles that flipped their active state.
-        let damaged = if self.layout_dirty {
+        // The damaged region: everything on the first render or a layout
+        // change, otherwise the tiles that flipped their active state.
+        let damaged = if self.texture.is_none() || self.layout_dirty {
             Some((0, 0, w, h))
         } else if self.active_title != self.last_active_title {
             let mut dirty = None;
