@@ -213,6 +213,52 @@ impl GlesRenderer {
         }
     }
 
+    /// Re-uploads only a rectangular region of an RGBA frame into a texture.
+    ///
+    /// Uses `glTexSubImage2D` with `GL_UNPACK_ROW_LENGTH`, so a redraw uploads
+    /// just the damaged area (the menu bar's clock, a dock tile) instead of the
+    /// whole frame. `data` is the **full** top-down RGBA8 frame — its stride is
+    /// the texture's width — and `(x, y, w, h)` names the region inside it.
+    pub fn upload_texture_region_rgba(
+        &self,
+        texture: &Texture,
+        data: &[u8],
+        x: u32,
+        y: u32,
+        w: u32,
+        h: u32,
+    ) -> Result<(), GlError> {
+        let stride = texture.size.0 as usize * 4;
+        let offset = y as usize * stride + x as usize * 4;
+        let needed = (h as usize - 1) * stride + w as usize * 4;
+        if data.len() < offset + needed {
+            return Err(GlError::Texture(format!(
+                "RGBA buffer is {} bytes, need {} for the {w}x{h} region",
+                data.len(),
+                offset + needed
+            )));
+        }
+        unsafe {
+            self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
+            self.gl
+                .pixel_store_i32(glow::UNPACK_ROW_LENGTH, texture.size.0 as i32);
+            self.gl.tex_sub_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                x as i32,
+                y as i32,
+                w as i32,
+                h as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(&data[offset..offset + needed]),
+            );
+            self.gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
+            self.gl.bind_texture(glow::TEXTURE_2D, None);
+            Ok(())
+        }
+    }
+
     /// Creates an EGL window surface on a native window (a `wl_egl_window*`).
     ///
     /// The shell presents through the Wayland EGL platform (Bloque 7c): the

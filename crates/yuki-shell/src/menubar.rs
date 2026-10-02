@@ -57,6 +57,10 @@ const BAR_BG: [u8; 4] = [0x1c, 0x1c, 0x1f, 0xe0];
 const TEXT_COLOR: [u8; 4] = [0xf2, 0xf2, 0xf5, 0xff];
 /// The margin from the edges, in logical pixels.
 const MARGIN: i32 = 10;
+/// Width of the damaged band covering the active title, in logical pixels.
+const TITLE_STRIP: u32 = 250;
+/// Width of the damaged band covering the clock, in logical pixels.
+const CLOCK_STRIP: u32 = 90;
 
 /// Duration until the next minute boundary, for the aligned clock timer.
 fn seconds_to_next_minute() -> Duration {
@@ -94,6 +98,11 @@ struct Menubar {
     last_window_modified: Option<SystemTime>,
     active_title: String,
     clock_text: String,
+    /// The last title/clock uploaded, to know which region changed.
+    last_title: String,
+    last_clock: String,
+    /// The full frame, kept so a redraw uploads only the damaged region.
+    frame: Vec<u8>,
     needs_redraw: bool,
 }
 
@@ -127,6 +136,9 @@ pub fn run() -> anyhow::Result<()> {
         last_window_modified: None,
         active_title: String::new(),
         clock_text: String::new(),
+        last_title: String::new(),
+        last_clock: String::new(),
+        frame: Vec::new(),
         needs_redraw: false,
     };
 
@@ -238,6 +250,10 @@ impl Menubar {
     }
 
     /// Rebuilds the frame and presents it by EGL (Bloque 7c).
+    ///
+    /// Only the damaged region — the clock on the right, the active title on
+    /// the left — is uploaded to the texture (`glTexSubImage2D`); when nothing
+    /// changed no frame is committed at all.
     fn render(&mut self, conn: &Connection) {
         self.needs_redraw = false;
         let (w, h) = self.buffer_size;
@@ -245,17 +261,20 @@ impl Menubar {
             return;
         }
         let stride = (w * 4) as usize;
-        let mut frame = vec![0u8; stride * h as usize];
+        if self.frame.len() != stride * h as usize {
+            self.frame = vec![0u8; stride * h as usize];
+        }
+        let frame = &mut self.frame;
 
-        // The bar background.
-        fill_rect(&mut frame, (w, h), (0, 0, w, h), BAR_BG);
+        // The bar background (static; not re-uploaded after the first frame).
+        fill_rect(frame, (w, h), (0, 0, w, h), BAR_BG);
 
         // The active app's name on the left.
         let baseline = (h as i32 - (FONT_SIZE * 1.3).round() as i32) / 2;
         self.text
             .set_text(&self.active_title, FONT_SIZE, Some(240.0));
         self.text.draw(
-            &mut frame,
+            frame,
             stride,
             w as i32,
             h as i32,
@@ -263,18 +282,37 @@ impl Menubar {
             TEXT_COLOR,
         );
 
-        // The clock on the right.
+        // The clock on the right, at a fixed band that covers the clock area; the
+        // `%H:%M` clock is always far narrower than the band.
         self.text.set_text(&self.clock_text, FONT_SIZE, None);
-        let (cw, _) = self.text.size();
-        let cx = (w as i32 - MARGIN) - cw.round() as i32;
+        let cx = (w as i32 - MARGIN) - CLOCK_STRIP as i32;
         self.text.draw(
-            &mut frame,
+            frame,
             stride,
             w as i32,
             h as i32,
             (cx, baseline),
             TEXT_COLOR,
         );
+
+        // What changed since the last upload: the title strip on the left and
+        // the clock strip on the right, as fixed bands that always cover the
+        // text areas (the clock is right-aligned and `%H:%M`).
+        let mut damaged = None;
+        if self.active_title != self.last_title {
+            damaged = Some(rect_union(damaged, (MARGIN as u32, 0, TITLE_STRIP, h)));
+            self.last_title = self.active_title.clone();
+        }
+        if self.clock_text != self.last_clock {
+            damaged = Some(rect_union(
+                damaged,
+                (w.saturating_sub(CLOCK_STRIP), 0, CLOCK_STRIP, h),
+            ));
+            self.last_clock = self.clock_text.clone();
+        }
+        let Some(damaged) = damaged else {
+            return; // nothing changed since the last commit
+        };
 
         // Create the GLES renderer on the first render and present the frame
         // as a texture over the EGL window (Bloque 7c).
@@ -287,22 +325,31 @@ impl Menubar {
         let (Some(renderer), Some(surface)) = (&mut self.renderer, &self.surface) else {
             return;
         };
-        // One texture per size, re-uploaded in place on each redraw so the
-        // clock does not leak a texture per second.
-        match &self.texture {
-            Some(texture) if texture.size == (w, h) => {
-                if renderer.upload_texture_rgba(texture, &frame).is_err() {
-                    return;
+        // One texture per size; the first upload is the whole frame, later
+        // redraws upload only the damaged rectangle.
+        let created = match &self.texture {
+            Some(texture) if texture.size == (w, h) => false,
+            _ => match renderer.create_texture_rgba((w, h), frame) {
+                Ok(texture) => {
+                    self.texture = Some(texture);
+                    true
                 }
-            }
-            _ => match renderer.create_texture_rgba((w, h), &frame) {
-                Ok(texture) => self.texture = Some(texture),
                 Err(_) => return,
             },
-        }
+        };
         let Some(texture) = &self.texture else {
             return;
         };
+        if created {
+            if renderer.upload_texture_rgba(texture, frame).is_err() {
+                return;
+            }
+        } else if renderer
+            .upload_texture_region_rgba(texture, frame, damaged.0, damaged.1, damaged.2, damaged.3)
+            .is_err()
+        {
+            return;
+        }
         if let Err(error) = self.presenter.present(renderer, surface, texture, (w, h)) {
             eprintln!("menubar: present failed: {error}");
         }
@@ -561,4 +608,16 @@ fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32
             frame[pi + 3] = (a * 255.0 + frame[pi + 3] as f32 * (1.0 - a)) as u8;
         }
     }
+}
+
+/// Bounding box of `a` and `b` (a may be `None`).
+fn rect_union(a: Option<(u32, u32, u32, u32)>, b: (u32, u32, u32, u32)) -> (u32, u32, u32, u32) {
+    let Some(a) = a else {
+        return b;
+    };
+    let x1 = a.0.min(b.0);
+    let y1 = a.1.min(b.1);
+    let x2 = (a.0 + a.2).max(b.0 + b.2);
+    let y2 = (a.1 + a.3).max(b.1 + b.3);
+    (x1, y1, x2 - x1, y2 - y1)
 }

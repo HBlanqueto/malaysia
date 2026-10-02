@@ -6,19 +6,31 @@
 //! cache lives here too, so re-drawing the same text (a clock) re-rasterizes
 //! nothing.
 
-use cosmic_text::{Attrs, Buffer, Color, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache};
 
 /// The text engine: a font system, a glyph cache and one laid-out buffer.
 pub struct Text {
     font_system: FontSystem,
     cache: SwashCache,
     buffer: Buffer,
+    /// The family actually used, picked from the fonts the system found.
+    ///
+    /// `FontSystem::new()` defaults the sans-serif fallback to "Open Sans",
+    /// which is not installed here; querying it yields no font and no glyphs.
+    /// The first non-monospace, non-emoji family available is used instead.
+    family: String,
 }
 
 impl Text {
     /// Creates an engine with the system fonts and the given metrics.
     pub fn new(font_size: f32) -> Self {
         let mut font_system = FontSystem::new();
+        let family = font_system
+            .db_mut()
+            .faces()
+            .find(|face| !face.monospaced && !face.post_script_name.contains("Emoji"))
+            .and_then(|face| face.families.first().map(|(name, _)| name.clone()))
+            .unwrap_or_else(|| "sans-serif".to_string());
         let cache = SwashCache::new();
         let metrics = Metrics::new(font_size, font_size * 1.3);
         let buffer = Buffer::new(&mut font_system, metrics);
@@ -26,6 +38,7 @@ impl Text {
             font_system,
             cache,
             buffer,
+            family,
         }
     }
 
@@ -34,8 +47,12 @@ impl Text {
         let metrics = Metrics::new(font_size, font_size * 1.3);
         self.buffer.set_metrics(metrics);
         self.buffer.set_size(max_width, None);
-        self.buffer
-            .set_text(text, &Attrs::new(), Shaping::Advanced, None);
+        self.buffer.set_text(
+            text,
+            &Attrs::new().family(Family::Name(&self.family)),
+            Shaping::Advanced,
+            None,
+        );
     }
 
     /// The laid-out size of the current text, in logical pixels.

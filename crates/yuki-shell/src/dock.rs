@@ -118,6 +118,12 @@ struct Dock {
 
     entries: Vec<DockEntry>,
     active_title: String,
+    /// The last active title uploaded, to know which tile changed.
+    last_active_title: String,
+    /// Set when the tile layout changed (add/remove/resize): full re-upload.
+    layout_dirty: bool,
+    /// The full frame, kept so a redraw uploads only the damaged tiles.
+    pixels: Vec<u8>,
 
     dock_store: PathBuf,
     last_dock_modified: Option<SystemTime>,
@@ -159,6 +165,9 @@ pub fn run() -> anyhow::Result<()> {
         tilesize: DEFAULT_TILESIZE,
         entries: Vec::new(),
         active_title: String::new(),
+        last_active_title: String::new(),
+        layout_dirty: false,
+        pixels: Vec::new(),
         dock_store,
         last_dock_modified: None,
         active_store,
@@ -265,23 +274,30 @@ impl Dock {
         }
     }
 
-    /// Rebuilds the frame and presents it.
+    /// Rebuilds the frame and presents it (Bloque 7c).
+    ///
+    /// A layout change re-uploads the whole frame; a change of the active app
+    /// uploads only the affected tile(s) via `glTexSubImage2D`. When nothing
+    /// changed no frame is committed.
     fn render(&mut self, conn: &Connection) {
         let (w, h) = self.buffer_size;
         if w == 0 || h == 0 {
             return;
         }
         let stride = (w * 4) as usize;
-        let mut frame = vec![0u8; stride * h as usize];
+        if self.pixels.len() != stride * h as usize {
+            self.pixels = vec![0u8; stride * h as usize];
+        }
+        let frame = &mut self.pixels;
 
-        fill_rect(&mut frame, (w, h), (0, 0, w, h), BAR_BG);
+        fill_rect(frame, (w, h), (0, 0, w, h), BAR_BG);
 
         let baseline = PADDING + 8;
         for entry in &self.entries {
             let active = entry.title == self.active_title;
             let bg = if active { TILE_ACTIVE } else { TILE_BG };
             fill_rect(
-                &mut frame,
+                frame,
                 (w, h),
                 (entry.x, PADDING, self.tilesize as u32, self.tilesize as u32),
                 bg,
@@ -290,7 +306,7 @@ impl Dock {
             self.text
                 .set_text(&entry.title, 11.0, Some(self.tilesize as f32 - 4.0));
             self.text.draw(
-                &mut frame,
+                frame,
                 stride,
                 w as i32,
                 h as i32,
@@ -298,6 +314,36 @@ impl Dock {
                 TEXT_COLOR,
             );
         }
+
+        // The damaged region: the whole bar on a layout change, otherwise the
+        // tiles that flipped their active state.
+        let damaged = if self.layout_dirty {
+            Some((0, 0, w, h))
+        } else if self.active_title != self.last_active_title {
+            let mut dirty = None;
+            for entry in &self.entries {
+                if entry.title == self.active_title || entry.title == self.last_active_title {
+                    dirty = Some(rect_union(
+                        dirty,
+                        (
+                            entry.x as u32,
+                            PADDING as u32,
+                            self.tilesize as u32,
+                            self.tilesize as u32,
+                        ),
+                    ));
+                }
+            }
+            dirty
+        } else {
+            None
+        };
+        self.layout_dirty = false;
+        self.needs_redraw = false;
+        self.last_active_title = self.active_title.clone();
+        let Some(damaged) = damaged else {
+            return; // nothing changed since the last commit
+        };
 
         if self.renderer.is_none() {
             let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
@@ -308,22 +354,31 @@ impl Dock {
         let (Some(renderer), Some(surface)) = (&mut self.renderer, &self.surface) else {
             return;
         };
-        // One texture per size, re-uploaded in place on each redraw so the
-        // dock does not leak a texture per frame.
-        match &self.texture {
-            Some(texture) if texture.size == (w, h) => {
-                if renderer.upload_texture_rgba(texture, &frame).is_err() {
-                    return;
+        // One texture per size; the first upload is the whole frame, later
+        // redraws upload only the damaged tiles.
+        let created = match &self.texture {
+            Some(texture) if texture.size == (w, h) => false,
+            _ => match renderer.create_texture_rgba((w, h), frame) {
+                Ok(texture) => {
+                    self.texture = Some(texture);
+                    true
                 }
-            }
-            _ => match renderer.create_texture_rgba((w, h), &frame) {
-                Ok(texture) => self.texture = Some(texture),
                 Err(_) => return,
             },
-        }
+        };
         let Some(texture) = &self.texture else {
             return;
         };
+        if created {
+            if renderer.upload_texture_rgba(texture, frame).is_err() {
+                return;
+            }
+        } else if renderer
+            .upload_texture_region_rgba(texture, frame, damaged.0, damaged.1, damaged.2, damaged.3)
+            .is_err()
+        {
+            return;
+        }
         if let Err(error) = self.presenter.present(renderer, surface, texture, (w, h)) {
             eprintln!("dock: present failed: {error}");
         }
@@ -356,6 +411,7 @@ impl Dock {
         });
         self.layout_tiles();
         self.needs_redraw = true;
+        self.layout_dirty = true;
     }
 
     /// Removes a tracked window.
@@ -363,6 +419,7 @@ impl Dock {
         self.entries.retain(|entry| entry.list_handle != *handle);
         self.layout_tiles();
         self.needs_redraw = true;
+        self.layout_dirty = true;
     }
 
     /// Re-reads `dock.domain` (tile size) and `window.domain` (active app).
@@ -379,6 +436,7 @@ impl Dock {
                 self.tilesize = store.tilesize;
                 self.layout_tiles();
                 self.needs_redraw = true;
+                self.layout_dirty = true;
             }
         }
 
@@ -776,4 +834,16 @@ fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32
             frame[pi + 3] = (a * 255.0 + frame[pi + 3] as f32 * (1.0 - a)) as u8;
         }
     }
+}
+
+/// Bounding box of `a` and `b` (a may be `None`).
+fn rect_union(a: Option<(u32, u32, u32, u32)>, b: (u32, u32, u32, u32)) -> (u32, u32, u32, u32) {
+    let Some(a) = a else {
+        return b;
+    };
+    let x1 = a.0.min(b.0);
+    let y1 = a.1.min(b.1);
+    let x2 = (a.0 + a.2).max(b.0 + b.2);
+    let y2 = (a.1 + a.3).max(b.1 + b.3);
+    (x1, y1, x2 - x1, y2 - y1)
 }
