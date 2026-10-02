@@ -57,10 +57,6 @@ const BAR_BG: [u8; 4] = [0x1c, 0x1c, 0x1f, 0xe0];
 const TEXT_COLOR: [u8; 4] = [0xf2, 0xf2, 0xf5, 0xff];
 /// The margin from the edges, in logical pixels.
 const MARGIN: i32 = 10;
-/// Width of the damaged band covering the active title, in logical pixels.
-const TITLE_STRIP: u32 = 250;
-/// Width of the damaged band covering the clock, in logical pixels.
-const CLOCK_STRIP: u32 = 90;
 
 /// Duration until the next minute boundary, for the aligned clock timer.
 fn seconds_to_next_minute() -> Duration {
@@ -273,6 +269,7 @@ impl Menubar {
         let baseline = (h as i32 - (FONT_SIZE * 1.3).round() as i32) / 2;
         self.text
             .set_text(&self.active_title, FONT_SIZE, Some(240.0));
+        let (title_w, _) = self.text.measure();
         self.text.draw(
             frame,
             stride,
@@ -282,10 +279,10 @@ impl Menubar {
             TEXT_COLOR,
         );
 
-        // The clock on the right, at a fixed band that covers the clock area; the
-        // `%H:%M` clock is always far narrower than the band.
+        // The clock on the right, right-aligned at the measured text width.
         self.text.set_text(&self.clock_text, FONT_SIZE, None);
-        let cx = (w as i32 - MARGIN) - CLOCK_STRIP as i32;
+        let (cw, _) = self.text.measure();
+        let cx = (w as i32 - MARGIN) - cw.round() as i32;
         self.text.draw(
             frame,
             stride,
@@ -295,18 +292,20 @@ impl Menubar {
             TEXT_COLOR,
         );
 
-        // What changed since the last upload: the title strip on the left and
-        // the clock strip on the right, as fixed bands that always cover the
-        // text areas (the clock is right-aligned and `%H:%M`).
+        // What changed since the last upload: the measured title run on the
+        // left and the measured clock run on the right.
         let mut damaged = None;
         if self.active_title != self.last_title {
-            damaged = Some(rect_union(damaged, (MARGIN as u32, 0, TITLE_STRIP, h)));
+            damaged = Some(rect_union(
+                damaged,
+                (MARGIN as u32, 0, title_w.round().max(1.0) as u32 + 4, h),
+            ));
             self.last_title = self.active_title.clone();
         }
         if self.clock_text != self.last_clock {
             damaged = Some(rect_union(
                 damaged,
-                (w.saturating_sub(CLOCK_STRIP), 0, CLOCK_STRIP, h),
+                (cx as u32, 0, cw.round().max(1.0) as u32 + 4, h),
             ));
             self.last_clock = self.clock_text.clone();
         }

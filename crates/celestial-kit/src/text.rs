@@ -61,6 +61,25 @@ impl Text {
         (w.unwrap_or(0.0), h.unwrap_or(0.0))
     }
 
+    /// The measured size of the current text, after shaping.
+    ///
+    /// [`Text::size`] reports the buffer size the caller configured (often
+    /// `None`, i.e. `0.0`); this shapes the pending text first and returns the
+    /// real laid-out width and height from the glyph hitboxes, so a caller can
+    /// position or damage-exactly the text it is about to draw.
+    pub fn measure(&mut self) -> (f32, f32) {
+        self.buffer.shape_until_scroll(&mut self.font_system, false);
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
+        for run in self.buffer.layout_runs() {
+            for glyph in run.glyphs {
+                width = width.max(glyph.x + glyph.w);
+            }
+            height = height.max(run.line_height);
+        }
+        (width, height)
+    }
+
     /// Composites the current text into `pixels` at `origin`, tinted `color`.
     ///
     /// `pixels` is a top-down RGBA8 frame of `frame_w`×`frame_h` with `stride`
@@ -75,6 +94,10 @@ impl Text {
         origin: (i32, i32),
         color: [u8; 4],
     ) {
+        // `Buffer::layout_runs` only iterates already-shaped lines; shape
+        // first or the iterator yields nothing (this was the shell-text bug of
+        // Bloque 7.1).
+        self.buffer.shape_until_scroll(&mut self.font_system, false);
         let (r, g, b) = (color[0], color[1], color[2]);
         for run in self.buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
@@ -105,6 +128,10 @@ impl Text {
                         data: &image.data,
                         color: (r, g, b),
                     },
+                    matches!(
+                        image.content,
+                        cosmic_text::SwashContent::Color | cosmic_text::SwashContent::SubpixelMask
+                    ),
                 );
             }
         }
@@ -125,12 +152,19 @@ struct Glyph<'a> {
     y: i32,
     w: u32,
     h: u32,
+    /// The glyph bitmap: one coverage byte per pixel (swash `Alpha`) or
+    /// premultiplied RGBA (swash `Color`, for colour glyphs/emoji).
     data: &'a [u8],
     color: (u8, u8, u8),
 }
 
-/// Blends one glyph bitmap (premultiplied RGBA) into a top-down RGBA frame.
-fn blit_glyph(frame: Frame<'_>, glyph: Glyph<'_>) {
+/// Blends one glyph bitmap into a top-down RGBA frame.
+///
+/// The bitmap is a swash image in `Alpha` format (1 byte of coverage per
+/// pixel) or `Color` format (premultiplied RGBA). Either way the text colour
+/// is composited premultiplied src-over: the RGB is scaled by the coverage
+/// before blending, so glyph edges never show a dark halo.
+fn blit_glyph(frame: Frame<'_>, glyph: Glyph<'_>, color_format: bool) {
     let (r, g, b) = glyph.color;
     for row in 0..glyph.h as i32 {
         let y = glyph.y + row;
@@ -142,8 +176,18 @@ fn blit_glyph(frame: Frame<'_>, glyph: Glyph<'_>) {
             if x < 0 || x >= frame.w {
                 continue;
             }
-            let gi = (row as usize * glyph.w as usize + col as usize) * 4;
-            let coverage = glyph.data[gi + 3];
+            let gi = row as usize * glyph.w as usize + col as usize;
+            let coverage = if color_format {
+                // A colour glyph carries its own premultiplied colour; use its
+                // alpha for coverage and keep the glyph's RGB.
+                let c = &glyph.data[gi * 4..gi * 4 + 4];
+                let src = [c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32];
+                let pi = y as usize * frame.stride + x as usize * 4;
+                composite(frame.pixels, pi, src);
+                continue;
+            } else {
+                glyph.data[gi]
+            };
             if coverage == 0 {
                 continue;
             }
@@ -151,20 +195,33 @@ fn blit_glyph(frame: Frame<'_>, glyph: Glyph<'_>) {
             // src-over with the text colour modulated by the glyph coverage.
             let a = coverage as f32 / 255.0;
             let src = [r as f32 * a, g as f32 * a, b as f32 * a, coverage as f32];
-            let dst = [
-                frame.pixels[pi] as f32,
-                frame.pixels[pi + 1] as f32,
-                frame.pixels[pi + 2] as f32,
-                frame.pixels[pi + 3] as f32,
-            ];
-            let out_a = src[3] + dst[3] * (1.0 - a);
-            for k in 0..3 {
-                let value = (src[k] + dst[k] * (1.0 - a)) / out_a.max(1.0);
-                frame.pixels[pi + k] = value.clamp(0.0, 255.0) as u8;
-            }
-            frame.pixels[pi + 3] = out_a.clamp(0.0, 255.0) as u8;
+            composite(frame.pixels, pi, src);
         }
     }
+}
+
+/// Premultiplied src-over of `src` (RGB already premultiplied, `src[3]` alpha)
+/// into an unpremultiplied RGBA pixel at `pi`.
+fn composite(pixels: &mut [u8], pi: usize, src: [f32; 4]) {
+    let a = src[3] / 255.0;
+    let dst = [
+        pixels[pi] as f32 / 255.0,
+        pixels[pi + 1] as f32 / 255.0,
+        pixels[pi + 2] as f32 / 255.0,
+        pixels[pi + 3] as f32 / 255.0,
+    ];
+    // Premultiply the destination by its own alpha.
+    let dst_premul = [dst[0] * dst[3], dst[1] * dst[3], dst[2] * dst[3], dst[3]];
+    let out_a = src[3] / 255.0 + dst_premul[3] * (1.0 - a);
+    if out_a <= 0.0 {
+        pixels[pi + 3] = 0;
+        return;
+    }
+    for k in 0..3 {
+        let value = (src[k] / 255.0 + dst_premul[k] * (1.0 - a)) / out_a;
+        pixels[pi + k] = (value * 255.0).clamp(0.0, 255.0) as u8;
+    }
+    pixels[pi + 3] = (out_a * 255.0).clamp(0.0, 255.0) as u8;
 }
 
 /// A colour in cosmic-text's `ARGB` layout.
@@ -174,6 +231,7 @@ pub fn argb(color: [u8; 4]) -> Color {
 
 #[cfg(test)]
 mod tests {
+    use super::Text;
     use super::argb;
 
     #[test]
@@ -184,5 +242,52 @@ mod tests {
         assert_eq!((color.0 >> 16) & 0xff, 0x12); // red
         assert_eq!((color.0 >> 8) & 0xff, 0x34); // green
         assert_eq!(color.0 & 0xff, 0x56); // blue
+    }
+
+    /// Rasterizes a string and checks that glyphs actually cover pixels.
+    ///
+    /// This is the regression test for the Bloque 7.1 bug: `layout_runs`
+    /// without a preceding `shape_until_scroll` yields nothing, so text was
+    /// never drawn. The test also pins the premultiplied src-over blend (no
+    /// dark halo around glyph edges).
+    #[test]
+    fn text_rasterizes_non_transparent_pixels() {
+        let mut text = Text::new(13.0);
+        text.set_text("18:38", 13.0, None);
+        let (w, h) = text.measure();
+        assert!(w > 0.0, "measured text width should be > 0, got {w}");
+        assert!(h > 0.0, "measured text height should be > 0, got {h}");
+
+        let (fw, fh) = (w.ceil() as usize + 2, h.ceil() as usize + 2);
+        let stride = fw * 4;
+        let mut frame = vec![0u8; stride * fh];
+        text.draw(
+            &mut frame,
+            stride,
+            fw as i32,
+            fh as i32,
+            (1, 1),
+            [0xff, 0xff, 0xff, 0xff],
+        );
+
+        let covered = frame.chunks(4).filter(|px| px[3] != 0).count();
+        assert!(
+            covered > 0,
+            "rasterized text produced no non-transparent pixels"
+        );
+
+        // No dark halo: the text colour is white on transparent, so every
+        // covered pixel must have equal RGB (premultiplied blend, no channel
+        // ever darkened below the coverage).
+        for px in frame.chunks(4) {
+            if px[3] == 0 {
+                continue;
+            }
+            assert!(
+                px[0] == px[1] && px[1] == px[2],
+                "channel mismatch {:?} (premultiplied halo)",
+                px
+            );
+        }
     }
 }
