@@ -124,6 +124,12 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 
 - `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`,
   `zwp_idle_inhibit_manager_v1`, `xdg-output`
+- **Captura de pantalla**: `ext-image-copy-capture-v1` +
+  `ext-image-capture-source-v1`, necesarios para compartir pantalla vía
+  xdg-desktop-portal. Hoy hay un volcado PNG de depuración por `SIGUSR1`
+  (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. **Nota: al
+  actualizar Smithay, revisar si ya sirve estos protocolos** (en 0.7.0 no
+  existe ningún módulo de captura).
 - Aceptación: (Pendiente)
 
 ## Después del Bloque 11

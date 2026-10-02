@@ -308,19 +308,22 @@ implícito · **7c** la shell presenta por EGL.
 
 ## 7.1 — captura, texto y daño real
 
-### Captura verificable (ítem 1 — detenido, propuesta)
+### Captura verificable (ítem 1 — hecho, volcado PNG)
 
 `smithay 0.7.0` **no soporta** ni `ext-image-copy-capture-v1` /
-`ext-image-capture-source-v1` ni `wlr-screencopy-unstable-v1`: no hay módulo de
-captura y `wayland-protocols` no trae los XML de `ext-image-copy-capture`. En
-este rev, implementar cualquiera de los dos desde cero (global + manager +
-frames + **render offscreen de la salida** + entrega de buffer + daño) es
-"mucho trabajo" — el renderer del compositor solo dibuja a la ventana winit, no
-a un buffer capturable. Según el criterio pactado, se **propone en su lugar un
-volcado PNG de depuración**: `copy_framebuffer` (el `Offscreen` del renderer
-GLES) tras renderizar, + codificación PNG. Es barato y sirve para adjuntar
-capturas a los reportes. `grim` queda para cuando se implemente un protocolo de
-captura de verdad.
+`ext-image-capture-source-v1` ni `wlr-screencopy-unstable-v1`, así que se
+implementó el **volcado PNG de depuración** aprobado:
+- **Disparo**: `SIGUSR1` por la fuente de señales de calloop (scriptable, sin
+  teclado); guarda `$XDG_RUNTIME_DIR/yuki/capture-<ms>.png` y loguea la ruta.
+- **Lectura**: tras componer y **antes del swap**; el output se re-renderiza a
+  un target offscreen (`Offscreen::create_buffer` + `render_output`, con el
+  mismo transform que la ventana) porque leer el back buffer de la superficie
+  winit devolvía ceros; se espera la fence del render (`sync.wait()`) antes del
+  readback, se **voltea en vertical** (GL lee de abajo arriba) y se codifica PNG.
+  `crates/yuki/src/capture.rs`, `scripts/capture-validate.sh`.
+- **Validado** con el wallpaper Solid Lavender (RGB exacto 215,207,239): ffmpeg
+  decodifica la captura y los píxeles coinciden **±1 por canal** en toda la
+  imagen. `grim` / el protocolo de captura quedan para el Bloque 11 (roadmap).
 
 ### Texto de la shell (ítem 2 — hecho)
 
@@ -342,11 +345,27 @@ Con `measure()` (que ahora shapea antes) devolviendo el ancho real del run, el
 menubar sustituye las franjas fijas por el **rectángulo exacto del reloj y del
 título** (`glTexSubImage2D` del área medida + 4 px de margen).
 
-### Verificación por captura (ítem 4 — pendiente)
+### Verificación por captura (ítem 4 — hecho) y hallazgos
 
-Depende de la decisión del ítem 1 (volcado PNG propuesto): menubar (título +
-reloj), dock y lock, comprobando colores (rojo/azul no intercambiados) y bordes
-de texto sin halo oscuro.
+La captura validada se usó para verificar la shell:
+- **menubar**: título (izquierda, texto claro ~242,242,245) y reloj (derecha)
+  presentes en la posición correcta; **sin swap rojo/azul** (el wallpaper
+  conserva r=215 b=239) y **sin halo oscuro** (0 píxeles negros junto al
+  texto).
+- **dock**: la barra se ve sobre el wallpaper; los **tiles no** — el dock recibe
+  **0 eventos** de `ext-foreign-toplevel-list-v1` (gap pre-existente: sus
+  `entries` quedan vacíos). Seguimiento.
+- **lock**: el fondo (20,20,24) se ve correcto pero **el texto falta en la
+  captura** (solo el cursor); el frame del lock tiene el texto, así que se
+  pierde en el camino EGL de la superficie full-screen del session-lock (bug
+  pre-existente, el menubar con el mismo motor sí lo presenta). Seguimiento.
+- **Bug de orden de capas (corregido)**: `render_output` de smithay espera
+  elementos en orden **front-to-back** y Yuki los construía back-to-front, así
+  que el wallpaper (primero) se dibujaba encima de todo (ventanas, menubar,
+  dock, cursor invisibles sobre él). Invertido a front-to-back en `draw()`.
+- **Bug del primer render del dock (corregido)**: el rectángulo dañado podía
+  ser `None` en el primer frame (sin layout ni título), así que el dock nunca
+  presentaba; ahora el primer render siempre es completo.
 
 ## Notas
 
