@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 mod active;
+pub mod capture;
 pub mod config;
 mod cursor;
 pub mod decoration;

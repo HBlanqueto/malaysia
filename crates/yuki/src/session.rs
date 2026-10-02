@@ -36,7 +36,7 @@ use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
-use smithay::reexports::calloop::{EventLoop, Interest, LoopSignal, Mode, PostAction};
+use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction};
 use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
@@ -134,6 +134,8 @@ pub(crate) struct Session {
     track_objects: bool,
     /// The last live-object counts logged, so only changes are emitted.
     last_objects: LiveObjects,
+    /// Set by `SIGUSR1`; the next frame writes a debug PNG (Bloque 7.1).
+    capture_requested: bool,
 }
 
 /// The buffers a finished frame read, held until their GPU work completes.
@@ -364,6 +366,7 @@ pub fn run() -> Result<(), SessionError> {
         start_time: Instant::now(),
         track_objects,
         last_objects: LiveObjects::default(),
+        capture_requested: false,
     };
     if session.track_objects {
         session.last_objects = live_objects(&session.display, &session.state);
@@ -371,7 +374,7 @@ pub fn run() -> Result<(), SessionError> {
     }
     session.backend.window().request_redraw();
 
-    watch_for_shutdown(loop_signal)?;
+    watch_for_shutdown(&loop_handle, loop_signal)?;
 
     loop_handle
         .insert_source(winit_events, move |event, _, session: &mut Session| {
@@ -498,21 +501,39 @@ fn import_pending_dmabufs(state: &mut State, renderer: &mut GlesRenderer) {
     }
 }
 
-/// Stops the loop when `SIGTERM` or `SIGINT` is delivered.
+/// Stops the loop on `SIGTERM`/`SIGINT` and requests a debug capture on
+/// `SIGUSR1`, through calloop's signal source (Bloque 7.1).
 ///
-/// The signal iterator blocks, so it lives on its own thread; `LoopSignal`
-/// is safe to use from another thread and wakes the loop.
-fn watch_for_shutdown(loop_signal: LoopSignal) -> Result<(), SessionError> {
-    use signal_hook::consts::{SIGINT, SIGTERM};
-    use signal_hook::iterator::Signals;
-
-    let mut signals = Signals::new([SIGTERM, SIGINT]).map_err(SessionError::Signals)?;
-    std::thread::spawn(move || {
-        if signals.forever().next().is_some() {
-            tracing::info!("shutdown signal received");
-            loop_signal.stop();
-        }
-    });
+/// The signal source lives in the loop, so the callback runs on the main
+/// thread with `&mut Session`: `SIGUSR1` sets `capture_requested` and the next
+/// frame writes a PNG; the shutdown signals stop the loop.
+fn watch_for_shutdown(
+    loop_handle: &LoopHandle<'static, Session>,
+    loop_signal: LoopSignal,
+) -> Result<(), SessionError> {
+    use calloop::signals::{Signal, Signals};
+    let signals = Signals::new(&[Signal::SIGUSR1, Signal::SIGTERM, Signal::SIGINT])
+        .map_err(|error| SessionError::Signals(std::io::Error::other(error.to_string())))?;
+    loop_handle
+        .insert_source(
+            signals,
+            move |signal, _, session: &mut Session| match signal.signal() {
+                Signal::SIGUSR1 => {
+                    session.capture_requested = true;
+                    // The compositor draws on demand; ask for a frame so the
+                    // capture happens now rather than at the next unrelated
+                    // redraw.
+                    session.backend.window().request_redraw();
+                    tracing::info!("SIGUSR1: debug capture requested");
+                }
+                Signal::SIGTERM | Signal::SIGINT => {
+                    tracing::info!("shutdown signal received");
+                    loop_signal.stop();
+                }
+                _ => {}
+            },
+        )
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
     Ok(())
 }
 
@@ -572,11 +593,13 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         display,
         cursor,
         start_time,
+        capture_requested,
         ..
     } = session;
 
     // Everything that borrows the renderer or the framebuffer is scoped so the
     // frame is submitted after the framebuffer is released.
+    let capture_size = backend.window_size();
     let (damage, sync) = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
@@ -586,6 +609,10 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             // no windows, no shell panels, no popups. If the lock client died,
             // its surfaces are gone and the clear color behind them stands in
             // — the session stays locked (lock.rs).
+            reset_dead_cursor(state);
+            // Front-to-back (smithay's `render_output` order): the cursor is on
+            // top, the lock surfaces behind it.
+            append_cursor(renderer, &mut elements, state, cursor);
             for lock_surface in &state.lock_surfaces {
                 if !lock_surface.alive() {
                     continue;
@@ -606,37 +633,14 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                     .map(OutputRenderElement::from),
                 );
             }
+        } else {
+            // `render_output` takes elements in front-to-back order (the first
+            // is drawn on top). So: cursor, then the Top/Overlay panels (above
+            // every window), then popups, then windows, then the Background /
+            // Bottom layers (the wallpaper). See `layers.rs` and ADR 0023.
             reset_dead_cursor(state);
             append_cursor(renderer, &mut elements, state, cursor);
-        } else {
-            // The layer shell's Background and Bottom layers sit behind every
-            // window (the wallpaper is on Background, as on macOS); Top and
-            // Overlay are appended after the windows. See `layers.rs` and ADR 0023.
-            append_layers(state, renderer, &mut elements, LayerSide::Back);
-            for window in state.windows.iter() {
-                if !window.is_mapped() {
-                    continue;
-                }
-                let location = (window.location() + window.surface_location())
-                    .to_physical(State::OUTPUT_SCALE);
-                elements.extend(
-                    render_elements_from_surface_tree::<
-                        GlesRenderer,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                    >(
-                        renderer,
-                        window.surface(),
-                        location,
-                        f64::from(State::OUTPUT_SCALE),
-                        1.0,
-                        Kind::Unspecified,
-                    )
-                    .into_iter()
-                    .map(OutputRenderElement::from),
-                );
-            }
-            // Popups (Bloque 5) sit above their parent window and above every
-            // window in the stack; the Top/Overlay layers come after them.
+            append_layers(state, renderer, &mut elements, LayerSide::Front);
             for (id, _parent, rect) in state.windows.iter_popups() {
                 let Some(surface) = state.popups.surface_of(id) else {
                     continue;
@@ -659,9 +663,29 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                     .map(OutputRenderElement::from),
                 );
             }
-            append_layers(state, renderer, &mut elements, LayerSide::Front);
-            reset_dead_cursor(state);
-            append_cursor(renderer, &mut elements, state, cursor);
+            for window in state.windows.iter() {
+                if !window.is_mapped() {
+                    continue;
+                }
+                let location = (window.location() + window.surface_location())
+                    .to_physical(State::OUTPUT_SCALE);
+                elements.extend(
+                    render_elements_from_surface_tree::<
+                        GlesRenderer,
+                        WaylandSurfaceRenderElement<GlesRenderer>,
+                    >(
+                        renderer,
+                        window.surface(),
+                        location,
+                        f64::from(State::OUTPUT_SCALE),
+                        1.0,
+                        Kind::Unspecified,
+                    )
+                    .into_iter()
+                    .map(OutputRenderElement::from),
+                );
+            }
+            append_layers(state, renderer, &mut elements, LayerSide::Back);
         }
 
         let result = damage_tracker
@@ -673,6 +697,16 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 [0.06, 0.06, 0.09, 1.0],
             )
             .map_err(DrawError::Output)?;
+
+        // Debug capture (Bloque 7.1): `SIGUSR1` asked for it, so read the
+        // composited framebuffer now — after the render, before the swap.
+        if *capture_requested {
+            *capture_requested = false;
+            if let Err(error) = crate::capture::capture_output(renderer, &elements, capture_size) {
+                tracing::warn!(%error, "debug capture failed");
+            }
+        }
+
         (result.damage.cloned(), result.sync)
     };
 
