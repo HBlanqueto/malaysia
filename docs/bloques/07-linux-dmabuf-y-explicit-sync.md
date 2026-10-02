@@ -297,13 +297,56 @@ implícito · **7c** la shell presenta por EGL.
   porque en reposo no hay flujo continuo que medir.
 - La opción 3 (menubar/dock por dmabuf sin GLES) se descartó explícitamente en
   la revisión; los datos justifican el contexto GLES de los componentes de texto.
-- **Bug pre-existente descubierto: el texto de la shell no se rasteriza.** En
-  este entorno, `cosmic-text 0.19` carga 283 fuentes (incluso con la familia
-  corregida a una real, p. ej. Inter) pero `layout_runs()` no produce glifos,
-  así que menubar, dock y lock dibujan el fondo sin el texto. No lo causa 7c
-  (el mismo `Text` se usaba con `wl_shm`); queda como seguimiento antes de
-  pulir la shell. Por eso el rectángulo dañado usa franjas fijas (90 px reloj /
-  250 px título) en vez de medir el texto.
+- **Bug de texto (diagnosticado y corregido en 7.1)**: el texto de la shell no
+  se rasterizaba. Dos causas: (1) `Text` iteraba `Buffer::layout_runs()` sin
+  `shape_until_scroll` previo, y ese iterador solo recorre líneas ya formadas
+  — ahora `draw`/`measure` hacen `shape_until_scroll` primero; (2) swash
+  renderiza glifos en formato **Alpha** (1 byte de cobertura por píxel), no
+  RGBA, y el blit lo leía como RGBA (corrupción/panic) — el blit ahora distingue
+  máscara (cobertura) de color (RGBA premultiplicado) y compone src-over
+  premultiplicado (sin halo oscuro).
+
+## 7.1 — captura, texto y daño real
+
+### Captura verificable (ítem 1 — detenido, propuesta)
+
+`smithay 0.7.0` **no soporta** ni `ext-image-copy-capture-v1` /
+`ext-image-capture-source-v1` ni `wlr-screencopy-unstable-v1`: no hay módulo de
+captura y `wayland-protocols` no trae los XML de `ext-image-copy-capture`. En
+este rev, implementar cualquiera de los dos desde cero (global + manager +
+frames + **render offscreen de la salida** + entrega de buffer + daño) es
+"mucho trabajo" — el renderer del compositor solo dibuja a la ventana winit, no
+a un buffer capturable. Según el criterio pactado, se **propone en su lugar un
+volcado PNG de depuración**: `copy_framebuffer` (el `Offscreen` del renderer
+GLES) tras renderizar, + codificación PNG. Es barato y sirve para adjuntar
+capturas a los reportes. `grim` queda para cuando se implemente un protocolo de
+captura de verdad.
+
+### Texto de la shell (ítem 2 — hecho)
+
+- **Causa raíz 1**: `Text` llamaba a `Buffer::layout_runs()` sin `shape_until_scroll`
+  previo; el iterador solo recorre líneas ya formadas (`shape_opt()?`),
+  así que rendía 0 runs y ningún glifo.
+- **Causa raíz 2**: swash rasteriza en `Format::Alpha` (1 byte de cobertura por
+  píxel); el blit lo leía como RGBA (`*4`). Ahora distingue máscara/color y
+  compone src-over premultiplicado (RGB × cobertura antes de mezclar, sin halo).
+- La familia por defecto de `FontSystem` ("Open Sans") tampoco existe; se elige
+  una familia real del db.
+- **Test nuevo** en `celestial-kit`: `text_rasterizes_non_transparent_pixels`
+  rasteriza `"18:38"`, comprueba que hay píxeles no transparentes y que el RGB
+  de cada píxel cubierto es uniforme (blend premultiplicado, sin halo oscuro).
+
+### Daño real (ítem 3 — hecho)
+
+Con `measure()` (que ahora shapea antes) devolviendo el ancho real del run, el
+menubar sustituye las franjas fijas por el **rectángulo exacto del reloj y del
+título** (`glTexSubImage2D` del área medida + 4 px de margen).
+
+### Verificación por captura (ítem 4 — pendiente)
+
+Depende de la decisión del ítem 1 (volcado PNG propuesto): menubar (título +
+reloj), dock y lock, comprobando colores (rojo/azul no intercambiados) y bordes
+de texto sin halo oscuro.
 
 ## Notas
 

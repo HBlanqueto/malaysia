@@ -99,6 +99,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren wezterm,
   Firefox, vkcube (Vulkan) y mpv (gpu-next) acelerados dentro de Yuki anidado.
   Los ADR 0026 (dmabuf + explicit sync) y 0027 (shell por EGL) fijan el diseño.
+  **7.1 en curso**: el texto de la shell arreglado (`shape_until_scroll` +
+  formato Alpha de swash) con daño real medido; captura verificable pendiente
+  (volcado PNG propuesto; smithay no trae protocolo de captura).
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +

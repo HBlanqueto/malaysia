@@ -81,8 +81,10 @@ Los **Bloques 0–6** están implementados (scaffolding, conexión de clientes,
 ventana en pantalla, input, ventanas manipulables, popups y portapapeles).
 El **Bloque 7** está hecho: **7a** (linux-dmabuf v5 con feedback), **7b**
 (explicit sync + sync implícito, release diferido por fence) y **7c** (la shell
-presenta por EGL, un solo camino sin `wl_shm`). Ya corren wezterm, Firefox,
-vkcube y mpv acelerados dentro de Yuki anidado.
+presenta por EGL, un solo camino sin `wl_shm`). **7.1** (en curso) arregla el
+texto de la shell (`shape_until_scroll` + formato Alpha de swash) con daño real
+medido; la captura verificable está propuesta (volcado PNG). Ya corren wezterm,
+Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
 funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).
