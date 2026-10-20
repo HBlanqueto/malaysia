@@ -207,6 +207,7 @@ dependencies = [
  "grade-graphics",
  "khronos-egl",
  "thiserror 2.0.20",
+ "zeroize",
 ]
 
 [[package]]
@@ -3043,6 +3044,7 @@ dependencies = [
  "celestial-kit",
  "chrono",
  "grade-graphics",
+ "libc",
  "png",
  "serde",
  "smithay-client-toolkit 0.19.2",
@@ -3050,6 +3052,7 @@ dependencies = [
  "toml",
  "wayland-client",
  "wayland-egl",
+ "zeroize",
 ]
 
 [[package]]
@@ -3078,6 +3081,12 @@ dependencies = [
  "syn 3.0.6",
  "synstructure",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zerotrie"

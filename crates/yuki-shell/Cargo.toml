@@ -23,3 +23,5 @@ grade-graphics.workspace = true
 sctk.workspace = true
 wayland-client.workspace = true
 wayland-egl.workspace = true
+libc.workspace = true
+zeroize.workspace = true

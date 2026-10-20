@@ -74,8 +74,10 @@ Estado de los componentes:
   clic (`zwlr_foreign_toplevel_management_v1`). Ver
   [`arquitectura/dock.md`](arquitectura/dock.md).
 - **Lock** (`yuki-shell lock`) — hecho. `ext-session-lock-v1`: bloquea la
-  sesión, dibuja la pantalla de bloqueo y garantiza que **no se desbloquea si
-  el cliente muere** (la autenticación es trabajo futuro). Ver
+  sesión, autentica con PAM (`yuki-lock`, fallback `login`) y garantiza que
+  **no se desbloquea si el cliente muere**. El compositor lo lanza solo tras
+  `lock.idle_timeout_seconds` de inactividad, respetando
+  `zwp_idle_inhibit_manager_v1`. Ver
   [`arquitectura/lock.md`](arquitectura/lock.md).
 - Supervisión: unidades systemd de usuario en el flake (`yuki-shell@.service`,
   `yuki-session.target`); `scripts/test.sh` las emula en desarrollo.

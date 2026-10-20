@@ -13,3 +13,4 @@ grade-graphics.workspace = true
 glow.workspace = true
 khronos-egl = { workspace = true, features = ["dynamic"] }
 thiserror.workspace = true
+zeroize.workspace = true

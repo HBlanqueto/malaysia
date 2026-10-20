@@ -84,6 +84,7 @@ fn compositor_shortcut(
 impl State {
     /// Handles one input event from the backend.
     pub(crate) fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        self.note_idle_activity();
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
@@ -999,6 +1000,7 @@ mod tests {
             feedback,
             None,
             Box::new(event_loop.handle()),
+            Box::new(()),
         )
         .expect("the test state should build");
         (display, state)

@@ -26,6 +26,7 @@ mod cursor;
 pub mod decoration;
 mod foreign;
 mod handlers;
+mod idle;
 mod input;
 mod layers;
 mod lock;

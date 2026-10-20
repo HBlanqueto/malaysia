@@ -17,6 +17,7 @@
         libdrm
         libgbm
         seatd
+        pam
         libxkbcommon
         mesa
         wayland

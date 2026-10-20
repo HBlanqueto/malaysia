@@ -36,6 +36,7 @@ impl SessionLockHandler for State {
         // focus so keystrokes cannot reach normal clients.
         tracing::info!("session locked");
         self.locked = true;
+        self.idle.set_locked(true);
         self.lock_surfaces.clear();
         self.clear_keyboard_focus();
         self.request_redraw();
@@ -53,6 +54,7 @@ impl SessionLockHandler for State {
         // frame of the desktop.
         tracing::info!("session unlocked");
         self.locked = false;
+        self.idle.set_locked(false);
         self.lock_surfaces.clear();
         self.request_redraw();
     }

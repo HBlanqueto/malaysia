@@ -129,6 +129,8 @@ pub struct Config {
     /// The system wallpapers. The current selection lives in a *separate* store,
     /// like macOS keeps it in `com.apple.wallpaper` (see `docs/configuracion`).
     pub wallpaper: WallpaperConfig,
+    /// The lock screen and automatic locking.
+    pub lock: LockConfig,
     /// Compositor-side surface effects (inner border, shadow, blur). ADR 0020.
     pub effects: EffectsConfig,
     /// Development and debugging switches.
@@ -149,6 +151,23 @@ pub enum WallpaperScale {
     Fit,
     /// Centre the image at its native size.
     Center,
+}
+
+/// Lock screen and idle options.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct LockConfig {
+    /// Seconds without input before the session locks itself. `0` disables
+    /// auto-lock. The default is five minutes.
+    pub idle_timeout_seconds: u64,
+}
+
+impl Default for LockConfig {
+    fn default() -> Self {
+        Self {
+            idle_timeout_seconds: 300,
+        }
+    }
 }
 
 /// The system wallpaper catalog (System Settings → Wallpaper).
@@ -403,6 +422,7 @@ impl Config {
             dock: load_section(config_dir, "dock"),
             menubar: load_section(config_dir, "menubar"),
             wallpaper: load_section(data_dir, "wallpaper"),
+            lock: load_section(config_dir, "lock"),
             effects: load_section(config_dir, "effects"),
             debug: load_section(config_dir, "debug"),
         }
@@ -524,6 +544,7 @@ mod tests {
         assert!(!config.effects.inner_border.enabled);
         assert!(!config.effects.shadow.enabled);
         assert!(!config.effects.blur.enabled);
+        assert_eq!(config.lock.idle_timeout_seconds, 300);
     }
 
     #[test]
@@ -568,6 +589,9 @@ mod tests {
             scale = "fit"
             shuffle = true
 
+            [lock]
+            idle_timeout_seconds = 15
+
             [effects]
             corner_radius = 12.0
             [effects.inner_border]
@@ -610,6 +634,7 @@ mod tests {
         assert_eq!(parsed.wallpaper.dir, "/home/user/Pictures/Solid Colors");
         assert_eq!(parsed.wallpaper.scale, WallpaperScale::Fit);
         assert!(parsed.wallpaper.shuffle);
+        assert_eq!(parsed.lock.idle_timeout_seconds, 15);
         assert!(parsed.effects.inner_border.enabled);
         assert_eq!(parsed.effects.inner_border.color, [1.0, 1.0, 1.0]);
         assert!(parsed.effects.shadow.enabled);

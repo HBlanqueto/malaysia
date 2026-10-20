@@ -26,13 +26,57 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
 2. **Crear la superficie**: en `locked`, crea una `ext_session_lock_surface_v1`
    por output (una superficie `wl_surface` nueva por output — un rol no se
    reutiliza). El compositor manda `configure` con el tamaño exacto.
-3. **Dibujar**: sobre el fondo sólido, un mensaje centrado (la UI de
-   autenticación — contraseña, passphrase, botón de desbloqueo — es trabajo
-   futuro). Se presenta por **EGL** (Bloque 7c, ADR 0027) con un
-   `wl_egl_window` por superficie (una por output). `ack_configure` antes del
-   primer commit (sctk lo hace solo).
-4. **Desbloquear**: solo la (futura) autenticación, con `unlock_and_destroy`.
-   Este cliente jamás desbloquea por su cuenta.
+3. **Dibujar**: sobre el fondo sólido, un campo de contraseña enmascarado,
+   el estado "verificando" y el error de PAM. Se presenta por **EGL** (Bloque
+   7c, ADR 0027) con un `wl_egl_window` por superficie (una por output).
+   `ack_configure` antes del primer commit (sctk lo hace solo).
+4. **Desbloquear**: solo una autenticación PAM correcta, con
+   `unlock_and_destroy`. Este cliente jamás desbloquea por su cuenta.
+
+## Autenticación PAM (`crates/yuki-shell/src/pam.rs`)
+
+La autenticación vive **en el proceso del lock**, no en el compositor. Es una
+adaptación del `pam.rs` de Otto (`components/otto-auth-ui`, MIT; ver `NOTICE`):
+FFI propio a `libpam`, sin crate intermedio. `pam_authenticate` es bloqueante,
+así que la conversación corre en un hilo `yuki-pam`; el hilo de render sigue
+dibujando. Los prompts y las respuestas viajan por canales de calloop y
+`std::sync::mpsc`.
+
+- La contraseña se guarda en `Zeroizing<String>` y se borra al entregarla a
+  PAM; las copias temporales para `strdup` también se zeroizan.
+- Servicio preferido: `yuki-lock`. Si `/etc/pam.d/yuki-lock` no existe, usa
+  `login` y lo registra en stderr/journal.
+- En NixOS el archivo se genera con:
+
+  ```nix
+  security.pam.services.yuki-lock.text = ''
+    auth required pam_unix.so
+    account required pam_unix.so
+  '';
+  ```
+
+  Los nombres de módulo van **sin ruta**: libpam los busca en su propio
+  `LIBPAM_MODDIR`, que es el del paquete con el que se enlazó el lock. Una
+  ruta absoluta a otro store puede fallar al cargar el módulo. No se toca
+  `~/nixdots` desde este repo.
+- Un fallo muestra el texto de PAM y deja el campo listo para otro intento;
+  un acierto llama a `SessionLock::unlock()` (`unlock_and_destroy`), hace
+  `flush` y termina el proceso del lock.
+- El servicio se resuelve antes de `pam_start`; el fallback se prueba en
+  `pam.rs` con un resolvedor inyectado.
+
+## Bloqueo automático (`crates/yuki/src/idle.rs`)
+
+`ext-idle-notify-v1` se anuncia en el compositor. Cada input reinicia el reloj;
+el timeout sale de `lock.idle_timeout_seconds` en `~/.config/yuki/lock.domain`
+(0 lo desactiva; por defecto 300 s). Al vencer, el compositor lanza
+`yuki-shell lock` (hermano del binario actual) y el lock pide la sesión.
+
+`zwp_idle_inhibit_manager_v1` se respeta: mientras haya un inhibidor vivo, no
+se arman ni las notificaciones de idle ni el auto-lock. mpv en pantalla
+completa crea uno; una ventana normal no. La lista se limpia también por un
+destruction hook de la superficie, así que un cliente que muere no deja la
+sesión despierta para siempre.
 
 ## El lado del compositor (`crates/yuki/src/lock.rs`)
 
@@ -58,9 +102,8 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
 
 ## Divergencias
 
-- **Sin autenticación todavía**: el lock bloquea, dibuja y recibe input, pero
-  desbloquear (la autenticación) es trabajo futuro. El compositor no expone un
-  desbloqueo por fuera del protocolo.
+- **La autenticación es del cliente**: el compositor no conoce PAM ni la
+  contraseña; solo acepta `unlock_and_destroy` del cliente de lock.
 - **Foco de teclado sin clipboard**: al enfocar la lock surface no se tocan el
   clipboard ni la selección primaria: ningún cliente normal debe ver la
   selección bloqueado.
@@ -83,7 +126,10 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
   crear la superficie (toma el control).
 - **Input**: con la sesión bloqueada, una ventana que mapea no toma foco de
   teclado y no se renderiza.
-- Todo verde: clippy `-D warnings`, fmt, 115 tests. Aceptación verificada además con EGL: el lock bloquea (`session locked`) y matar al cliente con `SIGKILL` **no desbloquea** la sesión.
+- Todo verde: clippy `-D warnings`, fmt y tests. Queda para prueba manual en la
+  sesión anidada: contraseña incorrecta/correcta, auto-lock con 15 s, y que
+  mpv en pantalla completa no bloquee. Matar el lock con `SIGKILL` sigue sin
+  desbloquear.
 
 ## Relación
 

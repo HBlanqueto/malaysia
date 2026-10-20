@@ -33,6 +33,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
@@ -174,6 +175,10 @@ pub struct State {
     pub locked: bool,
     /// The lock surfaces the lock client created, one per output.
     pub lock_surfaces: Vec<LockSurface>,
+    /// The idle clock, `ext-idle-notify-v1` clients and the auto-lock timer.
+    pub idle: crate::idle::IdleState,
+    /// Surfaces holding `zwp_idle_inhibitor_v1`.
+    pub idle_inhibitors: Vec<WlSurface>,
     /// The Wayland display handle.
     ///
     /// Held as a *handle*, never as a borrow of the [`Display`], so the module
@@ -253,6 +258,7 @@ impl State {
         dmabuf_feedback: DmabufFeedback,
         syncobj_device: Option<DrmDeviceFd>,
         blocker_sink: Box<dyn crate::blockers::BlockerSink>,
+        idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let output = winit_output(size);
         Self::new_with_output(
@@ -263,6 +269,7 @@ impl State {
             dmabuf_feedback,
             syncobj_device,
             blocker_sink,
+            idle_sink,
         )
     }
 
@@ -271,6 +278,7 @@ impl State {
     /// The DRM backend publishes the connector's own `wl_output`; winit uses
     /// [`winit_output`]. The global is created here so every backend follows
     /// the same path.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_with_output(
         loop_signal: LoopSignal,
         display_handle: &DisplayHandle,
@@ -279,7 +287,14 @@ impl State {
         dmabuf_feedback: DmabufFeedback,
         syncobj_device: Option<DrmDeviceFd>,
         blocker_sink: Box<dyn crate::blockers::BlockerSink>,
+        idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
+        let config = Config::load();
+        let idle_timeout = match config.lock.idle_timeout_seconds {
+            0 => None,
+            seconds => Some(std::time::Duration::from_secs(seconds)),
+        };
+        let idle = crate::idle::IdleState::new(display_handle, idle_sink, idle_timeout);
         let compositor_state = CompositorState::new::<Self>(display_handle);
         let shm_state = ShmState::new::<Self>(
             display_handle,
@@ -307,6 +322,8 @@ impl State {
         // it to a client the compositor itself launched is compositor policy
         // that the protocol allows (the lock client is that privileged client).
         let lock_state = SessionLockManagerState::new::<Self, _>(display_handle, |_| true);
+        let _idle_inhibit_state =
+            smithay::wayland::idle_inhibit::IdleInhibitManagerState::new::<Self>(display_handle);
 
         let mut seat_state: SeatState<Self> = SeatState::new();
         let mut seat = seat_state.new_wl_seat(display_handle, "yuki");
@@ -343,6 +360,8 @@ impl State {
             lock_state,
             locked: false,
             lock_surfaces: Vec::new(),
+            idle,
+            idle_inhibitors: Vec::new(),
             display_handle: display_handle.clone(),
             output_manager_state,
             output,
@@ -353,7 +372,7 @@ impl State {
             list_handles: Vec::new(),
             minimized: std::collections::HashSet::new(),
             dock_rectangle: None,
-            config: Config::load(),
+            config,
             grab: None,
             test_press: None,
             leaked_window: None,
@@ -390,6 +409,22 @@ impl State {
     /// Takes the VT switch requested by the keyboard, if any.
     pub(crate) fn take_vt_switch(&mut self) -> Option<u8> {
         self.pending_vt_switch.take()
+    }
+
+    /// Input activity: re-arms the idle clock and the auto-lock timer.
+    pub(crate) fn note_idle_activity(&mut self) {
+        self.idle.note_activity();
+    }
+
+    /// A timer from the backend fired. `0` is auto-lock; the rest are client
+    /// idle notifications.
+    pub(crate) fn idle_timer(&mut self, id: u64) {
+        self.idle.idle_timer(id);
+    }
+
+    /// Records the compositor's own Wayland socket for the auto-lock child.
+    pub(crate) fn set_wayland_display(&mut self, display: String) {
+        self.idle.set_wayland_display(display);
     }
 
     /// The output size in logical coordinates.

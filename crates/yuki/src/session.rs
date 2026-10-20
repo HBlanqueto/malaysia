@@ -354,6 +354,7 @@ pub fn run() -> Result<(), SessionError> {
         dmabuf_feedback,
         syncobj_device,
         Box::new(loop_handle.clone()),
+        Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
     )?;
     let damage_tracker =
         OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
@@ -386,10 +387,12 @@ pub fn run() -> Result<(), SessionError> {
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
     let listening_socket = ListeningSocketSource::new_auto()?;
-    tracing::info!(
-        socket = %listening_socket.socket_name().to_string_lossy(),
-        "listening on the Wayland socket"
-    );
+    let socket_name = listening_socket
+        .socket_name()
+        .to_string_lossy()
+        .into_owned();
+    tracing::info!(socket = %socket_name, "listening on the Wayland socket");
+    session.state.set_wayland_display(socket_name);
     loop_handle
         .insert_source(listening_socket, |stream, _, session: &mut Session| {
             let data = Arc::new(ClientState::default());
@@ -1088,6 +1091,12 @@ enum DrawError {
     Submit(#[source] SwapBuffersError),
 }
 
+impl crate::idle::IdleHost for Session {
+    fn idle_state(&mut self) -> &mut State {
+        &mut self.state
+    }
+}
+
 impl crate::blockers::BlockerSink for LoopHandle<'static, Session> {
     fn insert(
         &mut self,
@@ -1575,6 +1584,7 @@ mod tests {
             feedback,
             None,
             Box::new(event_loop.handle()),
+            Box::new(()),
         )
         .expect("the state should build");
 
@@ -1723,6 +1733,7 @@ mod tests {
             feedback,
             None,
             Box::new(event_loop.handle()),
+            Box::new(()),
         )
         .expect("the state should build");
         assert!(

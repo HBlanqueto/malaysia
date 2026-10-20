@@ -35,6 +35,22 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
     command
 }
 
+/// Builds a command for another Yuki process (the shell components).
+///
+/// Unlike a client, a shell component is part of Yuki's own runtime and may
+/// need the EGL/GBM environment the compositor was started with — in
+/// development the dev shell exports it, and the packaged `yuki-shell` wrapper
+/// sets it in production. The client sanitization is deliberately not applied
+/// here.
+pub fn shell_command(program: impl AsRef<OsStr>) -> Command {
+    Command::new(program)
+}
+
+/// Starts a shell command without stripping Yuki's own runtime environment.
+pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
+    command.spawn()
+}
+
 /// Starts `command` with the wrapper environment removed.
 pub fn spawn(mut command: Command) -> io::Result<Child> {
     sanitize(&mut command);

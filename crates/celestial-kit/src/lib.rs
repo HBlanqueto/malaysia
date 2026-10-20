@@ -22,6 +22,9 @@ pub mod gl;
 /// RGBA frame.
 pub mod text;
 
+/// The lock screen's minimal password field and status UI.
+pub mod password;
+
 /// Grade Animation (≈ Core Animation): animations shared by the shell's UI.
 ///
 /// This is a module inside CelestialKit, **not a crate** (glossary). It only

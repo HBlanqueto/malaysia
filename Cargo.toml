@@ -44,6 +44,11 @@ thiserror = "2"        # Typed error enums in library-shaped modules.
 tracing = "0.1"                # Structured logging and spans, needed for later measurement.
 tracing-subscriber = "0.3"     # Installs the global subscriber that emits `tracing` events.
 
+# PAM FFI (the lock's authentication) and the C allocator it needs.
+libc = "0.2"
+# Zeroing secrets (the lock password) when they leave scope.
+zeroize = "1"
+
 # Process lifetime.
 calloop = { version = "0.14", features = ["signals"] }  # SIGUSR1 capture + SIGTERM/SIGINT (Bloque 7.1).
 

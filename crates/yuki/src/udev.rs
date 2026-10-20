@@ -234,6 +234,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         feedback,
         syncobj,
         Box::new(loop_handle.clone()),
+        Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
@@ -329,6 +330,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let socket = ListeningSocketSource::new_auto().context("creating the Wayland socket")?;
     let socket_name = socket.socket_name().to_string_lossy().into_owned();
     info!(socket = %socket_name, "listening on the Wayland socket");
+    udev.state.set_wayland_display(socket_name.clone());
     loop_handle
         .insert_source(socket, |stream, _, data: &mut Udev| {
             let mut handle = data.display.handle();
@@ -719,6 +721,12 @@ fn make_output(
         Some((0, 0).into()),
     );
     Ok(output)
+}
+
+impl crate::idle::IdleHost for Udev {
+    fn idle_state(&mut self) -> &mut State {
+        &mut self.state
+    }
 }
 
 impl crate::blockers::BlockerSink for LoopHandle<'static, Udev> {

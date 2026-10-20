@@ -128,14 +128,15 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 10 — Lock con autenticación
 
-- Autenticación del lock con PAM y bloqueo por inactividad
-  (`ext-idle-notify-v1`)
-- Aceptación: (Pendiente)
+- Implementado: PAM en el proceso del lock (`yuki-lock`, fallback `login`),
+  campo enmascarado + estados, auto-lock por `ext-idle-notify-v1` y
+  `zwp_idle_inhibit_manager_v1`.
+- Aceptación manual pendiente en la sesión anidada: contraseña incorrecta y
+  correcta, auto-lock con 15 s, mpv en pantalla completa sin bloquear.
 
 ## Bloque 11 — Protocolos de uso diario
 
-- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`,
-  `zwp_idle_inhibit_manager_v1`, `xdg-output`
+- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`, `xdg-output`
 - **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`
   vacío de `handlers.rs` existe solo para que `WlSurface` cumpla
   `PointerTarget` en Smithay master; no hay `PointerConstraintsState` ni global.

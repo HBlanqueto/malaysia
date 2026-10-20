@@ -16,6 +16,7 @@ directorios — preferencias y estado:
 ├── window.domain
 ├── dock.domain
 ├── menubar.domain
+├── lock.domain
 ├── effects.domain
 └── debug.domain
 
@@ -114,6 +115,16 @@ sistema (`share/wallpapers/`).
 `mineffect` usa los nombres de macOS: "**Minimize windows using: Genie / Scale**".
 Las claves con guion son **exactamente** las de `defaults write com.apple.dock ...`.
 
+## `lock` — bloqueo de la sesión
+
+| Opción | Tipo | Default | Estado | Consumida por |
+|---|---|---|---|---|
+| `lock.idle_timeout_seconds` | entero (segundos) | `300` | **activa** | `ext-idle-notify-v1` / auto-lock |
+
+`0` desactiva el bloqueo automático. Al vencer el timeout sin input, el
+compositor lanza `yuki-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v1`
+(video en pantalla completa) detiene el reloj.
+
 ## `menubar` — barra de menús de la shell (macOS "Menu Bar")
 
 | Opción | Tipo | Default | Estado | Consumida por |
@@ -153,7 +164,7 @@ hace que el compositor difumine lo que hay detrás (vibrancy tipo macOS).
 El comando de control del compositor, con la misma estructura que `defaults` de
 macOS. Habla con el compositor por D-Bus (`org.yuki.Compositor1`); la app de
 ajustes y la shell usan el mismo canal. El dominio de cada opción es su sección:
-`appearance`, `window`, `dock`, `menubar`, `effects`, `debug`.
+`appearance`, `window`, `dock`, `menubar`, `lock`, `effects`, `debug`.
 
 ```
 domain read   <domain> <key>
@@ -193,6 +204,11 @@ titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 6
+```
+
+```toml
+# ~/.config/yuki/lock.domain
+idle_timeout_seconds = 300      # 0 desactiva el auto-lock
 ```
 
 ```toml
