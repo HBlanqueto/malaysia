@@ -315,3 +315,13 @@ pub const DARK: Palette = Palette {
     },
     accent: Rgba::rgb8(0x0a, 0x84, 0xff),
 };
+
+/// Where the wallpapers Yuki ships are installed, like GNOME's
+/// `/usr/share/backgrounds`. The flake installs `share/wallpapers/` under
+/// `/run/current-system/sw/share/wallpapers`.
+pub const WALLPAPER_DIR: &str = "/run/current-system/sw/share/wallpapers/solid-colors";
+
+/// The wallpaper a session shows when the store selects none: a fresh
+/// account's desktop, like macOS ships one default picture. A file name inside
+/// [`WALLPAPER_DIR`] (or inside a custom `wallpaper.dir`).
+pub const WALLPAPER: &str = "Solid Aqua Blue.png";

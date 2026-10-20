@@ -81,6 +81,11 @@ desarrollo puede apuntarlo al repo o a otra carpeta. El componente
 imágenes de esa carpeta (ADR 0023/0024; render GLES presentado por **EGL**/dmabuf,
 ADR 0027).
 
+**El wallpaper por defecto es `Solid Aqua Blue.png`** (`yuki_design::WALLPAPER`):
+es el que se ve cuando el almacén no elige ninguno o todavía no existe, como la
+imagen por defecto de una cuenta nueva de macOS. Si `wallpaper.dir` apunta a una
+carpeta propia que no lo tiene, se usa la primera imagen de esa carpeta.
+
 **Como macOS, la selección actual vive en un almacén aparte**:
 `~/.local/share/yuki/wallpaper.domain` (el equivalente a `~/Library/Application
 Support`, donde macOS guarda `com.apple.wallpaper`) — por desktop, con un `file://`
@@ -89,7 +94,7 @@ a la imagen:
 ```toml
 # ~/.local/share/yuki/wallpaper.domain  (current selection, per desktop)
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Lavender.png"
+default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, Solid Aqua Blue
 ```
 
 Editar ese archivo cambia el wallpaper **en vivo** (`yuki-shell wallpaper` vigila el
@@ -233,7 +238,7 @@ shuffle = false
 
 # Selección actual por desktop (como com.apple.wallpaper):
 [desktops]
-default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Lavender.png"
+default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqua Blue.png"
 ```
 
 ```toml

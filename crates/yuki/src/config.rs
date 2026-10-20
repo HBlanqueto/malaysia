@@ -187,14 +187,10 @@ pub struct WallpaperConfig {
     pub shuffle: bool,
 }
 
-/// Where the wallpapers Yuki ships are installed, like GNOME's
-/// `/usr/share/backgrounds`. The flake installs `share/wallpapers/` here.
-pub const WALLPAPER_DIR: &str = "/run/current-system/sw/share/wallpapers";
-
 impl Default for WallpaperConfig {
     fn default() -> Self {
         Self {
-            dir: format!("{WALLPAPER_DIR}/solid-colors"),
+            dir: yuki_design::WALLPAPER_DIR.to_owned(),
             scale: WallpaperScale::default(),
             shuffle: false,
         }

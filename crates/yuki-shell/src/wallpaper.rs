@@ -76,7 +76,9 @@ struct Wallpaper {
 
     store_path: PathBuf,
     current: Option<PathBuf>,
-    last_modified: Option<SystemTime>,
+    /// The store's mtime at the last check; `None` until the first check, so
+    /// a session without a store still loads the default once.
+    last_modified: Option<Option<SystemTime>>,
 }
 
 /// Connects to the compositor and runs the wallpaper component until the
@@ -252,10 +254,10 @@ impl Wallpaper {
         let modified = std::fs::metadata(&self.store_path)
             .and_then(|m| m.modified())
             .ok();
-        if modified == self.last_modified {
+        if self.last_modified == Some(modified) {
             return;
         }
-        self.last_modified = modified;
+        self.last_modified = Some(modified);
 
         match load_wallpaper(&self.store_path) {
             Ok(Some((path, scale))) if self.current.as_deref() != Some(path.as_path()) => {
@@ -450,7 +452,7 @@ delegate_dispatch!(
 // --- wallpaper store -------------------------------------------------------
 
 /// The `wallpaper.domain` store, as macOS keeps `com.apple.wallpaper`.
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Default, serde::Deserialize)]
 struct WallpaperStore {
     #[serde(default)]
     dir: String,
@@ -487,19 +489,29 @@ fn data_dir() -> PathBuf {
 }
 
 /// Reads the current wallpaper image path from the store.
+///
+/// The store's selection wins. Without one (or without a store at all, as on
+/// a fresh account) the default is [`yuki_design::WALLPAPER`] inside the
+/// catalog folder; a custom folder that lacks it falls back to its first image.
 fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, String)>> {
-    let text = match std::fs::read_to_string(store_path) {
-        Ok(text) => text,
-        Err(_) => return Ok(None), // no store yet: nothing to draw
+    let store: WallpaperStore = match std::fs::read_to_string(store_path) {
+        Ok(text) => toml::from_str(&text)?,
+        Err(_) => WallpaperStore::default(),
     };
-    let store: WallpaperStore = toml::from_str(&text)?;
-    if let Some(url) = store.desktops.default
-        && let Some(path) = file_url_to_path(&url)
+    if let Some(url) = &store.desktops.default
+        && let Some(path) = file_url_to_path(url)
     {
         return Ok(Some((path, store.scale)));
     }
-    // No explicit selection: fall back to the first image in the catalog.
-    let dir = PathBuf::from(store.dir);
+    let dir = if store.dir.is_empty() {
+        PathBuf::from(yuki_design::WALLPAPER_DIR)
+    } else {
+        PathBuf::from(&store.dir)
+    };
+    let default = dir.join(yuki_design::WALLPAPER);
+    if default.is_file() {
+        return Ok(Some((default, store.scale)));
+    }
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .ok()
         .into_iter()
@@ -583,4 +595,72 @@ fn decode_png(path: &Path) -> anyhow::Result<DecodedImage> {
         size: (width, height),
         rgba,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("yuki-wallpaper-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn touch(dir: &Path, file: &str) -> PathBuf {
+        let path = dir.join(file);
+        std::fs::write(&path, b"").unwrap();
+        path
+    }
+
+    #[test]
+    fn without_a_selection_the_default_wallpaper_is_used() {
+        let dir = scratch("default");
+        touch(&dir, "Black.png");
+        let aqua = touch(&dir, yuki_design::WALLPAPER);
+        let store = dir.join("wallpaper.domain");
+        std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
+        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
+        assert_eq!(path, aqua);
+    }
+
+    #[test]
+    fn the_store_selection_wins_over_the_default() {
+        let dir = scratch("selection");
+        touch(&dir, yuki_design::WALLPAPER);
+        let mint = touch(&dir, "Solid Mint.png");
+        let store = dir.join("wallpaper.domain");
+        std::fs::write(
+            &store,
+            format!(
+                "dir = {:?}\n[desktops]\ndefault = \"file://{}\"\n",
+                dir.to_str().unwrap(),
+                mint.to_str().unwrap()
+            ),
+        )
+        .unwrap();
+        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
+        assert_eq!(path, mint);
+    }
+
+    #[test]
+    fn a_folder_without_the_default_falls_back_to_its_first_image() {
+        let dir = scratch("custom");
+        let black = touch(&dir, "Black.png");
+        touch(&dir, "Yellow.png");
+        let store = dir.join("wallpaper.domain");
+        std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
+        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
+        assert_eq!(path, black);
+    }
+
+    #[test]
+    fn the_default_wallpaper_ships_with_yuki() {
+        let shipped = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../share/wallpapers/solid-colors")
+            .join(yuki_design::WALLPAPER);
+        assert!(shipped.is_file(), "{shipped:?} is missing");
+    }
 }

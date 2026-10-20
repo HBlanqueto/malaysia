@@ -3052,6 +3052,7 @@ dependencies = [
  "toml",
  "wayland-client",
  "wayland-egl",
+ "yuki-design",
  "zeroize",
 ]
 

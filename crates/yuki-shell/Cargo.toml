@@ -20,6 +20,7 @@ toml.workspace = true
 png.workspace = true
 celestial-kit.workspace = true
 grade-graphics.workspace = true
+yuki-design.workspace = true
 sctk.workspace = true
 wayland-client.workspace = true
 wayland-egl.workspace = true

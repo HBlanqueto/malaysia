@@ -8,12 +8,12 @@
 # Sends SIGUSR1 (which asks the next frame to write a debug PNG), waits, then
 # decodes the newest capture with ffmpeg and checks that a sample of pixels
 # match the expected colour within ±1 per channel. Default expected colour is
-# the Solid Lavender wallpaper (215, 207, 239).
+# the default Solid Aqua Blue wallpaper (65, 105, 170).
 #
 # Exits 0 (PASS) or 1 (FAIL).
 
 set -euo pipefail
-EXPECTED="${2:-215 207 239}"
+EXPECTED="${2:-65 105 170}"
 RUN_DIR="${XDG_RUNTIME_DIR:-/tmp}/yuki"
 
 if [ -f "$1" ]; then

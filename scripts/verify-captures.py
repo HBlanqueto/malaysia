@@ -9,8 +9,8 @@ Usage:
   verify_captures.py <capture.png> <criterion>
 
 Criteria:
-  wallpaper   - the whole output is the Solid Lavender (215,207,239) ±1.
-  window      - the workspace is covered by a client (few lavender samples).
+  wallpaper   - the whole output is the default Solid Aqua Blue (65,105,170) ±1.
+  window      - the workspace is covered by a client (few wallpaper samples).
   foot        - the foot background fills the workspace and text (light pixels)
                 appears in the top prompt band.
   popup       - the popup colour (128,128,128) fills its expected region near
@@ -23,7 +23,9 @@ Criteria:
 import subprocess
 import sys
 
-LAVENDER = (215, 207, 239)
+# The default wallpaper (yuki_design::WALLPAPER). A session whose
+# wallpaper.domain selects another image will not match.
+WALLPAPER = (65, 105, 170)
 
 
 def decode(path):
@@ -57,9 +59,9 @@ def region(raw, w, x0, y0, x1, y1, step):
 
 def check_wallpaper(raw, w, h):
     # The workspace (below the menu bar at 28, above the dock at 736) must be
-    # the Solid Lavender wallpaper; the shell panels are excluded.
+    # the default wallpaper; the shell panels are excluded.
     samples = region(raw, w, 0, 60, w, 700, 24)
-    bad = [p for p in samples if not close(p, LAVENDER)]
+    bad = [p for p in samples if not close(p, WALLPAPER)]
     print(f"wallpaper: {len(bad)}/{len(samples)} píxeles fuera de ±1")
     return len(bad) == 0
 
@@ -68,9 +70,9 @@ def check_window(raw, w, h):
     # The window covers the workspace (below the menu bar, above the dock);
     # the wallpaper should be mostly hidden there.
     samples = region(raw, w, 40, 60, w - 40, 720, 40)
-    lav = [p for p in samples if close(p, LAVENDER)]
-    print(f"window: {len(lav)}/{len(samples)} muestras lavanda en el workspace")
-    return len(lav) < len(samples) // 2
+    wall_px = [p for p in samples if close(p, WALLPAPER)]
+    print(f"window: {len(wall_px)}/{len(samples)} muestras del wallpaper en el workspace")
+    return len(wall_px) < len(samples) // 2
 
 
 def check_foot(raw, w, h):
@@ -82,7 +84,7 @@ def check_foot(raw, w, h):
         print(f"foot: fondo oscuro en {len(dark)}/{len(bg)} muestras del workspace")
         return False
     prompt_band = region(raw, w, 32, 40, w - 32, 200, 2)
-    text = [p for p in prompt_band if sum(p) > 300 and not close(p, LAVENDER, 3)]
+    text = [p for p in prompt_band if sum(p) > 300 and not close(p, WALLPAPER, 3)]
     print(f"foot: fondo oscuro {len(dark)}/{len(bg)}, texto del prompt {len(text)} px")
     return len(text) > 50
 
@@ -105,13 +107,13 @@ def check_ssd(raw, w, h):
     # The titlebar band on the left is the wallpaper; the content (0x40 = 64)
     # fills the rest of the workspace.
     band = region(raw, w, 0, 60, 31, 700, 6)
-    wall = [p for p in band if close(p, LAVENDER, 3)]
+    wall = [p for p in band if close(p, WALLPAPER, 3)]
     if len(wall) < len(band) // 2:
-        print(f"ssd: banda de titlebar lavanda en {len(wall)}/{len(band)} muestras")
+        print(f"ssd: banda de titlebar con wallpaper en {len(wall)}/{len(band)} muestras")
         return False
     content = region(raw, w, 40, 60, w - 40, 700, 12)
     gray = [p for p in content if close(p, (64, 64, 64), 2)]
-    print(f"ssd: banda lavanda {len(wall)}/{len(band)}, contenido {len(gray)}/{len(content)}")
+    print(f"ssd: banda wallpaper {len(wall)}/{len(band)}, contenido {len(gray)}/{len(content)}")
     return len(gray) > len(content) // 2
 
 
