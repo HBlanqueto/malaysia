@@ -17,6 +17,7 @@ xcursor.workspace = true
 serde.workspace = true
 toml.workspace = true
 xkbcommon.workspace = true
+zbus.workspace = true
 smithay.workspace = true
 calloop.workspace = true
 yuki-design.workspace = true

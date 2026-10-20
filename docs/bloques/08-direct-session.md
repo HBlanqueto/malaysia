@@ -134,3 +134,9 @@ propósito en esta prueba). Eso sigue en el checklist del panel real.
 - El renderer es GLES; no hay camino Vulkan ni fallback legacy.
 - El lock no necesita un cliente nuevo para probar la garantía: se puede
   bloquear con `yuki-shell lock`, cambiar de VT y volver.
+- El movimiento relativo (touchpad y TrackPoint) no lo cubría vkms: la prueba
+  usa `--no-input`. Ahora `InputEvent::PointerMotion` suma el delta a la
+  posición actual y limita el puntero al output.
+- El keymap sale de `org.freedesktop.locale1` (`X11Layout`, `X11Model`,
+  `X11Variant`, `X11Options`, lo mismo que `localectl status`). Las variables
+  `XKB_DEFAULT_*` tienen prioridad como override explícito.

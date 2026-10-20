@@ -25,7 +25,6 @@ use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::drm::DrmDeviceFd;
-use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
@@ -333,8 +332,11 @@ impl State {
         let mut seat = seat_state.new_wl_seat(display_handle, "yuki");
         // A seat with no keymap is worse than no seat: clients that accepted
         // the capability then get no keymap and misbehave. The keyboard must be
-        // added before the seat is useful, so its error is fatal here.
-        seat.add_keyboard(XkbConfig::default(), 200, 25)?;
+        // added before the seat is useful, so its error is fatal here. The
+        // layout comes from the system (or XKB_DEFAULT_*), never a hardcoded
+        // "us".
+        let keymap = crate::keymap::system();
+        seat.add_keyboard(keymap.xkb_config(), 200, 25)?;
         let _ = seat.add_pointer();
 
         let _ = output.create_global::<Self>(display_handle);

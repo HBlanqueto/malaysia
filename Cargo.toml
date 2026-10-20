@@ -66,6 +66,9 @@ toml = "0.8"
 # the same major smithay uses, so the Keysym type is the same crate.
 xkbcommon = "0.9"
 
+# System keymap: org.freedesktop.locale1 over the system bus (ADR 0021).
+zbus = "5"
+
 # Shell clock (yuki-shell menubar): local time formatting.
 chrono = "0.4"
 

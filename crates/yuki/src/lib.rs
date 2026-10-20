@@ -28,6 +28,7 @@ mod foreign;
 mod handlers;
 mod idle;
 mod input;
+mod keymap;
 mod layers;
 mod lock;
 mod popup;
