@@ -135,11 +135,8 @@
           # findable by the built binary when run from the dev shell.
           shellHook = ''
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
-            # libglvnd reads the double-underscore name. With the single-underscore
-            # one it ignored this directory and loaded the host's Mesa, whose
-            # libEGL_mesa was built against a different glibc.
+            # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
-            export EGL_VENDOR_LIBRARY_DIRS="$__EGL_VENDOR_LIBRARY_DIRS"
             # Without these, Mesa's GBM/DRI loader falls back to the host's
             # /run/opengl-driver, which is built against a different glibc.
             export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri''${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
