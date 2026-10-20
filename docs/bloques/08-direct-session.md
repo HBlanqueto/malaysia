@@ -71,6 +71,23 @@ solo no las conoce. El `enable --now` crea los enlaces en
   manager o desde el TTY, como se hacía antes. No hace falta tocar
   `~/nixdots`.
 
+## Prueba aislada con vkms
+
+`./dev.sh drm-vkms` prueba el backend directo sin tocar el panel ni la entrada
+real. Necesita `sudo` no interactivo (`sudo -v` antes) y `ffmpeg`. Carga
+`vkms` si hace falta, busca su `cardN` por `DRIVER=vkms` (nunca por número),
+arranca Yuki con `LIBSEAT_BACKEND=noop`, `--drm-device <vkms>` y `--no-input`,
+conecta `pattern_live`, pide la captura por `SIGUSR1` y verifica los cuatro
+cuadrantes. El `trap` mata Yuki y descarga `vkms` aunque falle. También lee
+`/proc/<pid>/fd` para comprobar que no se abrió otro `cardN` ni `/dev/input`.
+
+Cubre: modeset atómico, GBM/EGL en el render node de amdgpu, import dma-buf
+para scanout en vkms, vblank, frames con daño y la captura de depuración.
+
+No cubre: el panel eDP real, el touchpad/libinput, el cambio de VT ni la
+pausa/reanudación de libseat, el lock + VT, ni el target del shell (se omite a
+propósito en esta prueba). Eso sigue en el checklist del panel real.
+
 ## Checklist de aceptación
 
 - [ ] Desde un TTY, `./result/bin/yuki --drm` arranca sobre el panel interno.

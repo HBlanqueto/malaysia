@@ -18,6 +18,7 @@ EXIT_NO_LOG=6
 EXIT_NOT_DEVSHELL=7
 EXIT_WATCH=8
 EXIT_SMOKE=9
+EXIT_DRM_VKMS=10
 # status follows the LSB init-script conventions: 0 running, 1 dead with a
 # leftover pid file, 3 not running. Interrupting `watch` with Ctrl-C exits 130
 # (128 + SIGINT).
@@ -42,6 +43,7 @@ Commands:
     block4 [--release]  Build and run the 50-window open/close acceptance test
     move [--release]    Build and run the client-initiated move/resize probe
     decoration          Build and run the decoration-policy probe over real apps
+    drm-vkms            Test --drm on vkms without touching the real panel or input
 EOF
 }
 
@@ -498,6 +500,180 @@ move() {
         fail "$EXIT_SMOKE" "move probe failed"
 }
 
+# drm-vkms - exercise the direct session on vkms, isolated from the panel.
+#
+# Loads vkms (if needed), runs the compositor with LIBSEAT_BACKEND=noop and
+# --drm-device <vkms> --no-input, connects pattern_live, asks for a SIGUSR1
+# capture, and checks that the four quadrants are in the presented frame. The
+# EXIT trap kills the compositor and unloads vkms even when a check fails.
+# `sudo` is required; run `sudo -v` first so the commands are non-interactive.
+drm_vkms() {
+    require_devshell
+    require cargo
+    require sudo
+    require modprobe
+    require lsmod
+    require udevadm
+    require python3
+    require ffmpeg
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for drm-vkms: $1"
+    fi
+    sudo -n true 2>/dev/null ||
+        fail "$EXIT_DRM_VKMS" "drm-vkms needs sudo; run 'sudo -v' first"
+
+    _run=$(mktemp -d "${TMPDIR:-/tmp}/yuki-vkms.XXXXXX")
+    _log="$_run/yuki.log"
+    _pattern_log="$_run/pattern.log"
+    _pidfile="$_run/yuki.pid"
+    _client_pidfile="$_run/pattern.pid"
+    _yuki_pid=
+    _client_pid=
+    _vkms_loaded=
+    chmod 0777 "$_run"
+
+    cleanup() {
+        _status=$?
+        trap - EXIT HUP INT TERM
+        if [ -n "${_client_pid:-}" ]; then
+            sudo kill -TERM "$_client_pid" 2>/dev/null || true
+        fi
+        if [ -n "${_yuki_pid:-}" ]; then
+            sudo kill -TERM "$_yuki_pid" 2>/dev/null || true
+            sleep 0.3
+            sudo kill -KILL "$_yuki_pid" 2>/dev/null || true
+        fi
+        if [ -n "${_vkms_loaded:-}" ]; then
+            sudo modprobe -r vkms 2>/dev/null ||
+                printf 'dev.sh: warning: could not unload vkms\n' >&2
+        fi
+        sudo rm -rf "$_run" 2>/dev/null || rm -rf "$_run" 2>/dev/null || true
+        exit "$_status"
+    }
+    trap cleanup EXIT HUP INT TERM
+
+    if ! lsmod | grep -q '^vkms '; then
+        sudo modprobe vkms || fail "$EXIT_DRM_VKMS" "could not load vkms"
+        _vkms_loaded=1
+    fi
+
+    _vkms=
+    _tries=0
+    while [ "$_tries" -lt 25 ]; do
+        for _dev in /dev/dri/card*; do
+            [ -e "$_dev" ] || continue
+            _driver=$(udevadm info -q property -n "$_dev" 2>/dev/null |
+                sed -n 's/^DRIVER=//p')
+            if [ "$_driver" = vkms ]; then
+                _vkms=$_dev
+                break
+            fi
+        done
+        [ -n "$_vkms" ] && break
+        _tries=$((_tries + 1))
+        sleep 0.2
+    done
+    [ -n "$_vkms" ] || fail "$EXIT_DRM_VKMS" "no DRM card with driver=vkms"
+
+    cargo build -p yuki -p sctk-probe --bin yuki --bin pattern_live ||
+        fail "$EXIT_DRM_VKMS" "could not build yuki and pattern_live"
+    _yuki="$script_dir/target/debug/yuki"
+    _pattern="$script_dir/target/debug/pattern_live"
+
+    # The user's shell owns the log redirects, so the test can read them.
+    # shellcheck disable=SC2024
+    sudo env LIBSEAT_BACKEND=noop XDG_RUNTIME_DIR="$_run" \
+        sh -c 'printf "%s\n" "$$" >"$1"; shift; exec "$@"' sh "$_pidfile" \
+        "$_yuki" --drm --drm-device "$_vkms" --no-input --log-level=debug \
+        >"$_log" 2>&1 &
+
+    _tries=0
+    while [ "$_tries" -lt 50 ] && [ ! -s "$_pidfile" ]; do
+        _tries=$((_tries + 1))
+        sleep 0.1
+    done
+    [ -s "$_pidfile" ] ||
+        fail "$EXIT_DRM_VKMS" "yuki did not start; log follows: $(tail -n 20 "$_log" 2>/dev/null)"
+    _yuki_pid=$(cat "$_pidfile")
+
+    _socket=
+    _tries=0
+    while [ "$_tries" -lt 50 ]; do
+        _socket=$(sed -n 's/.*socket = \(wayland-[0-9]*\).*/\1/p' "$_log" | tail -n 1)
+        [ -n "$_socket" ] && break
+        _tries=$((_tries + 1))
+        sleep 0.1
+    done
+    [ -n "$_socket" ] ||
+        fail "$EXIT_DRM_VKMS" "no Wayland socket; log follows: $(tail -n 30 "$_log" 2>/dev/null)"
+
+    _drm_fds=$(sudo sh -c 'for fd in /proc/$1/fd/*; do readlink "$fd"; done' sh "$_yuki_pid" |
+        grep '^/dev/dri/' || true)
+    printf '%s\n' "$_drm_fds" | grep -qx "$_vkms" ||
+        fail "$EXIT_DRM_VKMS" "yuki did not open the vkms card $_vkms"
+    _other_card=$(printf '%s\n' "$_drm_fds" | grep '^/dev/dri/card' | grep -vx "$_vkms" || true)
+    [ -z "$_other_card" ] ||
+        fail "$EXIT_DRM_VKMS" "yuki opened another DRM card: $_other_card"
+    _input_fds=$(sudo sh -c 'for fd in /proc/$1/fd/*; do readlink "$fd"; done' sh "$_yuki_pid" |
+        grep '^/dev/input/' || true)
+    [ -z "$_input_fds" ] ||
+        fail "$EXIT_DRM_VKMS" "yuki opened input devices: $_input_fds"
+
+    # shellcheck disable=SC2024
+    sudo env XDG_RUNTIME_DIR="$_run" WAYLAND_DISPLAY="$_socket" \
+        sh -c 'printf "%s\n" "$$" >"$1"; shift; exec "$@"' sh "$_client_pidfile" \
+        "$_pattern" >"$_pattern_log" 2>&1 &
+
+    _tries=0
+    while [ "$_tries" -lt 100 ]; do
+        grep -q 'pattern_live: rendered' "$_pattern_log" 2>/dev/null && break
+        _tries=$((_tries + 1))
+        sleep 0.1
+    done
+    grep -q 'pattern_live: rendered' "$_pattern_log" 2>/dev/null ||
+        fail "$EXIT_DRM_VKMS" "pattern_live did not render; log follows: $(tail -n 20 "$_pattern_log" 2>/dev/null)"
+    [ -s "$_client_pidfile" ] && _client_pid=$(cat "$_client_pidfile")
+
+    sleep 1
+    sudo kill -USR1 "$_yuki_pid" || fail "$EXIT_DRM_VKMS" "could not send SIGUSR1"
+
+    _capture=
+    _tries=0
+    while [ "$_tries" -lt 50 ]; do
+        _capture=$(find "$_run/yuki" -name 'capture-*.png' 2>/dev/null | sort | tail -n 1)
+        [ -n "$_capture" ] && break
+        _tries=$((_tries + 1))
+        sleep 0.1
+    done
+    [ -n "$_capture" ] ||
+        fail "$EXIT_DRM_VKMS" "no capture written; log follows: $(tail -n 30 "$_log" 2>/dev/null)"
+    sudo chmod -R a+rX "$_run"
+    python3 "$script_dir/scripts/verify-captures.py" "$_capture" pattern ||
+        fail "$EXIT_DRM_VKMS" "the vkms capture does not contain the pattern"
+
+    grep -q 'mode chosen' "$_log" ||
+        fail "$EXIT_DRM_VKMS" "the log has no chosen mode"
+    _vblanks=$(grep -c 'vblank' "$_log" || true)
+    [ "$_vblanks" -ge 2 ] ||
+        fail "$EXIT_DRM_VKMS" "only $_vblanks vblank log lines"
+    _queued=$(grep -c 'frame queued with damage' "$_log" || true)
+    [ "$_queued" -ge 1 ] ||
+        fail "$EXIT_DRM_VKMS" "no frame with damage was queued"
+    grep -q 'frame skipped: no damage' "$_log" ||
+        fail "$EXIT_DRM_VKMS" "no empty frame was logged; cannot prove damage-only frames"
+    grep -q "DRM scanout device.*path=$_vkms" "$_log" ||
+        fail "$EXIT_DRM_VKMS" "the log does not name $_vkms as the scanout device"
+    grep -q 'DRM render device.*path=/dev/dri/renderD' "$_log" ||
+        fail "$EXIT_DRM_VKMS" "the log does not name a render node"
+
+    printf 'drm-vkms: PASS\n'
+    printf '  vkms scanout: %s\n' "$_vkms"
+    printf '%s\n' "$_drm_fds" | sed 's/^/  open: /'
+    printf '  capture: %s\n' "$_capture"
+    printf '  mode: %s\n' "$(sed -n 's/.*mode chosen \(.*\)/\1/p' "$_log" | tail -n 1)"
+    printf '  vblanks: %s, damaged frames queued: %s\n' "$_vblanks" "$_queued"
+}
+
 if [ "$#" -eq 0 ]; then
     usage >&2
     exit "$EXIT_USAGE"
@@ -523,6 +699,7 @@ case "$command_name" in
     block4) block4 "$@" ;;
     move) move "$@" ;;
     decoration) decoration "$@" ;;
+    drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
     *)
         usage >&2

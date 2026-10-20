@@ -3,12 +3,14 @@
 //! Bloque 8a is deliberately small: one primary GPU, the internal panel in its
 //! preferred mode, one primary plane, no hotplug and no direct scanout. The
 //! shared [`State`] and every protocol handler are the same as the winit
-//! backend; only presentation and input differ.
+//! backend; only presentation and input differ. The development-only
+//! `--drm-device`/`--no-input` pair can move scanout to vkms while rendering
+//! on the boot GPU's render node.
 
 #![allow(unsafe_code)]
 
 use std::os::fd::AsFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -29,8 +31,9 @@ use smithay::backend::udev::{all_gpus, primary_gpu};
 use smithay::output::{Mode as WlMode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::signals::{Signal, Signals};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction};
 use smithay::reexports::drm::control::connector::{self, Interface};
 use smithay::reexports::drm::control::{Device as ControlDevice, ModeTypeFlags, crtc};
 use smithay::reexports::input::Libinput;
@@ -61,13 +64,29 @@ struct Udev {
     start_time: Instant,
     active: bool,
     repaint_timer: Option<RegistrationToken>,
+    loop_signal: LoopSignal,
+    capture_requested: bool,
+    vblank_count: u64,
+    frames_queued: u64,
+    frame_was_empty: bool,
 }
 
-/// Runs Yuki on the primary DRM device.
+/// Development-only overrides for the direct session.
+#[derive(Debug, Clone, Default)]
+pub struct DrmOptions {
+    /// A specific KMS node instead of the seat's primary GPU.
+    pub device: Option<PathBuf>,
+    /// Do not open libinput.
+    pub no_input: bool,
+}
+
+/// Runs Yuki on the primary DRM device, or on a development `--drm-device`.
 ///
 /// No fallback: the caller asked for `--drm`, so a missing seat, GPU or eDP
-/// connector is a startup error, not a silent switch to winit.
-pub fn run() -> Result<()> {
+/// connector is a startup error, not a silent switch to winit. With a device
+/// override, GBM/EGL run on a render node and only scanout uses the named KMS
+/// node; libinput and the shell target are skipped.
+pub fn run(options: DrmOptions) -> Result<()> {
     let mut event_loop = EventLoop::<Udev>::try_new().context("creating the event loop")?;
     let loop_signal = event_loop.get_signal();
     let display = Display::<State>::new().context("creating the Wayland display")?;
@@ -76,47 +95,97 @@ pub fn run() -> Result<()> {
         LibSeatSession::new().map_err(|error| anyhow!("opening the libseat session: {error}"))?;
     let seat = session.seat();
 
-    let path = primary_gpu(&seat)
-        .map_err(|error| anyhow!("querying the primary GPU: {error}"))?
-        .or_else(|| {
-            all_gpus(&seat)
-                .ok()
-                .and_then(|gpus| gpus.into_iter().next())
-        })
-        .ok_or_else(|| anyhow!("the seat has no DRM device"))?;
-    let node = DrmNode::from_path(&path)
-        .map_err(|error| anyhow!("{} is not a DRM node: {error}", path.display()))?;
-    // udev may hand us the render node; libseat and DRM master need the
-    // primary node for the same device.
-    let node = match node.node_with_type(NodeType::Primary) {
-        Some(Ok(primary)) => primary,
-        _ => node,
+    let scanout_node = match options.device.as_deref() {
+        Some(path) => {
+            let node = DrmNode::from_path(path)
+                .map_err(|error| anyhow!("{} is not a DRM node: {error}", path.display()))?;
+            if node.ty() != NodeType::Primary {
+                bail!(
+                    "--drm-device must name a KMS primary node (cardN), not {}",
+                    path.display()
+                );
+            }
+            node
+        }
+        None => {
+            let path = primary_gpu(&seat)
+                .map_err(|error| anyhow!("querying the primary GPU: {error}"))?
+                .or_else(|| {
+                    all_gpus(&seat)
+                        .ok()
+                        .and_then(|gpus| gpus.into_iter().next())
+                })
+                .ok_or_else(|| anyhow!("the seat has no DRM device"))?;
+            let node = DrmNode::from_path(&path)
+                .map_err(|error| anyhow!("{} is not a DRM node: {error}", path.display()))?;
+            // udev may hand us the render node; libseat and DRM master need
+            // the primary node for the same device.
+            match node.node_with_type(NodeType::Primary) {
+                Some(Ok(primary)) => primary,
+                _ => node,
+            }
+        }
     };
-    let path = node.dev_path().unwrap_or(path);
-    info!(?node, ?path, "using the primary DRM device");
+    let scanout_path = scanout_node
+        .dev_path()
+        .or_else(|| options.device.clone())
+        .ok_or_else(|| anyhow!("the DRM device has no dev path"))?;
 
-    let fd = session
-        .open(
-            &path,
-            OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
-        )
-        .map_err(|error| anyhow!("opening {}: {error}", path.display()))?;
-    let drm_fd = DrmDeviceFd::new(DeviceFd::from(fd));
+    // A development override keeps rendering on the boot GPU's render node
+    // while scanout goes to the named KMS node (vkms). Production keeps the
+    // previous one-device behaviour.
+    let render_node = if options.device.is_some() {
+        find_render_node(&seat, &scanout_node)?
+    } else {
+        scanout_node
+    };
+    let render_path = if render_node == scanout_node {
+        scanout_path.clone()
+    } else {
+        render_node
+            .dev_path()
+            .ok_or_else(|| anyhow!("the render node has no dev path"))?
+    };
+    info!(
+        node = ?scanout_node,
+        path = %scanout_path.display(),
+        "DRM scanout device"
+    );
+    info!(
+        node = ?render_node,
+        path = %render_path.display(),
+        "DRM render device"
+    );
 
-    let (mut drm, drm_notifier) =
-        DrmDevice::new(drm_fd.clone(), true).map_err(|error| anyhow!("opening DRM: {error}"))?;
-    let gbm = GbmDevice::new(drm_fd.clone()).context("creating the GBM device")?;
+    let scanout_fd = open_drm_device(&mut session, &scanout_path)?;
+    let render_fd = if render_node == scanout_node {
+        scanout_fd.clone()
+    } else {
+        open_drm_device(&mut session, &render_path)?
+    };
+
+    let (mut drm, drm_notifier) = DrmDevice::new(scanout_fd.clone(), true)
+        .map_err(|error| anyhow!("opening DRM: {error}"))?;
+    let render_gbm = GbmDevice::new(render_fd.clone()).context("creating the render GBM device")?;
+    let scanout_gbm =
+        GbmDevice::new(scanout_fd.clone()).context("creating the scanout GBM device")?;
 
     // SAFETY: the EGL display and context belong to this one thread and are
     // never shared; the same is true of the GLES renderer. This is the scoped
     // exception to ADR 0003 recorded in ADR 0030.
-    let egl_display = unsafe { EGLDisplay::new(gbm.clone()) }
+    let egl_display = unsafe { EGLDisplay::new(render_gbm.clone()) }
         .map_err(|error| anyhow!("creating the EGL display: {error}"))?;
     let egl_context =
         EGLContext::new(&egl_display).map_err(|error| anyhow!("creating EGL: {error}"))?;
     let renderer = unsafe { GlesRenderer::new(egl_context) }
         .map_err(|error| anyhow!("creating GLES: {error}"))?;
     let (connector, crtc, mode) = find_panel(&drm)?;
+    info!(
+        connector = %format!("{}-{}", connector.interface().as_str(), connector.interface_id()),
+        mode = %format!("{}x{}@{}", mode.size().0, mode.size().1, mode.vrefresh()),
+        crtc = ?crtc,
+        "mode chosen"
+    );
     let output = make_output(&connector, mode)?;
     let surface = drm
         .create_surface(crtc, mode, &[connector.handle()])
@@ -129,10 +198,10 @@ pub fn run() -> Result<()> {
     planes.cursor.clear();
 
     let allocator = GbmAllocator::new(
-        gbm.clone(),
+        render_gbm.clone(),
         GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
     );
-    let exporter = GbmFramebufferExporter::new(gbm.clone(), node.into());
+    let exporter = GbmFramebufferExporter::new(scanout_gbm.clone(), scanout_node.into());
     let render_formats: Vec<_> = renderer
         .egl_context()
         .dmabuf_render_formats()
@@ -148,14 +217,14 @@ pub fn run() -> Result<()> {
         [Fourcc::Xrgb8888, Fourcc::Argb8888],
         render_formats,
         drm.cursor_size(),
-        Some(gbm.clone()),
+        Some(scanout_gbm),
     )
     .map_err(|error| anyhow!("creating the DRM compositor: {error}"))?;
 
-    let feedback = DmabufFeedbackBuilder::new(node.dev_id(), renderer.dmabuf_formats())
+    let feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), renderer.dmabuf_formats())
         .build()
         .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
-    let syncobj = supports_syncobj_eventfd(&drm_fd).then_some(drm_fd);
+    let syncobj = supports_syncobj_eventfd(&render_fd).then_some(render_fd);
     let loop_handle = event_loop.handle();
     let state = State::new_with_output(
         loop_signal.clone(),
@@ -181,6 +250,11 @@ pub fn run() -> Result<()> {
         start_time: Instant::now(),
         active: true,
         repaint_timer: None,
+        loop_signal: loop_signal.clone(),
+        capture_requested: false,
+        vblank_count: 0,
+        frames_queued: 0,
+        frame_was_empty: false,
     };
 
     // DRM events: VBlank is the pacing clock.
@@ -197,18 +271,28 @@ pub fn run() -> Result<()> {
         .map_err(|error| anyhow!("inserting the DRM source: {error}"))?;
 
     // libinput is the only input source in 8a; no hotplug backend yet.
-    let mut libinput =
-        Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
-    libinput
-        .udev_assign_seat(&seat)
-        .map_err(|_| anyhow!("libinput could not take seat {seat}"))?;
-    let libinput_backend = LibinputInputBackend::new(libinput.clone());
-    loop_handle
-        .insert_source(libinput_backend, |event, _, data: &mut Udev| {
-            data.state.process_input_event(event);
-            data.after_input();
-        })
-        .map_err(|error| anyhow!("inserting the libinput source: {error}"))?;
+    // `--no-input` skips it entirely, so a vkms test never opens /dev/input.
+    let mut libinput = if options.no_input {
+        info!("input disabled by --no-input");
+        None
+    } else {
+        let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
+            session.clone().into(),
+        );
+        libinput
+            .udev_assign_seat(&seat)
+            .map_err(|_| anyhow!("libinput could not take seat {seat}"))?;
+        Some(libinput)
+    };
+    if let Some(libinput) = &libinput {
+        let libinput_backend = LibinputInputBackend::new(libinput.clone());
+        loop_handle
+            .insert_source(libinput_backend, |event, _, data: &mut Udev| {
+                data.state.process_input_event(event);
+                data.after_input();
+            })
+            .map_err(|error| anyhow!("inserting the libinput source: {error}"))?;
+    }
 
     // Session pause/resume is the VT switch path.
     loop_handle
@@ -217,13 +301,17 @@ pub fn run() -> Result<()> {
             move |event, _, data: &mut Udev| match event {
                 SessionEvent::PauseSession => {
                     info!("session paused; releasing DRM and libinput");
-                    libinput.suspend();
+                    if let Some(libinput) = libinput.as_mut() {
+                        libinput.suspend();
+                    }
                     data.drm.pause();
                     data.active = false;
                 }
                 SessionEvent::ActivateSession => {
                     info!("session resumed");
-                    if libinput.resume().is_err() {
+                    if let Some(libinput) = libinput.as_mut()
+                        && libinput.resume().is_err()
+                    {
                         error!("resuming libinput");
                     }
                     if let Err(error) = data.drm.activate(false) {
@@ -251,7 +339,34 @@ pub fn run() -> Result<()> {
         })
         .map_err(|error| anyhow!("inserting the socket source: {error}"))?;
 
-    let shell_started = start_shell_session(&socket_name);
+    // A development device override is isolated: it must not start the
+    // user's shell units on the test output.
+    let shell_started = if options.device.is_some() || options.no_input {
+        info!("shell target skipped for the development DRM options");
+        false
+    } else {
+        start_shell_session(&socket_name)
+    };
+
+    let signals = Signals::new(&[Signal::SIGUSR1, Signal::SIGTERM, Signal::SIGINT])
+        .map_err(|error| anyhow!("installing the signal source: {error}"))?;
+    loop_handle
+        .insert_source(signals, |signal, _, data: &mut Udev| {
+            match signal.signal() {
+                Signal::SIGUSR1 => {
+                    info!("SIGUSR1: debug capture requested");
+                    data.capture_requested = true;
+                    data.render();
+                }
+                Signal::SIGTERM | Signal::SIGINT => {
+                    info!("shutdown signal received");
+                    data.loop_signal.stop();
+                }
+                _ => {}
+            }
+        })
+        .map_err(|error| anyhow!("inserting the signal source: {error}"))?;
+
     let display_fd = udev
         .display
         .as_fd()
@@ -380,6 +495,10 @@ impl Udev {
         if !self.active {
             return;
         }
+        self.vblank_count += 1;
+        if self.vblank_count <= 5 || self.vblank_count.is_multiple_of(120) {
+            info!(count = self.vblank_count, "vblank");
+        }
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
@@ -396,6 +515,18 @@ impl Udev {
             &mut self.renderer,
             &self.cursor,
         );
+        if self.capture_requested {
+            self.capture_requested = false;
+            if let Some(mode) = self.output.current_mode() {
+                let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
+                let transform = self.output.current_transform().invert();
+                if let Err(error) =
+                    crate::capture::capture_output(&mut self.renderer, &elements, size, transform)
+                {
+                    warn!(%error, "debug capture failed");
+                }
+            }
+        }
         match self.compositor.render_frame(
             &mut self.renderer,
             &elements,
@@ -403,12 +534,24 @@ impl Udev {
             FrameFlags::empty(),
         ) {
             Ok(result) if !result.is_empty => {
+                self.frames_queued += 1;
+                self.frame_was_empty = false;
+                info!(
+                    frames_queued = self.frames_queued,
+                    "frame queued with damage"
+                );
                 if let Err(error) = self.compositor.queue_frame(()) {
                     warn!(%error, "queueing a frame");
                     self.schedule_repaint();
                 }
             }
-            Ok(_) => self.schedule_repaint(),
+            Ok(_) => {
+                if !self.frame_was_empty {
+                    self.frame_was_empty = true;
+                    tracing::debug!("frame skipped: no damage");
+                }
+                self.schedule_repaint();
+            }
             Err(error) => {
                 warn!(%error, "rendering a frame");
                 self.schedule_repaint();
@@ -440,6 +583,48 @@ impl Udev {
             warn!(%error, "scheduling a repaint");
         }
     }
+}
+
+/// Opens a DRM node through the session.
+fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDeviceFd> {
+    let fd = session
+        .open(
+            path,
+            OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK,
+        )
+        .map_err(|error| anyhow!("opening {}: {error}", path.display()))?;
+    Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
+}
+
+/// Finds a render node on a different device than `scanout`.
+///
+/// `primary_gpu` puts a boot VGA card first, so the normal case is the
+/// amdgpu render node while `scanout` is vkms. The fallback scans the seat's
+/// GPUs in case there is no boot VGA flag. Only paths are stat'ed here; this
+/// never opens the primary card.
+fn find_render_node(seat: &str, scanout: &DrmNode) -> Result<DrmNode> {
+    let mut candidates = Vec::new();
+    if let Ok(Some(path)) = primary_gpu(seat) {
+        candidates.push(path);
+    }
+    if let Ok(gpus) = all_gpus(seat) {
+        candidates.extend(gpus);
+    }
+    for path in candidates {
+        let Ok(node) = DrmNode::from_path(&path) else {
+            continue;
+        };
+        if node.dev_id() == scanout.dev_id() {
+            continue;
+        }
+        if let Some(Ok(render)) = node.node_with_type(NodeType::Render) {
+            return Ok(render);
+        }
+    }
+    bail!(
+        "no render node found for --drm-device ({}); a vkms test needs a render-capable GPU",
+        scanout.dev_path().unwrap_or_default().display()
+    )
 }
 
 /// Picks the internal panel and its preferred mode, plus a usable CRTC.

@@ -712,7 +712,12 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         // swap in `submit` still targets a current surface (Bloque 7.3).
         if *capture_requested {
             *capture_requested = false;
-            if let Err(error) = crate::capture::capture_output(renderer, &elements, capture_size) {
+            if let Err(error) = crate::capture::capture_output(
+                renderer,
+                &elements,
+                capture_size,
+                winit_render_transform(),
+            ) {
                 tracing::warn!(%error, "debug capture failed");
             }
         }

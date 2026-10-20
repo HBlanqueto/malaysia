@@ -20,17 +20,17 @@ use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
 use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size};
 
 use crate::cursor::OutputRenderElement;
-use crate::session::winit_render_transform;
 
 /// Captures the composed output to `$XDG_RUNTIME_DIR/yuki/capture-*.png`.
 ///
-/// The output is re-rendered offscreen (reading the winit surface's back
-/// buffer is unreliable), with the same render transform as the window so the
-/// picture matches the screen. Returns the saved path and logs it.
+/// The output is re-rendered offscreen (reading the presented buffer is
+/// unreliable), with the backend's render transform so the picture matches the
+/// screen. Returns the saved path and logs it.
 pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
+    transform: smithay::utils::Transform,
 ) -> std::io::Result<PathBuf> {
     eprintln!("capture: {} elements", elements.len());
     let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
@@ -44,11 +44,7 @@ pub(crate) fn capture_output(
     let mut target = renderer
         .bind(&mut offscreen)
         .map_err(|error| std::io::Error::other(format!("bind offscreen failed: {error}")))?;
-    let mut tracker = OutputDamageTracker::new(
-        size,
-        Scale::from((1.0f64, 1.0f64)),
-        winit_render_transform(),
-    );
+    let mut tracker = OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), transform);
     let result = tracker
         .render_output(renderer, &mut target, 0, elements, [0.0, 0.0, 0.0, 1.0])
         .map_err(|error| std::io::Error::other(format!("offscreen render failed: {error}")))?;

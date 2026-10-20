@@ -41,7 +41,10 @@ fn start(options: cli::Cli) -> Result<()> {
     );
     match options.backend {
         cli::Backend::Winit => yuki::session::run()?,
-        cli::Backend::Drm => yuki::udev::run()?,
+        cli::Backend::Drm => yuki::udev::run(yuki::udev::DrmOptions {
+            device: options.drm_device.map(std::path::PathBuf::from),
+            no_input: options.no_input,
+        })?,
     }
     tracing::info!("yuki stopped");
     Ok(())

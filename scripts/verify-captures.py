@@ -33,6 +33,15 @@ def decode(path):
     ).stdout
 
 
+def dimensions(path):
+    # PNG IHDR: width and height are two big-endian u32s at offsets 16 and 20.
+    with open(path, "rb") as f:
+        header = f.read(24)
+    if header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path} is not a PNG")
+    return int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
+
+
 def px(raw, w, x, y):
     o = (y * w + x) * 3
     return raw[o], raw[o + 1], raw[o + 2]
@@ -128,8 +137,7 @@ def main():
     if not raw:
         print(f"FALLA: no se pudo decodificar {path}")
         return 1
-    # The capture is 1280x800 (the winit output).
-    w, h = 1280, 800
+    w, h = dimensions(path)
     checks = {
         "wallpaper": check_wallpaper,
         "window": check_window,

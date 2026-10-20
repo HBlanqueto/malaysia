@@ -1,10 +1,9 @@
 //! Command-line argument parsing for the `yuki` binary.
 //!
 //! Turns the raw argument list into a [`Command`]: either a request to start
-//! with a set of [`Cli`] options, or a request for help or the version. Block
-//! 0 accepts a single option, `--log-level`, so argument parsing is hand
-//! written against `std::env::args` rather than pulling in an argument
-//! parsing crate.
+//! with a set of [`Cli`] options, or a request for help or the version. The
+//! option set is still small, so argument parsing is hand written against
+//! `std::env::args` rather than pulling in an argument parsing crate.
 
 use crate::logging::LogLevel;
 
@@ -18,6 +17,8 @@ Usage:
 Options:
     --winit               Nested backend in a winit window (default)
     --drm                 Direct session on the primary DRM device
+    --drm-device <PATH>   DRM/KMS node for --drm (dev only; e.g. vkms)
+    --no-input            Do not open libinput under --drm (dev only)
     --log-level <LEVEL>   Log verbosity: error, warn, info, debug or trace
                           [default: info]
     -h, --help            Print this help and exit
@@ -25,7 +26,7 @@ Options:
 ";
 
 /// What the command line asked the binary to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Start the compositor with these options.
     Run(Cli),
@@ -47,12 +48,22 @@ pub enum Backend {
 }
 
 /// Options accepted when starting the compositor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Cli {
     /// Maximum log level to emit.
     pub log_level: LogLevel,
     /// Which presentation backend to start.
     pub backend: Backend,
+    /// A specific DRM/KMS node for `--drm`, instead of the primary GPU.
+    ///
+    /// Development only: it lets a test target vkms without touching the
+    /// panel's card.
+    pub drm_device: Option<String>,
+    /// Do not open libinput under `--drm`.
+    ///
+    /// Development only: it keeps a test from touching the real input
+    /// devices.
+    pub no_input: bool,
 }
 
 /// Errors raised while parsing the command line.
@@ -76,6 +87,12 @@ pub enum ParseError {
         /// The rejected value.
         value: String,
     },
+    /// A development option was used without the backend it belongs to.
+    #[error("option `{option}` is only valid with `--drm`")]
+    OptionRequiresDrm {
+        /// The option that needs `--drm`.
+        option: &'static str,
+    },
 }
 
 /// Parses arguments, excluding the program name.
@@ -92,6 +109,12 @@ where
             "-V" | "--version" => return Ok(Command::Version),
             "--winit" => options.backend = Backend::Winit,
             "--drm" => options.backend = Backend::Drm,
+            "--no-input" => options.no_input = true,
+            "--drm-device" => {
+                let option = "--drm-device";
+                let value = args.next().ok_or(ParseError::MissingValue { option })?;
+                options.drm_device = Some(value);
+            }
             "--log-level" => {
                 let option = "--log-level";
                 let value = args.next().ok_or(ParseError::MissingValue { option })?;
@@ -99,8 +122,24 @@ where
             }
             _ => match arg.strip_prefix("--log-level=") {
                 Some(value) => options.log_level = parse_level(value.to_owned())?,
-                None => return Err(unrecognised(&arg)),
+                None => match arg.strip_prefix("--drm-device=") {
+                    Some(value) => options.drm_device = Some(value.to_owned()),
+                    None => return Err(unrecognised(&arg)),
+                },
             },
+        }
+    }
+
+    if options.backend != Backend::Drm {
+        if options.drm_device.is_some() {
+            return Err(ParseError::OptionRequiresDrm {
+                option: "--drm-device",
+            });
+        }
+        if options.no_input {
+            return Err(ParseError::OptionRequiresDrm {
+                option: "--no-input",
+            });
         }
     }
 
@@ -137,6 +176,7 @@ mod tests {
             Ok(Command::Run(Cli {
                 log_level: LogLevel::Info,
                 backend: Backend::Winit,
+                ..Cli::default()
             }))
         );
     }
@@ -148,6 +188,7 @@ mod tests {
             Ok(Command::Run(Cli {
                 log_level: LogLevel::Debug,
                 backend: Backend::Winit,
+                ..Cli::default()
             }))
         );
     }
@@ -159,6 +200,7 @@ mod tests {
             Ok(Command::Run(Cli {
                 log_level: LogLevel::Warn,
                 backend: Backend::Winit,
+                ..Cli::default()
             }))
         );
     }
@@ -170,6 +212,7 @@ mod tests {
             Ok(Command::Run(Cli {
                 log_level: LogLevel::Info,
                 backend: Backend::Winit,
+                ..Cli::default()
             }))
         );
         assert_eq!(
@@ -177,6 +220,7 @@ mod tests {
             Ok(Command::Run(Cli {
                 log_level: LogLevel::Info,
                 backend: Backend::Drm,
+                ..Cli::default()
             }))
         );
     }
@@ -222,6 +266,48 @@ mod tests {
         assert_eq!(
             parse(args(&["start"])),
             Err(ParseError::UnexpectedArgument("start".to_owned()))
+        );
+    }
+
+    #[test]
+    fn drm_devices_accept_separate_and_inline_values() {
+        assert_eq!(
+            parse(args(&[
+                "--drm",
+                "--drm-device",
+                "/dev/dri/card2",
+                "--no-input"
+            ])),
+            Ok(Command::Run(Cli {
+                backend: Backend::Drm,
+                drm_device: Some("/dev/dri/card2".to_owned()),
+                no_input: true,
+                ..Cli::default()
+            }))
+        );
+        assert_eq!(
+            parse(args(&["--drm", "--drm-device=/dev/dri/card2"])),
+            Ok(Command::Run(Cli {
+                backend: Backend::Drm,
+                drm_device: Some("/dev/dri/card2".to_owned()),
+                ..Cli::default()
+            }))
+        );
+    }
+
+    #[test]
+    fn development_options_require_drm() {
+        assert_eq!(
+            parse(args(&["--drm-device", "/dev/dri/card2"])),
+            Err(ParseError::OptionRequiresDrm {
+                option: "--drm-device"
+            })
+        );
+        assert_eq!(
+            parse(args(&["--no-input"])),
+            Err(ParseError::OptionRequiresDrm {
+                option: "--no-input"
+            })
         );
     }
 }
