@@ -49,13 +49,27 @@
           # sandbox has neither. Tests run in the dev shell (cargo test).
           doCheck = false;
 
-          nativeBuildInputs = with pkgs; [ pkg-config ];
+          nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
 
           buildInputs = nativeDeps pkgs;
 
           postInstall = ''
             install -Dm644 share/wayland-sessions/yuki.desktop \
               $out/share/wayland-sessions/yuki.desktop
+            # The session file names the wrapped binary, not whatever `yuki`
+            # PATH happens to resolve to.
+            sed -i "s|@out@|$out|g" $out/share/wayland-sessions/yuki.desktop
+
+            # The binary must start outside `nix develop`. The RUNPATH covers
+            # the shared libraries, but libglvnd/Mesa also read these three
+            # environment variables, so bake the flake's Mesa into a wrapper.
+            for program in yuki yuki-shell; do
+              wrapProgram "$out/bin/$program" \
+                --set __EGL_VENDOR_LIBRARY_DIRS "${pkgs.mesa}/share/glvnd/egl_vendor.d" \
+                --set LIBGL_DRIVERS_PATH "${pkgs.mesa}/lib/dri" \
+                --set GBM_BACKENDS_PATH "${pkgs.mesa}/lib/gbm" \
+                --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
+            done
             # Ship the system wallpapers, like GNOME installs its own to
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers

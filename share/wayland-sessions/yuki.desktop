@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Yuki
 Comment=Yuki Wayland compositor
-Exec=yuki
+Exec=@out@/bin/yuki
 Type=Application
 DesktopNames=Yuki

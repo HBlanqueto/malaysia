@@ -104,10 +104,16 @@ read_pid() {
 }
 
 # pid_is_yuki PID - succeed only if the PID is alive and its comm is
-# "yuki". Linux /proc is assumed: this project is single-machine.
+# "yuki" or the wrapper's ".yuki-wrapped". Linux /proc is assumed: this
+# project is single-machine.
 pid_is_yuki() {
     kill -0 "$1" 2>/dev/null || return 1
-    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "yuki" ]
+    case "$(cat "/proc/$1/comm" 2>/dev/null)" in
+        # The Nix package's makeWrapper renames the real binary to
+        # `.yuki-wrapped`; the wrapper execs it, so that is the comm.
+        yuki | .yuki-wrapped) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # is_running - succeed only if the saved PID is a live Yuki process.
@@ -149,6 +155,12 @@ start() {
     fi
     if [ -n "${YUKI_BIN:-}" ]; then
         _bin=$YUKI_BIN
+    elif [ -z "${YUKI_DEV_SHELL:-}" ] && [ -x "$script_dir/result/bin/yuki" ]; then
+        # Outside the dev shell the raw target binary has the RUNPATH but not
+        # the EGL vendor/driver environment. Prefer the packaged wrapper, which
+        # sets all three variables. Inside the shell the target binary is the
+        # dev build and already runs with the shell's environment.
+        _bin="$script_dir/result/bin/yuki"
     elif [ -n "$_release" ]; then
         _bin="$script_dir/target/release/yuki"
     else

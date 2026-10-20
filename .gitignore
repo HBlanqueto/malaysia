@@ -1,5 +1,6 @@
 # Build artifacts.
 /target
+/result
 
 # dev.sh writes its PID and log files under $XDG_RUNTIME_DIR/neptune or
 # /tmp/neptune-$(id -u), neither of which is inside the repository. These

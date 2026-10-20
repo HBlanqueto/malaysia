@@ -55,19 +55,24 @@ La derivación del paquete nativo establece `YUKI_DEV_SHELL = "1"` a propósito:
 ruta de compilación sancionada y hermética, no interactiva, y no usa
 mold.
 
+El paquete envuelve `yuki` y `yuki-shell` con `makeWrapper`. El wrapper fija
+`__EGL_VENDOR_LIBRARY_DIRS`, `LIBGL_DRIVERS_PATH` y `GBM_BACKENDS_PATH` al Mesa del
+flake, porque el `RUNPATH` no cubre variables de entorno, y añade las librerías nativas
+a `LD_LIBRARY_PATH` para las que winit carga con `dlopen` (`libwayland-client`). El
+archivo de sesión usa `Exec=@out@/bin/yuki`, sustituido al instalar, así que la sesión
+arranca el binario envuelto. `./dev.sh run` fuera del dev shell usa `result/bin/yuki`
+si existe.
+
 ## Consecuencias
 
 - Un `cargo build`, `cargo check`, `cargo test` o `cargo clippy` directo con
   el marcador sin establecer ahora falla con el mensaje previsto en lugar de producir un
   binario enlazado de forma diferente.
-- `run` funciona fuera de la shell porque la shell de desarrollo también hornea su ruta
-  de búsqueda de librerías en tiempo de ejecución en el `RUNPATH` del binario. winit carga
-  `libwayland-client` mediante `dlopen`, que solo consulta `RUNPATH` o
-  `LD_LIBRARY_PATH`; sin la entrada el binario salía con
-  `The wayland library could not be loaded` — el único caso donde "no
-  compila, así que sigue funcionando fuera de la shell" no se sostenía. Las rutas horneadas
-  son las mismas store paths que la shell exporta en `LD_LIBRARY_PATH`, que
-  aún establece para las herramientas que se ejecutan como procesos hijo (las sondas).
+- El binario empaquetado arranca fuera de la shell: el wrapper de `makeWrapper` añade
+  las tres variables de EGL/Mesa y `LD_LIBRARY_PATH` con las librerías nativas, porque
+  el `RUNPATH` del build de Nix no incluye las que winit carga por `dlopen`.
+  El binario de desarrollo (`target/...`) sigue dependiendo del entorno del dev shell;
+  `./dev.sh run` fuera de la shell prefiere `result/bin/yuki` cuando existe.
 - `cargo:rerun-if-env-changed` significa que el guard no puede ser derrotado por una compilación
   exitosa en caché: quitar el marcador re-ejecuta el script y falla.
 - `dev.sh` sigue siendo el fallo más temprano y barato para la ruta común; las dos
