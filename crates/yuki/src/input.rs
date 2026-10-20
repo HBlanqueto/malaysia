@@ -13,6 +13,7 @@
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
     InputTime, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    PointerMotionEvent,
 };
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{
@@ -79,6 +80,20 @@ fn compositor_shortcut(
         }
     }
     CompositorShortcut::None
+}
+
+/// Keeps a relative pointer inside the logical output.
+///
+/// The right and bottom edges subtract a small epsilon so a pointer at the
+/// maximum is still a hit-testable point, not one pixel outside the output.
+fn clamp_pointer(
+    location: Point<f64, Logical>,
+    size: smithay::utils::Size<i32, Logical>,
+) -> Point<f64, Logical> {
+    const EDGE_EPSILON: f64 = 0.01;
+    let max_x = (f64::from(size.w) - EDGE_EPSILON).max(0.0);
+    let max_y = (f64::from(size.h) - EDGE_EPSILON).max(0.0);
+    Point::new(location.x.clamp(0.0, max_x), location.y.clamp(0.0, max_y))
 }
 
 impl State {
@@ -152,6 +167,16 @@ impl State {
                     .position_transformed(self.logical_output_size())
                     .to_f64();
                 self.pointer_motion(location, event.time());
+            }
+            InputEvent::PointerMotion { event, .. } => {
+                let Some(pointer) = self.seat.get_pointer() else {
+                    return;
+                };
+                let location = pointer.current_location() + event.delta();
+                self.pointer_motion(
+                    clamp_pointer(location, self.logical_output_size()),
+                    event.time(),
+                );
             }
             InputEvent::PointerButton { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
@@ -767,7 +792,9 @@ mod tests {
     use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
     use xkbcommon::xkb::keysyms;
 
-    use super::{BUTTON_LEFT, CompositorShortcut, Edge, compositor_shortcut, edge_cursor};
+    use super::{
+        BUTTON_LEFT, CompositorShortcut, Edge, clamp_pointer, compositor_shortcut, edge_cursor,
+    };
     use crate::state::State;
 
     #[test]
@@ -797,6 +824,31 @@ mod tests {
         assert_eq!(
             compositor_shortcut(false, true, &f2, false),
             CompositorShortcut::None
+        );
+    }
+
+    #[test]
+    fn relative_motion_is_clamped_to_the_output_on_all_four_edges() {
+        let size = Size::from((1280, 720));
+        assert_eq!(
+            clamp_pointer(Point::from((-10.0, 100.0)), size),
+            Point::from((0.0, 100.0))
+        );
+        assert_eq!(
+            clamp_pointer(Point::from((100.0, -10.0)), size),
+            Point::from((100.0, 0.0))
+        );
+        assert_eq!(
+            clamp_pointer(Point::from((2000.0, 100.0)), size),
+            Point::from((1279.99, 100.0))
+        );
+        assert_eq!(
+            clamp_pointer(Point::from((100.0, 2000.0)), size),
+            Point::from((100.0, 719.99))
+        );
+        assert_eq!(
+            clamp_pointer(Point::from((100.0, 100.0)), size),
+            Point::from((100.0, 100.0))
         );
     }
 
