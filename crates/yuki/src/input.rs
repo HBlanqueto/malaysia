@@ -43,6 +43,44 @@ const TEST_DRAG_STEPS: usize = 4;
 /// pixels.
 const TEST_DRAG_STEP: (f64, f64) = (12.0, 8.0);
 
+/// A compositor shortcut the shared input path handles itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompositorShortcut {
+    /// Switch to this VT.
+    Vt(u8),
+    /// Emergency exit, only when the session is not locked.
+    Quit,
+    /// Ctrl+Alt+Backspace while locked: deactivate it, but do not quit.
+    Blocked,
+    /// Not a compositor shortcut.
+    None,
+}
+
+fn compositor_shortcut(
+    ctrl: bool,
+    alt: bool,
+    syms: &[xkb::Keysym],
+    locked: bool,
+) -> CompositorShortcut {
+    if !(ctrl && alt) {
+        return CompositorShortcut::None;
+    }
+    for sym in syms {
+        let sym = u32::from(*sym);
+        if (keysyms::KEY_F1..=keysyms::KEY_F12).contains(&sym) {
+            return CompositorShortcut::Vt((sym - keysyms::KEY_F1 + 1) as u8);
+        }
+        if sym == keysyms::KEY_BackSpace {
+            return if locked {
+                CompositorShortcut::Blocked
+            } else {
+                CompositorShortcut::Quit
+            };
+        }
+    }
+    CompositorShortcut::None
+}
+
 impl State {
     /// Handles one input event from the backend.
     pub(crate) fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
@@ -59,26 +97,39 @@ impl State {
                         serial,
                         time,
                         |state, mods, keysym| {
-                            // Ctrl+Alt+F1..F12 asks the DRM backend for a VT
-                            // switch; Ctrl+Alt+Backspace is the documented
-                            // emergency exit. The nested backend ignores the
-                            // VT request (there is nothing to switch to).
-                            if pressed && mods.ctrl && mods.alt {
-                                if let Some(vt) = keysym.raw_syms().iter().find_map(|sym| {
-                                    let sym = u32::from(*sym);
-                                    (keysyms::KEY_F1..=keysyms::KEY_F12)
-                                        .contains(&sym)
-                                        .then(|| (sym - keysyms::KEY_F1 + 1) as u8)
-                                }) {
-                                    state.request_vt_switch(vt);
-                                }
-                                if keysym
-                                    .raw_syms()
-                                    .iter()
-                                    .any(|sym| u32::from(*sym) == keysyms::KEY_BackSpace)
-                                {
-                                    tracing::info!("emergency exit: Ctrl+Alt+Backspace");
-                                    state.stop();
+                            // Compositor shortcuts are consumed here: the
+                            // focused client must not see Ctrl+Alt+F* or
+                            // Ctrl+Alt+Backspace. While locked, Backspace is
+                            // blocked outright; the way out is a VT switch
+                            // and killing Yuki from another TTY.
+                            match compositor_shortcut(
+                                mods.ctrl,
+                                mods.alt,
+                                &keysym.raw_syms(),
+                                state.locked,
+                            ) {
+                                CompositorShortcut::None => {}
+                                shortcut => {
+                                    if pressed {
+                                        match shortcut {
+                                            CompositorShortcut::Vt(vt) => {
+                                                state.request_vt_switch(vt);
+                                            }
+                                            CompositorShortcut::Quit => {
+                                                tracing::info!(
+                                                    "emergency exit: Ctrl+Alt+Backspace"
+                                                );
+                                                state.stop();
+                                            }
+                                            CompositorShortcut::Blocked => {
+                                                tracing::info!(
+                                                    "Ctrl+Alt+Backspace ignored: the session is locked"
+                                                );
+                                            }
+                                            CompositorShortcut::None => {}
+                                        }
+                                    }
+                                    return FilterResult::Intercept(());
                                 }
                             }
                             // Esc closes one popup level (the topmost menu).
@@ -713,9 +764,40 @@ mod tests {
     use smithay::reexports::calloop::EventLoop;
     use smithay::reexports::wayland_server::Display;
     use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
+    use xkbcommon::xkb::keysyms;
 
-    use super::{BUTTON_LEFT, Edge, edge_cursor};
+    use super::{BUTTON_LEFT, CompositorShortcut, Edge, compositor_shortcut, edge_cursor};
     use crate::state::State;
+
+    #[test]
+    fn ctrl_alt_backspace_quits_only_when_unlocked() {
+        let backspace = [keysyms::KEY_BackSpace.into()];
+        assert_eq!(
+            compositor_shortcut(true, true, &backspace, false),
+            CompositorShortcut::Quit
+        );
+        assert_eq!(
+            compositor_shortcut(true, true, &backspace, true),
+            CompositorShortcut::Blocked
+        );
+    }
+
+    #[test]
+    fn ctrl_alt_f_keys_request_their_vt() {
+        let f2 = [keysyms::KEY_F2.into()];
+        assert_eq!(
+            compositor_shortcut(true, true, &f2, false),
+            CompositorShortcut::Vt(2)
+        );
+        assert_eq!(
+            compositor_shortcut(true, true, &f2, true),
+            CompositorShortcut::Vt(2)
+        );
+        assert_eq!(
+            compositor_shortcut(false, true, &f2, false),
+            CompositorShortcut::None
+        );
+    }
 
     #[test]
     fn each_edge_gets_its_own_resize_cursor() {

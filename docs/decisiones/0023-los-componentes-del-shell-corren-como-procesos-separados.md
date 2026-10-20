@@ -54,17 +54,19 @@ condiciones:
 - que existan usuarios externos del toolkit;
 - o un ritmo de versiones independiente entre shell y compositor.
 
-## Supervisión (Propuesta, dos opciones)
+## Supervisión (aceptada para 8a: opción 1)
 
 1. **Unidades de usuario de systemd incluidas en el flake propio de Yuki**:
    `Restart=on-failure`, `RestartSec` corto, límite de reintentos, logs por
    componente en el journal, y un `yuki-session.target` que arranca después de que
-   el compositor importe `WAYLAND_DISPLAY` al gestor de usuario.
+   el compositor importe `WAYLAND_DISPLAY` al gestor de usuario. En `--drm`, el
+   compositor importa `WAYLAND_DISPLAY` y `XDG_CURRENT_DESKTOP`, arranca el target
+   y lo detiene al salir. Si el target no está instalado, sigue funcionando sin
+   shell y registra cómo enlazar las units.
 2. **El compositor lanza y supervisa los procesos él mismo**: más simple bajo winit,
-   pero agrega código al proceso que más necesita ser pequeño.
+   pero agrega código al proceso que más necesita ser pequeño. No se usa.
 
-Recomendación: systemd para producción; en desarrollo, `scripts/test.sh` lanza los
-componentes a mano.
+En desarrollo, `scripts/test.sh` y `dev.sh` lanzan los componentes a mano.
 
 ## Ubicación del overview / exposé (ABIERTA, no se decide aquí)
 

@@ -8,6 +8,8 @@
 #![allow(unsafe_code)]
 
 use std::os::fd::AsFd;
+use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -237,10 +239,8 @@ pub fn run() -> Result<()> {
         .map_err(|error| anyhow!("inserting the session source: {error}"))?;
 
     let socket = ListeningSocketSource::new_auto().context("creating the Wayland socket")?;
-    info!(
-        socket = %socket.socket_name().to_string_lossy(),
-        "listening on the Wayland socket"
-    );
+    let socket_name = socket.socket_name().to_string_lossy().into_owned();
+    info!(socket = %socket_name, "listening on the Wayland socket");
     loop_handle
         .insert_source(socket, |stream, _, data: &mut Udev| {
             let mut handle = data.display.handle();
@@ -251,6 +251,7 @@ pub fn run() -> Result<()> {
         })
         .map_err(|error| anyhow!("inserting the socket source: {error}"))?;
 
+    let shell_started = start_shell_session(&socket_name);
     let display_fd = udev
         .display
         .as_fd()
@@ -271,10 +272,85 @@ pub fn run() -> Result<()> {
 
     udev.render();
     info!("direct session ready");
-    event_loop
-        .run(None, &mut udev, |_| {})
-        .context("running the event loop")?;
+    let result = event_loop.run(None, &mut udev, |_| {});
+    if shell_started {
+        stop_shell_session();
+    }
+    result.context("running the event loop")?;
     Ok(())
+}
+
+/// Starts the shell target after the socket exists. The target's units read
+/// `WAYLAND_DISPLAY` from the user manager, not from Yuki's process.
+fn start_shell_session(socket: &str) -> bool {
+    let import = systemctl(
+        &[
+            "--user",
+            "import-environment",
+            "WAYLAND_DISPLAY",
+            "XDG_CURRENT_DESKTOP",
+        ],
+        Some(socket),
+    );
+    if let Ok(output) = &import
+        && !output.status.success()
+    {
+        error!(
+            stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+            "could not import WAYLAND_DISPLAY into the user manager"
+        );
+    }
+
+    match systemctl(&["--user", "start", "yuki-session.target"], Some(socket)) {
+        Ok(output) if output.status.success() => {
+            info!("yuki-session.target started");
+            true
+        }
+        Ok(output) => {
+            error!(
+                status = %output.status,
+                stderr = %String::from_utf8_lossy(&output.stderr).trim(),
+                "{}",
+                missing_target_help()
+            );
+            false
+        }
+        Err(error) => {
+            error!(%error, "{}", missing_target_help());
+            false
+        }
+    }
+}
+
+fn stop_shell_session() {
+    let _ = systemctl(&["--user", "stop", "yuki-session.target"], None);
+}
+
+fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::process::Output> {
+    let mut command = crate::spawn::command("systemctl");
+    command
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    if let Some(socket) = socket {
+        command.env("WAYLAND_DISPLAY", socket);
+        command.env("XDG_CURRENT_DESKTOP", "Yuki");
+    }
+    crate::spawn::spawn(command)?.wait_with_output()
+}
+
+fn missing_target_help() -> String {
+    let units = unit_dir()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "result/share/systemd/user".to_string());
+    format!(
+        "yuki-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/yuki-session.target;          systemctl --user link {units}/yuki-shell@.service; systemctl --user daemon-reload;          systemctl --user enable --now yuki-shell@wallpaper.service yuki-shell@menubar.service yuki-shell@dock.service"
+    )
+}
+
+fn unit_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    Some(exe.parent()?.parent()?.join("share/systemd/user"))
 }
 
 impl Udev {
