@@ -35,6 +35,8 @@ continua.
 | 0026 | linux-dmabuf y explicit sync (Bloque 7a/7b) | aceptado |
 | 0027 | La shell presenta por EGL (Bloque 7c) | aceptado |
 | 0028 | Smithay se ancla a master por revisión | aceptado |
+| 0029 | El backend se elige con un flag explícito | aceptado |
+| 0030 | Direct Session 8a: un plano primario y una sola salida | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

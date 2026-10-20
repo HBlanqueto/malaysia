@@ -14,6 +14,8 @@
       nativeDeps = pkgs: with pkgs; [
         libinput
         libglvnd
+        libdrm
+        libgbm
         seatd
         libxkbcommon
         mesa

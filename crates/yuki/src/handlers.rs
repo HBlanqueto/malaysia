@@ -115,14 +115,26 @@ impl CompositorHandler for State {
                     if let Some(acquire) = acquire
                         && let Ok((blocker, source)) = acquire.generate_blocker()
                     {
-                        insert_blocker_source(state, surface, client, source, blocker);
+                        insert_blocker_source(
+                            state,
+                            surface,
+                            client,
+                            crate::blockers::BlockerSource::Sync(source),
+                            blocker,
+                        );
                     }
                 }
                 Some(BlockerKind::Implicit) => {
                     if let Some(dmabuf) = dmabuf
                         && let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ)
                     {
-                        insert_blocker_source(state, surface, client, source, blocker);
+                        insert_blocker_source(
+                            state,
+                            surface,
+                            client,
+                            crate::blockers::BlockerSource::Dmabuf(source),
+                            blocker,
+                        );
                     }
                 }
                 None => {}
@@ -182,49 +194,23 @@ fn pending_blocker(has_dmabuf: bool, has_acquire_point: bool) -> Option<BlockerK
 ///
 /// The source is one-shot: when the dmabuf (implicit) or the acquire point
 /// (explicit) becomes readable, the callback resumes the commit with
-/// `CompositorClientState::blocker_cleared`. The callback's data is the
-/// [`Session`](crate::session::Session), whose loop owns the source.
+/// `CompositorClientState::blocker_cleared`. The callback only wakes the main
+/// loop through a channel, so the blocker loop does not depend on the backend.
 ///
 /// Returns whether the source was inserted; a failed insertion (e.g. the loop
 /// is shutting down) leaves the commit unblocked rather than forever blocked.
-fn insert_blocker_source<M, S>(
+fn insert_blocker_source(
     state: &mut State,
     surface: &WlSurface,
     client: Client,
-    source: S,
+    source: crate::blockers::BlockerSource,
     blocker: impl Blocker + Send + 'static,
-) -> bool
-where
-    S: smithay::reexports::calloop::EventSource<
-            Event = (),
-            Metadata = M,
-            Ret = Result<(), std::io::Error>,
-            Error = std::io::Error,
-        > + 'static,
-{
-    let inserted = state.loop_handle.insert_source(
-        source,
-        move |_, _: &mut M, session: &mut crate::session::Session| {
-            // The client may have died while the commit was blocked (its surface was
-            // destroyed and the transaction cancelled); its data is then gone
-            // and the source just cleans itself up. This is what keeps killing
-            // a blocked client from leaving orphan sources or fds (Bloque 7b).
-            let Some(client_state) = client.get_data::<ClientState>() else {
-                return Ok(());
-            };
-            let dh = session.state.display_handle.clone();
-            client_state
-                .compositor_state
-                .blocker_cleared(&mut session.state, &dh);
-            Ok(())
-        },
-    );
-    if inserted.is_ok() {
+) -> bool {
+    let inserted = state.blocker_sink.insert(source, client);
+    if inserted {
         add_blocker(surface, blocker);
-        true
-    } else {
-        false
     }
+    inserted
 }
 
 /// Logs the buffer type of the surface's just-committed buffer, at `trace`.

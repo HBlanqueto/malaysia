@@ -16,6 +16,8 @@ Usage:
     yuki [OPTIONS]
 
 Options:
+    --winit               Nested backend in a winit window (default)
+    --drm                 Direct session on the primary DRM device
     --log-level <LEVEL>   Log verbosity: error, warn, info, debug or trace
                           [default: info]
     -h, --help            Print this help and exit
@@ -33,11 +35,24 @@ pub enum Command {
     Version,
 }
 
+/// Which presentation backend to run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Backend {
+    /// Nested in a winit window. The development default: it needs no TTY,
+    /// no seat and no DRM master, so `dev.sh` and the probes keep working.
+    #[default]
+    Winit,
+    /// Direct session on the primary DRM device, with libseat and libinput.
+    Drm,
+}
+
 /// Options accepted when starting the compositor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Cli {
     /// Maximum log level to emit.
     pub log_level: LogLevel,
+    /// Which presentation backend to start.
+    pub backend: Backend,
 }
 
 /// Errors raised while parsing the command line.
@@ -75,6 +90,8 @@ where
         match arg.as_str() {
             "-h" | "--help" => return Ok(Command::Help),
             "-V" | "--version" => return Ok(Command::Version),
+            "--winit" => options.backend = Backend::Winit,
+            "--drm" => options.backend = Backend::Drm,
             "--log-level" => {
                 let option = "--log-level";
                 let value = args.next().ok_or(ParseError::MissingValue { option })?;
@@ -106,7 +123,7 @@ fn parse_level(value: String) -> Result<LogLevel, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, ParseError, parse};
+    use super::{Backend, Cli, Command, ParseError, parse};
     use crate::logging::LogLevel;
 
     fn args(values: &[&str]) -> Vec<String> {
@@ -118,7 +135,8 @@ mod tests {
         assert_eq!(
             parse(args(&[])),
             Ok(Command::Run(Cli {
-                log_level: LogLevel::Info
+                log_level: LogLevel::Info,
+                backend: Backend::Winit,
             }))
         );
     }
@@ -128,7 +146,8 @@ mod tests {
         assert_eq!(
             parse(args(&["--log-level", "debug"])),
             Ok(Command::Run(Cli {
-                log_level: LogLevel::Debug
+                log_level: LogLevel::Debug,
+                backend: Backend::Winit,
             }))
         );
     }
@@ -138,7 +157,26 @@ mod tests {
         assert_eq!(
             parse(args(&["--log-level=warn"])),
             Ok(Command::Run(Cli {
-                log_level: LogLevel::Warn
+                log_level: LogLevel::Warn,
+                backend: Backend::Winit,
+            }))
+        );
+    }
+
+    #[test]
+    fn explicit_backends_are_parsed_and_winit_is_the_default() {
+        assert_eq!(
+            parse(args(&["--winit"])),
+            Ok(Command::Run(Cli {
+                log_level: LogLevel::Info,
+                backend: Backend::Winit,
+            }))
+        );
+        assert_eq!(
+            parse(args(&["--drm"])),
+            Ok(Command::Run(Cli {
+                log_level: LogLevel::Info,
+                backend: Backend::Drm,
             }))
         );
     }

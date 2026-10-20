@@ -120,8 +120,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `zwlr_foreign_toplevel_management_v1` (dock), `ext-session-lock-v1` (lock,
   con la garantía de no desbloquear si el cliente muere) y `zwp_linux_dmabuf_v1`
   v5 (7a).
-- Backend winit anidado (GLES2); **Bloque 8 = Direct Session** (DRM/KMS)
-  planificado.
+- Backend winit anidado (GLES2), backend DRM/KMS **8a** implementado
+  (un plano primario, eDP, libseat/libinput, VT); **8b/8c** planificados.
+  Aceptación de 8a: pendiente en el panel real.
 - `TODO(scale)` en `crates/yuki/src/state.rs:133` (HiDPI).
 
 ## Cómo compilar y probar

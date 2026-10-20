@@ -29,7 +29,6 @@ use smithay::input::keyboard::XkbConfig;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
-use smithay::reexports::calloop::LoopHandle;
 use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
@@ -82,6 +81,10 @@ pub struct State {
     /// Handlers cannot reach the backend, so they raise this and the session
     /// turns it into a redraw request (ADR 0012).
     needs_redraw: bool,
+    /// A VT switch requested by the keyboard, for the DRM backend to perform.
+    ///
+    /// The nested backend never acts on it; input is shared, the action is not.
+    pending_vt_switch: Option<u8>,
     /// The `wl_compositor` and `wl_subcompositor` state.
     pub compositor_state: CompositorState,
     /// The `wl_shm` state and its advertised pixel formats.
@@ -107,13 +110,8 @@ pub struct State {
     /// that the global is not announced and clients fall back to the implicit
     /// sync blocker.
     pub syncobj_state: Option<DrmSyncobjState>,
-    /// The calloop loop handle, for the pre-commit blockers (Bloque 7b).
-    ///
-    /// The implicit-sync and explicit-sync commit blockers insert a one-shot
-    /// event source into the loop and resume the commit when it fires. The
-    /// loop's data type is [`Session`](crate::session::Session); anvil keeps
-    /// the same handle in its state.
-    pub(crate) loop_handle: LoopHandle<'static, crate::session::Session>,
+    /// Inserts the commit-blocker source into the backend's loop (Bloque 7b).
+    pub(crate) blocker_sink: Box<dyn crate::blockers::BlockerSink>,
     /// The factory for `wl_seat` globals.
     pub seat_state: SeatState<State>,
     /// The one seat Yuki offers.
@@ -254,7 +252,33 @@ impl State {
         size: Size<i32, Physical>,
         dmabuf_feedback: DmabufFeedback,
         syncobj_device: Option<DrmDeviceFd>,
-        loop_handle: LoopHandle<'static, crate::session::Session>,
+        blocker_sink: Box<dyn crate::blockers::BlockerSink>,
+    ) -> Result<Self, StateError> {
+        let output = winit_output(size);
+        Self::new_with_output(
+            loop_signal,
+            display_handle,
+            size,
+            output,
+            dmabuf_feedback,
+            syncobj_device,
+            blocker_sink,
+        )
+    }
+
+    /// Like [`Self::new`], but with the output the backend already created.
+    ///
+    /// The DRM backend publishes the connector's own `wl_output`; winit uses
+    /// [`winit_output`]. The global is created here so every backend follows
+    /// the same path.
+    pub(crate) fn new_with_output(
+        loop_signal: LoopSignal,
+        display_handle: &DisplayHandle,
+        size: Size<i32, Physical>,
+        output: Output,
+        dmabuf_feedback: DmabufFeedback,
+        syncobj_device: Option<DrmDeviceFd>,
+        blocker_sink: Box<dyn crate::blockers::BlockerSink>,
     ) -> Result<Self, StateError> {
         let compositor_state = CompositorState::new::<Self>(display_handle);
         let shm_state = ShmState::new::<Self>(
@@ -292,44 +316,18 @@ impl State {
         seat.add_keyboard(XkbConfig::default(), 200, 25)?;
         let _ = seat.add_pointer();
 
-        let output = Output::new(
-            "yuki".to_string(),
-            PhysicalProperties {
-                size: (0, 0).into(),
-                subpixel: Subpixel::Unknown,
-                make: "Yuki".to_string(),
-                model: "Winit".to_string(),
-                serial_number: String::new(),
-            },
-        );
-        let mode = Mode {
-            size,
-            refresh: 60_000,
-        };
-        // The advertised transform stays `Normal` on purpose. The winit
-        // framebuffer's bottom-left origin is corrected at render time by the
-        // damage tracker's mode source, never by telling clients to pre-rotate:
-        // this transform reaches clients in `wl_output.geometry`
-        // (`smithay-0.7.0/src/wayland/output/mod.rs:164-177`). See
-        // `session::winit_render_transform`.
-        output.change_current_state(
-            Some(mode),
-            Some(Transform::Normal),
-            Some(Scale::Integer(1)),
-            Some((0, 0).into()),
-        );
-        output.set_preferred(mode);
         let _ = output.create_global::<Self>(display_handle);
 
         Ok(Self {
             loop_signal,
             needs_redraw: false,
+            pending_vt_switch: None,
             compositor_state,
             shm_state,
             dmabuf_state,
             pending_dmabuf_imports: Vec::new(),
             syncobj_state,
-            loop_handle,
+            blocker_sink,
             seat_state,
             seat,
             cursor_status: CursorImageStatus::default_named(),
@@ -382,6 +380,16 @@ impl State {
     /// Takes the pending redraw request, clearing it.
     pub fn take_redraw_request(&mut self) -> bool {
         std::mem::take(&mut self.needs_redraw)
+    }
+
+    /// Asks the DRM backend to switch to virtual terminal `vt`.
+    pub(crate) fn request_vt_switch(&mut self, vt: u8) {
+        self.pending_vt_switch = Some(vt);
+    }
+
+    /// Takes the VT switch requested by the keyboard, if any.
+    pub(crate) fn take_vt_switch(&mut self) -> Option<u8> {
+        self.pending_vt_switch.take()
     }
 
     /// The output size in logical coordinates.
@@ -485,4 +493,36 @@ pub struct PendingDmabufImport {
     pub dmabuf: Dmabuf,
     /// The notifier that answers the client's import request.
     pub notifier: ImportNotifier,
+}
+
+/// The nested backend's single output: a 0×0 winit panel at the given size.
+fn winit_output(size: Size<i32, Physical>) -> Output {
+    let output = Output::new(
+        "yuki".to_string(),
+        PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Yuki".to_string(),
+            model: "Winit".to_string(),
+            serial_number: String::new(),
+        },
+    );
+    let mode = Mode {
+        size,
+        refresh: 60_000,
+    };
+    // The advertised transform stays `Normal` on purpose. The winit
+    // framebuffer's bottom-left origin is corrected at render time by the
+    // damage tracker's mode source, never by telling clients to pre-rotate:
+    // this transform reaches clients in `wl_output.geometry`
+    // (`smithay-0.7.0/src/wayland/output/mod.rs:164-177`). See
+    // `session::winit_render_transform`.
+    output.change_current_state(
+        Some(mode),
+        Some(Transform::Normal),
+        Some(Scale::Integer(1)),
+        Some((0, 0).into()),
+    );
+    output.set_preferred(mode);
+    output
 }

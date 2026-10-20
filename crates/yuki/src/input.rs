@@ -58,7 +58,29 @@ impl State {
                         event.state(),
                         serial,
                         time,
-                        |state, _mods, keysym| {
+                        |state, mods, keysym| {
+                            // Ctrl+Alt+F1..F12 asks the DRM backend for a VT
+                            // switch; Ctrl+Alt+Backspace is the documented
+                            // emergency exit. The nested backend ignores the
+                            // VT request (there is nothing to switch to).
+                            if pressed && mods.ctrl && mods.alt {
+                                if let Some(vt) = keysym.raw_syms().iter().find_map(|sym| {
+                                    let sym = u32::from(*sym);
+                                    (keysyms::KEY_F1..=keysyms::KEY_F12)
+                                        .contains(&sym)
+                                        .then(|| (sym - keysyms::KEY_F1 + 1) as u8)
+                                }) {
+                                    state.request_vt_switch(vt);
+                                }
+                                if keysym
+                                    .raw_syms()
+                                    .iter()
+                                    .any(|sym| u32::from(*sym) == keysyms::KEY_BackSpace)
+                                {
+                                    tracing::info!("emergency exit: Ctrl+Alt+Backspace");
+                                    state.stop();
+                                }
+                            }
                             // Esc closes one popup level (the topmost menu).
                             if pressed
                                 && keysym
@@ -894,7 +916,7 @@ mod tests {
             Size::from(size),
             feedback,
             None,
-            event_loop.handle(),
+            Box::new(event_loop.handle()),
         )
         .expect("the test state should build");
         (display, state)

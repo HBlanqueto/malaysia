@@ -106,6 +106,11 @@ sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca512767cacc07efca55fae8be4", default-features = false, features = [
     "backend_winit",
     "backend_drm",
+    "backend_gbm",
+    "backend_egl",
+    "backend_udev",
+    "backend_libinput",
+    "backend_session_libseat",
     "renderer_gl",
     "wayland_frontend",
 ] }

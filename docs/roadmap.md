@@ -103,9 +103,21 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 
 ## Bloque 8 — Direct Session (DRM/KMS)
 
-- Backend DRM/KMS atómico + libseat + libinput, en paralelo a winit
-- Cambio de VT, hotplug y direct scanout
-- Aceptación: la sesión arranca sobre el panel real (Pendiente)
+Se divide en tres entregas. 8a es la única con código en este árbol.
+
+- **8a — sesión mínima.** DRM/KMS atómico, libseat, libinput, GBM + EGL +
+  `GlesRenderer`, `DrmCompositor` sobre el conector interno (eDP) en su modo
+  preferido, **un solo plano primario** (sin overlay ni cursor planes), un
+  frame por vblank con damage tracking, cambio de VT con pausa/restauración y
+  la garantía del lock. Winit sigue siendo el backend de desarrollo. Sin
+  hotplug, sin monitores externos y sin direct scanout.
+- **8b — hotplug y monitores externos.** Varios conectores, reubicación de
+  outputs, `wl_output` por conector y manejo de desconexión.
+- **8c — planos y direct scanout.** Overlay/cursor planes, asignación de
+  superficies a KMS y los criterios de promoción/expulsión.
+- Aceptación 8a: la sesión arranca desde un TTY sobre el panel del ThinkPad,
+  con teclado, touchpad y cambio de VT. Ver
+  `bloques/08-direct-session.md` para el checklist.
 
 ## Bloque 9 — Escala fraccional
 
@@ -194,6 +206,9 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   7c hecho: la shell presenta por EGL (`wl_egl_window`), sin `wl_shm`. vkcube
   (RADV), mpv (gpu-next), wezterm y Firefox corren acelerados. Véase
   `bloques/07-linux-dmabuf-y-explicit-sync.md` y los ADR 0026/0027.
+- **Bloque 8a — implementado, aceptación pendiente.** DRM/KMS atómico, libseat,
+  libinput, GBM/EGL/GLES, un plano primario y el panel interno. Winit sigue
+  igual. Ver `bloques/08-direct-session.md`, ADR 0029 y ADR 0030.
 
 ## Numeración de bloques
 

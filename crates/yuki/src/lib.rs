@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 mod active;
+mod blockers;
 pub mod capture;
 pub mod config;
 mod cursor;
@@ -32,4 +33,5 @@ mod popup;
 pub mod session;
 pub mod spawn;
 pub mod state;
+pub mod udev;
 pub mod window;

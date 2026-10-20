@@ -21,8 +21,9 @@ docs/
 │   ├── 04-ventanas-manipulables.md
 │   ├── 05-popups.md
 │   ├── 06-portapapeles.md
-│   └── 07-linux-dmabuf-y-explicit-sync.md
-├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0028)
+│   ├── 07-linux-dmabuf-y-explicit-sync.md
+│   └── 08-direct-session.md
+├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
 │   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
@@ -60,7 +61,7 @@ docs/
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
 5. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0028, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0030, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 6. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
@@ -98,6 +99,8 @@ corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
 superficie EGL de la ventana; la captura ahora corre antes del render de la
 ventana). Ya corren wezterm,
 Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
-El **Bloque 8** (Direct Session, DRM/KMS) está planificado. La shell es nativa
+El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
+pendiente de aceptación en el panel real; **8b** (hotplug) y **8c** (planos y
+direct scanout) están planificados. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
 funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).

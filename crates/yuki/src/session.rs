@@ -112,6 +112,8 @@ pub enum SessionError {
 /// could not (ADR 0013). The damage tracker is backend state, so it lives here
 /// too rather than in `State` (ADR 0012).
 pub(crate) struct Session {
+    /// The loop handle, for the deferred frame-fence source.
+    loop_handle: LoopHandle<'static, Session>,
     /// The Wayland display: owns the clients and their protocol objects.
     display: Display<State>,
     /// The compositor state handlers mutate.
@@ -351,13 +353,14 @@ pub fn run() -> Result<(), SessionError> {
         backend.window_size(),
         dmabuf_feedback,
         syncobj_device,
-        loop_handle.clone(),
+        Box::new(loop_handle.clone()),
     )?;
     let damage_tracker =
         OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
     let cursor = Cursors::load(State::OUTPUT_SCALE);
     let track_objects = std::env::var_os("YUKI_TEST_OBJECTS").is_some();
     let mut session = Session {
+        loop_handle: loop_handle.clone(),
         display,
         state,
         backend,
@@ -482,7 +485,7 @@ fn dispatch_clients(session: &mut Session) {
 /// The renderer lives in the session (ADR 0012); this function is a free
 /// function rather than a `State` method so `State` stays free of renderer
 /// types, and so the tests can drive it directly.
-fn import_pending_dmabufs(state: &mut State, renderer: &mut GlesRenderer) {
+pub(crate) fn import_pending_dmabufs(state: &mut State, renderer: &mut GlesRenderer) {
     for pending in state.pending_dmabuf_imports.drain(..) {
         match renderer.import_dmabuf(&pending.dmabuf, None) {
             Ok(_) => {
@@ -585,8 +588,105 @@ fn redraw(session: &mut Session) {
 }
 
 /// Renders every mapped window over the session background.
+/// Builds the frame's elements in Smithay's front-to-back order.
+///
+/// Shared by the winit and DRM backends: the scene, the lock rule and the
+/// cursor are the same, only presentation differs.
+pub(crate) fn build_output_elements(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
+    if state.locked {
+        // A locked session shows only the lock surfaces (plus the cursor):
+        // no windows, no shell panels, no popups. If the lock client died,
+        // its surfaces are gone and the clear color behind them stands in
+        // — the session stays locked (lock.rs).
+        reset_dead_cursor(state);
+        // Front-to-back (smithay's `render_output` order): the cursor is on
+        // top, the lock surfaces behind it.
+        append_cursor(renderer, &mut elements, state, cursor);
+        for lock_surface in &state.lock_surfaces {
+            if !lock_surface.alive() {
+                continue;
+            }
+            elements.extend(
+                render_elements_from_surface_tree::<
+                    GlesRenderer,
+                    WaylandSurfaceRenderElement<GlesRenderer>,
+                >(
+                    renderer,
+                    lock_surface.wl_surface(),
+                    Point::from((0, 0)).to_physical(State::OUTPUT_SCALE),
+                    f64::from(State::OUTPUT_SCALE),
+                    1.0,
+                    Kind::Unspecified,
+                )
+                .into_iter()
+                .map(OutputRenderElement::from),
+            );
+        }
+    } else {
+        // `render_output` takes elements in front-to-back order (the first
+        // is drawn on top). So: cursor, then the Top/Overlay panels (above
+        // every window), then popups, then windows, then the Background /
+        // Bottom layers (the wallpaper). See `layers.rs` and ADR 0023.
+        reset_dead_cursor(state);
+        append_cursor(renderer, &mut elements, state, cursor);
+        append_layers(state, renderer, &mut elements, LayerSide::Front);
+        for (id, _parent, rect) in state.windows.iter_popups() {
+            let Some(surface) = state.popups.surface_of(id) else {
+                continue;
+            };
+            let location = Point::from((rect.x().round() as i32, rect.y().round() as i32))
+                .to_physical(State::OUTPUT_SCALE);
+            elements.extend(
+                render_elements_from_surface_tree::<
+                    GlesRenderer,
+                    WaylandSurfaceRenderElement<GlesRenderer>,
+                >(
+                    renderer,
+                    surface,
+                    location,
+                    f64::from(State::OUTPUT_SCALE),
+                    1.0,
+                    Kind::Unspecified,
+                )
+                .into_iter()
+                .map(OutputRenderElement::from),
+            );
+        }
+        for window in state.windows.iter() {
+            if !window.is_mapped() {
+                continue;
+            }
+            let location =
+                (window.location() + window.surface_location()).to_physical(State::OUTPUT_SCALE);
+            elements.extend(
+                render_elements_from_surface_tree::<
+                    GlesRenderer,
+                    WaylandSurfaceRenderElement<GlesRenderer>,
+                >(
+                    renderer,
+                    window.surface(),
+                    location,
+                    f64::from(State::OUTPUT_SCALE),
+                    1.0,
+                    Kind::Unspecified,
+                )
+                .into_iter()
+                .map(OutputRenderElement::from),
+            );
+        }
+        append_layers(state, renderer, &mut elements, LayerSide::Back);
+    }
+    elements
+}
+
 fn draw(session: &mut Session) -> Result<(), DrawError> {
     let Session {
+        loop_handle,
         backend,
         state,
         damage_tracker,
@@ -603,90 +703,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     let (damage, sync) = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
-        let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
-        if state.locked {
-            // A locked session shows only the lock surfaces (plus the cursor):
-            // no windows, no shell panels, no popups. If the lock client died,
-            // its surfaces are gone and the clear color behind them stands in
-            // — the session stays locked (lock.rs).
-            reset_dead_cursor(state);
-            // Front-to-back (smithay's `render_output` order): the cursor is on
-            // top, the lock surfaces behind it.
-            append_cursor(renderer, &mut elements, state, cursor);
-            for lock_surface in &state.lock_surfaces {
-                if !lock_surface.alive() {
-                    continue;
-                }
-                elements.extend(
-                    render_elements_from_surface_tree::<
-                        GlesRenderer,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                    >(
-                        renderer,
-                        lock_surface.wl_surface(),
-                        Point::from((0, 0)).to_physical(State::OUTPUT_SCALE),
-                        f64::from(State::OUTPUT_SCALE),
-                        1.0,
-                        Kind::Unspecified,
-                    )
-                    .into_iter()
-                    .map(OutputRenderElement::from),
-                );
-            }
-        } else {
-            // `render_output` takes elements in front-to-back order (the first
-            // is drawn on top). So: cursor, then the Top/Overlay panels (above
-            // every window), then popups, then windows, then the Background /
-            // Bottom layers (the wallpaper). See `layers.rs` and ADR 0023.
-            reset_dead_cursor(state);
-            append_cursor(renderer, &mut elements, state, cursor);
-            append_layers(state, renderer, &mut elements, LayerSide::Front);
-            for (id, _parent, rect) in state.windows.iter_popups() {
-                let Some(surface) = state.popups.surface_of(id) else {
-                    continue;
-                };
-                let location = Point::from((rect.x().round() as i32, rect.y().round() as i32))
-                    .to_physical(State::OUTPUT_SCALE);
-                elements.extend(
-                    render_elements_from_surface_tree::<
-                        GlesRenderer,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                    >(
-                        renderer,
-                        surface,
-                        location,
-                        f64::from(State::OUTPUT_SCALE),
-                        1.0,
-                        Kind::Unspecified,
-                    )
-                    .into_iter()
-                    .map(OutputRenderElement::from),
-                );
-            }
-            for window in state.windows.iter() {
-                if !window.is_mapped() {
-                    continue;
-                }
-                let location = (window.location() + window.surface_location())
-                    .to_physical(State::OUTPUT_SCALE);
-                elements.extend(
-                    render_elements_from_surface_tree::<
-                        GlesRenderer,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                    >(
-                        renderer,
-                        window.surface(),
-                        location,
-                        f64::from(State::OUTPUT_SCALE),
-                        1.0,
-                        Kind::Unspecified,
-                    )
-                    .into_iter()
-                    .map(OutputRenderElement::from),
-                );
-            }
-            append_layers(state, renderer, &mut elements, LayerSide::Back);
-        }
+        let elements = build_output_elements(state, renderer, cursor);
 
         // Debug capture (Bloque 7.1): `SIGUSR1` asked for it. The offscreen readback
         // makes the GL context surfaceless (`eglMakeCurrent(EGL_NO_SURFACE, ...)`
@@ -717,7 +734,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     // waits for its fence (ADR 0026, see `PendingFrameRelease`).
     let buffers = collect_drawn_buffers(state);
     if !buffers.is_empty() {
-        schedule_frame_release(state, PendingFrameRelease { sync, buffers });
+        schedule_frame_release(loop_handle, PendingFrameRelease { sync, buffers });
     }
 
     // Send frame callbacks only once the frame has been drawn, so a client
@@ -833,7 +850,10 @@ fn collect_tree_buffers(buffers: &mut Vec<Buffer>, surface: &WlSurface) {
 /// `wl_buffer.release` / the explicit-sync release point — and the source
 /// removes itself. The loop keeps running, so the compositor never blocks on
 /// the GPU and a client is never signalled to reuse a buffer still being read.
-fn schedule_frame_release(state: &mut State, release: PendingFrameRelease) {
+fn schedule_frame_release(
+    loop_handle: &LoopHandle<'static, Session>,
+    release: PendingFrameRelease,
+) {
     // `EGL_ANDROID_native_fence_sync` is guaranteed at startup, so export only
     // returns `None` when the fence is already signalled — the GPU finished
     // this frame before it was exported — and releasing right away is exactly
@@ -852,16 +872,13 @@ fn schedule_frame_release(state: &mut State, release: PendingFrameRelease) {
     };
     let source = Generic::new(fd, Interest::READ, Mode::Level);
     let mut release = Some(release);
-    if let Err(error) = state
-        .loop_handle
-        .insert_source(source, move |_, _, _: &mut Session| {
-            if let Some(release) = release.take() {
-                tracing::trace!(count = release.buffers.len(), "released a frame's buffers");
-                drop(release);
-            }
-            Ok(PostAction::Remove)
-        })
-    {
+    if let Err(error) = loop_handle.insert_source(source, move |_, _, _: &mut Session| {
+        if let Some(release) = release.take() {
+            tracing::trace!(count = release.buffers.len(), "released a frame's buffers");
+            drop(release);
+        }
+        Ok(PostAction::Remove)
+    }) {
         tracing::error!(%error, "could not arm the frame fence source");
     }
 }
@@ -1011,7 +1028,7 @@ fn cursor_surface_hotspot(surface: &WlSurface) -> Point<f64, Logical> {
 /// There is one output, so every mapped surface is on its scan-out path and no
 /// throttling is needed; with more outputs this is where visibility would be
 /// decided.
-fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
+pub(crate) fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
     let time_ms = time.as_millis() as u32;
     with_surface_tree_downward(
         surface,
@@ -1027,6 +1044,31 @@ fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
     );
 }
 
+/// Completes the frame callbacks of everything a frame drew.
+pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
+    if state.locked {
+        for surface in &state.lock_surfaces {
+            if surface.alive() {
+                send_frame_callbacks(surface.wl_surface(), time);
+            }
+        }
+        return;
+    }
+    for window in state.windows.iter() {
+        if window.is_mapped() {
+            send_frame_callbacks(window.surface(), time);
+        }
+    }
+    for entry in state.layers.all() {
+        send_frame_callbacks(entry.surface.wl_surface(), time);
+    }
+    for (id, _parent, _rect) in state.windows.iter_popups() {
+        if let Some(surface) = state.popups.surface_of(id) {
+            send_frame_callbacks(surface, time);
+        }
+    }
+}
+
 /// Failures while drawing a single frame.
 #[derive(Debug, thiserror::Error)]
 enum DrawError {
@@ -1039,6 +1081,26 @@ enum DrawError {
     /// Presenting the frame to the window failed.
     #[error("could not present the frame")]
     Submit(#[source] SwapBuffersError),
+}
+
+impl crate::blockers::BlockerSink for LoopHandle<'static, Session> {
+    fn insert(
+        &mut self,
+        source: crate::blockers::BlockerSource,
+        client: smithay::reexports::wayland_server::Client,
+    ) -> bool {
+        self.insert_source(source, move |_, _, session: &mut Session| {
+            // The client may have died while the commit was blocked.
+            if let Some(client_state) = client.get_data::<ClientState>() {
+                let dh = session.state.display_handle.clone();
+                client_state
+                    .compositor_state
+                    .blocker_cleared(&mut session.state, &dh);
+            }
+            Ok(())
+        })
+        .is_ok()
+    }
 }
 
 #[cfg(test)]
@@ -1507,7 +1569,7 @@ mod tests {
             Size::from((1280, 720)),
             feedback,
             None,
-            event_loop.handle(),
+            Box::new(event_loop.handle()),
         )
         .expect("the state should build");
 
@@ -1655,7 +1717,7 @@ mod tests {
             Size::from((1280, 720)),
             feedback,
             None,
-            event_loop.handle(),
+            Box::new(event_loop.handle()),
         )
         .expect("the state should build");
         assert!(

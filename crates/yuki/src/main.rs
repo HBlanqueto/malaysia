@@ -34,8 +34,15 @@ fn run() -> Result<()> {
 
 fn start(options: cli::Cli) -> Result<()> {
     logging::init(options.log_level)?;
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "yuki starting");
-    yuki::session::run()?;
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        backend = ?options.backend,
+        "yuki starting"
+    );
+    match options.backend {
+        cli::Backend::Winit => yuki::session::run()?,
+        cli::Backend::Drm => yuki::udev::run()?,
+    }
     tracing::info!("yuki stopped");
     Ok(())
 }
