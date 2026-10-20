@@ -30,5 +30,6 @@ mod layers;
 mod lock;
 mod popup;
 pub mod session;
+pub mod spawn;
 pub mod state;
 pub mod window;

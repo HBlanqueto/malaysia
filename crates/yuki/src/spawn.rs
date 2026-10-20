@@ -1,0 +1,155 @@
+//! The one place the compositor starts another process.
+//!
+//! The Nix wrapper gives `yuki` and `yuki-shell` a private Mesa/EGL
+//! environment. That environment must not reach the clients they launch: a
+//! client has to resolve its own Mesa (the system one) and its own EGL vendor
+//! directory. The wrapper also saves the previous values in `YUKI_ORIG_*`, so
+//! a child gets the same environment it would have had without the wrapper.
+//!
+//! Use [`command`] to build the command and [`spawn`] to start it. Do not call
+//! `Command::spawn` directly for a client.
+
+use std::ffi::{OsStr, OsString};
+use std::io;
+use std::process::{Child, Command};
+
+/// Variables the package wrapper sets for Yuki itself.
+pub const WRAPPER_ENV: &[&str] = &[
+    "LD_LIBRARY_PATH",
+    "__EGL_VENDOR_LIBRARY_DIRS",
+    "LIBGL_DRIVERS_PATH",
+    "GBM_BACKENDS_PATH",
+];
+
+/// Prefix the wrapper uses to save the value each variable had before it.
+pub const ORIGINAL_PREFIX: &str = "YUKI_ORIG_";
+
+/// Builds a command with the wrapper environment removed.
+///
+/// The caller may still add arguments and its own environment; [`spawn`]
+/// applies the same cleanup again, so the final child cannot inherit the
+/// wrapper's Mesa paths.
+pub fn command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    sanitize(&mut command);
+    command
+}
+
+/// Starts `command` with the wrapper environment removed.
+pub fn spawn(mut command: Command) -> io::Result<Child> {
+    sanitize(&mut command);
+    command.spawn()
+}
+
+/// Removes every managed variable from `command` and restores its original
+/// when the wrapper saved a non-empty one.
+fn sanitize(command: &mut Command) {
+    sanitize_with(command, |name| std::env::var_os(name));
+}
+
+fn sanitize_with(command: &mut Command, original: impl Fn(&str) -> Option<OsString>) {
+    for name in WRAPPER_ENV {
+        command.env_remove(name);
+
+        let saved = format!("{ORIGINAL_PREFIX}{name}");
+        if let Some(value) = original(&saved).filter(|value| !value.is_empty()) {
+            command.env(name, value);
+        }
+        command.env_remove(&saved);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Stdio;
+
+    use super::*;
+
+    fn child_env(command: &Command) -> Vec<(OsString, Option<OsString>)> {
+        command
+            .get_envs()
+            .map(|(name, value)| (name.to_owned(), value.map(ToOwned::to_owned)))
+            .collect()
+    }
+
+    fn value<'a>(
+        env: &'a [(OsString, Option<OsString>)],
+        name: &str,
+    ) -> Option<&'a Option<OsString>> {
+        env.iter()
+            .find(|(key, _)| key == OsStr::new(name))
+            .map(|(_, value)| value)
+    }
+
+    fn removed(env: &[(OsString, Option<OsString>)], name: &str) -> bool {
+        matches!(value(env, name), None | Some(None))
+    }
+
+    #[test]
+    fn strips_the_wrapper_and_restores_the_originals() {
+        let mut command = Command::new("true");
+        command.env("LD_LIBRARY_PATH", "/wrapper/lib");
+        command.env("__EGL_VENDOR_LIBRARY_DIRS", "/wrapper/egl");
+        command.env("LIBGL_DRIVERS_PATH", "/wrapper/dri");
+        command.env("GBM_BACKENDS_PATH", "/wrapper/gbm");
+        command.env("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+        command.env("YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS", "/orig/egl");
+        command.env("YUKI_ORIG_LIBGL_DRIVERS_PATH", "");
+
+        sanitize_with(&mut command, |name| match name {
+            "YUKI_ORIG_LD_LIBRARY_PATH" => Some(OsString::from("/orig/lib")),
+            "YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS" => Some(OsString::from("/orig/egl")),
+            "YUKI_ORIG_LIBGL_DRIVERS_PATH" => Some(OsString::new()),
+            "YUKI_ORIG_GBM_BACKENDS_PATH" => None,
+            _ => None,
+        });
+
+        let env = child_env(&command);
+        assert_eq!(
+            value(&env, "LD_LIBRARY_PATH"),
+            Some(&Some(OsString::from("/orig/lib")))
+        );
+        assert_eq!(
+            value(&env, "__EGL_VENDOR_LIBRARY_DIRS"),
+            Some(&Some(OsString::from("/orig/egl")))
+        );
+        assert!(removed(&env, "LIBGL_DRIVERS_PATH"));
+        assert!(removed(&env, "GBM_BACKENDS_PATH"));
+        for name in WRAPPER_ENV {
+            assert!(
+                removed(&env, &format!("{ORIGINAL_PREFIX}{name}")),
+                "{name} original leaked"
+            );
+        }
+    }
+
+    #[test]
+    fn the_public_path_does_not_forward_the_wrapper() {
+        let command = self::command("true");
+        let env = child_env(&command);
+        for name in WRAPPER_ENV {
+            assert!(removed(&env, name), "{name} was forwarded");
+        }
+    }
+
+    #[test]
+    fn a_spawned_child_does_not_see_the_wrapper() {
+        let mut command = Command::new("sh");
+        command
+            .arg("-c")
+            .arg("printf '%s' \"${LD_LIBRARY_PATH-}\"")
+            .env("LD_LIBRARY_PATH", "/wrapper/lib")
+            .stdout(Stdio::piped());
+
+        let output = spawn(command)
+            .expect("spawn the probe")
+            .wait_with_output()
+            .expect("wait for the probe");
+
+        assert!(
+            output.stdout.is_empty(),
+            "child inherited the wrapper: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+}

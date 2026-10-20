@@ -65,6 +65,10 @@
             # environment variables, so bake the flake's Mesa into a wrapper.
             for program in yuki yuki-shell; do
               wrapProgram "$out/bin/$program" \
+                --run 'export YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS="''${YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS-''${__EGL_VENDOR_LIBRARY_DIRS-}}"' \
+                --run 'export YUKI_ORIG_LIBGL_DRIVERS_PATH="''${YUKI_ORIG_LIBGL_DRIVERS_PATH-''${LIBGL_DRIVERS_PATH-}}"' \
+                --run 'export YUKI_ORIG_GBM_BACKENDS_PATH="''${YUKI_ORIG_GBM_BACKENDS_PATH-''${GBM_BACKENDS_PATH-}}"' \
+                --run 'export YUKI_ORIG_LD_LIBRARY_PATH="''${YUKI_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
                 --set __EGL_VENDOR_LIBRARY_DIRS "${pkgs.mesa}/share/glvnd/egl_vendor.d" \
                 --set LIBGL_DRIVERS_PATH "${pkgs.mesa}/lib/dri" \
                 --set GBM_BACKENDS_PATH "${pkgs.mesa}/lib/gbm" \

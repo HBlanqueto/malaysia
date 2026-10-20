@@ -60,8 +60,9 @@ El paquete envuelve `yuki` y `yuki-shell` con `makeWrapper`. El wrapper fija
 flake, porque el `RUNPATH` no cubre variables de entorno, y añade las librerías nativas
 a `LD_LIBRARY_PATH` para las que winit carga con `dlopen` (`libwayland-client`). El
 archivo de sesión usa `Exec=@out@/bin/yuki`, sustituido al instalar, así que la sesión
-arranca el binario envuelto. `./dev.sh run` fuera del dev shell usa `result/bin/yuki`
-si existe.
+arranca el binario envuelto. El wrapper guarda los valores previos en `YUKI_ORIG_*`;
+`yuki::spawn::spawn` los restaura en los clientes y no les propaga las variables del
+wrapper. `./dev.sh run` fuera del dev shell usa `result/bin/yuki` si existe.
 
 ## Consecuencias
 
