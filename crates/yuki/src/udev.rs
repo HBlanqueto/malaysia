@@ -519,7 +519,9 @@ impl Udev {
             self.capture_requested = false;
             if let Some(mode) = self.output.current_mode() {
                 let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
-                let transform = self.output.current_transform().invert();
+                // The capture re-renders offscreen and then flips the GL
+                // readback; Flipped180 keeps it upright, as in winit.
+                let transform = smithay::utils::Transform::Flipped180;
                 if let Err(error) =
                     crate::capture::capture_output(&mut self.renderer, &elements, size, transform)
                 {

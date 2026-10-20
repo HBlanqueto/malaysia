@@ -50,7 +50,7 @@ comportamiento de producción no cambia.
   no debe arrancar componentes en la sesión del usuario.
 - La prueba no abre el card del GPU de arranque: solo hace `stat` de sus nodos
   para encontrar el render node. El test `dev.sh drm-vkms` lo verifica leyendo
-  `/proc/<pid>/fd`.
+  `/proc/<pid>/fd`; también comprueba que no haya `/dev/input` abierto.
 - Bajo `LIBSEAT_BACKEND=noop` y `sudo`, libseat abre los nodos sin seatd. Es
   solo para vkms; no es una ruta de producción.
 

@@ -4,6 +4,8 @@
 //! the one-time installation of the global subscriber. Nothing in this module
 //! knows about arguments; it receives an already-parsed level.
 
+use std::io::IsTerminal;
+
 use tracing::level_filters::LevelFilter;
 
 /// Maximum level of detail the compositor emits.
@@ -63,6 +65,7 @@ pub fn init(level: LogLevel) -> Result<(), InitError> {
     tracing_subscriber::fmt()
         .with_max_level(level.to_filter())
         .with_target(false)
+        .with_ansi(std::io::stderr().is_terminal())
         .try_init()
         .map_err(InitError::AlreadyInstalled)
 }

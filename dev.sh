@@ -542,6 +542,8 @@ drm_vkms() {
             sudo kill -TERM "$_yuki_pid" 2>/dev/null || true
             sleep 0.3
             sudo kill -KILL "$_yuki_pid" 2>/dev/null || true
+        else
+            sudo pkill -TERM -f -- "--drm --drm-device $_vkms" 2>/dev/null || true
         fi
         if [ -n "${_vkms_loaded:-}" ]; then
             sudo modprobe -r vkms 2>/dev/null ||
@@ -568,6 +570,15 @@ drm_vkms() {
                 _vkms=$_dev
                 break
             fi
+            # Kernels with the faux bus expose vkms as faux_driver, so identify
+            # the device by its sysfs path instead of a card number.
+            _sys=$(readlink -f "/sys/class/drm/$(basename "$_dev")/device" 2>/dev/null || true)
+            case "$_sys" in
+                */vkms | */vkms/*)
+                    _vkms=$_dev
+                    break
+                    ;;
+            esac
         done
         [ -n "$_vkms" ] && break
         _tries=$((_tries + 1))
@@ -583,12 +594,17 @@ drm_vkms() {
     # The user's shell owns the log redirects, so the test can read them.
     # shellcheck disable=SC2024
     sudo env LIBSEAT_BACKEND=noop XDG_RUNTIME_DIR="$_run" \
+        LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
+        __EGL_VENDOR_LIBRARY_DIRS="${__EGL_VENDOR_LIBRARY_DIRS:-}" \
+        LIBGL_DRIVERS_PATH="${LIBGL_DRIVERS_PATH:-}" \
+        GBM_BACKENDS_PATH="${GBM_BACKENDS_PATH:-}" \
         sh -c 'printf "%s\n" "$$" >"$1"; shift; exec "$@"' sh "$_pidfile" \
         "$_yuki" --drm --drm-device "$_vkms" --no-input --log-level=debug \
         >"$_log" 2>&1 &
 
+    # The first sudo prompt can take a while; give it 30 seconds.
     _tries=0
-    while [ "$_tries" -lt 50 ] && [ ! -s "$_pidfile" ]; do
+    while [ "$_tries" -lt 300 ] && [ ! -s "$_pidfile" ]; do
         _tries=$((_tries + 1))
         sleep 0.1
     done
@@ -598,8 +614,8 @@ drm_vkms() {
 
     _socket=
     _tries=0
-    while [ "$_tries" -lt 50 ]; do
-        _socket=$(sed -n 's/.*socket = \(wayland-[0-9]*\).*/\1/p' "$_log" | tail -n 1)
+    while [ "$_tries" -lt 300 ]; do
+        _socket=$(sed -n 's/.*socket *= *\(wayland-[0-9]*\).*/\1/p' "$_log" | tail -n 1)
         [ -n "$_socket" ] && break
         _tries=$((_tries + 1))
         sleep 0.1

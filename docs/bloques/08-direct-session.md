@@ -75,7 +75,8 @@ solo no las conoce. El `enable --now` crea los enlaces en
 
 `./dev.sh drm-vkms` prueba el backend directo sin tocar el panel ni la entrada
 real. Necesita `sudo` no interactivo (`sudo -v` antes) y `ffmpeg`. Carga
-`vkms` si hace falta, busca su `cardN` por `DRIVER=vkms` (nunca por número),
+`vkms` si hace falta, busca su `cardN` por el driver/sysfs de vkms (nunca por
+número),
 arranca Yuki con `LIBSEAT_BACKEND=noop`, `--drm-device <vkms>` y `--no-input`,
 conecta `pattern_live`, pide la captura por `SIGUSR1` y verifica los cuatro
 cuadrantes. El `trap` mata Yuki y descarga `vkms` aunque falle. También lee
