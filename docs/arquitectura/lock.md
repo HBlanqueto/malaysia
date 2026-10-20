@@ -33,6 +33,33 @@ yuki-shell lock ──► ext_session_lock_manager_v1.lock(surface)
 4. **Desbloquear**: solo una autenticación PAM correcta, con
    `unlock_and_destroy`. Este cliente jamás desbloquea por su cuenta.
 
+## Recuperación si el cliente muere
+
+La garantía no es "no hacer nada": el protocolo permite recuperar la sesión sin
+desbloquearla. `ext-session-lock-v1` dice que, si el cliente muere estando
+bloqueada, el compositor **no debe desbloquearla**, y añade que puede permitir
+que un cliente nuevo cree un `ext_session_lock_v1` y asuma la
+responsabilidad, incluso lanzando automáticamente una instancia nueva.
+
+Smithay en la revisión anclada implementa ambas cosas: al desconectarse el
+cliente dueño cambia `LockStatus` a `Defunct` (no a `Unlocked`), y un segundo
+`lock()` sigue llegando a `SessionLockHandler::lock`; `SessionLocker::lock`
+pasa la propiedad al nuevo `ExtSessionLockV1`. Yuki mantiene `locked == true`
+durante todo el cambio.
+
+La recuperación vive en `crates/yuki/src/lock.rs`:
+
+- cada lock surface registra un destruction hook; si desaparece la última
+  superficie con la sesión bloqueada, se programa la recuperación;
+- al confirmar un lock se arma un watchdog de 3 s por si el cliente muere
+  antes de crear su primera superficie;
+- el reloj usa el mismo `TimerSink` que el idle y el mismo camino de arranque
+  que `idle.rs` (`shell_command` + `spawn_shell`, con `WAYLAND_DISPLAY`);
+- backoff exponencial 1, 2, 4, 8 y 16 s, máximo 5 intentos. Agotados, la
+  sesión sigue bloqueada en color sólido; un `yuki-shell lock` manual se sigue
+  aceptando;
+- ni la recuperación ni un segundo lock llaman a `SessionLockHandler::unlock`.
+
 ## Autenticación PAM (`crates/yuki-shell/src/pam.rs`)
 
 La autenticación vive **en el proceso del lock**, no en el compositor. Es una

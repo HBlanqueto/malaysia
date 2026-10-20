@@ -179,6 +179,10 @@ pub struct State {
     pub idle: crate::idle::IdleState,
     /// Surfaces holding `zwp_idle_inhibitor_v1`.
     pub idle_inhibitors: Vec<WlSurface>,
+    /// Failed lock-recovery attempts since the current lock client was seen.
+    pub(crate) lock_recovery_attempts: u32,
+    /// Whether a lock-recovery timer is already scheduled.
+    pub(crate) lock_recovery_pending: bool,
     /// The Wayland display handle.
     ///
     /// Held as a *handle*, never as a borrow of the [`Display`], so the module
@@ -362,6 +366,8 @@ impl State {
             lock_surfaces: Vec::new(),
             idle,
             idle_inhibitors: Vec::new(),
+            lock_recovery_attempts: 0,
+            lock_recovery_pending: false,
             display_handle: display_handle.clone(),
             output_manager_state,
             output,
@@ -416,10 +422,14 @@ impl State {
         self.idle.note_activity();
     }
 
-    /// A timer from the backend fired. `0` is auto-lock; the rest are client
-    /// idle notifications.
+    /// A timer from the backend fired. `0` is auto-lock, the lock-recovery
+    /// sentinel is handled here, and the rest are client idle notifications.
     pub(crate) fn idle_timer(&mut self, id: u64) {
-        self.idle.idle_timer(id);
+        if id == crate::idle::LOCK_RECOVERY_ID {
+            self.lock_recovery_timer();
+        } else {
+            self.idle.idle_timer(id);
+        }
     }
 
     /// Records the compositor's own Wayland socket for the auto-lock child.

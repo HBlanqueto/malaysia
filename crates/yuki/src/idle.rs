@@ -34,6 +34,8 @@ use crate::state::State;
 /// The auto-lock timer has no notification resource, so it gets this id;
 /// client notifications start at 1.
 const AUTO_ID: u64 = 0;
+/// The lock-recovery timer shares the sink but is handled by `State`.
+pub(crate) const LOCK_RECOVERY_ID: u64 = u64::MAX;
 
 /// Where a backend's event loop inserts timers.
 pub trait TimerSink {
@@ -149,6 +151,17 @@ impl IdleState {
     /// to the host session.
     pub fn set_wayland_display(&mut self, display: String) {
         self.wayland_display = Some(display);
+    }
+
+    /// Schedules the lock-recovery watchdog/backoff. The id is reserved for
+    /// the lock module; `IdleState::idle_timer` never sees it.
+    pub fn schedule_lock_recovery(&mut self, delay: Duration) {
+        self.sink.insert(LOCK_RECOVERY_ID, delay);
+    }
+
+    /// Cancels a pending lock-recovery timer.
+    pub fn cancel_lock_recovery(&mut self) {
+        self.sink.remove(LOCK_RECOVERY_ID);
     }
 
     /// The session locked: auto-lock has nothing left to do.
@@ -272,28 +285,42 @@ impl IdleState {
         if self.locked || self.inhibited {
             return;
         }
+        if self.spawn_lock_screen() {
+            tracing::info!("idle timeout: started the lock screen");
+        }
+    }
+
+    /// Starts `yuki-shell lock` if there is no live lock child.
+    ///
+    /// Shared by the idle timeout and by the compositor's lock recovery, so
+    /// both use the same shell command and the same `WAYLAND_DISPLAY`.
+    /// Returns whether a child is running (or was just started).
+    pub(crate) fn spawn_lock_screen(&mut self) -> bool {
         if let Some(child) = &mut self.auto_lock_child {
             match child.try_wait() {
-                Ok(None) => return,
+                Ok(None) => return true,
                 Ok(Some(_)) | Err(_) => self.auto_lock_child = None,
             }
         }
+        let Some(display) = &self.wayland_display else {
+            error!("starting the lock screen: the Wayland socket is not known yet");
+            return false;
+        };
         let shell = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(|dir| dir.join("yuki-shell")))
             .unwrap_or_else(|| "yuki-shell".into());
-        let Some(display) = &self.wayland_display else {
-            error!("idle timeout: the Wayland socket is not known yet");
-            return;
-        };
         let mut command = crate::spawn::shell_command(shell);
         command.arg("lock").env("WAYLAND_DISPLAY", display);
         match crate::spawn::spawn_shell(command) {
             Ok(child) => {
-                tracing::info!("idle timeout: started the lock screen");
                 self.auto_lock_child = Some(child);
+                true
             }
-            Err(error) => error!(%error, "starting the lock screen after idle"),
+            Err(error) => {
+                error!(%error, "starting the lock screen");
+                false
+            }
         }
     }
 }

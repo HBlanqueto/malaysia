@@ -75,7 +75,8 @@ Estado de los componentes:
   [`arquitectura/dock.md`](arquitectura/dock.md).
 - **Lock** (`yuki-shell lock`) — hecho. `ext-session-lock-v1`: bloquea la
   sesión, autentica con PAM (`yuki-lock`, fallback `login`) y garantiza que
-  **no se desbloquea si el cliente muere**. El compositor lo lanza solo tras
+  **no se desbloquea si el cliente muere**: lo relanza con backoff y límite de
+  intentos mientras `locked` sigue siendo `true`. El compositor lo lanza solo tras
   `lock.idle_timeout_seconds` de inactividad, respetando
   `zwp_idle_inhibit_manager_v1`. Ver
   [`arquitectura/lock.md`](arquitectura/lock.md).
