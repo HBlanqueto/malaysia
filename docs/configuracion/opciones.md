@@ -97,7 +97,7 @@ almacén y repinta). El catálogo (qué wallpapers existen) y la selección actu
 se muestra) están juntos en el dominio `wallpaper.domain`; el catálogo está en el
 sistema (`share/wallpapers/`).
 
-## `dock` — dock de la shell (futuro `yuki-shell dock`; macOS `com.apple.dock`)
+## `dock` — dock de la shell (`yuki-shell dock`; macOS `com.apple.dock`)
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|

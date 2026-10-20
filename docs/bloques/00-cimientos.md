@@ -104,7 +104,7 @@ Dos cosas están modeladas deliberadamente. Los colores que difieren entre una v
 una no enfocada son un `FocusPair`, de modo que un valor no enfocado es su propia
 constante en lugar de un multiplicador aplicado después. La línea interior del modo oscuro es
 `Option<Rgba>`, ausente en modo claro, de modo que un renderer puede saltarse el pase en lugar
-de dibujar algo invisible. El acento proviene de la configuración de somewm del host;
+de dibujar algo invisible. El acento proviene de la configuración del host;
 el doc del módulo registra el archivo, la línea y el formato `#rrggbb` original
 (ADR 0011).
 

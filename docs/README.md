@@ -99,8 +99,8 @@ corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
 superficie EGL de la ventana; la captura ahora corre antes del render de la
 ventana). Ya corren wezterm,
 Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
-El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
-pendiente de aceptación en el panel real; **8b** (hotplug) y **8c** (planos y
-direct scanout) están planificados. La shell es nativa
+El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado;
+`./dev.sh drm-vkms` ya pasa y queda la aceptación en el panel real. **8b**
+(hotplug) y **8c** (planos y direct scanout) están planificados. La shell es nativa
 (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
 funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).

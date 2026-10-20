@@ -115,8 +115,8 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   outputs, `wl_output` por conector y manejo de desconexión.
 - **8c — planos y direct scanout.** Overlay/cursor planes, asignación de
   superficies a KMS y los criterios de promoción/expulsión.
-- Aceptación 8a: la sesión arranca desde un TTY sobre el panel del ThinkPad,
-  con teclado, touchpad y cambio de VT. Ver
+- Aceptación 8a: `./dev.sh drm-vkms` pasa; falta la sesión desde un TTY sobre
+  el panel del ThinkPad, con teclado, touchpad y cambio de VT. Ver
   `bloques/08-direct-session.md` para el checklist.
 
 ## Bloque 9 — Escala fraccional
@@ -129,14 +129,19 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 ## Bloque 10 — Lock con autenticación
 
 - Implementado: PAM en el proceso del lock (`yuki-lock`, fallback `login`),
-  campo enmascarado + estados, auto-lock por `ext-idle-notify-v1` y
-  `zwp_idle_inhibit_manager_v1`.
+  campo enmascarado + estados, auto-lock por `ext-idle-notify-v1`,
+  `zwp_idle_inhibit_manager_v1` y recuperación del lock (destruction hook,
+  watchdog de arranque y backoff 1/2/4/8/16 s, máximo 5 intentos).
 - Aceptación manual pendiente en la sesión anidada: contraseña incorrecta y
   correcta, auto-lock con 15 s, mpv en pantalla completa sin bloquear.
+- **Pendiente:** un atajo para relanzar el lock cuando se agotan los 5
+  reintentos. Nunca debe desbloquear la sesión.
 
 ## Bloque 11 — Protocolos de uso diario
 
-- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`, `xdg-output`
+- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`
+- `xdg-output` ya se anuncia con `OutputManagerState::new_with_xdg_output`;
+  no está pendiente.
 - **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`
   vacío de `handlers.rs` existe solo para que `WlSurface` cumpla
   `PointerTarget` en Smithay master; no hay `PointerConstraintsState` ni global.
@@ -155,6 +160,8 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Dónde está este repositorio
 
+- **Smithay — actualizado.** La subida a `023b78b1c5a05ca512767cacc07efca55fae8be4`
+  (ADR 0028) está hecha y la aceptación con el backend anidado pasó.
 - **Bloque 0 — hecho, con divergencias.** Los tipos de coordenadas viven en el
   crate `yuki-scene`, no en el compositor (ADR 0001). Smithay está anclado por
   `rev` a `023b78b1c5a05ca512767cacc07efca55fae8be4` con `desktop` desactivado
@@ -207,9 +214,18 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   7c hecho: la shell presenta por EGL (`wl_egl_window`), sin `wl_shm`. vkcube
   (RADV), mpv (gpu-next), wezterm y Firefox corren acelerados. Véase
   `bloques/07-linux-dmabuf-y-explicit-sync.md` y los ADR 0026/0027.
-- **Bloque 8a — implementado, aceptación pendiente.** DRM/KMS atómico, libseat,
-  libinput, GBM/EGL/GLES, un plano primario y el panel interno. Winit sigue
-  igual. Ver `bloques/08-direct-session.md`, ADR 0029 y ADR 0030.
+- **Bloque 8a — implementado en vkms; falta el panel real.** DRM/KMS atómico,
+  libseat, libinput, GBM/EGL/GLES y un plano primario. `./dev.sh drm-vkms`
+  pasó (modeset, render en el render node, scanout en vkms, vblank, daño y
+  captura). Winit sigue igual. Falta la aceptación en el panel eDP:
+  touchpad, VT y lock + VT. Ver `bloques/08-direct-session.md`, ADR 0029 y
+  ADR 0030.
+- **Bloque 10 — implementado, aceptación manual pendiente.** PAM en el proceso
+  del lock, UI de contraseña, auto-lock por `ext-idle-notify-v1` con
+  `zwp_idle_inhibit_manager_v1`, y recuperación del lock con backoff y límite
+  de 5 intentos. Queda probar a mano el ciclo incorrecta/correcta, el timeout
+  de 15 s y mpv fullscreen; también queda el atajo para relanzar el lock
+  agotados los reintentos, que nunca debe desbloquear.
 
 ## Numeración de bloques
 

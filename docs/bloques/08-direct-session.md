@@ -67,9 +67,9 @@ solo no las conoce. El `enable --now` crea los enlaces en
   cliente con foco.
 - También valen `SIGTERM`/`SIGINT` desde otra TTY o el cierre normal de la
   sesión.
-- Para volver a SomeWM: salir de Yuki y arrancar SomeWM desde el display
-  manager o desde el TTY, como se hacía antes. No hace falta tocar
-  `~/nixdots`.
+- Para volver a GDM: desde otra TTY, `pkill -f .yuki-wrapped`; después
+  `Ctrl+Alt+F1` o `sudo systemctl restart display-manager`. No hace falta
+  tocar `~/nixdots`.
 
 ## Prueba aislada con vkms
 

@@ -73,19 +73,22 @@ dibujando. Los prompts y las respuestas viajan por canales de calloop y
   PAM; las copias temporales para `strdup` también se zeroizan.
 - Servicio preferido: `yuki-lock`. Si `/etc/pam.d/yuki-lock` no existe, usa
   `login` y lo registra en stderr/journal.
-- En NixOS el archivo se genera con:
+- En NixOS la forma recomendada es dejar que NixOS genere la pila completa:
 
   ```nix
-  security.pam.services.yuki-lock.text = ''
-    auth required pam_unix.so
-    account required pam_unix.so
-  '';
+  security.pam.services.yuki-lock = { };
+  ```
+
+  Para otras distribuciones, el archivo `/etc/pam.d/yuki-lock` puede ser:
+
+  ```
+  auth required pam_unix.so
+  account required pam_unix.so
   ```
 
   Los nombres de módulo van **sin ruta**: libpam los busca en su propio
-  `LIBPAM_MODDIR`, que es el del paquete con el que se enlazó el lock. Una
-  ruta absoluta a otro store puede fallar al cargar el módulo. No se toca
-  `~/nixdots` desde este repo.
+  `LIBPAM_MODDIR`. Una ruta absoluta a otro store puede fallar al cargar el
+  módulo. No se toca `~/nixdots` desde este repo.
 - Un fallo muestra el texto de PAM y deja el campo listo para otro intento;
   un acierto llama a `SessionLock::unlock()` (`unlock_and_destroy`), hace
   `flush` y termina el proceso del lock.
