@@ -122,8 +122,12 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   v5 (7a).
 - Backend winit anidado (GLES2), backend DRM/KMS **8a** implementado
   (un plano primario, eDP, libseat/libinput, VT); **8b/8c** planificados.
-  Aceptación de 8a: pendiente en el panel real.
-- `TODO(scale)` en `crates/yuki/src/state.rs:133` (HiDPI).
+  Aceptación de 8a: vkms pasa; pendiente en el panel real.
+- **Bloque 10 implementado, aceptación manual pendiente:** PAM en el proceso
+  del lock, UI de contraseña, auto-lock por `ext-idle-notify-v1` con
+  `zwp_idle_inhibit_manager_v1` y recuperación del lock con backoff y límite
+  de 5 intentos.
+- `TODO(scale)` en `crates/yuki/src/state.rs:233` (HiDPI).
 
 ## Cómo compilar y probar
 

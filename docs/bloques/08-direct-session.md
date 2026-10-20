@@ -42,19 +42,35 @@ el compositor sigue funcionando sin shell y registra cómo instalar las units.
 Forma normal: el paquete Nix las instala y nixdots las activa con
 `systemd.packages` (fuera de este repo).
 
-Para probar a mano, enlazando las units de `result/`:
+Para probar a mano, enlazando las units de `result/lib/systemd/user/`
+desde la raíz del repo (`systemctl --user link` exige rutas absolutas):
 
 ```sh
-systemctl --user link result/share/systemd/user/yuki-session.target
-systemctl --user link result/share/systemd/user/yuki-shell@.service
+systemctl --user link "$PWD/result/lib/systemd/user/yuki-session.target"
+systemctl --user link "$PWD/result/lib/systemd/user/yuki-shell@.service"
 systemctl --user daemon-reload
-systemctl --user enable --now yuki-shell@wallpaper.service \
+systemctl --user enable yuki-shell@wallpaper.service \
   yuki-shell@menubar.service yuki-shell@dock.service
 ```
 
 El target arranca las instancias habilitadas; `yuki-session.target` por sí
-solo no las conoce. El `enable --now` crea los enlaces en
-`yuki-session.target.wants`.
+solo no las conoce. `enable` crea los enlaces en `yuki-session.target.wants`;
+no uses `--now` desde GNOME, porque arrancaría la shell en la sesión
+equivocada.
+
+## Script de lanzamiento
+
+`scripts/yuki-drm.sh` automatiza el setup, el arranque desde un TTY, los
+clientes, el lock y la salida de emergencia:
+
+```sh
+scripts/yuki-drm.sh setup          # desde GNOME: build + units
+scripts/yuki-drm.sh run            # desde un TTY: yuki --drm
+scripts/yuki-drm.sh client foot    # desde otro TTY: cliente en Yuki
+scripts/yuki-drm.sh lock           # desde otro TTY: bloquea
+scripts/yuki-drm.sh status         # pid, socket y log
+scripts/yuki-drm.sh stop           # mata Yuki, también con lock
+```
 
 ## Salida de emergencia
 
