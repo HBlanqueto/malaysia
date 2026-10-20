@@ -59,7 +59,7 @@ toml = "0.8"
 
 # Keyboard handling (Esc closes a popup level): xkb keysym lookup. Pinned to
 # the same major smithay uses, so the Keysym type is the same crate.
-xkbcommon = "0.8"
+xkbcommon = "0.9"
 
 # Shell clock (yuki-shell menubar): local time formatting.
 chrono = "0.4"
@@ -95,14 +95,15 @@ smithay-client-toolkit = "0.19.2"
 # Same package, under the shorter name the shell uses (`sctk::...`).
 sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 
-# Compositor framework. Default features are off so only the nested winit
-# backend and the GLES2 renderer are compiled (ADR 0009); `wayland_frontend`
-# is needed for the protocol handlers that follow. `backend_drm` is the module
-# that knows render nodes: `EGLDevice::try_get_render_node` (the dmabuf
-# feedback's main device, Bloque 7a) and the drm-syncobj explicit-sync
-# protocol (Bloque 7b) both live behind it. It adds the `drm`/`drm-ffi`
-# userspace crates, not the kernel driver.
-smithay = { version = "0.7", default-features = false, features = [
+# Compositor framework, pinned to master by revision (ADR 0028). The rev is
+# what `Cargo.lock` resolves; bumping it is a deliberate change. Default
+# features are off so only the nested winit backend and the GLES2 renderer are
+# compiled (ADR 0009); `wayland_frontend` is needed for the protocol handlers
+# that follow. `backend_drm` is the module that knows render nodes:
+# `EGLDevice::try_get_render_node` (the dmabuf feedback's main device, Bloque 7a)
+# and the drm-syncobj explicit-sync protocol (Bloque 7b) both live behind it.
+# It adds the `drm`/`drm-ffi` userspace crates, not the kernel driver.
+smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca512767cacc07efca55fae8be4", default-features = false, features = [
     "backend_winit",
     "backend_drm",
     "renderer_gl",

@@ -299,6 +299,7 @@ impl State {
                 subpixel: Subpixel::Unknown,
                 make: "Yuki".to_string(),
                 model: "Winit".to_string(),
+                serial_number: String::new(),
             },
         );
         let mode = Mode {

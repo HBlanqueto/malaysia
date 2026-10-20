@@ -124,12 +124,15 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 
 - `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`,
   `zwp_idle_inhibit_manager_v1`, `xdg-output`
+- **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`
+  vacío de `handlers.rs` existe solo para que `WlSurface` cumpla
+  `PointerTarget` en Smithay master; no hay `PointerConstraintsState` ni global.
 - **Captura de pantalla**: `ext-image-copy-capture-v1` +
   `ext-image-capture-source-v1`, necesarios para compartir pantalla vía
   xdg-desktop-portal. Hoy hay un volcado PNG de depuración por `SIGUSR1`
-  (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. **Nota: al
-  actualizar Smithay, revisar si ya sirve estos protocolos** (en 0.7.0 no
-  existe ningún módulo de captura).
+  (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. Smithay ya
+  ofrece `image_copy_capture` e `image_capture_source` en la revisión anclada;
+  falta implementar los handlers y la ruta de buffers de Yuki.
 - Aceptación: (Pendiente)
 
 ## Después del Bloque 11
@@ -140,9 +143,9 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 ## Dónde está este repositorio
 
 - **Bloque 0 — hecho, con divergencias.** Los tipos de coordenadas viven en el
-  crate `yuki-scene`, no en el compositor (ADR 0001). Smithay está anclado al
-  release 0.7.0 de crates.io con `desktop` deliberadamente desactivado, no a un `rev`
-  de git con `desktop` activado (ADR 0009, ADR 0010). El nivel de log se establece con `--log-level`,
+  crate `yuki-scene`, no en el compositor (ADR 0001). Smithay está anclado por
+  `rev` a `023b78b1c5a05ca512767cacc07efca55fae8be4` con `desktop` desactivado
+  (ADR 0009, ADR 0010). El nivel de log se establece con `--log-level`,
   no con filtrado basado en variables de entorno. `yuki-design` no está vacío.
 - **Bloque 1 — hecho.** `wayland-info` (el dev shell no tiene `weston-info`) enumera
   todos los globals. Véase `bloques/00-cimientos.md` y el registro a nivel de sesión

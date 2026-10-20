@@ -22,7 +22,7 @@ docs/
 │   ├── 05-popups.md
 │   ├── 06-portapapeles.md
 │   └── 07-linux-dmabuf-y-explicit-sync.md
-├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0027)
+├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0028)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
 │   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
@@ -37,13 +37,16 @@ docs/
 ├── hardware.md        línea base de hardware/gráficos de la máquina
 └── investigacion/
     ├── como-renderiza-macos.md   investigación a fondo del renderizado de macOS
-    └── wayland-vs-macos.md       comparación con Wayland y qué probar en yuki
+    ├── wayland-vs-macos.md       comparación con Wayland y qué probar en yuki
+    └── otto-y-forks.md           Otto y los forks de HBlanqueto: qué reutilizar
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
 > **POLÍTICA DE DISEÑO** (ADR 0020) — chrome separado (GTK/Libadwaita conserva su
 > apariencia; Qt y demás reciben el chrome de Yuki) y efectos para todas las
 > ventanas (inner border, sombra, blur). Si vas a tocar diseño, léelo.
+>
+> **Avisos de terceros.** `NOTICE` debe actualizarse en el mismo commit en que se copie código de un tercero (Otto incluido).
 
 ## Cómo leerlo
 
@@ -57,7 +60,7 @@ docs/
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
 5. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0027, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0028, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 6. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
@@ -73,7 +76,8 @@ docs/
 8. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
    comparará el hito Direct Session (DRM/KMS).
 9. **[`investigacion/`](investigacion/)** — material de investigación: cómo
-   renderiza macOS su escritorio y cómo se compara con las opciones Wayland.
+   renderiza macOS su escritorio, cómo se compara con las opciones Wayland y qué
+   se puede reutilizar de [Otto y sus forks](investigacion/otto-y-forks.md).
 
 ## Estado actual en una línea
 

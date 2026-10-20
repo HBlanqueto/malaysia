@@ -17,7 +17,7 @@ continua.
 | 0007 | Compilar fuera de la shell de desarrollo está prohibido | aceptado |
 | 0008 | Los design tokens fluyen en una sola dirección, de Nix a Rust | aceptado |
 | 0009 | El backend anidado es winit con el renderizador GLES2 | aceptado |
-| 0010 | Smithay está anclado a la versión 0.7.0 publicada en crates.io | aceptado |
+| 0010 | Smithay está anclado a la versión 0.7.0 publicada en crates.io | reemplazado por 0028 |
 | 0011 | Los valores de diseño son constantes Rust escritas a mano en `yuki-design` | aceptado |
 | 0012 | El backend vive junto al State del compositor | aceptado |
 | 0013 | El dispatch de clientes hace poll de un descriptor de archivo duplicado del display | aceptado |
@@ -34,6 +34,7 @@ continua.
 | 0025 | La shell es nativa (`yuki-shell`); se elimina Quickshell | aceptado |
 | 0026 | linux-dmabuf y explicit sync (Bloque 7a/7b) | aceptado |
 | 0027 | La shell presenta por EGL (Bloque 7c) | aceptado |
+| 0028 | Smithay se ancla a master por revisión | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

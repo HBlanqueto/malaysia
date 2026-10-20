@@ -1,6 +1,6 @@
 # 0010 — Smithay está anclado a la versión 0.7.0 publicada en crates.io
 
-Estado: aceptado (sesión anidada, parte 1)
+Estado: reemplazado por 0028
 
 ## Contexto
 

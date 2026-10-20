@@ -32,12 +32,22 @@
 
           cargoLock = {
             lockFile = ./Cargo.lock;
+            # Smithay se toma de git en Cargo.toml; Nix necesita el hash del
+            # árbol de esa revisión para vendorizarlo. Rev:
+            # 023b78b1c5a05ca512767cacc07efca55fae8be4.
+            outputHashes = {
+              "smithay-0.7.0" = "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
+            };
           };
 
           # The per-crate build script refuses to compile without this marker
           # (ADR 0007). The package build is a sanctioned, hermetic build path,
           # so it sets the marker deliberately; it does not use mold.
           YUKI_DEV_SHELL = "1";
+
+          # The test suite needs an EGL device and system fonts; the Nix build
+          # sandbox has neither. Tests run in the dev shell (cargo test).
+          doCheck = false;
 
           nativeBuildInputs = with pkgs; [ pkg-config ];
 

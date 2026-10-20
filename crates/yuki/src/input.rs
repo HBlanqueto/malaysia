@@ -12,7 +12,7 @@
 
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
-    KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    InputTime, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
 };
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{
@@ -49,7 +49,7 @@ impl State {
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
-                let time = Event::time_msec(&event);
+                let time = event.time();
                 if let Some(keyboard) = self.seat.get_keyboard() {
                     let pressed = event.state() == KeyState::Pressed;
                     keyboard.input::<(), _>(
@@ -77,7 +77,7 @@ impl State {
                 let location = event
                     .position_transformed(self.logical_output_size())
                     .to_f64();
-                self.pointer_motion(location, event.time_msec());
+                self.pointer_motion(location, event.time());
             }
             InputEvent::PointerButton { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
@@ -103,7 +103,7 @@ impl State {
                             button,
                             state,
                             serial,
-                            time: event.time_msec(),
+                            time: event.time(),
                         },
                     );
                     pointer.frame(self);
@@ -330,7 +330,7 @@ impl State {
         if self.windows.surface_under(location).is_none() {
             return;
         }
-        let time = 0;
+        let time = InputTime::from_millis(0);
         // The hover goes through the real motion path, as a host pointer's
         // would, so the seam exercises the same focus-origin computation.
         self.pointer_motion(location, time);
@@ -395,7 +395,7 @@ impl State {
         let (dx, dy) = test_drag_delta();
         let location = Point::new(press.location.x + dx, press.location.y + dy);
         let before = self.windows.outer(id);
-        self.pointer_motion(location, 0);
+        self.pointer_motion(location, InputTime::from_millis(0));
         if let Some(press) = self.test_press.as_mut() {
             press.location = location;
         }
@@ -421,7 +421,7 @@ impl State {
             return;
         }
         self.end_grab();
-        let time = 0;
+        let time = InputTime::from_millis(0);
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
@@ -447,7 +447,7 @@ impl State {
     /// longer mask the focus.
     fn inject_test_hovers(&mut self) {
         for (x, y) in test_hover_points() {
-            self.pointer_motion(Point::new(x, y), 0);
+            self.pointer_motion(Point::new(x, y), InputTime::from_millis(0));
         }
     }
 
@@ -488,7 +488,7 @@ impl State {
     /// not the surface-local point `surface_under` reports: Smithay subtracts
     /// the origin itself before sending the client the surface-local position
     /// (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`).
-    fn pointer_motion(&mut self, location: Point<f64, Logical>, time: u32) {
+    fn pointer_motion(&mut self, location: Point<f64, Logical>, time: InputTime) {
         if let Some(grab) = self.grab {
             self.drag(grab, location);
             self.request_redraw();
@@ -593,7 +593,7 @@ impl State {
             .amount(Axis::Vertical)
             .unwrap_or_else(|| event.amount_v120(Axis::Vertical).unwrap_or(0.0) * 15.0 / 120.0);
 
-        let mut frame = AxisFrame::new(event.time_msec()).source(source);
+        let mut frame = AxisFrame::new(event.time()).source(source);
         if horizontal != 0.0 {
             frame = frame.value(Axis::Horizontal, horizontal);
             if let Some(discrete) = event.amount_v120(Axis::Horizontal) {
@@ -685,7 +685,7 @@ mod tests {
     use smithay::backend::input::ButtonState;
     use smithay::backend::input::{
         AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
-        PointerMotionAbsoluteEvent, UnusedEvent,
+        InputTime, PointerMotionAbsoluteEvent, UnusedEvent,
     };
     use smithay::input::pointer::{ButtonEvent, CursorIcon};
     use smithay::reexports::calloop::EventLoop;
@@ -716,7 +716,7 @@ mod tests {
                 button: BUTTON_LEFT,
                 state: state_,
                 serial,
-                time: 0,
+                time: InputTime::from_millis(0),
             },
         );
         pointer.frame(state);
@@ -838,8 +838,8 @@ mod tests {
     }
 
     impl Event<TestBackend> for TestMouseMove {
-        fn time(&self) -> u64 {
-            0
+        fn time(&self) -> InputTime {
+            InputTime::from_millis(0)
         }
 
         fn device(&self) -> TestDevice {

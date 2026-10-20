@@ -147,7 +147,9 @@ impl WindowData {
 
     /// The window state that affects decoration, from the surface's state.
     fn state(&self) -> WindowState {
-        let states = self.toplevel.current_state().states;
+        let states = self.toplevel.with_committed_state(|state| {
+            state.map(|state| state.states.clone()).unwrap_or_default()
+        });
         if states.contains(xdg_toplevel::State::Fullscreen) {
             WindowState::Fullscreen
         } else if states.contains(xdg_toplevel::State::Maximized) {

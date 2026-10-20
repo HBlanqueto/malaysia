@@ -1,40 +1,26 @@
 //! Protocol handler implementations and their delegation glue.
 //!
-//! Smithay's `delegate_*` macros wire a state type to the protocol objects it
-//! serves, but they only work if the matching `*Handler` trait is implemented.
-//! The impls live here, next to the macros, so `state.rs` stays a plain data
-//! description and every handler is in one place.
+//! Smithay's `delegate_dispatch2!` macro wires a state type to the protocol
+//! objects it serves, but it only works if the matching `*Handler` trait is
+//! implemented. The impls live here, next to the macro, so `state.rs` stays a
+//! plain data description and every handler is in one place.
 //!
 //! The globals split across two traits each: the handler trait is the
-//! compositor's behaviour, the `delegate_*` macro is the plumbing that turns
-//! client requests into calls on that behaviour.
+//! compositor's behaviour, the macro is the plumbing that turns client
+//! requests into calls on that behaviour.
 
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::delegate_compositor;
-use smithay::delegate_data_device;
-use smithay::delegate_dmabuf;
-use smithay::delegate_drm_syncobj;
-use smithay::delegate_foreign_toplevel_list;
-use smithay::delegate_fractional_scale;
-use smithay::delegate_kde_decoration;
-use smithay::delegate_layer_shell;
-use smithay::delegate_output;
-use smithay::delegate_primary_selection;
-use smithay::delegate_seat;
-use smithay::delegate_session_lock;
-use smithay::delegate_shm;
-use smithay::delegate_viewporter;
-use smithay::delegate_xdg_decoration;
-use smithay::delegate_xdg_shell;
+use smithay::delegate_dispatch2;
 use smithay::reexports::calloop::Interest;
 use smithay::wayland::dmabuf::{get_dmabuf, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::{DrmSyncobjCachedState, DrmSyncobjHandler, DrmSyncobjState};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelListHandler, ForeignToplevelListState};
+use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
 use smithay::input::Seat;
 use smithay::input::SeatHandler;
 use smithay::input::SeatState;
-use smithay::input::pointer::CursorImageStatus;
+use smithay::input::pointer::{CursorImageStatus, Focus};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::{
     Mode as KdeMode, OrgKdeKwinServerDecoration,
@@ -52,9 +38,10 @@ use smithay::wayland::compositor::{
     SurfaceAttributes, add_blocker, add_pre_commit_hook, with_states,
 };
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::pointer_constraints::PointerConstraintsHandler;
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::selection::data_device::{
-    ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
+    DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler,
 };
 use smithay::wayland::selection::primary_selection::{
     PrimarySelectionHandler, PrimarySelectionState,
@@ -163,8 +150,6 @@ impl CompositorHandler for State {
         self.request_redraw();
     }
 }
-
-delegate_compositor!(State);
 
 /// Which commit blocker a pending dmabuf needs, if any (Bloque 7b).
 ///
@@ -296,15 +281,11 @@ impl DmabufHandler for State {
     }
 }
 
-delegate_dmabuf!(State);
-
 impl DrmSyncobjHandler for State {
     fn drm_syncobj_state(&mut self) -> Option<&mut DrmSyncobjState> {
         self.syncobj_state.as_mut()
     }
 }
-
-delegate_drm_syncobj!(State);
 
 impl ShmHandler for State {
     fn shm_state(&self) -> &ShmState {
@@ -312,7 +293,7 @@ impl ShmHandler for State {
     }
 }
 
-delegate_shm!(State);
+impl PointerConstraintsHandler for State {}
 
 impl SeatHandler for State {
     type KeyboardFocus = WlSurface;
@@ -333,36 +314,70 @@ impl SeatHandler for State {
     }
 }
 
-delegate_seat!(State);
-
 impl SelectionHandler for State {
     type SelectionUserData = ();
 }
 
 impl DataDeviceHandler for State {
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.data_device_state
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.data_device_state
     }
 }
 
-impl ClientDndGrabHandler for State {}
-impl ServerDndGrabHandler for State {}
+impl WaylandDndGrabHandler for State {
+    fn dnd_requested<S: Source>(
+        &mut self,
+        source: S,
+        _icon: Option<WlSurface>,
+        seat: Seat<Self>,
+        serial: Serial,
+        type_: GrabType,
+    ) {
+        match type_ {
+            GrabType::Pointer => {
+                let Some(pointer) = seat.get_pointer() else {
+                    source.cancel();
+                    return;
+                };
+                let Some(start_data) = pointer.grab_start_data() else {
+                    source.cancel();
+                    return;
+                };
+                pointer.set_grab(
+                    self,
+                    DnDGrab::new_pointer(&self.display_handle, start_data, source, seat),
+                    serial,
+                    Focus::Keep,
+                );
+            }
+            GrabType::Touch => {
+                let Some(touch) = seat.get_touch() else {
+                    source.cancel();
+                    return;
+                };
+                let Some(start_data) = touch.grab_start_data() else {
+                    source.cancel();
+                    return;
+                };
+                touch.set_grab(
+                    self,
+                    DnDGrab::new_touch(&self.display_handle, start_data, source, seat),
+                    serial,
+                );
+            }
+        }
+    }
+}
 
-delegate_data_device!(State);
+impl DndGrabHandler for State {}
 
 impl PrimarySelectionHandler for State {
-    fn primary_selection_state(&self) -> &PrimarySelectionState {
-        &self.primary_selection_state
+    fn primary_selection_state(&mut self) -> &mut PrimarySelectionState {
+        &mut self.primary_selection_state
     }
 }
 
-delegate_primary_selection!(State);
-
-delegate_session_lock!(State);
-
 impl OutputHandler for State {}
-
-delegate_output!(State);
 
 impl ForeignToplevelListHandler for State {
     fn foreign_toplevel_list_state(&mut self) -> &mut ForeignToplevelListState {
@@ -370,7 +385,6 @@ impl ForeignToplevelListHandler for State {
     }
 }
 
-delegate_foreign_toplevel_list!(State);
 delegate_foreign_management!(State);
 
 impl WlrLayerShellHandler for State {
@@ -399,8 +413,6 @@ impl WlrLayerShellHandler for State {
     }
 }
 
-delegate_layer_shell!(State);
-
 impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
         // Advertise the current output scale. The shell renders its buffers at
@@ -414,9 +426,6 @@ impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
         });
     }
 }
-
-delegate_fractional_scale!(State);
-delegate_viewporter!(State);
 
 impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
@@ -572,8 +581,6 @@ impl XdgShellHandler for State {
     }
 }
 
-delegate_xdg_shell!(State);
-
 /// The decoration a client asks for with an xdg-decoration mode.
 ///
 /// The protocol has no "unset" value here: `request_mode` carries one of the
@@ -647,8 +654,6 @@ impl XdgDecorationHandler for State {
     }
 }
 
-delegate_xdg_decoration!(State);
-
 impl KdeDecorationHandler for State {
     fn kde_decoration_state(&self) -> &KdeDecorationState {
         &self.kde_decoration_state
@@ -676,8 +681,6 @@ impl KdeDecorationHandler for State {
         );
     }
 }
-
-delegate_kde_decoration!(State);
 
 #[cfg(test)]
 mod tests {
@@ -766,3 +769,5 @@ mod tests {
         assert_eq!(pending_blocker(true, false), Some(BlockerKind::Implicit));
     }
 }
+
+delegate_dispatch2!(State);
