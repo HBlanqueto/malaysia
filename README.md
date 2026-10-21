@@ -53,6 +53,47 @@ domain read  effects.shadow.radius
 Los dominios son `appearance`, `window`, `dock`, `menubar`, `lock`, `effects` y
 `debug`.
 
+### Opciones
+
+`activa` cambia el comportamiento ya; `datos` está definida pero todavía no se
+consume; `pendiente` está acordada y se implementará después.
+
+| Opción | Valores | Default | Estado |
+|---|---|---|---|
+| `appearance.color_scheme` | `auto`, `dark`, `light` | `auto` | datos |
+| `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos |
+| `window.decorations` | `default`, `force_server`, `force_client` | `default` | activa |
+| `window.titlebar` | bool | `true` | datos |
+| `window.double_click_titlebar` | `fill`, `minimize`, `zoom`, `none` | `zoom` | datos |
+| `window.focus` | `click`, `sloppy` | `click` | datos |
+| `window.resize_border` | entero (px lógicos) | `6` | datos |
+| `wallpaper.dir` | ruta | `/run/current-system/sw/share/wallpapers/solid-colors` | datos |
+| `wallpaper.scale` | `fill`, `stretch`, `fit`, `center` | `fill` | datos |
+| `wallpaper.shuffle` | bool | `false` | datos |
+| `dock.autohide` | bool | `false` | pendiente |
+| `dock.orientation` | `bottom`, `left`, `right` | `bottom` | pendiente |
+| `dock.magnification` | bool | `false` | pendiente |
+| `dock.tilesize` | entero (px) | `48` | pendiente |
+| `dock.largesize` | entero (px) | `64` | pendiente |
+| `dock.mineffect` | `genie`, `scale`, `suck` | `genie` | pendiente |
+| `dock.show-process-indicators` | bool | `true` | pendiente |
+| `dock.static-only` | bool | `false` | pendiente |
+| `dock.minimize-to-application` | bool | `false` | pendiente |
+| `dock.show-recents` | bool | `true` | pendiente |
+| `lock.idle_timeout_seconds` | entero (segundos) | `300` | activa |
+| `menubar.autohide` | bool | `false` | pendiente |
+| `effects.corner_radius` | float (px) | `0.0` | datos |
+| `effects.inner_border.enabled` | bool | `false` | datos |
+| `effects.inner_border.width` | float (px) | `1.0` | datos |
+| `effects.inner_border.color` | `[r,g,b]` | `[0.5,0.5,0.5]` | datos |
+| `effects.shadow.enabled` | bool | `false` | datos |
+| `effects.shadow.radius` | float (px) | `24.0` | datos |
+| `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | datos |
+| `effects.shadow.opacity` | float `[0,1]` | `0.35` | datos |
+| `effects.blur.enabled` | bool | `false` | datos |
+| `effects.blur.radius` | float (px) | `20.0` | datos |
+| `debug.damage_highlight` | bool | `false` | datos |
+
 ### Archivos `.domain`
 
 La configuración se guarda como TOML, un archivo por dominio, al estilo de los
