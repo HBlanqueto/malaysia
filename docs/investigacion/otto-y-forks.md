@@ -356,8 +356,8 @@ de Otto es solo referencia.
 | `src/state/kde_appmenu.rs` | 143 | 0 | 0 | Extra portable: `org_kde_kwin_appmenu` para el menú global. |
 
 Otto captura con `wlr-screencopy`, atado a su renderer Skia. Yuki eligió
-`ext-image-copy-capture-v1` + `ext-image-capture-source-v1` en el roadmap (aún no
-implementados). De Otto no se copia la captura; sí la parte PipeWire: el pool y la
+`ext-image-copy-capture-v1` + `ext-image-capture-source-v1` en el roadmap
+(implementados en el Bloque 11). De Otto no se copia la captura; sí la parte PipeWire: el pool y la
 negociación de `screenshare/pipewire_stream.rs` y la capa de portal
 (`interface.rs`, `stream.rs`, `otto_client/screencast.rs`), adaptando el D-Bus
 privado de Otto a uno de Yuki.

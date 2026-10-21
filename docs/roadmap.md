@@ -125,13 +125,14 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 9 — Escala fraccional
 
-- **Hecho:** `State::scale` (`output::Scale`), `YUKI_SCALE` como override de
-  desarrollo, `wl_output` entero + `wp_fractional_scale_v1` exacto, escala en
-  `logical_output_size`, render, damage tracker, cursor y viewporter de la
-  shell. Ver `bloques/09-escala-fraccional.md`.
+- **Hecho:** `State::scale` (`output::Scale`), `display.scale` persistente en
+  `display.domain` (`YUKI_SCALE` queda como override de desarrollo), `wl_output`
+  entero + `wp_fractional_scale_v1` exacto, escala en `logical_output_size`,
+  render, damage tracker, cursor y viewporter de la shell, y el redondeo
+  floor/ceil de rectángulos lógicos (ADR 0004). Ver
+  `bloques/09-escala-fraccional.md`.
 - **Pendiente:** aceptación en panel real a 1.25/1.5; escala por salida/monitor
-  con 8b; opción de configuración real (no `YUKI_SCALE`); redondeo de
-  rectángulos lógicos (ADR 0004).
+  con 8b.
 - Aceptación: una ventana y la shell se ven nítidas a escala 1.25/1.5; el
   puntero cae donde se ve; el panel real lo confirma.
 
@@ -305,9 +306,9 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   Ver `bloques/08-direct-session.md`, ADR 0029 y ADR 0030.
 - **Bloque 9 — parcial.** `State::scale` sustituye el literal global; la escala
   entera y fraccionaria llega a `wl_output`, render, damage tracker, cursor y
-  shell. `YUKI_SCALE` es el override de desarrollo. Faltan la aceptación en
-  panel a 1.25/1.5, la opción persistente y la escala por salida de 8b. Ver
-  `bloques/09-escala-fraccional.md`.
+  shell, y `display.scale` es persistente (`YUKI_SCALE` es el override de
+  desarrollo). Faltan la aceptación en panel a 1.25/1.5 y la escala por salida
+  de 8b. Ver `bloques/09-escala-fraccional.md`.
 - **Bloque 10 — implementado y aceptado.** PAM en el proceso del lock, UI de
   contraseña, auto-lock por `ext-idle-notify-v1` con
   `zwp_idle_inhibit_manager_v1`, recuperación del lock con backoff y límite de

@@ -17,7 +17,7 @@ aceptación en el panel real y la escala por salida de 8b.
   `buffer_scale` con viewport y a 1.5 el source quedaba fuera del buffer
   (`wp_viewport: out_of_buffer`).
 - `FractionalScaleHandler` envía `preferred_scale` exacto a cada superficie.
-- Test unitario de parseo/clamp de `YUKI_SCALE`.
+- Test unitario de parseo/clamp de `display.scale` y del override `YUKI_SCALE`.
 
 ## Pendiente
 
@@ -37,6 +37,9 @@ aceptación en el panel real y la escala por salida de 8b.
 
 ```sh
 YUKI_SCALE=1.5 ./dev.sh run
+# o, persistente, sin YUKI_SCALE:
+#   printf 'scale = 1.5\n' > "${XDG_CONFIG_HOME:-$HOME/.config}/yuki/display.domain"
+#   ./dev.sh run
 # en otra terminal, con el WAYLAND_DISPLAY que imprima Yuki:
 WAYLAND_DISPLAY=wayland-N yuki-shell wallpaper
 WAYLAND_DISPLAY=wayland-N yuki-shell menubar

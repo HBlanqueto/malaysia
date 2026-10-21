@@ -243,8 +243,9 @@ código, más estándar y evita reimplementar diálogos de ficheros o impresión
       `meta_onscreen_native_direct_scanout` con el `DrmCompositor` de Yuki.
 - [ ] Bloque 11: usar Mutter como referencia para fractional scale, activation,
       cursor-shape, pointer constraints y presentation.
-- [ ] Bloque 11: implementar `ext-image-copy-capture` +
-      `ext-image-capture-source` antes del portal de captura.
+- [x] Bloque 11: implementar `ext-image-copy-capture` +
+      `ext-image-capture-source` antes del portal de captura (captura de salida
+      hecha; falta la de ventana).
 - [ ] Portal Fase 1: `xdg-desktop-portal-yuki` con `Settings` y
       `org.freedesktop.appearance`.
 - [ ] Portal Fase 2: `ScreenCast`/`Screenshot` con PipeWire; configurar

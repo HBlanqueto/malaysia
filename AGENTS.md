@@ -102,7 +102,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   **7.1 hecho**: el texto de la shell arreglado (`shape_until_scroll` +
   formato Alpha de swash), daño real medido, y **captura de depuración por
   `SIGUSR1`** (volcado PNG, `scripts/capture-validate.sh`; smithay no trae
-  protocolo de captura — `ext-image-copy-capture` va al Bloque 11). La captura
+  protocolo de captura — `ext-image-copy-capture` llegó en el Bloque 11). La captura
   descubrió y corrigió el orden de capas (front-to-back) y el primer render del
   dock.
   **7.2 hecho**: la captura expuso el **bug de la matriz UV** del present EGL
@@ -146,6 +146,7 @@ nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
 ./dev.sh check         # fmt + clippy + tests
 ./dev.sh run           # lanza el compositor anidado
 ./dev.sh smoke         # prueba de mapeo de toplevels
+# probes de protocolo: move, pointers, screencopy, presentation, activation
 ```
 
 No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).
