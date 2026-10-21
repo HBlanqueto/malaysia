@@ -52,6 +52,10 @@
           # sandbox has neither. Tests run in the dev shell (cargo test).
           doCheck = false;
 
+          # `services.displayManager.sessionPackages` requires the package to
+          # name the session files it installs.
+          passthru.providedSessions = [ "yuki" ];
+
           nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
 
           buildInputs = nativeDeps pkgs;
@@ -92,6 +96,10 @@
         };
       });
 
+      nixosModules = {
+        default = import ./nix/yuki.nix { inherit self; };
+      };
+
       devShells = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
@@ -122,6 +130,8 @@
             mold
             shellcheck
             cargo-watch
+            # Scriptable smoke client (it negotiates server-side). Manual GPU
+            # acceptance uses the host's wezterm, which does not.
             foot
             wayland-utils
             # Test tools for the GPU-acceleration blocks (Bloque 7): the weston
