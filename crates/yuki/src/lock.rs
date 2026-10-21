@@ -143,6 +143,17 @@ impl State {
         }
     }
 
+    /// Starts a fresh lock client after a manual request.
+    ///
+    /// A manual `Ctrl+Alt+L` after recovery gave up must get a fresh budget;
+    /// otherwise the new client's first death would hit the old limit
+    /// immediately. The session stays locked, and this never unlocks it.
+    pub(crate) fn relaunch_lock_screen(&mut self) -> bool {
+        self.lock_recovery_attempts = 0;
+        self.cancel_lock_recovery();
+        self.idle.spawn_lock_screen()
+    }
+
     /// The recovery timer fired: launch a fresh lock client, with backoff and
     /// a finite number of attempts. The session stays locked throughout.
     pub(crate) fn lock_recovery_timer(&mut self) {

@@ -53,6 +53,8 @@ enum CompositorShortcut {
     Quit,
     /// Ctrl+Alt+Backspace while locked: deactivate it, but do not quit.
     Blocked,
+    /// Ctrl+Alt+L: lock now, or relaunch the lock client if it is gone.
+    Relock,
     /// Not a compositor shortcut.
     None,
 }
@@ -77,6 +79,9 @@ fn compositor_shortcut(
             } else {
                 CompositorShortcut::Quit
             };
+        }
+        if sym == keysyms::KEY_L {
+            return CompositorShortcut::Relock;
         }
     }
     CompositorShortcut::None
@@ -114,10 +119,10 @@ impl State {
                         time,
                         |state, mods, keysym| {
                             // Compositor shortcuts are consumed here: the
-                            // focused client must not see Ctrl+Alt+F* or
-                            // Ctrl+Alt+Backspace. While locked, Backspace is
-                            // blocked outright; the way out is a VT switch
-                            // and killing Yuki from another TTY.
+                            // focused client must not see Ctrl+Alt+F*,
+                            // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
+                            // Backspace is blocked outright; the way out is a
+                            // VT switch and killing Yuki from another TTY.
                             match compositor_shortcut(
                                 mods.ctrl,
                                 mods.alt,
@@ -141,6 +146,19 @@ impl State {
                                                 tracing::info!(
                                                     "Ctrl+Alt+Backspace ignored: the session is locked"
                                                 );
+                                            }
+                                            CompositorShortcut::Relock => {
+                                                if state.locked
+                                                    && !state.lock_surfaces.is_empty()
+                                                {
+                                                    tracing::info!(
+                                                        "Ctrl+Alt+L ignored: a lock surface is already live"
+                                                    );
+                                                } else if state.relaunch_lock_screen() {
+                                                    tracing::info!(
+                                                        "Ctrl+Alt+L: started the lock screen"
+                                                    );
+                                                }
                                             }
                                             CompositorShortcut::None => {}
                                         }
@@ -807,6 +825,23 @@ mod tests {
         assert_eq!(
             compositor_shortcut(true, true, &backspace, true),
             CompositorShortcut::Blocked
+        );
+    }
+
+    #[test]
+    fn ctrl_alt_l_locks_or_relaunches() {
+        let l = [keysyms::KEY_L.into()];
+        assert_eq!(
+            compositor_shortcut(true, true, &l, false),
+            CompositorShortcut::Relock
+        );
+        assert_eq!(
+            compositor_shortcut(true, true, &l, true),
+            CompositorShortcut::Relock
+        );
+        assert_eq!(
+            compositor_shortcut(false, true, &l, false),
+            CompositorShortcut::None
         );
     }
 
