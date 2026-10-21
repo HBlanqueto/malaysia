@@ -44,6 +44,8 @@ Commands:
     move [--release]    Build and run the client-initiated move/resize probe
     pointers [--release] Build and run the pointer lock and relative motion probes
     screencopy [--release] Build and run the output capture probe
+    presentation        Build and run the wp_presentation feedback probe
+    activation          Build and run the xdg-activation probe
     decoration          Build and run the decoration-policy probe over real apps
     drm-vkms            Test --drm on vkms without touching the real panel or input
 EOF
@@ -502,25 +504,17 @@ move() {
         fail "$EXIT_SMOKE" "move probe failed"
 }
 
-# pointers - run the pointer lock and relative motion probes, each against a
-# fresh compositor with the scripted input enabled.
+# build_probes [--release] - build the compositor and the probe package.
 #
-# A probe cannot move the pointer itself, so the compositor is started with
-# `YUKI_TEST_INPUT=1`, which hovers the pointer over the first mapped window and
-# moves it. `pointer_lock` asserts the `locked` event arrives for a constraint
-# on the focused surface; `relative_pointer` asserts a non-zero relative motion
-# reaches the client. Each probe needs its own compositor: the scripted press is
-# injected once and stays held.
-pointers() {
-    require_devshell
-    require cargo
+# Sets `_profile` to the directory the probe binaries live in.
+build_probes() {
     _release=
     if [ "${1:-}" = "--release" ]; then
         _release=1
         shift
     fi
     if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for pointers: $1"
+        fail "$EXIT_USAGE" "unexpected argument for the probes: $1"
     fi
     if [ -n "$_release" ]; then
         _profile=release
@@ -531,61 +525,23 @@ pointers() {
         cargo build -p yuki -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the probes"
     fi
-    _run_pointer_probe() {
-        _probe=$1
-        stop >/dev/null 2>&1 || true
-        YUKI_TEST_INPUT=1 start
-        _socket=
-        _waited=0
-        while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
-            _socket=$(sed -n \
-                's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-                "$LOG_FILE" 2>/dev/null | tail -n 1)
-            [ -n "$_socket" ] && break
-            sleep 0.1
-            _waited=$((_waited + 1))
-        done
-        if [ -z "$_socket" ]; then
-            stop >/dev/null 2>&1 || true
-            fail "$EXIT_SMOKE" "$_probe: the compositor never opened a socket"
-        fi
-        if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
-            stop >/dev/null 2>&1 || true
-            fail "$EXIT_SMOKE" "$_probe failed"
-        fi
-        stop >/dev/null 2>&1 || true
-    }
-    _run_pointer_probe pointer_lock
-    _run_pointer_probe relative_pointer
 }
 
-# screencopy - capture the output through `ext-image-copy-capture-v1`.
+# run_one_probe PROBE [--test-input] - run one probe against a fresh compositor.
 #
-# Starts its own compositor, then runs `screencopy`, which opens a capture
-# session for the output, allocates an SHM buffer from the offered constraints
-# and asserts the frame is ready and not blank.
-screencopy() {
-    require_devshell
-    require cargo
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for screencopy: $1"
-    fi
-    if [ -n "$_release" ]; then
-        _profile=release
-        cargo build --release -p yuki -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    else
-        _profile=debug
-        cargo build -p yuki -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    fi
+# Starts the compositor, waits for its socket, runs the probe binary and stops
+# the compositor again. `--test-input` starts it with `YUKI_TEST_INPUT=1`, whose
+# scripted press a probe cannot make itself. Fails the script when the probe
+# does.
+run_one_probe() {
+    _probe=$1
+    _with_input=${2:-}
     stop >/dev/null 2>&1 || true
-    start
+    if [ -n "$_with_input" ]; then
+        YUKI_TEST_INPUT=1 start
+    else
+        start
+    fi
     _socket=
     _waited=0
     while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
@@ -598,14 +554,63 @@ screencopy() {
     done
     if [ -z "$_socket" ]; then
         stop >/dev/null 2>&1 || true
-        fail "$EXIT_SMOKE" "screencopy: the compositor never opened a socket"
+        fail "$EXIT_SMOKE" "$_probe: the compositor never opened a socket"
     fi
-    if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/screencopy"; then
+    if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
         stop >/dev/null 2>&1 || true
-        fail "$EXIT_SMOKE" "screencopy probe failed"
+        fail "$EXIT_SMOKE" "$_probe failed"
     fi
     stop >/dev/null 2>&1 || true
 }
+
+# pointers - run the pointer lock and relative motion probes, each against a
+# fresh compositor with the scripted input enabled.
+#
+# `pointer_lock` asserts the `locked` event arrives for a constraint on the
+# focused surface; `relative_pointer` asserts a non-zero relative motion reaches
+# the client. Each probe needs its own compositor: the scripted press is
+# injected once and stays held.
+pointers() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe pointer_lock --test-input
+    run_one_probe relative_pointer --test-input
+}
+
+# screencopy - capture the output through `ext-image-copy-capture-v1`.
+#
+# `screencopy` opens a capture session for the output, allocates an SHM buffer
+# from the offered constraints and asserts the frame is ready and not blank.
+screencopy() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe screencopy
+}
+
+# presentation - assert `wp_presentation` feedback reaches a client.
+#
+# `presentation` maps a window, asks for feedback and asserts the `presented`
+# event arrives with a monotonic timestamp and a refresh.
+presentation() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe presentation
+}
+
+# activation - assert `xdg-activation-v1` focuses a window in the same client.
+#
+# `activation` maps two windows, requests a token with the scripted press serial
+# and activates the first, asserting focus moves back to it.
+activation() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe activation --test-input
+}
+
 
 # drm-vkms - exercise the direct session on vkms, isolated from the panel.
 #
@@ -823,6 +828,8 @@ case "$command_name" in
     move) move "$@" ;;
     pointers) pointers "$@" ;;
     screencopy) screencopy "$@" ;;
+    presentation) presentation "$@" ;;
+    activation) activation "$@" ;;
     decoration) decoration "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;

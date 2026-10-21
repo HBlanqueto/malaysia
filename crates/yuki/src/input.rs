@@ -572,6 +572,9 @@ impl State {
             return;
         };
         let press = SERIAL_COUNTER.next_serial();
+        // A real press records the serial for xdg-activation tokens; the
+        // scripted press must too, or a probe cannot request a valid token.
+        self.note_activation_serial(press);
         pointer.button(
             self,
             &ButtonEvent {

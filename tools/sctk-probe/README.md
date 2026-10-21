@@ -248,6 +248,28 @@ empty copy. It also reports whether the session offered DMA-BUF constraints.
 ./dev.sh screencopy
 ```
 
+## `presentation`
+
+Maps a window, asks `wp_presentation` for feedback on the next commit and
+asserts the `presented` event arrives with a monotonic timestamp and a refresh.
+A `discarded` event, or a timeout, fails.
+
+```sh
+./dev.sh presentation
+```
+
+## `activation`
+
+Maps two toplevels of one client (A then B, so B is focused) and uses the
+scripted input's press serial to request an activation token for A, then
+activates A through it. It passes when the keyboard enters A again, which means
+the compositor accepted the token and moved focus. Run with `YUKI_TEST_INPUT=1`
+(the `./dev.sh activation` target does).
+
+```sh
+./dev.sh activation
+```
+
 ## `move_client`
 
 The client `move_probe` drives: it maps a toplevel, waits for the scripted press

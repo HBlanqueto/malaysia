@@ -58,10 +58,13 @@ protocolos y la captura.
 ## Aceptación pendiente
 
 - Un cliente con `wp_presentation` recibe `presented` con un timestamp
-  monótono y un `refresh` razonable; al cerrar la superficie recibe
-  `discarded` o deja de esperar.
+  monótono y un `refresh` razonable: probado con `./dev.sh presentation`
+  (timestamp monótono, `refresh` 16666000 ns, flag `Vsync`).
 - Una app activa otra con un token válido y una ventana existente sube y
-  recibe foco; un token viejo, sin foco o sin serial no activa.
+  recibe foco; un token viejo, sin foco o sin serial no activa: la vía positiva
+  está probada con `./dev.sh activation` (dos ventanas del mismo cliente, token
+  con el serial del press scriptado y foco vuelve a la primera); los rechazos
+  tienen tests unitarios.
 - Un cliente pide `cursor-shape` y el cursor cambia sin enviar un buffer;
   wezterm pide `Text` en el primer enter y Yuki lo aplica.
 - Al agitar el ratón el cursor crece con animación suave hasta 3× y, al
@@ -83,13 +86,13 @@ protocolos y la captura.
   `hypr-dynamic-cursors` (GPL-3.0, por eso no se copia código), con 4×,
   crecimiento mientras sigues agitando y 2 s de espera tras parar. Yuki sigue
   el comportamiento de macOS: 3× y encogido inmediato.
-- `wp_presentation` no se ha probado todavía con un cliente que pida feedback;
-  `wayland-info` solo verifica el global. Falta un probe pequeño para el evento
-  `presented`/`discarded`.
-- `xdg-activation` no tiene todavía un probe automatizado de dos ventanas. La
-  política es deliberadamente estricta: tokens sin superficie, sin serial o con
-  un serial que no sea el último teclado/botón se descartan; si una app usa un
-  serial de foco en vez de input, no activará. Es el límite documentado.
+- `wp_presentation` se prueba con `./dev.sh presentation`: el probe pide
+  feedback, commitea y comprueba que llega `presented` con timestamp monótono y
+  `refresh`. No cubre `discarded` (haría falta un frame sin daño).
+- `xdg-activation` se prueba con `./dev.sh activation`: dos ventanas del mismo
+  cliente, token con el serial del press scriptado, y foco vuelve a la primera.
+  El rechazo (sin foco, serial viejo o fabricado) lo cubren los tests unitarios
+  de la política, no el probe.
 - El gesto de agitar no se puede provocar con el input scriptado actual; el
   detector y sus umbrales tienen tests unitarios, pero falta confirmación
   visual en el panel real.
