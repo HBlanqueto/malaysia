@@ -85,7 +85,8 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    window.attach(Some(buffer.wl_buffer()), 0, 0);
+    // Commit without a buffer first: the initial xdg_surface.configure must
+    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -96,7 +97,8 @@ fn main() {
         seat: None,
         pointer: None,
         window,
-        _buffer: buffer,
+        buffer,
+        attached: false,
         press_serial: None,
         motions: 0,
         requested: false,
@@ -148,7 +150,8 @@ struct App {
     seat: Option<WlSeat>,
     pointer: Option<WlPointer>,
     window: Window,
-    _buffer: Buffer,
+    buffer: Buffer,
+    attached: bool,
     press_serial: Option<u32>,
     motions: usize,
     requested: bool,
@@ -240,6 +243,10 @@ impl WindowHandler for App {
         _: WindowConfigure,
         _: u32,
     ) {
+        if !self.attached {
+            self.attached = true;
+            window.attach(Some(self.buffer.wl_buffer()), 0, 0);
+        }
         // Acknowledge and commit, so the window maps and later configures flow.
         window.commit();
     }

@@ -42,7 +42,10 @@ use smithay_client_toolkit::{
         },
         WaylandSurface,
     },
-    shm::{slot::SlotPool, Shm, ShmHandler},
+    shm::{
+        slot::{Buffer, SlotPool},
+        Shm, ShmHandler,
+    },
 };
 
 /// The toplevel's surface size, in pixels.
@@ -75,7 +78,8 @@ fn main() {
         )
         .expect("no buffer");
     canvas.fill(0x40);
-    window.attach(Some(buffer.wl_buffer()), 0, 0);
+    // Commit without a buffer first: xdg-shell requires the initial configure
+    // before the client attaches anything.
     window.commit();
 
     let wm_base: XdgWmBase =
@@ -108,15 +112,17 @@ fn main() {
         )
         .expect("no popup buffer");
     popup_canvas.fill(0x80);
-    popup
-        .wl_surface()
-        .attach(Some(popup_buffer.wl_buffer()), 0, 0);
-    popup.wl_surface().commit();
 
     let mut app = App {
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
         shm,
+        _window: window,
+        window_buffer: buffer,
+        window_attached: false,
+        popup,
+        popup_buffer,
+        popup_attached: false,
         popup_configure: None,
         output_size: None,
         phase: 0,
@@ -139,6 +145,12 @@ struct App {
     registry_state: RegistryState,
     output_state: OutputState,
     shm: Shm,
+    _window: Window,
+    window_buffer: Buffer,
+    window_attached: bool,
+    popup: Popup,
+    popup_buffer: Buffer,
+    popup_attached: bool,
     popup_configure: Option<(i32, i32, i32, i32)>,
     output_size: Option<(u32, u32)>,
     phase: u32,
@@ -227,10 +239,15 @@ impl WindowHandler for App {
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
-        _: &Window,
+        window: &Window,
         _: WindowConfigure,
         _serial: u32,
     ) {
+        if !self.window_attached {
+            self.window_attached = true;
+            window.attach(Some(self.window_buffer.wl_buffer()), 0, 0);
+        }
+        window.commit();
     }
 }
 
@@ -243,6 +260,13 @@ impl PopupHandler for App {
         configure: PopupConfigure,
     ) {
         println!("probe: popup configure {configure:?}");
+        if !self.popup_attached {
+            self.popup_attached = true;
+            self.popup
+                .wl_surface()
+                .attach(Some(self.popup_buffer.wl_buffer()), 0, 0);
+            self.popup.wl_surface().commit();
+        }
         self.popup_configure = Some((
             configure.position.0,
             configure.position.1,

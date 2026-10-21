@@ -41,7 +41,10 @@ use smithay_client_toolkit::{
         },
         WaylandSurface,
     },
-    shm::{slot::SlotPool, Shm, ShmHandler},
+    shm::{
+        slot::{Buffer, SlotPool},
+        Shm, ShmHandler,
+    },
 };
 
 /// Buffer side, in pixels.
@@ -66,15 +69,17 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    window.attach(Some(buffer.wl_buffer()), 0, 0);
+    // Commit without a buffer first: the initial xdg_surface.configure must
+    // arrive before the client attaches anything.
     window.commit();
-    let _keep_buffer = buffer;
 
     let mut app = App {
         registry_state: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
         shm,
         window,
+        buffer,
+        attached: false,
         server_width: None,
         requested_change: false,
         saw_client: false,
@@ -116,6 +121,8 @@ struct App {
     output_state: OutputState,
     shm: Shm,
     window: Window,
+    buffer: Buffer,
+    attached: bool,
     server_width: Option<u32>,
     requested_change: bool,
     saw_client: bool,
@@ -221,6 +228,10 @@ impl WindowHandler for App {
                     self.loop_signal.stop();
                 }
             }
+        }
+        if !self.attached {
+            self.attached = true;
+            window.attach(Some(self.buffer.wl_buffer()), 0, 0);
         }
         // Acknowledge the configure and commit, so the window maps and later
         // configures flow.

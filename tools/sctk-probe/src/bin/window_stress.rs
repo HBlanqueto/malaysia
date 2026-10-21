@@ -85,6 +85,13 @@ fn main() {
         .expect("event loop failed");
 }
 
+/// One window opened by the stress client.
+struct OpenWindow {
+    window: Window,
+    buffer: Buffer,
+    attached: bool,
+}
+
 struct App {
     registry_state: RegistryState,
     output_state: OutputState,
@@ -93,13 +100,17 @@ struct App {
     shm: Shm,
     pool: SlotPool,
     qh: QueueHandle<App>,
-    windows: Vec<(Window, Buffer)>,
+    windows: Vec<OpenWindow>,
     phase: u32,
     loop_signal: calloop::LoopSignal,
 }
 
 impl App {
-    /// Creates every toplevel with a buffer attached, so each one maps.
+    /// Creates every toplevel and asks for its initial configure.
+    ///
+    /// The first commit carries no buffer: xdg-shell requires the client to
+    /// wait for the initial configure before attaching anything. The buffer is
+    /// attached from [`WindowHandler::configure`].
     fn open_all(&mut self) {
         let qh = self.qh.clone();
         for _ in 0..WINDOWS {
@@ -112,9 +123,12 @@ impl App {
                 .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
                 .expect("failed to create a buffer");
             canvas.fill(0x40);
-            window.attach(Some(buffer.wl_buffer()), 0, 0);
             window.commit();
-            self.windows.push((window, buffer));
+            self.windows.push(OpenWindow {
+                window,
+                buffer,
+                attached: false,
+            });
         }
         println!("stress: opened {WINDOWS} windows");
     }
@@ -180,7 +194,18 @@ impl WindowHandler for App {
         _: WindowConfigure,
         _: u32,
     ) {
-        // Acknowledging the configure and committing maps the window.
+        // Attach the buffer on the first configure, then acknowledge and
+        // commit, so the window maps.
+        if let Some(entry) = self
+            .windows
+            .iter_mut()
+            .find(|entry| entry.window == *window)
+        {
+            if !entry.attached {
+                entry.attached = true;
+                entry.window.attach(Some(entry.buffer.wl_buffer()), 0, 0);
+            }
+        }
         window.commit();
     }
 }

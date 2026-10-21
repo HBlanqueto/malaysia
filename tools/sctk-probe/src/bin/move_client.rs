@@ -84,7 +84,8 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    window.attach(Some(buffer.wl_buffer()), 0, 0);
+    // Commit without a buffer first: the initial xdg_surface.configure must
+    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -99,8 +100,10 @@ fn main() {
         pool,
         window,
         second: None,
-        _first_buffer: buffer,
-        _second_buffer: None,
+        buffer,
+        second_buffer: None,
+        attached: false,
+        second_attached: false,
         press_serial: None,
         motions: 0,
         requested: false,
@@ -150,8 +153,10 @@ struct App {
     pool: SlotPool,
     window: Window,
     second: Option<Window>,
-    _first_buffer: Buffer,
-    _second_buffer: Option<Buffer>,
+    buffer: Buffer,
+    second_buffer: Option<Buffer>,
+    attached: bool,
+    second_attached: bool,
     press_serial: Option<u32>,
     motions: usize,
     requested: bool,
@@ -176,11 +181,12 @@ impl App {
             .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
             .expect("failed to create a second buffer");
         canvas.fill(0x20);
-        window.attach(Some(buffer.wl_buffer()), 0, 0);
+        // Commit without a buffer first; the buffer is attached when the
+        // initial configure arrives.
         window.commit();
         println!("move_client: mapped a second window to take focus");
         self.second = Some(window);
-        self._second_buffer = Some(buffer);
+        self.second_buffer = Some(buffer);
     }
 
     /// Sends move and resize with `serial`, the requests the gesture makes.
@@ -246,6 +252,19 @@ impl WindowHandler for App {
         configure: WindowConfigure,
         _: u32,
     ) {
+        if *window == self.window {
+            if !self.attached {
+                self.attached = true;
+                window.attach(Some(self.buffer.wl_buffer()), 0, 0);
+            }
+        } else if self.second.as_ref().is_some_and(|second| second == window)
+            && !self.second_attached
+        {
+            self.second_attached = true;
+            if let Some(buffer) = &self.second_buffer {
+                window.attach(Some(buffer.wl_buffer()), 0, 0);
+            }
+        }
         // Acknowledge and commit, so the window maps and later configures flow.
         window.commit();
         if configure.is_resizing() {

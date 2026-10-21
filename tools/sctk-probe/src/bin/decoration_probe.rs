@@ -314,8 +314,14 @@ fn run() -> Result<(), String> {
             );
             continue;
         };
-        let mut command = Command::new(&program);
+        // Apps such as Nautilus are single-instance over the session bus: a
+        // plain launch would activate the instance already running in the host
+        // GNOME session instead of creating a window here. A private bus makes
+        // the app a new process that connects to this Yuki.
+        let mut command = Command::new("dbus-run-session");
         command
+            .arg("--")
+            .arg(&program)
             .args(&case.args)
             .env("XDG_RUNTIME_DIR", runtime.path())
             .env("WAYLAND_DISPLAY", &socket)
@@ -515,12 +521,15 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "nautilus",
             args: vec!["--no-desktop".to_string()],
             env: Vec::new(),
-            // GTK4 + libadwaita: always has a headerbar, so it never creates
-            // a decoration object and keeps client-side chrome.
+            // Nautilus 50 requests the KDE server-side mode explicitly, even
+            // though it is GTK4. ADR 0019 says the compositor honours that
+            // request; forcing client-side here would hide a real double
+            // decoration. The expectation is pinned to the version in the dev
+            // shell and must be revisited if Nautilus changes its mind.
             expectation: Expectation {
                 protocol: Protocol::Kde,
-                mode: None,
-                inset: 0,
+                mode: Some(Mode::Server),
+                inset: TITLEBAR,
             },
         },
         Case {
