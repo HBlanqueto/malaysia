@@ -41,6 +41,8 @@ use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
+use smithay::wayland::image_capture_source::OutputCaptureSourceState;
+use smithay::wayland::image_copy_capture::{ImageCopyCaptureState, Session};
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
@@ -160,6 +162,18 @@ pub struct State {
     pub pointer_constraints_state: PointerConstraintsState,
     /// The `zwp_relative_pointer_manager_v1` state.
     pub relative_pointer_state: RelativePointerManagerState,
+    /// The `ext-output-image-capture-source-v1` state.
+    pub(crate) output_capture_source_state: OutputCaptureSourceState,
+    /// The `ext-image-copy-capture-v1` state.
+    pub(crate) image_copy_capture_state: ImageCopyCaptureState,
+    /// Live capture sessions. Dropping a [`Session`] stops it, so they are kept
+    /// alive here until the client destroys them.
+    capture_sessions: Vec<Session>,
+    /// Capture frames queued by the handler and completed by the backend.
+    pub(crate) pending_captures: Vec<crate::capture::PendingCapture>,
+    /// DMA-BUF allocation info for capture, set once by the backend.
+    pub(crate) capture_dma: Option<crate::capture::CaptureDma>,
+    capture_dma_checked: bool,
     /// The last key or pointer-button press serial, for activation tokens.
     pub(crate) last_activation_serial: Option<(Serial, Instant)>,
     /// When the shake enlargement started; `None` when the pointer is at its
@@ -367,6 +381,8 @@ impl State {
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(display_handle);
         let pointer_constraints_state = PointerConstraintsState::new::<Self>(display_handle);
         let relative_pointer_state = RelativePointerManagerState::new::<Self>(display_handle);
+        let output_capture_source_state = OutputCaptureSourceState::new::<Self>(display_handle);
+        let image_copy_capture_state = ImageCopyCaptureState::new::<Self>(display_handle);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
         // The manager global is advertised to every client for now; restricting
@@ -407,6 +423,12 @@ impl State {
             cursor_shape_state,
             pointer_constraints_state,
             relative_pointer_state,
+            output_capture_source_state,
+            image_copy_capture_state,
+            capture_sessions: Vec::new(),
+            pending_captures: Vec::new(),
+            capture_dma: None,
+            capture_dma_checked: false,
             last_activation_serial: None,
             cursor_boost_started: None,
             shake: ShakeDetector::default(),
@@ -465,6 +487,26 @@ impl State {
     /// Takes the pending redraw request, clearing it.
     pub fn take_redraw_request(&mut self) -> bool {
         std::mem::take(&mut self.needs_redraw)
+    }
+
+    /// Derives the DMA-BUF capture constraints from the renderer, once.
+    ///
+    /// `State` never sees the renderer (ADR 0012), so the backend calls this
+    /// from its render path the first time; later calls are a no-op.
+    pub(crate) fn init_capture_dma(
+        &mut self,
+        renderer: &smithay::backend::renderer::gles::GlesRenderer,
+    ) {
+        if self.capture_dma_checked {
+            return;
+        }
+        self.capture_dma_checked = true;
+        self.capture_dma = crate::capture::dmabuf_constraints(renderer);
+    }
+
+    /// Keeps a capture session alive; dropping it stops the session.
+    pub(crate) fn push_capture_session(&mut self, session: Session) {
+        self.capture_sessions.push(session);
     }
 
     /// Asks the DRM backend to switch to virtual terminal `vt`.

@@ -41,10 +41,10 @@ Falta:
 ## Después, en orden
 
 1. **Bloque 11 — protocolos de uso diario.** `wp_presentation`,
-   `xdg-activation`, `cursor-shape`, el shake-to-locate y
-   `pointer-constraints` + `relative-pointer` ya están hechos; falta la
-   integración de captura
-   (`ext-image-copy-capture` + `ext-image-capture-source`, ya en Smithay). Ver
+   `xdg-activation`, `cursor-shape`, el shake-to-locate, `pointer-constraints` +
+   `relative-pointer` y la captura de salida
+   (`ext-output-image-capture-source-v1` + `ext-image-copy-capture-v1`) ya están
+   hechos; falta la captura de ventana. Ver
    `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** Primero `Settings` /
    `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la

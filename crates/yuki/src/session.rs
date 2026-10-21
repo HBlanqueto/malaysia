@@ -51,6 +51,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
+use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
@@ -721,6 +722,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
 
         let elements = build_output_elements(state, renderer, cursor);
 
+        state.init_capture_dma(renderer);
+
         // Debug capture (Bloque 7.1): `SIGUSR1` asked for it. The offscreen readback
         // makes the GL context surfaceless (`eglMakeCurrent(EGL_NO_SURFACE, ...)`
         // in smithay's `bind_texture`), so it runs *before* the window pass: the
@@ -735,6 +738,30 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 winit_render_transform(),
             ) {
                 tracing::warn!(%error, "debug capture failed");
+            }
+        }
+
+        // `ext-image-copy-capture-v1` frames queued by the handler. Like the
+        // debug capture they run before the window pass, so the offscreen
+        // render does not leave the GL context without the window surface.
+        for pending in std::mem::take(&mut state.pending_captures) {
+            let damage = Rectangle::from_size(Size::from((pending.size.w, pending.size.h)));
+            match crate::capture::capture_into_buffer(
+                renderer,
+                &elements,
+                pending.size,
+                [0.06, 0.06, 0.09, 1.0],
+                &pending.frame.buffer(),
+            ) {
+                Ok(()) => {
+                    pending
+                        .frame
+                        .success(Transform::Normal, Some(vec![damage]), Duration::ZERO)
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "screencopy frame failed");
+                    pending.frame.fail(CaptureFailureReason::Unknown);
+                }
             }
         }
 

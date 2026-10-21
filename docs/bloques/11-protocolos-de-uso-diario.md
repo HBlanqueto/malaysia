@@ -40,12 +40,19 @@ protocolos y la captura.
   entrar en su región, y Smithay la desactiva sola al perder el foco.
 - `zwp_relative_pointer_manager_v1` v1: cada movimiento del puntero reenvía su
   delta a los objetos `zwp_relative_pointer_v1` del cliente con foco.
+- **Captura de salida**: `ext-output-image-capture-source-v1` +
+  `ext-image-copy-capture-v1`. El compositor anuncia las constraints de la
+  sesión (tamaño del modo, `Argb8888`/`Xrgb8888` y, si el backend encontró un
+  render node, los formatos dmabuf con ese nodo). `frame()` encola la petición
+  (el handler no ve el renderer, ADR 0012) y el backend la completa en el
+  siguiente frame: re-renderiza offscreen con `Transform::Flipped` (cancela el
+  framebuffer GL bottom-up) y copia a un SHM por filas o renderiza directo al
+  dmabuf del cliente. Probe: `./dev.sh screencopy`.
 
 ## Pendiente
 
-- `ext-image-copy-capture-v1` + `ext-image-capture-source-v1`: Smithay ya
-  implementa los protocolos; falta integrar sources, constraints, render a
-  dmabuf/SHM y el portal del Bloque 12.
+- `ext-foreign-toplevel-image-capture-source-v1`: capturar una **ventana**.
+- El portal `Screenshot`/`ScreenCast` del Bloque 12 sobre esta captura.
 - Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.
 
 ## Aceptación pendiente
@@ -62,7 +69,11 @@ protocolos y la captura.
 - Un juego confina/bloquea el puntero y `relative-pointer` da deltas: probado
   con `./dev.sh pointers` (`pointer_lock` recibe `locked` sobre la superficie
   con foco; `relative_pointer` recibe un delta no nulo).
-- La captura entrega frames por dmabuf y la app puede elegir monitor/ventana.
+- La captura entrega frames: probado con `./dev.sh screencopy` (SHM, píxel
+  central igual al color de fondo y no en blanco); las constraints anuncian
+  dmabuf con el render node, pero falta un cliente que capture por dmabuf.
+- Falta capturar una **ventana** (`ext-foreign-toplevel-image-capture-source-v1`)
+  y la captura con salida rotada (hoy se ignora la rotación).
 
 ## Notas
 
@@ -82,3 +93,7 @@ protocolos y la captura.
 - El gesto de agitar no se puede provocar con el input scriptado actual; el
   detector y sus umbrales tienen tests unitarios, pero falta confirmación
   visual en el panel real.
+- La captura dmabuf renderiza directo al buffer del cliente con
+  `renderer.bind(&mut dmabuf)`; no hay un cliente que la ejercite todavía, así
+  que esa ruta está implementada pero sin probar. La de SHM sí pasa por
+  `./dev.sh screencopy`.

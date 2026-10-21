@@ -1,11 +1,13 @@
-//! Debug PNG capture of the composed output (Bloque 7.1).
+//! Captures: the debug PNG dump (Bloque 7.1) and the screencopy protocol.
 //!
-//! A development tool, not a protocol: `SIGUSR1` sets a flag, and the next
-//! frame re-renders the output to an offscreen buffer (the same elements the
-//! window pass drew), reads it back, flips it vertically (GL reads bottom-up)
-//! and saves a PNG. It exists to attach captures to reports; a real capture
-//! protocol (`ext-image-copy-capture-v1` / `wlr-screencopy`) is planned for
-//! Bloque 11.
+//! `SIGUSR1` sets a flag, and the next frame re-renders the output to an
+//! offscreen buffer (the same elements the window pass drew), reads it back,
+//! flips it vertically (GL reads bottom-up) and saves a PNG. It is a
+//! development tool for attaching captures to reports.
+//!
+//! The same offscreen render serves `ext-image-copy-capture-v1`: the frame
+//! handler queues a [`PendingCapture`] and the backend renders it into the
+//! client's SHM or DMA-BUF buffer (Bloque 11).
 
 use std::{
     fs,
@@ -13,13 +15,51 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use smithay::backend::allocator::Fourcc;
+use smithay::backend::allocator::{Fourcc, Modifier};
+use smithay::backend::drm::DrmNode;
+use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
-use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
-use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size};
+use smithay::backend::renderer::{Bind, BufferType, ExportMem, ImportDma, Offscreen, buffer_type};
+use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
+use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size, Transform};
+use smithay::wayland::dmabuf::get_dmabuf;
+use smithay::wayland::image_copy_capture::Frame;
+use smithay::wayland::shm::with_buffer_contents_mut;
 
 use crate::cursor::OutputRenderElement;
+
+/// DMA-BUF allocation info for capture, derived from the renderer.
+///
+/// `State` never sees the renderer (ADR 0012), so the backend fills this in
+/// once after binding the renderer; `capture_constraints` serves it to clients.
+pub(crate) struct CaptureDma {
+    pub node: DrmNode,
+    pub formats: Vec<(Fourcc, Vec<Modifier>)>,
+}
+
+/// A capture frame waiting for the next render pass.
+///
+/// `ImageCopyCaptureHandler::frame` runs on `State`, which has no renderer, so
+/// it queues the frame here and the backend completes it in `draw`/`render`.
+pub(crate) struct PendingCapture {
+    pub frame: Frame,
+    pub size: Size<i32, Physical>,
+}
+
+/// Derives the DMA-BUF constraints for capture from the renderer's device.
+pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> {
+    let node = EGLDevice::device_for_display(renderer.egl_context().display())
+        .ok()
+        .and_then(|device| device.try_get_render_node().ok().flatten())?;
+    let formats = renderer
+        .dmabuf_formats()
+        .iter()
+        .map(|format| (format.code, vec![format.modifier]))
+        .collect();
+    Some(CaptureDma { node, formats })
+}
 
 /// Captures the composed output to `$XDG_RUNTIME_DIR/yuki/capture-*.png`.
 ///
@@ -89,6 +129,108 @@ pub(crate) fn capture_output(
 
     tracing::info!(path = %path.display(), "debug capture written");
     Ok(path)
+}
+
+/// Renders `elements` into the buffer attached to an `ext-image-copy-capture`
+/// frame.
+///
+/// Both paths render with `Transform::Flipped` to cancel GL's bottom-up
+/// framebuffer, so the buffer is top-down and the caller reports
+/// `Transform::Normal`. Only `Normal` output orientation is handled; a rotated
+/// output captures unrotated content.
+pub(crate) fn capture_into_buffer(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    clear: [f32; 4],
+    buffer: &WlBuffer,
+) -> Result<(), String> {
+    match buffer_type(buffer) {
+        Some(BufferType::Shm) => capture_into_shm(renderer, elements, size, clear, buffer),
+        Some(BufferType::Dma) => capture_into_dmabuf(renderer, elements, size, clear, buffer),
+        _ => Err("unsupported capture buffer type".into()),
+    }
+}
+
+fn capture_into_dmabuf(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    clear: [f32; 4],
+    buffer: &WlBuffer,
+) -> Result<(), String> {
+    let dmabuf = get_dmabuf(buffer).map_err(|error| format!("not a dmabuf: {error}"))?;
+    // A clone shares the underlying buffer; binding needs a mutable handle.
+    let mut dmabuf = dmabuf.clone();
+    let mut target = renderer
+        .bind(&mut dmabuf)
+        .map_err(|error| format!("bind dmabuf failed: {error}"))?;
+    let mut tracker =
+        OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), Transform::Flipped);
+    let result = tracker
+        .render_output(renderer, &mut target, 0, elements, clear)
+        .map_err(|error| format!("capture render failed: {error}"))?;
+    result
+        .sync
+        .wait()
+        .map_err(|error| format!("capture sync failed: {error}"))
+}
+
+#[allow(unsafe_code)] // the SHM pool is the client's shared memory; Smithay only
+// exposes it as a raw pointer for exactly this reason.
+fn capture_into_shm(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    clear: [f32; 4],
+    buffer: &WlBuffer,
+) -> Result<(), String> {
+    with_buffer_contents_mut(buffer, |ptr, _len, data| {
+        let fourcc = match data.format {
+            wl_shm::Format::Xrgb8888 => Fourcc::Xrgb8888,
+            wl_shm::Format::Argb8888 => Fourcc::Argb8888,
+            _ => return Err("unsupported shm capture format".to_string()),
+        };
+        let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
+        let mut offscreen: GlesTexture = renderer
+            .create_buffer(fourcc, size_buf)
+            .map_err(|error| format!("create_buffer failed: {error}"))?;
+        let mut tracker =
+            OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), Transform::Flipped);
+        {
+            let mut target = renderer
+                .bind(&mut offscreen)
+                .map_err(|error| format!("bind offscreen failed: {error}"))?;
+            let result = tracker
+                .render_output(renderer, &mut target, 0, elements, clear)
+                .map_err(|error| format!("capture render failed: {error}"))?;
+            result
+                .sync
+                .wait()
+                .map_err(|error| format!("capture sync failed: {error}"))?;
+
+            let mapping = renderer
+                .copy_framebuffer(&target, Rectangle::from_size(size_buf), fourcc)
+                .map_err(|error| format!("copy_framebuffer failed: {error}"))?;
+            let bytes = renderer
+                .map_texture(&mapping)
+                .map_err(|error| format!("map_texture failed: {error}"))?;
+
+            let src_stride = size.w as usize * 4;
+            let dst_stride = data.stride as usize;
+            let needed = dst_stride * data.height as usize;
+            // SAFETY: the pointer is valid for the duration of this closure and
+            // the pool is the buffer's own; only this client's memory is written.
+            let dst = unsafe { std::slice::from_raw_parts_mut(ptr, needed) };
+            for row in 0..size.h as usize {
+                let src = &bytes[row * src_stride..row * src_stride + src_stride];
+                let dst = &mut dst[row * dst_stride..row * dst_stride + src_stride];
+                dst.copy_from_slice(src);
+            }
+        }
+        Ok(())
+    })
+    .map_err(|error| format!("shm buffer access failed: {error}"))?
 }
 
 /// The directory for captures: `$XDG_RUNTIME_DIR/yuki` (or `/tmp/yuki`).

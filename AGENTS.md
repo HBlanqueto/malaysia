@@ -129,8 +129,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   de 5 intentos, y `Ctrl+Alt+L` para bloquear/relanzar sin desbloquear.
   Checklist en `docs/bloques/10-lock.md`.
 - **Bloque 11 parcial:** `wp_presentation`, `xdg-activation`, `cursor-shape`,
-  el shake-to-locate y `pointer-constraints` + `relative-pointer` hechos; falta
-  la integración de captura (los protocolos ya están en Smithay). Ver
+  el shake-to-locate, `pointer-constraints` + `relative-pointer` y la captura de
+  salida (`ext-image-copy-capture-v1`) hechos; falta la captura de ventana. Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la

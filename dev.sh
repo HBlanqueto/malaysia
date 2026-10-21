@@ -43,6 +43,7 @@ Commands:
     block4 [--release]  Build and run the 50-window open/close acceptance test
     move [--release]    Build and run the client-initiated move/resize probe
     pointers [--release] Build and run the pointer lock and relative motion probes
+    screencopy [--release] Build and run the output capture probe
     decoration          Build and run the decoration-policy probe over real apps
     drm-vkms            Test --drm on vkms without touching the real panel or input
 EOF
@@ -558,6 +559,54 @@ pointers() {
     _run_pointer_probe relative_pointer
 }
 
+# screencopy - capture the output through `ext-image-copy-capture-v1`.
+#
+# Starts its own compositor, then runs `screencopy`, which opens a capture
+# session for the output, allocates an SHM buffer from the offered constraints
+# and asserts the frame is ready and not blank.
+screencopy() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for screencopy: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p yuki -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    else
+        _profile=debug
+        cargo build -p yuki -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    fi
+    stop >/dev/null 2>&1 || true
+    start
+    _socket=
+    _waited=0
+    while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
+        _socket=$(sed -n \
+            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+            "$LOG_FILE" 2>/dev/null | tail -n 1)
+        [ -n "$_socket" ] && break
+        sleep 0.1
+        _waited=$((_waited + 1))
+    done
+    if [ -z "$_socket" ]; then
+        stop >/dev/null 2>&1 || true
+        fail "$EXIT_SMOKE" "screencopy: the compositor never opened a socket"
+    fi
+    if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/screencopy"; then
+        stop >/dev/null 2>&1 || true
+        fail "$EXIT_SMOKE" "screencopy probe failed"
+    fi
+    stop >/dev/null 2>&1 || true
+}
+
 # drm-vkms - exercise the direct session on vkms, isolated from the panel.
 #
 # Loads vkms (if needed), runs the compositor with LIBSEAT_BACKEND=noop and
@@ -773,6 +822,7 @@ case "$command_name" in
     block4) block4 "$@" ;;
     move) move "$@" ;;
     pointers) pointers "$@" ;;
+    screencopy) screencopy "$@" ;;
     decoration) decoration "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;

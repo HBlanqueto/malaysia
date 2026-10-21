@@ -167,18 +167,20 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   foco, `locked` congela el puntero y `confined` lo limita a la región, y cada
   movimiento reenvía su delta a los `zwp_relative_pointer_v1`. Probes:
   `./dev.sh pointers`.
-- **Captura de pantalla**: `ext-image-copy-capture-v1` +
-  `ext-image-capture-source-v1`, necesarios para compartir pantalla vía
-  xdg-desktop-portal. Hoy hay un volcado PNG de depuración por `SIGUSR1`
-  (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. Smithay ya
-  ofrece `image_copy_capture` e `image_capture_source` en la revisión anclada;
-  falta implementar los handlers y la ruta de buffers de Yuki.
+- **Captura de pantalla — hecha (salida).** `ext-output-image-capture-source-v1`
+  + `ext-image-copy-capture-v1`: constraints de sesión (tamaño, SHM y dmabuf
+  con el render node), `frame()` encolado y completado por el backend (render
+  offscreen a SHM por filas o directo al dmabuf del cliente). Probe:
+  `./dev.sh screencopy`. Falta la captura de ventana
+  (`ext-foreign-toplevel-image-capture-source-v1`) y el portal del Bloque 12.
+  El volcado PNG de depuración por `SIGUSR1` (`capture.rs`, Bloque 7.1) sigue
+  como herramienta de desarrollo.
 - Opcional para uso diario: `keyboard-shortcuts-inhibit` (escritorio remoto).
   No bloquea la aceptación del Bloque 11.
-- Aceptación: una app de captura puede pedir un monitor o una ventana, los
-  frames llegan por dmabuf y el cursor se dibuja o se omite según la petición;
-  `wp_presentation` entrega timestamps; `xdg-activation` activa una ventana con
-  token válido.
+- Aceptación: una app de captura puede pedir un monitor (y, cuando se añada,
+  una ventana), los frames llegan por SHM o dmabuf y el cursor se dibuja o se
+  omite según la petición; `wp_presentation` entrega timestamps;
+  `xdg-activation` activa una ventana con token válido.
 
 ## Bloque 12 — Portales y servicios de escritorio
 

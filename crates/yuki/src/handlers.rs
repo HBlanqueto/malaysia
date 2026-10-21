@@ -35,7 +35,17 @@ use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::WEnum;
-use smithay::utils::Serial;
+use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::output::{Output, WeakOutput};
+use smithay::utils::{Serial, Transform};
+use smithay::wayland::image_capture_source::{
+    ImageCaptureSource, ImageCaptureSourceHandler, OutputCaptureSourceHandler,
+    OutputCaptureSourceState,
+};
+use smithay::wayland::image_copy_capture::{
+    BufferConstraints, CaptureFailureReason, DmabufConstraints, Frame, ImageCopyCaptureHandler,
+    ImageCopyCaptureState, Session, SessionRef,
+};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     Blocker, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
@@ -287,6 +297,67 @@ impl DrmSyncobjHandler for State {
 impl ShmHandler for State {
     fn shm_state(&self) -> &ShmState {
         &self.shm_state
+    }
+}
+
+impl ImageCaptureSourceHandler for State {
+    fn source_destroyed(&mut self, _source: ImageCaptureSource) {}
+}
+
+impl OutputCaptureSourceHandler for State {
+    fn output_capture_source_state(&mut self) -> &mut OutputCaptureSourceState {
+        &mut self.output_capture_source_state
+    }
+
+    fn output_source_created(&mut self, source: ImageCaptureSource, output: &Output) {
+        // The source carries its output so `capture_constraints` and `frame`
+        // can resolve it back without tracking sources separately.
+        source.user_data().insert_if_missing(|| output.downgrade());
+    }
+}
+
+impl ImageCopyCaptureHandler for State {
+    fn image_copy_capture_state(&mut self) -> &mut ImageCopyCaptureState {
+        &mut self.image_copy_capture_state
+    }
+
+    fn capture_constraints(&mut self, source: &ImageCaptureSource) -> Option<BufferConstraints> {
+        let output = source.user_data().get::<WeakOutput>()?.upgrade()?;
+        let mode = output.current_mode()?;
+        Some(BufferConstraints {
+            size: mode.size.to_logical(1).to_buffer(1, Transform::Normal),
+            shm: vec![wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
+            // DMA-BUF is offered only when the backend found a render node.
+            dma: self.capture_dma.as_ref().map(|dma| DmabufConstraints {
+                node: dma.node,
+                formats: dma.formats.clone(),
+            }),
+        })
+    }
+
+    fn new_session(&mut self, session: Session) {
+        if let Some(constraints) = self.capture_constraints(&session.source()) {
+            session.update_constraints(constraints);
+        }
+        self.push_capture_session(session);
+    }
+
+    fn frame(&mut self, session: &SessionRef, frame: Frame) {
+        let output = session
+            .source()
+            .user_data()
+            .get::<WeakOutput>()
+            .and_then(WeakOutput::upgrade);
+        let Some(mode) = output.as_ref().and_then(Output::current_mode) else {
+            frame.fail(CaptureFailureReason::Unknown);
+            return;
+        };
+        self.pending_captures.push(crate::capture::PendingCapture {
+            frame,
+            size: mode.size,
+        });
+        // The backend completes it on the next render pass.
+        self.request_redraw();
     }
 }
 

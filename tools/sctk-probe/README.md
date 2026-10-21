@@ -235,6 +235,19 @@ scripted press is injected once and stays held:
 ./dev.sh pointers
 ```
 
+## `screencopy`
+
+Captures the output through `ext-image-copy-capture-v1`. It creates a source
+for the first `wl_output`, opens a session, and on the compositor's constraints
+allocates a matching SHM buffer, attaches it to a frame and captures. It passes
+on the frame's `Ready` event and additionally checks the centre pixel is the
+compositor's clear colour (not blank), which catches a wrong channel order or an
+empty copy. It also reports whether the session offered DMA-BUF constraints.
+
+```sh
+./dev.sh screencopy
+```
+
 ## `move_client`
 
 The client `move_probe` drives: it maps a toplevel, waits for the scripted press

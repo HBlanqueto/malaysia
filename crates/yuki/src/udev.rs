@@ -39,9 +39,10 @@ use smithay::reexports::drm::control::{Device as ControlDevice, ModeTypeFlags, c
 use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::Display;
-use smithay::utils::{DeviceFd, Transform};
+use smithay::utils::{DeviceFd, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
+use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{error, info, warn};
 
@@ -525,6 +526,7 @@ impl Udev {
             &mut self.renderer,
             &self.cursor,
         );
+        self.state.init_capture_dma(&self.renderer);
         if self.capture_requested {
             self.capture_requested = false;
             if let Some(mode) = self.output.current_mode() {
@@ -536,6 +538,26 @@ impl Udev {
                     crate::capture::capture_output(&mut self.renderer, &elements, size, transform)
                 {
                     warn!(%error, "debug capture failed");
+                }
+            }
+        }
+        for pending in std::mem::take(&mut self.state.pending_captures) {
+            let damage = Rectangle::from_size(Size::from((pending.size.w, pending.size.h)));
+            match crate::capture::capture_into_buffer(
+                &mut self.renderer,
+                &elements,
+                pending.size,
+                [0.06, 0.06, 0.09, 1.0],
+                &pending.frame.buffer(),
+            ) {
+                Ok(()) => {
+                    pending
+                        .frame
+                        .success(Transform::Normal, Some(vec![damage]), Duration::ZERO)
+                }
+                Err(error) => {
+                    warn!(%error, "screencopy frame failed");
+                    pending.frame.fail(CaptureFailureReason::Unknown);
                 }
             }
         }
