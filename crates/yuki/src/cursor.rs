@@ -12,10 +12,10 @@
 //!
 //! - a client surface is drawn at the pointer position minus its hotspot;
 //! - `Hidden` (a null surface) draws nothing;
-//! - a named cursor — the default arrow, or the resize shape over an edge zone —
-//!   is loaded once from the Xcursor theme and drawn. A shape the theme does
-//!   not have falls back to the default arrow, and if no theme can be read at
-//!   all a built-in arrow is used.
+//! - a named cursor — the default arrow, a `wp_cursor_shape_v1` shape, or the
+//!   resize shape over an edge zone — is loaded once from the Xcursor theme and
+//!   drawn. A shape the theme does not have falls back to the default arrow,
+//!   and if no theme can be read at all a built-in arrow is used.
 //!
 //! [`State::cursor_status`]: crate::state::State::cursor_status
 //! [`SERIAL_COUNTER`]: smithay::utils::SERIAL_COUNTER
@@ -31,7 +31,7 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::input::pointer::CursorIcon;
-use smithay::utils::{Logical, Point, Transform};
+use smithay::utils::{Logical, Point, Size, Transform};
 use xcursor::CursorTheme;
 use xcursor::parser::{Image, parse_xcursor};
 
@@ -53,17 +53,58 @@ pub struct LoadedCursor {
     buffer: MemoryRenderBuffer,
     /// The pixel inside the image that sits on the pointer position.
     hotspot: Point<i32, Logical>,
+    /// The image size in logical coordinates, before any shake enlargement.
+    size: Size<i32, Logical>,
 }
+
+/// Every shape a client may request through `wp_cursor_shape_v1`.
+const SHAPES: [CursorIcon; 35] = [
+    CursorIcon::ContextMenu,
+    CursorIcon::Help,
+    CursorIcon::Pointer,
+    CursorIcon::Progress,
+    CursorIcon::Wait,
+    CursorIcon::Cell,
+    CursorIcon::Crosshair,
+    CursorIcon::Text,
+    CursorIcon::VerticalText,
+    CursorIcon::Alias,
+    CursorIcon::Copy,
+    CursorIcon::Move,
+    CursorIcon::NoDrop,
+    CursorIcon::NotAllowed,
+    CursorIcon::Grab,
+    CursorIcon::Grabbing,
+    CursorIcon::EResize,
+    CursorIcon::NResize,
+    CursorIcon::NeResize,
+    CursorIcon::NwResize,
+    CursorIcon::SResize,
+    CursorIcon::SeResize,
+    CursorIcon::SwResize,
+    CursorIcon::WResize,
+    CursorIcon::EwResize,
+    CursorIcon::NsResize,
+    CursorIcon::NeswResize,
+    CursorIcon::NwseResize,
+    CursorIcon::ColResize,
+    CursorIcon::RowResize,
+    CursorIcon::AllScroll,
+    CursorIcon::ZoomIn,
+    CursorIcon::ZoomOut,
+    CursorIcon::DndAsk,
+    CursorIcon::AllResize,
+];
 
 impl Cursors {
     /// Loads the cursor shapes from the Xcursor theme, with built-ins as a
     /// fallback.
     ///
     /// `scale` is the output's integer scale, so a HiDPI output gets a larger
-    /// pointer. The theme is `XCURSOR_THEME` or `default`, and the size is
-    /// `XCURSOR_SIZE` or 24. A shape that cannot be read falls back to the
-    /// default arrow, and if no theme can be read at all the built-in arrow is
-    /// used.
+    /// pointer. The theme is `XCURSOR_THEME`, or the first of `Adwaita`,
+    /// `breeze` and `default` that exists; the size is `XCURSOR_SIZE` or 24. A
+    /// shape that cannot be read falls back to the default arrow, and if no
+    /// theme can be read at all the built-in arrow is used.
     pub fn load(scale: i32) -> Self {
         let fallback = load_icon(CursorIcon::Default, scale).unwrap_or_else(|| {
             tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
@@ -71,12 +112,7 @@ impl Cursors {
         });
 
         let mut icons = Vec::new();
-        for icon in [
-            CursorIcon::EwResize,
-            CursorIcon::NsResize,
-            CursorIcon::NwseResize,
-            CursorIcon::NeswResize,
-        ] {
+        for icon in SHAPES {
             if let Some(cursor) = load_icon(icon, scale) {
                 icons.push((icon, cursor));
             }
@@ -105,6 +141,11 @@ impl LoadedCursor {
     pub fn hotspot(&self) -> Point<i32, Logical> {
         self.hotspot
     }
+
+    /// The image size, in logical coordinates before a shake enlargement.
+    pub fn size(&self) -> Size<i32, Logical> {
+        self.size
+    }
 }
 
 /// One decoded cursor image and its hotspot, before it becomes a buffer.
@@ -122,39 +163,78 @@ struct ImageData {
 }
 
 /// Reads a named icon from the Xcursor theme, if it can be read.
+///
+/// The theme is `XCURSOR_THEME` when set; otherwise the common desktop
+/// defaults are tried in order, because an unset variable would otherwise make
+/// every shape fall back to the built-in triangle. The search path itself is
+/// the XDG one `xcursor` implements (`XCURSOR_PATH`, then `XDG_DATA_DIRS`),
+/// which on NixOS is set by the session.
 fn theme_image(name: &str, scale: i32) -> Option<ImageData> {
-    let theme_name = std::env::var("XCURSOR_THEME").unwrap_or_else(|_| "default".to_string());
     let size = std::env::var("XCURSOR_SIZE")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
         .unwrap_or(24);
     let target = size.saturating_mul(scale.max(1) as u32);
 
-    let theme = CursorTheme::load(&theme_name);
-    let path = theme.load_icon(name)?;
-    let mut data = Vec::new();
-    std::fs::File::open(path)
-        .ok()?
-        .read_to_end(&mut data)
-        .ok()?;
-    let images = parse_xcursor(&data)?;
-    let image = nearest_image(&images, target)?;
+    for theme_name in theme_names() {
+        let theme = CursorTheme::load(&theme_name);
+        let Some(path) = theme.load_icon(name) else {
+            continue;
+        };
+        let mut data = Vec::new();
+        if std::fs::File::open(path)
+            .ok()
+            .and_then(|mut file| file.read_to_end(&mut data).ok())
+            .is_none()
+        {
+            continue;
+        }
+        let Some(images) = parse_xcursor(&data) else {
+            continue;
+        };
+        let Some(image) = nearest_image(&images, target) else {
+            continue;
+        };
 
-    Some(ImageData {
-        pixels: image.pixels_rgba.clone(),
-        width: image.width as i32,
-        height: image.height as i32,
-        hot_x: image.xhot as i32,
-        hot_y: image.yhot as i32,
-    })
+        return Some(ImageData {
+            pixels: image.pixels_rgba.clone(),
+            width: image.width as i32,
+            height: image.height as i32,
+            hot_x: image.xhot as i32,
+            hot_y: image.yhot as i32,
+        });
+    }
+    None
+}
+
+/// The cursor theme names to try, in order: the session's choice first, then
+/// the usual GNOME and KDE defaults.
+fn theme_names() -> Vec<String> {
+    let mut names = Vec::new();
+    if let Ok(name) = std::env::var("XCURSOR_THEME")
+        && !name.is_empty()
+    {
+        names.push(name);
+    }
+    for fallback in ["Adwaita", "breeze", "default"] {
+        if !names.iter().any(|name| name == fallback) {
+            names.push(fallback.to_string());
+        }
+    }
+    names
 }
 
 /// Loads one named cursor into an uploadable buffer.
 fn load_icon(icon: CursorIcon, scale: i32) -> Option<LoadedCursor> {
-    let data = theme_image(icon.name(), scale)?;
+    // Xcursor themes commonly use legacy names (`left_ptr` for `default`);
+    // the standard name comes first, then the crate's alternatives.
+    let data = std::iter::once(icon.name())
+        .chain(icon.alt_names().iter().copied())
+        .find_map(|name| theme_image(name, scale))?;
     Some(LoadedCursor {
         buffer: memory_buffer(&data, scale),
         hotspot: Point::from((data.hot_x, data.hot_y)),
+        size: Size::from((data.width / scale, data.height / scale)),
     })
 }
 
@@ -164,6 +244,7 @@ fn builtin_cursor(scale: i32) -> LoadedCursor {
     LoadedCursor {
         buffer: memory_buffer(&data, scale),
         hotspot: Point::from((data.hot_x, data.hot_y)),
+        size: Size::from((data.width / scale, data.height / scale)),
     }
 }
 

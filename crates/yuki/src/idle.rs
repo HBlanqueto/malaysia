@@ -55,6 +55,10 @@ impl TimerSink for () {
 pub trait IdleHost {
     /// The shared compositor state.
     fn idle_state(&mut self) -> &mut State;
+
+    /// Asks the backend for one frame, after a timer changed something that is
+    /// drawn (the shake-to-locate cursor animation).
+    fn request_redraw(&mut self);
 }
 
 /// The concrete sink the two backends use.
@@ -85,6 +89,9 @@ where
                 .insert_source(Timer::from_duration(duration), move |_, _, data: &mut D| {
                     tokens.lock().unwrap().remove(&id);
                     data.idle_state().idle_timer(id);
+                    if data.idle_state().take_redraw_request() {
+                        data.request_redraw();
+                    }
                     TimeoutAction::Drop
                 });
         match token {
@@ -145,6 +152,12 @@ impl IdleState {
         };
         idle.arm_auto();
         idle
+    }
+
+    /// Arms a timer owned by another part of `State` (the cursor shake
+    /// enlargement) through the same backend timer sink.
+    pub(crate) fn arm(&self, id: u64, duration: Duration) {
+        self.sink.insert(id, duration);
     }
 
     /// Records the compositor's socket so a spawned lock connects to Yuki, not

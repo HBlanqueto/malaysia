@@ -43,7 +43,9 @@ use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
 use smithay::reexports::wayland_server::backend::{ClientId, ObjectId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{DeviceFd, IsAlive, Logical, Physical, Point, Scale, Size, Transform};
+use smithay::utils::{
+    DeviceFd, IsAlive, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
+};
 use smithay::wayland::compositor::{
     SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
 };
@@ -808,6 +810,7 @@ fn reset_dead_cursor(state: &mut State) {
         && !surface.alive()
     {
         state.cursor_status = CursorImageStatus::default_named();
+        state.client_cursor = CursorImageStatus::default_named();
     }
 }
 
@@ -969,36 +972,52 @@ fn append_cursor(
         return;
     };
     let scale = state.scale.fractional_scale();
+    let boost = f64::from(state.cursor_boost_scale());
 
     match &state.cursor_status {
         CursorImageStatus::Hidden => {}
         CursorImageStatus::Named(icon) => {
             let shape = cursor.get(*icon);
-            let position = cursor_origin(location, shape.hotspot().to_f64(), scale);
+            let hotspot = shape.hotspot().to_f64();
+            let hotspot = Point::from((hotspot.x * boost, hotspot.y * boost));
+            let position = cursor_origin(location, hotspot, scale);
+            let source = Rectangle::from_size(shape.size().to_f64());
+            let size = Size::from((
+                (shape.size().w as f64 * boost).round() as i32,
+                (shape.size().h as f64 * boost).round() as i32,
+            ));
             match MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
                 position,
                 shape.buffer(),
                 None,
-                None,
-                None,
+                Some(source),
+                Some(size),
                 Kind::Cursor,
             ) {
                 Ok(element) => {
-                    tracing::debug!("drawing a pointer cursor");
+                    tracing::debug!(boost, "drawing a pointer cursor");
                     elements.push(OutputRenderElement::from(element));
                 }
                 Err(error) => tracing::warn!(?error, "could not draw a pointer cursor"),
             }
         }
         CursorImageStatus::Surface(surface) => {
-            let position =
-                cursor_origin(location, cursor_surface_hotspot(surface), scale).to_i32_round();
+            let hotspot = cursor_surface_hotspot(surface).to_f64();
+            let hotspot = Point::from((hotspot.x * boost, hotspot.y * boost));
+            let position = cursor_origin(location, hotspot, scale).to_i32_round();
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
                     WaylandSurfaceRenderElement<GlesRenderer>,
-                >(renderer, surface, position, scale, 1.0, Kind::Cursor)
+                >(
+                    renderer,
+                    surface,
+                    position,
+                    scale * boost,
+                    1.0,
+                    Kind::Cursor,
+                )
                 .into_iter()
                 .map(OutputRenderElement::from),
             );
@@ -1162,6 +1181,10 @@ enum DrawError {
 impl crate::idle::IdleHost for Session {
     fn idle_state(&mut self) -> &mut State {
         &mut self.state
+    }
+
+    fn request_redraw(&mut self) {
+        self.backend.window().request_redraw();
     }
 }
 
@@ -1388,6 +1411,40 @@ mod tests {
             pixel(&pixels, size, 60, 4),
             CLEAR,
             "the top-right must stay clear"
+        );
+    }
+
+    #[test]
+    fn an_enlarged_cursor_fills_its_scaled_rectangle() {
+        let size = Size::from((64, 64));
+        let mut renderer = offscreen_renderer();
+        // A 4x4 cursor scaled to 12x12 must cover the whole destination: the
+        // source rectangle stays 4x4, so the sample cannot run past it.
+        let cursor = MemoryRenderBuffer::from_slice(
+            &GREEN.repeat(16),
+            Fourcc::Argb8888,
+            (4, 4),
+            1,
+            Transform::Normal,
+            None,
+        );
+        let source = Rectangle::from_size(Size::from((4.0, 4.0)));
+        let element = MemoryRenderBufferRenderElement::from_buffer(
+            &mut renderer,
+            Point::from((0.0, 0.0)),
+            &cursor,
+            None,
+            Some(source),
+            Some(Size::from((12, 12))),
+            Kind::Cursor,
+        )
+        .expect("the enlarged cursor element should build");
+        let pixels = render_and_read(&mut renderer, size, &[OutputRenderElement::from(element)]);
+
+        assert_eq!(
+            pixel(&pixels, size, 10, 10),
+            GREEN,
+            "an enlarged cursor must paint the far corner of its destination"
         );
     }
 

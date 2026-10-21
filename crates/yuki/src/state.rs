@@ -21,6 +21,8 @@
 //!
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
+use std::time::{Duration, Instant};
+
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
@@ -33,8 +35,9 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::backend::ClientData;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Serial, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
+use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
@@ -44,6 +47,7 @@ use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState};
 use smithay::wayland::viewporter::ViewporterState;
+use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode as KdeDefaultMode;
 use smithay::wayland::shell::kde::decoration::KdeDecorationState;
 use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
@@ -53,9 +57,18 @@ use smithay::wayland::shm::ShmState;
 
 use crate::config::Config;
 use crate::foreign::{ForeignState, ListHandles};
+use crate::input::ShakeDetector;
 use crate::layers::Layers;
 use crate::popup::Popups;
 use crate::window::Windows;
+
+/// Timer id for the shake-to-locate cursor enlargement; idle notifications use
+/// other ids and the lock recovery shares the timer sink with its own sentinel.
+const CURSOR_BOOST_ID: u64 = u64::MAX - 1;
+/// How old an activation token's input serial may be.
+const ACTIVATION_SERIAL_MAX_AGE: Duration = Duration::from_secs(30);
+/// How long after the last shake motion the pointer keeps its full size.
+const CURSOR_SHAKE_ACTIVE_WINDOW: Duration = Duration::from_millis(150);
 
 /// Failures while building the compositor state.
 #[derive(Debug, thiserror::Error)]
@@ -122,10 +135,34 @@ pub struct State {
     /// Smithay updates this through `SeatHandler::cursor_image`, and only for a
     /// `wl_pointer.set_cursor` whose serial matches the pointer's last enter
     /// serial — the one generated from the single serial counter in
-    /// `input.rs`. `Named` means no client cursor is active, so the
-    /// compositor's own default arrow is drawn; `Hidden` means the client
-    /// cleared the cursor and nothing is drawn.
+    /// `input.rs`. `Named` is either a client's `wp_cursor_shape_v1` request or
+    /// a shape the compositor picked (the default arrow, an edge resize);
+    /// `Hidden` means the client cleared the cursor and nothing is drawn.
     pub cursor_status: CursorImageStatus,
+    /// The cursor the focused client last requested (surface, named or
+    /// hidden). Decoration edge bands temporarily replace a named client
+    /// cursor and restore this when the pointer leaves the band.
+    pub(crate) client_cursor: CursorImageStatus,
+    /// The `xdg-activation-v1` state.
+    ///
+    /// Tokens are only accepted when the requesting surface's client has the
+    /// keyboard focus and the token carries the last pressed key/button
+    /// serial; see `crate::handlers`.
+    pub activation_state: XdgActivationState,
+    /// The `wp_cursor_shape_manager_v1` state.
+    ///
+    /// The compositor keeps owning the cursor theme: clients name a shape and
+    /// Yuki draws the matching themed cursor (ADR 0020).
+    pub cursor_shape_state: CursorShapeManagerState,
+    /// The last key or pointer-button press serial, for activation tokens.
+    pub(crate) last_activation_serial: Option<(Serial, Instant)>,
+    /// When the shake enlargement started; `None` when the pointer is at its
+    /// normal size. The scale is derived from this instant so the growth and
+    /// shrink are animated rather than snapped.
+    pub(crate) cursor_boost_started: Option<Instant>,
+    /// Detects the rapid back-and-forth motion that macOS calls
+    /// "shake the mouse pointer to locate".
+    pub(crate) shake: ShakeDetector,
     /// The `xdg_wm_base` state.
     pub xdg_shell_state: XdgShellState,
     /// The `zxdg_decoration_manager_v1` state.
@@ -320,6 +357,8 @@ impl State {
         let fractional_scale_state = FractionalScaleManagerState::new::<Self>(display_handle);
         // Clock 1 is CLOCK_MONOTONIC, the clock used for input and rendering.
         let presentation_state = PresentationState::new::<Self>(display_handle, 1);
+        let activation_state = XdgActivationState::new::<Self>(display_handle);
+        let cursor_shape_state = CursorShapeManagerState::new::<Self>(display_handle);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
         // The manager global is advertised to every client for now; restricting
@@ -355,6 +394,12 @@ impl State {
             seat_state,
             seat,
             cursor_status: CursorImageStatus::default_named(),
+            client_cursor: CursorImageStatus::default_named(),
+            activation_state,
+            cursor_shape_state,
+            last_activation_serial: None,
+            cursor_boost_started: None,
+            shake: ShakeDetector::default(),
             xdg_shell_state,
             decoration_state,
             kde_decoration_state,
@@ -430,11 +475,76 @@ impl State {
     /// A timer from the backend fired. `0` is auto-lock, the lock-recovery
     /// sentinel is handled here, and the rest are client idle notifications.
     pub(crate) fn idle_timer(&mut self, id: u64) {
-        if id == crate::idle::LOCK_RECOVERY_ID {
+        if id == CURSOR_BOOST_ID {
+            self.cursor_boost_tick();
+        } else if id == crate::idle::LOCK_RECOVERY_ID {
             self.lock_recovery_timer();
         } else {
             self.idle.idle_timer(id);
         }
+    }
+
+    /// Remembers the serial of a key or pointer-button press for
+    /// `xdg-activation-v1` token validation.
+    pub(crate) fn note_activation_serial(&mut self, serial: Serial) {
+        self.last_activation_serial = Some((serial, Instant::now()));
+    }
+
+    /// Whether `serial` is the last key/button press and still recent.
+    pub(crate) fn activation_serial_is_recent(&self, serial: Serial) -> bool {
+        self.last_activation_serial
+            .is_some_and(|(last, at)| last == serial && at.elapsed() <= ACTIVATION_SERIAL_MAX_AGE)
+    }
+
+    /// Draws the pointer at this scale; it grows, holds and shrinks smoothly
+    /// after a shake.
+    pub(crate) fn cursor_boost_scale(&self) -> f32 {
+        self.cursor_boost_started
+            .map_or(1.0, |started| boost_scale_at(started.elapsed()))
+    }
+
+    /// Starts the shake-to-locate animation and arms its first frame.
+    pub(crate) fn trigger_cursor_boost(&mut self) {
+        tracing::info!("pointer enlarged: shake to locate");
+        self.cursor_boost_started = Some(Instant::now());
+        self.idle.arm(
+            CURSOR_BOOST_ID,
+            Duration::from_millis(yuki_design::CURSOR_SHAKE_TICK_MS),
+        );
+        self.request_redraw();
+    }
+
+    /// Keeps an already-enlarged pointer at full size while the shake
+    /// continues. Once the shake stops, the normal animation shrinks it back.
+    pub(crate) fn keep_cursor_boost_alive(&mut self, now: Instant) {
+        if self.cursor_boost_started.is_none() {
+            return;
+        }
+        let recent = self
+            .shake
+            .last_shake()
+            .is_some_and(|last| now.duration_since(last) <= CURSOR_SHAKE_ACTIVE_WINDOW);
+        if recent {
+            self.cursor_boost_started =
+                Some(now - Duration::from_millis(yuki_design::CURSOR_SHAKE_GROW_MS));
+        }
+    }
+
+    /// One animation frame: keeps asking for redraws until the pointer is back
+    /// at its normal size.
+    fn cursor_boost_tick(&mut self) {
+        let Some(started) = self.cursor_boost_started else {
+            return;
+        };
+        if boost_animation_active(started.elapsed()) {
+            self.idle.arm(
+                CURSOR_BOOST_ID,
+                Duration::from_millis(yuki_design::CURSOR_SHAKE_TICK_MS),
+            );
+        } else {
+            self.cursor_boost_started = None;
+        }
+        self.request_redraw();
     }
 
     /// Records the compositor's own Wayland socket for the auto-lock child.
@@ -467,6 +577,40 @@ impl State {
             Size::from((full.w, (full.h - top - bottom).max(0))),
         )
     }
+}
+
+/// The pointer scale at `elapsed` after a shake: an ease-out growth followed
+/// immediately by a smooth shrink. There is no hold: as soon as the shake
+/// stops, the pointer starts going back to its normal size, like macOS.
+fn boost_scale_at(elapsed: Duration) -> f32 {
+    let ms = elapsed.as_millis() as f32;
+    let grow = yuki_design::CURSOR_SHAKE_GROW_MS as f32;
+    let shrink = yuki_design::CURSOR_SHAKE_SHRINK_MS as f32;
+    let full = yuki_design::CURSOR_SHAKE_SCALE;
+    if ms < grow {
+        1.0 + (full - 1.0) * ease_out_cubic(ms / grow)
+    } else if ms < grow + shrink {
+        full - (full - 1.0) * smoothstep((ms - grow) / shrink)
+    } else {
+        1.0
+    }
+}
+
+/// Whether the shake animation still has frames to draw.
+fn boost_animation_active(elapsed: Duration) -> bool {
+    let total = yuki_design::CURSOR_SHAKE_GROW_MS + yuki_design::CURSOR_SHAKE_SHRINK_MS;
+    elapsed < Duration::from_millis(total)
+}
+
+/// Fast at first, settling into the full size (macOS' enlargement is not
+/// linear).
+fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
+}
+
+/// Smoothstep, for the shrink.
+fn smoothstep(t: f32) -> f32 {
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// An interactive move or resize in progress.
@@ -614,6 +758,22 @@ fn parse_scale(value: Option<&str>) -> Scale {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shake_animation_grows_then_shrinks() {
+        let grow = yuki_design::CURSOR_SHAKE_GROW_MS;
+        let shrink = yuki_design::CURSOR_SHAKE_SHRINK_MS;
+        let full = yuki_design::CURSOR_SHAKE_SCALE;
+
+        assert_eq!(boost_scale_at(Duration::from_millis(0)), 1.0);
+        assert!(boost_scale_at(Duration::from_millis(grow / 2)) > 1.0);
+        assert_eq!(boost_scale_at(Duration::from_millis(grow)), full);
+        assert!(boost_scale_at(Duration::from_millis(grow + shrink / 2)) < full);
+        assert_eq!(boost_scale_at(Duration::from_millis(grow + shrink)), 1.0);
+        assert!(!boost_animation_active(Duration::from_millis(
+            grow + shrink
+        )));
+    }
 
     #[test]
     fn scales_are_parsed_and_clamped() {

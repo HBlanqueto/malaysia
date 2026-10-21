@@ -741,6 +741,10 @@ impl crate::idle::IdleHost for Udev {
     fn idle_state(&mut self) -> &mut State {
         &mut self.state
     }
+
+    fn request_redraw(&mut self) {
+        self.schedule_repaint();
+    }
 }
 
 impl crate::blockers::BlockerSink for LoopHandle<'static, Udev> {

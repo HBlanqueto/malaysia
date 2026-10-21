@@ -256,6 +256,20 @@ pub const WINDOW: WindowStyle = WindowStyle {
     superellipse_exponent: 5.0,
 };
 
+/// The pointer scale while the user shakes the mouse to locate it, like
+/// macOS Accessibility > Pointer Control. macOS grows the pointer to roughly
+/// three times its normal size; normal drawing uses `1.0`.
+pub const CURSOR_SHAKE_SCALE: f32 = 3.0;
+
+/// How long the shake enlargement takes to grow, in milliseconds.
+pub const CURSOR_SHAKE_GROW_MS: u64 = 180;
+
+/// How long the pointer takes to shrink back, in milliseconds.
+pub const CURSOR_SHAKE_SHRINK_MS: u64 = 220;
+
+/// The interval between animation frames, in milliseconds (roughly 60 Hz).
+pub const CURSOR_SHAKE_TICK_MS: u64 = 16;
+
 /// The body text face.
 pub const TEXT: Font = Font {
     family: "Inter",

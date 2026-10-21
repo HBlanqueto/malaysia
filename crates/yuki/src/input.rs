@@ -10,6 +10,8 @@
 //! the compositor's own state, not a Smithay `PointerGrab`, because every event
 //! already passes through this module.
 
+use std::time::{Duration, Instant};
+
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
     InputTime, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
@@ -43,6 +45,109 @@ const TEST_DRAG_STEPS: usize = 4;
 /// The pointer movement of each scripted pre-threshold motion, in logical
 /// pixels.
 const TEST_DRAG_STEP: (f64, f64) = (12.0, 8.0);
+/// The smallest horizontal movement a shake sample considers.
+const SHAKE_MIN_DX: f64 = 2.0;
+/// The horizontal travel one swing needs before it counts.
+const SHAKE_MIN_SWING: f64 = 24.0;
+/// The longest a single swing may take.
+const SHAKE_MAX_SWING: Duration = Duration::from_millis(300);
+/// The longest a whole shake may take.
+const SHAKE_MAX_TOTAL: Duration = Duration::from_secs(1);
+/// Direction changes needed to call the motion a shake (four swings).
+const SHAKE_REVERSALS: u8 = 3;
+
+/// Detects the rapid back-and-forth motion macOS calls "shake the mouse pointer
+/// to locate".
+///
+/// It ignores slow reversals and small jitter: a swing has to travel at least
+/// [`SHAKE_MIN_SWING`] logical pixels within [`SHAKE_MAX_SWING`], and the whole
+/// gesture has to fit in [`SHAKE_MAX_TOTAL`]. The trigger is the third
+/// direction change, i.e. left-right-left-right.
+#[derive(Debug, Default)]
+pub(crate) struct ShakeDetector {
+    last_x: Option<f64>,
+    direction: i8,
+    swing: f64,
+    reversals: u8,
+    started: Option<Instant>,
+    last_reversal: Option<Instant>,
+    last_shake: Option<Instant>,
+}
+
+impl ShakeDetector {
+    /// Feeds the pointer's x coordinate and the event time; returns `true`
+    /// exactly when the gesture completes.
+    pub(crate) fn observe(&mut self, x: f64, now: Instant) -> bool {
+        let Some(last) = self.last_x.replace(x) else {
+            return false;
+        };
+        let dx = x - last;
+        if dx.abs() < SHAKE_MIN_DX {
+            return false;
+        }
+        let direction = if dx > 0.0 { 1 } else { -1 };
+
+        if self.direction == 0 {
+            self.start(direction, dx.abs(), now);
+            return false;
+        }
+        if direction == self.direction {
+            self.swing += dx.abs();
+            if self
+                .started
+                .is_some_and(|started| now.duration_since(started) > SHAKE_MAX_TOTAL)
+            {
+                self.start(direction, dx.abs(), now);
+            }
+            return false;
+        }
+
+        let swing = self.swing;
+        let reversal_dt = self
+            .last_reversal
+            .map(|last| now.duration_since(last))
+            .unwrap_or_default();
+        let total = self
+            .started
+            .map(|started| now.duration_since(started))
+            .unwrap_or_default();
+        if swing < SHAKE_MIN_SWING || reversal_dt > SHAKE_MAX_SWING || total > SHAKE_MAX_TOTAL {
+            self.start(direction, dx.abs(), now);
+            return false;
+        }
+
+        self.reversals += 1;
+        self.direction = direction;
+        self.last_reversal = Some(now);
+        self.last_shake = Some(now);
+        self.swing = dx.abs();
+        if self.reversals >= SHAKE_REVERSALS {
+            self.direction = 0;
+            self.swing = 0.0;
+            self.reversals = 0;
+            self.started = None;
+            self.last_reversal = None;
+            self.last_shake = Some(now);
+            return true;
+        }
+        false
+    }
+
+    /// The last moment the motion looked like part of a shake, if any. The
+    /// cursor stays enlarged while this is recent and starts shrinking as soon
+    /// as it is not.
+    pub(crate) fn last_shake(&self) -> Option<Instant> {
+        self.last_shake
+    }
+
+    fn start(&mut self, direction: i8, swing: f64, now: Instant) {
+        self.direction = direction;
+        self.swing = swing;
+        self.reversals = 0;
+        self.started = Some(now);
+        self.last_reversal = Some(now);
+    }
+}
 
 /// A compositor shortcut the shared input path handles itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,8 +214,11 @@ impl State {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = event.time();
+                let pressed = event.state() == KeyState::Pressed;
+                if pressed {
+                    self.note_activation_serial(serial);
+                }
                 if let Some(keyboard) = self.seat.get_keyboard() {
-                    let pressed = event.state() == KeyState::Pressed;
                     keyboard.input::<(), _>(
                         self,
                         event.key_code(),
@@ -200,6 +308,9 @@ impl State {
                 let serial = SERIAL_COUNTER.next_serial();
                 let button = event.button_code();
                 let state = event.state();
+                if state == ButtonState::Pressed {
+                    self.note_activation_serial(serial);
+                }
 
                 if state == ButtonState::Pressed {
                     if let Some(location) = self
@@ -555,6 +666,40 @@ impl State {
         self.inject_test_hovers();
     }
 
+    /// Test-only: inject a rapid left-right motion that trips the shake
+    /// detector, so the locate enlargement can be seen without a real hand.
+    ///
+    /// Only when `YUKI_TEST_SHAKE` is set. The motions go through the real
+    /// pointer path, so the same detector and draw path run as for a host
+    /// pointer; the four swings complete well inside the one-second window.
+    pub(crate) fn inject_test_shake(&mut self) {
+        if std::env::var_os("YUKI_TEST_SHAKE").is_none() {
+            return;
+        }
+        let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        else {
+            return;
+        };
+        let size = self.logical_output_size();
+        let center = clamp_pointer(location, size);
+        let y = center.y;
+        // Four swings, then back to where it started: the pointer must not
+        // end up off-screen, which would draw a clipped cursor.
+        for x in [
+            center.x - 60.0,
+            center.x + 60.0,
+            center.x - 60.0,
+            center.x + 60.0,
+            center.x,
+        ] {
+            let point = clamp_pointer(Point::new(x, y), size);
+            self.pointer_motion(point, InputTime::from_millis(0));
+        }
+    }
+
     /// Test-only: hover the pointer over the points in `YUKI_TEST_HOVER`.
     ///
     /// The value is a `;`-separated list of global `x,y` points. They are
@@ -606,6 +751,13 @@ impl State {
     /// the origin itself before sending the client the surface-local position
     /// (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`).
     fn pointer_motion(&mut self, location: Point<f64, Logical>, time: InputTime) {
+        let now = Instant::now();
+        if self.shake.observe(location.x, now) {
+            self.trigger_cursor_boost();
+        } else {
+            self.keep_cursor_boost_alive(now);
+        }
+
         if let Some(grab) = self.grab {
             self.drag(grab, location);
             self.request_redraw();
@@ -691,10 +843,17 @@ impl State {
     /// named (compositor-drawn) cursor, which is what is active over decoration.
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
         match self.windows.edge_under(location, RESIZE_BORDER) {
-            Some((_, edge)) => self.cursor_status = CursorImageStatus::Named(edge_cursor(edge)),
+            Some((_, edge)) => {
+                // A client surface cursor owns its pixels; only a named cursor
+                // (the default arrow, a cursor-shape request, or a previous
+                // edge) yields to the decoration's resize shape.
+                if matches!(self.client_cursor, CursorImageStatus::Named(_)) {
+                    self.cursor_status = CursorImageStatus::Named(edge_cursor(edge));
+                }
+            }
             None => {
                 if matches!(self.cursor_status, CursorImageStatus::Named(_)) {
-                    self.cursor_status = CursorImageStatus::default_named();
+                    self.cursor_status = self.client_cursor.clone();
                 }
             }
         }
@@ -800,6 +959,7 @@ mod tests {
     use std::path::PathBuf;
 
     use smithay::backend::input::ButtonState;
+
     use smithay::backend::input::{
         AbsolutePositionEvent, Device, DeviceCapability, Event, InputBackend, InputEvent,
         InputTime, PointerMotionAbsoluteEvent, UnusedEvent,
@@ -811,7 +971,8 @@ mod tests {
     use xkbcommon::xkb::keysyms;
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, Edge, clamp_pointer, compositor_shortcut, edge_cursor,
+        BUTTON_LEFT, CompositorShortcut, Edge, ShakeDetector, clamp_pointer, compositor_shortcut,
+        edge_cursor,
     };
     use crate::state::State;
 
@@ -885,6 +1046,67 @@ mod tests {
             clamp_pointer(Point::from((100.0, 100.0)), size),
             Point::from((100.0, 100.0))
         );
+    }
+
+    #[test]
+    fn only_the_latest_key_or_button_serial_activates() {
+        let (_display, mut state) = test_state((1280, 720));
+        let serial = SERIAL_COUNTER.next_serial();
+        let other = SERIAL_COUNTER.next_serial();
+        state.note_activation_serial(serial);
+        assert!(state.activation_serial_is_recent(serial));
+        assert!(!state.activation_serial_is_recent(other));
+    }
+
+    #[test]
+    fn a_shake_starts_the_pointer_animation() {
+        let (_display, mut state) = test_state((1280, 720));
+        state.trigger_cursor_boost();
+        assert!(state.cursor_boost_started.is_some());
+        let scale = state.cursor_boost_scale();
+        assert!((1.0..=yuki_design::CURSOR_SHAKE_SCALE).contains(&scale));
+        state.cursor_boost_started = None;
+        assert_eq!(state.cursor_boost_scale(), 1.0);
+    }
+
+    #[test]
+    fn a_rapid_side_to_side_shake_triggers_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
+            fired |= shake.observe(
+                x,
+                start + std::time::Duration::from_millis(index as u64 * 20),
+            );
+        }
+        assert!(fired, "left-right-left-right should trigger");
+    }
+
+    #[test]
+    fn a_slow_reversal_does_not_trigger_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 100.0, 0.0, 100.0, 0.0].into_iter().enumerate() {
+            let elapsed = std::time::Duration::from_millis(index as u64 * 400);
+            fired |= shake.observe(x, start + elapsed);
+        }
+        assert!(!fired, "one swing per few hundred ms is not a shake");
+    }
+
+    #[test]
+    fn tiny_jitter_does_not_trigger_the_locate_growth() {
+        let mut shake = ShakeDetector::default();
+        let start = std::time::Instant::now();
+        let mut fired = false;
+        for (index, x) in [0.0, 1.0, 0.0, 1.0, 0.0].into_iter().enumerate() {
+            fired |= shake.observe(
+                x,
+                start + std::time::Duration::from_millis(index as u64 * 10),
+            );
+        }
+        assert!(!fired, "sub-pixel jitter is not a deliberate shake");
     }
 
     #[test]

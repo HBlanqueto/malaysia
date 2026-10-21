@@ -128,9 +128,10 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `zwp_idle_inhibit_manager_v1`, recuperación del lock con backoff y límite
   de 5 intentos, y `Ctrl+Alt+L` para bloquear/relanzar sin desbloquear.
   Checklist en `docs/bloques/10-lock.md`.
-- **Bloque 11 parcial:** `wp_presentation` implementado (global v2, feedback
-  `presented`/`discarded`); faltan activation, cursor-shape, pointer-constraints
-  y captura. Ver `docs/bloques/11-protocolos-de-uso-diario.md`.
+- **Bloque 11 parcial:** `wp_presentation`, `xdg-activation`, `cursor-shape`
+  y el shake-to-locate hechos; faltan pointer-constraints y la integración de
+  captura (los protocolos ya están en Smithay). Ver
+  `docs/bloques/11-protocolos-de-uso-diario.md`.
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
   captura del Bloque 11. El plan corto vive en `docs/por-hacer.md`.

@@ -9,6 +9,9 @@
 //! compositor's behaviour, the macro is the plumbing that turns client
 //! requests into calls on that behaviour.
 
+use std::time::Duration;
+
+use smithay::backend::input::TabletToolDescriptor;
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::delegate_dispatch2;
@@ -19,6 +22,7 @@ use smithay::wayland::foreign_toplevel_list::{ForeignToplevelListHandler, Foreig
 use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
 use smithay::input::Seat;
 use smithay::input::SeatHandler;
+use smithay::input::tablet::TabletSeatHandler;
 use smithay::input::SeatState;
 use smithay::input::pointer::{CursorImageStatus, Focus};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -38,6 +42,9 @@ use smithay::wayland::compositor::{
     SurfaceAttributes, add_blocker, add_pre_commit_hook, with_states,
 };
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::xdg_activation::{
+    XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
+};
 use smithay::wayland::pointer_constraints::PointerConstraintsHandler;
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::selection::data_device::{
@@ -60,6 +67,9 @@ use yuki_scene::scene::Decoration;
 use crate::config::DecorationPolicy;
 use crate::delegate_foreign_management;
 use crate::state::{ClientState, State};
+
+/// How long a client-created activation token stays usable.
+const ACTIVATION_TOKEN_MAX_AGE: Duration = Duration::from_secs(30);
 
 impl CompositorHandler for State {
     fn compositor_state(&mut self) -> &mut CompositorState {
@@ -156,6 +166,7 @@ impl CompositorHandler for State {
         if let Some(mapped) = self.windows.commit(surface) {
             self.focus_window(mapped);
             self.foreign_window_mapped(mapped);
+            self.inject_test_shake();
             self.inject_test_press(mapped);
         }
         self.popup_commit(surface);
@@ -281,6 +292,80 @@ impl ShmHandler for State {
 
 impl PointerConstraintsHandler for State {}
 
+impl TabletSeatHandler for State {
+    type ToolFocus = WlSurface;
+
+    fn tablet_tool_image(&mut self, _tool: &TabletToolDescriptor, image: CursorImageStatus) {
+        // Tablets share the compositor's single pointer image today. The
+        // request is already serial-checked by Smithay before this point.
+        tracing::debug!(?image, "client set the pointer cursor");
+        self.client_cursor = image.clone();
+        self.cursor_status = image;
+        self.request_redraw();
+    }
+}
+
+impl XdgActivationHandler for State {
+    fn activation_state(&mut self) -> &mut XdgActivationState {
+        &mut self.activation_state
+    }
+
+    fn token_created(&mut self, _token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
+        self.activation_state
+            .retain_tokens(|_, old| old.timestamp.elapsed() <= ACTIVATION_TOKEN_MAX_AGE);
+        // A token is only useful if it was created by a client that actually
+        // has keyboard focus, and it names the latest key/button press. This
+        // is the compositor's focus-stealing policy: without both, an app
+        // could activate itself from the background.
+        let Some(surface) = data.surface.as_ref() else {
+            return false;
+        };
+        let Some(focus) = self
+            .seat
+            .get_keyboard()
+            .and_then(|keyboard| keyboard.current_focus())
+        else {
+            return false;
+        };
+        if !surface.id().same_client_as(&focus.id()) {
+            return false;
+        }
+        let Some((serial, _seat)) = data.serial else {
+            return false;
+        };
+        let recent = self.activation_serial_is_recent(serial);
+        if !recent {
+            tracing::info!(
+                serial = ?serial,
+                "rejected activation token: the press is not the latest key/button"
+            );
+        }
+        recent
+    }
+
+    fn request_activation(
+        &mut self,
+        token: XdgActivationToken,
+        data: XdgActivationTokenData,
+        surface: WlSurface,
+    ) {
+        self.activation_state.remove_token(&token);
+        if data.timestamp.elapsed() > ACTIVATION_TOKEN_MAX_AGE {
+            tracing::info!("ignored an expired activation token");
+            return;
+        }
+        let Some(id) = self.windows.id_of(&surface) else {
+            tracing::info!("ignored activation: the surface is not a tracked toplevel");
+            return;
+        };
+        tracing::info!(
+            window = id.get(),
+            "activating a window through xdg-activation"
+        );
+        self.activate_window(id);
+    }
+}
+
 impl SeatHandler for State {
     type KeyboardFocus = WlSurface;
     type PointerFocus = WlSurface;
@@ -295,6 +380,8 @@ impl SeatHandler for State {
         // matches the pointer's last enter serial, which this compositor
         // generated from its single serial counter (see `cursor.rs`). No second
         // counter is involved. Store the image; the draw path renders it.
+        tracing::debug!(?image, "client set the pointer cursor");
+        self.client_cursor = image.clone();
         self.cursor_status = image;
         self.request_redraw();
     }

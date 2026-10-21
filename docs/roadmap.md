@@ -153,8 +153,13 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   `presented`/`discarded` tras presentar el frame y en `vblank` para DRM. Ver
   `bloques/11-protocolos-de-uso-diario.md`; falta el probe de un cliente que
   pida feedback.
-- `xdg-activation-v1` y `wp_cursor_shape_v1` — pendientes. `cursor-shape`
-  necesita completar `TabletSeatHandler` para el `Dispatch2` del dispositivo.
+- **`xdg-activation-v1` — hecho.** Política estricta: superficie enfocada,
+  serial del último teclado/botón y token de menos de 30 s; activa/restaura la
+  ventana.
+- **`wp_cursor_shape_v1` — hecho.** `TabletSeatHandler` completo, 35 formas
+  mapeadas al tema Xcursor y restauración del cursor del cliente tras un borde.
+- **Shake to locate — hecho.** El puntero crece con animación suave hasta 3×
+  y encoge en cuanto el ratón se detiene; valores en `yuki-design`.
 - `xdg-output` ya se anuncia con `OutputManagerState::new_with_xdg_output`;
   no está pendiente.
 - **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`
