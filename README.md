@@ -50,6 +50,15 @@ domain write dock.autohide -bool true
 domain read  effects.shadow.radius
 ```
 
+| Comando | Qué hace |
+|---|---|
+| `read <dominio> <clave>` | Lee el valor actual de esa opción. |
+| `write <dominio> <clave> <valor> <tipo>` | Escribe el valor en el archivo del dominio. El tipo (`-bool`, `-int`, `-float` o `-string`) indica cómo interpretarlo. |
+| `delete <dominio> <clave>` | Borra la clave del archivo del dominio; la opción vuelve a su valor por defecto. |
+| `rename <dominio> <antigua> <nueva>` | Renombra una clave conservando su valor. |
+| `find <palabra>` | Busca esa palabra entre los nombres de opciones. |
+| `domains` | Lista los dominios disponibles. |
+
 Los dominios son `appearance`, `window`, `dock`, `menubar`, `lock`, `effects` y
 `debug`.
 
