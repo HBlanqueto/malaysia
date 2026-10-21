@@ -569,14 +569,19 @@ impl State {
     /// Keeps an already-enlarged pointer at full size while the shake
     /// continues. Once the shake stops, the normal animation shrinks it back.
     pub(crate) fn keep_cursor_boost_alive(&mut self, now: Instant) {
-        if self.cursor_boost_started.is_none() {
+        let Some(started) = self.cursor_boost_started else {
             return;
-        }
+        };
         let recent = self
             .shake
             .last_shake()
             .is_some_and(|last| now.duration_since(last) <= CURSOR_SHAKE_ACTIVE_WINDOW);
-        if recent {
+        // Pin to full only once the growth has played: pinning earlier would
+        // skip the grow animation, which is what the first motions of the very
+        // shake that started it would do.
+        let grown =
+            now.duration_since(started) >= Duration::from_millis(yuki_design::CURSOR_SHAKE_GROW_MS);
+        if recent && grown {
             self.cursor_boost_started =
                 Some(now - Duration::from_millis(yuki_design::CURSOR_SHAKE_GROW_MS));
         }

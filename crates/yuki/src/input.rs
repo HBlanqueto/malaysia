@@ -1145,6 +1145,24 @@ mod tests {
     }
 
     #[test]
+    fn the_pointer_grows_before_the_shake_holds_it() {
+        let (_display, mut state) = test_state((1280, 720));
+        let now = std::time::Instant::now();
+        state.cursor_boost_started = Some(now);
+        state.shake.last_shake = Some(now);
+        // A motion while the shake is still active must not pin the pointer to
+        // full size before the growth has played.
+        state.keep_cursor_boost_alive(now);
+        let scale = state.cursor_boost_scale();
+        // Right after the shake starts the pointer is still near its normal
+        // size; pinning to full would put it at `CURSOR_SHAKE_SCALE` (3.0).
+        assert!(
+            scale < 1.5,
+            "the growth was skipped: the pointer jumped to {scale}"
+        );
+    }
+
+    #[test]
     fn a_rapid_side_to_side_shake_triggers_the_locate_growth() {
         let mut shake = ShakeDetector::default();
         let start = std::time::Instant::now();
