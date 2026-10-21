@@ -255,15 +255,20 @@ pub(crate) const fn winit_render_transform() -> Transform {
     Transform::Flipped180
 }
 
+/// Converts a logical point to the physical pixel the renderer draws at.
+fn physical_point(point: Point<i32, Logical>, scale: f64) -> Point<i32, Physical> {
+    point.to_f64().to_physical(scale).to_i32_round()
+}
+
 /// The damage tracker mode source for the winit output.
 ///
 /// A static source, because the render transform is not the output's: it pins
 /// the size the session already tracks and the transform above. A resize builds
 /// a new tracker with the new size.
-pub(crate) fn winit_mode_source(size: Size<i32, Physical>) -> OutputModeSource {
+pub(crate) fn winit_mode_source(size: Size<i32, Physical>, scale: f64) -> OutputModeSource {
     OutputModeSource::Static {
         size,
-        scale: Scale::from(f64::from(State::OUTPUT_SCALE)),
+        scale: Scale::from(scale),
         transform: winit_render_transform(),
     }
 }
@@ -356,9 +361,11 @@ pub fn run() -> Result<(), SessionError> {
         Box::new(loop_handle.clone()),
         Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
     )?;
-    let damage_tracker =
-        OutputDamageTracker::from_mode_source(winit_mode_source(backend.window_size()));
-    let cursor = Cursors::load(State::OUTPUT_SCALE);
+    let damage_tracker = OutputDamageTracker::from_mode_source(winit_mode_source(
+        backend.window_size(),
+        state.scale.fractional_scale(),
+    ));
+    let cursor = Cursors::load(state.scale.fractional_scale().round().max(1.0) as i32);
     let track_objects = std::env::var_os("YUKI_TEST_OBJECTS").is_some();
     let mut session = Session {
         loop_handle: loop_handle.clone(),
@@ -561,7 +568,10 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
             // The tracker's mode source is static, so the new size is carried
             // by a fresh tracker. Resetting the damage history on a resize is
             // what the whole surface needs anyway.
-            session.damage_tracker = OutputDamageTracker::from_mode_source(winit_mode_source(size));
+            session.damage_tracker = OutputDamageTracker::from_mode_source(winit_mode_source(
+                size,
+                session.state.scale.fractional_scale(),
+            ));
             session.backend.window().request_redraw();
         }
         WinitEvent::CloseRequested => {
@@ -601,6 +611,7 @@ pub(crate) fn build_output_elements(
     cursor: &Cursors,
 ) -> Vec<OutputRenderElement<GlesRenderer>> {
     let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
+    let scale = state.scale.fractional_scale();
     if state.locked {
         // A locked session shows only the lock surfaces (plus the cursor):
         // no windows, no shell panels, no popups. If the lock client died,
@@ -621,8 +632,8 @@ pub(crate) fn build_output_elements(
                 >(
                     renderer,
                     lock_surface.wl_surface(),
-                    Point::from((0, 0)).to_physical(State::OUTPUT_SCALE),
-                    f64::from(State::OUTPUT_SCALE),
+                    physical_point(Point::from((0, 0)), scale),
+                    scale,
                     1.0,
                     Kind::Unspecified,
                 )
@@ -642,20 +653,15 @@ pub(crate) fn build_output_elements(
             let Some(surface) = state.popups.surface_of(id) else {
                 continue;
             };
-            let location = Point::from((rect.x().round() as i32, rect.y().round() as i32))
-                .to_physical(State::OUTPUT_SCALE);
+            let location = physical_point(
+                Point::from((rect.x().round() as i32, rect.y().round() as i32)),
+                scale,
+            );
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
                     WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
-                    renderer,
-                    surface,
-                    location,
-                    f64::from(State::OUTPUT_SCALE),
-                    1.0,
-                    Kind::Unspecified,
-                )
+                >(renderer, surface, location, scale, 1.0, Kind::Unspecified)
                 .into_iter()
                 .map(OutputRenderElement::from),
             );
@@ -664,8 +670,7 @@ pub(crate) fn build_output_elements(
             if !window.is_mapped() {
                 continue;
             }
-            let location =
-                (window.location() + window.surface_location()).to_physical(State::OUTPUT_SCALE);
+            let location = physical_point(window.location() + window.surface_location(), scale);
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
@@ -674,7 +679,7 @@ pub(crate) fn build_output_elements(
                     renderer,
                     window.surface(),
                     location,
-                    f64::from(State::OUTPUT_SCALE),
+                    scale,
                     1.0,
                     Kind::Unspecified,
                 )
@@ -913,9 +918,10 @@ fn append_layers(
         LayerSide::Back => [Layer::Background, Layer::Bottom],
         LayerSide::Front => [Layer::Top, Layer::Overlay],
     };
+    let scale = state.scale.fractional_scale();
     for layer in layers {
         for entry in state.layers.on_layer(layer) {
-            let location = entry.geometry.loc.to_physical(State::OUTPUT_SCALE);
+            let location = physical_point(entry.geometry.loc, scale);
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
@@ -924,7 +930,7 @@ fn append_layers(
                     renderer,
                     entry.surface.wl_surface(),
                     location,
-                    f64::from(State::OUTPUT_SCALE),
+                    scale,
                     1.0,
                     Kind::Unspecified,
                 )
@@ -950,16 +956,13 @@ fn append_cursor(
     else {
         return;
     };
+    let scale = state.scale.fractional_scale();
 
     match &state.cursor_status {
         CursorImageStatus::Hidden => {}
         CursorImageStatus::Named(icon) => {
             let shape = cursor.get(*icon);
-            let position = cursor_origin(
-                location,
-                shape.hotspot().to_f64(),
-                f64::from(State::OUTPUT_SCALE),
-            );
+            let position = cursor_origin(location, shape.hotspot().to_f64(), scale);
             match MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
                 position,
@@ -977,24 +980,13 @@ fn append_cursor(
             }
         }
         CursorImageStatus::Surface(surface) => {
-            let position = cursor_origin(
-                location,
-                cursor_surface_hotspot(surface),
-                f64::from(State::OUTPUT_SCALE),
-            )
-            .to_i32_round();
+            let position =
+                cursor_origin(location, cursor_surface_hotspot(surface), scale).to_i32_round();
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,
                     WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
-                    renderer,
-                    surface,
-                    position,
-                    f64::from(State::OUTPUT_SCALE),
-                    1.0,
-                    Kind::Cursor,
-                )
+                >(renderer, surface, position, scale, 1.0, Kind::Cursor)
                 .into_iter()
                 .map(OutputRenderElement::from),
             );
@@ -1230,7 +1222,7 @@ mod tests {
                 .expect("the test needs an offscreen buffer");
         let mut framebuffer = renderer.bind(&mut target).expect("the buffer should bind");
 
-        let mut tracker = OutputDamageTracker::from_mode_source(winit_mode_source(size));
+        let mut tracker = OutputDamageTracker::from_mode_source(winit_mode_source(size, 1.0));
         tracker
             .render_output(
                 renderer,

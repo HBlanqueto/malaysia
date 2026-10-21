@@ -1,0 +1,70 @@
+# Bloque 9 — Escala fraccional
+
+Estado: **parcial.** La base de escala ya no es un literal global; falta la
+aceptación en el panel real y la escala por salida de 8b.
+
+## Implementado
+
+- `State::scale` es un `smithay::output::Scale`, no un entero global. Expone la
+  parte entera a `wl_output` y la fraccionaria a `wp_fractional_scale_v1`.
+- `YUKI_SCALE` es el override de desarrollo (`1.0..=4.0`; por ejemplo
+  `YUKI_SCALE=1.5`). Sin él, escala 1. Es temporal: la opción de configuración
+  llegará con la app de ajustes (ADR 0021).
+- `State::logical_output_size`, la colocación y escala de los elementos de
+  render, el damage tracker, el cursor y el foco usan la escala de la salida.
+- La shell usa `wp_viewport` para la parte fraccionaria y mantiene
+  `wl_surface.set_buffer_scale(1)` cuando hay viewport. Antes combinaba
+  `buffer_scale` con viewport y a 1.5 el source quedaba fuera del buffer
+  (`wp_viewport: out_of_buffer`).
+- `FractionalScaleHandler` envía `preferred_scale` exacto a cada superficie.
+- Test unitario de parseo/clamp de `YUKI_SCALE`.
+
+## Pendiente
+
+- Aceptación en el panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
+- Escala por salida y por monitor cuando 8b introduzca varios outputs.
+- Opción de configuración real (no `YUKI_SCALE`) y persistencia.
+- Redondeo de rectángulos lógicos cuando la escala no es entera (ADR 0004).
+- Probar clientes que no negocian fractional-scale y clientes con
+  `viewporter` propio.
+
+## Cómo probar
+
+```sh
+YUKI_SCALE=1.5 ./dev.sh run
+# en otra terminal, con el WAYLAND_DISPLAY que imprima Yuki:
+WAYLAND_DISPLAY=wayland-N yuki-shell wallpaper
+WAYLAND_DISPLAY=wayland-N yuki-shell menubar
+WAYLAND_DISPLAY=wayland-N yuki-shell dock
+WAYLAND_DISPLAY=wayland-N wezterm
+```
+
+No debe aparecer `wp_viewport: out_of_buffer` ni `bad_size` en los logs de la
+shell. El puntero debe caer en el mismo píxel que se ve y la captura por
+`SIGUSR1` debe mostrar el wallpaper, la menubar y el dock completos.
+
+## Verificación en anidado (2026-10-21)
+
+- `YUKI_SCALE=1.25`, `1.5` y `2.0` con `yuki-shell wallpaper/menubar/dock`:
+  sin `wp_viewport` ni error de protocolo; los tres procesos siguen vivos.
+- `YUKI_SCALE=1.5 ./dev.sh smoke`: PASS.
+- `smoke`, `block4`, `move` y `decoration` a escala 1: PASS.
+- `./dev.sh check` y `nix build .#default`: PASS.
+
+Falta la comprobación visual en el panel real (nitidez, cursor y alineación).
+
+## Comparación con macOS
+
+macOS no usa escala fraccional por app: renderiza el escritorio a 2× de la
+resolución lógica y reduce el framebuffer virtual al panel. Es supersampling
+global. Yuki sigue el modelo Wayland (escala por salida/superficie); ver
+[`../investigacion/escalado-macos.md`](../investigacion/escalado-macos.md) para
+el análisis y las diferencias. El supersampling tipo macOS queda como **futuro
+opcional**, solo cuando el escritorio base sea competente; no forma parte de
+este bloque.
+
+## Notas
+
+- `wl_output.scale` es entero; para 1.5 se anuncia `advertised_integer = 1` y
+  los clientes que lo soportan usan `wp_fractional_scale_v1`.
+- El cursor se carga a la escala entera redondeada para no quedar borroso.

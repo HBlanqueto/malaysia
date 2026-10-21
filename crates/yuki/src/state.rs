@@ -196,6 +196,11 @@ pub struct State {
     /// The output's current size, in physical pixels, mirroring its current
     /// mode. New toplevels are sized from it; the session updates it on resize.
     pub output_size: Size<i32, Physical>,
+    /// The output scale, both the integer value advertised to `wl_output` and
+    /// the fractional value used by the compositor and `wp_fractional_scale_v1`.
+    ///
+    /// One output today; 8b makes this per output.
+    pub scale: Scale,
     /// The tracked toplevels. All window geometry goes through this; the Direct
     /// Session milestone replaces it with `yuki-scene` (see [`crate::window`]).
     pub windows: Windows,
@@ -223,20 +228,6 @@ pub struct State {
 }
 
 impl State {
-    /// The output scale, as an integer.
-    ///
-    /// This is the one literal that stands in for scale. Every physical/logical
-    /// conversion names it rather than writing `1`, so when fractional scale
-    /// lands there is a single value to replace and a single set of call sites
-    /// to revisit.
-    // TODO(scale): this must not stay a literal. On a HiDPI output the integer
-    // scale is 2, not 1, and fractional scaling wants a per-surface value, not
-    // one global integer. Both call sites change together: [`Self::logical_output_size`]
-    // below, and the render-element placement in `session::draw` (the location
-    // converted with `to_physical` and the element scale, both of which read
-    // this constant).
-    pub const OUTPUT_SCALE: i32 = 1;
-
     /// Creates the state for one session and publishes its globals.
     ///
     /// `size` is the initial size of the output, which the session takes from
@@ -293,6 +284,11 @@ impl State {
         idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let config = Config::load();
+        let scale = output_scale();
+        // Applying the scale before the global is created means clients learn
+        // the integer value in the initial wl_output state. The fractional
+        // value is sent per surface by `FractionalScaleHandler`.
+        output.change_current_state(None, None, Some(scale), None);
         let idle_timeout = match config.lock.idle_timeout_seconds {
             0 => None,
             seconds => Some(std::time::Duration::from_secs(seconds)),
@@ -374,6 +370,7 @@ impl State {
             output_manager_state,
             output,
             output_size: size,
+            scale,
             windows: Windows::new(),
             popups: Popups::new(),
             foreign: ForeignState::new(display_handle),
@@ -443,10 +440,14 @@ impl State {
     ///
     /// Every conversion from the output's physical mode size to logical
     /// coordinates goes through here — there is deliberately one such call
-    /// site, not one per user. The output runs at scale 1, so today this is the
-    /// identity; when fractional scale lands, this method is what changes.
+    /// site, not one per user. The fractional scale is the one clients get
+    /// through `wp_fractional_scale_v1`; the integer part is what `wl_output`
+    /// can advertise.
     pub fn logical_output_size(&self) -> Size<i32, Logical> {
-        self.output_size.to_logical(Self::OUTPUT_SCALE)
+        self.output_size
+            .to_f64()
+            .to_logical(self.scale.fractional_scale())
+            .to_i32_round()
     }
 
     /// The workspace for windows: the output minus the layer-shell exclusive
@@ -572,4 +573,50 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
     );
     output.set_preferred(mode);
     output
+}
+
+/// The output scale for this session.
+///
+/// Until the settings app owns per-display scale, `YUKI_SCALE` is the explicit
+/// development override (for example `YUKI_SCALE=1.5`); without it the output
+/// runs at integer scale 1. The value is clamped to `1.0..=4.0` and invalid
+/// values fall back to 1.
+pub(crate) fn output_scale() -> Scale {
+    parse_scale(std::env::var("YUKI_SCALE").ok().as_deref())
+}
+
+fn parse_scale(value: Option<&str>) -> Scale {
+    let Some(value) = value else {
+        return Scale::Integer(1);
+    };
+    let Ok(scale) = value.parse::<f64>() else {
+        return Scale::Integer(1);
+    };
+    if !(1.0..=4.0).contains(&scale) || !scale.is_finite() {
+        return Scale::Integer(1);
+    }
+    if scale.fract() == 0.0 {
+        Scale::Integer(scale as i32)
+    } else {
+        Scale::Custom {
+            advertised_integer: scale.floor() as i32,
+            fractional: scale,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scales_are_parsed_and_clamped() {
+        assert_eq!(parse_scale(None).integer_scale(), 1);
+        assert_eq!(parse_scale(Some("2")).integer_scale(), 2);
+        assert_eq!(parse_scale(Some("1.5")).fractional_scale(), 1.5);
+        assert_eq!(parse_scale(Some("1.5")).integer_scale(), 1);
+        assert_eq!(parse_scale(Some("2.5")).fractional_scale(), 2.5);
+        assert_eq!(parse_scale(Some("0.5")).integer_scale(), 1);
+        assert_eq!(parse_scale(Some("abc")).integer_scale(), 1);
+    }
 }

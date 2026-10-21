@@ -238,6 +238,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
+    let cursor = Cursors::load(state.scale.fractional_scale().round().max(1.0) as i32);
     let mut udev = Udev {
         loop_handle: loop_handle.clone(),
         display,
@@ -246,7 +247,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         drm,
         compositor,
         renderer,
-        cursor: Cursors::load(State::OUTPUT_SCALE),
+        cursor,
         output,
         start_time: Instant::now(),
         active: true,

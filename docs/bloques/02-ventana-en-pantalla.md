@@ -152,6 +152,11 @@ de un cliente real sea legible en la ventana anidada. El cliente de aceptación 
 
 ## Preguntas abiertas
 
+> **Actualizado en el Bloque 9.** La constante `OUTPUT_SCALE` ya no existe:
+> `State::scale` lleva la escala de la salida. Ver
+> [`09-escala-fraccional.md`](09-escala-fraccional.md). Esta nota se conserva
+> como registro de lo que estaba abierto al cerrar el Bloque 2.
+
 1. **`OUTPUT_SCALE` es una literal.** Es `1` detrás de una única constante con
    nombre, y sus dos sitios de llamada — `State::logical_output_size` y la
    colocación de elementos en `session::draw` — cambian juntos cuando aterrice el

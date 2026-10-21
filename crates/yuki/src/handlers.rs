@@ -401,13 +401,14 @@ impl WlrLayerShellHandler for State {
 
 impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
-        // Advertise the current output scale. The shell renders its buffers at
-        // this scale and lets viewport land them on the logical size. When
-        // fractional output scaling lands, this becomes the output scale value
-        // instead of the `OUTPUT_SCALE` literal (see `State::OUTPUT_SCALE`).
+        // Advertise the output's fractional scale. The shell renders its
+        // buffers at this scale and lets the viewport land them on the logical
+        // size; clients without fractional-scale support still get the
+        // integer value in `wl_output`.
+        let scale = self.scale.fractional_scale();
         smithay::wayland::compositor::with_states(&surface, |states| {
             smithay::wayland::fractional_scale::with_fractional_scale(states, |state| {
-                state.set_preferred_scale(State::OUTPUT_SCALE as f64);
+                state.set_preferred_scale(scale);
             });
         });
     }

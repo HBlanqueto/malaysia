@@ -234,8 +234,18 @@ impl Menubar {
         );
         self.buffer_size = (bw, bh);
 
+        // With a viewport, the destination size is the logical size and the
+        // source is the real buffer size; leaving buffer_scale at 1 avoids
+        // applying the scale twice (and keeps the source inside the buffer as
+        // Smithay checks it). Without a viewport, fall back to the integer
+        // buffer scale.
         if let Some(surface) = &self.surface {
-            surface.set_buffer_scale(scale.round().max(1.0) as i32);
+            let buffer_scale = if self.viewport.is_some() {
+                1
+            } else {
+                scale.round().max(1.0) as i32
+            };
+            surface.set_buffer_scale(buffer_scale);
         }
         if let Some(viewport) = &self.viewport {
             viewport.set_source(0.0, 0.0, bw as f64, bh as f64);
