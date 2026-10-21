@@ -12,7 +12,8 @@ docs/
 ├── README.md          ← este índice
 ├── yuki.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
 ├── glossary.md        glosario de nombres (celestial-kit, grade-graphics, ...)
-├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–11 + lo siguiente)
+├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–12 + lo siguiente)
+├── por-hacer.md       plan corto: aceptación de 8a/10 y orden de 9, 11, 12
 ├── bloques/           qué se ha hecho e implementado, bloque por bloque
 │   ├── 00-cimientos.md
 │   ├── 01-sesion.md            (cubre los Bloques 1–3)
@@ -22,7 +23,9 @@ docs/
 │   ├── 05-popups.md
 │   ├── 06-portapapeles.md
 │   ├── 07-linux-dmabuf-y-explicit-sync.md
-│   └── 08-direct-session.md
+│   ├── 08-direct-session.md
+│   ├── 09-escala-fraccional.md
+│   └── 10-lock.md
 ├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
@@ -39,7 +42,9 @@ docs/
 └── investigacion/
     ├── como-renderiza-macos.md   investigación a fondo del renderizado de macOS
     ├── wayland-vs-macos.md       comparación con Wayland y qué probar en yuki
-    └── otto-y-forks.md           Otto y los forks de HBlanqueto: qué reutilizar
+    ├── otto-y-forks.md           Otto y los forks de HBlanqueto: qué reutilizar
+    ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
+    └── escalado-macos.md         puntos, backing store y downsample en macOS
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
@@ -60,25 +65,32 @@ docs/
    fuente de verdad sobre qué hay planeado.
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
-5. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
+5. **[`por-hacer.md`](por-hacer.md)** — el plan corto: aceptación de 8a y 10
+   en hardware real, y el orden de 9 → 11 → 12. El roadmap es el plan largo;
+   este documento es la lista de ahora.
+6. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
    implementación (ADR 0001–0030, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
-6. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
+7. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
    (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
    [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md) y
    [lock](arquitectura/lock.md).
-7. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
+8. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
    canónico de opciones del compositor, con **nombres y valores idénticos a macOS**
    (secciones tipo System Settings, claves tipo `com.apple.dock`). Un archivo
    **`.domain`** por dominio (extensión propia, como `.plist`); comando **`domain`**
    (sintaxis `defaults`) y app de ajustes después, ADR 0021.
-8. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
+9. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
    comparará el hito Direct Session (DRM/KMS).
-9. **[`investigacion/`](investigacion/)** — material de investigación: cómo
-   renderiza macOS su escritorio, cómo se compara con las opciones Wayland y qué
-   se puede reutilizar de [Otto y sus forks](investigacion/otto-y-forks.md).
+10. **[`investigacion/`](investigacion/)** — material de investigación: cómo
+   renderiza macOS su escritorio, cómo se compara con las opciones Wayland, qué
+   se puede reutilizar de [Otto y sus forks](investigacion/otto-y-forks.md) y
+   qué funciones de [GNOME](investigacion/gnome.md) sirven de referencia
+   (incluido el debate portal propio frente a `xdg-desktop-portal-gtk`) y cómo
+   separa macOS puntos, backing store y píxeles de panel
+   ([escalado](investigacion/escalado-macos.md)).
 
 ## Estado actual en una línea
 
@@ -99,8 +111,14 @@ corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
 superficie EGL de la ventana; la captura ahora corre antes del render de la
 ventana). Ya corren wezterm,
 Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
-El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado;
-`./dev.sh drm-vkms` ya pasa y queda la aceptación en el panel real. **8b**
-(hotplug) y **8c** (planos y direct scanout) están planificados. La shell es nativa
-(`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y **lock**
-funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md).
+El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
+aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
+(hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
+está parcialmente hecho: escala real y `YUKI_SCALE`, pendiente panel y
+configuración. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
+recuperación y `Ctrl+Alt+L`). El **Bloque 12** (portales y servicios de escritorio) está
+planificado y depende de la captura del Bloque 11. La base NixOS está hecha
+(`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
+nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
+**lock** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y
+[`por-hacer.md`](por-hacer.md).

@@ -5,15 +5,42 @@ Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque.
 > [!NOTE]
 > Este es un proyecto vibecoded, por gusto personal. No tiene más que uso diario como hobby.
 
+## NixOS
+
+El flake expone `nixosModules.default`. Con el módulo la sesión queda instalada
+sin enlaces manuales de systemd:
+
+```nix
+{
+  inputs.yuki.url = "github:HBlanqueto/yukiwm";
+
+  outputs = { nixpkgs, yuki, ... }: {
+    nixosConfigurations.mi-pc = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        yuki.nixosModules.default
+        { programs.yuki.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+`programs.yuki.enable` instala el paquete, registra la sesión en el display
+manager, crea `/etc/pam.d/yuki-lock`, activa `hardware.graphics` y arranca
+`yuki-session.target` con `wallpaper`, `menubar` y `dock` (configurable con
+`programs.yuki.shellComponents`). El display manager ejecuta `yuki --drm`, la
+sesión directa del Bloque 8a.
+
 ## Datos generales
 
 | Dato | Estado |
 |---|---|
 | Lenguaje | Rust (edición 2024) |
 | Framework | Smithay, fijado por revisión (`023b78b1`, ADR 0028) |
-| Backend de sesión | Winit anidado para desarrollo; DRM/KMS directo para el panel real (Bloque 8a) |
+| Backend de sesión | Winit anidado para desarrollo; DRM/KMS directo aceptado en el panel real (Bloque 8a) |
 | Aceleración gráfica | Sí: renderizado por GPU con EGL + OpenGL ES 3 (GLES) |
-| DRM/KMS | Sí: sesión directa atómica con libseat/libinput; vkms verificado, panel real pendiente |
+| DRM/KMS | Sí: sesión directa atómica con libseat/libinput; vkms verificado y panel real aceptado |
 | Vulkan | No como renderer del compositor; los clientes sí pueden usar Vulkan (p. ej. vkcube) |
 | OpenGL | OpenGL ES 3 vía EGL; no hay renderer OpenGL de escritorio ni fallback por software |
 | Shell | `yuki-shell` nativa, un proceso por componente (ADR 0023) |

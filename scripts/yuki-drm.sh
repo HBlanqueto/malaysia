@@ -4,7 +4,7 @@
 # Uso (desde la raíz del repo):
 #   scripts/yuki-drm.sh setup          # desde GNOME: build + units de la shell
 #   scripts/yuki-drm.sh run            # desde un TTY: arranca yuki --drm
-#   scripts/yuki-drm.sh client foot    # desde otro TTY: abre un cliente en Yuki
+#   scripts/yuki-drm.sh client wezterm # desde otro TTY: abre un cliente en Yuki
 #   scripts/yuki-drm.sh lock           # desde otro TTY: bloquea la sesión
 #   scripts/yuki-drm.sh status         # pid, socket y últimas líneas del log
 #   scripts/yuki-drm.sh stop           # mata Yuki (sirve con la sesión bloqueada)

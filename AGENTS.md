@@ -120,14 +120,20 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `zwlr_foreign_toplevel_management_v1` (dock), `ext-session-lock-v1` (lock,
   con la garantía de no desbloquear si el cliente muere) y `zwp_linux_dmabuf_v1`
   v5 (7a).
-- Backend winit anidado (GLES2), backend DRM/KMS **8a** implementado
-  (un plano primario, eDP, libseat/libinput, VT); **8b/8c** planificados.
-  Aceptación de 8a: vkms pasa; pendiente en el panel real.
-- **Bloque 10 implementado, aceptación manual pendiente:** PAM en el proceso
+- Backend winit anidado (GLES2), backend DRM/KMS **8a** implementado y
+  aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b/8c**
+  planificados. `dev.sh drm-vkms` sigue pasando.
+- **Bloque 10 implementado y aceptado (2026-10-21):** PAM en el proceso
   del lock, UI de contraseña, auto-lock por `ext-idle-notify-v1` con
-  `zwp_idle_inhibit_manager_v1` y recuperación del lock con backoff y límite
-  de 5 intentos.
-- `TODO(scale)` en `crates/yuki/src/state.rs:233` (HiDPI).
+  `zwp_idle_inhibit_manager_v1`, recuperación del lock con backoff y límite
+  de 5 intentos, y `Ctrl+Alt+L` para bloquear/relanzar sin desbloquear.
+  Checklist en `docs/bloques/10-lock.md`.
+- **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
+  de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
+  captura del Bloque 11. El plan corto vive en `docs/por-hacer.md`.
+- **Bloque 9 parcial:** `State::scale` y `YUKI_SCALE` ya sustituyen el literal
+  global; faltan panel real, configuración persistente y escala por salida de
+  8b. Ver `docs/bloques/09-escala-fraccional.md`.
 
 ## Cómo compilar y probar
 
@@ -139,6 +145,10 @@ nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
 ```
 
 No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).
+
+En NixOS, el flake expone `nixosModules.default` (`programs.yuki.enable = true`):
+instala el paquete, registra la sesión, crea `/etc/pam.d/yuki-lock` y arranca
+`yuki-session.target` con los componentes de la shell.
 
 ## Regla de entorno (permanente)
 

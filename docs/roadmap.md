@@ -112,19 +112,28 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   la garantía del lock. Winit sigue siendo el backend de desarrollo. Sin
   hotplug, sin monitores externos y sin direct scanout.
 - **8b — hotplug y monitores externos.** Varios conectores, reubicación de
-  outputs, `wl_output` por conector y manejo de desconexión.
-- **8c — planos y direct scanout.** Overlay/cursor planes, asignación de
-  superficies a KMS y los criterios de promoción/expulsión.
-- Aceptación 8a: `./dev.sh drm-vkms` pasa; falta la sesión desde un TTY sobre
-  el panel del ThinkPad, con teclado, touchpad y cambio de VT. Ver
-  `bloques/08-direct-session.md` para el checklist.
+  outputs, `wl_output` y `xdg-output` por conector, elección de modo y escala
+  por monitor, orientación, primario, espejo y configuración persistente.
+  Manejo de desconexión y de estados de energía del panel. Sin planos todavía.
+- **8c — planos y direct scanout.** Planos overlay y cursor, asignación de
+  superficies a KMS, comprobación de formato/modificador y opacidad, criterios
+  de promoción y expulsión del direct scanout, y pruebas en vkms. Depende de
+  8b para el caso multi-monitor.
+- Aceptación 8a: **hecha** en el panel del ThinkPad el 2026-10-21, con
+  `wezterm`, touchpad y cambio de VT. `./dev.sh drm-vkms` sigue pasando. Ver
+  `bloques/08-direct-session.md`.
 
 ## Bloque 9 — Escala fraccional
 
-- `wp_fractional_scale_v1` + viewporter validada en el panel real
-- Resolver el `TODO(scale)` en `state.rs` (un valor por superficie, no un
-  literal global)
-- Aceptación: (Pendiente)
+- **Hecho:** `State::scale` (`output::Scale`), `YUKI_SCALE` como override de
+  desarrollo, `wl_output` entero + `wp_fractional_scale_v1` exacto, escala en
+  `logical_output_size`, render, damage tracker, cursor y viewporter de la
+  shell. Ver `bloques/09-escala-fraccional.md`.
+- **Pendiente:** aceptación en panel real a 1.25/1.5; escala por salida/monitor
+  con 8b; opción de configuración real (no `YUKI_SCALE`); redondeo de
+  rectángulos lógicos (ADR 0004).
+- Aceptación: una ventana y la shell se ven nítidas a escala 1.25/1.5; el
+  puntero cae donde se ve; el panel real lo confirma.
 
 ## Bloque 10 — Lock con autenticación
 
@@ -132,10 +141,11 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   campo enmascarado + estados, auto-lock por `ext-idle-notify-v1`,
   `zwp_idle_inhibit_manager_v1` y recuperación del lock (destruction hook,
   watchdog de arranque y backoff 1/2/4/8/16 s, máximo 5 intentos).
-- Aceptación manual pendiente en la sesión anidada: contraseña incorrecta y
-  correcta, auto-lock con 15 s, mpv en pantalla completa sin bloquear.
-- **Pendiente:** un atajo para relanzar el lock cuando se agotan los 5
-  reintentos. Nunca debe desbloquear la sesión.
+- Atajo `Ctrl+Alt+L`: bloquea ahora o relanza el lock cuando no hay superficie
+  de lock viva. Nunca desbloquea.
+- Aceptación: **hecha** en el panel real el 2026-10-21 (contraseña
+  incorrecta/correcta, auto-lock, mpv fullscreen, 5 relanzamientos y
+  `Ctrl+Alt+L`). Ver `bloques/10-lock.md`.
 
 ## Bloque 11 — Protocolos de uso diario
 
@@ -151,12 +161,71 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. Smithay ya
   ofrece `image_copy_capture` e `image_capture_source` en la revisión anclada;
   falta implementar los handlers y la ruta de buffers de Yuki.
-- Aceptación: (Pendiente)
+- Opcional para uso diario: `relative-pointer` y
+  `keyboard-shortcuts-inhibit` (juegos y escritorio remoto). No bloquean la
+  aceptación del Bloque 11.
+- Aceptación: una app de captura puede pedir un monitor o una ventana, los
+  frames llegan por dmabuf y el cursor se dibuja o se omite según la petición;
+  `wp_presentation` entrega timestamps; `xdg-activation` activa una ventana con
+  token válido.
 
-## Después del Bloque 11
+## Bloque 12 — Portales y servicios de escritorio
 
-- D-Bus de configuración (ADR 0021) y la app de ajustes. XWayland sigue
-  diferido.
+Se divide en dos entregas. Depende de la captura del Bloque 11.
+
+- **12a — `xdg-desktop-portal-yuki`.** Backend propio para lo que depende del
+  compositor:
+  - `Settings` (`org.freedesktop.appearance`) desde el store `.domain`:
+    dark/light, accent-color y contraste, con `SettingChanged`.
+  - `Screenshot` y `ScreenCast` sobre `ext-image-copy-capture` +
+    `ext-image-capture-source` y PipeWire (dmabuf, modificadores, fences).
+  - Diálogos de permiso de la shell y concesiones por app.
+  - `xdg.portal.config.yuki` enruta solo estas interfaces a Yuki; FileChooser,
+    AppChooser, Print, Notification y Access siguen en `-gtk`.
+- **12b — servicios de escritorio.** Notificaciones
+  (`org.freedesktop.Notifications`), agente polkit, keyring/Secret Service y
+  AT-SPI para accesibilidad. Autostart por `xdg-desktop-autostart` si no lo
+  cubre el módulo de NixOS.
+- Aceptación 12a: Firefox/Chromium comparten una ventana y un monitor por el
+  portal; OBS recibe el stream; dark/light cambia desde `.domain` sin
+  reiniciar; el portal GTK sigue sirviendo FileChooser.
+- Aceptación 12b: una notificación de una app aparece en la shell; una
+  operación privilegiada pide contraseña por el agente polkit; Orca puede
+  leer la shell.
+
+## Transversal — NixOS
+
+- **Hecho:** `nixosModules.default` (`programs.yuki.enable`) instala el
+  paquete, registra la sesión, crea `/etc/pam.d/yuki-lock`, activa
+  `hardware.graphics` y define `yuki-session.target` con un proceso por
+  componente.
+- **Pendiente:** `xdg.portal` con `-gtk` como fallback y el portal de Yuki
+  cuando exista; `services.graphical-desktop`, `security.polkit`, keyring y
+  AT-SPI con `mkDefault`; y una VM NixOS que arranque la sesión y ejecute
+  `yuki-session.target`.
+
+## Después del Bloque 12
+
+- D-Bus de configuración (ADR 0021), el comando `domain` y la app de ajustes.
+  XWayland sigue diferido.
+
+## Futuro opcional — supersampling tipo macOS
+
+**No se implementa ahora.** Es un modo de calidad que solo se reevaluará cuando
+el escritorio base sea competente:
+
+- 8b y 9 aceptados en panel real (multi-monitor y escala);
+- Bloque 11 cerrado (protocolos de uso diario y captura);
+- Bloque 12a/12b cerrado (portal, notificaciones, polkit, keyring, AT-SPI);
+- uso diario estable durante un periodo razonable, sin regresiones graves.
+
+La idea es renderizar la escena completa a 2× de la resolución lógica y reducir
+el framebuffer al panel, como macOS, para que los clientes que no soportan
+fractional-scale también se vean nítidos. Coste: más memoria y GPU, y un blit
+final. No sustituye al modelo Wayland de escala por salida/superficie; sería una
+opción adicional, nunca el camino por defecto sin medir.
+
+Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
 
 ## Dónde está este repositorio
 
@@ -214,18 +283,29 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   7c hecho: la shell presenta por EGL (`wl_egl_window`), sin `wl_shm`. vkcube
   (RADV), mpv (gpu-next), wezterm y Firefox corren acelerados. Véase
   `bloques/07-linux-dmabuf-y-explicit-sync.md` y los ADR 0026/0027.
-- **Bloque 8a — implementado en vkms; falta el panel real.** DRM/KMS atómico,
+- **Bloque 8a — implementado y aceptado en el panel real.** DRM/KMS atómico,
   libseat, libinput, GBM/EGL/GLES y un plano primario. `./dev.sh drm-vkms`
   pasó (modeset, render en el render node, scanout en vkms, vblank, daño y
-  captura). Winit sigue igual. Falta la aceptación en el panel eDP:
-  touchpad, VT y lock + VT. Ver `bloques/08-direct-session.md`, ADR 0029 y
-  ADR 0030.
-- **Bloque 10 — implementado, aceptación manual pendiente.** PAM en el proceso
-  del lock, UI de contraseña, auto-lock por `ext-idle-notify-v1` con
-  `zwp_idle_inhibit_manager_v1`, y recuperación del lock con backoff y límite
-  de 5 intentos. Queda probar a mano el ciclo incorrecta/correcta, el timeout
-  de 15 s y mpv fullscreen; también queda el atajo para relanzar el lock
-  agotados los reintentos, que nunca debe desbloquear.
+  captura). Winit sigue igual: `smoke`, `block4`, `move`, `decoration`,
+  `popup_probe` y `popup_live` pasan en el backend anidado. La aceptación en el
+  panel eDP (touchpad, VT y lock + VT) se cerró el 2026-10-21 con `wezterm`.
+  Ver `bloques/08-direct-session.md`, ADR 0029 y ADR 0030.
+- **Bloque 9 — parcial.** `State::scale` sustituye el literal global; la escala
+  entera y fraccionaria llega a `wl_output`, render, damage tracker, cursor y
+  shell. `YUKI_SCALE` es el override de desarrollo. Faltan la aceptación en
+  panel a 1.25/1.5, la opción persistente y la escala por salida de 8b. Ver
+  `bloques/09-escala-fraccional.md`.
+- **Bloque 10 — implementado y aceptado.** PAM en el proceso del lock, UI de
+  contraseña, auto-lock por `ext-idle-notify-v1` con
+  `zwp_idle_inhibit_manager_v1`, recuperación del lock con backoff y límite de
+  5 intentos, y `Ctrl+Alt+L` para bloquear o relanzar el lock sin desbloquear.
+  Aceptado en el panel real el 2026-10-21. Ver `bloques/10-lock.md`.
+- **Integración NixOS — hecha la base.** El flake expone
+  `nixosModules.default` (`programs.yuki.enable`): paquete, sesión, PAM,
+  `hardware.graphics` y units de la shell. Faltan portal, keyring, AT-SPI,
+  polkit y una VM de prueba (sección Transversal).
+- **Bloque 12 — planificado.** Portales y servicios de escritorio; depende de
+  la captura del Bloque 11. No hay código todavía.
 
 ## Numeración de bloques
 

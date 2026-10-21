@@ -4,7 +4,8 @@ Investigación sobre la arquitectura de renderizado y composición de macOS, des
 procesos que intervienen hasta cómo se compone cada píxel final. El objetivo de este
 documento es servir de referencia para entender el modelo que un compositor como
 yuki podría emular. La comparación con Wayland y las opciones existentes están en
-[`wayland-vs-macos.md`](wayland-vs-macos.md).
+[`wayland-vs-macos.md`](wayland-vs-macos.md). El escalado de pantalla se trata
+en detalle en [`escalado-macos.md`](escalado-macos.md).
 
 > **Aviso de fuentes.** Gran parte del comportamiento interno de macOS está
 > documentado (el modelo de Core Animation y el papel de WindowServer son públicos en
