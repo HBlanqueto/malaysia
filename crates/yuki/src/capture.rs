@@ -39,13 +39,24 @@ pub(crate) struct CaptureDma {
     pub formats: Vec<(Fourcc, Vec<Modifier>)>,
 }
 
+/// What a queued capture frame should draw.
+pub(crate) enum CaptureTarget {
+    /// The whole output, at its mode size.
+    Output { size: Size<i32, Physical> },
+    /// One toplevel, at its usable (client surface) size.
+    Window {
+        id: yuki_scene::scene::WindowId,
+        size: Size<i32, Physical>,
+    },
+}
+
 /// A capture frame waiting for the next render pass.
 ///
 /// `ImageCopyCaptureHandler::frame` runs on `State`, which has no renderer, so
 /// it queues the frame here and the backend completes it in `draw`/`render`.
 pub(crate) struct PendingCapture {
     pub frame: Frame,
-    pub size: Size<i32, Physical>,
+    pub target: CaptureTarget,
 }
 
 /// Derives the DMA-BUF constraints for capture from the renderer's device.

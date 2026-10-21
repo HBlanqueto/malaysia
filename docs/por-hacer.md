@@ -42,9 +42,10 @@ Falta:
 
 1. **Bloque 11 — protocolos de uso diario.** `wp_presentation`,
    `xdg-activation`, `cursor-shape`, el shake-to-locate, `pointer-constraints` +
-   `relative-pointer` y la captura de salida
-   (`ext-output-image-capture-source-v1` + `ext-image-copy-capture-v1`) ya están
-   hechos; falta la captura de ventana. Ver
+   `relative-pointer` y la captura (salida y ventana:
+   `ext-output-image-capture-source-v1`,
+   `ext-foreign-toplevel-image-capture-source-v1` y
+   `ext-image-copy-capture-v1`) ya están hechos. Ver
    `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** Primero `Settings` /
    `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la

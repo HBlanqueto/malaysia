@@ -48,10 +48,13 @@ protocolos y la captura.
   siguiente frame: re-renderiza offscreen con `Transform::Flipped` (cancela el
   framebuffer GL bottom-up) y copia a un SHM por filas o renderiza directo al
   dmabuf del cliente. Probe: `./dev.sh screencopy`.
+- **Captura de ventana**: `ext-foreign-toplevel-image-capture-source-v1`. La
+  fuente guarda el `WindowId` en el `ext-foreign-toplevel-list` handle y el
+  compositor dibuja solo la superficie del cliente, a su tamaño usable. Probe:
+  `./dev.sh screencopy-window`.
 
 ## Pendiente
 
-- `ext-foreign-toplevel-image-capture-source-v1`: capturar una **ventana**.
 - El portal `Screenshot`/`ScreenCast` del Bloque 12 sobre esta captura.
 - Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.
 
@@ -72,11 +75,12 @@ protocolos y la captura.
 - Un juego confina/bloquea el puntero y `relative-pointer` da deltas: probado
   con `./dev.sh pointers` (`pointer_lock` recibe `locked` sobre la superficie
   con foco; `relative_pointer` recibe un delta no nulo).
-- La captura entrega frames: probado con `./dev.sh screencopy` (SHM, píxel
-  central igual al color de fondo y no en blanco); las constraints anuncian
-  dmabuf con el render node, pero falta un cliente que capture por dmabuf.
-- Falta capturar una **ventana** (`ext-foreign-toplevel-image-capture-source-v1`)
-  y la captura con salida rotada (hoy se ignora la rotación).
+- La captura entrega frames: probado con `./dev.sh screencopy` (salida, SHM,
+  píxel central igual al color de fondo y no en blanco) y
+  `./dev.sh screencopy-window` (ventana, píxel central igual al contenido gris
+  de la ventana). Las constraints anuncian dmabuf con el render node, pero
+  falta un cliente que capture por dmabuf.
+- Falta la captura con salida rotada (hoy se ignora la rotación).
 
 ## Notas
 
@@ -99,4 +103,8 @@ protocolos y la captura.
 - La captura dmabuf renderiza directo al buffer del cliente con
   `renderer.bind(&mut dmabuf)`; no hay un cliente que la ejercite todavía, así
   que esa ruta está implementada pero sin probar. La de SHM sí pasa por
-  `./dev.sh screencopy`.
+  `./dev.sh screencopy` y `./dev.sh screencopy-window`.
+- El volcado PNG de depuración (`SIGUSR1`) sigue escribiendo en
+  `$XDG_RUNTIME_DIR/yuki`; no es la vía de guardado del usuario. El portal
+  (Bloque 12a) usará `yuki::xdg::desktop_dir()` para el destino por defecto de
+  las capturas, que sale de XDG (localizado) y no de un nombre fijo.

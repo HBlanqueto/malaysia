@@ -700,6 +700,28 @@ pub(crate) fn build_output_elements(
     elements
 }
 
+/// Renders a single window's surface tree at the origin, for window capture.
+///
+/// The window's client surface only; the compositor's chrome and effects are
+/// not drawn yet, so a captured window is its client content.
+pub(crate) fn build_window_elements(
+    renderer: &mut GlesRenderer,
+    surface: &WlSurface,
+    scale: f64,
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    render_elements_from_surface_tree::<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>(
+        renderer,
+        surface,
+        Point::from((0, 0)),
+        scale,
+        1.0,
+        Kind::Unspecified,
+    )
+    .into_iter()
+    .map(OutputRenderElement::from)
+    .collect()
+}
+
 fn draw(session: &mut Session) -> Result<(), DrawError> {
     let Session {
         loop_handle,
@@ -744,12 +766,28 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         // `ext-image-copy-capture-v1` frames queued by the handler. Like the
         // debug capture they run before the window pass, so the offscreen
         // render does not leave the GL context without the window surface.
+        let capture_scale = state.scale.fractional_scale();
         for pending in std::mem::take(&mut state.pending_captures) {
-            let damage = Rectangle::from_size(Size::from((pending.size.w, pending.size.h)));
+            let (size, window_elements) = match &pending.target {
+                crate::capture::CaptureTarget::Output { size } => (*size, None),
+                crate::capture::CaptureTarget::Window { id, size } => {
+                    let Some(surface) = state.windows.surface_of(*id).cloned() else {
+                        pending.frame.fail(CaptureFailureReason::Unknown);
+                        continue;
+                    };
+                    (
+                        *size,
+                        Some(build_window_elements(renderer, &surface, capture_scale)),
+                    )
+                }
+            };
+            let drawn: &[OutputRenderElement<GlesRenderer>] =
+                window_elements.as_deref().unwrap_or(&elements);
+            let damage = Rectangle::from_size(Size::from((size.w, size.h)));
             match crate::capture::capture_into_buffer(
                 renderer,
-                &elements,
-                pending.size,
+                drawn,
+                size,
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {

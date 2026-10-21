@@ -41,7 +41,9 @@ use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
-use smithay::wayland::image_capture_source::OutputCaptureSourceState;
+use smithay::wayland::image_capture_source::{
+    OutputCaptureSourceState, ToplevelCaptureSourceState,
+};
 use smithay::wayland::image_copy_capture::{ImageCopyCaptureState, Session};
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
@@ -164,6 +166,8 @@ pub struct State {
     pub relative_pointer_state: RelativePointerManagerState,
     /// The `ext-output-image-capture-source-v1` state.
     pub(crate) output_capture_source_state: OutputCaptureSourceState,
+    /// The `ext-foreign-toplevel-image-capture-source-v1` state.
+    pub(crate) toplevel_capture_source_state: ToplevelCaptureSourceState,
     /// The `ext-image-copy-capture-v1` state.
     pub(crate) image_copy_capture_state: ImageCopyCaptureState,
     /// Live capture sessions. Dropping a [`Session`] stops it, so they are kept
@@ -382,6 +386,7 @@ impl State {
         let pointer_constraints_state = PointerConstraintsState::new::<Self>(display_handle);
         let relative_pointer_state = RelativePointerManagerState::new::<Self>(display_handle);
         let output_capture_source_state = OutputCaptureSourceState::new::<Self>(display_handle);
+        let toplevel_capture_source_state = ToplevelCaptureSourceState::new::<Self>(display_handle);
         let image_copy_capture_state = ImageCopyCaptureState::new::<Self>(display_handle);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
@@ -424,6 +429,7 @@ impl State {
             pointer_constraints_state,
             relative_pointer_state,
             output_capture_source_state,
+            toplevel_capture_source_state,
             image_copy_capture_state,
             capture_sessions: Vec::new(),
             pending_captures: Vec::new(),

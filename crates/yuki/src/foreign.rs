@@ -182,6 +182,9 @@ impl State {
         // be created empty and the identity sent explicitly (smithay's
         // `send_title`/`send_app_id` dedupe against the stored value).
         let handle = self.foreign.list.new_toplevel::<State>("", "");
+        // The window id rides on the handle so a capture source created from it
+        // can resolve the window without a reverse lookup (image_capture_source).
+        handle.user_data().insert_if_missing(|| id);
         handle.send_title(&title);
         handle.send_app_id(&app_id);
         handle.send_done();

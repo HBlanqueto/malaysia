@@ -44,6 +44,7 @@ Commands:
     move [--release]    Build and run the client-initiated move/resize probe
     pointers [--release] Build and run the pointer lock and relative motion probes
     screencopy [--release] Build and run the output capture probe
+    screencopy-window   Build and run the window capture probe
     presentation        Build and run the wp_presentation feedback probe
     activation          Build and run the xdg-activation probe
     decoration          Build and run the decoration-policy probe over real apps
@@ -589,6 +590,18 @@ screencopy() {
     run_one_probe screencopy
 }
 
+# screencopy-window - capture a window through `ext-image-copy-capture-v1`.
+#
+# `screencopy_window` maps a window, creates a capture source from its
+# `ext-foreign-toplevel-list` handle and asserts the frame is ready and shows
+# the window's own content.
+screencopy_window() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe screencopy_window
+}
+
 # presentation - assert `wp_presentation` feedback reaches a client.
 #
 # `presentation` maps a window, asks for feedback and asserts the `presented`
@@ -828,6 +841,7 @@ case "$command_name" in
     move) move "$@" ;;
     pointers) pointers "$@" ;;
     screencopy) screencopy "$@" ;;
+    screencopy-window) screencopy_window "$@" ;;
     presentation) presentation "$@" ;;
     activation) activation "$@" ;;
     decoration) decoration "$@" ;;

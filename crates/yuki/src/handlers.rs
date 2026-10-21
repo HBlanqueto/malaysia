@@ -37,10 +37,12 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::output::{Output, WeakOutput};
-use smithay::utils::{Serial, Transform};
+use smithay::utils::{Buffer as BufferCoords, Serial, Size};
+use yuki_scene::scene::WindowId;
+use smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle;
 use smithay::wayland::image_capture_source::{
     ImageCaptureSource, ImageCaptureSourceHandler, OutputCaptureSourceHandler,
-    OutputCaptureSourceState,
+    OutputCaptureSourceState, ToplevelCaptureSourceHandler, ToplevelCaptureSourceState,
 };
 use smithay::wayland::image_copy_capture::{
     BufferConstraints, CaptureFailureReason, DmabufConstraints, Frame, ImageCopyCaptureHandler,
@@ -74,6 +76,7 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 
 use yuki_scene::scene::Decoration;
 
+use crate::capture::CaptureTarget;
 use crate::config::DecorationPolicy;
 use crate::delegate_foreign_management;
 use crate::state::{ClientState, State};
@@ -316,16 +319,34 @@ impl OutputCaptureSourceHandler for State {
     }
 }
 
+impl ToplevelCaptureSourceHandler for State {
+    fn toplevel_capture_source_state(&mut self) -> &mut ToplevelCaptureSourceState {
+        &mut self.toplevel_capture_source_state
+    }
+
+    fn toplevel_source_created(
+        &mut self,
+        source: ImageCaptureSource,
+        toplevel: ForeignToplevelHandle,
+    ) {
+        // The window id was stored on the handle when the window mapped.
+        if let Some(id) = toplevel.user_data().get::<WindowId>().copied() {
+            source.user_data().insert_if_missing(|| id);
+        }
+    }
+}
+
 impl ImageCopyCaptureHandler for State {
     fn image_copy_capture_state(&mut self) -> &mut ImageCopyCaptureState {
         &mut self.image_copy_capture_state
     }
 
     fn capture_constraints(&mut self, source: &ImageCaptureSource) -> Option<BufferConstraints> {
-        let output = source.user_data().get::<WeakOutput>()?.upgrade()?;
-        let mode = output.current_mode()?;
+        let size = match self.capture_target(source)? {
+            CaptureTarget::Output { size } | CaptureTarget::Window { size, .. } => size,
+        };
         Some(BufferConstraints {
-            size: mode.size.to_logical(1).to_buffer(1, Transform::Normal),
+            size: Size::<i32, BufferCoords>::from((size.w, size.h)),
             shm: vec![wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
             // DMA-BUF is offered only when the backend found a render node.
             dma: self.capture_dma.as_ref().map(|dma| DmabufConstraints {
@@ -343,21 +364,40 @@ impl ImageCopyCaptureHandler for State {
     }
 
     fn frame(&mut self, session: &SessionRef, frame: Frame) {
-        let output = session
-            .source()
-            .user_data()
-            .get::<WeakOutput>()
-            .and_then(WeakOutput::upgrade);
-        let Some(mode) = output.as_ref().and_then(Output::current_mode) else {
+        let Some(target) = self.capture_target(&session.source()) else {
             frame.fail(CaptureFailureReason::Unknown);
             return;
         };
-        self.pending_captures.push(crate::capture::PendingCapture {
-            frame,
-            size: mode.size,
-        });
+        self.pending_captures
+            .push(crate::capture::PendingCapture { frame, target });
         // The backend completes it on the next render pass.
         self.request_redraw();
+    }
+}
+
+impl State {
+    /// Resolves a capture source to what should be drawn, if it is still live.
+    ///
+    /// A source carries either its output or its window id (inserted when the
+    /// source was created); a window that has since closed resolves to `None`,
+    /// which rejects the session.
+    fn capture_target(&self, source: &ImageCaptureSource) -> Option<CaptureTarget> {
+        if let Some(output) = source
+            .user_data()
+            .get::<WeakOutput>()
+            .and_then(WeakOutput::upgrade)
+        {
+            let mode = output.current_mode()?;
+            return Some(CaptureTarget::Output { size: mode.size });
+        }
+        let id = *source.user_data().get::<WindowId>()?;
+        let rect = self.windows.usable_rect(id)?;
+        let size = rect
+            .size
+            .to_f64()
+            .to_physical(self.scale.fractional_scale())
+            .to_i32_round();
+        Some(CaptureTarget::Window { id, size })
     }
 }
 

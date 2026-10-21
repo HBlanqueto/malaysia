@@ -46,7 +46,7 @@ use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{error, info, warn};
 
-use crate::cursor::Cursors;
+use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State};
 
 type Compositor =
@@ -541,12 +541,32 @@ impl Udev {
                 }
             }
         }
+        let capture_scale = self.state.scale.fractional_scale();
         for pending in std::mem::take(&mut self.state.pending_captures) {
-            let damage = Rectangle::from_size(Size::from((pending.size.w, pending.size.h)));
+            let (size, window_elements) = match &pending.target {
+                crate::capture::CaptureTarget::Output { size } => (*size, None),
+                crate::capture::CaptureTarget::Window { id, size } => {
+                    let Some(surface) = self.state.windows.surface_of(*id).cloned() else {
+                        pending.frame.fail(CaptureFailureReason::Unknown);
+                        continue;
+                    };
+                    (
+                        *size,
+                        Some(crate::session::build_window_elements(
+                            &mut self.renderer,
+                            &surface,
+                            capture_scale,
+                        )),
+                    )
+                }
+            };
+            let drawn: &[OutputRenderElement<GlesRenderer>] =
+                window_elements.as_deref().unwrap_or(&elements);
+            let damage = Rectangle::from_size(Size::from((size.w, size.h)));
             match crate::capture::capture_into_buffer(
                 &mut self.renderer,
-                &elements,
-                pending.size,
+                drawn,
+                size,
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {

@@ -168,20 +168,20 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   foco, `locked` congela el puntero y `confined` lo limita a la región, y cada
   movimiento reenvía su delta a los `zwp_relative_pointer_v1`. Probes:
   `./dev.sh pointers`.
-- **Captura de pantalla — hecha (salida).** `ext-output-image-capture-source-v1`
-  + `ext-image-copy-capture-v1`: constraints de sesión (tamaño, SHM y dmabuf
-  con el render node), `frame()` encolado y completado por el backend (render
-  offscreen a SHM por filas o directo al dmabuf del cliente). Probe:
-  `./dev.sh screencopy`. Falta la captura de ventana
-  (`ext-foreign-toplevel-image-capture-source-v1`) y el portal del Bloque 12.
-  El volcado PNG de depuración por `SIGUSR1` (`capture.rs`, Bloque 7.1) sigue
-  como herramienta de desarrollo.
+- **Captura de pantalla — hecha.** `ext-output-image-capture-source-v1` +
+  `ext-foreign-toplevel-image-capture-source-v1` + `ext-image-copy-capture-v1`:
+  constraints de sesión (tamaño, SHM y dmabuf con el render node), `frame()`
+  encolado y completado por el backend (render offscreen a SHM por filas o
+  directo al dmabuf del cliente), tanto de la salida como de una ventana.
+  Probes: `./dev.sh screencopy` y `./dev.sh screencopy-window`. Falta el portal
+  del Bloque 12. El volcado PNG de depuración por `SIGUSR1` (`capture.rs`,
+  Bloque 7.1) sigue como herramienta de desarrollo.
 - Opcional para uso diario: `keyboard-shortcuts-inhibit` (escritorio remoto).
   No bloquea la aceptación del Bloque 11.
-- Aceptación: una app de captura puede pedir un monitor (y, cuando se añada,
-  una ventana), los frames llegan por SHM o dmabuf y el cursor se dibuja o se
-  omite según la petición; `wp_presentation` entrega timestamps;
-  `xdg-activation` activa una ventana con token válido.
+- Aceptación: una app de captura puede pedir un monitor o una ventana, los
+  frames llegan por SHM o dmabuf y el cursor se dibuja o se omite según la
+  petición; `wp_presentation` entrega timestamps; `xdg-activation` activa una
+  ventana con token válido.
 
 ## Bloque 12 — Portales y servicios de escritorio
 
@@ -193,6 +193,9 @@ Se divide en dos entregas. Depende de la captura del Bloque 11.
     dark/light, accent-color y contraste, con `SettingChanged`.
   - `Screenshot` y `ScreenCast` sobre `ext-image-copy-capture` +
     `ext-image-capture-source` y PipeWire (dmabuf, modificadores, fences).
+    Las capturas de ventana se guardan por defecto en el Escritorio del
+    usuario, resuelto con `yuki::xdg::desktop_dir()` desde XDG (nombre
+    localizado, nunca fijo).
   - Diálogos de permiso de la shell y concesiones por app.
   - `xdg.portal.config.yuki` enruta solo estas interfaces a Yuki; FileChooser,
     AppChooser, Print, Notification y Access siguen en `-gtk`.

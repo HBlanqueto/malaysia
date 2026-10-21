@@ -248,6 +248,17 @@ empty copy. It also reports whether the session offered DMA-BUF constraints.
 ./dev.sh screencopy
 ```
 
+## `screencopy_window`
+
+Captures a window through `ext-image-copy-capture-v1`. It maps a window, waits
+for its `ext-foreign-toplevel-list` handle, creates a capture source from it and
+captures it into an SHM buffer, checking the centre pixel is the window's own
+(grey) content rather than the background.
+
+```sh
+./dev.sh screencopy-window
+```
+
 ## `presentation`
 
 Maps a window, asks `wp_presentation` for feedback on the next commit and

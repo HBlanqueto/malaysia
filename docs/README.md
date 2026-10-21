@@ -119,8 +119,8 @@ está parcialmente hecho: escala real, `display.scale` persistente y redondeo
 floor/ceil; pendiente panel y escala por salida. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 `wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate,
-`pointer-constraints` + `relative-pointer` y la captura de salida; falta la
-captura de ventana. El **Bloque 12** (portales y servicios de escritorio) está
+`pointer-constraints` + `relative-pointer` y la captura de salida y de ventana.
+El **Bloque 12** (portales y servicios de escritorio) está
 planificado y depende de la captura del Bloque 11. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
