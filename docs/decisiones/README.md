@@ -11,7 +11,7 @@ continua.
 | 0001 | Tipos de coordenadas: los de Smithay en el compositor, los nuestros en `yuki-scene` | aceptado |
 | 0002 | Exponer `crates/yuki` como biblioteca y como binario a la vez | aceptado |
 | 0003 | `deny(unsafe_code)` en el compositor, `forbid` en el resto | aceptado |
-| 0004 | Redondear rectángulos lógicos al espacio entero | abierto |
+| 0004 | Redondear rectángulos lógicos al espacio entero | aceptado |
 | 0005 | Una máquina, una shell, un linker | aceptado |
 | 0006 | El flake es la única fuente de verdad de la toolchain | aceptado |
 | 0007 | Compilar fuera de la shell de desarrollo está prohibido | aceptado |

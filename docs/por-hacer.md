@@ -33,9 +33,10 @@ cursor y viewporter de la shell; ver `bloques/09-escala-fraccional.md`.
 Falta:
 
 - [ ] Aceptación en panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
-- [ ] Sustituir `YUKI_SCALE` por una opción de configuración persistente.
+- [x] `display.scale` persistente en `display.domain` (`YUKI_SCALE` queda como
+      override de desarrollo).
 - [ ] Escala por salida/monitor cuando 8b introduzca varios outputs.
-- [ ] Redondeo de rectángulos lógicos (ADR 0004) a escala no entera.
+- [x] Redondeo de rectángulos lógicos (ADR 0004): floor posición, ceil tamaño.
 
 ## Después, en orden
 

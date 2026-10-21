@@ -115,8 +115,8 @@ Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
 aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
 (hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
-está parcialmente hecho: escala real y `YUKI_SCALE`, pendiente panel y
-configuración. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
+está parcialmente hecho: escala real, `display.scale` persistente y redondeo
+floor/ceil; pendiente panel y escala por salida. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 `wp_presentation`, `xdg-activation`, `cursor-shape` y el shake-to-locate;
 faltan pointer-constraints y la integración de captura. El **Bloque 12** (portales y servicios de escritorio) está

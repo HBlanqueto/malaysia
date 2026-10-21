@@ -324,7 +324,7 @@ impl State {
         idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let config = Config::load();
-        let scale = output_scale();
+        let scale = output_scale(config.display.scale);
         // Applying the scale before the global is created means clients learn
         // the integer value in the initial wl_output state. The fractional
         // value is sent per surface by `FractionalScaleHandler`.
@@ -727,21 +727,26 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
 
 /// The output scale for this session.
 ///
-/// Until the settings app owns per-display scale, `YUKI_SCALE` is the explicit
-/// development override (for example `YUKI_SCALE=1.5`); without it the output
-/// runs at integer scale 1. The value is clamped to `1.0..=4.0` and invalid
-/// values fall back to 1.
-pub(crate) fn output_scale() -> Scale {
-    parse_scale(std::env::var("YUKI_SCALE").ok().as_deref())
+/// `config_scale` is the persistent `display.scale` (ADR 0021). `YUKI_SCALE`
+/// remains the development override and wins when set, so `dev.sh` can test a
+/// scale without writing a config file. Either value is clamped to `1.0..=4.0`
+/// and an invalid one falls back to 1.
+pub(crate) fn output_scale(config_scale: f64) -> Scale {
+    match std::env::var("YUKI_SCALE").ok().as_deref() {
+        Some(value) => parse_scale(Some(value)),
+        None => clamp_scale(config_scale),
+    }
 }
 
 fn parse_scale(value: Option<&str>) -> Scale {
-    let Some(value) = value else {
-        return Scale::Integer(1);
-    };
-    let Ok(scale) = value.parse::<f64>() else {
-        return Scale::Integer(1);
-    };
+    value
+        .and_then(|value| value.parse::<f64>().ok())
+        .map_or_else(|| Scale::Integer(1), clamp_scale)
+}
+
+/// Clamps a scale to the supported `1.0..=4.0` range and maps it to Smithay's
+/// integer-or-fractional [`Scale`].
+fn clamp_scale(scale: f64) -> Scale {
     if !(1.0..=4.0).contains(&scale) || !scale.is_finite() {
         return Scale::Integer(1);
     }

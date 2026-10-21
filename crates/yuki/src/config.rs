@@ -129,6 +129,9 @@ pub struct Config {
     /// The system wallpapers. The current selection lives in a *separate* store,
     /// like macOS keeps it in `com.apple.wallpaper` (see `docs/configuracion`).
     pub wallpaper: WallpaperConfig,
+    /// Display scale (System Settings → Displays). Yuki-specific: macOS has no
+    /// fractional-scale preference, it picks a mode per display.
+    pub display: DisplayConfig,
     /// The lock screen and automatic locking.
     pub lock: LockConfig,
     /// Compositor-side surface effects (inner border, shadow, blur). ADR 0020.
@@ -151,6 +154,22 @@ pub enum WallpaperScale {
     Fit,
     /// Centre the image at its native size.
     Center,
+}
+
+/// Display options (System Settings → Displays).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct DisplayConfig {
+    /// The output scale, `1.0..=4.0`. Fractional values go to clients through
+    /// `wp_fractional_scale_v1`; the integer part is what `wl_output` carries.
+    /// This is Yuki-specific: macOS chooses a display mode instead.
+    pub scale: f64,
+}
+
+impl Default for DisplayConfig {
+    fn default() -> Self {
+        Self { scale: 1.0 }
+    }
 }
 
 /// Lock screen and idle options.
@@ -418,6 +437,7 @@ impl Config {
             dock: load_section(config_dir, "dock"),
             menubar: load_section(config_dir, "menubar"),
             wallpaper: load_section(data_dir, "wallpaper"),
+            display: load_section(config_dir, "display"),
             lock: load_section(config_dir, "lock"),
             effects: load_section(config_dir, "effects"),
             debug: load_section(config_dir, "debug"),
@@ -503,6 +523,8 @@ mod tests {
             "autohide = true\norientation = \"left\"\n",
         )
         .expect("write dock.domain");
+        std::fs::write(config_dir.join("display.domain"), "scale = 1.5\n")
+            .expect("write display.domain");
         std::fs::write(
             data_dir.join("wallpaper.domain"),
             "dir = \"/run/current-system/sw/share/wallpapers/solid-colors\"\nscale = \"fit\"\n\n[desktops]\ndefault = \"file:///w/Solid Mint.png\"\n",
@@ -518,6 +540,7 @@ mod tests {
         // Domains without a file keep their defaults.
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(!config.effects.blur.enabled);
+        assert_eq!(config.display.scale, 1.5);
 
         let _ = std::fs::remove_dir_all(&base);
     }
@@ -540,6 +563,7 @@ mod tests {
         assert!(!config.effects.inner_border.enabled);
         assert!(!config.effects.shadow.enabled);
         assert!(!config.effects.blur.enabled);
+        assert_eq!(config.display.scale, 1.0);
         assert_eq!(config.lock.idle_timeout_seconds, 300);
     }
 

@@ -1,6 +1,6 @@
 # 0004 — Redondear rectángulos lógicos al espacio entero
 
-Estado: **abierto** — decisión diferida hasta que exista la colocación de superficies
+Estado: **aceptado** — implementado en `yuki-scene` (2026-10-21)
 
 ## Contexto
 
@@ -44,24 +44,26 @@ región de daño (damage) o de recorte (scissor) en píxeles.
 
 ## Decisión
 
-**Abierta.** El Bloque 0 mantiene el redondeo al más cercano porque nada coloca superficies
-todavía y no hay evidencia sobre la que actuar. El requisito de renderizado conocido se
-registra aquí para que el primer hito que coloque o dañe superficies
-evalúe la opción 2 (floor para posición, ceil para tamaño) en lugar de redescubrir el
-problema de las costuras.
+**Opción 2.** La conversión de lógico a entero redondea la **posición con
+`floor`** y el **tamaño con `ceil`**. Dos rectángulos adyacentes comparten así el
+píxel del borde en vez de abrir una costura de un píxel, y ningún rectángulo
+cubre de menos. Es la convención que usan los compositores al construir regiones
+de damage y scissor.
 
-La API deliberadamente no se construye todavía: esto es un requisito de renderizado, no
-especulación, pero no tiene llamador, y la regla de no-API-especulativa sigue
-aplicando.
+Implementado en `crates/yuki-scene/src/geometry.rs`:
+
+- `Point::to_physical` / `Point::to_buffer`: `floor`.
+- `Size::to_physical` / `Size::to_buffer`: `ceil`.
+- `Rect` combina ambos, así que su esquina se floor y sus extensiones se ceilan.
 
 ## Consecuencias
 
-- El redondeo al más cercano en `geometry.rs` es un marcador de posición, no una decisión final.
-- Cuando se produzca el primer rectángulo de damage/scissor, este ADR debe
-  revisarse y aceptarse o reemplazarse antes de que ese código se publique.
-- La API de conversión probablemente necesitará expresar el redondeo de posición y de tamaño
-  por separado; las firmas actuales de `to_physical`/`to_buffer` pueden cambiar.
-- Este ADR no implica cambios de código hoy.
+- `scale_up` se dividió en `scale_floor` (posición) y `scale_ceil` (tamaño);
+  ya no hay un único redondeo al más cercano.
+- Los tests cubren el caso de dos rectángulos que comparten una arista
+  fraccionaria y no dejan hueco.
+- El redondeo al más cercano desaparece de la API; cada sitio de llamada sigue
+  usando `to_physical`/`to_buffer` y no elige el modo.
 
 ## Referencias
 

@@ -20,6 +20,11 @@
 //! fractional, and only the last step before rasterisation rounds them into
 //! integer [`Physical`] or [`Buffer`] coordinates.
 //!
+//! That last step is asymmetric (ADR 0004): a **position is floored** and a
+//! **size is ceiled**. Two adjacent rectangles that share a fractional logical
+//! edge then share the physical pixel on that edge instead of leaving a
+//! one-pixel seam, which is what damage and scissor regions need.
+//!
 //! Conversions between spaces are never implicit. Each one is a named method
 //! that takes the scale factor explicitly, so a call site always shows which
 //! space it leaves and which it enters.
@@ -116,19 +121,19 @@ impl Point<f64, Logical> {
     /// Converts this logical point to the physical space of an output.
     ///
     /// `scale` is the output's scale factor (for example `2.0` on a HiDPI
-    /// output) and must be greater than zero. The result is rounded to the
-    /// nearest physical pixel; this is the last point at which the fractional
-    /// logical position may be discarded.
+    /// output) and must be greater than zero. The result is floored to the
+    /// physical pixel (ADR 0004); this is the last point at which the
+    /// fractional logical position may be discarded.
     pub fn to_physical(self, scale: f64) -> Point<i32, Physical> {
-        Point::new(scale_up(self.x, scale), scale_up(self.y, scale))
+        Point::new(scale_floor(self.x, scale), scale_floor(self.y, scale))
     }
 
     /// Converts this logical point to the buffer space of a client.
     ///
     /// `scale` is the target scale factor and must be greater than zero. The
-    /// result is rounded to the nearest buffer pixel.
+    /// result is floored to the buffer pixel (ADR 0004).
     pub fn to_buffer(self, scale: f64) -> Point<i32, Buffer> {
-        Point::new(scale_up(self.x, scale), scale_up(self.y, scale))
+        Point::new(scale_floor(self.x, scale), scale_floor(self.y, scale))
     }
 }
 
@@ -188,18 +193,25 @@ impl<N: Copy, Space> Copy for Size<N, Space> {}
 impl Size<f64, Logical> {
     /// Converts this logical size to the physical space of an output.
     ///
-    /// `scale` must be greater than zero. Each extent is rounded to the
-    /// nearest physical pixel.
+    /// `scale` must be greater than zero. Each extent is ceiled to the
+    /// physical pixel, so a rectangle always covers the pixels it overlaps
+    /// (ADR 0004).
     pub fn to_physical(self, scale: f64) -> Size<i32, Physical> {
-        Size::new(scale_up(self.width, scale), scale_up(self.height, scale))
+        Size::new(
+            scale_ceil(self.width, scale),
+            scale_ceil(self.height, scale),
+        )
     }
 
     /// Converts this logical size to the buffer space of a client.
     ///
-    /// `scale` must be greater than zero. Each extent is rounded to the
-    /// nearest buffer pixel.
+    /// `scale` must be greater than zero. Each extent is ceiled to the buffer
+    /// pixel (ADR 0004).
     pub fn to_buffer(self, scale: f64) -> Size<i32, Buffer> {
-        Size::new(scale_up(self.width, scale), scale_up(self.height, scale))
+        Size::new(
+            scale_ceil(self.width, scale),
+            scale_ceil(self.height, scale),
+        )
     }
 }
 
@@ -265,8 +277,8 @@ impl<N: Copy, Space> Copy for Rect<N, Space> {}
 impl Rect<f64, Logical> {
     /// Converts this logical rectangle to the physical space of an output.
     ///
-    /// `scale` must be greater than zero. Corner and extents are rounded to
-    /// the nearest physical pixel.
+    /// `scale` must be greater than zero. The corner is floored and the
+    /// extents are ceiled (ADR 0004).
     pub fn to_physical(self, scale: f64) -> Rect<i32, Physical> {
         Rect::new(
             self.location.to_physical(scale),
@@ -276,8 +288,8 @@ impl Rect<f64, Logical> {
 
     /// Converts this logical rectangle to the buffer space of a client.
     ///
-    /// `scale` must be greater than zero. Corner and extents are rounded to
-    /// the nearest buffer pixel.
+    /// `scale` must be greater than zero. The corner is floored and the
+    /// extents are ceiled (ADR 0004).
     pub fn to_buffer(self, scale: f64) -> Rect<i32, Buffer> {
         Rect::new(self.location.to_buffer(scale), self.size.to_buffer(scale))
     }
@@ -349,13 +361,21 @@ where
     }
 }
 
-/// Scales a logical coordinate up and rounds it to the nearest integer pixel.
+/// Scales a logical position up and floors it to the integer pixel (ADR 0004).
 ///
 /// Called only when entering an integer space, so the fractional value is
 /// discarded here and nowhere earlier. `scale` must be greater than zero.
-fn scale_up(value: f64, scale: f64) -> i32 {
+fn scale_floor(value: f64, scale: f64) -> i32 {
     debug_assert!(scale > 0.0, "coordinate scale must be greater than zero");
-    (value * scale).round() as i32
+    (value * scale).floor() as i32
+}
+
+/// Scales a logical extent up and ceils it to the integer pixel (ADR 0004).
+///
+/// `scale` must be greater than zero.
+fn scale_ceil(value: f64, scale: f64) -> i32 {
+    debug_assert!(scale > 0.0, "coordinate scale must be greater than zero");
+    (value * scale).ceil() as i32
 }
 
 /// Scales an integer pixel coordinate back down to a fractional logical value.
@@ -378,9 +398,38 @@ mod tests {
     }
 
     #[test]
-    fn fractional_logical_point_rounds_to_nearest_pixel() {
+    fn a_fractional_logical_point_is_floored() {
         let logical = Point::<f64, Logical>::new(1.25, 1.75);
-        assert_eq!(logical.to_physical(2.0), Point::<i32, Physical>::new(3, 4));
+        assert_eq!(logical.to_physical(2.0), Point::<i32, Physical>::new(2, 3));
+    }
+
+    #[test]
+    fn a_fractional_logical_size_is_ceiled() {
+        let logical = Size::<f64, Logical>::new(1.25, 1.75);
+        assert_eq!(logical.to_physical(2.0), Size::<i32, Physical>::new(3, 4));
+    }
+
+    #[test]
+    fn adjacent_fractional_rectangles_share_their_edge() {
+        // Two logical rectangles that share the 1.25 edge, at scale 1: the
+        // first covers 0..2 and the second 1..3, so the edge pixel is drawn
+        // by both and no seam is left (ADR 0004).
+        let left = Rect::<f64, Logical>::new(Point::new(0.0, 0.0), Size::new(1.25, 1.0));
+        let right = Rect::<f64, Logical>::new(Point::new(1.25, 0.0), Size::new(1.25, 1.0));
+        let left = left.to_physical(1.0);
+        let right = right.to_physical(1.0);
+        assert_eq!(
+            left,
+            Rect::<i32, Physical>::new(Point::new(0, 0), Size::new(2, 1))
+        );
+        assert_eq!(
+            right,
+            Rect::<i32, Physical>::new(Point::new(1, 0), Size::new(2, 1))
+        );
+        assert!(
+            left.right() > right.x(),
+            "the shared edge must not leave a gap"
+        );
     }
 
     #[test]

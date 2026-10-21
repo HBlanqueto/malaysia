@@ -13,6 +13,7 @@ directorios — preferencias y estado:
 ```
 ~/.config/yuki/            ← ~/Library/Preferences
 ├── appearance.domain
+├── display.domain
 ├── window.domain
 ├── dock.domain
 ├── menubar.domain
@@ -46,6 +47,19 @@ Estado de cada opción:
 | `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos | portal, shell, efectos |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**".
+
+## `display` — escala de salida (System Settings → Displays)
+
+| Opción | Tipo | Default | Estado | Consumida por |
+|---|---|---|---|---|
+| `display.scale` | float `1.0..=4.0` | `1.0` | **activa** | `State::scale`, `wl_output`, `wp_fractional_scale_v1` |
+
+No tiene equivalente exacto en macOS: macOS elige un **modo de pantalla** por
+monitor, no una escala fraccional. Yuki sigue el modelo Wayland y publica la
+parte entera por `wl_output` y la fraccionaria por `wp_fractional_scale_v1`.
+`YUKI_SCALE` sigue existiendo como **override de desarrollo** y gana cuando está
+definido; sirve para `dev.sh` sin escribir configuración. Con 8b esta opción
+pasará a ser por salida.
 
 ## `window` — chrome y comportamiento de ventana (System Settings → Windows & Apps)
 
@@ -200,6 +214,11 @@ Como macOS, un archivo por dominio en `~/.config/yuki/`:
 # ~/.config/yuki/appearance.domain
 color_scheme = "dark"           # auto | dark | light
 accent_color = [0.208, 0.518, 0.894]
+```
+
+```toml
+# ~/.config/yuki/display.domain
+scale = 1.5                     # 1.0 .. 4.0
 ```
 
 ```toml

@@ -7,9 +7,9 @@ aceptación en el panel real y la escala por salida de 8b.
 
 - `State::scale` es un `smithay::output::Scale`, no un entero global. Expone la
   parte entera a `wl_output` y la fraccionaria a `wp_fractional_scale_v1`.
-- `YUKI_SCALE` es el override de desarrollo (`1.0..=4.0`; por ejemplo
-  `YUKI_SCALE=1.5`). Sin él, escala 1. Es temporal: la opción de configuración
-  llegará con la app de ajustes (ADR 0021).
+- `display.scale` es la opción persistente en `~/.config/yuki/display.domain`
+  (`1.0..=4.0`, ADR 0021). `YUKI_SCALE` sigue siendo el override de desarrollo y
+  gana cuando está definido; sin ninguno de los dos, escala 1.
 - `State::logical_output_size`, la colocación y escala de los elementos de
   render, el damage tracker, el cursor y el foco usan la escala de la salida.
 - La shell usa `wp_viewport` para la parte fraccionaria y mantiene
@@ -23,10 +23,15 @@ aceptación en el panel real y la escala por salida de 8b.
 
 - Aceptación en el panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
 - Escala por salida y por monitor cuando 8b introduzca varios outputs.
-- Opción de configuración real (no `YUKI_SCALE`) y persistencia.
-- Redondeo de rectángulos lógicos cuando la escala no es entera (ADR 0004).
 - Probar clientes que no negocian fractional-scale y clientes con
   `viewporter` propio.
+
+## Hecho después de la primera pasada
+
+- `display.scale` persistente en `~/.config/yuki/display.domain`; `YUKI_SCALE`
+  queda como override de desarrollo (ADR 0021).
+- Redondeo asimétrico (floor posición, ceil tamaño) en `yuki-scene`, ADR 0004
+  aceptado e implementado.
 
 ## Cómo probar
 

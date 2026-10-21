@@ -135,9 +135,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
   captura del Bloque 11. El plan corto vive en `docs/por-hacer.md`.
-- **Bloque 9 parcial:** `State::scale` y `YUKI_SCALE` ya sustituyen el literal
-  global; faltan panel real, configuración persistente y escala por salida de
-  8b. Ver `docs/bloques/09-escala-fraccional.md`.
+- **Bloque 9 parcial:** `State::scale`, `display.scale` persistente y el
+  redondeo floor/ceil (ADR 0004) hechos; faltan la aceptación en panel real y
+  la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.
 
 ## Cómo compilar y probar
 
