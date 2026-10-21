@@ -162,18 +162,19 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
   y encoge en cuanto el ratón se detiene; valores en `yuki-design`.
 - `xdg-output` ya se anuncia con `OutputManagerState::new_with_xdg_output`;
   no está pendiente.
-- **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`
-  vacío de `handlers.rs` existe solo para que `WlSurface` cumpla
-  `PointerTarget` en Smithay master; no hay `PointerConstraintsState` ni global.
+- **`zwp_pointer_constraints_v1` + `zwp_relative_pointer_manager_v1` — hechos.**
+  El global se anuncia; el handler activa la constraint sobre la superficie con
+  foco, `locked` congela el puntero y `confined` lo limita a la región, y cada
+  movimiento reenvía su delta a los `zwp_relative_pointer_v1`. Probes:
+  `./dev.sh pointers`.
 - **Captura de pantalla**: `ext-image-copy-capture-v1` +
   `ext-image-capture-source-v1`, necesarios para compartir pantalla vía
   xdg-desktop-portal. Hoy hay un volcado PNG de depuración por `SIGUSR1`
   (`capture.rs`, Bloque 7.1) como herramienta de desarrollo. Smithay ya
   ofrece `image_copy_capture` e `image_capture_source` en la revisión anclada;
   falta implementar los handlers y la ruta de buffers de Yuki.
-- Opcional para uso diario: `relative-pointer` y
-  `keyboard-shortcuts-inhibit` (juegos y escritorio remoto). No bloquean la
-  aceptación del Bloque 11.
+- Opcional para uso diario: `keyboard-shortcuts-inhibit` (escritorio remoto).
+  No bloquea la aceptación del Bloque 11.
 - Aceptación: una app de captura puede pedir un monitor o una ventana, los
   frames llegan por dmabuf y el cursor se dibuja o se omite según la petición;
   `wp_presentation` entrega timestamps; `xdg-activation` activa una ventana con

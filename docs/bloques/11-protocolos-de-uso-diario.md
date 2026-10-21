@@ -32,16 +32,21 @@ protocolos y la captura.
   se queda quieto (180 ms de crecimiento y 220 ms de vuelta, a ~60 Hz).
   Es el gesto de macOS Accessibility > Pointer Control. Los valores viven en
   `yuki-design`.
+- `zwp_pointer_constraints_v1` v1: el global está anunciado y el handler activa
+  la constraint en cuanto llega sobre la superficie con foco del puntero. Una
+  constraint activa manda: `locked` deja el puntero quieto y solo alimenta
+  `relative_motion`; `confined` limita el movimiento a la región de la
+  superficie (deslizando por los bordes). Una constraint dormida se activa al
+  entrar en su región, y Smithay la desactiva sola al perder el foco.
+- `zwp_relative_pointer_manager_v1` v1: cada movimiento del puntero reenvía su
+  delta a los objetos `zwp_relative_pointer_v1` del cliente con foco.
 
 ## Pendiente
 
-- `zwp_pointer_constraints_v1`: estado/global y activación por foco; hoy solo
-  existe el handler vacío que exige `PointerTarget`.
 - `ext-image-copy-capture-v1` + `ext-image-capture-source-v1`: Smithay ya
   implementa los protocolos; falta integrar sources, constraints, render a
   dmabuf/SHM y el portal del Bloque 12.
-- Opcional: `relative-pointer` y `keyboard-shortcuts-inhibit` para juegos y
-  escritorio remoto.
+- Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.
 
 ## Aceptación pendiente
 
@@ -54,7 +59,9 @@ protocolos y la captura.
   wezterm pide `Text` en el primer enter y Yuki lo aplica.
 - Al agitar el ratón el cursor crece con animación suave hasta 3× y, al
   dejar de moverse, empieza a encogerse de inmediato.
-- Un juego confina/bloquea el puntero y `relative-pointer` da deltas.
+- Un juego confina/bloquea el puntero y `relative-pointer` da deltas: probado
+  con `./dev.sh pointers` (`pointer_lock` recibe `locked` sobre la superficie
+  con foco; `relative_pointer` recibe un delta no nulo).
 - La captura entrega frames por dmabuf y la app puede elegir monitor/ventana.
 
 ## Notas

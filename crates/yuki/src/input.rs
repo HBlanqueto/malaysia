@@ -20,10 +20,12 @@ use smithay::backend::input::{
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{
     AxisFrame, ButtonEvent, CursorIcon, CursorImageStatus, GrabStartData, MotionEvent,
+    RelativeMotionEvent,
 };
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER, Serial};
+use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_constraint};
 use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
 use xkbcommon::xkb::{self, keysyms};
@@ -750,7 +752,7 @@ impl State {
     /// not the surface-local point `surface_under` reports: Smithay subtracts
     /// the origin itself before sending the client the surface-local position
     /// (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`).
-    fn pointer_motion(&mut self, location: Point<f64, Logical>, time: InputTime) {
+    fn pointer_motion(&mut self, mut location: Point<f64, Logical>, time: InputTime) {
         let now = Instant::now();
         if self.shake.observe(location.x, now) {
             self.trigger_cursor_boost();
@@ -791,26 +793,96 @@ impl State {
         self.update_edge_cursor(location);
 
         let serial = SERIAL_COUNTER.next_serial();
-        let focus = self
+        let under = self
             .windows
             .surface_under(location)
-            .or_else(|| self.layers.surface_under(location))
-            .map(|(surface, local)| {
-                let origin = Point::new(location.x - local.x, location.y - local.y);
-                (surface, origin)
+            .or_else(|| self.layers.surface_under(location));
+        let focus = under.clone().map(|(surface, local)| {
+            let origin = Point::new(location.x - local.x, location.y - local.y);
+            (surface, origin)
+        });
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        // A client's relative-pointer gets the raw delta of every motion.
+        let delta = location - pointer.current_location();
+
+        // Pointer constraints (zwp_pointer_constraints_v1): an active lock keeps
+        // the pointer in place and only feeds relative motion; an active confine
+        // clamps the move to the surface-local region. A dormant constraint is
+        // activated the moment the pointer enters its region.
+        let mut locked = false;
+        let mut confined = None;
+        if let Some((surface, local)) = &under {
+            with_pointer_constraint(surface, &pointer, |constraint| {
+                let Some(constraint) = constraint else {
+                    return;
+                };
+                let point = local.to_i32_round();
+                if !constraint
+                    .region()
+                    .is_none_or(|region| region.contains(point))
+                {
+                    return;
+                }
+                if !constraint.is_active() {
+                    constraint.activate();
+                }
+                match &*constraint {
+                    PointerConstraint::Locked(_) => locked = true,
+                    PointerConstraint::Confined(confine) => {
+                        confined = confine.region().cloned();
+                    }
+                }
             });
-        if let Some(pointer) = self.seat.get_pointer() {
-            pointer.motion(
+        }
+        if locked {
+            pointer.relative_motion(
                 self,
                 focus,
-                &MotionEvent {
-                    location,
-                    serial,
+                &RelativeMotionEvent {
+                    delta,
+                    delta_unaccel: delta,
                     time,
                 },
             );
             pointer.frame(self);
+            return;
         }
+        if let (Some(region), Some((_, local))) = (confined, &under) {
+            let origin = location - *local;
+            let old = location - delta;
+            let mut clamped = old;
+            let candidate = Point::new(old.x + delta.x, old.y);
+            if region.contains((candidate - origin).to_i32_round()) {
+                clamped.x = candidate.x;
+            }
+            let candidate = Point::new(clamped.x, old.y + delta.y);
+            if region.contains((candidate - origin).to_i32_round()) {
+                clamped.y = candidate.y;
+            }
+            location = clamped;
+        }
+
+        pointer.relative_motion(
+            self,
+            focus.clone(),
+            &RelativeMotionEvent {
+                delta,
+                delta_unaccel: delta,
+                time,
+            },
+        );
+        pointer.motion(
+            self,
+            focus,
+            &MotionEvent {
+                location,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
     }
 
     /// Advances an in-progress move or resize.

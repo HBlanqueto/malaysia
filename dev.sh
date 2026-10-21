@@ -42,6 +42,7 @@ Commands:
     smoke [--release]   Build and run the toplevel mapping smoke test
     block4 [--release]  Build and run the 50-window open/close acceptance test
     move [--release]    Build and run the client-initiated move/resize probe
+    pointers [--release] Build and run the pointer lock and relative motion probes
     decoration          Build and run the decoration-policy probe over real apps
     drm-vkms            Test --drm on vkms without touching the real panel or input
 EOF
@@ -500,6 +501,63 @@ move() {
         fail "$EXIT_SMOKE" "move probe failed"
 }
 
+# pointers - run the pointer lock and relative motion probes, each against a
+# fresh compositor with the scripted input enabled.
+#
+# A probe cannot move the pointer itself, so the compositor is started with
+# `YUKI_TEST_INPUT=1`, which hovers the pointer over the first mapped window and
+# moves it. `pointer_lock` asserts the `locked` event arrives for a constraint
+# on the focused surface; `relative_pointer` asserts a non-zero relative motion
+# reaches the client. Each probe needs its own compositor: the scripted press is
+# injected once and stays held.
+pointers() {
+    require_devshell
+    require cargo
+    _release=
+    if [ "${1:-}" = "--release" ]; then
+        _release=1
+        shift
+    fi
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for pointers: $1"
+    fi
+    if [ -n "$_release" ]; then
+        _profile=release
+        cargo build --release -p yuki -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    else
+        _profile=debug
+        cargo build -p yuki -p sctk-probe ||
+            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
+    fi
+    _run_pointer_probe() {
+        _probe=$1
+        stop >/dev/null 2>&1 || true
+        YUKI_TEST_INPUT=1 start
+        _socket=
+        _waited=0
+        while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
+            _socket=$(sed -n \
+                's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+                "$LOG_FILE" 2>/dev/null | tail -n 1)
+            [ -n "$_socket" ] && break
+            sleep 0.1
+            _waited=$((_waited + 1))
+        done
+        if [ -z "$_socket" ]; then
+            stop >/dev/null 2>&1 || true
+            fail "$EXIT_SMOKE" "$_probe: the compositor never opened a socket"
+        fi
+        if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
+            stop >/dev/null 2>&1 || true
+            fail "$EXIT_SMOKE" "$_probe failed"
+        fi
+        stop >/dev/null 2>&1 || true
+    }
+    _run_pointer_probe pointer_lock
+    _run_pointer_probe relative_pointer
+}
+
 # drm-vkms - exercise the direct session on vkms, isolated from the panel.
 #
 # Loads vkms (if needed), runs the compositor with LIBSEAT_BACKEND=noop and
@@ -714,6 +772,7 @@ case "$command_name" in
     smoke) smoke "$@" ;;
     block4) block4 "$@" ;;
     move) move "$@" ;;
+    pointers) pointers "$@" ;;
     decoration) decoration "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;

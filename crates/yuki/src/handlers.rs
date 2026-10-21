@@ -290,7 +290,28 @@ impl ShmHandler for State {
     }
 }
 
-impl PointerConstraintsHandler for State {}
+impl PointerConstraintsHandler for State {
+    fn new_constraint(
+        &mut self,
+        surface: &WlSurface,
+        pointer: &smithay::input::pointer::PointerHandle<Self>,
+    ) {
+        // A constraint only binds while the pointer is over its surface; if it
+        // arrives for another surface it stays dormant until motion enters it.
+        if pointer.current_focus().as_ref() != Some(surface) {
+            return;
+        }
+        smithay::wayland::pointer_constraints::with_pointer_constraint(
+            surface,
+            pointer,
+            |constraint| {
+                if let Some(constraint) = constraint {
+                    constraint.activate();
+                }
+            },
+        );
+    }
+}
 
 impl TabletSeatHandler for State {
     type ToolFocus = WlSurface;

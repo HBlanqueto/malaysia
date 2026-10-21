@@ -41,7 +41,9 @@ use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
+use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
+use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
@@ -154,6 +156,10 @@ pub struct State {
     /// The compositor keeps owning the cursor theme: clients name a shape and
     /// Yuki draws the matching themed cursor (ADR 0020).
     pub cursor_shape_state: CursorShapeManagerState,
+    /// The `zwp_pointer_constraints_v1` state (pointer lock and confinement).
+    pub pointer_constraints_state: PointerConstraintsState,
+    /// The `zwp_relative_pointer_manager_v1` state.
+    pub relative_pointer_state: RelativePointerManagerState,
     /// The last key or pointer-button press serial, for activation tokens.
     pub(crate) last_activation_serial: Option<(Serial, Instant)>,
     /// When the shake enlargement started; `None` when the pointer is at its
@@ -359,6 +365,8 @@ impl State {
         let presentation_state = PresentationState::new::<Self>(display_handle, 1);
         let activation_state = XdgActivationState::new::<Self>(display_handle);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(display_handle);
+        let pointer_constraints_state = PointerConstraintsState::new::<Self>(display_handle);
+        let relative_pointer_state = RelativePointerManagerState::new::<Self>(display_handle);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
         // The manager global is advertised to every client for now; restricting
@@ -397,6 +405,8 @@ impl State {
             client_cursor: CursorImageStatus::default_named(),
             activation_state,
             cursor_shape_state,
+            pointer_constraints_state,
+            relative_pointer_state,
             last_activation_serial: None,
             cursor_boost_started: None,
             shake: ShakeDetector::default(),

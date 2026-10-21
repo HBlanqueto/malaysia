@@ -212,6 +212,29 @@ cargo run -p sctk-probe --bin move_probe   # run it directly, if already built
 Environment overrides: `YUKI_BIN`, `YUKI_MOVE_BIN`, `YUKI_HOVER_BIN`
 and `YUKI_APP_NAUTILUS`.
 
+## `pointer_lock`
+
+Maps a client-decorated toplevel and, on the first `wl_pointer.enter` (the
+compositor's scripted input hovers the pointer over the window), asks
+`zwp_pointer_constraints_v1` for a persistent lock with no region. It passes
+when the compositor sends `locked`, which it only does after activating the
+constraint for the surface the pointer is over. Times out if the global is
+advertised but never activated.
+
+## `relative_pointer`
+
+Maps a toplevel, binds `zwp_relative_pointer_manager_v1`, creates a relative
+pointer for the seat's pointer and waits for a `relative_motion` with a non-zero
+delta from the scripted motions. Times out if the compositor never forwards
+motion to relative-pointer clients.
+
+Both are driven by one command, each against its own compositor because the
+scripted press is injected once and stays held:
+
+```sh
+./dev.sh pointers
+```
+
 ## `move_client`
 
 The client `move_probe` drives: it maps a toplevel, waits for the scripted press

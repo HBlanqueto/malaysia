@@ -118,8 +118,8 @@ aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
 está parcialmente hecho: escala real, `display.scale` persistente y redondeo
 floor/ceil; pendiente panel y escala por salida. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
-`wp_presentation`, `xdg-activation`, `cursor-shape` y el shake-to-locate;
-faltan pointer-constraints y la integración de captura. El **Bloque 12** (portales y servicios de escritorio) está
+`wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate y
+`pointer-constraints` + `relative-pointer`; falta la integración de captura. El **Bloque 12** (portales y servicios de escritorio) está
 planificado y depende de la captura del Bloque 11. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
