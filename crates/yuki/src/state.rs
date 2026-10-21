@@ -38,6 +38,7 @@ use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
 use smithay::wayland::drm_syncobj::DrmSyncobjState;
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
+use smithay::wayland::presentation::PresentationState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
@@ -149,6 +150,8 @@ pub struct State {
     pub viewporter_state: ViewporterState,
     /// The `wp_fractional_scale_manager_v1` state (HiDPI fractional scales).
     pub fractional_scale_state: FractionalScaleManagerState,
+    /// The `wp_presentation` state (frame timestamps and presentation feedback).
+    pub presentation_state: PresentationState,
     /// The placed layer surfaces.
     pub layers: Layers,
     /// The `wl_data_device_manager` state.
@@ -315,6 +318,8 @@ impl State {
         let layer_shell_state = WlrLayerShellState::new::<Self>(display_handle);
         let viewporter_state = ViewporterState::new::<Self>(display_handle);
         let fractional_scale_state = FractionalScaleManagerState::new::<Self>(display_handle);
+        // Clock 1 is CLOCK_MONOTONIC, the clock used for input and rendering.
+        let presentation_state = PresentationState::new::<Self>(display_handle, 1);
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
         // The manager global is advertised to every client for now; restricting
@@ -356,6 +361,7 @@ impl State {
             layer_shell_state,
             viewporter_state,
             fractional_scale_state,
+            presentation_state,
             layers: Layers::new(),
             data_device_state,
             primary_selection_state,

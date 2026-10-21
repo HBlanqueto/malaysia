@@ -149,7 +149,12 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 11 — Protocolos de uso diario
 
-- `wp_presentation`, `xdg-activation-v1`, `wp_cursor_shape_v1`
+- **`wp_presentation` — hecho.** Global v2 con `CLOCK_MONOTONIC`, feedback
+  `presented`/`discarded` tras presentar el frame y en `vblank` para DRM. Ver
+  `bloques/11-protocolos-de-uso-diario.md`; falta el probe de un cliente que
+  pida feedback.
+- `xdg-activation-v1` y `wp_cursor_shape_v1` — pendientes. `cursor-shape`
+  necesita completar `TabletSeatHandler` para el `Dispatch2` del dispositivo.
 - `xdg-output` ya se anuncia con `OutputManagerState::new_with_xdg_output`;
   no está pendiente.
 - **`zwp_pointer_constraints_v1` no se anuncia.** El `PointerConstraintsHandler`

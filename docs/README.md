@@ -25,7 +25,8 @@ docs/
 │   ├── 07-linux-dmabuf-y-explicit-sync.md
 │   ├── 08-direct-session.md
 │   ├── 09-escala-fraccional.md
-│   └── 10-lock.md
+│   ├── 10-lock.md
+│   └── 11-protocolos-de-uso-diario.md
 ├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
@@ -116,7 +117,9 @@ aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
 (hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
 está parcialmente hecho: escala real y `YUKI_SCALE`, pendiente panel y
 configuración. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
-recuperación y `Ctrl+Alt+L`). El **Bloque 12** (portales y servicios de escritorio) está
+recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
+`wp_presentation`; faltan activation, cursor-shape, pointer-constraints y
+captura. El **Bloque 12** (portales y servicios de escritorio) está
 planificado y depende de la captura del Bloque 11. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y

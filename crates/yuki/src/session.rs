@@ -37,6 +37,7 @@ use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction};
+use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::backend::InitError;
@@ -48,6 +49,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
+use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -138,6 +140,8 @@ pub(crate) struct Session {
     last_objects: LiveObjects,
     /// Set by `SIGUSR1`; the next frame writes a debug PNG (Bloque 7.1).
     capture_requested: bool,
+    /// Sequence number for `wp_presentation` feedback.
+    frame_seq: u64,
 }
 
 /// The buffers a finished frame read, held until their GPU work completes.
@@ -378,6 +382,7 @@ pub fn run() -> Result<(), SessionError> {
         track_objects,
         last_objects: LiveObjects::default(),
         capture_requested: false,
+        frame_seq: 0,
     };
     if session.track_objects {
         session.last_objects = live_objects(&session.display, &session.state);
@@ -702,6 +707,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         cursor,
         start_time,
         capture_requested,
+        frame_seq,
         ..
     } = session;
 
@@ -780,9 +786,15 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         tracing::warn!(%error, "failed to flush clients after a frame");
     }
 
+    let presented = damage.is_some();
     backend
         .submit(damage.as_deref())
         .map_err(DrawError::Submit)?;
+    *frame_seq = frame_seq.wrapping_add(1);
+    send_presentation_feedbacks_for_state(state, start_time.elapsed(), *frame_seq, presented);
+    if let Err(error) = display.flush_clients() {
+        tracing::warn!(%error, "failed to flush presentation feedback");
+    }
     Ok(())
 }
 
@@ -1065,6 +1077,70 @@ pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
     for (id, _parent, _rect) in state.windows.iter_popups() {
         if let Some(surface) = state.popups.surface_of(id) {
             send_frame_callbacks(surface, time);
+        }
+    }
+}
+
+/// Sends `wp_presentation` feedback for the surfaces a frame drew.
+///
+/// `presented` is false when the frame was discarded (no damage); the protocol
+/// requires `discarded` for a frame that never reached the output.
+pub(crate) fn send_presentation_feedbacks_for_state(
+    state: &State,
+    time: Duration,
+    seq: u64,
+    presented: bool,
+) {
+    let refresh = Refresh::fixed(Duration::from_micros(16_666));
+    let send = |surface: &WlSurface| {
+        with_surface_tree_downward(
+            surface,
+            (),
+            |_, _, &()| TraversalAction::DoChildren(()),
+            |_, states, &()| {
+                let callbacks = std::mem::take(
+                    &mut states
+                        .cached_state
+                        .get::<PresentationFeedbackCachedState>()
+                        .current()
+                        .callbacks,
+                );
+                for callback in callbacks {
+                    if presented {
+                        callback.presented(
+                            &state.output,
+                            time,
+                            refresh,
+                            seq,
+                            wp_presentation_feedback::Kind::Vsync,
+                        );
+                    } else {
+                        callback.discarded();
+                    }
+                }
+            },
+            |_, _, &()| true,
+        );
+    };
+    if state.locked {
+        for surface in &state.lock_surfaces {
+            if surface.alive() {
+                send(surface.wl_surface());
+            }
+        }
+        return;
+    }
+    for window in state.windows.iter() {
+        if window.is_mapped() {
+            send(window.surface());
+        }
+    }
+    for entry in state.layers.all() {
+        send(entry.surface.wl_surface());
+    }
+    for (id, _parent, _rect) in state.windows.iter_popups() {
+        if let Some(surface) = state.popups.surface_of(id) {
+            send(surface);
         }
     }
 }

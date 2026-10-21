@@ -39,9 +39,10 @@ Falta:
 
 ## Después, en orden
 
-1. **Bloque 11 — protocolos de uso diario.** `wp_presentation`,
-   `xdg-activation`, `cursor-shape`, `pointer-constraints` y captura
-   (`ext-image-copy-capture` + `ext-image-capture-source`).
+1. **Bloque 11 — protocolos de uso diario.** `wp_presentation` ya está hecho;
+   faltan `xdg-activation`, `cursor-shape`, `pointer-constraints` y captura
+   (`ext-image-copy-capture` + `ext-image-capture-source`). Ver
+   `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** Primero `Settings` /
    `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la
    captura del Bloque 11 y PipeWire. GTK sigue sirviendo FileChooser, Print y

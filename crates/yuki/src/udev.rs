@@ -505,7 +505,14 @@ impl Udev {
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
-        crate::session::send_frame_callbacks_for_state(&self.state, self.start_time.elapsed());
+        let time = self.start_time.elapsed();
+        crate::session::send_presentation_feedbacks_for_state(
+            &self.state,
+            time,
+            self.vblank_count,
+            true,
+        );
+        crate::session::send_frame_callbacks_for_state(&self.state, time);
         self.render();
     }
 
@@ -555,6 +562,12 @@ impl Udev {
                     self.frame_was_empty = true;
                     tracing::debug!("frame skipped: no damage");
                 }
+                crate::session::send_presentation_feedbacks_for_state(
+                    &self.state,
+                    self.start_time.elapsed(),
+                    self.vblank_count,
+                    false,
+                );
                 self.schedule_repaint();
             }
             Err(error) => {
