@@ -722,6 +722,47 @@ pub(crate) fn build_window_elements(
     .collect()
 }
 
+/// Saves a PrintScreen screenshot to the Desktop.
+///
+/// The focused window when there is one (its client content), otherwise the
+/// whole output. Shared by the winit and DRM backends; `transform` is the
+/// backend's render transform.
+pub(crate) fn save_screenshot(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    output_elements: &[OutputRenderElement<GlesRenderer>],
+    output_size: Size<i32, Physical>,
+    transform: Transform,
+) -> std::io::Result<std::path::PathBuf> {
+    let scale = state.scale.fractional_scale();
+    let window = state.focused_window().and_then(|id| {
+        let surface = state.windows.surface_of(id).cloned()?;
+        let rect = state.windows.usable_rect(id)?;
+        Some((surface, rect))
+    });
+    match window {
+        Some((surface, rect)) => {
+            let size = rect.size.to_f64().to_physical(scale).to_i32_round();
+            let elements = build_window_elements(renderer, &surface, scale);
+            crate::capture::screenshot(renderer, &elements, size, transform, [0.0, 0.0, 0.0, 0.0])
+        }
+        None => crate::capture::screenshot(
+            renderer,
+            output_elements,
+            output_size,
+            transform,
+            [0.06, 0.06, 0.09, 1.0],
+        ),
+    }
+}
+
+/// Logs a screenshot result. The success path already logs the saved path.
+pub(crate) fn log_screenshot(result: std::io::Result<std::path::PathBuf>) {
+    if let Err(error) = result {
+        tracing::warn!(%error, "screenshot failed");
+    }
+}
+
 fn draw(session: &mut Session) -> Result<(), DrawError> {
     let Session {
         loop_handle,
@@ -761,6 +802,18 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             ) {
                 tracing::warn!(%error, "debug capture failed");
             }
+        }
+
+        // PrintScreen: save the focused window (or the output when none) to the
+        // Desktop. Runs before the window pass like the other offscreen reads.
+        if state.take_screenshot_request() {
+            log_screenshot(save_screenshot(
+                state,
+                renderer,
+                &elements,
+                capture_size,
+                winit_render_transform(),
+            ));
         }
 
         // `ext-image-copy-capture-v1` frames queued by the handler. Like the

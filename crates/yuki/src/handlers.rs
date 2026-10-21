@@ -181,6 +181,7 @@ impl CompositorHandler for State {
             self.foreign_window_mapped(mapped);
             self.inject_test_shake();
             self.inject_test_press(mapped);
+            self.inject_test_screenshot();
         }
         self.popup_commit(surface);
         self.request_redraw();

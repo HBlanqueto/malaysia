@@ -53,6 +53,15 @@ protocolos y la captura.
   compositor dibuja solo la superficie del cliente, a su tamaño usable. Probe:
   `./dev.sh screencopy-window`.
 
+- **PrintScreen**: guarda una captura de la **ventana con foco** (o de la
+  salida si no hay ninguna) en el Escritorio del usuario. El destino sale de
+  `yuki::xdg::desktop_dir()` (XDG user-dirs, nombre localizado: Escritorio,
+  Desktop, Schreibtisch…), nunca de un literal. Escribe
+  `Screenshot-<epoch-ms>.png` con fondo transparente. Para pruebas,
+  `YUKI_TEST_SCREENSHOT=1` dispara la captura al mapear la primera ventana y
+  `YUKI_SCREENSHOT_DIR` redirige el guardado (así la verificación no toca el
+  Escritorio real).
+
 ## Pendiente
 
 - El portal `Screenshot`/`ScreenCast` del Bloque 12 sobre esta captura.
@@ -81,6 +90,9 @@ protocolos y la captura.
   de la ventana). Las constraints anuncian dmabuf con el render node, pero
   falta un cliente que capture por dmabuf.
 - Falta la captura con salida rotada (hoy se ignora la rotación).
+- PrintScreen probado con `YUKI_TEST_SCREENSHOT=1` y `YUKI_SCREENSHOT_DIR`:
+  PNG RGBA de la ventana (1248×800 con foot), contenido correcto y guardado en
+  el directorio indicado.
 
 ## Notas
 

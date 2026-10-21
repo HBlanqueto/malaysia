@@ -162,6 +162,8 @@ enum CompositorShortcut {
     Blocked,
     /// Ctrl+Alt+L: lock now, or relaunch the lock client if it is gone.
     Relock,
+    /// PrintScreen: save a screenshot of the focused window.
+    Screenshot,
     /// Not a compositor shortcut.
     None,
 }
@@ -172,6 +174,10 @@ fn compositor_shortcut(
     syms: &[xkb::Keysym],
     locked: bool,
 ) -> CompositorShortcut {
+    // PrintScreen works on its own, so it is checked before the modifier gate.
+    if syms.iter().any(|sym| u32::from(*sym) == keysyms::KEY_Print) {
+        return CompositorShortcut::Screenshot;
+    }
     if !(ctrl && alt) {
         return CompositorShortcut::None;
     }
@@ -269,6 +275,12 @@ impl State {
                                                         "Ctrl+Alt+L: started the lock screen"
                                                     );
                                                 }
+                                            }
+                                            CompositorShortcut::Screenshot => {
+                                                tracing::info!(
+                                                    "PrintScreen: screenshotting the focused window"
+                                                );
+                                                state.request_screenshot();
                                             }
                                             CompositorShortcut::None => {}
                                         }
@@ -671,6 +683,17 @@ impl State {
         self.inject_test_hovers();
     }
 
+    /// Test-only: request a screenshot on the first mapped window.
+    ///
+    /// Only when `YUKI_TEST_SCREENSHOT` is set. With `YUKI_SCREENSHOT_DIR` it
+    /// lets a check exercise the PrintScreen path without the real key.
+    pub(crate) fn inject_test_screenshot(&mut self) {
+        if std::env::var_os("YUKI_TEST_SCREENSHOT").is_none() {
+            return;
+        }
+        self.request_screenshot();
+    }
+
     /// Test-only: inject a rapid left-right motion that trips the shake
     /// detector, so the locate enlargement can be seen without a real hand.
     ///
@@ -1043,7 +1066,7 @@ mod tests {
     use smithay::reexports::calloop::EventLoop;
     use smithay::reexports::wayland_server::Display;
     use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
-    use xkbcommon::xkb::keysyms;
+    use xkbcommon::xkb::{self, keysyms};
 
     use super::{
         BUTTON_LEFT, CompositorShortcut, Edge, ShakeDetector, clamp_pointer, compositor_shortcut,
@@ -1142,6 +1165,25 @@ mod tests {
         assert!((1.0..=yuki_design::CURSOR_SHAKE_SCALE).contains(&scale));
         state.cursor_boost_started = None;
         assert_eq!(state.cursor_boost_scale(), 1.0);
+    }
+
+    #[test]
+    fn print_screen_maps_to_the_screenshot_shortcut() {
+        let print = xkb::Keysym::new(keysyms::KEY_Print);
+        assert!(matches!(
+            compositor_shortcut(false, false, &[print], false),
+            CompositorShortcut::Screenshot
+        ));
+        // It works with modifiers too, and never shadows Ctrl+Alt+L.
+        assert!(matches!(
+            compositor_shortcut(true, false, &[print], false),
+            CompositorShortcut::Screenshot
+        ));
+        let l = xkb::Keysym::new(keysyms::KEY_L);
+        assert!(matches!(
+            compositor_shortcut(true, true, &[l], false),
+            CompositorShortcut::Relock
+        ));
     }
 
     #[test]

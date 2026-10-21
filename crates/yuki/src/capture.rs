@@ -81,9 +81,75 @@ pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
-    transform: smithay::utils::Transform,
+    transform: Transform,
 ) -> std::io::Result<PathBuf> {
     eprintln!("capture: {} elements", elements.len());
+    let (w, h, flipped) =
+        render_and_read(renderer, elements, size, transform, [0.0, 0.0, 0.0, 1.0])?;
+    let dir = capture_dir();
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("capture-{}.png", stamp()));
+    write_png(&path, w, h, &flipped)?;
+    tracing::info!(path = %path.display(), "debug capture written");
+    Ok(path)
+}
+
+/// Saves a screenshot to the user's Desktop.
+///
+/// The destination is the XDG Desktop directory (localised, see
+/// [`crate::xdg::desktop_dir`]), not a fixed name. `clear` is the background:
+/// transparent for a window so only its content is kept, opaque for an output.
+pub(crate) fn screenshot(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    transform: Transform,
+    clear: [f32; 4],
+) -> std::io::Result<PathBuf> {
+    let (w, h, flipped) = render_and_read(renderer, elements, size, transform, clear)?;
+    // `YUKI_SCREENSHOT_DIR` is a test seam (like `YUKI_SCALE`): it redirects
+    // the save so a check does not touch the user's real Desktop.
+    let dir = std::env::var_os("YUKI_SCREENSHOT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(crate::xdg::desktop_dir);
+    fs::create_dir_all(&dir)?;
+    let path = dir.join(format!("Screenshot-{}.png", stamp()));
+    write_png(&path, w, h, &flipped)?;
+    tracing::info!(path = %path.display(), "screenshot saved");
+    Ok(path)
+}
+
+/// Milliseconds since the Unix epoch, for a unique file name.
+fn stamp() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+}
+
+/// Writes `rgba` as an RGBA8 PNG.
+fn write_png(path: &Path, width: usize, height: usize, rgba: &[u8]) -> std::io::Result<()> {
+    let file = fs::File::create(path)?;
+    let mut encoder = png::Encoder::new(file, width as u32, height as u32);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header()?;
+    writer.write_image_data(rgba)?;
+    writer.finish()?;
+    Ok(())
+}
+
+/// Renders `elements` offscreen and reads them back top-down as RGBA8.
+///
+/// The GL framebuffer is bottom-up, so the readback rows are flipped. `clear`
+/// is the background the render starts from.
+fn render_and_read(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    transform: Transform,
+    clear: [f32; 4],
+) -> std::io::Result<(usize, usize, Vec<u8>)> {
     let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
     let region = Rectangle::from_size(size_buf);
 
@@ -97,7 +163,7 @@ pub(crate) fn capture_output(
         .map_err(|error| std::io::Error::other(format!("bind offscreen failed: {error}")))?;
     let mut tracker = OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), transform);
     let result = tracker
-        .render_output(renderer, &mut target, 0, elements, [0.0, 0.0, 0.0, 1.0])
+        .render_output(renderer, &mut target, 0, elements, clear)
         .map_err(|error| std::io::Error::other(format!("offscreen render failed: {error}")))?;
     // The readback needs the GPU to have finished the render, or the mapping
     // comes back empty (the window pass ignores this sync; the capture waits).
@@ -121,25 +187,7 @@ pub(crate) fn capture_output(
         let dst = row * stride;
         flipped[dst..dst + stride].copy_from_slice(&bytes[src..src + stride]);
     }
-
-    let dir = capture_dir();
-    fs::create_dir_all(&dir)?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let path = dir.join(format!("capture-{stamp}.png"));
-
-    let file = fs::File::create(&path)?;
-    let mut encoder = png::Encoder::new(file, w as u32, h as u32);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    let mut writer = encoder.write_header()?;
-    writer.write_image_data(&flipped)?;
-    writer.finish()?;
-
-    tracing::info!(path = %path.display(), "debug capture written");
-    Ok(path)
+    Ok((w, h, flipped))
 }
 
 /// Renders `elements` into the buffer attached to an `ext-image-copy-capture`

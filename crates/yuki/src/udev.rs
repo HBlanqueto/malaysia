@@ -541,6 +541,19 @@ impl Udev {
                 }
             }
         }
+        if let (true, Some(mode)) = (
+            self.state.take_screenshot_request(),
+            self.output.current_mode(),
+        ) {
+            let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
+            crate::session::log_screenshot(crate::session::save_screenshot(
+                &mut self.state,
+                &mut self.renderer,
+                &elements,
+                size,
+                Transform::Flipped180,
+            ));
+        }
         let capture_scale = self.state.scale.fractional_scale();
         for pending in std::mem::take(&mut self.state.pending_captures) {
             let (size, window_elements) = match &pending.target {

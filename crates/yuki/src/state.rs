@@ -289,6 +289,9 @@ pub struct State {
     pub(crate) test_press: Option<TestPress>,
     /// Test-only: the window left behind by `YUKI_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
+    /// PrintScreen asked for a screenshot of the focused window; the backend
+    /// renders it on the next frame.
+    pub(crate) screenshot_requested: bool,
 }
 
 impl State {
@@ -470,6 +473,7 @@ impl State {
             grab: None,
             test_press: None,
             leaked_window: None,
+            screenshot_requested: false,
         })
     }
 
@@ -513,6 +517,32 @@ impl State {
     /// Keeps a capture session alive; dropping it stops the session.
     pub(crate) fn push_capture_session(&mut self, session: Session) {
         self.capture_sessions.push(session);
+    }
+
+    /// PrintScreen: screenshot the focused window on the next render pass.
+    ///
+    /// Blocked while locked: the lock surface is not a window to save.
+    pub(crate) fn request_screenshot(&mut self) {
+        if self.locked {
+            tracing::info!("screenshot ignored: the session is locked");
+            return;
+        }
+        self.screenshot_requested = true;
+        self.request_redraw();
+    }
+
+    /// Takes the pending screenshot request, clearing it.
+    pub(crate) fn take_screenshot_request(&mut self) -> bool {
+        std::mem::take(&mut self.screenshot_requested)
+    }
+
+    /// The window that currently holds keyboard focus, if any.
+    pub(crate) fn focused_window(&self) -> Option<WindowId> {
+        let surface = self
+            .seat
+            .get_keyboard()
+            .and_then(|keyboard| keyboard.current_focus())?;
+        self.windows.id_of(&surface)
     }
 
     /// Asks the DRM backend to switch to virtual terminal `vt`.
