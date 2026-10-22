@@ -117,6 +117,34 @@ impl ChromeCache {
     }
 }
 
+/// The centre of a titlebar button, in logical coordinates.
+///
+/// Used by the scripted-input hook to press an exact button, and by any future
+/// accessibility or testing surface. `None` when the window has no top titlebar
+/// or the kind is not in the bar.
+pub(crate) fn button_center(
+    outer: SceneRect<f64, SceneLogical>,
+    insets: Insets,
+    kind: ButtonKind,
+) -> Option<Point<f64, Logical>> {
+    if TITLEBAR.position != TitlebarPosition::Top || insets.top < f64::from(TITLEBAR.thickness) {
+        return None;
+    }
+    let index = TITLEBAR
+        .buttons
+        .order
+        .iter()
+        .position(|button| button.kind == kind)?;
+    let diameter = f64::from(TITLEBAR.buttons.diameter);
+    let gap = f64::from(TITLEBAR.buttons.spacing);
+    let x = outer.x()
+        + f64::from(TITLEBAR.buttons.margin_start)
+        + diameter / 2.0
+        + index as f64 * (diameter + gap);
+    let y = outer.y() + f64::from(TITLEBAR.thickness) / 2.0;
+    Some(Point::new(x, y))
+}
+
 /// The titlebar button at `location`, if any.
 ///
 /// Only top titlebars take part; a window with no titlebar (client-side chrome,

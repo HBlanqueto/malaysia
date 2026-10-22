@@ -48,6 +48,7 @@ Commands:
     screencopy-window   Build and run the window capture probe
     presentation        Build and run the wp_presentation feedback probe
     activation          Build and run the xdg-activation probe
+    titlebar            Press close, minimize and maximize on a real window
     decoration          Build and run the decoration-policy probe over real apps
     drm-vkms            Test --drm on vkms without touching the real panel or input
 EOF
@@ -444,6 +445,55 @@ block4() {
         YUKI_RESIZE_BIN="$script_dir/target/$_profile/resize_client" \
         "$script_dir/target/$_profile/block4" ||
         fail "$EXIT_SMOKE" "block4 test failed"
+}
+
+# titlebar - press each titlebar button with the scripted input and check the
+# compositor log. A real click cannot be synthesized from a probe, so this uses
+# the same test hook that moves the pointer to an exact button centre.
+titlebar() {
+    require_devshell
+    require cargo
+    require foot
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for titlebar: $1"
+    fi
+    cargo build -p yuki || fail "$EXIT_SMOKE" "could not build the compositor"
+    for scenario in close minimize maximize; do
+        case "$scenario" in
+            close) expected="window removed" ;;
+            minimize) expected="window minimized" ;;
+            maximize) expected="window maximized" ;;
+        esac
+        stop >/dev/null 2>&1 || true
+        YUKI_TEST_INPUT=1 YUKI_TEST_TITLEBAR_BUTTON="$scenario" start
+        _socket=
+        _waited=0
+        while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
+            _socket=$(sed -n \
+                's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+                "$LOG_FILE" 2>/dev/null | tail -n 1)
+            [ -n "$_socket" ] && break
+            sleep 0.1
+            _waited=$((_waited + 1))
+        done
+        if [ -z "$_socket" ]; then
+            stop >/dev/null 2>&1 || true
+            fail "$EXIT_SMOKE" "titlebar: the compositor never opened a socket"
+        fi
+        WAYLAND_DISPLAY="$_socket" foot -a yuki-titlebar >/dev/null 2>&1 &
+        _waited=0
+        while ! grep -q "$expected" "$LOG_FILE" 2>/dev/null && [ "$_waited" -lt 50 ]; do
+            sleep 0.1
+            _waited=$((_waited + 1))
+        done
+        if ! grep -q "$expected" "$LOG_FILE" 2>/dev/null; then
+            tail -n 15 "$LOG_FILE" >&2
+            stop >/dev/null 2>&1 || true
+            fail "$EXIT_SMOKE" "titlebar: $scenario did not reach '$expected'"
+        fi
+        stop >/dev/null 2>&1 || true
+        printf 'titlebar %s: PASS\n' "$scenario"
+    done
 }
 
 # decoration - run real applications inside Yuki and assert the decoration
@@ -928,6 +978,7 @@ case "$command_name" in
     screencopy-window) screencopy_window "$@" ;;
     presentation) presentation "$@" ;;
     activation) activation "$@" ;;
+    titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
     drm-vkms) drm_vkms "$@" ;;

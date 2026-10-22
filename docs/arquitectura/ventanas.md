@@ -79,9 +79,11 @@ siempre). Los botones solo actúan con el botón primario.
 
 - `./dev.sh demo`: titlebar clara con título centrado y semáforos de color en la
   ventana con foco; la de atrás queda gris.
-- `YUKI_TEST_INPUT=1 YUKI_TEST_PRESS_AT` sobre las fracciones de los botones
-  (`~0.0172`, `~0.0328`, `~0.0484` del ancho) cierra, minimiza y maximiza; los
-  logs muestran `window removed`, `window minimized` y `window maximized`.
+- `./dev.sh titlebar` lanza un `foot`, pulsa el centro exacto de cada botón
+  (`YUKI_TEST_TITLEBAR_BUTTON`) y comprueba en el log `window removed`,
+  `window minimized` y `window maximized`. Pasa a 1.0 y con
+  `YUKI_SCALE=1.5` (los centros se calculan en lógico y el hit-test usa la
+  misma geometría).
 - `YUKI_SCALE=1.5 ./dev.sh demo`: la barra y el texto se rasterizan a la escala
   física.
 - `./dev.sh check` pasa (tests de `button_at` incluidos).

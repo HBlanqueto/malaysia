@@ -688,11 +688,21 @@ impl State {
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
-        let (fx, fy) = test_press_fraction();
-        let location = Point::new(
-            outer.x() + outer.width() * fx,
-            outer.y() + outer.height() * fy,
-        );
+        let location = if let Some(kind) = test_titlebar_button() {
+            let Some(insets) = self.windows.insets(id) else {
+                return;
+            };
+            let Some(center) = crate::chrome::button_center(outer, insets, kind) else {
+                return;
+            };
+            center
+        } else {
+            let (fx, fy) = test_press_fraction();
+            Point::new(
+                outer.x() + outer.width() * fx,
+                outer.y() + outer.height() * fy,
+            )
+        };
         // The scripted press may land on the client or on the titlebar; the
         // real press path decides what to do with it. It must land inside the
         // window's decorated rectangle, which `outer` established above.
@@ -1156,6 +1166,17 @@ fn test_press_fraction() -> (f64, f64) {
 }
 
 /// The pointer delta the scripted drag applies once a grab starts, from
+/// Test-only: press an exact titlebar button (`close`, `minimize` or
+/// `maximize`) instead of a window fraction.
+fn test_titlebar_button() -> Option<yuki_design::ButtonKind> {
+    match std::env::var("YUKI_TEST_TITLEBAR_BUTTON").ok()?.as_str() {
+        "close" => Some(yuki_design::ButtonKind::Close),
+        "minimize" => Some(yuki_design::ButtonKind::Minimize),
+        "maximize" => Some(yuki_design::ButtonKind::Maximize),
+        _ => None,
+    }
+}
+
 /// `YUKI_TEST_DRAG` (`dx,dy` in logical pixels), `(60, 40)` by default.
 fn test_drag_delta() -> (f64, f64) {
     parse_pair("YUKI_TEST_DRAG").unwrap_or((60.0, 40.0))

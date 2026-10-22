@@ -161,6 +161,7 @@ nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
 ./dev.sh check         # fmt + clippy + tests
 ./dev.sh run           # lanza el compositor anidado
 ./dev.sh demo          # sesión anidada con wallpaper, menubar, dock y ventanas
+./dev.sh titlebar      # prueba cerrar/minimizar/maximizar de la titlebar
 ./dev.sh smoke         # prueba de mapeo de toplevels
 # probes de protocolo: move, pointers, screencopy, presentation, activation
 ```
