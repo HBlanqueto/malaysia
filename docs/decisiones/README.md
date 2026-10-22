@@ -39,6 +39,7 @@ continua.
 | 0030 | Direct Session 8a: un plano primario y una sola salida | aceptado |
 | 0031 | Portal backend propio (`xdg-desktop-portal-yuki`) | aceptado |
 | 0032 | Neptunia es la fuente de diseño del escritorio | aceptado |
+| 0033 | Skia en clientes y CelestialKit desde otto-kit | aceptado (modifica 0024) |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
@@ -47,8 +48,9 @@ continua.
 
 - ~~Shell in-process contra clientes layer-shell~~ — **resuelta por el ADR 0023**:
   clientes layer-shell, un proceso por componente.
-- ~~Stack de render del toolkit~~ — **resuelta por el ADR 0024** (opción A: GLES +
-  cosmic-text + shaders propios, mismo stack que el compositor).
+- ~~Stack de render del toolkit~~ — **resuelta por el ADR 0024** (opción A) y
+  **modificada por el ADR 0033**: Skia en clientes, GLES/cosmic-text en el
+  compositor.
 - **Stack de render del compositor** — abierta (hoy winit + GLES2; ver hito Direct
   Session).
 - **Si el repositorio es privado o abierto** — abierta.

@@ -6,18 +6,22 @@ equivalente en macOS y su rol.
 
 | Nombre | Identificador en código | Equivalente en macOS | Rol |
 |---|---|---|---|
-| **CelestialKit** | `celestial-kit` | AppKit | Toolkit de la **shell** y de las **apps propias** de Yuki (Settings, ...): ventanas, titlebars, semáforos, widgets, texto. Lo usan la shell (ADR 0023) y las apps propias; **no el compositor**. |
-| **Grade Graphics** | `grade-graphics` | Core Graphics + Core Text | Crate de gráficos compartido: los **shaders GLSL** (squircle SDF, hairline, inner line, sombra 9-slice) y sus parámetros. Lo usan el **compositor** y **CelestialKit**; lo que se comparte es el **GLSL**, no el código GL de Rust. Los shaders que se habían previsto para `yuki-design` viven aquí; `yuki-design` conserva los tokens de diseño (ADR 0011). |
-| **Grade Animation** | `celestial_kit::animation` (módulo) | Core Animation | Módulo de animación **dentro de CelestialKit**; aún no es crate. Solo sale a crate propio si el compositor también lo necesita (p. ej. compartir curvas de animación). |
-| **Infinity** | `infinity` (reservado) | SkyLight | **Nombre reservado** para un futuro protocolo privado entre la shell y el compositor. **No crear nada hoy**: se usan los protocolos Wayland estándar (ADR 0023). |
+| **CelestialKit** | `celestial-kit` | AppKit | Toolkit de la **shell** y de las **apps propias** de Yuki (Settings, ...): ventanas, titlebars, semáforos, widgets, texto. Parte de `otto-kit` (MIT, Riccardo Canalicchio), traído de forma selectiva, renombrado a nombres propios y usando `yuki-design` (ADR 0033). Lo usan la shell (ADR 0023) y las apps propias; **no el compositor**. |
+| **Grade Graphics** | `grade-graphics` | Core Graphics + Core Text | Crate de los **shaders GLSL** del compositor (squircle SDF, hairline, inner line, sombra 9-slice) y sus parámetros. El kit iguala el aspecto con los mismos tokens de `yuki-design`, sin usar estos shaders para dibujar su contenido (ADR 0033). |
+| **Grade Animation** | `grade-animation` | Core Animation | Crate de animación sobre **`laye-rs`** (fork `HBlanqueto/layers`, rama `neptunia`, fijado por commit). Lo usan la shell y las apps propias; el compositor no lo necesita (ADR 0033). |
+| **Infinity** | `infinity` | SkyLight | Protocolo privado app↔compositor, equivalente a `otto-surface-style`: esquinas, sombras, desenfoque y animaciones. El kit lo trata como **opcional** hasta que el compositor lo implemente (ADR 0033). |
 
 ## Reparto de responsabilidades
 
-- `celestial-kit` — la UI de la shell y las apps propias (≈ AppKit).
-- `grade-graphics` — los shaders y parámetros compartidos con el compositor
-  (≈ Core Graphics + Core Text). Es la pieza que mantiene "una sola vez" el
-  squircle SDF y el dibujo de la titlebar.
+- `celestial-kit` — la UI de la shell y las apps propias (≈ AppKit), basada
+  selectivamente en `otto-kit` (MIT) y con Skia en los procesos cliente.
+- `grade-graphics` — los shaders GLSL del compositor (≈ Core Graphics + Core
+  Text).
+- `grade-animation` — animación sobre `laye-rs` (≈ Core Animation).
+- `infinity` — protocolo privado app↔compositor (≈ SkyLight), opcional.
 - `yuki-design` — los tokens de diseño (radios, sombras, blur, colores, márgenes —
   ADR 0011). No contiene shaders.
+- `yuki-appearance` — resuelve `appearance.domain` + `wallpaper.state` para el
+  compositor, la shell y el portal.
 - `yuki-scene` — layout de ventanas del compositor (ADR 0015).
 - `yuki` — el compositor.

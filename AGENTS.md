@@ -55,6 +55,16 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 7. **El shell propio** (top bar, dock, menús del sistema) usa el mismo lenguaje de
    diseño y los mismos tokens que decoraciones y efectos.
 
+8. **Skia solo en clientes.** La shell y las apps propias (`celestial-kit`,
+   ADR 0033) pueden usar Skia. El **compositor nunca** usa Skia: sigue con GLES,
+   `grade-graphics` y `cosmic-text`. `celestial-kit` parte selectivamente de
+   `otto-kit` (MIT), se renombra a nombres propios (nada de `otto_*`) y usa los
+   tokens de `yuki-design`. `grade-animation` vive sobre `laye-rs` (fork
+   `HBlanqueto/layers`, rama `neptunia`, fijado por commit) e Infinity es el
+   protocolo privado app↔compositor (opcional hasta que el compositor lo
+   implemente). No se usan `otto-foundations`, `otto-dbus` ni
+   `otto-surface-style`.
+
 ---
 
 ## Referencias rápidas
@@ -63,10 +73,11 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Roadmap de bloques (fuente de verdad)**: `docs/roadmap.md`
 - **Bloques implementados**: `docs/bloques/` (00-cimientos … 07-linux-dmabuf-y-explicit-sync)
 - **Decisiones (ADRs)**: `docs/decisiones/` — sobre todo **0019** (decoración),
-  **0020** (política de diseño), **0021** (superficie de configuración) y
+  **0020** (política de diseño), **0021** (superficie de configuración),
   **0023** (los componentes del shell corren como procesos separados, uno por
   cliente Wayland; ver `docs/arquitectura/modelo-de-procesos.md`), **0024**
-  (stack de render del toolkit) y **0025** (la shell es nativa, `yuki-shell`).
+  (stack de render del toolkit), **0025** (la shell es nativa, `yuki-shell`) y
+  **0033** (Skia en clientes, CelestialKit desde otto-kit).
   La 0019 documenta cómo negocian GTK3/GTK4/Qt. Índice y decisiones abiertas:
   `docs/decisiones/README.md`.
 - **Configuración**: `docs/configuracion/opciones.md` — **catálogo canónico de

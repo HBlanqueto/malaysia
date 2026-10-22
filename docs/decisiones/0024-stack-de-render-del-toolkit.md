@@ -1,8 +1,12 @@
 # 0024 — Stack de render del toolkit del shell (propuesta)
 
-Estado: **aceptado** (opción A). Este ADR presenta las opciones para el stack de
-render del toolkit de la shell (ADR 0023) y sus ventajas y desventajas sobre el
-hardware de la máquina, y fija la decisión con sus parámetros técnicos.
+Estado: **aceptado** (opción A), **modificada por [0033](0033-skia-en-clientes-y-celestialkit-desde-otto-kit.md)**:
+Skia se permite en los procesos cliente y CelestialKit parte de `otto-kit`; el
+compositor sigue con GLES + `cosmic-text` + `grade-graphics`.
+
+Este ADR presenta las opciones para el stack de render del toolkit de la shell
+(ADR 0023) y sus ventajas y desventajas sobre el hardware de la máquina, y fija
+la decisión con sus parámetros técnicos.
 
 ## Contexto
 
