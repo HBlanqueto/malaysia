@@ -75,17 +75,23 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
 /// Captures the composed output to `$XDG_RUNTIME_DIR/yuki/capture-*.png`.
 ///
 /// The output is re-rendered offscreen (reading the presented buffer is
-/// unreliable), with the backend's render transform so the picture matches the
-/// screen. Returns the saved path and logs it.
+/// unreliable), with the backend's render transform and output scale so the
+/// picture matches the screen. Returns the saved path and logs it.
 pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
+    scale: f64,
 ) -> std::io::Result<PathBuf> {
-    eprintln!("capture: {} elements", elements.len());
-    let (w, h, flipped) =
-        render_and_read(renderer, elements, size, transform, [0.0, 0.0, 0.0, 1.0])?;
+    let (w, h, flipped) = render_and_read(
+        renderer,
+        elements,
+        size,
+        transform,
+        scale,
+        [0.0, 0.0, 0.0, 1.0],
+    )?;
     let dir = capture_dir();
     fs::create_dir_all(&dir)?;
     let path = dir.join(format!("capture-{}.png", stamp()));
@@ -104,9 +110,10 @@ pub(crate) fn screenshot(
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
+    scale: f64,
     clear: [f32; 4],
 ) -> std::io::Result<PathBuf> {
-    let (w, h, flipped) = render_and_read(renderer, elements, size, transform, clear)?;
+    let (w, h, flipped) = render_and_read(renderer, elements, size, transform, scale, clear)?;
     let path = screenshot_path()?;
     write_png(&path, w, h, &flipped)?;
     tracing::info!(path = %path.display(), "screenshot saved");
@@ -126,8 +133,14 @@ pub(crate) fn screenshot_region(
     region: Rectangle<i32, Logical>,
     scale: f64,
 ) -> std::io::Result<PathBuf> {
-    let (w, h, rgba) =
-        render_and_read(renderer, elements, size, transform, [0.06, 0.06, 0.09, 1.0])?;
+    let (w, h, rgba) = render_and_read(
+        renderer,
+        elements,
+        size,
+        transform,
+        scale,
+        [0.06, 0.06, 0.09, 1.0],
+    )?;
     let x = (f64::from(region.loc.x) * scale).round() as i32;
     let y = (f64::from(region.loc.y) * scale).round() as i32;
     let width = (f64::from(region.size.w) * scale).round() as i32;
@@ -204,6 +217,7 @@ fn render_and_read(
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
+    scale: f64,
     clear: [f32; 4],
 ) -> std::io::Result<(usize, usize, Vec<u8>)> {
     let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
@@ -217,7 +231,7 @@ fn render_and_read(
     let mut target = renderer
         .bind(&mut offscreen)
         .map_err(|error| std::io::Error::other(format!("bind offscreen failed: {error}")))?;
-    let mut tracker = OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), transform);
+    let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), transform);
     let result = tracker
         .render_output(renderer, &mut target, 0, elements, clear)
         .map_err(|error| std::io::Error::other(format!("offscreen render failed: {error}")))?;
@@ -257,12 +271,15 @@ pub(crate) fn capture_into_buffer(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
+    scale: f64,
     clear: [f32; 4],
     buffer: &WlBuffer,
 ) -> Result<(), String> {
     match buffer_type(buffer) {
-        Some(BufferType::Shm) => capture_into_shm(renderer, elements, size, clear, buffer),
-        Some(BufferType::Dma) => capture_into_dmabuf(renderer, elements, size, clear, buffer),
+        Some(BufferType::Shm) => capture_into_shm(renderer, elements, size, scale, clear, buffer),
+        Some(BufferType::Dma) => {
+            capture_into_dmabuf(renderer, elements, size, scale, clear, buffer)
+        }
         _ => Err("unsupported capture buffer type".into()),
     }
 }
@@ -271,6 +288,7 @@ fn capture_into_dmabuf(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
+    scale: f64,
     clear: [f32; 4],
     buffer: &WlBuffer,
 ) -> Result<(), String> {
@@ -280,8 +298,7 @@ fn capture_into_dmabuf(
     let mut target = renderer
         .bind(&mut dmabuf)
         .map_err(|error| format!("bind dmabuf failed: {error}"))?;
-    let mut tracker =
-        OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), Transform::Flipped);
+    let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Flipped);
     let result = tracker
         .render_output(renderer, &mut target, 0, elements, clear)
         .map_err(|error| format!("capture render failed: {error}"))?;
@@ -297,6 +314,7 @@ fn capture_into_shm(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
+    scale: f64,
     clear: [f32; 4],
     buffer: &WlBuffer,
 ) -> Result<(), String> {
@@ -310,8 +328,7 @@ fn capture_into_shm(
         let mut offscreen: GlesTexture = renderer
             .create_buffer(fourcc, size_buf)
             .map_err(|error| format!("create_buffer failed: {error}"))?;
-        let mut tracker =
-            OutputDamageTracker::new(size, Scale::from((1.0f64, 1.0f64)), Transform::Flipped);
+        let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Flipped);
         {
             let mut target = renderer
                 .bind(&mut offscreen)

@@ -374,7 +374,7 @@ pub fn run() -> Result<(), SessionError> {
         backend.window_size(),
         state.scale.fractional_scale(),
     ));
-    let cursor = Cursors::load(state.scale.fractional_scale().round().max(1.0) as i32);
+    let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
     let track_objects = std::env::var_os("YUKI_TEST_OBJECTS").is_some();
     let mut session = Session {
         loop_handle: loop_handle.clone(),
@@ -892,10 +892,10 @@ pub(crate) fn save_screenshot(
     match request {
         crate::state::ScreenshotRequest::Focused => match state.focused_window() {
             Some(id) => capture_window(state, renderer, id, transform),
-            None => capture_output(renderer, output_elements, output_size, transform),
+            None => capture_output(renderer, output_elements, output_size, transform, scale),
         },
         crate::state::ScreenshotRequest::Output => {
-            capture_output(renderer, output_elements, output_size, transform)
+            capture_output(renderer, output_elements, output_size, transform, scale)
         }
         crate::state::ScreenshotRequest::Window(id) => {
             capture_window(state, renderer, id, transform)
@@ -930,7 +930,14 @@ fn capture_window(
         .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
     let size = rect.size.to_f64().to_physical(scale).to_i32_round();
     let elements = build_window_elements(renderer, &surface, scale);
-    crate::capture::screenshot(renderer, &elements, size, transform, [0.0, 0.0, 0.0, 0.0])
+    crate::capture::screenshot(
+        renderer,
+        &elements,
+        size,
+        transform,
+        scale,
+        [0.0, 0.0, 0.0, 0.0],
+    )
 }
 
 /// Renders the whole output into a screenshot.
@@ -939,8 +946,16 @@ fn capture_output(
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
+    scale: f64,
 ) -> std::io::Result<std::path::PathBuf> {
-    crate::capture::screenshot(renderer, elements, size, transform, [0.06, 0.06, 0.09, 1.0])
+    crate::capture::screenshot(
+        renderer,
+        elements,
+        size,
+        transform,
+        scale,
+        [0.06, 0.06, 0.09, 1.0],
+    )
 }
 
 /// Logs a screenshot result. The success path already logs the saved path.
@@ -986,6 +1001,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 &elements,
                 capture_size,
                 winit_render_transform(),
+                state.scale.fractional_scale(),
             ) {
                 tracing::warn!(%error, "debug capture failed");
             }
@@ -1029,6 +1045,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 renderer,
                 drawn,
                 size,
+                capture_scale,
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {

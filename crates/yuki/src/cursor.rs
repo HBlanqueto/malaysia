@@ -232,19 +232,22 @@ fn load_icon(icon: CursorIcon, scale: i32) -> Option<LoadedCursor> {
     let data = std::iter::once(icon.name())
         .chain(icon.alt_names().iter().copied())
         .find_map(|name| theme_image(name, scale))?;
-    Some(LoadedCursor {
-        buffer: memory_buffer(&data, scale),
-        hotspot: Point::from((data.hot_x, data.hot_y)),
-        size: Size::from((data.width / scale, data.height / scale)),
-    })
+    Some(loaded_cursor(&data, scale))
 }
 
 /// The built-in arrow, as an uploadable buffer.
 fn builtin_cursor(scale: i32) -> LoadedCursor {
-    let data = fallback_image();
+    loaded_cursor(&fallback_image(), scale)
+}
+
+/// Turns a theme image loaded for `scale` physical pixels per logical pixel
+/// into a buffer plus logical hotspot and size.
+fn loaded_cursor(data: &ImageData, scale: i32) -> LoadedCursor {
     LoadedCursor {
-        buffer: memory_buffer(&data, scale),
-        hotspot: Point::from((data.hot_x, data.hot_y)),
+        buffer: memory_buffer(data, scale),
+        // The theme stores the hotspot in the loaded image's pixels; the rest
+        // of the compositor works in logical coordinates.
+        hotspot: Point::from((data.hot_x / scale, data.hot_y / scale)),
         size: Size::from((data.width / scale, data.height / scale)),
     }
 }
@@ -316,7 +319,8 @@ smithay::render_elements! {
 
 #[cfg(test)]
 mod tests {
-    use super::fallback_image;
+    use super::{ImageData, fallback_image, loaded_cursor};
+    use smithay::utils::{Point, Size};
 
     #[test]
     fn the_fallback_image_is_a_full_rgba_buffer() {
@@ -325,6 +329,20 @@ mod tests {
             image.pixels.len(),
             (image.width * image.height * 4) as usize
         );
+    }
+
+    #[test]
+    fn a_cursor_loaded_at_2x_has_a_logical_hotspot_and_size() {
+        let data = ImageData {
+            pixels: vec![0; 48 * 48 * 4],
+            width: 48,
+            height: 48,
+            hot_x: 18,
+            hot_y: 12,
+        };
+        let cursor = loaded_cursor(&data, 2);
+        assert_eq!(cursor.hotspot, Point::from((9, 6)));
+        assert_eq!(cursor.size, Size::from((24, 24)));
     }
 
     #[test]

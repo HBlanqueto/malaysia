@@ -239,7 +239,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
-    let cursor = Cursors::load(state.scale.fractional_scale().round().max(1.0) as i32);
+    let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
     let mut udev = Udev {
         loop_handle: loop_handle.clone(),
         display,
@@ -534,9 +534,13 @@ impl Udev {
                 // The capture re-renders offscreen and then flips the GL
                 // readback; Flipped180 keeps it upright, as in winit.
                 let transform = smithay::utils::Transform::Flipped180;
-                if let Err(error) =
-                    crate::capture::capture_output(&mut self.renderer, &elements, size, transform)
-                {
+                if let Err(error) = crate::capture::capture_output(
+                    &mut self.renderer,
+                    &elements,
+                    size,
+                    transform,
+                    self.state.scale.fractional_scale(),
+                ) {
                     warn!(%error, "debug capture failed");
                 }
             }
@@ -581,6 +585,7 @@ impl Udev {
                 &mut self.renderer,
                 drawn,
                 size,
+                capture_scale,
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {

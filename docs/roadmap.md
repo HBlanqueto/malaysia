@@ -310,8 +310,9 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
 - **Bloque 9 — parcial.** `State::scale` sustituye el literal global; la escala
   entera y fraccionaria llega a `wl_output`, render, damage tracker, cursor y
   shell, y `display.scale` es persistente (`YUKI_SCALE` es el override de
-  desarrollo). Faltan la aceptación en panel a 1.25/1.5 y la escala por salida
-  de 8b. Ver `bloques/09-escala-fraccional.md`.
+  desarrollo). Verificado en anidado a 1.25/1.5/2.0, incluidas capturas y
+  cursor. Faltan la aceptación en panel a 1.25/1.5 y la escala por salida de
+  8b. Ver `bloques/09-escala-fraccional.md`.
 - **Bloque 10 — implementado y aceptado.** PAM en el proceso del lock, UI de
   contraseña, auto-lock por `ext-idle-notify-v1` con
   `zwp_idle_inhibit_manager_v1`, recuperación del lock con backoff y límite de

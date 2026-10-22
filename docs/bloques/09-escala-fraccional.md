@@ -18,6 +18,13 @@ aceptación en el panel real y la escala por salida de 8b.
   (`wp_viewport: out_of_buffer`).
 - `FractionalScaleHandler` envía `preferred_scale` exacto a cada superficie.
 - Test unitario de parseo/clamp de `display.scale` y del override `YUKI_SCALE`.
+- Las capturas offscreen (debug `SIGUSR1`, guardado a Escritorio y
+  `ext-image-copy-capture-v1`) usan la escala de la salida en su damage
+  tracker. Antes estaba fijada a 1.0 y a 1.5 el frame solo ocupaba la esquina
+  lógica superior izquierda.
+- El cursor se carga a `ceil(scale)` y su hotspot se convierte de píxeles de la
+  imagen a coordenadas lógicas; antes a 2× el hotspot del tema se restaba dos
+  veces.
 
 ## Pendiente
 
@@ -55,11 +62,26 @@ shell. El puntero debe caer en el mismo píxel que se ve y la captura por
 
 - `YUKI_SCALE=1.25`, `1.5` y `2.0` con `yuki-shell wallpaper/menubar/dock`:
   sin `wp_viewport` ni error de protocolo; los tres procesos siguen vivos.
-- `YUKI_SCALE=1.5 ./dev.sh smoke`: PASS.
+- `YUKI_SCALE=1.5 ./dev.sh smoke`, `screencopy` y `screencopy-window`: PASS.
+- Captura `SIGUSR1` a 1.5 con `foot` (cliente sin fractional-scale) y
+  `yuki-shell wallpaper/menubar` (con viewporter): frame completo de 1280×800,
+  la menubar cruza todo el ancho y el wallpaper ya no queda recortado.
+- Región a 1.5 (`YUKI_TEST_SCREENSHOT=region`): PNG de 450×300 (300×200
+  lógicos), el rectángulo correcto.
 - `smoke`, `block4`, `move` y `decoration` a escala 1: PASS.
 - `./dev.sh check` y `nix build .#default`: PASS.
 
 Falta la comprobación visual en el panel real (nitidez, cursor y alineación).
+
+## Arreglado al verificar la aceptación (2026-10-21)
+
+- `SIGUSR1` y `SIGTERM` no llegaban al manejador: calloop bloquea las señales
+  solo en el hilo principal y los hilos del renderer las tenían
+  desbloqueadas, así que el kernel se las entregaba a ellos (muerte directa y
+  captura perdida). `main` las bloquea antes de crear ningún hilo, de modo que
+  todos heredan la máscara.
+- Las capturas a escala fraccional renderizaban los elementos a 1× (tracker
+  con escala 1.0): ahora usan la escala real.
 
 ## Comparación con macOS
 
@@ -75,4 +97,6 @@ este bloque.
 
 - `wl_output.scale` es entero; para 1.5 se anuncia `advertised_integer = 1` y
   los clientes que lo soportan usan `wp_fractional_scale_v1`.
-- El cursor se carga a la escala entera redondeada para no quedar borroso.
+- El cursor se carga a la escala entera **hacia arriba** (`ceil`) para no
+  quedar borroso, y el hotspot del tema se pasa de píxeles de la imagen a
+  coordenadas lógicas (antes a 2× quedaba desplazado).
