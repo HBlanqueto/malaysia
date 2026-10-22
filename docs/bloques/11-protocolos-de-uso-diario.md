@@ -53,18 +53,32 @@ protocolos y la captura.
   compositor dibuja solo la superficie del cliente, a su tamaño usable. Probe:
   `./dev.sh screencopy-window`.
 
-- **PrintScreen**: guarda una captura de la **ventana con foco** (o de la
-  salida si no hay ninguna) en el Escritorio del usuario. El destino sale de
-  `yuki::xdg::desktop_dir()` (XDG user-dirs, nombre localizado: Escritorio,
-  Desktop, Schreibtisch…), nunca de un literal. Escribe
-  `Screenshot-<epoch-ms>.png` con fondo transparente. Para pruebas,
-  `YUKI_TEST_SCREENSHOT=1` dispara la captura al mapear la primera ventana y
-  `YUKI_SCREENSHOT_DIR` redirige el guardado (así la verificación no toca el
-  Escritorio real).
+- **Capturas al estilo macOS** (Command = Super en Linux):
+  - `Shift+Super+3`: captura la **pantalla completa**.
+  - `Shift+Super+4`: el puntero pasa a cruz; arrastra para seleccionar una
+    **región** y suelta para capturarla. `Esc` cancela. La selección se ve con
+    el exterior atenuado y un borde blanco.
+  - `Shift+Super+4`, luego `Espacio`: modo **ventana**; al pasar el puntero se
+    resalta la ventana y un clic la captura.
+  - `PrintScreen`: atajo extra que captura la **ventana con foco** (o la salida
+    si no hay ninguna).
+  - El destino es el Escritorio del usuario vía `yuki::xdg::desktop_dir()`
+    (XDG user-dirs, nombre localizado: Escritorio, Desktop, Schreibtisch…),
+    nunca un literal. El archivo se llama
+    `Screenshot AAAA-MM-DD at HH.MM.SS.png` (con ` (2)`, ` (3)` si coincide en
+    el mismo segundo); fondo transparente en ventana, opaco en salida/región.
+  - Para pruebas, `YUKI_TEST_SCREENSHOT=1` captura la ventana enfocada al
+    mapear la primera ventana, `YUKI_TEST_SCREENSHOT=region` captura un
+    rectángulo fijo (100,100 300×200) y `YUKI_SCREENSHOT_DIR` redirige el
+    guardado (así la verificación no toca el Escritorio real).
 
 ## Pendiente
 
 - El portal `Screenshot`/`ScreenCast` del Bloque 12 sobre esta captura.
+- Del flujo macOS faltan: la app de `Shift+Super+5` (temporizador, opciones,
+  destino, miniatura flotante), copiar al portapapeles con `Control`, mover la
+  selección con Espacio mientras se arrastra, excluir la sombra con `Option` y
+  que la captura de salida/región omita el puntero por defecto.
 - Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.
 
 ## Aceptación pendiente
@@ -93,6 +107,8 @@ protocolos y la captura.
 - PrintScreen probado con `YUKI_TEST_SCREENSHOT=1` y `YUKI_SCREENSHOT_DIR`:
   PNG RGBA de la ventana (1248×800 con foot), contenido correcto y guardado en
   el directorio indicado.
+- Región probada con `YUKI_TEST_SCREENSHOT=region`: PNG de 300×200, el
+  rectángulo exacto pedido.
 
 ## Notas
 

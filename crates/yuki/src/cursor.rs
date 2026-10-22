@@ -29,6 +29,7 @@ use smithay::backend::renderer::ImportMem;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::input::pointer::CursorIcon;
 use smithay::utils::{Logical, Point, Size, Transform};
@@ -310,6 +311,7 @@ smithay::render_elements! {
     pub(crate) OutputRenderElement<R> where R: ImportAll + ImportMem;
     Surface = WaylandSurfaceRenderElement<R>,
     Memory = MemoryRenderBufferRenderElement<R>,
+    Solid = SolidColorRenderElement,
 }
 
 #[cfg(test)]

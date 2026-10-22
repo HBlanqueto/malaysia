@@ -541,7 +541,7 @@ impl Udev {
                 }
             }
         }
-        if let (true, Some(mode)) = (
+        if let (Some(request), Some(mode)) = (
             self.state.take_screenshot_request(),
             self.output.current_mode(),
         ) {
@@ -552,6 +552,7 @@ impl Udev {
                 &elements,
                 size,
                 Transform::Flipped180,
+                request,
             ));
         }
         let capture_scale = self.state.scale.fractional_scale();

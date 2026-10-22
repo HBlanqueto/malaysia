@@ -27,7 +27,7 @@ use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::drm::DrmDeviceFd;
-use smithay::input::pointer::CursorImageStatus;
+use smithay::input::pointer::{CursorIcon, CursorImageStatus};
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopSignal;
@@ -289,9 +289,36 @@ pub struct State {
     pub(crate) test_press: Option<TestPress>,
     /// Test-only: the window left behind by `YUKI_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
-    /// PrintScreen asked for a screenshot of the focused window; the backend
-    /// renders it on the next frame.
-    pub(crate) screenshot_requested: bool,
+    /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
+    /// backend renders it on the next frame.
+    pub(crate) screenshot: Option<ScreenshotRequest>,
+    /// The interactive screenshot mode (region or window pick), if any.
+    pub(crate) screenshot_mode: Option<ScreenshotMode>,
+}
+
+/// What a queued screenshot should capture.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ScreenshotRequest {
+    /// The focused window, or the output when none is focused.
+    Focused,
+    /// The whole output.
+    Output,
+    /// One window by id.
+    Window(WindowId),
+    /// A rectangle of the output, in logical coordinates.
+    Region(Rectangle<i32, Logical>),
+}
+
+/// The interactive screenshot mode.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ScreenshotMode {
+    /// Shift+Super+4: drag a rectangle. `start` is `None` until the press.
+    Region {
+        start: Option<Point<f64, Logical>>,
+        current: Point<f64, Logical>,
+    },
+    /// Shift+Super+4 then Space: click a window.
+    Window { under: Option<WindowId> },
 }
 
 impl State {
@@ -473,7 +500,8 @@ impl State {
             grab: None,
             test_press: None,
             leaked_window: None,
-            screenshot_requested: false,
+            screenshot: None,
+            screenshot_mode: None,
         })
     }
 
@@ -519,21 +547,21 @@ impl State {
         self.capture_sessions.push(session);
     }
 
-    /// PrintScreen: screenshot the focused window on the next render pass.
+    /// Queues a screenshot for the next render pass.
     ///
-    /// Blocked while locked: the lock surface is not a window to save.
-    pub(crate) fn request_screenshot(&mut self) {
+    /// Blocked while locked: the lock surface is not something to save.
+    pub(crate) fn request_screenshot(&mut self, request: ScreenshotRequest) {
         if self.locked {
             tracing::info!("screenshot ignored: the session is locked");
             return;
         }
-        self.screenshot_requested = true;
+        self.screenshot = Some(request);
         self.request_redraw();
     }
 
     /// Takes the pending screenshot request, clearing it.
-    pub(crate) fn take_screenshot_request(&mut self) -> bool {
-        std::mem::take(&mut self.screenshot_requested)
+    pub(crate) fn take_screenshot_request(&mut self) -> Option<ScreenshotRequest> {
+        self.screenshot.take()
     }
 
     /// The window that currently holds keyboard focus, if any.
@@ -543,6 +571,103 @@ impl State {
             .get_keyboard()
             .and_then(|keyboard| keyboard.current_focus())?;
         self.windows.id_of(&surface)
+    }
+
+    /// Shift+Super+4: start dragging a region.
+    pub(crate) fn start_region_screenshot(&mut self) {
+        if self.locked {
+            return;
+        }
+        let current = self.seat.get_pointer().map_or_else(
+            || Point::from((0.0, 0.0)),
+            |pointer| pointer.current_location(),
+        );
+        self.screenshot_mode = Some(ScreenshotMode::Region {
+            start: None,
+            current,
+        });
+        self.cursor_status = CursorImageStatus::Named(CursorIcon::Crosshair);
+        self.request_redraw();
+    }
+
+    /// Shift+Super+4 then Space: pick a window under the pointer.
+    pub(crate) fn start_window_screenshot(&mut self) {
+        if self.locked || !matches!(self.screenshot_mode, Some(ScreenshotMode::Region { .. })) {
+            return;
+        }
+        self.screenshot_mode = Some(ScreenshotMode::Window { under: None });
+        self.cursor_status = CursorImageStatus::Named(CursorIcon::Default);
+        self.request_redraw();
+    }
+
+    /// Esc: leave the interactive mode without capturing.
+    pub(crate) fn cancel_screenshot(&mut self) {
+        if self.screenshot_mode.take().is_some() {
+            self.cursor_status = CursorImageStatus::Named(CursorIcon::Default);
+            self.request_redraw();
+        }
+    }
+
+    /// The interactive screenshot mode, if any.
+    pub(crate) fn screenshot_mode(&self) -> Option<&ScreenshotMode> {
+        self.screenshot_mode.as_ref()
+    }
+
+    /// Tracks the pointer in the interactive mode. Returns whether it consumed
+    /// the motion (and so must not reach a client).
+    pub(crate) fn screenshot_pointer_motion(&mut self, location: Point<f64, Logical>) -> bool {
+        match self.screenshot_mode.as_mut() {
+            Some(ScreenshotMode::Region { current, .. }) => *current = location,
+            Some(ScreenshotMode::Window { under }) => {
+                *under = self.windows.window_under(location);
+            }
+            None => return false,
+        }
+        self.request_redraw();
+        true
+    }
+
+    /// Press in the interactive mode: start a region or pick the hovered window.
+    pub(crate) fn screenshot_pointer_press(&mut self, location: Point<f64, Logical>) -> bool {
+        let pick = match self.screenshot_mode.as_mut() {
+            Some(ScreenshotMode::Region { start, current }) => {
+                *start = Some(location);
+                *current = location;
+                None
+            }
+            Some(ScreenshotMode::Window { under }) => under.take(),
+            None => return false,
+        };
+        if let Some(id) = pick {
+            self.finish_screenshot(ScreenshotRequest::Window(id));
+        }
+        true
+    }
+
+    /// Release in the interactive mode: finish the dragged region, if any.
+    pub(crate) fn screenshot_pointer_release(&mut self, location: Point<f64, Logical>) -> bool {
+        let rect = match self.screenshot_mode.as_mut() {
+            Some(ScreenshotMode::Region {
+                start: Some(start),
+                current,
+            }) => {
+                *current = location;
+                Some(region_rect(*start, *current, self.logical_output_size()))
+            }
+            Some(_) => None,
+            None => return false,
+        };
+        if let Some(rect) = rect.filter(|rect| rect.size.w > 0 && rect.size.h > 0) {
+            self.finish_screenshot(ScreenshotRequest::Region(rect));
+        }
+        true
+    }
+
+    fn finish_screenshot(&mut self, request: ScreenshotRequest) {
+        self.screenshot = Some(request);
+        self.screenshot_mode = None;
+        self.cursor_status = CursorImageStatus::Named(CursorIcon::Default);
+        self.request_redraw();
     }
 
     /// Asks the DRM backend to switch to virtual terminal `vt`.
@@ -670,6 +795,23 @@ impl State {
             Size::from((full.w, (full.h - top - bottom).max(0))),
         )
     }
+}
+
+/// The rectangle between two pointer points, clamped to the output.
+pub(crate) fn region_rect(
+    start: Point<f64, Logical>,
+    current: Point<f64, Logical>,
+    output: Size<i32, Logical>,
+) -> Rectangle<i32, Logical> {
+    let x0 = start.x.min(current.x).round() as i32;
+    let y0 = start.y.min(current.y).round() as i32;
+    let x1 = start.x.max(current.x).round() as i32;
+    let y1 = start.y.max(current.y).round() as i32;
+    let x0 = x0.clamp(0, output.w);
+    let y0 = y0.clamp(0, output.h);
+    let x1 = x1.clamp(x0, output.w);
+    let y1 = y1.clamp(y0, output.h);
+    Rectangle::new(Point::from((x0, y0)), Size::from((x1 - x0, y1 - y0)))
 }
 
 /// The pointer scale at `elapsed` after a shake: an ease-out growth followed
@@ -871,6 +1013,27 @@ mod tests {
         assert!(!boost_animation_active(Duration::from_millis(
             grow + shrink
         )));
+    }
+
+    #[test]
+    fn the_screenshot_region_is_normalized_and_clamped() {
+        let output = Size::from((1280, 800));
+        // Dragged backwards: the rect is normalized.
+        let rect = region_rect(
+            Point::from((300.0, 200.0)),
+            Point::from((100.0, 50.0)),
+            output,
+        );
+        assert_eq!(rect.loc, Point::from((100, 50)));
+        assert_eq!(rect.size, Size::from((200, 150)));
+        // Dragged past the output: clamped to it.
+        let rect = region_rect(
+            Point::from((1200.0, 700.0)),
+            Point::from((1400.0, 900.0)),
+            output,
+        );
+        assert_eq!(rect.loc, Point::from((1200, 700)));
+        assert_eq!(rect.size, Size::from((80, 100)));
     }
 
     #[test]

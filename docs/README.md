@@ -120,7 +120,8 @@ floor/ceil; pendiente panel y escala por salida. El **Bloque 10** está implemen
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 `wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate,
 `pointer-constraints` + `relative-pointer`, la captura de salida y de ventana y
-la tecla PrintScreen (guarda en el Escritorio XDG). El **Bloque 12** (portales y servicios de escritorio) está
+las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG).
+El **Bloque 12** (portales y servicios de escritorio) está
 planificado y depende de la captura del Bloque 11. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y

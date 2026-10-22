@@ -24,7 +24,7 @@ use smithay::input::pointer::{
 };
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Point, SERIAL_COUNTER, Serial};
+use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_constraint};
 use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
@@ -32,7 +32,7 @@ use xkbcommon::xkb::{self, keysyms};
 use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
 
-use crate::state::{Grab, State, TestPress};
+use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 use crate::window::RESIZE_BORDER;
 
 /// The Linux button code for the primary pointer button.
@@ -164,6 +164,10 @@ enum CompositorShortcut {
     Relock,
     /// PrintScreen: save a screenshot of the focused window.
     Screenshot,
+    /// Shift+Super+3: capture the whole output.
+    ScreenshotFull,
+    /// Shift+Super+4: drag a region (then optionally Space for a window).
+    ScreenshotRegion,
     /// Not a compositor shortcut.
     None,
 }
@@ -171,9 +175,21 @@ enum CompositorShortcut {
 fn compositor_shortcut(
     ctrl: bool,
     alt: bool,
+    shift: bool,
+    logo: bool,
     syms: &[xkb::Keysym],
     locked: bool,
 ) -> CompositorShortcut {
+    // macOS shape: Shift+Super+3 whole screen, Shift+Super+4 a region.
+    if shift && logo {
+        for sym in syms {
+            match u32::from(*sym) {
+                0x33 => return CompositorShortcut::ScreenshotFull, // '3'
+                0x34 => return CompositorShortcut::ScreenshotRegion, // '4'
+                _ => {}
+            }
+        }
+    }
     // PrintScreen works on its own, so it is checked before the modifier gate.
     if syms.iter().any(|sym| u32::from(*sym) == keysyms::KEY_Print) {
         return CompositorShortcut::Screenshot;
@@ -234,6 +250,23 @@ impl State {
                         serial,
                         time,
                         |state, mods, keysym| {
+                            // While picking a screenshot region or window, the
+                            // keyboard belongs to the screenshot: Esc cancels and
+                            // Space switches from region to window pick.
+                            if state.screenshot_mode().is_some() {
+                                if pressed {
+                                    for sym in keysym.raw_syms() {
+                                        match u32::from(sym) {
+                                            keysyms::KEY_Escape => state.cancel_screenshot(),
+                                            keysyms::KEY_space => {
+                                                state.start_window_screenshot()
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                return FilterResult::Intercept(());
+                            }
                             // Compositor shortcuts are consumed here: the
                             // focused client must not see Ctrl+Alt+F*,
                             // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
@@ -242,6 +275,8 @@ impl State {
                             match compositor_shortcut(
                                 mods.ctrl,
                                 mods.alt,
+                                mods.shift,
+                                mods.logo,
                                 &keysym.raw_syms(),
                                 state.locked,
                             ) {
@@ -280,7 +315,23 @@ impl State {
                                                 tracing::info!(
                                                     "PrintScreen: screenshotting the focused window"
                                                 );
-                                                state.request_screenshot();
+                                                state.request_screenshot(
+                                                    ScreenshotRequest::Focused,
+                                                );
+                                            }
+                                            CompositorShortcut::ScreenshotFull => {
+                                                tracing::info!(
+                                                    "Shift+Super+3: screenshotting the output"
+                                                );
+                                                state.request_screenshot(
+                                                    ScreenshotRequest::Output,
+                                                );
+                                            }
+                                            CompositorShortcut::ScreenshotRegion => {
+                                                tracing::info!(
+                                                    "Shift+Super+4: selecting a screenshot region"
+                                                );
+                                                state.start_region_screenshot();
                                             }
                                             CompositorShortcut::None => {}
                                         }
@@ -306,19 +357,45 @@ impl State {
                 let location = event
                     .position_transformed(self.logical_output_size())
                     .to_f64();
+                if self.screenshot_mode().is_some() {
+                    if let Some(pointer) = self.seat.get_pointer() {
+                        pointer.set_location(location);
+                    }
+                    self.screenshot_pointer_motion(location);
+                    return;
+                }
                 self.pointer_motion(location, event.time());
             }
             InputEvent::PointerMotion { event, .. } => {
                 let Some(pointer) = self.seat.get_pointer() else {
                     return;
                 };
-                let location = pointer.current_location() + event.delta();
-                self.pointer_motion(
-                    clamp_pointer(location, self.logical_output_size()),
-                    event.time(),
+                let location = clamp_pointer(
+                    pointer.current_location() + event.delta(),
+                    self.logical_output_size(),
                 );
+                if self.screenshot_mode().is_some() {
+                    if let Some(pointer) = self.seat.get_pointer() {
+                        pointer.set_location(location);
+                    }
+                    self.screenshot_pointer_motion(location);
+                    return;
+                }
+                self.pointer_motion(location, event.time());
             }
             InputEvent::PointerButton { event, .. } => {
+                if self.screenshot_mode().is_some() {
+                    let location = self.seat.get_pointer().map_or_else(
+                        || Point::from((0.0, 0.0)),
+                        |pointer| pointer.current_location(),
+                    );
+                    if event.state() == ButtonState::Pressed {
+                        self.screenshot_pointer_press(location);
+                    } else {
+                        self.screenshot_pointer_release(location);
+                    }
+                    return;
+                }
                 let serial = SERIAL_COUNTER.next_serial();
                 let button = event.button_code();
                 let state = event.state();
@@ -352,6 +429,9 @@ impl State {
                 }
             }
             InputEvent::PointerAxis { event, .. } => {
+                if self.screenshot_mode().is_some() {
+                    return;
+                }
                 self.pointer_axis(&event);
             }
             _ => {}
@@ -688,10 +768,18 @@ impl State {
     /// Only when `YUKI_TEST_SCREENSHOT` is set. With `YUKI_SCREENSHOT_DIR` it
     /// lets a check exercise the PrintScreen path without the real key.
     pub(crate) fn inject_test_screenshot(&mut self) {
-        if std::env::var_os("YUKI_TEST_SCREENSHOT").is_none() {
+        let Ok(mode) = std::env::var("YUKI_TEST_SCREENSHOT") else {
             return;
-        }
-        self.request_screenshot();
+        };
+        let request = if mode == "region" {
+            ScreenshotRequest::Region(Rectangle::new(
+                Point::from((100, 100)),
+                Size::from((300, 200)),
+            ))
+        } else {
+            ScreenshotRequest::Focused
+        };
+        self.request_screenshot(request);
     }
 
     /// Test-only: inject a rapid left-right motion that trips the shake
@@ -1078,11 +1166,11 @@ mod tests {
     fn ctrl_alt_backspace_quits_only_when_unlocked() {
         let backspace = [keysyms::KEY_BackSpace.into()];
         assert_eq!(
-            compositor_shortcut(true, true, &backspace, false),
+            compositor_shortcut(true, true, false, false, &backspace, false),
             CompositorShortcut::Quit
         );
         assert_eq!(
-            compositor_shortcut(true, true, &backspace, true),
+            compositor_shortcut(true, true, false, false, &backspace, true),
             CompositorShortcut::Blocked
         );
     }
@@ -1091,15 +1179,15 @@ mod tests {
     fn ctrl_alt_l_locks_or_relaunches() {
         let l = [keysyms::KEY_L.into()];
         assert_eq!(
-            compositor_shortcut(true, true, &l, false),
+            compositor_shortcut(true, true, false, false, &l, false),
             CompositorShortcut::Relock
         );
         assert_eq!(
-            compositor_shortcut(true, true, &l, true),
+            compositor_shortcut(true, true, false, false, &l, true),
             CompositorShortcut::Relock
         );
         assert_eq!(
-            compositor_shortcut(false, true, &l, false),
+            compositor_shortcut(false, true, false, false, &l, false),
             CompositorShortcut::None
         );
     }
@@ -1108,15 +1196,15 @@ mod tests {
     fn ctrl_alt_f_keys_request_their_vt() {
         let f2 = [keysyms::KEY_F2.into()];
         assert_eq!(
-            compositor_shortcut(true, true, &f2, false),
+            compositor_shortcut(true, true, false, false, &f2, false),
             CompositorShortcut::Vt(2)
         );
         assert_eq!(
-            compositor_shortcut(true, true, &f2, true),
+            compositor_shortcut(true, true, false, false, &f2, true),
             CompositorShortcut::Vt(2)
         );
         assert_eq!(
-            compositor_shortcut(false, true, &f2, false),
+            compositor_shortcut(false, true, false, false, &f2, false),
             CompositorShortcut::None
         );
     }
@@ -1171,18 +1259,37 @@ mod tests {
     fn print_screen_maps_to_the_screenshot_shortcut() {
         let print = xkb::Keysym::new(keysyms::KEY_Print);
         assert!(matches!(
-            compositor_shortcut(false, false, &[print], false),
+            compositor_shortcut(false, false, false, false, &[print], false),
             CompositorShortcut::Screenshot
         ));
         // It works with modifiers too, and never shadows Ctrl+Alt+L.
         assert!(matches!(
-            compositor_shortcut(true, false, &[print], false),
+            compositor_shortcut(true, false, false, false, &[print], false),
             CompositorShortcut::Screenshot
         ));
         let l = xkb::Keysym::new(keysyms::KEY_L);
         assert!(matches!(
-            compositor_shortcut(true, true, &[l], false),
+            compositor_shortcut(true, true, false, false, &[l], false),
             CompositorShortcut::Relock
+        ));
+    }
+
+    #[test]
+    fn macos_shift_super_keys_map_to_the_screenshot_modes() {
+        let three = xkb::Keysym::new(0x33);
+        let four = xkb::Keysym::new(0x34);
+        assert!(matches!(
+            compositor_shortcut(false, false, true, true, &[three], false),
+            CompositorShortcut::ScreenshotFull
+        ));
+        assert!(matches!(
+            compositor_shortcut(false, false, true, true, &[four], false),
+            CompositorShortcut::ScreenshotRegion
+        ));
+        // Without Super (Command) it is not a compositor shortcut.
+        assert!(matches!(
+            compositor_shortcut(false, false, true, false, &[three], false),
+            CompositorShortcut::None
         ));
     }
 

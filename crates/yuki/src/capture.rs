@@ -23,7 +23,7 @@ use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::{Bind, BufferType, ExportMem, ImportDma, Offscreen, buffer_type};
 use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
 use smithay::reexports::wayland_server::protocol::wl_shm;
-use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size, Transform};
+use smithay::utils::{Buffer as BufferCoord, Logical, Physical, Rectangle, Scale, Size, Transform};
 use smithay::wayland::dmabuf::get_dmabuf;
 use smithay::wayland::image_copy_capture::Frame;
 use smithay::wayland::shm::with_buffer_contents_mut;
@@ -107,15 +107,71 @@ pub(crate) fn screenshot(
     clear: [f32; 4],
 ) -> std::io::Result<PathBuf> {
     let (w, h, flipped) = render_and_read(renderer, elements, size, transform, clear)?;
-    // `YUKI_SCREENSHOT_DIR` is a test seam (like `YUKI_SCALE`): it redirects
-    // the save so a check does not touch the user's real Desktop.
+    let path = screenshot_path()?;
+    write_png(&path, w, h, &flipped)?;
+    tracing::info!(path = %path.display(), "screenshot saved");
+    Ok(path)
+}
+
+/// Saves a rectangular crop of the output to the user's Desktop.
+///
+/// The whole output is rendered and then cropped, so the region sees exactly
+/// what is on screen. `region` is in logical coordinates; `scale` converts it
+/// to the physical pixels of the rendered buffer.
+pub(crate) fn screenshot_region(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    transform: Transform,
+    region: Rectangle<i32, Logical>,
+    scale: f64,
+) -> std::io::Result<PathBuf> {
+    let (w, h, rgba) =
+        render_and_read(renderer, elements, size, transform, [0.06, 0.06, 0.09, 1.0])?;
+    let x = (f64::from(region.loc.x) * scale).round() as i32;
+    let y = (f64::from(region.loc.y) * scale).round() as i32;
+    let width = (f64::from(region.size.w) * scale).round() as i32;
+    let height = (f64::from(region.size.h) * scale).round() as i32;
+    let x = x.clamp(0, w as i32);
+    let y = y.clamp(0, h as i32);
+    let width = width.min(w as i32 - x);
+    let height = height.min(h as i32 - y);
+    if width <= 0 || height <= 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "empty screenshot region",
+        ));
+    }
+    let row_bytes = width as usize * 4;
+    let mut cropped = Vec::with_capacity(row_bytes * height as usize);
+    for row in y as usize..(y + height) as usize {
+        let start = (row * w + x as usize) * 4;
+        cropped.extend_from_slice(&rgba[start..start + row_bytes]);
+    }
+    let path = screenshot_path()?;
+    write_png(&path, width as usize, height as usize, &cropped)?;
+    tracing::info!(path = %path.display(), "screenshot saved");
+    Ok(path)
+}
+
+/// `Screenshot <date> at <time>.png` in the XDG Desktop directory.
+///
+/// `YUKI_SCREENSHOT_DIR` is a test seam (like `YUKI_SCALE`): it redirects the
+/// save so a check does not touch the user's real Desktop. A name already taken
+/// (two captures in the same second) gets a ` (2)`, ` (3)` suffix.
+fn screenshot_path() -> std::io::Result<PathBuf> {
     let dir = std::env::var_os("YUKI_SCREENSHOT_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(crate::xdg::desktop_dir);
     fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("Screenshot-{}.png", stamp()));
-    write_png(&path, w, h, &flipped)?;
-    tracing::info!(path = %path.display(), "screenshot saved");
+    let now = chrono::Local::now();
+    let base = now.format("Screenshot %Y-%m-%d at %H.%M.%S").to_string();
+    let mut path = dir.join(format!("{base}.png"));
+    let mut sequence = 2;
+    while path.exists() {
+        path = dir.join(format!("{base} ({sequence}).png"));
+        sequence += 1;
+    }
     Ok(path)
 }
 

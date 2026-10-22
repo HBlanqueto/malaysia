@@ -26,6 +26,7 @@ use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
+use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
@@ -58,6 +59,7 @@ use smithay::wayland::socket::ListeningSocketSource;
 
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
+use crate::state::{ScreenshotMode, region_rect};
 
 /// Failures that can stop the session from starting.
 #[derive(Debug, thiserror::Error)]
@@ -608,6 +610,156 @@ fn redraw(session: &mut Session) {
     }
 }
 
+/// Draws the screenshot selection: a dimmed outside, a rectangle border, or a
+/// window highlight while picking one.
+fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderElement<GlesRenderer>>) {
+    let Some(mode) = state.screenshot_mode() else {
+        return;
+    };
+    let scale = state.scale.fractional_scale();
+    let output = state.logical_output_size();
+    match mode {
+        ScreenshotMode::Region {
+            start: Some(start),
+            current,
+        } => {
+            let rect = region_rect(*start, *current, output);
+            append_dim_outside(rect, output, scale, elements);
+            append_border(rect, scale, elements);
+        }
+        ScreenshotMode::Region { start: None, .. } => {
+            // A light dim says "the next drag selects"; the crosshair points.
+            append_solid(
+                Point::from((0, 0)),
+                output,
+                [0.0, 0.0, 0.0, 0.15],
+                scale,
+                elements,
+            );
+        }
+        ScreenshotMode::Window { under: Some(id) } => {
+            if let Some(outer) = state.windows.outer(*id) {
+                let rect = Rectangle::new(
+                    Point::from((outer.x().round() as i32, outer.y().round() as i32)),
+                    Size::from((outer.width().round() as i32, outer.height().round() as i32)),
+                );
+                append_dim_outside(rect, output, scale, elements);
+                append_border(rect, scale, elements);
+            }
+        }
+        ScreenshotMode::Window { under: None } => {}
+    }
+}
+
+/// Dims everything outside `rect`.
+fn append_dim_outside(
+    rect: Rectangle<i32, Logical>,
+    output: Size<i32, Logical>,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+) {
+    let dim = [0.0, 0.0, 0.0, 0.35];
+    let left = rect.loc.x.clamp(0, output.w);
+    let top = rect.loc.y.clamp(0, output.h);
+    let right = (rect.loc.x + rect.size.w).clamp(left, output.w);
+    let bottom = (rect.loc.y + rect.size.h).clamp(top, output.h);
+    append_solid(
+        Point::from((0, 0)),
+        Size::from((output.w, top)),
+        dim,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((0, bottom)),
+        Size::from((output.w, output.h - bottom)),
+        dim,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((0, top)),
+        Size::from((left, bottom - top)),
+        dim,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((right, top)),
+        Size::from((output.w - right, bottom - top)),
+        dim,
+        scale,
+        elements,
+    );
+}
+
+/// Draws a thin white border around `rect`.
+fn append_border(
+    rect: Rectangle<i32, Logical>,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+) {
+    const BORDER: i32 = 1;
+    let color = [1.0, 1.0, 1.0, 0.9];
+    let (x, y) = (rect.loc.x, rect.loc.y);
+    let (w, h) = (rect.size.w, rect.size.h);
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    append_solid(
+        Point::from((x, y)),
+        Size::from((w, BORDER)),
+        color,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((x, y + h - BORDER)),
+        Size::from((w, BORDER)),
+        color,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((x, y + BORDER)),
+        Size::from((BORDER, h - 2 * BORDER)),
+        color,
+        scale,
+        elements,
+    );
+    append_solid(
+        Point::from((x + w - BORDER, y + BORDER)),
+        Size::from((BORDER, h - 2 * BORDER)),
+        color,
+        scale,
+        elements,
+    );
+}
+
+/// Pushes one solid-colour rectangle as a render element.
+fn append_solid(
+    location: Point<i32, Logical>,
+    size: Size<i32, Logical>,
+    color: [f32; 4],
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+) {
+    if size.w <= 0 || size.h <= 0 {
+        return;
+    }
+    let buffer = SolidColorBuffer::new(size, color);
+    elements.push(
+        SolidColorRenderElement::from_buffer(
+            &buffer,
+            physical_point(location, scale),
+            scale,
+            1.0,
+            Kind::Unspecified,
+        )
+        .into(),
+    );
+}
+
 /// Renders every mapped window over the session background.
 /// Builds the frame's elements in Smithay's front-to-back order.
 ///
@@ -656,6 +808,7 @@ pub(crate) fn build_output_elements(
         // Bottom layers (the wallpaper). See `layers.rs` and ADR 0023.
         reset_dead_cursor(state);
         append_cursor(renderer, &mut elements, state, cursor);
+        append_screenshot_overlay(state, &mut elements);
         append_layers(state, renderer, &mut elements, LayerSide::Front);
         for (id, _parent, rect) in state.windows.iter_popups() {
             let Some(surface) = state.popups.surface_of(id) else {
@@ -733,27 +886,61 @@ pub(crate) fn save_screenshot(
     output_elements: &[OutputRenderElement<GlesRenderer>],
     output_size: Size<i32, Physical>,
     transform: Transform,
+    request: crate::state::ScreenshotRequest,
 ) -> std::io::Result<std::path::PathBuf> {
     let scale = state.scale.fractional_scale();
-    let window = state.focused_window().and_then(|id| {
-        let surface = state.windows.surface_of(id).cloned()?;
-        let rect = state.windows.usable_rect(id)?;
-        Some((surface, rect))
-    });
-    match window {
-        Some((surface, rect)) => {
-            let size = rect.size.to_f64().to_physical(scale).to_i32_round();
-            let elements = build_window_elements(renderer, &surface, scale);
-            crate::capture::screenshot(renderer, &elements, size, transform, [0.0, 0.0, 0.0, 0.0])
+    match request {
+        crate::state::ScreenshotRequest::Focused => match state.focused_window() {
+            Some(id) => capture_window(state, renderer, id, transform),
+            None => capture_output(renderer, output_elements, output_size, transform),
+        },
+        crate::state::ScreenshotRequest::Output => {
+            capture_output(renderer, output_elements, output_size, transform)
         }
-        None => crate::capture::screenshot(
+        crate::state::ScreenshotRequest::Window(id) => {
+            capture_window(state, renderer, id, transform)
+        }
+        crate::state::ScreenshotRequest::Region(region) => crate::capture::screenshot_region(
             renderer,
             output_elements,
             output_size,
             transform,
-            [0.06, 0.06, 0.09, 1.0],
+            region,
+            scale,
         ),
     }
+}
+
+/// Renders one window (its client content) into a screenshot.
+fn capture_window(
+    state: &State,
+    renderer: &mut GlesRenderer,
+    id: yuki_scene::scene::WindowId,
+    transform: Transform,
+) -> std::io::Result<std::path::PathBuf> {
+    let scale = state.scale.fractional_scale();
+    let surface = state
+        .windows
+        .surface_of(id)
+        .cloned()
+        .ok_or_else(|| std::io::Error::other("screenshot: the window is gone"))?;
+    let rect = state
+        .windows
+        .usable_rect(id)
+        .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
+    let size = rect.size.to_f64().to_physical(scale).to_i32_round();
+    let elements = build_window_elements(renderer, &surface, scale);
+    crate::capture::screenshot(renderer, &elements, size, transform, [0.0, 0.0, 0.0, 0.0])
+}
+
+/// Renders the whole output into a screenshot.
+fn capture_output(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    transform: Transform,
+) -> std::io::Result<std::path::PathBuf> {
+    crate::capture::screenshot(renderer, elements, size, transform, [0.06, 0.06, 0.09, 1.0])
 }
 
 /// Logs a screenshot result. The success path already logs the saved path.
@@ -806,13 +993,14 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
 
         // PrintScreen: save the focused window (or the output when none) to the
         // Desktop. Runs before the window pass like the other offscreen reads.
-        if state.take_screenshot_request() {
+        if let Some(request) = state.take_screenshot_request() {
             log_screenshot(save_screenshot(
                 state,
                 renderer,
                 &elements,
                 capture_size,
                 winit_render_transform(),
+                request,
             ));
         }
 

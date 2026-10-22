@@ -130,8 +130,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   Checklist en `docs/bloques/10-lock.md`.
 - **Bloque 11 parcial:** `wp_presentation`, `xdg-activation`, `cursor-shape`,
   el shake-to-locate, `pointer-constraints` + `relative-pointer`, la captura
-  (salida y ventana, `ext-image-copy-capture-v1`) y el atajo PrintScreen
-  (guarda en el Escritorio XDG) hechos. Ver
+  (salida y ventana, `ext-image-copy-capture-v1`) y las capturas al estilo
+  macOS (`Shift+Super+3/4`, ventana con Espacio, PrintScreen; guardan en el
+  Escritorio XDG) hechas. Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
