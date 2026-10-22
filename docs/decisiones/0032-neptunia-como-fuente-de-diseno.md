@@ -20,10 +20,12 @@ mientras Yuki se construye.
 1. **Neptunia manda.** El look por defecto es su tema `light`; `dark` y
    `dark-tint` son las otras variantes. Los colores, radios, espacios,
    tipografía, sombras y medidas de ventana salen de sus JSON.
-2. **La ventana de Neptunia**: titlebar **arriba**, `size.titlebar-h = 44`,
-   semáforos de 12 px con 8 px de separación y **radio 4** (cuadrados
-   redondeados), radio de ventana `radius.lg = 16` y el estilo de semáforos
-   `macos` (colores `traffic-*`).
+2. **La ventana de Neptunia**: titlebar **arriba**, semáforos de 12 px con 8 px
+   de separación y **radio 4** (cuadrados redondeados), radio de ventana
+   `radius.lg = 16` y el estilo de semáforos `macos` (colores `traffic-*`). El
+   compositor usa **32 px** para las ventanas SSD de terceros; Neptunia define
+   44 px para las ventanas propias de apps. Las apps CSD (GTK, wezterm) no
+   reciben la barra de Yuki.
 3. **Se implementa en Yuki, no en un framework ajeno.** El chrome es
    compositor-side (ADR 0020); el texto de la titlebar usa `cosmic-text` en el
    compositor. `celestial-kit` sigue siendo el toolkit de la shell y de las
@@ -41,7 +43,7 @@ mientras Yuki se construye.
 ## Consecuencias
 
 - La titlebar, la menubar y el dock comparten la paleta clara de Neptunia.
-- La titlebar se dibuja con los valores de Neptunia (44/12/16) y sus botones
+- La titlebar del compositor se dibuja con 32 px para ventanas SSD, semáforos de 12 y radio 16; sus botones
   cierran, minimizan y maximizan.
 - Quedan pendientes el redondeo real de ventanas, la sombra, los glifos de los
   semáforos al pasar el puntero y el cambio de tema en vivo.

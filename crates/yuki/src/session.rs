@@ -841,7 +841,7 @@ pub(crate) fn build_output_elements(
             &yuki_design::LIGHT
         };
         for window in state.windows.iter().rev() {
-            if !window.is_mapped() {
+            if !window.is_mapped() || window.insets().top <= 0.0 {
                 continue;
             }
             let id = window.id();

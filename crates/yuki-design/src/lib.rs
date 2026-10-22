@@ -217,10 +217,11 @@ pub struct Palette {
     pub traffic_lights_inactive: Rgba,
 }
 
-/// The titlebar: Neptunia's 44 px bar at the top, with 12 px traffic lights.
+/// The titlebar: 32 px at the top for server-decorated client windows, with
+/// 12 px traffic lights. Neptunia's own 44 px app-window bar is not this one.
 pub const TITLEBAR: Titlebar = Titlebar {
     position: TitlebarPosition::Top,
-    thickness: 44,
+    thickness: 32,
     buttons: TitlebarButtons {
         order: [
             Button {

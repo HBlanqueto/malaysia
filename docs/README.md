@@ -133,7 +133,7 @@ o el portapapeles) con su dominio `screenshot.domain`. El **Bloque 12a** está
 empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
 `appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
 ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
-la titlebar Neptunia arriba (44 px) ya se dibuja y sus botones funcionan; el
+la titlebar Neptunia arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
 launcher es lo siguiente. Neptunia (`kits/neptunia`) es la fuente de diseño
 (ADR 0032); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
 polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha

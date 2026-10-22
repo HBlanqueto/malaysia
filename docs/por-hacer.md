@@ -46,7 +46,7 @@ shell; ver `bloques/09-escala-fraccional.md`.
 
 ## Ahora: escritorio usable (Bloque 13, adelantado)
 
-El diseño es **Neptunia** (ADR 0032): titlebar arriba de 44 px, radio 16,
+El diseño es **Neptunia** (ADR 0032): titlebar arriba de 32 px para ventanas SSD, radio 16,
 semáforos de 12, tema claro por defecto.
 
 - [x] Titlebar en el compositor: fondo, semáforos redondeados, título centrado,

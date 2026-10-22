@@ -218,7 +218,8 @@ Se divide en dos entregas. Depende de la captura del Bloque 11.
 Antes de seguir con los portales, el escritorio necesita chrome y una forma de
 abrir apps. El diseño es **Neptunia** (ADR 0032).
 
-- **Titlebar Neptunia — hecha.** Barra superior de 44 px, semáforos de 12 px,
+- **Titlebar Neptunia — hecha.** Barra superior de 32 px para ventanas SSD,
+  semáforos de 12 px,
   título centrado con `cosmic-text`, caché por ventana y botones de cerrar,
   minimizar y maximizar; también se elevan las ventanas al enfocarlas. Ver
   [`arquitectura/ventanas.md`](arquitectura/ventanas.md).

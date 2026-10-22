@@ -1,7 +1,8 @@
 # Ventanas y titlebar (Neptunia)
 
 La titlebar de Yuki es **compositor-side** (ADR 0020) y usa el diseño de
-**Neptunia** (ADR 0032): barra **arriba** de 44 px lógicos, semáforos de 12 px
+**Neptunia** (ADR 0032): barra **arriba** de **32 px lógicos** para las ventanas
+SSD de terceros, semáforos de 12 px
 (**cuadrados redondeados** de radio 4) con 8 px de separación y radio de
 ventana de 16 px.
 
@@ -19,8 +20,10 @@ ventana de 16 px.
   `title.unfocused`.
 
 Solo reciben titlebar las ventanas **server-side** que reservan inset (ADR
-0014/0019). Las apps GTK/Libadwaita conservan su headerbar; los diálogos, los
-popups y el fullscreen no llevan chrome.
+0014/0019). Las apps GTK/Libadwaita y las que piden CSD conservan su propio
+chrome; los diálogos, los popups y el fullscreen no llevan chrome. Wezterm, por
+ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
+`window.decorations = "force_server"`.
 
 ## Cómo funciona
 

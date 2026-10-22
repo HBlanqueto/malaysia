@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn the_titlebar_uses_neptunia_metrics() {
         assert_eq!(TITLEBAR.position, TitlebarPosition::Top);
-        assert_eq!(TITLEBAR.thickness, 44);
+        assert_eq!(TITLEBAR.thickness, 32);
         assert_eq!(TITLEBAR.buttons.diameter, 12);
         assert_eq!(TITLEBAR.buttons.spacing, 8);
         assert_eq!(TITLEBAR.buttons.margin_start, 16);
