@@ -62,6 +62,38 @@ docs/
 >
 > **Avisos de terceros.** `NOTICE` debe actualizarse en el mismo commit en que se copie código de un tercero (Otto incluido).
 
+## Compilar y probar
+
+El dev shell es obligatorio para cargo (ADR 0007):
+
+```sh
+nix develop
+./dev.sh build            # debug de los miembros por defecto
+./dev.sh run              # compositor anidado
+./dev.sh check            # fmt + clippy + tests + checks de diseño/Neptunia
+nix build .#default       # paquete instalable (perfil dist)
+```
+
+El día a día usa el perfil `dev`: nuestro código sin optimizar, dependencias a
+`opt-level = 2` y `debug = "line-tables-only"`. El paquete Nix usa `dist` (fat
+LTO, `codegen-units = 1`) y separa `buildDepsOnly` de `buildPackage` con crane:
+las dependencias quedan en la caché de Nix y no se recompilan al cambiar
+`crates/`. Skia llega precompilada de `nix/skia.nix` por `SKIA_BINARIES_URL`; el
+build no descarga ni compila Skia.
+
+Tiempos medidos en esta máquina (Ryzen 5 PRO 5650U, x86_64-linux):
+
+| Caso | Tiempo |
+| --- | --- |
+| Limpio, `cargo build -p yuki` con `target/` vacío | ~3 min 50 s |
+| Incremental sin cambios | <1 s |
+| Incremental tras tocar un crate propio (`yuki`) | ~5 s |
+
+El primer `nix build .#default` puede tardar más porque construye Skia una vez;
+después Skia y las dependencias salen de la caché de Nix. Los checks del flake
+(`design-tokens`, `neptunia-generated`) usan un `lib.fileset` reducido, no el
+árbol entero.
+
 ## Cómo leerlo
 
 1. **[`yuki.md`](yuki.md)** — qué es el proyecto y cómo compilarlo/ejecutarlo.

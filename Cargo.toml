@@ -140,9 +140,10 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca51
 # are cheap but the third-party code we lean on is not painfully slow.
 [profile.dev]
 opt-level = 0
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
-opt-level = 1
+opt-level = 2
 
 # Same trade-off as `dev`, with debug info disabled for quicker links. Build
 # with `cargo build --profile dev-fast`. Use when iterating on compile errors
@@ -156,6 +157,13 @@ incremental = true
 # optimisation, abort on panic (no unwinding machinery), symbols stripped.
 [profile.release]
 lto = "thin"
-codegen-units = 1
+codegen-units = 16
 panic = "abort"
 strip = true
+
+# The installed build: fat LTO and one codegen unit. The Nix package sets
+# CARGO_PROFILE=dist; day-to-day use stays on dev/release.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

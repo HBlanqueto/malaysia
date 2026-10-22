@@ -1,0 +1,20 @@
+# Crate mínimo que solo existe para que nix/skia.nix compile Skia (vía
+# skia-bindings) una vez, en su propia derivación. Las features de skia-safe
+# deben coincidir con las que activa laye-rs v1.18.2 (default + all-linux); el
+# preBuild del paquete lo comprueba contra $out/features.txt.
+[package]
+name = "skia-prebuild"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+skia-safe = { version = "=0.93", features = ["all-linux"] }
+# Directa (como en laye-rs), para que el árbol de features coincida.
+skia-bindings = "=0.93"
+
+[lib]
+path = "src/lib.rs"
+
+# Workspace propio: no es miembro del workspace de Yuki.
+[workspace]

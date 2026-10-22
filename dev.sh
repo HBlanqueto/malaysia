@@ -5,7 +5,8 @@
 # the compositor through a PID file and a log file. It adds nothing else.
 #
 # POSIX shell only: no bashisms, and no tools beyond coreutils and cargo.
-# The linker setup lives in the devShell (RUSTFLAGS), not here.
+# The devShell provides mold; the fallback below makes it explicit for every
+# cargo invocation made by this script.
 
 set -eu
 
@@ -77,6 +78,14 @@ require_devshell() {
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+
+# The dev shell already exports RUSTFLAGS with mold and the runtime rpath. Keep
+# mold explicit for the script's own cargo calls too, without duplicating the
+# flag when the shell already set it.
+case "${RUSTFLAGS:-}" in
+    *-fuse-ld=mold*) ;;
+    *) RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-fuse-ld=mold"; export RUSTFLAGS ;;
+esac
 
 # Runtime files (the pid and the log) live under XDG_RUNTIME_DIR, or a
 # UID-scoped directory in /tmp when it is not set. They are kept in a

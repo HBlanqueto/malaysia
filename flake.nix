@@ -3,10 +3,11 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
-    { self, nixpkgs }:
+    { self, nixpkgs, crane }:
     let
       systems = [ "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -27,39 +28,77 @@
     {
       packages = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
-      in rec {
-        default = pkgs.rustPlatform.buildRustPackage {
+        lib = pkgs.lib;
+        craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.symlinkJoin {
+          name = "rust-toolchain";
+          paths = [ p.cargo p.rustc p.clippy p.rustfmt ];
+        });
+        src = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./crates
+            ./tools/sctk-probe
+            ./Cargo.toml
+            ./Cargo.lock
+            ./share
+          ];
+        };
+        skia = pkgs.callPackage ./nix/skia.nix { };
+        commonArgs = {
           pname = "yuki";
           version = "0.1.0";
-          src = ./.;
+          inherit src;
+          strictDeps = true;
 
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-            # Smithay se toma de git en Cargo.toml; Nix necesita el hash del
-            # árbol de esa revisión para vendorizarlo. Rev:
-            # 023b78b1c5a05ca512767cacc07efca55fae8be4.
-            outputHashes = {
-              "smithay-0.7.0" = "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
-            };
+          cargoLock = ./Cargo.lock;
+          outputHashes = {
+            "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
+              "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
           };
 
           # The per-crate build script refuses to compile without this marker
-          # (ADR 0007). The package build is a sanctioned, hermetic build path,
-          # so it sets the marker deliberately; it does not use mold.
-          YUKI_DEV_SHELL = "1";
+          # (ADR 0007). The package build is a sanctioned, hermetic build path.
+          env = {
+            YUKI_DEV_SHELL = "1";
+            SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
+          };
 
           # The test suite needs an EGL device and system fonts; the Nix build
           # sandbox has neither. Tests run in the dev shell (cargo test).
           doCheck = false;
 
-          # `services.displayManager.sessionPackages` requires the package to
-          # name the session files it installs.
-          passthru.providedSessions = [ "yuki" ];
+          # The installed build uses the fat-LTO profile; dependencies are
+          # cached separately by buildDepsOnly.
+          CARGO_PROFILE = "dist";
 
-          nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
-
+          nativeBuildInputs = with pkgs; [ diffutils pkg-config makeWrapper ];
           buildInputs = nativeDeps pkgs;
 
+          # Skia is prebuilt. When laye-rs lands, this fails if its version or
+          # features drift from nix/skia-prebuild; today it is a no-op.
+          preBuild = ''
+            if cargo tree --offline -i skia-bindings --depth 0 --prefix none >/dev/null 2>&1; then
+              version="$(cargo tree --offline -i skia-bindings --depth 0 --prefix none \
+                | sed -n 's/.*skia-bindings v\([0-9.]*\).*/\1/p' | head -n1)"
+              if [ "$version" != "0.93.1" ] && [ "$version" != "0.93.0" ]; then
+                echo "skia-bindings $version no coincide con la derivación 0.93" >&2
+                exit 1
+              fi
+              cargo tree --offline -e features -i skia-bindings --prefix none \
+                | sed -n 's/^skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > skia-features.txt
+              if ! diff -u ${skia}/features.txt skia-features.txt; then
+                echo "las features de Skia cambiaron: actualiza nix/skia-prebuild/Cargo.toml" >&2
+                exit 1
+              fi
+            else
+              echo "skia-bindings no está en el grafo todavía; Skia precompilado queda listo" >&2
+            fi
+          '';
+        };
+
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        yuki = craneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts;
           postInstall = ''
             install -Dm644 share/wayland-sessions/yuki.desktop \
               $out/share/wayland-sessions/yuki.desktop
@@ -102,11 +141,23 @@
                 > "$out/lib/systemd/user/$unit"
             done
           '';
-        };
+          passthru = {
+            providedSessions = [ "yuki" ];
+            skiaBinaries = skia;
+          };
+        });
+      in {
+        default = yuki;
+        skia-binaries = skia;
       });
 
       checks = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
+        lib = pkgs.lib;
+        checkSrc = lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [ ./crates ./scripts ];
+        };
       in {
         # The vendored Neptunia outputs must match default.nix.
         neptunia-generated = let
@@ -114,11 +165,12 @@
         in pkgs.runCommand "check-neptunia-generated" {
           nativeBuildInputs = with pkgs; [ diffutils ];
         } ''
-          diff -u ${./crates/yuki-design/neptunia/generated/neptunia.slint} \
+          cd ${checkSrc}
+          diff -u crates/yuki-design/neptunia/generated/neptunia.slint \
             ${pkgs.writeText "neptunia.slint" neptunia.slint}
-          diff -u ${./crates/yuki-design/neptunia/generated/neptunia.css} \
+          diff -u crates/yuki-design/neptunia/generated/neptunia.css \
             ${pkgs.writeText "neptunia.css" neptunia.css}
-          diff -u ${./crates/yuki-design/neptunia/generated/Neptunia.qml} \
+          diff -u crates/yuki-design/neptunia/generated/Neptunia.qml \
             ${pkgs.writeText "Neptunia.qml" neptunia.qml}
           touch $out
         '';
@@ -127,7 +179,7 @@
         design-tokens = pkgs.runCommand "check-design-tokens" {
           nativeBuildInputs = with pkgs; [ bash coreutils findutils gawk gnugrep ];
         } ''
-          cd ${./.}
+          cd ${checkSrc}
           bash scripts/check-design-tokens.sh
           touch $out
         '';
@@ -140,6 +192,7 @@
       devShells = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
+        skia = pkgs.callPackage ./nix/skia.nix { };
         # weston with its simple test clients enabled. nixpkgs builds weston
         # with `-Dsimple-clients=`, so `weston-simple-egl`, `weston-simple-shm`
         # and `weston-simple-dmabuf-feedback` do not exist; Bloque 7 drives
@@ -198,6 +251,7 @@
           # where the linker flag above would be missing and the binary would
           # be linked differently (ADR 0007).
           YUKI_DEV_SHELL = "1";
+          SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
 
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.
