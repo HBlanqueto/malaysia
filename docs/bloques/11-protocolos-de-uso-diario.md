@@ -31,7 +31,10 @@ protocolos y la captura.
   crece con animación suave hasta 3× y empieza a encogerse en cuanto el ratón
   se queda quieto (180 ms de crecimiento y 220 ms de vuelta, a ~60 Hz).
   Es el gesto de macOS Accessibility > Pointer Control. Los valores viven en
-  `yuki-design`.
+  `yuki-design`. Para que el aumento no se vea pixelado, el cursor se carga
+  dos veces (tamaño normal y tamaño del shake) y el grande se muestrea en vez
+  de ampliar el bitmap normal; `YUKI_TEST_CURSOR_BOOST=3` fija el aumento para
+  verlo en una captura.
 - `zwp_pointer_constraints_v1` v1: el global está anunciado y el handler activa
   la constraint en cuanto llega sobre la superficie con foco del puntero. Una
   constraint activa manda: `locked` deja el puntero quieto y solo alimenta

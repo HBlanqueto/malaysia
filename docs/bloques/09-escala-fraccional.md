@@ -100,4 +100,5 @@ este bloque.
   los clientes que lo soportan usan `wp_fractional_scale_v1`.
 - El cursor se carga a la escala entera **hacia arriba** (`ceil`) para no
   quedar borroso, y el hotspot del tema se pasa de píxeles de la imagen a
-  coordenadas lógicas (antes a 2× quedaba desplazado).
+  coordenadas lógicas (antes a 2× quedaba desplazado). Para el shake hay un
+  segundo juego cargado al tamaño ampliado.

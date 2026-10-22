@@ -32,7 +32,7 @@ use smithay::backend::renderer::element::memory::{
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::input::pointer::CursorIcon;
-use smithay::utils::{Logical, Point, Size, Transform};
+use smithay::utils::{Logical, Point, Rectangle, Size, Transform};
 use xcursor::CursorTheme;
 use xcursor::parser::{Image, parse_xcursor};
 
@@ -46,15 +46,23 @@ pub struct Cursors {
     icons: Vec<(CursorIcon, LoadedCursor)>,
     /// The default arrow, used for every shape the theme did not provide.
     fallback: LoadedCursor,
+    /// The same shapes at the shake size, so the enlargement samples a
+    /// higher-resolution image instead of magnifying the normal one.
+    boosted_icons: Vec<(CursorIcon, LoadedCursor)>,
+    /// The boosted default arrow.
+    boosted_fallback: LoadedCursor,
 }
 
 /// One decoded cursor image and its hotspot.
 pub struct LoadedCursor {
     /// The image, ready to upload as a render element.
     buffer: MemoryRenderBuffer,
-    /// The pixel inside the image that sits on the pointer position.
+    /// The pixel inside the image that sits on the pointer position, in the
+    /// image's logical coordinates.
     hotspot: Point<i32, Logical>,
-    /// The image size in logical coordinates, before any shake enlargement.
+    /// The image's logical size, which is the source rectangle.
+    source: Size<i32, Logical>,
+    /// The image size at rest, before any shake enlargement.
     size: Size<i32, Logical>,
 }
 
@@ -107,19 +115,45 @@ impl Cursors {
     /// shape that cannot be read falls back to the default arrow, and if no
     /// theme can be read at all the built-in arrow is used.
     pub fn load(scale: i32) -> Self {
-        let fallback = load_icon(CursorIcon::Default, scale).unwrap_or_else(|| {
+        let target = cursor_target(scale);
+        let fallback = load_icon(CursorIcon::Default, scale, target, None).unwrap_or_else(|| {
             tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
-            builtin_cursor(scale)
+            builtin_cursor(scale, None)
         });
 
         let mut icons = Vec::new();
         for icon in SHAPES {
-            if let Some(cursor) = load_icon(icon, scale) {
+            if let Some(cursor) = load_icon(icon, scale, target, None) {
                 icons.push((icon, cursor));
             }
         }
 
-        Self { icons, fallback }
+        let boost = yuki_design::CURSOR_SHAKE_SCALE.ceil() as u32;
+        let boosted_target = target.saturating_mul(boost);
+        let boosted_fallback = load_icon(
+            CursorIcon::Default,
+            scale,
+            boosted_target,
+            Some(fallback.size()),
+        )
+        .unwrap_or_else(|| builtin_cursor(scale, Some(fallback.size())));
+        let boosted_icons = SHAPES
+            .iter()
+            .filter_map(|&icon| {
+                let nominal = icons
+                    .iter()
+                    .find(|(name, _)| *name == icon)
+                    .map_or_else(|| fallback.size(), |(_, cursor)| cursor.size());
+                load_icon(icon, scale, boosted_target, Some(nominal)).map(|cursor| (icon, cursor))
+            })
+            .collect();
+
+        Self {
+            icons,
+            fallback,
+            boosted_icons,
+            boosted_fallback,
+        }
     }
 
     /// The cursor for a shape, or the default arrow when the theme lacks it.
@@ -130,6 +164,15 @@ impl Cursors {
             .map(|(_, cursor)| cursor)
             .unwrap_or(&self.fallback)
     }
+
+    /// The high-resolution cursor used while the shake enlarges the pointer.
+    pub fn get_boosted(&self, icon: CursorIcon) -> &LoadedCursor {
+        self.boosted_icons
+            .iter()
+            .find(|(name, _)| *name == icon)
+            .map(|(_, cursor)| cursor)
+            .unwrap_or(&self.boosted_fallback)
+    }
 }
 
 impl LoadedCursor {
@@ -138,14 +181,35 @@ impl LoadedCursor {
         &self.buffer
     }
 
-    /// The hotspot, in logical coordinates relative to the image's top-left.
-    pub fn hotspot(&self) -> Point<i32, Logical> {
-        self.hotspot
-    }
-
     /// The image size, in logical coordinates before a shake enlargement.
     pub fn size(&self) -> Size<i32, Logical> {
         self.size
+    }
+
+    /// The source rectangle, destination size and hotspot for `boost`.
+    ///
+    /// The destination grows with the shake but the source stays the full
+    /// image, so the boosted set (loaded at a larger size) is sampled instead
+    /// of magnified; the hotspot scales with the destination.
+    pub fn geometry(
+        &self,
+        boost: f64,
+    ) -> (
+        Rectangle<f64, Logical>,
+        Size<i32, Logical>,
+        Point<f64, Logical>,
+    ) {
+        let target = Size::from((
+            (f64::from(self.size.w) * boost).round().max(1.0) as i32,
+            (f64::from(self.size.h) * boost).round().max(1.0) as i32,
+        ));
+        let ratio_x = f64::from(target.w) / f64::from(self.source.w.max(1));
+        let ratio_y = f64::from(target.h) / f64::from(self.source.h.max(1));
+        let hotspot = Point::from((
+            f64::from(self.hotspot.x) * ratio_x,
+            f64::from(self.hotspot.y) * ratio_y,
+        ));
+        (Rectangle::from_size(self.source.to_f64()), target, hotspot)
     }
 }
 
@@ -170,13 +234,7 @@ struct ImageData {
 /// every shape fall back to the built-in triangle. The search path itself is
 /// the XDG one `xcursor` implements (`XCURSOR_PATH`, then `XDG_DATA_DIRS`),
 /// which on NixOS is set by the session.
-fn theme_image(name: &str, scale: i32) -> Option<ImageData> {
-    let size = std::env::var("XCURSOR_SIZE")
-        .ok()
-        .and_then(|value| value.parse::<u32>().ok())
-        .unwrap_or(24);
-    let target = size.saturating_mul(scale.max(1) as u32);
-
+fn theme_image(name: &str, target: u32) -> Option<ImageData> {
     for theme_name in theme_names() {
         let theme = CursorTheme::load(&theme_name);
         let Some(path) = theme.load_icon(name) else {
@@ -225,30 +283,52 @@ fn theme_names() -> Vec<String> {
     names
 }
 
-/// Loads one named cursor into an uploadable buffer.
-fn load_icon(icon: CursorIcon, scale: i32) -> Option<LoadedCursor> {
+/// The physical pixels to ask the theme for, per logical cursor size.
+fn cursor_target(scale: i32) -> u32 {
+    let size = std::env::var("XCURSOR_SIZE")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(24);
+    size.saturating_mul(scale.max(1) as u32)
+}
+
+/// Loads one named cursor at `target` physical pixels into an uploadable
+/// buffer. `nominal` is the logical size it should be drawn at; without it the
+/// image's own logical size is used.
+fn load_icon(
+    icon: CursorIcon,
+    scale: i32,
+    target: u32,
+    nominal: Option<Size<i32, Logical>>,
+) -> Option<LoadedCursor> {
     // Xcursor themes commonly use legacy names (`left_ptr` for `default`);
     // the standard name comes first, then the crate's alternatives.
     let data = std::iter::once(icon.name())
         .chain(icon.alt_names().iter().copied())
-        .find_map(|name| theme_image(name, scale))?;
-    Some(loaded_cursor(&data, scale))
+        .find_map(|name| theme_image(name, target))?;
+    Some(loaded_cursor(&data, scale, nominal))
 }
 
 /// The built-in arrow, as an uploadable buffer.
-fn builtin_cursor(scale: i32) -> LoadedCursor {
-    loaded_cursor(&fallback_image(), scale)
+fn builtin_cursor(scale: i32, nominal: Option<Size<i32, Logical>>) -> LoadedCursor {
+    loaded_cursor(&fallback_image(), scale, nominal)
 }
 
 /// Turns a theme image loaded for `scale` physical pixels per logical pixel
 /// into a buffer plus logical hotspot and size.
-fn loaded_cursor(data: &ImageData, scale: i32) -> LoadedCursor {
+fn loaded_cursor(
+    data: &ImageData,
+    scale: i32,
+    nominal: Option<Size<i32, Logical>>,
+) -> LoadedCursor {
+    let source = Size::from((data.width / scale, data.height / scale));
     LoadedCursor {
         buffer: memory_buffer(data, scale),
         // The theme stores the hotspot in the loaded image's pixels; the rest
         // of the compositor works in logical coordinates.
         hotspot: Point::from((data.hot_x / scale, data.hot_y / scale)),
-        size: Size::from((data.width / scale, data.height / scale)),
+        source,
+        size: nominal.unwrap_or(source),
     }
 }
 
@@ -320,7 +400,7 @@ smithay::render_elements! {
 #[cfg(test)]
 mod tests {
     use super::{ImageData, fallback_image, loaded_cursor};
-    use smithay::utils::{Point, Size};
+    use smithay::utils::{Point, Rectangle, Size};
 
     #[test]
     fn the_fallback_image_is_a_full_rgba_buffer() {
@@ -332,6 +412,24 @@ mod tests {
     }
 
     #[test]
+    fn the_shake_uses_a_higher_resolution_source() {
+        let data = ImageData {
+            pixels: vec![0; 128 * 128 * 4],
+            width: 128,
+            height: 128,
+            hot_x: 16,
+            hot_y: 16,
+        };
+        let cursor = loaded_cursor(&data, 2, Some(Size::from((24, 24))));
+        assert_eq!(cursor.source, Size::from((64, 64)));
+        let (source, target, hotspot) = cursor.geometry(3.0);
+        assert_eq!(source, Rectangle::from_size(Size::from((64.0, 64.0))));
+        assert_eq!(target, Size::from((72, 72)));
+        // 8 logical inside the source, scaled by 72/64.
+        assert_eq!(hotspot, Point::from((9.0, 9.0)));
+    }
+
+    #[test]
     fn a_cursor_loaded_at_2x_has_a_logical_hotspot_and_size() {
         let data = ImageData {
             pixels: vec![0; 48 * 48 * 4],
@@ -340,8 +438,9 @@ mod tests {
             hot_x: 18,
             hot_y: 12,
         };
-        let cursor = loaded_cursor(&data, 2);
+        let cursor = loaded_cursor(&data, 2, None);
         assert_eq!(cursor.hotspot, Point::from((9, 6)));
+        assert_eq!(cursor.source, Size::from((24, 24)));
         assert_eq!(cursor.size, Size::from((24, 24)));
     }
 

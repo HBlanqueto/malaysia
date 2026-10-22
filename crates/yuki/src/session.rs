@@ -1300,15 +1300,15 @@ fn append_cursor(
     match &state.cursor_status {
         CursorImageStatus::Hidden => {}
         CursorImageStatus::Named(icon) => {
-            let shape = cursor.get(*icon);
-            let hotspot = shape.hotspot().to_f64();
-            let hotspot = Point::from((hotspot.x * boost, hotspot.y * boost));
+            // While the shake enlarges the pointer, sample the set loaded at
+            // the enlarged size; magnifying the normal image looks pixelated.
+            let shape = if boost > 1.0 {
+                cursor.get_boosted(*icon)
+            } else {
+                cursor.get(*icon)
+            };
+            let (source, size, hotspot) = shape.geometry(boost);
             let position = cursor_origin(location, hotspot, scale);
-            let source = Rectangle::from_size(shape.size().to_f64());
-            let size = Size::from((
-                (shape.size().w as f64 * boost).round() as i32,
-                (shape.size().h as f64 * boost).round() as i32,
-            ));
             match MemoryRenderBufferRenderElement::from_buffer(
                 renderer,
                 position,
