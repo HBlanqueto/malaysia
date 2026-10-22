@@ -114,15 +114,6 @@ pub enum TitleRotation {
     BottomToTop,
 }
 
-/// A font weight.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontWeight {
-    /// Regular weight.
-    Regular,
-    /// Bold weight.
-    Bold,
-}
-
 /// A font face and size.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Font {
@@ -130,8 +121,9 @@ pub struct Font {
     pub family: &'static str,
     /// Size in points.
     pub size: u32,
-    /// Weight.
-    pub weight: FontWeight,
+    /// Numeric weight, as CSS/fontconfig: 400 regular, 500 medium, 600
+    /// semibold, 650, 700 bold.
+    pub weight: u16,
 }
 
 /// What a titlebar button does.
@@ -265,9 +257,9 @@ pub const TITLEBAR: Titlebar = Titlebar {
         margin_start: 16,
     },
     font: Font {
-        family: "Inter",
+        family: "Geist",
         size: 13,
-        weight: FontWeight::Bold,
+        weight: 600,
     },
     rotation: TitleRotation::Horizontal,
 };
@@ -322,9 +314,9 @@ pub const SCREENSHOT_BORDER_WIDTH: i32 = 1;
 
 /// The body text face.
 pub const TEXT: Font = Font {
-    family: "Inter",
-    size: 10,
-    weight: FontWeight::Regular,
+    family: "Geist",
+    size: 13,
+    weight: 400,
 };
 
 /// The window shadow, the same in both modes.
