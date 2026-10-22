@@ -23,8 +23,8 @@ window.domain ──► título de la app activa (el compositor lo publica)
    **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
    debajo de la barra.
 2. **El render** es CPU: `celestial-kit::text` (cosmic-text + swash) compone el
-   texto en un frame RGBA sobre el fondo claro de Neptunia
-   (`SHELL_BAR`, `#f2f4f7e6`) y la textura se presenta
+   texto en un frame RGBA sobre la `ShellPalette` de Neptunia (barra
+   translúcida, `#f2f4f7e6` en claro) y la textura se presenta
    por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
    dmabuf que el compositor texturiza directo. La subida a la textura es
    **parcial**: solo la franja del reloj (90 px) o del título (250 px) que

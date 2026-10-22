@@ -10,6 +10,7 @@ mod lock;
 mod menubar;
 mod pam;
 mod present;
+mod theme;
 mod wallpaper;
 
 use std::process::ExitCode;

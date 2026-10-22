@@ -379,6 +379,7 @@ check() {
     require cargo-clippy
     check_display_env
     cargo fmt --all -- --check
+    "$script_dir/scripts/check-design-tokens.sh"
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace
 }

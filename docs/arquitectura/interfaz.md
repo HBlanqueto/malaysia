@@ -63,8 +63,8 @@ solo se dibujan sus superficies (y el cursor).
   - `wallpaper`: tinte del color dominante del wallpaper (7 % / 9 %), semáforos
     derivados.
   - `traffic_lights` puede forzar `macos`, `accent` o `wallpaper`.
-  - `window_tint_scope = "desktop"` está definido; el tinte de menubar/dock
-    todavía no lo consume la shell.
+  - `window_tint_scope = "desktop"` tiñe menubar y dock con el dominante
+    (20 % claro / 26 % oscuro).
 
 ## Shell: un proceso por componente
 
@@ -79,8 +79,8 @@ solo se dibujan sus superficies (y el cursor).
 
 Los componentes leen preferencias de `~/.config/yuki/` y estado de
 `~/.local/share/yuki/`; no escriben su propia configuración. La menubar y el
-dock comparten la paleta clara de Neptunia (`SHELL_BAR`, `SHELL_TEXT`,
-`SHELL_TILE`, `SHELL_TILE_ACTIVE`). Ver
+dock comparten la `ShellPalette` de Neptunia (`SHELL_LIGHT`, `SHELL_DARK`,
+`SHELL_DARK_TINT`), elegida por `appearance.color_scheme`. Ver
 [`yuki-y-shell.md`](yuki-y-shell.md), [`modelo-de-procesos.md`](modelo-de-procesos.md),
 [`wallpaper.md`](wallpaper.md), [`menubar.md`](menubar.md), [`dock.md`](dock.md)
 y [`lock.md`](lock.md).
@@ -147,7 +147,6 @@ también notifica a las apps).
 - **Esquinas redondeadas** de ventana (16), **sombra** y **glifos de hover** en
   los semáforos.
 - **Doble clic** en la titlebar para zoom, y titlebar en la captura de ventana.
-- **Tinte de panel/dock** en `window_tint_scope = "desktop"`.
 - **Iconos** reales en el dock (hoy títulos) y menús globales de la menubar.
 - **Notificaciones** y el resto del Bloque 12b.
 

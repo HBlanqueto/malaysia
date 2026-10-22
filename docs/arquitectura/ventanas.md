@@ -73,10 +73,9 @@ si no hay color, se usa el acento. El compositor vigila ese archivo y
 `appearance.traffic_lights` permite forzar `macos`, `accent` o `wallpaper` en
 vez de `auto`.
 
-`appearance.window_tint_scope = "desktop"` está definido en el catálogo y el
-factor de panel/dock (20 % / 26 %) vive en `yuki-design`, pero la shell todavía
-no consume ese tinte. El tema se resuelve al arrancar; un cambio en
-`appearance.domain` o en el wallpaper se aplica al reiniciar, no en vivo.
+`appearance.window_tint_scope = "desktop"` tiñe menubar y dock con el dominante
+del wallpaper (20 % claro / 26 % oscuro). El tema se reconstruye en vivo cuando
+cambian `appearance.domain` o `wallpaper.state`.
 
 ## Botones
 

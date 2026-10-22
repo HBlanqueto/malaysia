@@ -75,6 +75,16 @@ impl Rgba {
             a,
         }
     }
+
+    /// The 8-bit RGBA bytes the CPU rasterizers upload.
+    pub fn to_rgba8(self) -> [u8; 4] {
+        [
+            (self.r * 255.0).round().clamp(0.0, 255.0) as u8,
+            (self.g * 255.0).round().clamp(0.0, 255.0) as u8,
+            (self.b * 255.0).round().clamp(0.0, 255.0) as u8,
+            (self.a * 255.0).round().clamp(0.0, 255.0) as u8,
+        ]
+    }
 }
 
 /// One color in its focused and unfocused variants.
@@ -434,20 +444,130 @@ pub const DARK_TINT: Palette = Palette {
     traffic_lights_inactive: Rgba::rgb8(0x4e, 0x4e, 0x50),
 };
 
-/// The menubar/dock surface: Neptunia `bg-window` with a slight transparency.
-pub const SHELL_BAR: [u8; 4] = [0xf2, 0xf4, 0xf7, 0xe6];
+/// The menubar and dock colours for one appearance.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShellPalette {
+    /// The bar surface, translucent like macOS vibrancy.
+    pub bar: Rgba,
+    /// The bar text.
+    pub text: Rgba,
+    /// A dock tile.
+    pub tile: Rgba,
+    /// An active dock tile.
+    pub tile_active: Rgba,
+    /// Text on an active dock tile.
+    pub tile_text_active: Rgba,
+}
 
-/// The menubar/dock text: Neptunia `ink-strong`.
-pub const SHELL_TEXT: [u8; 4] = [0x0d, 0x12, 0x19, 0xff];
+/// The light shell palette: Neptunia `light`.
+pub const SHELL_LIGHT: ShellPalette = ShellPalette {
+    bar: Rgba::rgba8(0xf2, 0xf4, 0xf7, 230.0 / 255.0),
+    text: Rgba::rgb8(0x0d, 0x12, 0x19),
+    tile: Rgba::rgb8(0xe3, 0xe8, 0xef),
+    tile_active: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    tile_text_active: Rgba::rgb8(0xff, 0xff, 0xff),
+};
 
-/// A dock tile: Neptunia `bg-control`.
-pub const SHELL_TILE: [u8; 4] = [0xe3, 0xe8, 0xef, 0xff];
+/// The dark shell palette: Neptunia `dark`.
+pub const SHELL_DARK: ShellPalette = ShellPalette {
+    bar: Rgba::rgba8(0x1e, 0x1e, 0x1e, 230.0 / 255.0),
+    text: Rgba::rgb8(0xf5, 0xf5, 0xf5),
+    tile: Rgba::rgb8(0x3a, 0x3a, 0x3a),
+    tile_active: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    tile_text_active: Rgba::rgb8(0xff, 0xff, 0xff),
+};
 
-/// An active dock tile: Neptunia `accent`.
-pub const SHELL_TILE_ACTIVE: [u8; 4] = [0x2f, 0x6f, 0xe4, 0xff];
+/// The dark-tint shell palette: Neptunia `dark-tint`.
+pub const SHELL_DARK_TINT: ShellPalette = ShellPalette {
+    bar: Rgba::rgba8(0x1d, 0x1e, 0x20, 230.0 / 255.0),
+    text: Rgba::rgb8(0xf4, 0xf5, 0xf6),
+    tile: Rgba::rgb8(0x38, 0x39, 0x3d),
+    tile_active: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    tile_text_active: Rgba::rgb8(0xff, 0xff, 0xff),
+};
 
-/// Text on an active dock tile: Neptunia `on-accent`.
-pub const SHELL_TILE_TEXT_ACTIVE: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
+/// The lock screen colours: Neptunia `bg-surface`, `ink`, `ink-muted`,
+/// `danger` and `accent` for the focused field.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LockPalette {
+    /// The screen and field surface (`bg-surface`).
+    pub bg_surface: Rgba,
+    /// Title and masked input (`ink`).
+    pub ink: Rgba,
+    /// Labels and status (`ink-muted`).
+    pub ink_muted: Rgba,
+    /// A refused attempt (`danger`).
+    pub danger: Rgba,
+    /// The focused field line (`accent`).
+    pub accent: Rgba,
+}
+
+/// The lock palette (Neptunia `dark-tint`).
+pub const LOCK: LockPalette = LockPalette {
+    bg_surface: Rgba::rgb8(0x25, 0x26, 0x28),
+    ink: Rgba::rgb8(0xda, 0xdc, 0xdf),
+    ink_muted: Rgba::rgb8(0x99, 0x9c, 0xa3),
+    danger: Rgba::rgb8(0xff, 0x6b, 0x6b),
+    accent: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+};
+
+/// The menubar height, in logical pixels.
+pub const MENUBAR_HEIGHT: i32 = 28;
+/// The menubar font size, in points.
+pub const MENUBAR_FONT_SIZE: f32 = 13.0;
+/// The menubar edge margin, in logical pixels.
+pub const MENUBAR_MARGIN: i32 = 10;
+/// The maximum width of the active app title, in logical pixels.
+pub const MENUBAR_TITLE_MAX_WIDTH: f32 = 240.0;
+
+/// The default dock tile size, in logical pixels (`dock.domain` may override).
+pub const DOCK_TILESIZE: i32 = 48;
+/// The gap between dock tiles, in logical pixels.
+pub const DOCK_GAP: i32 = 6;
+/// The dock padding around the tiles, in logical pixels.
+pub const DOCK_PADDING: i32 = 8;
+/// The dock bar height, in logical pixels.
+pub const DOCK_BAR_HEIGHT: i32 = DOCK_TILESIZE + DOCK_PADDING * 2;
+/// The dock label font size, in points.
+pub const DOCK_FONT_SIZE: f32 = 11.0;
+/// The dock label baseline offset inside a tile, in logical pixels.
+pub const DOCK_LABEL_OFFSET: i32 = 8;
+/// The dock label's horizontal inset, in logical pixels.
+pub const DOCK_TILE_TEXT_INSET: i32 = 2;
+/// The dock label's width padding inside a tile, in logical pixels.
+pub const DOCK_TILE_TEXT_PADDING: i32 = 4;
+
+/// The lock title font size, in points.
+pub const LOCK_FONT_SIZE: f32 = 24.0;
+/// The title is this many times the prompt font size.
+pub const LOCK_TITLE_SCALE: f32 = 1.5;
+/// The title's vertical position is the height divided by this.
+pub const LOCK_TITLE_Y_DIVISOR: i32 = 3;
+/// The password field width, in logical pixels.
+pub const LOCK_FIELD_WIDTH: i32 = 360;
+/// The password field height, in logical pixels.
+pub const LOCK_FIELD_HEIGHT: i32 = 44;
+/// The password field's minimum width, in logical pixels.
+pub const LOCK_FIELD_MIN_WIDTH: i32 = 120;
+/// The horizontal margin that bounds the field and status, in logical pixels.
+pub const LOCK_FIELD_MARGIN: i32 = 80;
+/// The focused field line height, in logical pixels.
+pub const LOCK_FIELD_LINE: i32 = 2;
+/// The label offset above the field, in logical pixels.
+pub const LOCK_LABEL_OFFSET: i32 = 10;
+/// The masked input offset below the field top, in logical pixels.
+pub const LOCK_MASK_OFFSET: i32 = 30;
+/// The status offset below the field, in logical pixels.
+pub const LOCK_STATUS_OFFSET: i32 = 22;
+/// The label font size, in points.
+pub const LOCK_LABEL_FONT_SIZE: f32 = 16.0;
+/// The masked input font size, in points.
+pub const LOCK_MASK_FONT_SIZE: f32 = 22.0;
+/// The status font size, in points.
+pub const LOCK_STATUS_FONT_SIZE: f32 = 14.0;
+
+/// The line-height multiplier used by the text engines.
+pub const TEXT_LINE_HEIGHT: f32 = 1.3;
 
 /// Where the wallpapers Yuki ships are installed, like GNOME's
 /// `/usr/share/backgrounds`. The flake installs `share/wallpapers/` under

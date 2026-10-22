@@ -46,17 +46,12 @@ use sctk::{
 
 use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::text::Text;
+use yuki_design::{
+    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_TITLE_MAX_WIDTH, Rgba,
+    TEXT_LINE_HEIGHT,
+};
 
-/// The bar height, in logical pixels.
-const BAR_HEIGHT: i32 = 28;
-/// The font size, in logical pixels.
-const FONT_SIZE: f32 = 13.0;
-/// The bar background, translucent (macOS vibrancy will come with blur).
-const BAR_BG: [u8; 4] = yuki_design::SHELL_BAR;
-/// The text colour.
-const TEXT_COLOR: [u8; 4] = yuki_design::SHELL_TEXT;
-/// The margin from the edges, in logical pixels.
-const MARGIN: i32 = 10;
+use crate::theme::{ShellTheme, data_dir};
 
 /// Duration until the next minute boundary, for the aligned clock timer.
 fn seconds_to_next_minute() -> Duration {
@@ -100,6 +95,7 @@ struct Menubar {
     /// The full frame, kept so a redraw uploads only the damaged region.
     frame: Vec<u8>,
     needs_redraw: bool,
+    theme: ShellTheme,
 }
 
 /// Connects to the compositor and runs the menu bar until closed.
@@ -122,7 +118,7 @@ pub fn run() -> anyhow::Result<()> {
         layer_surface: None,
         viewport: None,
         presenter: crate::present::EglPresenter::new(),
-        text: Text::new(FONT_SIZE),
+        text: Text::new(MENUBAR_FONT_SIZE),
         renderer: None,
         texture: None,
         scale: 1.0,
@@ -136,6 +132,7 @@ pub fn run() -> anyhow::Result<()> {
         last_clock: String::new(),
         frame: Vec::new(),
         needs_redraw: false,
+        theme: ShellTheme::new(),
     };
 
     if state.layer_shell.is_none() {
@@ -171,6 +168,9 @@ pub fn run() -> anyhow::Result<()> {
             calloop::timer::Timer::from_duration(Duration::from_millis(500)),
             move |_, _, state: &mut Menubar| {
                 state.check_window_store(&store_conn);
+                if state.theme.refresh() {
+                    state.render(&store_conn);
+                }
                 calloop::timer::TimeoutAction::ToDuration(Duration::from_millis(500))
             },
         )
@@ -196,9 +196,9 @@ impl Menubar {
         );
         // Full width, bar height; anchored to the top edge, reserving its
         // height so windows never go under it.
-        layer_surface.set_size(0, BAR_HEIGHT as u32);
+        layer_surface.set_size(0, MENUBAR_HEIGHT as u32);
         layer_surface.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-        layer_surface.set_exclusive_zone(BAR_HEIGHT);
+        layer_surface.set_exclusive_zone(MENUBAR_HEIGHT);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
         self.layer_surface = Some(layer_surface);
 
@@ -271,35 +271,40 @@ impl Menubar {
             self.frame = vec![0u8; stride * h as usize];
         }
         let frame = &mut self.frame;
+        let palette = self.theme.palette();
 
         // The bar background (static; not re-uploaded after the first frame).
-        fill_rect(frame, (w, h), (0, 0, w, h), BAR_BG);
+        fill_rect(frame, (w, h), (0, 0, w, h), palette.bar);
 
         // The active app's name on the left.
-        let baseline = (h as i32 - (FONT_SIZE * 1.3).round() as i32) / 2;
-        self.text
-            .set_text(&self.active_title, FONT_SIZE, Some(240.0));
+        let baseline = (h as i32 - (MENUBAR_FONT_SIZE * TEXT_LINE_HEIGHT).round() as i32) / 2;
+        self.text.set_text(
+            &self.active_title,
+            MENUBAR_FONT_SIZE,
+            Some(MENUBAR_TITLE_MAX_WIDTH),
+        );
         let (title_w, _) = self.text.measure();
         self.text.draw(
             frame,
             stride,
             w as i32,
             h as i32,
-            (MARGIN, baseline),
-            TEXT_COLOR,
+            (MENUBAR_MARGIN, baseline),
+            palette.text,
         );
 
         // The clock on the right, right-aligned at the measured text width.
-        self.text.set_text(&self.clock_text, FONT_SIZE, None);
+        self.text
+            .set_text(&self.clock_text, MENUBAR_FONT_SIZE, None);
         let (cw, _) = self.text.measure();
-        let cx = (w as i32 - MARGIN) - cw.round() as i32;
+        let cx = (w as i32 - MENUBAR_MARGIN) - cw.round() as i32;
         self.text.draw(
             frame,
             stride,
             w as i32,
             h as i32,
             (cx, baseline),
-            TEXT_COLOR,
+            palette.text,
         );
 
         // What changed since the last upload: everything on the first render,
@@ -313,7 +318,12 @@ impl Menubar {
         if self.active_title != self.last_title {
             damaged = Some(rect_union(
                 damaged,
-                (MARGIN as u32, 0, title_w.round().max(1.0) as u32 + 4, h),
+                (
+                    MENUBAR_MARGIN as u32,
+                    0,
+                    title_w.round().max(1.0) as u32 + 4,
+                    h,
+                ),
             ));
             self.last_title = self.active_title.clone();
         }
@@ -566,24 +576,6 @@ delegate_dispatch!(
 
 // --- helpers ---------------------------------------------------------------
 
-/// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`.
-fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".local/share"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".local/share"));
-            base.join("yuki")
-        },
-        PathBuf::from,
-    )
-}
-
 /// Reads the active window title from the compositor's store.
 fn load_active_window(store_path: &PathBuf) -> anyhow::Result<String> {
     #[derive(serde::Deserialize)]
@@ -602,7 +594,8 @@ fn load_active_window(store_path: &PathBuf) -> anyhow::Result<String> {
 }
 
 /// Fills a rectangle in a top-down RGBA frame, src-over.
-fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32), color: [u8; 4]) {
+fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32), color: Rgba) {
+    let color = color.to_rgba8();
     let (w, h) = frame_size;
     let (x, y, rw, rh) = rect;
     let stride = (w * 4) as usize;

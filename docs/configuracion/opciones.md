@@ -52,7 +52,7 @@ Estado de cada opción:
 | `appearance.contrast` | bool | `false` | **activa** | portal (`org.freedesktop.appearance` `contrast`) |
 | `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor |
-| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | datos | `desktop` tintará también menubar/dock (pendiente) |
+| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %) |
 | `appearance.traffic_lights` | `"auto"` \| `"macos"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
@@ -265,7 +265,7 @@ accent_color = [0.208, 0.518, 0.894]
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 window_color = "neutral"        # neutral | accent | wallpaper
-window_tint_scope = "windows"   # windows | desktop (desktop: pendiente en la shell)
+window_tint_scope = "windows"   # windows | desktop (tiñe menubar/dock)
 traffic_lights = "auto"         # auto | macos | accent | wallpaper
 ```
 

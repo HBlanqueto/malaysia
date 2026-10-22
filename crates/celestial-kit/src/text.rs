@@ -9,7 +9,7 @@
 use std::sync::Once;
 
 use cosmic_text::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache, Weight};
-use yuki_design::TEXT;
+use yuki_design::{Rgba, TEXT, TEXT_LINE_HEIGHT};
 
 /// The text engine: a font system, a glyph cache and one laid-out buffer.
 pub struct Text {
@@ -46,7 +46,7 @@ impl Text {
         let mut font_system = FontSystem::new();
         let family = resolve_family(&mut font_system, TEXT.family);
         let cache = SwashCache::new();
-        let metrics = Metrics::new(font_size, font_size * 1.3);
+        let metrics = Metrics::new(font_size, font_size * TEXT_LINE_HEIGHT);
         let buffer = Buffer::new(&mut font_system, metrics);
         Self {
             font_system,
@@ -59,7 +59,7 @@ impl Text {
 
     /// Sets the text, wrapping at `max_width` logical pixels when given.
     pub fn set_text(&mut self, text: &str, font_size: f32, max_width: Option<f32>) {
-        let metrics = Metrics::new(font_size, font_size * 1.3);
+        let metrics = Metrics::new(font_size, font_size * TEXT_LINE_HEIGHT);
         self.buffer.set_metrics(metrics);
         self.buffer.set_size(max_width, None);
         self.buffer.set_text(
@@ -107,13 +107,13 @@ impl Text {
         frame_w: i32,
         frame_h: i32,
         origin: (i32, i32),
-        color: [u8; 4],
+        color: Rgba,
     ) {
         // `Buffer::layout_runs` only iterates already-shaped lines; shape
         // first or the iterator yields nothing (this was the shell-text bug of
         // Bloque 7.1).
         self.buffer.shape_until_scroll(&mut self.font_system, false);
-        let (r, g, b) = (color[0], color[1], color[2]);
+        let [r, g, b, _] = color.to_rgba8();
         for run in self.buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
                 let physical = glyph.physical((0.0, 0.0), 1.0);
@@ -240,23 +240,28 @@ fn composite(pixels: &mut [u8], pi: usize, src: [f32; 4]) {
 }
 
 /// A colour in cosmic-text's `ARGB` layout.
-pub fn argb(color: [u8; 4]) -> Color {
-    Color::rgba(color[0], color[1], color[2], color[3])
+pub fn argb(color: Rgba) -> Color {
+    let [r, g, b, a] = color.to_rgba8();
+    Color::rgba(r, g, b, a)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Text;
-    use super::argb;
+    use super::{Rgba, TEXT, Text, argb};
 
     #[test]
     fn argb_encodes_in_cosmic_order() {
-        // cosmic-text packs `a<<24 | r<<16 | g<<8 | b`; our API takes [r, g, b, a].
-        let color = argb([0x12, 0x34, 0x56, 0x78]);
-        assert_eq!((color.0 >> 24) & 0xff, 0x78); // alpha
-        assert_eq!((color.0 >> 16) & 0xff, 0x12); // red
-        assert_eq!((color.0 >> 8) & 0xff, 0x34); // green
-        assert_eq!(color.0 & 0xff, 0x56); // blue
+        // cosmic-text packs `a<<24 | r<<16 | g<<8 | b`.
+        let color = argb(Rgba {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 0.4,
+        });
+        assert_eq!((color.0 >> 24) & 0xff, 102); // alpha
+        assert_eq!((color.0 >> 16) & 0xff, 26); // red
+        assert_eq!((color.0 >> 8) & 0xff, 51); // green
+        assert_eq!(color.0 & 0xff, 77); // blue
     }
 
     /// Rasterizes a string and checks that glyphs actually cover pixels.
@@ -267,8 +272,9 @@ mod tests {
     /// dark halo around glyph edges).
     #[test]
     fn text_rasterizes_non_transparent_pixels() {
-        let mut text = Text::new(13.0);
-        text.set_text("18:38", 13.0, None);
+        let size = TEXT.size as f32;
+        let mut text = Text::new(size);
+        text.set_text("18:38", size, None);
         let (w, h) = text.measure();
         assert!(w > 0.0, "measured text width should be > 0, got {w}");
         assert!(h > 0.0, "measured text height should be > 0, got {h}");
@@ -282,7 +288,12 @@ mod tests {
             fw as i32,
             fh as i32,
             (1, 1),
-            [0xff, 0xff, 0xff, 0xff],
+            Rgba {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
         );
 
         let covered = frame.chunks(4).filter(|px| px[3] != 0).count();

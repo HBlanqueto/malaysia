@@ -41,12 +41,10 @@ use sctk::{
 
 use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::password::PasswordPrompt;
+use yuki_design::LOCK_FONT_SIZE;
 
 use crate::pam;
 use crate::present::EglPresenter;
-
-/// The font size, in logical pixels.
-const FONT_SIZE: f32 = 24.0;
 
 struct Lock {
     registry: RegistryState,
@@ -97,7 +95,7 @@ pub fn run() -> anyhow::Result<()> {
         renderer: None,
         texture: None,
         presenters: Vec::new(),
-        prompt: PasswordPrompt::new(FONT_SIZE),
+        prompt: PasswordPrompt::new(LOCK_FONT_SIZE),
         _keyboard: None,
         seat: SeatState::new(&globals, &qh),
         modifiers: Modifiers::default(),

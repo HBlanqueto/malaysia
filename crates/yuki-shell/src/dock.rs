@@ -62,23 +62,12 @@ use sctk::{
 
 use celestial_kit::gl::{GlesRenderer, Texture};
 use celestial_kit::text::Text;
+use yuki_design::{
+    DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_LABEL_OFFSET, DOCK_PADDING,
+    DOCK_TILE_TEXT_INSET, DOCK_TILE_TEXT_PADDING, DOCK_TILESIZE, Rgba,
+};
 
-/// The tile size, in logical pixels (overridable via `dock.domain` `tilesize`).
-const DEFAULT_TILESIZE: i32 = 48;
-/// The gap between tiles.
-const GAP: i32 = 6;
-/// The dock padding around the tiles.
-const PADDING: i32 = 8;
-/// The bar height, in logical pixels.
-const BAR_HEIGHT: i32 = DEFAULT_TILESIZE + PADDING * 2;
-/// The bar background.
-const BAR_BG: [u8; 4] = yuki_design::SHELL_BAR;
-/// A running app tile.
-const TILE_BG: [u8; 4] = yuki_design::SHELL_TILE;
-/// The active app tile.
-const TILE_ACTIVE: [u8; 4] = yuki_design::SHELL_TILE_ACTIVE;
-/// The tile text colour.
-const TEXT_COLOR: [u8; 4] = yuki_design::SHELL_TEXT;
+use crate::theme::{ShellTheme, data_dir};
 
 /// One app in the dock.
 #[derive(Clone)]
@@ -130,6 +119,7 @@ struct Dock {
     active_store: PathBuf,
     last_active_modified: Option<SystemTime>,
     needs_redraw: bool,
+    theme: ShellTheme,
 }
 
 /// Connects to the compositor and runs the dock until closed.
@@ -158,11 +148,11 @@ pub fn run() -> anyhow::Result<()> {
         renderer: None,
         presenter: crate::present::EglPresenter::new(),
         texture: None,
-        text: Text::new(11.0),
+        text: Text::new(DOCK_FONT_SIZE),
         scale: 1.0,
         logical_size: (0, 0),
         buffer_size: (0, 0),
-        tilesize: DEFAULT_TILESIZE,
+        tilesize: DOCK_TILESIZE,
         entries: Vec::new(),
         active_title: String::new(),
         last_active_title: String::new(),
@@ -173,6 +163,7 @@ pub fn run() -> anyhow::Result<()> {
         active_store,
         last_active_modified: None,
         needs_redraw: false,
+        theme: ShellTheme::new(),
     };
 
     if state.layer_shell.is_none() {
@@ -214,7 +205,7 @@ impl Dock {
             Some("yuki-dock"),
             None,
         );
-        let bar_height = BAR_HEIGHT + (self.tilesize - DEFAULT_TILESIZE);
+        let bar_height = DOCK_BAR_HEIGHT + (self.tilesize - DOCK_TILESIZE);
         layer_surface.set_size(0, bar_height as u32);
         layer_surface.set_anchor(Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
         layer_surface.set_exclusive_zone(bar_height);
@@ -277,10 +268,10 @@ impl Dock {
 
     /// Lays the tiles out left to right.
     fn layout_tiles(&mut self) {
-        let mut x = PADDING;
+        let mut x = DOCK_PADDING;
         for entry in &mut self.entries {
             entry.x = x;
-            x += self.tilesize + GAP;
+            x += self.tilesize + DOCK_GAP;
         }
     }
 
@@ -299,32 +290,45 @@ impl Dock {
             self.pixels = vec![0u8; stride * h as usize];
         }
         let frame = &mut self.pixels;
+        let palette = self.theme.palette();
 
-        fill_rect(frame, (w, h), (0, 0, w, h), BAR_BG);
+        fill_rect(frame, (w, h), (0, 0, w, h), palette.bar);
 
-        let baseline = PADDING + 8;
+        let baseline = DOCK_PADDING + DOCK_LABEL_OFFSET;
         for entry in &self.entries {
             let active = entry.title == self.active_title;
-            let bg = if active { TILE_ACTIVE } else { TILE_BG };
+            let bg = if active {
+                palette.tile_active
+            } else {
+                palette.tile
+            };
             fill_rect(
                 frame,
                 (w, h),
-                (entry.x, PADDING, self.tilesize as u32, self.tilesize as u32),
+                (
+                    entry.x,
+                    DOCK_PADDING,
+                    self.tilesize as u32,
+                    self.tilesize as u32,
+                ),
                 bg,
             );
             // The app name, clipped to the tile.
-            self.text
-                .set_text(&entry.title, 11.0, Some(self.tilesize as f32 - 4.0));
+            self.text.set_text(
+                &entry.title,
+                DOCK_FONT_SIZE,
+                Some(self.tilesize as f32 - DOCK_TILE_TEXT_PADDING as f32),
+            );
             self.text.draw(
                 frame,
                 stride,
                 w as i32,
                 h as i32,
-                (entry.x + 2, baseline),
+                (entry.x + DOCK_TILE_TEXT_INSET, baseline),
                 if active {
-                    yuki_design::SHELL_TILE_TEXT_ACTIVE
+                    palette.tile_text_active
                 } else {
-                    TEXT_COLOR
+                    palette.text
                 },
             );
         }
@@ -341,7 +345,7 @@ impl Dock {
                         dirty,
                         (
                             entry.x as u32,
-                            PADDING as u32,
+                            DOCK_PADDING as u32,
                             self.tilesize as u32,
                             self.tilesize as u32,
                         ),
@@ -401,7 +405,10 @@ impl Dock {
     /// Activates the app whose tile was clicked.
     fn click_tile(&mut self, x: i32, y: i32) {
         let Some(entry) = self.entries.iter().find(|e| {
-            x >= e.x && x < e.x + self.tilesize && y >= PADDING && y < PADDING + self.tilesize
+            x >= e.x
+                && x < e.x + self.tilesize
+                && y >= DOCK_PADDING
+                && y < DOCK_PADDING + self.tilesize
         }) else {
             return;
         };
@@ -465,6 +472,11 @@ impl Dock {
                 self.active_title = title;
                 self.needs_redraw = true;
             }
+        }
+
+        if self.theme.refresh() {
+            self.layout_dirty = true;
+            self.needs_redraw = true;
         }
 
         if self.needs_redraw {
@@ -775,24 +787,6 @@ delegate_dispatch!(Dock: [zwlr_layer_surface_v1::ZwlrLayerSurfaceV1: LayerSurfac
 
 // --- helpers ---------------------------------------------------------------
 
-/// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`.
-fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".local/share"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".local/share"));
-            base.join("yuki")
-        },
-        PathBuf::from,
-    )
-}
-
 /// Parses the dock options from `dock.domain`.
 fn parse_dock(text: &str) -> anyhow::Result<DockOptions> {
     #[derive(serde::Deserialize)]
@@ -802,7 +796,7 @@ fn parse_dock(text: &str) -> anyhow::Result<DockOptions> {
     }
     let store: Store = toml::from_str(text)?;
     Ok(DockOptions {
-        tilesize: store.tilesize.unwrap_or(DEFAULT_TILESIZE),
+        tilesize: store.tilesize.unwrap_or(DOCK_TILESIZE),
     })
 }
 
@@ -828,7 +822,8 @@ struct DockOptions {
 }
 
 /// Fills a rectangle in a top-down RGBA frame, src-over.
-fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32), color: [u8; 4]) {
+fn fill_rect(frame: &mut [u8], frame_size: (u32, u32), rect: (i32, i32, u32, u32), color: Rgba) {
+    let color = color.to_rgba8();
     let (w, h) = frame_size;
     let (x, y, rw, rh) = rect;
     let stride = (w * 4) as usize;

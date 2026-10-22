@@ -29,8 +29,8 @@ window.domain ──► app activa (resaltada)
    foco de puntero a las capas `Top`/`Overlay` con interactividad).
 2. **La lista de ventanas**: `ext-foreign-toplevel-list-v1` (el compositor lo
    sirve con el módulo de smithay). Cada ventana mapeada → un tile; cada tile
-   muestra el título de la app sobre la paleta clara de Neptunia
-   (`SHELL_TILE`, activo `SHELL_TILE_ACTIVE`).
+   muestra el título de la app sobre la `ShellPalette` de Neptunia
+   (`tile`, activo `tile_active`), elegida por `appearance.color_scheme`.
 3. **Activar al clic**: `zwlr_foreign_toplevel_management_v1` (el compositor lo
    sirve manualmente — smithay 0.7 no lo trae). Un clic en un tile envía
    `activate`, y el compositor restaura (si estaba minimizada), eleva y enfoca
@@ -76,8 +76,8 @@ window.domain ──► app activa (resaltada)
   supervisor lo relanza.
 - Todo verde: clippy `-D warnings`, fmt y tests. El texto de los tiles se
   rasteriza (bug de 7.1 corregido) y los títulos se ven.
-- El tinte de panel/dock de `appearance.window_tint_scope = "desktop"` aún no
-  está conectado: el dock usa la paleta clara fija.
+- `appearance.window_tint_scope = "desktop"` tiñe la barra y los tiles con el
+  dominante del wallpaper (20 % claro / 26 % oscuro), en vivo.
 
 ## Relación
 

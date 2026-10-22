@@ -5,6 +5,12 @@
 //! The compositor never sees the password; the secret is handed to the lock's
 //! PAM thread and zeroized when that side drops it.
 
+use yuki_design::{
+    LOCK, LOCK_FIELD_HEIGHT, LOCK_FIELD_LINE, LOCK_FIELD_MARGIN, LOCK_FIELD_MIN_WIDTH,
+    LOCK_FIELD_WIDTH, LOCK_LABEL_FONT_SIZE, LOCK_LABEL_OFFSET, LOCK_MASK_FONT_SIZE,
+    LOCK_MASK_OFFSET, LOCK_STATUS_FONT_SIZE, LOCK_STATUS_OFFSET, LOCK_TITLE_SCALE,
+    LOCK_TITLE_Y_DIVISOR, Rgba,
+};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::text::Text;
@@ -150,75 +156,88 @@ impl PasswordPrompt {
         if w <= 0 || h <= 0 {
             return;
         }
-        fill_rect(frame, stride, (0, 0, w, h), [0x14, 0x14, 0x18, 0xff]);
+        fill_rect(frame, stride, (0, 0, w, h), LOCK.bg_surface);
 
-        self.text.set_text("Bloqueado", self.font_size * 1.5, None);
+        self.text
+            .set_text("Bloqueado", self.font_size * LOCK_TITLE_SCALE, None);
         let (tw, _) = self.text.measure();
         self.text.draw(
             frame,
             stride,
             w,
             h,
-            ((w - tw.round() as i32) / 2, h / 3),
-            [0xf2, 0xf2, 0xf5, 0xff],
+            ((w - tw.round() as i32) / 2, h / LOCK_TITLE_Y_DIVISOR),
+            LOCK.ink,
         );
 
-        let field_w = 360.min((w - 80).max(120));
-        let field_h = 44;
+        let field_w = LOCK_FIELD_WIDTH.min((w - LOCK_FIELD_MARGIN).max(LOCK_FIELD_MIN_WIDTH));
+        let field_h = LOCK_FIELD_HEIGHT;
         let field_x = (w - field_w) / 2;
         let field_y = h / 2;
         fill_rect(
             frame,
             stride,
             (field_x, field_y, field_w, field_h),
-            [0x24, 0x24, 0x2c, 0xff],
+            LOCK.bg_surface,
         );
         fill_rect(
             frame,
             stride,
-            (field_x, field_y + field_h - 2, field_w, 2),
-            [0x7a, 0x7a, 0x8a, 0xff],
+            (
+                field_x,
+                field_y + field_h - LOCK_FIELD_LINE,
+                field_w,
+                LOCK_FIELD_LINE,
+            ),
+            LOCK.accent,
         );
 
-        self.text.set_text(&self.label, 16.0, None);
+        self.text.set_text(&self.label, LOCK_LABEL_FONT_SIZE, None);
         let (lw, _) = self.text.measure();
         self.text.draw(
             frame,
             stride,
             w,
             h,
-            ((w - lw.round() as i32) / 2, field_y - 10),
-            [0xb8, 0xb8, 0xc4, 0xff],
+            ((w - lw.round() as i32) / 2, field_y - LOCK_LABEL_OFFSET),
+            LOCK.ink_muted,
         );
 
         let masked = self.field.masked();
         if !masked.is_empty() {
-            self.text.set_text(&masked, 22.0, None);
+            self.text.set_text(&masked, LOCK_MASK_FONT_SIZE, None);
             let (mw, _) = self.text.measure();
             self.text.draw(
                 frame,
                 stride,
                 w,
                 h,
-                ((w - mw.round() as i32) / 2, field_y + 30),
-                [0xf2, 0xf2, 0xf5, 0xff],
+                ((w - mw.round() as i32) / 2, field_y + LOCK_MASK_OFFSET),
+                LOCK.ink,
             );
         }
 
         let (status, color) = match self.field.state() {
-            State::Idle => (String::new(), [0xb8, 0xb8, 0xc4, 0xff]),
-            State::Verifying => ("Verificando…".to_string(), [0xb8, 0xb8, 0xc4, 0xff]),
-            State::Error(message) => (message.clone(), [0xff, 0x9a, 0x9a, 0xff]),
+            State::Idle => (String::new(), LOCK.ink_muted),
+            State::Verifying => ("Verificando…".to_string(), LOCK.ink_muted),
+            State::Error(message) => (message.clone(), LOCK.danger),
         };
         if !status.is_empty() {
-            self.text.set_text(&status, 14.0, Some((w - 80) as f32));
+            self.text.set_text(
+                &status,
+                LOCK_STATUS_FONT_SIZE,
+                Some((w - LOCK_FIELD_MARGIN) as f32),
+            );
             let (sw, _) = self.text.measure();
             self.text.draw(
                 frame,
                 stride,
                 w,
                 h,
-                ((w - sw.round() as i32) / 2, field_y + field_h + 22),
+                (
+                    (w - sw.round() as i32) / 2,
+                    field_y + field_h + LOCK_STATUS_OFFSET,
+                ),
                 color,
             );
         }
@@ -226,7 +245,8 @@ impl PasswordPrompt {
 }
 
 /// Fills a rectangle with an opaque colour.
-fn fill_rect(frame: &mut [u8], stride: usize, rect: (i32, i32, i32, i32), color: [u8; 4]) {
+fn fill_rect(frame: &mut [u8], stride: usize, rect: (i32, i32, i32, i32), color: Rgba) {
+    let color = color.to_rgba8();
     let (x, y, rw, rh) = rect;
     let width = stride / 4;
     for row in y..(y + rh) {

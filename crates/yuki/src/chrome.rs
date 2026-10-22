@@ -20,8 +20,8 @@ use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use unicode_segmentation::UnicodeSegmentation;
 use yuki_design::{
     ButtonKind, DARK, DARK_TINT, FocusPair, Font, LAYER_FACTOR_LINE, LIGHT, Palette, Rgba,
-    TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TRAFFIC_ZOOM_LIGHTEN,
-    TitlebarPosition, WINDOW, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH,
+    TRAFFIC_ZOOM_LIGHTEN, TitlebarPosition, WINDOW, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 use yuki_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use yuki_scene::scene::WindowId;
@@ -435,7 +435,8 @@ impl TextEngine {
 
     fn shape(&mut self, text: &str, font: Font, scale: f64, max_width: Option<f32>) {
         let size = (f64::from(font.size) * scale).max(1.0) as f32;
-        self.buffer.set_metrics(Metrics::new(size, size * 1.3));
+        self.buffer
+            .set_metrics(Metrics::new(size, size * TEXT_LINE_HEIGHT));
         self.buffer.set_size(max_width, None);
         self.buffer.set_wrap(Wrap::None);
         self.buffer.set_text(

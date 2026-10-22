@@ -45,6 +45,7 @@ use celestial_kit::gl::{GlesRenderer, Texture};
 use yuki_design::Rgba;
 
 use crate::present::EglPresenter;
+use crate::theme::data_dir;
 
 /// The decoded wallpaper, ready to upload as an RGBA8 texture.
 #[derive(Clone)]
@@ -484,26 +485,6 @@ struct WallpaperStore {
 struct Desktops {
     #[serde(default)]
     default: Option<String>,
-}
-
-/// The preferences/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`
-/// (`~/.local/share/yuki` by default) — the `~/Library/Application Support`
-/// equivalent, where the wallpaper store lives.
-fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".local/share"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".local/share"));
-            base.join("yuki")
-        },
-        PathBuf::from,
-    )
 }
 
 /// Reads the current wallpaper image path from the store.
