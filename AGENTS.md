@@ -148,7 +148,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Diseño:** **Neptunia** (`~/dotfiles/kits/neptunia`, `tokens.json` +
   `components.json`) es la fuente por defecto del escritorio (ADR 0032):
   titlebar **arriba** de 32 px para ventanas SSD, semáforos de 12, radio 16,
-  tema claro. Los
+  tema claro, y modos de color `neutral`/`accent`/`wallpaper` (tinte de la
+  titlebar y semáforos). Los
   valores se copian a `yuki-design`; no inventes colores/medidas. Ver
   `docs/arquitectura/ventanas.md`.
 - **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el

@@ -57,7 +57,7 @@ use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
-use crate::config::{ColorScheme, ScreenshotTarget};
+use crate::config::ScreenshotTarget;
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
@@ -834,12 +834,6 @@ pub(crate) fn build_output_elements(
             );
         }
         let focused = state.focused_window();
-        let dark = matches!(state.config.appearance.color_scheme, ColorScheme::Dark);
-        let palette = if dark {
-            &yuki_design::DARK
-        } else {
-            &yuki_design::LIGHT
-        };
         for window in state.windows.iter().rev() {
             if !window.is_mapped() || window.insets().top <= 0.0 {
                 continue;
@@ -853,8 +847,7 @@ pub(crate) fn build_output_elements(
                 window.size().w,
                 window.location(),
                 scale,
-                palette,
-                dark,
+                &state.chrome_theme,
             ) {
                 elements.push(element);
             }

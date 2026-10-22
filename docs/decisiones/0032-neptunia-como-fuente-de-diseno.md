@@ -45,6 +45,10 @@ mientras Yuki se construye.
 - La titlebar, la menubar y el dock comparten la paleta clara de Neptunia.
 - La titlebar del compositor se dibuja con 32 px para ventanas SSD, semáforos de 12 y radio 16; sus botones
   cierran, minimizan y maximizan.
+- `appearance.window_color` implementa los modos `neutral`/`accent`/`wallpaper`
+  de Neptunia: tiñe la titlebar con el acento o con el color dominante del
+  wallpaper y deriva los semáforos; `window_tint_scope` y el tinte de panel/dock
+  quedan para la shell.
 - Quedan pendientes el redondeo real de ventanas, la sombra, los glifos de los
   semáforos al pasar el puntero y el cambio de tema en vivo.
 - La launcher y las apps propias se diseñan primero en Neptunia

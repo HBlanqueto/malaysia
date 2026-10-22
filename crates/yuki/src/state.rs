@@ -295,6 +295,8 @@ pub struct State {
     pub(crate) leaked_window: Option<WindowId>,
     /// Cached titlebar textures for server-decorated windows.
     pub(crate) chrome: crate::chrome::ChromeCache,
+    /// The Neptunia tint and traffic-light colours, resolved at startup.
+    pub(crate) chrome_theme: crate::chrome::ChromeTheme,
     /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
     /// backend renders it on the next frame.
     pub(crate) screenshot: Option<ScreenshotRequest>,
@@ -384,6 +386,7 @@ impl State {
         idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let config = Config::load();
+        let chrome_theme = crate::chrome::ChromeTheme::from_config(&config);
         let scale = output_scale(config.display.scale);
         // Applying the scale before the global is created means clients learn
         // the integer value in the initial wl_output state. The fractional
@@ -508,6 +511,7 @@ impl State {
             test_press: None,
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
+            chrome_theme,
             screenshot: None,
             screenshot_mode: None,
         })

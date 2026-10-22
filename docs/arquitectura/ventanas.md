@@ -52,6 +52,27 @@ WindowMap::iter (topmost → bottom)
 - La ventana se eleva al recibir foco; el foco y el orden de apilado no se
   separan.
 
+## Color de las ventanas (Neptunia)
+
+`appearance.window_color` elige qué tiñe la titlebar, con los factores de
+Neptunia:
+
+| Modo | Tinte | Semáforos en `auto` |
+|---|---|---|
+| `neutral` | ninguno | macOS fijos |
+| `accent` | el acento, 6 % en claro / 8 % en oscuro | derivados del acento |
+| `wallpaper` | el color dominante del wallpaper, 7 % / 9 % | derivados del wallpaper |
+
+El color dominante se calcula reduciendo el PNG del wallpaper actual a
+histogramas de 4 bits y eligiendo el más frecuente; si no se puede leer, se usa
+el acento. `appearance.traffic_lights` permite forzar `macos`, `accent` o
+`wallpaper` en vez de `auto`.
+
+`appearance.window_tint_scope = "desktop"` está definido en el catálogo y el
+factor de panel/dock (20 % / 26 %) vive en `yuki-design`, pero la shell todavía
+no consume ese tinte. El tema se resuelve al arrancar; un cambio en
+`appearance.domain` o en el wallpaper se aplica al reiniciar, no en vivo.
+
 ## Botones
 
 | Botón | Acción |

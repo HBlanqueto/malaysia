@@ -39,6 +39,28 @@ pub struct Rgba {
 }
 
 impl Rgba {
+    /// Mixes toward `other` by `amount` (`0.0` keeps this color, `1.0` is the
+    /// other one); alpha stays this color's.
+    pub fn mix(self, other: Self, amount: f32) -> Self {
+        let amount = amount.clamp(0.0, 1.0);
+        Self {
+            r: self.r + (other.r - self.r) * amount,
+            g: self.g + (other.g - self.g) * amount,
+            b: self.b + (other.b - self.b) * amount,
+            a: self.a,
+        }
+    }
+
+    /// Mixes toward black by `amount`.
+    pub fn darken(self, amount: f32) -> Self {
+        self.mix(Self::rgb8(0, 0, 0), amount)
+    }
+
+    /// Mixes toward white by `amount`.
+    pub fn lighten(self, amount: f32) -> Self {
+        self.mix(Self::rgb8(255, 255, 255), amount)
+    }
+
     /// Builds an opaque color from 8-bit channels.
     pub const fn rgb8(r: u8, g: u8, b: u8) -> Self {
         Self::rgba8(r, g, b, 1.0)
@@ -269,6 +291,22 @@ pub const CURSOR_SHAKE_SHRINK_MS: u64 = 220;
 
 /// The interval between animation frames, in milliseconds (roughly 60 Hz).
 pub const CURSOR_SHAKE_TICK_MS: u64 = 16;
+
+/// How much the accent tints the window chrome, for light and dark modes
+/// (Neptunia `appearance.modes.accent`).
+pub const WINDOW_TINT_ACCENT: [f32; 2] = [0.06, 0.08];
+
+/// How much the wallpaper's dominant colour tints the window chrome.
+pub const WINDOW_TINT_WALLPAPER: [f32; 2] = [0.07, 0.09];
+
+/// How much the wallpaper tints the panels and dock in `desktop` scope.
+pub const PANEL_TINT_WALLPAPER: [f32; 2] = [0.20, 0.26];
+
+/// How much the close/minimize lights darken their source colour.
+pub const TRAFFIC_CLOSE_MINIMIZE_DARKEN: f32 = 0.28;
+
+/// How much the zoom light lightens its source colour.
+pub const TRAFFIC_ZOOM_LIGHTEN: f32 = 0.58;
 
 /// Dim over everything outside the screenshot selection.
 pub const SCREENSHOT_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.35];

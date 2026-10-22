@@ -221,7 +221,8 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
 - **Titlebar Neptunia — hecha.** Barra superior de 32 px para ventanas SSD,
   semáforos de 12 px,
   título centrado con `cosmic-text`, caché por ventana y botones de cerrar,
-  minimizar y maximizar; también se elevan las ventanas al enfocarlas. Ver
+  minimizar y maximizar; modos de color `neutral`/`accent`/`wallpaper` con
+  tinte de la titlebar y semáforos derivados; también se elevan las ventanas al enfocarlas. Ver
   [`arquitectura/ventanas.md`](arquitectura/ventanas.md).
 - **Launcher — siguiente.** `yuki-shell launcher` en la capa Overlay,
   `Super+Space`, búsqueda en `.desktop`, lanzamiento y cierre con `Esc`.

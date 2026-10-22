@@ -16,12 +16,128 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
-use yuki_design::{ButtonKind, Font, Palette, TITLEBAR, TitlebarPosition};
+use yuki_design::{
+    ButtonKind, DARK, FocusPair, Font, LIGHT, Palette, Rgba, TITLEBAR,
+    TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, TitlebarPosition, WINDOW_TINT_ACCENT,
+    WINDOW_TINT_WALLPAPER,
+};
 use yuki_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use yuki_scene::scene::WindowId;
 
+use crate::config::{AppearanceConfig, ColorScheme, Config, TrafficLightStyle, WindowColorMode};
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
+
+/// The colours the titlebar uses: the base palette plus the tint and the
+/// traffic-light colours selected by `appearance.domain`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ChromeTheme {
+    palette: Palette,
+    lights: [Rgba; 3],
+    signature: u64,
+}
+
+impl ChromeTheme {
+    /// Builds the theme from the configuration and the current wallpaper.
+    pub(crate) fn from_config(config: &Config) -> Self {
+        let dark = matches!(config.appearance.color_scheme, ColorScheme::Dark);
+        let wallpaper = crate::wallpaper::dominant_color();
+        Self::from_parts(&config.appearance, dark, wallpaper)
+    }
+
+    fn from_parts(appearance: &AppearanceConfig, dark: bool, wallpaper: Option<Rgba>) -> Self {
+        let base = if dark { DARK } else { LIGHT };
+        let accent = appearance
+            .accent_color
+            .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
+            .unwrap_or(base.accent);
+        let mode = appearance.window_color;
+        let source = match mode {
+            WindowColorMode::Neutral => None,
+            WindowColorMode::Accent => Some(accent),
+            WindowColorMode::Wallpaper => wallpaper.or(Some(accent)),
+        };
+        let index = usize::from(dark);
+        let factor = match mode {
+            WindowColorMode::Neutral => 0.0,
+            WindowColorMode::Accent => WINDOW_TINT_ACCENT[index],
+            WindowColorMode::Wallpaper => WINDOW_TINT_WALLPAPER[index],
+        };
+        let mut palette = base;
+        if let Some(source) = source {
+            palette.titlebar_bg = FocusPair {
+                focused: base.titlebar_bg.focused.mix(source, factor),
+                unfocused: base.titlebar_bg.unfocused.mix(source, factor),
+            };
+            palette.hairline = base.hairline.mix(source, factor * 0.5);
+        }
+
+        let style = match appearance.traffic_lights {
+            TrafficLightStyle::Auto => match mode {
+                WindowColorMode::Neutral => TrafficLightStyle::Macos,
+                WindowColorMode::Accent => TrafficLightStyle::Accent,
+                WindowColorMode::Wallpaper => TrafficLightStyle::Wallpaper,
+            },
+            style => style,
+        };
+        let lights = match style {
+            TrafficLightStyle::Auto | TrafficLightStyle::Macos => [
+                TITLEBAR.buttons.order[0].color,
+                TITLEBAR.buttons.order[1].color,
+                TITLEBAR.buttons.order[2].color,
+            ],
+            TrafficLightStyle::Accent | TrafficLightStyle::Wallpaper => {
+                let source = if style == TrafficLightStyle::Accent {
+                    accent
+                } else {
+                    wallpaper.unwrap_or(accent)
+                };
+                [
+                    source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),
+                    source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),
+                    source.lighten(TRAFFIC_ZOOM_LIGHTEN),
+                ]
+            }
+        };
+
+        let signature = signature(dark, mode, style, palette, lights);
+        Self {
+            palette,
+            lights,
+            signature,
+        }
+    }
+}
+
+fn signature(
+    dark: bool,
+    mode: WindowColorMode,
+    style: TrafficLightStyle,
+    palette: Palette,
+    lights: [Rgba; 3],
+) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    let mut add = |bits: u64| {
+        hash ^= bits;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    };
+    add(u64::from(dark));
+    add(mode as u64);
+    add(style as u64);
+    for color in [
+        palette.titlebar_bg.focused,
+        palette.titlebar_bg.unfocused,
+        palette.hairline,
+        lights[0],
+        lights[1],
+        lights[2],
+    ] {
+        for channel in [color.r, color.g, color.b, color.a] {
+            add(u64::from(channel.to_bits()));
+        }
+    }
+    hash
+}
 
 /// The titlebar texture cache, one entry per decorated window.
 pub(crate) struct ChromeCache {
@@ -41,7 +157,7 @@ struct Key {
     focused: bool,
     width: i32,
     scale: u64,
-    dark: bool,
+    theme: u64,
 }
 
 impl ChromeCache {
@@ -68,19 +184,18 @@ impl ChromeCache {
         width: i32,
         location: Point<i32, Logical>,
         scale: f64,
-        palette: &Palette,
-        dark: bool,
+        theme: &ChromeTheme,
     ) -> Option<OutputRenderElement<GlesRenderer>> {
         let key = Key {
             title: title.to_string(),
             focused,
             width,
             scale: scale.to_bits(),
-            dark,
+            theme: theme.signature,
         };
         let stale = self.entries.get(&id).is_none_or(|entry| entry.key != key);
         if stale {
-            let (pixels, w, h) = self.text.rasterize(title, focused, width, scale, palette);
+            let (pixels, w, h) = self.text.rasterize(title, focused, width, scale, *theme);
             let buffer = MemoryRenderBuffer::from_slice(
                 &pixels,
                 Fourcc::Abgr8888,
@@ -217,8 +332,9 @@ impl TextEngine {
         focused: bool,
         width: i32,
         scale: f64,
-        palette: &Palette,
+        theme: ChromeTheme,
     ) -> (Vec<u8>, i32, i32) {
+        let palette = &theme.palette;
         let w = (f64::from(width) * scale).round().max(1.0) as i32;
         let h = (f64::from(TITLEBAR.thickness) * scale).round().max(1.0) as i32;
         let mut pixels = vec![0u8; (w * h * 4) as usize];
@@ -235,10 +351,10 @@ impl TextEngine {
         let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
         let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
         let center_y = h / 2;
-        for (index, button) in TITLEBAR.buttons.order.iter().enumerate() {
+        for index in 0..TITLEBAR.buttons.order.len() {
             let center_x = margin + diameter / 2 + index as i32 * (diameter + gap);
             let color = if focused {
-                button.color
+                theme.lights[index]
             } else {
                 palette.traffic_lights_inactive
             };
@@ -487,6 +603,63 @@ mod tests {
             top: f64::from(TITLEBAR.thickness),
             ..Insets::ZERO
         }
+    }
+
+    #[test]
+    fn neutral_keeps_the_base_palette_and_macos_lights() {
+        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), false, None);
+        assert_eq!(theme.palette.titlebar_bg, LIGHT.titlebar_bg);
+        assert_eq!(theme.lights[0], TITLEBAR.buttons.order[0].color);
+    }
+
+    #[test]
+    fn accent_tints_the_bar_and_derives_the_lights() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Accent,
+            accent_color: Some([0.8, 0.2, 0.2]),
+            ..AppearanceConfig::default()
+        };
+        let theme = ChromeTheme::from_parts(&appearance, false, None);
+        let accent = Rgba {
+            r: 0.8,
+            g: 0.2,
+            b: 0.2,
+            a: 1.0,
+        };
+        assert_ne!(theme.palette.titlebar_bg.focused, LIGHT.titlebar_bg.focused);
+        assert_eq!(
+            theme.lights[0],
+            accent.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
+        );
+        assert_eq!(theme.lights[2], accent.lighten(TRAFFIC_ZOOM_LIGHTEN));
+    }
+
+    #[test]
+    fn wallpaper_tinting_uses_the_dominant_colour() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Wallpaper,
+            ..AppearanceConfig::default()
+        };
+        let wallpaper = Rgba {
+            r: 0.1,
+            g: 0.5,
+            b: 0.9,
+            a: 1.0,
+        };
+        let theme = ChromeTheme::from_parts(&appearance, true, Some(wallpaper));
+        assert_ne!(theme.palette.titlebar_bg.focused, DARK.titlebar_bg.focused);
+        assert_eq!(theme.lights[2], wallpaper.lighten(TRAFFIC_ZOOM_LIGHTEN));
+    }
+
+    #[test]
+    fn an_explicit_macos_style_keeps_the_fixed_lights() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Accent,
+            traffic_lights: TrafficLightStyle::Macos,
+            ..AppearanceConfig::default()
+        };
+        let theme = ChromeTheme::from_parts(&appearance, false, None);
+        assert_eq!(theme.lights[1], TITLEBAR.buttons.order[1].color);
     }
 
     #[test]

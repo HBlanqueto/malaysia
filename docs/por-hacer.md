@@ -55,6 +55,10 @@ semáforos de 12, tema claro por defecto.
 - [x] Foco de puntero limitado al rectángulo del cliente (la titlebar no se
       trata como superficie del cliente).
 - [x] Menubar y dock con la paleta clara de Neptunia.
+- [x] `appearance.window_color` (`neutral`/`accent`/`wallpaper`) y
+      `traffic_lights` en la titlebar; el color dominante del wallpaper se
+      extrae del PNG. `window_tint_scope = "desktop"` queda pendiente de que la
+      shell consuma el tinte.
 - [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
       en layer surfaces).
 - [ ] Esquinas redondeadas, sombra, glifos de hover y doble clic para zoom.

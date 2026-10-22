@@ -316,6 +316,54 @@ pub struct AppearanceConfig {
     /// "Reduce motion" (macOS Accessibility). Published as
     /// `org.freedesktop.appearance` `reduced-motion`.
     pub reduced_motion: bool,
+    /// What tints the window chrome: nothing, the accent or the wallpaper.
+    pub window_color: WindowColorMode,
+    /// In wallpaper mode, whether only windows or the panels and dock too are
+    /// tinted. The shell side of `desktop` is still pending.
+    pub window_tint_scope: WindowTintScope,
+    /// The traffic-light palette: follow the window colour mode, macOS fixed
+    /// colours, or derive them from the accent/wallpaper.
+    pub traffic_lights: TrafficLightStyle,
+}
+
+/// Neptunia's "Color de las ventanas" (`neutral` / `accent` / `wallpaper`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowColorMode {
+    /// No tint: the light/dark palette as-is.
+    #[default]
+    Neutral,
+    /// Tint the window chrome toward the accent colour.
+    Accent,
+    /// Tint the window chrome toward the wallpaper's dominant colour.
+    Wallpaper,
+}
+
+/// How far the wallpaper tint reaches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WindowTintScope {
+    /// Only the windows.
+    #[default]
+    Windows,
+    /// Windows plus the panels and dock (the shell side lands later).
+    Desktop,
+}
+
+/// Neptunia's traffic-light styles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrafficLightStyle {
+    /// Same as the window colour mode: macOS colours for neutral, accent or
+    /// wallpaper-derived colours otherwise.
+    #[default]
+    Auto,
+    /// The fixed macOS red/amber/green.
+    Macos,
+    /// Derived from the accent colour.
+    Accent,
+    /// Derived from the wallpaper's dominant colour.
+    Wallpaper,
 }
 
 /// Window chrome and behaviour (macOS System Settings → Windows & Apps).
@@ -561,7 +609,7 @@ pub fn config_dir() -> PathBuf {
 /// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`
 /// (`~/.local/share/yuki` by default) — the `~/Library/Application Support`
 /// equivalent, where the wallpaper store lives.
-fn data_dir() -> PathBuf {
+pub fn data_dir() -> PathBuf {
     std::env::var_os("YUKI_DATA_DIR").map_or_else(
         || {
             let base = std::env::var_os("XDG_DATA_HOME")
@@ -609,7 +657,7 @@ mod tests {
         std::fs::create_dir_all(&data_dir).expect("create the temp data dir");
         std::fs::write(
             config_dir.join("appearance.domain"),
-            "color_scheme = \"dark\"\n",
+            "color_scheme = \"dark\"\nwindow_color = \"wallpaper\"\nwindow_tint_scope = \"desktop\"\ntraffic_lights = \"accent\"\n",
         )
         .expect("write appearance.domain");
         std::fs::write(
@@ -632,6 +680,12 @@ mod tests {
 
         let config = Config::load_from_dirs(&config_dir, &data_dir);
         assert_eq!(config.appearance.color_scheme, ColorScheme::Dark);
+        assert_eq!(config.appearance.window_color, WindowColorMode::Wallpaper);
+        assert_eq!(
+            config.appearance.window_tint_scope,
+            WindowTintScope::Desktop
+        );
+        assert_eq!(config.appearance.traffic_lights, TrafficLightStyle::Accent);
         assert!(config.dock.autohide);
         assert_eq!(config.dock.orientation, DockOrientation::Left);
         // The wallpaper domain comes from the data dir (Application Support).
@@ -662,6 +716,12 @@ mod tests {
         assert_eq!(config.appearance.color_scheme, ColorScheme::Auto);
         assert!(!config.appearance.contrast);
         assert!(!config.appearance.reduced_motion);
+        assert_eq!(config.appearance.window_color, WindowColorMode::Neutral);
+        assert_eq!(
+            config.appearance.window_tint_scope,
+            WindowTintScope::Windows
+        );
+        assert_eq!(config.appearance.traffic_lights, TrafficLightStyle::Auto);
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(config.window.titlebar);
         assert_eq!(config.window.focus, FocusPolicy::Click);
