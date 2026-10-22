@@ -26,7 +26,8 @@ docs/
 │   ├── 08-direct-session.md
 │   ├── 09-escala-fraccional.md
 │   ├── 10-lock.md
-│   └── 11-protocolos-de-uso-diario.md
+│   ├── 11-protocolos-de-uso-diario.md
+│   └── 12-portales-y-servicios.md
 ├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
@@ -126,10 +127,11 @@ aceptados en panel real a 1.0/1.25/1.5; la escala por salida queda para 8b. El *
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 `wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate,
 `pointer-constraints` + `relative-pointer`, la captura de salida y de ventana y
-las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG)
-con su dominio `screenshot.domain` (defaults macOS, `show_pointer` activo).
-El **Bloque 12** (portales y servicios de escritorio) está
-planificado y depende de la captura del Bloque 11. La base NixOS está hecha
+las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG
+o el portapapeles) con su dominio `screenshot.domain`. El **Bloque 12a** está
+empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
+`appearance.domain`; faltan `Screenshot`/`ScreenCast`. El **Bloque 12b**
+(notificaciones, polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
 **lock** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y

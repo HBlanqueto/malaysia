@@ -46,6 +46,20 @@ in
     # Both the compositor and the shell render through GBM/EGL.
     hardware.graphics.enable = lib.mkDefault true;
 
+    # ADR 0031: Yuki's backend serves Settings; GTK keeps FileChooser, Print
+    # and Notification. `UseIn=Yuki` ties the backend to this session.
+    xdg.portal = {
+      enable = lib.mkDefault true;
+      extraPortals = lib.mkAfter [
+        cfg.package
+        pkgs.xdg-desktop-portal-gtk
+      ];
+      config.yuki = lib.mkDefault {
+        default = [ "gtk" ];
+        "org.freedesktop.impl.portal.Settings" = [ "yuki" ];
+      };
+    };
+
     # The lock prefers this stack and falls back to `login` when it is absent.
     security.pam.services.yuki-lock.text = ''
       auth include login

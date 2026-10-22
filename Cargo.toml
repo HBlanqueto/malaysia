@@ -11,6 +11,7 @@ members = [
     "crates/grade-graphics",
     "crates/celestial-kit",
     "crates/yuki-shell",
+    "crates/xdg-desktop-portal-yuki",
     "tools/sctk-probe",
 ]
 
@@ -26,6 +27,7 @@ default-members = [
     "crates/grade-graphics",
     "crates/celestial-kit",
     "crates/yuki-shell",
+    "crates/xdg-desktop-portal-yuki",
 ]
 
 [workspace.package]
@@ -77,6 +79,7 @@ zbus = "5"
 chrono = "0.4"
 
 # Yuki's own crates.
+yuki = { path = "crates/yuki" }                 # The compositor library (config, xdg helpers).
 yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.
 yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
 grade-graphics = { path = "crates/grade-graphics" }  # Shared GLSL shaders + parameters (glossary).

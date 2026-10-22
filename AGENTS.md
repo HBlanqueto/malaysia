@@ -137,9 +137,11 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   Escritorio XDG) hechas. Opciones en `screenshot.domain` (defaults macOS;
   `show_pointer` activo, el resto reservadas). Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
-- **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
-  de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
-  captura del Bloque 11. El plan corto vive en `docs/por-hacer.md`.
+- **Bloque 12a empezado:** backend `xdg-desktop-portal-yuki` con `Settings`
+  (`org.freedesktop.appearance` desde `appearance.domain`, `SettingChanged`,
+  `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback). Siguen
+  `Screenshot`/`ScreenCast` y el Bloque 12b (notificaciones, polkit, keyring,
+  AT-SPI). Ver `docs/bloques/12-portales-y-servicios.md`.
 - **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el
   redondeo floor/ceil (ADR 0004), aceptados en panel real a 1.0/1.25/1.5.
   Falta la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.

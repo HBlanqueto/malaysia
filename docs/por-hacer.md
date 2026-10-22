@@ -55,10 +55,11 @@ shell; ver `bloques/09-escala-fraccional.md`.
    están hechos (incluido `target = "clipboard"`). Faltan la miniatura,
    `Control` al vuelo y la app de `Shift+Super+5`. Ver
    `bloques/11-protocolos-de-uso-diario.md`.
-2. **Bloque 12a — portal nativo.** Primero `Settings` /
-   `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la
-   captura del Bloque 11 y PipeWire. GTK sigue sirviendo FileChooser, Print y
-   Notification.
+2. **Bloque 12a — portal nativo.** `Settings` /
+   `org.freedesktop.appearance` **hecho** (backend D-Bus, `SettingChanged`,
+   `xdg.portal.config.yuki` con GTK de fallback). Siguen `Screenshot` y
+   `ScreenCast` sobre la captura del Bloque 11 y PipeWire. GTK sigue sirviendo
+   FileChooser, Print y Notification.
 3. **Bloque 12b — servicios de escritorio.** Notificaciones, agente polkit,
    keyring/Secret Service y AT-SPI.
 4. **Bloques 8b/8c — multi-monitor y planos.** 8c después de 8b.

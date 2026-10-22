@@ -188,9 +188,10 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 Se divide en dos entregas. Depende de la captura del Bloque 11.
 
 - **12a — `xdg-desktop-portal-yuki`.** Backend propio para lo que depende del
-  compositor:
-  - `Settings` (`org.freedesktop.appearance`) desde el store `.domain`:
-    dark/light, accent-color y contraste, con `SettingChanged`.
+  compositor (ADR 0031). **Settings hecho**: `org.freedesktop.appearance`
+  (dark/light, accent-color, contraste y reduced-motion) desde
+  `appearance.domain`, con `SettingChanged`; portal registrado con
+  `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback.
   - `Screenshot` y `ScreenCast` sobre `ext-image-copy-capture` +
     `ext-image-capture-source` y PipeWire (dmabuf, modificadores, fences).
     Las capturas de ventana se guardan por defecto en el Escritorio del
@@ -205,7 +206,9 @@ Se divide en dos entregas. Depende de la captura del Bloque 11.
   cubre el módulo de NixOS.
 - Aceptación 12a: Firefox/Chromium comparten una ventana y un monitor por el
   portal; OBS recibe el stream; dark/light cambia desde `.domain` sin
-  reiniciar; el portal GTK sigue sirviendo FileChooser.
+  reiniciar; el portal GTK sigue sirviendo FileChooser. (Settings verificado
+  por D-Bus en anidado; falta la comprobación con una app real y el resto de
+  interfaces.)
 - Aceptación 12b: una notificación de una app aparece en la shell; una
   operación privilegiada pide contraseña por el agente polkit; Orca puede
   leer la shell.

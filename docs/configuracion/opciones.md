@@ -46,8 +46,12 @@ Estado de cada opción:
 |---|---|---|---|---|
 | `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"light"` | `"auto"` | datos | portal `org.freedesktop.appearance`, shell |
 | `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos | portal, shell, efectos |
+| `appearance.contrast` | bool | `false` | **activa** | portal (`org.freedesktop.appearance` `contrast`) |
+| `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
 
-macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**".
+macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
+contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
+namespace del portal.
 
 ## `display` — escala de salida (System Settings → Displays)
 

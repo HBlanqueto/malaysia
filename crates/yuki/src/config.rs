@@ -310,6 +310,12 @@ pub struct AppearanceConfig {
     pub color_scheme: ColorScheme,
     /// An sRGB accent color, `[r, g, b]` in `[0, 1]`. `None` → the default.
     pub accent_color: Option<[f32; 3]>,
+    /// "Increase contrast" (macOS Accessibility). Published as the
+    /// `org.freedesktop.appearance` `contrast` key.
+    pub contrast: bool,
+    /// "Reduce motion" (macOS Accessibility). Published as
+    /// `org.freedesktop.appearance` `reduced-motion`.
+    pub reduced_motion: bool,
 }
 
 /// Window chrome and behaviour (macOS System Settings → Windows & Apps).
@@ -535,7 +541,7 @@ impl Config {
 
 /// The preferences directory: `YUKI_CONFIG_DIR`, else `$XDG_CONFIG_HOME/yuki`
 /// (`~/.config/yuki` by default) — the `~/Library/Preferences` equivalent.
-fn config_dir() -> PathBuf {
+pub fn config_dir() -> PathBuf {
     std::env::var_os("YUKI_CONFIG_DIR").map_or_else(
         || {
             let base = std::env::var_os("XDG_CONFIG_HOME")
@@ -654,6 +660,8 @@ mod tests {
     fn defaults_are_complete_and_sane() {
         let config = Config::default();
         assert_eq!(config.appearance.color_scheme, ColorScheme::Auto);
+        assert!(!config.appearance.contrast);
+        assert!(!config.appearance.reduced_motion);
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(config.window.titlebar);
         assert_eq!(config.window.focus, FocusPolicy::Click);

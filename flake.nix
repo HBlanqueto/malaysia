@@ -81,6 +81,15 @@
                 --set GBM_BACKENDS_PATH "${pkgs.mesa}/lib/gbm" \
                 --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
             done
+            # The portal backend (ADR 0031), its portal registration and its
+            # D-Bus activation file. `xdg-desktop-portal` starts it on demand.
+            install -Dm644 share/xdg-desktop-portal/portals/yuki.portal \
+              $out/share/xdg-desktop-portal/portals/yuki.portal
+            mkdir -p $out/share/dbus-1/services
+            sed "s|@out@|$out|g" \
+              share/dbus-1/services/org.freedesktop.impl.portal.desktop.yuki.service \
+              > $out/share/dbus-1/services/org.freedesktop.impl.portal.desktop.yuki.service
+
             # Ship the system wallpapers, like GNOME installs its own to
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers
