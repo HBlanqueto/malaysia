@@ -74,8 +74,9 @@
           nativeBuildInputs = with pkgs; [ diffutils pkg-config makeWrapper ];
           buildInputs = nativeDeps pkgs;
 
-          # Skia is prebuilt. When laye-rs lands, this fails if its version or
-          # features drift from nix/skia-prebuild; today it is a no-op.
+          # Skia is prebuilt. When CelestialKit uses it, this fails if its
+          # version or features drift from nix/skia-prebuild; today it is a
+          # no-op.
           preBuild = ''
             if cargo tree --offline -i skia-bindings --depth 0 --prefix none >/dev/null 2>&1; then
               version="$(cargo tree --offline -i skia-bindings --depth 0 --prefix none \

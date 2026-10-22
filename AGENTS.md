@@ -59,10 +59,10 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
    ADR 0033) pueden usar Skia. El **compositor nunca** usa Skia: sigue con GLES,
    `grade-graphics` y `cosmic-text`. `celestial-kit` parte selectivamente de
    `otto-kit` (MIT), se renombra a nombres propios (nada de `otto_*`) y usa los
-   tokens de `yuki-design`. `grade-animation` vive sobre `laye-rs` (fork
-   `HBlanqueto/layers`, rama `neptunia`, fijado por commit) e Infinity es el
-   protocolo privado app↔compositor (opcional hasta que el compositor lo
-   implemente). No se usan `otto-foundations`, `otto-dbus` ni
+   tokens de `yuki-design`. `grade-animation` es propio (curvas, resortes y
+   transacciones) y **no depende de `laye-rs` mientras no tenga licencia**;
+   Infinity es el protocolo privado app↔compositor (opcional hasta que el
+   compositor lo implemente). No se usan `otto-foundations`, `otto-dbus` ni
    `otto-surface-style`.
 
 ---

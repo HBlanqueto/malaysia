@@ -1,6 +1,6 @@
 # Crate mínimo que solo existe para que nix/skia.nix compile Skia (vía
 # skia-bindings) una vez, en su propia derivación. Las features de skia-safe
-# deben coincidir con las que activa laye-rs v1.18.2 (default + all-linux); el
+# deben coincidir con las que usará CelestialKit (all-linux + defaults); el
 # preBuild del paquete lo comprueba contra $out/features.txt.
 [package]
 name = "skia-prebuild"
@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 skia-safe = { version = "=0.93", features = ["all-linux"] }
-# Directa (como en laye-rs), para que el árbol de features coincida.
+# Directa, para que el árbol de features coincida con el de CelestialKit.
 skia-bindings = "=0.93"
 
 [lib]

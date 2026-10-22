@@ -6,10 +6,10 @@ Estado: **aceptado** (2026-10-22). Modifica el [ADR 0024](0024-stack-de-render-d
 
 El ADR 0024 eligió GLES + `cosmic-text` + shaders propios para todo el stack y
 dejó `celestial-kit` como un toolkit por escribir. Otto ya tiene resuelto ese
-mismo problema con `otto-kit` (MIT, Riccardo Canalicchio), Skia y `laye-rs`.
-Reescribir a mano lo que ya existe es peor que reutilizarlo con una frontera
-clara: el compositor no necesita Skia, pero la shell y las apps propias sí se
-benefician de un canvas 2D completo.
+mismo problema con `otto-kit` (MIT, Riccardo Canalicchio) y Skia. Reescribir a
+mano lo que ya existe es peor que reutilizarlo con una frontera clara: el
+compositor no necesita Skia, pero la shell y las apps propias sí se benefician
+de un canvas 2D completo.
 
 La frontera importante sigue siendo la del ADR 0024: **el compositor dibuja
 ventanas y efectos; la shell y las apps propias dibujan su propia UI**. Son
@@ -24,9 +24,11 @@ lenguaje visual, porque los tokens viven en `yuki-design`.
 2. **CelestialKit (`celestial-kit`, ≈ AppKit) parte de `otto-kit`** (MIT,
    Riccardo Canalicchio). Se trae de forma **selectiva**, se renombra a nombres
    propios (nada de `otto_*`) y usa los tokens de `yuki-design`.
-3. **Grade Animation (≈ Core Animation) pasa a ser el crate `grade-animation`**
-   sobre **`laye-rs`** (fork `HBlanqueto/layers`, rama `neptunia`, fijado por
-   `rev` en `Cargo.toml`).
+3. **Grade Animation (≈ Core Animation) pasa a ser el crate `grade-animation`**.
+   **No depende de `laye-rs` mientras este no tenga una licencia**: se
+   reimplementa tomando solo ideas (curvas, resortes y transacciones), como
+   indica `docs/investigacion/otto-y-forks.md`. Si upstream publica una licencia
+   compatible, una ADR nueva puede revisar esta decisión.
 4. **Infinity (≈ SkyLight) es el protocolo privado app↔compositor** equivalente
    a `otto-surface-style`: esquinas, sombras, desenfoque y animaciones. Hasta
    que el compositor lo implemente, el kit lo trata como **opcional**.
@@ -44,14 +46,15 @@ lenguaje visual, porque los tokens viven en `yuki-design`.
 - `celestial-kit` puede reutilizar widgets, layout y dibujo de `otto-kit`, pero
   con nombres propios, sin `otto_*` en la API pública y con los tokens de
   `yuki-design` como única fuente de colores y medidas.
-- Las animaciones dejan de ser un módulo interno y pasan a `grade-animation`
-  sobre `laye-rs`. El fork se fija por commit para que el build sea
-  reproducible.
+- Las animaciones dejan de ser un módulo interno y pasan a `grade-animation`,
+  una implementación propia de curvas, resortes y transacciones. No incorpora
+  código de `laye-rs`.
 - Infinity puede aparecer en el kit desde el principio como capacidad opcional:
   si el compositor no lo anuncia, el kit sigue funcionando con Wayland estándar.
 - `grade-graphics` sigue siendo el punto de encuentro visual del compositor; el
   kit no lo usa para renderizar, solo comparte los tokens.
-- Los avisos MIT de `otto-kit` y `laye-rs` viven en `NOTICE`.
+- El aviso MIT de `otto-kit` vive en `NOTICE`. `laye-rs` no tiene licencia y no
+  se usa ni se copia.
 
 ## Referencias
 
@@ -65,4 +68,17 @@ lenguaje visual, porque los tokens viven en `yuki-design`.
 - [`0025`](0025-la-shell-es-nativa.md) — shell nativa `yuki-shell`.
 - [`0032`](0032-neptunia-como-fuente-de-diseno.md) — Neptunia como fuente.
 - `otto-kit` — MIT, <https://github.com/nongio/otto>.
-- `laye-rs` — fork `HBlanqueto/layers`, rama `neptunia`, commit `6706e9b`.
+
+
+## Corrección (2026-10-22)
+
+`laye-rs` (`nongio/layers` y el fork `HBlanqueto/layers`) no publica licencia:
+no hay `LICENSE` ni campo `license` en su `Cargo.toml`. Por tanto:
+
+- Se elimina el aviso MIT de `laye-rs` de `NOTICE`; no hay código suyo en el
+  repositorio.
+- `grade-animation` no depende de `laye-rs`. Se reimplementa con ideas propias
+  (curvas, resortes y transacciones), como ya indicaba
+  `docs/investigacion/otto-y-forks.md`.
+- Si upstream publica una licencia compatible, una ADR nueva podrá revisar la
+  decisión.

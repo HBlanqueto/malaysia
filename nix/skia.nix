@@ -2,7 +2,7 @@
 # que el build de Yuki lo reutilice en vez de reconstruirlo en cada cambio.
 #
 # Copia adaptada del patrón de Otto (MIT, Riccardo Canalicchio): compila el
-# crate mínimo de nix/skia-prebuild con las features que pide laye-rs v1.18.2
+# crate mínimo de nix/skia-prebuild con las features que usará CelestialKit
 # (`all-linux` + defaults) y empaqueta lo que skia-bindings deja en
 # `$OUT_DIR/skia` como un .tar.gz. Los consumidores lo usan con
 # `SKIA_BINARIES_URL = file://…`; el build.rs de skia-bindings solo entonces
@@ -96,7 +96,7 @@ rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
     rm -rf $out/skia-binaries
 
     # Features con las que se compiló, para que el preBuild del paquete
-    # compruebe que las de laye-rs no cambiaron.
+    # compruebe que las de CelestialKit no cambiaron.
     cargo tree --offline -e features -i skia-bindings --prefix none \
       | sed -n 's/^skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > $out/features.txt
 
