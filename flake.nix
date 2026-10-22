@@ -105,6 +105,34 @@
         };
       });
 
+      checks = forAllSystems (system: let
+        pkgs = import nixpkgs { inherit system; };
+      in {
+        # The vendored Neptunia outputs must match default.nix.
+        neptunia-generated = let
+          neptunia = import ./crates/yuki-design/neptunia;
+        in pkgs.runCommand "check-neptunia-generated" {
+          nativeBuildInputs = with pkgs; [ diffutils ];
+        } ''
+          diff -u ${./crates/yuki-design/neptunia/generated/neptunia.slint} \
+            ${pkgs.writeText "neptunia.slint" neptunia.slint}
+          diff -u ${./crates/yuki-design/neptunia/generated/neptunia.css} \
+            ${pkgs.writeText "neptunia.css" neptunia.css}
+          diff -u ${./crates/yuki-design/neptunia/generated/Neptunia.qml} \
+            ${pkgs.writeText "Neptunia.qml" neptunia.qml}
+          touch $out
+        '';
+
+        # No colour or UI measurement may live outside yuki-design.
+        design-tokens = pkgs.runCommand "check-design-tokens" {
+          nativeBuildInputs = with pkgs; [ bash coreutils findutils gawk gnugrep ];
+        } ''
+          cd ${./.}
+          bash scripts/check-design-tokens.sh
+          touch $out
+        '';
+      });
+
       nixosModules = {
         default = import ./nix/yuki.nix { inherit self; };
       };

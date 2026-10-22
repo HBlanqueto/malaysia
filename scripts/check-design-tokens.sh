@@ -1,7 +1,10 @@
 #!/bin/sh
-# Fails when the shell or the toolkit hardcodes a design value instead of
-# reading it from yuki-design. Algorithm constants (sampling, PAM, pixel
-# formats) are allowed; colours and UI measurements are not.
+# Fails when a crate outside yuki-design hardcodes a design value.
+#
+# Colours are checked in yuki, yuki-shell and celestial-kit. Test modules are
+# skipped (the awk below stops at #[cfg(test)]); buffer formats ([u8; 4]) are
+# allowed in the compositor and only forbidden in the shell/toolkit, where the
+# single conversion helper must be Rgba::to_rgba8.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -15,18 +18,19 @@ report() {
     status=1
 }
 
-if matches=$(grep -rnE --include='*.rs' '0x[0-9a-fA-F]{6,8}' \
-    crates/yuki-shell/src crates/celestial-kit/src); then
-    report "hex colour literals must live in yuki-design" "$matches"
+production() {
+    for file in $(find "$@" -name '*.rs' | sort); do
+        awk '/#\[cfg\(test\)\]/{exit} {print FILENAME ":" FNR ":" $0}' "$file"
+    done
+}
+
+if matches=$(production crates/yuki/src crates/yuki-shell/src crates/celestial-kit/src |
+    grep -E '0x[0-9a-fA-F]{6,8}|Rgba::(rgb8|rgba8)'); then
+    report "colour literals must live in yuki-design" "$matches"
 fi
 
-if matches=$(grep -rnE --include='*.rs' 'Rgba::(rgb8|rgba8)' \
-    crates/yuki-shell/src crates/celestial-kit/src); then
-    report "Rgba constructors must live in yuki-design" "$matches"
-fi
-
-if matches=$(grep -rnE --include='*.rs' '\[u8; ?4\]' \
-    crates/yuki-shell/src crates/celestial-kit/src); then
+if matches=$(production crates/yuki-shell/src crates/celestial-kit/src |
+    grep -E '\[u8; ?4\]'); then
     report "convert colours with Rgba::to_rgba8, not a local [u8; 4]" "$matches"
 fi
 
@@ -35,7 +39,8 @@ crates/yuki-shell/src/dock.rs
 crates/yuki-shell/src/lock.rs
 crates/celestial-kit/src/password.rs
 crates/celestial-kit/src/text.rs"
-if matches=$(grep -nE '^[[:space:]]*const [A-Z0-9_]+: (i32|u32|f32) = [0-9]' $ui_files); then
+if matches=$(production $ui_files |
+    grep -E ':[0-9]+:[[:space:]]*const [A-Z0-9_]+: (i32|u32|f32) = [0-9]'); then
     report "UI measurements must live in yuki-design" "$matches"
 fi
 
