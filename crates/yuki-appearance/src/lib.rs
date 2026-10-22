@@ -514,13 +514,16 @@ mod tests {
     #[test]
     fn wallpaper_traffic_lights_follow_the_dominant_even_in_accent_mode() {
         let accent = [0.9, 0.3, 0.1];
-        let with_dominant = resolve(&appearance(
-            ColorScheme::Light,
-            WindowColorMode::Accent,
-            WindowTintScope::Windows,
-            TrafficLightStyle::Wallpaper,
-            Some(accent),
-        ), Some(dominant()));
+        let with_dominant = resolve(
+            &appearance(
+                ColorScheme::Light,
+                WindowColorMode::Accent,
+                WindowTintScope::Windows,
+                TrafficLightStyle::Wallpaper,
+                Some(accent),
+            ),
+            Some(dominant()),
+        );
         assert_eq!(
             with_dominant.lights[0],
             dominant().darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
@@ -530,13 +533,16 @@ mod tests {
             dominant().lighten(TRAFFIC_ZOOM_LIGHTEN)
         );
 
-        let without_dominant = resolve(&appearance(
-            ColorScheme::Light,
-            WindowColorMode::Accent,
-            WindowTintScope::Windows,
-            TrafficLightStyle::Wallpaper,
-            Some(accent),
-        ), None);
+        let without_dominant = resolve(
+            &appearance(
+                ColorScheme::Light,
+                WindowColorMode::Accent,
+                WindowTintScope::Windows,
+                TrafficLightStyle::Wallpaper,
+                Some(accent),
+            ),
+            None,
+        );
         let normal = Rgba {
             r: accent[0],
             g: accent[1],
