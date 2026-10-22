@@ -248,6 +248,8 @@ Como macOS, un archivo por dominio en `~/.config/yuki/`:
 # ~/.config/yuki/appearance.domain
 color_scheme = "dark"           # auto | dark | light
 accent_color = [0.208, 0.518, 0.894]
+contrast = false                # Increase contrast
+reduced_motion = false          # Reduce motion
 ```
 
 ```toml
