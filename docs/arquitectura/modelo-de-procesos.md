@@ -36,6 +36,12 @@ ADR 0027), **`yuki-shell menubar`** (capa `Top`, app activa + reloj),
 no se desbloquea si el cliente muere).
 La shell es nativa (ADR 0025); no hay dependencias de shell externas.
 
+**Fuera de la shell** hay un proceso más: **`xdg-desktop-portal-yuki`** (ADR
+0031). No es un cliente Wayland ni se supervisa con `yuki-session.target`: lo
+arranca `xdg-desktop-portal` por activación D-Bus cuando una app pide
+`Settings` (después `Screenshot`/`ScreenCast`). Si cae, el compositor y la
+shell siguen; las apps pierden el portal hasta que D-Bus lo relance.
+
 ## Qué significa en la práctica
 
 - **Aislamiento de fallas por componente**: la muerte de uno no tumba a los demás.
@@ -88,9 +94,13 @@ los bloques actuales del roadmap. Lo que el compositor **ya sirve** hoy:
 - `zwp_linux_dmabuf_v1` — hecho (Bloque 7a): v5 con feedback del render node y
   los formatos del renderer GLES, para clientes con GPU (Mesa EGL/Vulkan).
 
-Lo que sigue siendo **trabajo futuro**: `xdg-activation-v1`,
-`ext-idle-notify-v1` y, más adelante, el sync explícito `wp_linux_drm_syncobj_v1`
-(Bloque 7b).
+También están hechos `wp_presentation`, `xdg-activation-v1`,
+`ext-idle-notify-v1` + `zwp_idle_inhibit_manager_v1`, `wp_cursor_shape_v1`, las
+pointer constraints, `relative-pointer`, el sync explícito
+`wp_linux_drm_syncobj_v1` (Bloque 7b) y la captura
+(`ext-image-copy-capture-v1`, Bloque 11). Queda como trabajo futuro
+`keyboard-shortcuts-inhibit` y el portal `Screenshot`/`ScreenCast` del Bloque
+12a.
 
 ## Fallos esperados y su tratamiento
 
@@ -100,11 +110,15 @@ Lo que sigue siendo **trabajo futuro**: `xdg-activation-v1`,
 | cae la pantalla de bloqueo | la sesión **sigue bloqueada** | el compositor muestra un color sólido y nunca desbloquea (`ext-session-lock-v1`) |
 | cae el dock y su zona exclusiva | las ventanas maximizadas se reacomodan | se vuelven a reacomodar al reiniciar el dock; se acepta el parpadeo |
 | cae el compositor | mueren todos los clientes | es el único punto de falla inevitable |
+| cae el portal (`xdg-desktop-portal-yuki`) | las apps pierden `Settings` (y después `Screenshot`/`ScreenCast`) | D-Bus lo relanza en la siguiente petición; el escritorio sigue |
 | reinicio de GPU (amdgpu) | afecta a todos los procesos con contexto GL | separar procesos no protege contra esto |
 
 ## Relación con el resto de la documentación
 
 - ADR 0023 — la decisión (este documento es su consecuencia en forma de distribución).
 - ADR 0025 — la shell es nativa: los componentes `yuki-shell` son estos procesos.
+- ADR 0031 — el portal es un backend D-Bus aparte, no un componente del shell.
 - `yuki-y-shell.md` — la división de trabajo compositor ↔ shell (quién decide
   cada cosa).
+- [`../bloques/12-portales-y-servicios.md`](../bloques/12-portales-y-servicios.md)
+  — el portal `Settings` y lo que sigue.

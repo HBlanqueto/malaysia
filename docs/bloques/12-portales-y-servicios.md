@@ -6,7 +6,9 @@ Estado: **12a en curso.** El portal `Settings` está implementado; faltan
 ## 12a — `xdg-desktop-portal-yuki`
 
 Backend propio (ADR 0031), en un proceso aparte que arranca
-`xdg-desktop-portal` por activación D-Bus:
+`xdg-desktop-portal` por activación D-Bus. No es un cliente Wayland ni forma
+parte de la shell; ver
+[`../arquitectura/modelo-de-procesos.md`](../arquitectura/modelo-de-procesos.md):
 
 ```
 app (GTK/Qt/Electron)
