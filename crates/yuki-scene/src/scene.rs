@@ -242,9 +242,12 @@ impl Scene {
         point: Point<f64, Logical>,
         side: f64,
         corner: f64,
+        eligible: impl Fn(WindowId) -> bool,
     ) -> Option<(WindowId, Edge)> {
         for entry in self.windows.iter().rev() {
-            if let Some(edge) = edge_in(entry.outer, point, side, corner) {
+            if eligible(entry.id)
+                && let Some(edge) = edge_in(entry.outer, point, side, corner)
+            {
                 return Some((entry.id, edge));
             }
             if entry.outer.contains(point) {
@@ -406,10 +409,10 @@ fn edge_in(
         return Some(Edge::BottomRight);
     }
 
-    let top = point.y >= outer.y() - side && point.y <= outer.y();
-    let bottom = point.y >= outer.bottom() && point.y <= outer.bottom() + side;
-    let left = point.x >= outer.x() - side && point.x <= outer.x();
-    let right = point.x >= outer.right() && point.x <= outer.right() + side;
+    let top = point.y >= outer.y() - side && point.y <= outer.y() + CORNER_INSET;
+    let bottom = point.y >= outer.bottom() - CORNER_INSET && point.y <= outer.bottom() + side;
+    let left = point.x >= outer.x() - side && point.x <= outer.x() + CORNER_INSET;
+    let right = point.x >= outer.right() - CORNER_INSET && point.x <= outer.right() + side;
 
     if top && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
         return Some(Edge::Top);
@@ -563,31 +566,42 @@ mod tests {
         let side = 10.0;
         let corner = 20.0;
 
-        // One pixel inside the right edge, well below the corner: client.
-        assert_eq!(scene.edge_at(point(299.0, 150.0), side, corner), None);
+        // The side band enters 2 px: one pixel inside is still Right.
+        assert_eq!(
+            scene.edge_at(point(299.0, 150.0), side, corner, |_| true),
+            Some((window, Edge::Right))
+        );
+        // Three pixels inside is client area.
+        assert_eq!(
+            scene.edge_at(point(297.0, 150.0), side, corner, |_| true),
+            None
+        );
         // Six pixels outside the right edge: the right band.
         assert_eq!(
-            scene.edge_at(point(306.0, 150.0), side, corner),
+            scene.edge_at(point(306.0, 150.0), side, corner, |_| true),
             Some((window, Edge::Right))
         );
         // Six pixels outside diagonally from the top-left corner: the corner L.
         assert_eq!(
-            scene.edge_at(point(94.0, 94.0), side, corner),
+            scene.edge_at(point(94.0, 94.0), side, corner, |_| true),
             Some((window, Edge::TopLeft))
         );
         // Thirty pixels inside a corner is content, not a 24 px square.
-        assert_eq!(scene.edge_at(point(130.0, 130.0), side, corner), None);
+        assert_eq!(
+            scene.edge_at(point(130.0, 130.0), side, corner, |_| true),
+            None
+        );
         // The sides still work away from the corners.
         assert_eq!(
-            scene.edge_at(point(150.0, 94.0), side, corner),
+            scene.edge_at(point(150.0, 94.0), side, corner, |_| true),
             Some((window, Edge::Top))
         );
         assert_eq!(
-            scene.edge_at(point(94.0, 150.0), side, corner),
+            scene.edge_at(point(94.0, 150.0), side, corner, |_| true),
             Some((window, Edge::Left))
         );
         assert_eq!(
-            scene.edge_at(point(306.0, 244.0), side, corner),
+            scene.edge_at(point(306.0, 244.0), side, corner, |_| true),
             Some((window, Edge::BottomRight))
         );
     }
@@ -602,7 +616,10 @@ mod tests {
 
         // The point is in the below window's right exterior band, but also in
         // the above window's content. Content wins.
-        assert_eq!(scene.edge_at(point(306.0, 150.0), 10.0, 20.0), None);
+        assert_eq!(
+            scene.edge_at(point(306.0, 150.0), 10.0, 20.0, |_| true),
+            None
+        );
     }
 
     #[test]
@@ -616,8 +633,41 @@ mod tests {
         // The point is in the above window's right exterior band and over the
         // below window's content. The top window wins.
         assert_eq!(
-            scene.edge_at(point(456.0, 150.0), 10.0, 20.0),
+            scene.edge_at(point(456.0, 150.0), 10.0, 20.0, |_| true),
             Some((above, Edge::Right))
+        );
+    }
+
+    #[test]
+    fn an_ineligible_band_does_not_count_but_its_content_still_blocks() {
+        let mut scene = Scene::new();
+        let lower = WindowId::new(1);
+        let upper = WindowId::new(2);
+        scene.insert(lower, rect(100.0, 100.0, 200.0, 150.0));
+        scene.insert(upper, rect(250.0, 100.0, 200.0, 150.0));
+
+        // The point is in the upper window's band and the lower window's
+        // content. If the upper window is ineligible, its content blocks the
+        // lower band; its own band is skipped.
+        assert_eq!(
+            scene.edge_at(point(306.0, 150.0), 10.0, 20.0, |id| id != upper),
+            None
+        );
+    }
+
+    #[test]
+    fn an_ineligible_window_still_blocks_a_lower_band_with_its_content() {
+        let mut scene = Scene::new();
+        let lower = WindowId::new(1);
+        let upper = WindowId::new(2);
+        scene.insert(lower, rect(400.0, 100.0, 200.0, 150.0));
+        scene.insert(upper, rect(250.0, 100.0, 200.0, 150.0));
+
+        // The upper window's right band is skipped, but its outer content
+        // still stops the search before the lower window.
+        assert_eq!(
+            scene.edge_at(point(456.0, 150.0), 10.0, 20.0, |id| id != upper),
+            None
         );
     }
 

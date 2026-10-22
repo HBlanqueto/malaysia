@@ -462,6 +462,14 @@ impl State {
             self.dismiss_all_popups();
         }
 
+        // Top/Overlay layers (menubar, dock, OSD) win over the exterior band.
+        // The layer surface receives the press through the pointer focus set
+        // in `pointer_motion`; there is no window press to process.
+        if self.layers.surface_under(location).is_some() {
+            tracing::info!(?location, "press landed on a layer surface");
+            return;
+        }
+
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
         let edge = self.windows.edge_under(location, side, corner);
@@ -982,11 +990,24 @@ impl State {
 
         self.update_edge_cursor(location);
 
+        let side = f64::from(self.config.window.resize_border);
+        let corner = f64::from(self.config.window.resize_corner);
+        let layer_under = self.layers.surface_under(location);
+        let edge = if layer_under.is_some() {
+            None
+        } else {
+            self.windows.edge_under(location, side, corner)
+        };
+        let under_window = self.windows.window_under(location);
+        let blocked =
+            pointer_focus_blocked(layer_under.is_some(), edge.map(|(id, _)| id), under_window);
+        let under = if blocked {
+            None
+        } else {
+            self.windows.surface_under(location).or(layer_under)
+        };
+
         let serial = SERIAL_COUNTER.next_serial();
-        let under = self
-            .windows
-            .surface_under(location)
-            .or_else(|| self.layers.surface_under(location));
         let focus = under.clone().map(|(surface, local)| {
             let origin = Point::new(location.x - local.x, location.y - local.y);
             (surface, origin)
@@ -1106,7 +1127,13 @@ impl State {
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
-        match self.windows.edge_under(location, side, corner) {
+        let layer_under = self.layers.surface_under(location).is_some();
+        let edge = if layer_under {
+            None
+        } else {
+            self.windows.edge_under(location, side, corner)
+        };
+        match edge {
             Some((_, edge)) => {
                 // A client surface cursor owns its pixels; only a named cursor
                 // (the default arrow, a cursor-shape request, or a previous
@@ -1160,6 +1187,16 @@ impl State {
             pointer.frame(self);
         }
     }
+}
+
+/// Whether a resize band above a different window must leave the pointer focus
+/// empty. A Top/Overlay layer over the band wins instead.
+fn pointer_focus_blocked(
+    layer_under: bool,
+    edge_window: Option<WindowId>,
+    under_window: Option<WindowId>,
+) -> bool {
+    !layer_under && edge_window.is_some_and(|id| Some(id) != under_window)
 }
 
 /// The cursor shown while an edge or corner is resized.
@@ -1247,9 +1284,10 @@ mod tests {
 
     use super::{
         BUTTON_LEFT, CompositorShortcut, Edge, ShakeDetector, clamp_pointer, compositor_shortcut,
-        edge_cursor,
+        edge_cursor, pointer_focus_blocked,
     };
     use crate::state::State;
+    use yuki_scene::scene::WindowId;
 
     #[test]
     fn ctrl_alt_backspace_quits_only_when_unlocked() {
@@ -1438,6 +1476,27 @@ mod tests {
             );
         }
         assert!(!fired, "sub-pixel jitter is not a deliberate shake");
+    }
+
+    #[test]
+    fn a_layer_over_a_band_keeps_pointer_focus() {
+        // The menubar/dock sit on Top/Overlay: the band below is ignored.
+        assert!(!pointer_focus_blocked(
+            true,
+            Some(WindowId::new(1)),
+            Some(WindowId::new(2))
+        ));
+    }
+
+    #[test]
+    fn a_band_over_another_window_clears_pointer_focus() {
+        let edge = Some(WindowId::new(1));
+        // Band of the window above, content of another below.
+        assert!(pointer_focus_blocked(false, edge, Some(WindowId::new(2))));
+        // Exterior band outside every window.
+        assert!(pointer_focus_blocked(false, edge, None));
+        // The band belongs to the content under the pointer: keep focus.
+        assert!(!pointer_focus_blocked(false, edge, edge));
     }
 
     #[test]

@@ -410,13 +410,14 @@ impl Windows {
         side: f64,
         corner: f64,
     ) -> Option<(WindowId, Edge)> {
-        let (id, edge) = self.scene.edge_at(scene_point(point), side, corner)?;
-        let index = self.index(id)?;
-        let data = &self.windows[index];
-        (self.decoration_of(id) == Decoration::Server
-            && !data.maximized
-            && data.state() == WindowState::Normal)
-            .then_some((id, edge))
+        self.scene.edge_at(scene_point(point), side, corner, |id| {
+            self.index(id).is_some_and(|index| {
+                let data = &self.windows[index];
+                self.decoration_of(id) == Decoration::Server
+                    && !data.maximized
+                    && data.state() == WindowState::Normal
+            })
+        })
     }
 
     /// The surface under a logical point, with the point in surface-local
