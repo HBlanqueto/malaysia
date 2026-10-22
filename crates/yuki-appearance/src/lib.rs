@@ -179,7 +179,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
             TITLEBAR.buttons.order[2].color,
         ],
         TrafficLightStyle::Accent => derived_lights(normal_accent),
-        TrafficLightStyle::Wallpaper => derived_lights(accent),
+        TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(normal_accent)),
     };
 
     Resolved {
@@ -509,6 +509,48 @@ mod tests {
                 Some((dominant(), PANEL_TINT_WALLPAPER[1]))
             );
         }
+    }
+
+    #[test]
+    fn wallpaper_traffic_lights_follow_the_dominant_even_in_accent_mode() {
+        let accent = [0.9, 0.3, 0.1];
+        let with_dominant = resolve(&appearance(
+            ColorScheme::Light,
+            WindowColorMode::Accent,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Wallpaper,
+            Some(accent),
+        ), Some(dominant()));
+        assert_eq!(
+            with_dominant.lights[0],
+            dominant().darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
+        );
+        assert_eq!(
+            with_dominant.lights[2],
+            dominant().lighten(TRAFFIC_ZOOM_LIGHTEN)
+        );
+
+        let without_dominant = resolve(&appearance(
+            ColorScheme::Light,
+            WindowColorMode::Accent,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Wallpaper,
+            Some(accent),
+        ), None);
+        let normal = Rgba {
+            r: accent[0],
+            g: accent[1],
+            b: accent[2],
+            a: 1.0,
+        };
+        assert_eq!(
+            without_dominant.lights[0],
+            normal.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
+        );
+        assert_eq!(
+            without_dominant.lights[2],
+            normal.lighten(TRAFFIC_ZOOM_LIGHTEN)
+        );
     }
 
     #[test]
