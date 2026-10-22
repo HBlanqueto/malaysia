@@ -6,31 +6,45 @@
 //! cache lives here too, so re-drawing the same text (a clock) re-rasterizes
 //! nothing.
 
-use cosmic_text::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache};
+use std::sync::Once;
+
+use cosmic_text::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache, Weight};
+use yuki_design::TEXT;
 
 /// The text engine: a font system, a glyph cache and one laid-out buffer.
 pub struct Text {
     font_system: FontSystem,
     cache: SwashCache,
     buffer: Buffer,
-    /// The family actually used, picked from the fonts the system found.
-    ///
-    /// `FontSystem::new()` defaults the sans-serif fallback to "Open Sans",
-    /// which is not installed here; querying it yields no font and no glyphs.
-    /// The first non-monospace, non-emoji family available is used instead.
-    family: String,
+    /// The family actually used; sans-serif when fontconfig has no `Geist`.
+    family: Family<'static>,
+    /// The numeric weight from the design token.
+    weight: u16,
+}
+
+static MISSING_FAMILY_WARNING: Once = Once::new();
+
+/// Resolves the design family, falling back to sans-serif (once per process).
+fn resolve_family(font_system: &mut FontSystem, family: &'static str) -> Family<'static> {
+    let found = font_system
+        .db()
+        .faces()
+        .any(|face| face.families.iter().any(|(name, _)| name == family));
+    if found {
+        Family::Name(family)
+    } else {
+        MISSING_FAMILY_WARNING.call_once(|| {
+            tracing::warn!(family, "font family not found; falling back to sans-serif");
+        });
+        Family::SansSerif
+    }
 }
 
 impl Text {
     /// Creates an engine with the system fonts and the given metrics.
     pub fn new(font_size: f32) -> Self {
         let mut font_system = FontSystem::new();
-        let family = font_system
-            .db_mut()
-            .faces()
-            .find(|face| !face.monospaced && !face.post_script_name.contains("Emoji"))
-            .and_then(|face| face.families.first().map(|(name, _)| name.clone()))
-            .unwrap_or_else(|| "sans-serif".to_string());
+        let family = resolve_family(&mut font_system, TEXT.family);
         let cache = SwashCache::new();
         let metrics = Metrics::new(font_size, font_size * 1.3);
         let buffer = Buffer::new(&mut font_system, metrics);
@@ -39,6 +53,7 @@ impl Text {
             cache,
             buffer,
             family,
+            weight: TEXT.weight,
         }
     }
 
@@ -49,7 +64,7 @@ impl Text {
         self.buffer.set_size(max_width, None);
         self.buffer.set_text(
             text,
-            &Attrs::new().family(Family::Name(&self.family)),
+            &Attrs::new().family(self.family).weight(Weight(self.weight)),
             Shaping::Advanced,
             None,
         );
@@ -219,9 +234,9 @@ fn composite(pixels: &mut [u8], pi: usize, src: [f32; 4]) {
     }
     for k in 0..3 {
         let value = (src[k] / 255.0 + dst_premul[k] * (1.0 - a)) / out_a;
-        pixels[pi + k] = (value * 255.0).clamp(0.0, 255.0) as u8;
+        pixels[pi + k] = (value * 255.0).round().clamp(0.0, 255.0) as u8;
     }
-    pixels[pi + 3] = (out_a * 255.0).clamp(0.0, 255.0) as u8;
+    pixels[pi + 3] = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
 }
 
 /// A colour in cosmic-text's `ARGB` layout.
