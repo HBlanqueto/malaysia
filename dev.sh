@@ -634,16 +634,22 @@ activation() {
 # `YUKI_SCALE` passes through, so `YUKI_SCALE=1.5 ./dev.sh demo` shows the
 # fractional-scale path.
 demo() {
-    require_devshell
     if [ "$#" -ne 0 ]; then
         fail "$EXIT_USAGE" "unexpected argument for demo: $1"
     fi
     if is_running; then
         fail "$EXIT_ALREADY_RUNNING" "yuki is already running (pid $(read_pid))"
     fi
-    if [ ! -x "$script_dir/target/debug/yuki" ] ||
-        [ ! -x "$script_dir/target/debug/yuki-shell" ]; then
-        "$script_dir/dev.sh" build
+    if [ -n "${YUKI_DEV_SHELL:-}" ]; then
+        _shell_bin="$script_dir/target/debug/yuki-shell"
+        if [ ! -x "$script_dir/target/debug/yuki" ] || [ ! -x "$_shell_bin" ]; then
+            "$script_dir/dev.sh" build
+        fi
+    else
+        _shell_bin="$script_dir/result/bin/yuki-shell"
+        if [ ! -x "$script_dir/result/bin/yuki" ] || [ ! -x "$_shell_bin" ]; then
+            fail "$EXIT_RUN_FAILED" "no existe result/bin/yuki-shell; ejecuta: nix build .#default"
+        fi
     fi
 
     start
@@ -671,9 +677,9 @@ demo() {
             "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
         _pids="$_pids $!"
     }
-    demo_client wallpaper "$script_dir/target/debug/yuki-shell" wallpaper
-    demo_client menubar "$script_dir/target/debug/yuki-shell" menubar
-    demo_client dock "$script_dir/target/debug/yuki-shell" dock
+    demo_client wallpaper "$_shell_bin" wallpaper
+    demo_client menubar "$_shell_bin" menubar
+    demo_client dock "$_shell_bin" dock
     # Give the background layer a moment, then open windows so the dock has
     # tiles and the menubar an active app.
     sleep 0.5
