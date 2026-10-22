@@ -394,9 +394,11 @@ pub struct WindowConfig {
     pub double_click_titlebar: DoubleClickAction,
     /// When the pointer focus changes the focused window (see [`FocusPolicy`]).
     pub focus: FocusPolicy,
-    /// The thickness, in logical pixels, of the resize edge band. Today a
-    /// constant in `window::RESIZE_BORDER`; this is where it becomes configurable.
+    /// The thickness, in logical pixels, of the resize side band.
     pub resize_border: i32,
+    /// The size, in logical pixels, of the square at each corner that starts a
+    /// resize. Larger than `resize_border` so corners are easier to hit.
+    pub resize_corner: i32,
 }
 
 impl Default for WindowConfig {
@@ -406,7 +408,8 @@ impl Default for WindowConfig {
             titlebar: true,
             double_click_titlebar: DoubleClickAction::default(),
             focus: FocusPolicy::default(),
-            resize_border: 6,
+            resize_border: 12,
+            resize_corner: 24,
         }
     }
 }
@@ -764,6 +767,13 @@ mod tests {
     }
 
     #[test]
+    fn the_resize_band_defaults_are_12_and_24() {
+        let window = WindowConfig::default();
+        assert_eq!(window.resize_border, 12);
+        assert_eq!(window.resize_corner, 24);
+    }
+
+    #[test]
     fn auto_resolves_to_the_light_default() {
         assert_eq!(ColorScheme::Auto.resolved(), ColorScheme::Light);
         assert_eq!(ColorScheme::Dark.resolved(), ColorScheme::Dark);
@@ -798,6 +808,7 @@ mod tests {
             double_click_titlebar = "minimize"
             focus = "sloppy"
             resize_border = 8
+            resize_corner = 20
 
             [dock]
             autohide = true
@@ -851,6 +862,7 @@ mod tests {
         );
         assert_eq!(parsed.window.focus, FocusPolicy::Sloppy);
         assert_eq!(parsed.window.resize_border, 8);
+        assert_eq!(parsed.window.resize_corner, 20);
         assert!(parsed.dock.autohide);
         assert_eq!(parsed.dock.orientation, DockOrientation::Left);
         assert!(parsed.dock.magnification);

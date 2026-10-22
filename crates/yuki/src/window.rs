@@ -36,9 +36,6 @@ use yuki_scene::scene::{Decoration, Edge, PopupId, PopupParent, Scene, WindowId}
 
 use crate::decoration::{Insets, Role, WindowState};
 
-/// The grab band along each edge, in logical pixels.
-pub const RESIZE_BORDER: f64 = 8.0;
-
 /// A read-only view of one tracked window.
 ///
 /// It borrows the window's data and its current scene geometry, so callers see
@@ -403,8 +400,23 @@ impl Windows {
     }
 
     /// The topmost window under `point` and its resize edge zone, if any.
-    pub fn edge_under(&self, point: Point<f64, Logical>, border: f64) -> Option<(WindowId, Edge)> {
-        self.scene.edge_at(scene_point(point), border)
+    ///
+    /// Only server-decorated windows that are not maximized or fullscreen
+    /// offer compositor-side resize. Client-decorated windows own their edges
+    /// (ADR 0019), and a maximized/fullscreen window has no free edge to drag.
+    pub fn edge_under(
+        &self,
+        point: Point<f64, Logical>,
+        side: f64,
+        corner: f64,
+    ) -> Option<(WindowId, Edge)> {
+        let (id, edge) = self.scene.edge_at(scene_point(point), side, corner)?;
+        let index = self.index(id)?;
+        let data = &self.windows[index];
+        (self.decoration_of(id) == Decoration::Server
+            && !data.maximized
+            && data.state() == WindowState::Normal)
+            .then_some((id, edge))
     }
 
     /// The surface under a logical point, with the point in surface-local

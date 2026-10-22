@@ -33,7 +33,6 @@ use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
 
 use crate::state::{Grab, ScreenshotRequest, State, TestPress};
-use crate::window::RESIZE_BORDER;
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
@@ -463,24 +462,30 @@ impl State {
             self.dismiss_all_popups();
         }
 
-        if let Some((id, edge)) = self.windows.edge_under(location, RESIZE_BORDER) {
-            tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");
-            self.raise_and_focus(id);
-            self.start_resize(id, edge, location);
-            return;
-        }
-
         let Some(id) = self.windows.window_under(location) else {
             tracing::info!(?location, "press landed outside every window");
             return;
         };
         self.raise_and_focus(id);
 
+        // A titlebar button wins over the resize band. With 24 px corners the
+        // top-left/right resize squares overlap the traffic lights, so checking
+        // the edge first would make close/minimize/maximize unreachable.
         if button == BUTTON_LEFT
             && let (Some(outer), Some(insets)) = (self.windows.outer(id), self.windows.insets(id))
             && let Some(kind) = crate::chrome::button_at(outer, insets, location)
         {
             self.window_button(id, kind);
+            return;
+        }
+
+        let side = f64::from(self.config.window.resize_border);
+        let corner = f64::from(self.config.window.resize_corner);
+        if let Some((edge_id, edge)) = self.windows.edge_under(location, side, corner)
+            && edge_id == id
+        {
+            tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");
+            self.start_resize(id, edge, location);
             return;
         }
 
@@ -1085,7 +1090,9 @@ impl State {
     /// A client-set surface cursor is left alone: the override only replaces a
     /// named (compositor-drawn) cursor, which is what is active over decoration.
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
-        match self.windows.edge_under(location, RESIZE_BORDER) {
+        let side = f64::from(self.config.window.resize_border);
+        let corner = f64::from(self.config.window.resize_corner);
+        match self.windows.edge_under(location, side, corner) {
             Some((_, edge)) => {
                 // A client surface cursor owns its pixels; only a named cursor
                 // (the default arrow, a cursor-shape request, or a previous
