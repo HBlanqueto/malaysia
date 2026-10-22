@@ -30,8 +30,23 @@ pub enum ColorScheme {
     Auto,
     /// Prefer the dark appearance ("Dark").
     Dark,
+    /// Prefer the dark-tinted appearance ("Dark tint").
+    #[serde(rename = "dark_tint")]
+    DarkTint,
     /// Prefer the light appearance ("Light").
     Light,
+}
+
+impl ColorScheme {
+    /// Resolves `Auto` to the concrete appearance Yuki uses. There is no
+    /// separate system preference source yet, so it follows the light default;
+    /// the portal publishes this same resolved value.
+    pub fn resolved(self) -> Self {
+        match self {
+            Self::Auto => Self::Light,
+            scheme => scheme,
+        }
+    }
 }
 
 /// Which windows get the compositor's server-side chrome.
@@ -306,7 +321,7 @@ impl Default for WallpaperConfig {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct AppearanceConfig {
-    /// "Light", "Dark" or "Auto". `None` → `ColorScheme::Auto`.
+    /// "Light", "Dark", "Dark tint" or "Auto". `None` → `ColorScheme::Auto`.
     pub color_scheme: ColorScheme,
     /// An sRGB accent color, `[r, g, b]` in `[0, 1]`. `None` → the default.
     pub accent_color: Option<[f32; 3]>,
@@ -746,6 +761,20 @@ mod tests {
         assert_eq!(config.screenshot.timer, 0);
         assert!(!config.screenshot.remember_selection);
         assert_eq!(config.lock.idle_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn auto_resolves_to_the_light_default() {
+        assert_eq!(ColorScheme::Auto.resolved(), ColorScheme::Light);
+        assert_eq!(ColorScheme::Dark.resolved(), ColorScheme::Dark);
+        assert_eq!(ColorScheme::DarkTint.resolved(), ColorScheme::DarkTint);
+    }
+
+    #[test]
+    fn dark_tint_is_a_color_scheme_value() {
+        let parsed: Config = toml::from_str("[appearance]\ncolor_scheme = \"dark_tint\"\n")
+            .expect("dark_tint parses");
+        assert_eq!(parsed.appearance.color_scheme, ColorScheme::DarkTint);
     }
 
     #[test]

@@ -240,15 +240,15 @@ pub const TITLEBAR: Titlebar = Titlebar {
         order: [
             Button {
                 kind: ButtonKind::Close,
-                color: Rgba::rgb8(0xe0, 0x62, 0x5d),
+                color: Rgba::rgb8(0xff, 0x5f, 0x57),
             },
             Button {
                 kind: ButtonKind::Minimize,
-                color: Rgba::rgb8(0xd9, 0xa6, 0x3a),
+                color: Rgba::rgb8(0xfe, 0xbc, 0x2e),
             },
             Button {
                 kind: ButtonKind::Maximize,
-                color: Rgba::rgb8(0x4f, 0xae, 0x5f),
+                color: Rgba::rgb8(0x28, 0xc8, 0x40),
             },
         ],
         diameter: 12,
@@ -294,6 +294,23 @@ pub const WINDOW_TINT_WALLPAPER: [f32; 2] = [0.07, 0.09];
 /// How much the wallpaper tints the panels and dock in `desktop` scope.
 pub const PANEL_TINT_WALLPAPER: [f32; 2] = [0.20, 0.26];
 
+/// The hairline rim drawn around each traffic light.
+pub const TRAFFIC_RIM: Rgba = Rgba::rgba8(0, 0, 0, 0.20);
+
+/// The traffic-light rim width, in logical pixels.
+pub const TRAFFIC_RIM_WIDTH: f32 = 0.5;
+
+/// Neptunia's layer factors: how much each surface kind picks up the window
+/// tint. `bg-sunken` and the controls/lines lean into it; raised surfaces
+/// barely do.
+pub const LAYER_FACTOR_BG_SUNKEN: f32 = 1.4;
+/// See [`LAYER_FACTOR_BG_SUNKEN`]; controls (`bg-control`, `bg-hover`).
+pub const LAYER_FACTOR_CONTROL: f32 = 1.2;
+/// See [`LAYER_FACTOR_BG_SUNKEN`]; lines and borders.
+pub const LAYER_FACTOR_LINE: f32 = 1.2;
+/// See [`LAYER_FACTOR_BG_SUNKEN`]; raised surfaces (`bg-surface`, `bg-raised`).
+pub const LAYER_FACTOR_SURFACE: f32 = 0.6;
+
 /// How much the close/minimize lights darken their source colour.
 pub const TRAFFIC_CLOSE_MINIMIZE_DARKEN: f32 = 0.28;
 
@@ -319,7 +336,7 @@ pub const TEXT: Font = Font {
     weight: 400,
 };
 
-/// The window shadow, the same in both modes.
+/// The window shadow in light mode.
 pub const SHADOW: ShadowStyle = ShadowStyle {
     ambient: ShadowLayer {
         blur: 48,
@@ -334,6 +351,29 @@ pub const SHADOW: ShadowStyle = ShadowStyle {
     unfocused_scale: 0.5,
 };
 
+/// The window shadow in dark and dark-tint modes: Neptunia's deeper,
+/// tighter dark shadow.
+pub const SHADOW_DARK: ShadowStyle = ShadowStyle {
+    ambient: ShadowLayer {
+        blur: 56,
+        y_offset: 22,
+        opacity: 0.55,
+    },
+    contact: ShadowLayer {
+        blur: 16,
+        y_offset: 6,
+        opacity: 0.35,
+    },
+    unfocused_scale: 0.5,
+};
+
+/// The window outer border: light first, dark second. Painted by the effects
+/// painter (ADR 0020), not by the titlebar.
+pub const WINDOW_OUTER: [Rgba; 2] = [
+    Rgba::rgba8(0x0d, 0x12, 0x19, 0.12),
+    Rgba::rgba8(0, 0, 0, 0.90),
+];
+
 /// The light mode palette: Neptunia `light`.
 pub const LIGHT: Palette = Palette {
     titlebar_bg: FocusPair {
@@ -344,7 +384,7 @@ pub const LIGHT: Palette = Palette {
     inner_line: None,
     title: FocusPair {
         focused: Rgba::rgb8(0x0d, 0x12, 0x19),
-        unfocused: Rgba::rgb8(0x55, 0x65, 0x7e),
+        unfocused: Rgba::rgb8(0x8a, 0x96, 0xa8),
     },
     text: FocusPair {
         focused: Rgba::rgb8(0x1b, 0x23, 0x30),
@@ -369,6 +409,26 @@ pub const DARK: Palette = Palette {
     text: FocusPair {
         focused: Rgba::rgb8(0xdc, 0xdc, 0xdc),
         unfocused: Rgba::rgb8(0x9b, 0x9b, 0x9b),
+    },
+    accent: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    traffic_lights_inactive: Rgba::rgb8(0x4e, 0x4e, 0x50),
+};
+
+/// The dark-tint mode palette: Neptunia `dark-tint`.
+pub const DARK_TINT: Palette = Palette {
+    titlebar_bg: FocusPair {
+        focused: Rgba::rgb8(0x1d, 0x1e, 0x20),
+        unfocused: Rgba::rgb8(0x15, 0x16, 0x17),
+    },
+    hairline: Rgba::rgb8(0x32, 0x33, 0x36),
+    inner_line: Some(Rgba::rgba8(0xff, 0xff, 0xff, 0.14)),
+    title: FocusPair {
+        focused: Rgba::rgb8(0xf4, 0xf5, 0xf6),
+        unfocused: Rgba::rgb8(0x99, 0x9c, 0xa3),
+    },
+    text: FocusPair {
+        focused: Rgba::rgb8(0xda, 0xdc, 0xdf),
+        unfocused: Rgba::rgb8(0x99, 0x9c, 0xa3),
     },
     accent: Rgba::rgb8(0x2f, 0x6f, 0xe4),
     traffic_lights_inactive: Rgba::rgb8(0x4e, 0x4e, 0x50),

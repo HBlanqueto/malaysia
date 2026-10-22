@@ -19,9 +19,9 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use unicode_segmentation::UnicodeSegmentation;
 use yuki_design::{
-    ButtonKind, DARK, FocusPair, Font, LIGHT, Palette, Rgba, TITLEBAR,
-    TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, TitlebarPosition, WINDOW_TINT_ACCENT,
-    WINDOW_TINT_WALLPAPER,
+    ButtonKind, DARK, DARK_TINT, FocusPair, Font, LAYER_FACTOR_LINE, LIGHT, Palette, Rgba,
+    TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TRAFFIC_ZOOM_LIGHTEN,
+    TitlebarPosition, WINDOW, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 use yuki_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use yuki_scene::scene::WindowId;
@@ -42,22 +42,32 @@ pub(crate) struct ChromeTheme {
 impl ChromeTheme {
     /// Builds the theme from the configuration and the current wallpaper.
     pub(crate) fn from_config(config: &Config) -> Self {
-        let dark = matches!(config.appearance.color_scheme, ColorScheme::Dark);
         let wallpaper = crate::wallpaper::dominant_color();
-        Self::from_parts(&config.appearance, dark, wallpaper)
+        Self::from_parts(&config.appearance, wallpaper)
     }
 
-    fn from_parts(appearance: &AppearanceConfig, dark: bool, wallpaper: Option<Rgba>) -> Self {
-        let base = if dark { DARK } else { LIGHT };
+    fn from_parts(appearance: &AppearanceConfig, wallpaper: Option<Rgba>) -> Self {
+        let scheme = appearance.color_scheme.resolved();
+        let dark = matches!(scheme, ColorScheme::Dark | ColorScheme::DarkTint);
+        let base = match scheme {
+            ColorScheme::DarkTint => DARK_TINT,
+            _ if dark => DARK,
+            _ => LIGHT,
+        };
         let accent = appearance
             .accent_color
             .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
             .unwrap_or(base.accent);
         let mode = appearance.window_color;
+        let resolved_accent = if mode == WindowColorMode::Wallpaper {
+            wallpaper.unwrap_or(accent)
+        } else {
+            accent
+        };
         let source = match mode {
             WindowColorMode::Neutral => None,
             WindowColorMode::Accent => Some(accent),
-            WindowColorMode::Wallpaper => wallpaper.or(Some(accent)),
+            WindowColorMode::Wallpaper => Some(resolved_accent),
         };
         let index = usize::from(dark);
         let factor = match mode {
@@ -66,12 +76,13 @@ impl ChromeTheme {
             WindowColorMode::Wallpaper => WINDOW_TINT_WALLPAPER[index],
         };
         let mut palette = base;
+        palette.accent = resolved_accent;
         if let Some(source) = source {
             palette.titlebar_bg = FocusPair {
                 focused: base.titlebar_bg.focused.mix(source, factor),
                 unfocused: base.titlebar_bg.unfocused.mix(source, factor),
             };
-            palette.hairline = base.hairline.mix(source, factor * 0.5);
+            palette.hairline = base.hairline.mix(source, factor * LAYER_FACTOR_LINE);
         }
 
         let style = match appearance.traffic_lights {
@@ -102,7 +113,7 @@ impl ChromeTheme {
             }
         };
 
-        let signature = signature(dark, mode, style, palette, lights);
+        let signature = signature(scheme, mode, style, palette, lights);
         Self {
             palette,
             lights,
@@ -112,7 +123,7 @@ impl ChromeTheme {
 }
 
 fn signature(
-    dark: bool,
+    scheme: ColorScheme,
     mode: WindowColorMode,
     style: TrafficLightStyle,
     palette: Palette,
@@ -123,7 +134,7 @@ fn signature(
         hash ^= bits;
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     };
-    add(u64::from(dark));
+    add(scheme as u64);
     add(mode as u64);
     add(style as u64);
     for color in [
@@ -357,7 +368,8 @@ impl TextEngine {
         } else {
             palette.titlebar_bg.unfocused
         };
-        fill_rect(&mut pixels, w, h, 0, 0, w, h, background);
+        let radius = f64::from(WINDOW.corner_radius) * scale;
+        fill_top_rounded(&mut pixels, w, h, radius, background);
 
         let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale)
             .round()
@@ -372,6 +384,7 @@ impl TextEngine {
             } else {
                 palette.traffic_lights_inactive
             };
+            let radius = (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32;
             fill_rounded_square(
                 &mut pixels,
                 w,
@@ -379,8 +392,19 @@ impl TextEngine {
                 center_x,
                 center_y,
                 diameter,
-                (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32,
+                radius,
                 color,
+            );
+            stroke_rounded_square(
+                &mut pixels,
+                w,
+                h,
+                center_x,
+                center_y,
+                diameter,
+                radius,
+                (f64::from(TRAFFIC_RIM_WIDTH) * scale) as f32,
+                TRAFFIC_RIM,
             );
         }
 
@@ -529,13 +553,53 @@ fn fill_rect(
     h: i32,
     color: yuki_design::Rgba,
 ) {
-    let rgba = rgba8(color);
     for row in y.max(0)..(y + h).min(height) {
         for col in x.max(0)..(x + w).min(width) {
             let index = (row * width + col) as usize * 4;
-            pixels[index..index + 4].copy_from_slice(&rgba);
+            blend(&mut pixels[index..index + 4], color, 1.0);
         }
     }
+}
+
+/// Fills the whole bar but rounds its two top corners, with antialiased
+/// coverage.
+fn fill_top_rounded(
+    pixels: &mut [u8],
+    width: i32,
+    height: i32,
+    radius: f64,
+    color: yuki_design::Rgba,
+) {
+    let radius = (radius as f32).min(width as f32 / 2.0).min(height as f32);
+    for row in 0..height {
+        for col in 0..width {
+            let coverage =
+                top_corner_coverage(col as f32 + 0.5, row as f32 + 0.5, width as f32, radius);
+            if coverage <= 0.0 {
+                continue;
+            }
+            let index = (row * width + col) as usize * 4;
+            blend(&mut pixels[index..index + 4], color, coverage);
+        }
+    }
+}
+
+/// Coverage of a pixel in the bar's top-left or top-right rounded corner.
+fn top_corner_coverage(px: f32, py: f32, width: f32, radius: f32) -> f32 {
+    if radius <= 0.0 || py > radius {
+        return 1.0;
+    }
+    let center_x = if px < radius {
+        radius
+    } else if px > width - radius {
+        width - radius
+    } else {
+        return 1.0;
+    };
+    let dx = px - center_x;
+    let dy = py - radius;
+    let distance = (dx * dx + dy * dy).sqrt() - radius;
+    (0.5 - distance).clamp(0.0, 1.0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -558,6 +622,37 @@ fn fill_rounded_square(
             let dy = ((row as f32 + 0.5) - cy as f32).abs() - inner;
             let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
             let coverage = (0.5 - distance).clamp(0.0, 1.0);
+            if coverage <= 0.0 {
+                continue;
+            }
+            let index = (row * width + col) as usize * 4;
+            blend(&mut pixels[index..index + 4], color, coverage);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stroke_rounded_square(
+    pixels: &mut [u8],
+    width: i32,
+    height: i32,
+    cx: i32,
+    cy: i32,
+    size: i32,
+    radius: i32,
+    stroke: f32,
+    color: yuki_design::Rgba,
+) {
+    let half = size as f32 / 2.0;
+    let radius = (radius as f32).min(half);
+    let inner = half - radius;
+    let half_stroke = stroke / 2.0;
+    for row in (cy - size).max(0)..(cy + size).min(height) {
+        for col in (cx - size).max(0)..(cx + size).min(width) {
+            let dx = ((col as f32 + 0.5) - cx as f32).abs() - inner;
+            let dy = ((row as f32 + 0.5) - cy as f32).abs() - inner;
+            let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
+            let coverage = (half_stroke + 0.5 - distance.abs()).clamp(0.0, 1.0);
             if coverage <= 0.0 {
                 continue;
             }
@@ -612,26 +707,20 @@ fn blit_glyph(
     }
 }
 
+/// Premultiplied src-over: `dst` stores premultiplied RGBA, as the renderer
+/// expects, and its alpha is composed rather than forced opaque.
 fn blend(dst: &mut [u8], src: yuki_design::Rgba, coverage: f32) {
     let a = (src.a * coverage).clamp(0.0, 1.0);
-    let out = [
-        src.r * a + (f32::from(dst[0]) / 255.0) * (1.0 - a),
-        src.g * a + (f32::from(dst[1]) / 255.0) * (1.0 - a),
-        src.b * a + (f32::from(dst[2]) / 255.0) * (1.0 - a),
-    ];
-    for (index, value) in out.iter().enumerate() {
+    let inverse = 1.0 - a;
+    for (index, channel) in [src.r, src.g, src.b].into_iter().enumerate() {
+        let destination = f32::from(dst[index]) / 255.0;
+        let value = channel * a + destination * inverse;
         dst[index] = (value * 255.0).round().clamp(0.0, 255.0) as u8;
     }
-    dst[3] = 255;
-}
-
-fn rgba8(color: yuki_design::Rgba) -> [u8; 4] {
-    [
-        (color.r * 255.0).round() as u8,
-        (color.g * 255.0).round() as u8,
-        (color.b * 255.0).round() as u8,
-        (color.a * 255.0).round() as u8,
-    ]
+    let destination = f32::from(dst[3]) / 255.0;
+    dst[3] = ((a + destination * inverse) * 255.0)
+        .round()
+        .clamp(0.0, 255.0) as u8;
 }
 
 #[cfg(test)]
@@ -656,9 +745,16 @@ mod tests {
 
     #[test]
     fn neutral_keeps_the_base_palette_and_macos_lights() {
-        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), false, None);
-        assert_eq!(theme.palette.titlebar_bg, LIGHT.titlebar_bg);
-        assert_eq!(theme.lights[0], TITLEBAR.buttons.order[0].color);
+        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
+        assert_eq!(theme.palette, LIGHT);
+        assert_eq!(
+            theme.lights,
+            [
+                Rgba::rgb8(0xff, 0x5f, 0x57),
+                Rgba::rgb8(0xfe, 0xbc, 0x2e),
+                Rgba::rgb8(0x28, 0xc8, 0x40),
+            ]
+        );
     }
 
     #[test]
@@ -668,14 +764,23 @@ mod tests {
             accent_color: Some([0.8, 0.2, 0.2]),
             ..AppearanceConfig::default()
         };
-        let theme = ChromeTheme::from_parts(&appearance, false, None);
+        let theme = ChromeTheme::from_parts(&appearance, None);
         let accent = Rgba {
             r: 0.8,
             g: 0.2,
             b: 0.2,
             a: 1.0,
         };
-        assert_ne!(theme.palette.titlebar_bg.focused, LIGHT.titlebar_bg.focused);
+        let factor = WINDOW_TINT_ACCENT[0];
+        assert_eq!(theme.palette.accent, accent);
+        assert_eq!(
+            theme.palette.titlebar_bg.focused,
+            LIGHT.titlebar_bg.focused.mix(accent, factor)
+        );
+        assert_eq!(
+            theme.palette.hairline,
+            LIGHT.hairline.mix(accent, factor * LAYER_FACTOR_LINE)
+        );
         assert_eq!(
             theme.lights[0],
             accent.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
@@ -686,6 +791,7 @@ mod tests {
     #[test]
     fn wallpaper_tinting_uses_the_dominant_colour() {
         let appearance = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
             window_color: WindowColorMode::Wallpaper,
             ..AppearanceConfig::default()
         };
@@ -695,9 +801,31 @@ mod tests {
             b: 0.9,
             a: 1.0,
         };
-        let theme = ChromeTheme::from_parts(&appearance, true, Some(wallpaper));
-        assert_ne!(theme.palette.titlebar_bg.focused, DARK.titlebar_bg.focused);
+        let theme = ChromeTheme::from_parts(&appearance, Some(wallpaper));
+        let factor = WINDOW_TINT_WALLPAPER[1];
+        assert_eq!(theme.palette.accent, wallpaper);
+        assert_eq!(
+            theme.palette.titlebar_bg.focused,
+            DARK.titlebar_bg.focused.mix(wallpaper, factor)
+        );
+        assert_eq!(
+            theme.palette.hairline,
+            DARK.hairline.mix(wallpaper, factor * LAYER_FACTOR_LINE)
+        );
         assert_eq!(theme.lights[2], wallpaper.lighten(TRAFFIC_ZOOM_LIGHTEN));
+    }
+
+    #[test]
+    fn dark_tint_uses_its_own_palette_and_light_title_faint() {
+        let appearance = AppearanceConfig {
+            color_scheme: ColorScheme::DarkTint,
+            ..AppearanceConfig::default()
+        };
+        let theme = ChromeTheme::from_parts(&appearance, None);
+        assert_eq!(theme.palette, DARK_TINT);
+        assert_eq!(theme.palette.title.focused, Rgba::rgb8(0xf4, 0xf5, 0xf6));
+        assert_eq!(theme.palette.title.unfocused, Rgba::rgb8(0x99, 0x9c, 0xa3));
+        assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x8a, 0x96, 0xa8));
     }
 
     #[test]
@@ -707,7 +835,7 @@ mod tests {
             traffic_lights: TrafficLightStyle::Macos,
             ..AppearanceConfig::default()
         };
-        let theme = ChromeTheme::from_parts(&appearance, false, None);
+        let theme = ChromeTheme::from_parts(&appearance, None);
         assert_eq!(theme.lights[1], TITLEBAR.buttons.order[1].color);
     }
 
@@ -782,6 +910,18 @@ mod tests {
             button_at(outer(), insets(), Point::from((500.0, 100.0))),
             None
         );
+    }
+
+    #[test]
+    fn the_bar_rounds_its_top_corners_and_keeps_real_alpha() {
+        let mut text = TextEngine::new();
+        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
+        let (pixels, w, h) = text.rasterize("", false, 800, 1.0, theme);
+        let alpha = |x: i32, y: i32| pixels[((y * w + x) * 4 + 3) as usize];
+        assert_eq!(alpha(0, 0), 0, "the top-left corner stays transparent");
+        assert_eq!(alpha(w - 1, 0), 0, "the top-right corner stays transparent");
+        assert_eq!(alpha(w / 2, 0), 255, "the top edge stays opaque");
+        assert_eq!(alpha(0, h - 1), 255, "the bottom corners stay square");
     }
 
     #[test]

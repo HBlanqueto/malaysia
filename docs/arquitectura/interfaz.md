@@ -47,9 +47,9 @@ solo se dibujan sus superficies (y el cursor).
 
 ## Sistema de diseño: Neptunia
 
-- **Temas**: `light` (por defecto), `dark` y `dark-tint` en los tokens. Hoy
-  `yuki-design` implementa `LIGHT` y `DARK`; `dark-tint` está en el catálogo
-  pero aún no se selecciona.
+- **Temas**: `light` (por defecto), `dark` y `dark-tint` en los tokens.
+  `yuki-design` implementa `LIGHT`, `DARK` y `DARK_TINT`; el valor
+  `appearance.color_scheme = "dark_tint"` selecciona el último.
 - **Forma**: radio de ventana 16, semáforos de 12 con radio 4, titlebar de
   cliente **32 px** arriba. Los 44 px de `components.window` son la ventana de
   las apps propias de Neptunia, no el chrome de terceros.
@@ -136,9 +136,9 @@ Los dominios que afectan a la interfaz:
 
 El portal `xdg-desktop-portal-yuki` publica `org.freedesktop.appearance`
 (`color-scheme`, `accent-color`, `contrast`, `reduced-motion`) desde
-`appearance.domain`. El tema de la titlebar se resuelve **al arrancar**; un
-cambio de apariencia o wallpaper se aplica al reiniciar (el portal sí notifica
-a las apps en vivo).
+`appearance.domain`. El tema de la titlebar se reconstruye **en vivo** cuando
+cambian `appearance.domain` o `wallpaper.state`, sin reiniciar (el portal
+también notifica a las apps).
 
 ## Lo que falta (UI)
 
@@ -148,8 +148,6 @@ a las apps en vivo).
   los semáforos.
 - **Doble clic** en la titlebar para zoom, y titlebar en la captura de ventana.
 - **Tinte de panel/dock** en `window_tint_scope = "desktop"`.
-- **Cambio de tema en vivo** (hoy al arrancar), `dark-tint`, y el resto de
-  tokens de Neptunia portados a `yuki-design`.
 - **Iconos** reales en el dock (hoy títulos) y menús globales de la menubar.
 - **Notificaciones** y el resto del Bloque 12b.
 
