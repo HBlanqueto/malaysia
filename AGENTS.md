@@ -86,12 +86,15 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `celestial-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
 - **Investigación**: `docs/investigacion/` — cómo renderiza macOS y comparación
   con Wayland (contexto de diseño).
+- **Interfaz**: `docs/arquitectura/interfaz.md` reúne todo lo visual (Neptunia,
+  capas, shell, ventanas, capturas, cursor y opciones). Léelo antes de tocar UI.
 - **Arquitectura**: `docs/arquitectura/yuki-y-shell.md` (+ `yuki-y-shell.svg`)
   — **quién decide cada cosa entre Yuki (compositor) y la shell (`yuki-shell`)**:
   la shell dibuja el contenido, Yuki coloca/compone/regula. Léelo antes de tocar
   la integración de la shell. Componentes: `wallpaper.md`, `menubar.md`,
   `dock.md`, `lock.md`, `capturas.md` (capturas: capacidad del compositor, no
-  proceso de shell) y `ventanas.md` (titlebar Neptunia).
+  proceso de shell), `ventanas.md` (titlebar Neptunia) e
+  `interfaz.md` (el mapa completo).
 
 ## Estado actual
 

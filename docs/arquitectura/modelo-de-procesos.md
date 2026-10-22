@@ -115,6 +115,8 @@ pointer constraints, `relative-pointer`, el sync explícito
 
 ## Relación con el resto de la documentación
 
+- [`interfaz.md`](interfaz.md) — el mapa completo de la UI y sus capas.
+
 - ADR 0023 — la decisión (este documento es su consecuencia en forma de distribución).
 - ADR 0025 — la shell es nativa: los componentes `yuki-shell` son estos procesos.
 - ADR 0031 — el portal es un backend D-Bus aparte, no un componente del shell.

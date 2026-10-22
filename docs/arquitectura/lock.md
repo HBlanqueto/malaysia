@@ -108,6 +108,10 @@ completa crea uno; una ventana normal no. La lista se limpia también por un
 destruction hook de la superficie, así que un cliente que muere no deja la
 sesión despierta para siempre.
 
+## Relación
+
+- [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
+
 ## El lado del compositor (`crates/yuki/src/lock.rs`)
 
 - **`SessionLockManagerState`** (smithay) + `SessionLockHandler`:

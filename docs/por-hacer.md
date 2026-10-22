@@ -46,6 +46,8 @@ shell; ver `bloques/09-escala-fraccional.md`.
 
 ## Ahora: escritorio usable (Bloque 13, adelantado)
 
+Mapa completo de la UI: [`arquitectura/interfaz.md`](arquitectura/interfaz.md).
+
 El diseño es **Neptunia** (ADR 0032): titlebar arriba de 32 px para ventanas SSD, radio 16,
 semáforos de 12, tema claro por defecto.
 

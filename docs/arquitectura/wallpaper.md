@@ -66,6 +66,7 @@ wallpaper.domain ──► decodificar PNG ──► textura (celestial-kit)
 
 ## Relación
 
+- [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
 - ADR 0023 — el modelo de procesos (un proceso por componente).
 - ADR 0024 — el stack de render del toolkit (GLES + cosmic-text + shaders).
 - ADR 0027 — la shell presenta por EGL (Bloque 7c).

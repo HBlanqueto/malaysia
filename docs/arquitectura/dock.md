@@ -29,7 +29,8 @@ window.domain ──► app activa (resaltada)
    foco de puntero a las capas `Top`/`Overlay` con interactividad).
 2. **La lista de ventanas**: `ext-foreign-toplevel-list-v1` (el compositor lo
    sirve con el módulo de smithay). Cada ventana mapeada → un tile; cada tile
-   muestra el título de la app.
+   muestra el título de la app sobre la paleta clara de Neptunia
+   (`SHELL_TILE`, activo `SHELL_TILE_ACTIVE`).
 3. **Activar al clic**: `zwlr_foreign_toplevel_management_v1` (el compositor lo
    sirve manualmente — smithay 0.7 no lo trae). Un clic en un tile envía
    `activate`, y el compositor restaura (si estaba minimizada), eleva y enfoca
@@ -73,14 +74,15 @@ window.domain ──► app activa (resaltada)
   la menubar (`window.domain` = `foot`).
 - `kill -9` al dock: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
-- Todo verde: clippy `-D warnings`, fmt, 115 tests.
-- **Bug pre-existente conocido**: el texto (cosmic-text) no se rasteriza en
-  este entorno; el dock dibuja los tiles sin el título. Seguimiento en
-  `bloques/07`.
+- Todo verde: clippy `-D warnings`, fmt y tests. El texto de los tiles se
+  rasteriza (bug de 7.1 corregido) y los títulos se ven.
+- El tinte de panel/dock de `appearance.window_tint_scope = "desktop"` aún no
+  está conectado: el dock usa la paleta clara fija.
 
 ## Relación
 
-- ADR 0023 (procesos y protocolos), ADR 0024 (texto).
+- [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
+- ADR 0023 (procesos y protocolos), ADR 0024 (texto), ADR 0032 (Neptunia).
 - `menubar.md` / `wallpaper.md` — componentes hermanos (presentación EGL,
   ADR 0027).
 - `configuracion/opciones.md` — `dock.*` (catálogo; `tilesize` en uso).

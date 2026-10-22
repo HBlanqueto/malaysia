@@ -23,7 +23,8 @@ window.domain ──► título de la app activa (el compositor lo publica)
    **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
    debajo de la barra.
 2. **El render** es CPU: `celestial-kit::text` (cosmic-text + swash) compone el
-   texto en un frame RGBA sobre un fondo translúcido, y la textura se presenta
+   texto en un frame RGBA sobre el fondo claro de Neptunia
+   (`SHELL_BAR`, `#f2f4f7e6`) y la textura se presenta
    por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
    dmabuf que el compositor texturiza directo. La subida a la textura es
    **parcial**: solo la franja del reloj (90 px) o del título (250 px) que
@@ -75,14 +76,14 @@ el área útil).
   lo muestra; el reloj avanza al minuto (1 commit/min, `Dma`).
 - `kill -9` al proceso: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
-- Todo verde: clippy `-D warnings`, fmt, 115 tests.
-- **Bug pre-existente conocido**: en este entorno el texto (cosmic-text) no se
-  rasteriza (`layout_runs()` vacío pese a tener fuentes); la menubar dibuja el
-  fondo sin el texto. Seguimiento en `bloques/07`.
+- El texto se rasteriza (el bug de `layout_runs` vacío se corrigió en 7.1);
+  la menubar muestra la app activa y el reloj sobre la paleta clara de Neptunia.
+- Todo verde: clippy `-D warnings`, fmt y tests.
 
 ## Relación
 
-- ADR 0023 (procesos), ADR 0024 (texto con cosmic-text).
+- [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
+- ADR 0023 (procesos), ADR 0024 (texto con cosmic-text), ADR 0032 (Neptunia).
 - `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
 - `modelo-de-procesos.md` — la distribución de procesos.
 - `configuracion/opciones.md` — `menubar.autohide` (catálogo).

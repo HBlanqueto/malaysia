@@ -1,5 +1,7 @@
 # Ventanas y titlebar (Neptunia)
 
+> Mapa general de la interfaz: [`interfaz.md`](interfaz.md).
+
 La titlebar de Yuki es **compositor-side** (ADR 0020) y usa el diseño de
 **Neptunia** (ADR 0032): barra **arriba** de **32 px lógicos** para las ventanas
 SSD de terceros, semáforos de 12 px

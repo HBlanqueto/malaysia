@@ -31,6 +31,7 @@ docs/
 ├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
+│   ├── interfaz.md             mapa completo de la UI (diseño, shell, ventanas, capas)
 │   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
 │   ├── yuki-y-shell.svg       diagrama de la división de trabajo
 │   ├── modelo-de-procesos.md  distribución de procesos del shell (ADR 0023)
@@ -70,13 +71,16 @@ docs/
    fuente de verdad sobre qué hay planeado.
 4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
    construyó cada bloque, las divergencias con el brief y cómo se verificó.
-5. **[`por-hacer.md`](por-hacer.md)** — el plan corto: aceptación de 8a y 10
-   en hardware real, y el orden de 9 → 11 → 12. El roadmap es el plan largo;
-   este documento es la lista de ahora.
+5. **[`por-hacer.md`](por-hacer.md)** — el plan corto: el escritorio usable
+   (Bloque 13), el cierre de 12a/12b y el hardware real. El roadmap es el plan
+   largo; este documento es la lista de ahora.
 6. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0030, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0032, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
-7. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
+7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
+   de la interfaz: Neptunia, capas, shell, ventanas, capturas, cursor y
+   configuración. Empieza aquí si vas a tocar algo visual.
+8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
    (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
@@ -84,14 +88,14 @@ docs/
    [lock](arquitectura/lock.md),
    [capturas de pantalla](arquitectura/capturas.md) y
    [ventanas/titlebar](arquitectura/ventanas.md).
-8. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
+9. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
    canónico de opciones del compositor, con **nombres y valores idénticos a macOS**
    (secciones tipo System Settings, claves tipo `com.apple.dock`). Un archivo
    **`.domain`** por dominio (extensión propia, como `.plist`); comando **`domain`**
    (sintaxis `defaults`) y app de ajustes después, ADR 0021.
-9. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
+10. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
    comparará el hito Direct Session (DRM/KMS).
-10. **[`investigacion/`](investigacion/)** — material de investigación: cómo
+11. **[`investigacion/`](investigacion/)** — material de investigación: cómo
    renderiza macOS su escritorio, cómo se compara con las opciones Wayland, qué
    se puede reutilizar de [Otto y sus forks](investigacion/otto-y-forks.md) y
    qué funciones de [GNOME](investigacion/gnome.md) sirven de referencia

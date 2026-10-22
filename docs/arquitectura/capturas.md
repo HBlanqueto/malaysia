@@ -1,5 +1,7 @@
 # Capturas de pantalla (`Shift+Super+3/4`, PrintScreen)
 
+> Mapa general de la interfaz: [`interfaz.md`](interfaz.md).
+
 Las capturas son una capacidad del escritorio al mismo nivel que el
 [wallpaper](wallpaper.md), la [menubar](menubar.md) o el [dock](dock.md), pero
 **no son un proceso de la shell**: las hace el compositor. La shell no

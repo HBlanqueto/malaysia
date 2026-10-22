@@ -4,7 +4,8 @@ Este documento fija cómo actúa la shell (**`yuki-shell`**, un proceso por
 componente, ADR 0023/0025) dentro del compositor (**Yuki**), quién decide cada
 cosa y cómo se comunican. Es la implementación de la política de diseño
 (ADR 0020) y de la elección de shell nativa (ADR 0025). El diagrama está en
-[`yuki-y-shell.svg`](yuki-y-shell.svg).
+[`yuki-y-shell.svg`](yuki-y-shell.svg). El mapa completo de la UI está en
+[`interfaz.md`](interfaz.md).
 
 ## La idea en una frase
 

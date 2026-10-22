@@ -61,4 +61,5 @@ mientras Yuki se construye.
   viven en `yuki-design`.
 - [`0020`](0020-politica-de-diseno-y-unificacion.md) — chrome compositor-side.
 - [`0024`](0024-stack-de-render-del-toolkit.md) — GLES/cosmic-text, sin Skia.
+- [`../arquitectura/interfaz.md`](../arquitectura/interfaz.md) — el mapa completo.
 - [`../arquitectura/ventanas.md`](../arquitectura/ventanas.md) — la titlebar.

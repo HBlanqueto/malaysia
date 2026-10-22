@@ -6,6 +6,8 @@ secciones imitan System Settings (`appearance`, `window`, `dock`, `menubar`) y l
 claves imitan `com.apple.dock` y demás (`autohide`, `orientation`, `tilesize`,
 `mineffect`, `show-process-indicators`, ...).
 
+Mapa visual completo: [`../arquitectura/interfaz.md`](../arquitectura/interfaz.md).
+
 **Como macOS, la configuración se guarda en un archivo por dominio** (extensión
 **`.domain`**, el formato propio de Yuki, como `.plist` lo es de macOS) en dos
 directorios — preferencias y estado:
