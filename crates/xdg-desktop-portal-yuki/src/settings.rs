@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-use yuki::config::{AppearanceConfig, ColorScheme, config_dir};
-use yuki_design::{DARK, LIGHT};
+use yuki::config::{AppearanceConfig, ColorScheme, WindowColorMode, config_dir, data_dir};
+use yuki_design::{DARK, DARK_TINT, LIGHT, Rgba};
 use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
@@ -45,31 +45,52 @@ impl Values {
     fn from_appearance(appearance: Option<&AppearanceConfig>) -> Self {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
-        let color_scheme = match appearance.color_scheme {
-            ColorScheme::Auto => 0,
-            ColorScheme::Dark => 1,
+        let wallpaper = if appearance.window_color == WindowColorMode::Wallpaper {
+            yuki::wallpaper::dominant_color()
+        } else {
+            None
+        };
+        Self::from_parts(appearance, wallpaper)
+    }
+
+    fn from_parts(appearance: &AppearanceConfig, wallpaper: Option<Rgba>) -> Self {
+        // Resolve `auto` here, so the portal and the compositor agree on the
+        // concrete scheme (there is no separate system preference source).
+        let scheme = appearance.color_scheme.resolved();
+        let color_scheme = match scheme {
             ColorScheme::Light => 2,
+            ColorScheme::Dark | ColorScheme::DarkTint => 1,
+            ColorScheme::Auto => 2,
         };
         // macOS's default accent is the system blue; use the palette that
-        // matches the requested scheme when the user has not chosen one.
-        let palette = if color_scheme == 2 { &LIGHT } else { &DARK };
-        let accent = appearance.accent_color.map_or(
-            (
-                f64::from(palette.accent.r),
-                f64::from(palette.accent.g),
-                f64::from(palette.accent.b),
-            ),
-            |[r, g, b]| {
-                (
-                    f64::from(r).clamp(0.0, 1.0),
-                    f64::from(g).clamp(0.0, 1.0),
-                    f64::from(b).clamp(0.0, 1.0),
-                )
-            },
-        );
+        // matches the resolved scheme when the user has not chosen one.
+        let palette = match scheme {
+            ColorScheme::Light => &LIGHT,
+            ColorScheme::DarkTint => &DARK_TINT,
+            _ => &DARK,
+        };
+        let resolved = appearance
+            .accent_color
+            .map_or(palette.accent, |[r, g, b]| Rgba {
+                r: r.clamp(0.0, 1.0),
+                g: g.clamp(0.0, 1.0),
+                b: b.clamp(0.0, 1.0),
+                a: 1.0,
+            });
+        // In wallpaper mode the dominant colour is the system accent, the same
+        // value the compositor's chrome uses, so libadwaita follows it.
+        let accent = if appearance.window_color == WindowColorMode::Wallpaper {
+            wallpaper.unwrap_or(resolved)
+        } else {
+            resolved
+        };
         Self {
             color_scheme,
-            accent,
+            accent: (
+                f64::from(accent.r),
+                f64::from(accent.g),
+                f64::from(accent.b),
+            ),
             contrast: u32::from(appearance.contrast),
             reduced_motion: u32::from(appearance.reduced_motion),
         }
@@ -172,11 +193,12 @@ enum PortalError {
 /// Watches `appearance.domain` and emits `SettingChanged` for each key.
 pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
     std::thread::spawn(move || {
-        let path = appearance_path();
-        let mut last = mtime(&path);
+        let appearance = appearance_path();
+        let wallpaper = wallpaper_state_path();
+        let mut last = (mtime(&appearance), mtime(&wallpaper));
         loop {
             std::thread::sleep(WATCH_INTERVAL);
-            let now = mtime(&path);
+            let now = (mtime(&appearance), mtime(&wallpaper));
             if now == last {
                 continue;
             }
@@ -218,6 +240,10 @@ fn appearance_path() -> PathBuf {
     config_dir().join("appearance.domain")
 }
 
+fn wallpaper_state_path() -> PathBuf {
+    data_dir().join("wallpaper.state")
+}
+
 fn read_appearance() -> Result<Option<AppearanceConfig>, toml::de::Error> {
     let Ok(text) = std::fs::read_to_string(appearance_path()) else {
         return Ok(None);
@@ -252,7 +278,7 @@ mod tests {
     #[test]
     fn the_color_scheme_maps_to_the_portal_values() {
         let auto = AppearanceConfig::default();
-        assert_eq!(Values::from_appearance(Some(&auto)).color_scheme, 0);
+        assert_eq!(Values::from_appearance(Some(&auto)).color_scheme, 2);
         let dark = AppearanceConfig {
             color_scheme: ColorScheme::Dark,
             ..AppearanceConfig::default()
@@ -263,6 +289,33 @@ mod tests {
             ..AppearanceConfig::default()
         };
         assert_eq!(Values::from_appearance(Some(&light)).color_scheme, 2);
+        let tint = AppearanceConfig {
+            color_scheme: ColorScheme::DarkTint,
+            ..AppearanceConfig::default()
+        };
+        assert_eq!(Values::from_appearance(Some(&tint)).color_scheme, 1);
+    }
+
+    #[test]
+    fn wallpaper_mode_publishes_the_dominant_accent() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Wallpaper,
+            ..AppearanceConfig::default()
+        };
+        let wallpaper = Rgba {
+            r: 0.1,
+            g: 0.5,
+            b: 0.9,
+            a: 1.0,
+        };
+        assert_eq!(
+            Values::from_parts(&appearance, Some(wallpaper)).accent,
+            (
+                f64::from(wallpaper.r),
+                f64::from(wallpaper.g),
+                f64::from(wallpaper.b)
+            )
+        );
     }
 
     #[test]

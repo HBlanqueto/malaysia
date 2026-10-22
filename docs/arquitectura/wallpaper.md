@@ -7,7 +7,7 @@ nativa (`yuki-shell`, ADR 0025).
 ## Cómo funciona
 
 ```
-wallpaper.domain ──► decodificar PNG ──► textura (celestial-kit)
+wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit)
    (~/.local/share/yuki)                       │
                                               GLES
                                               (render "fill", cubrir)
@@ -30,7 +30,9 @@ wallpaper.domain ──► decodificar PNG ──► textura (celestial-kit)
    directo — sin readback, sin copias por CPU, sin `wl_shm`.
 4. El componente **vigila `wallpaper.domain`** (cada 500 ms) y repinta al
    cambiar — como macOS, la selección actual vive en `~/Library/Application
-   Support` (`~/.local/share/yuki/`).
+   Support` (`~/.local/share/yuki/`). Al cambiar de fondo calcula su color
+   dominante y lo escribe en `wallpaper.state` (`dominant = [r, g, b]`) para
+   el compositor y el portal; el compositor ya no decodifica imágenes.
 
 ## Crates y ficheros
 
@@ -38,7 +40,7 @@ wallpaper.domain ──► decodificar PNG ──► textura (celestial-kit)
   una EGL window surface).
 - `crates/yuki-shell/src/main.rs` — subcomandos: `yuki-shell wallpaper`.
 - `crates/yuki-shell/src/wallpaper.rs` — el componente: cliente layer-shell,
-  lectura del store, decodificación PNG, presentación.
+  lectura del store, decodificación PNG/JPEG, color dominante y presentación.
 - `crates/yuki-shell/src/present.rs` — `EglPresenter` (el `wl_egl_window`).
 - `crates/grade-graphics/` — los shaders GLSL compartidos (vacío aún).
 

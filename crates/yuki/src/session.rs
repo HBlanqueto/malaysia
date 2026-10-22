@@ -37,6 +37,7 @@ use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction};
 use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::BindError;
@@ -397,6 +398,21 @@ pub fn run() -> Result<(), SessionError> {
     session.backend.window().request_redraw();
 
     watch_for_shutdown(&loop_handle, loop_signal)?;
+
+    // Rebuild the chrome theme when appearance.domain or wallpaper.state
+    // changes, without a restart.
+    loop_handle
+        .insert_source(
+            Timer::from_duration(Duration::from_millis(500)),
+            |_, _, session: &mut Session| {
+                session.state.refresh_theme();
+                if session.state.take_redraw_request() {
+                    session.backend.window().request_redraw();
+                }
+                TimeoutAction::ToDuration(Duration::from_millis(500))
+            },
+        )
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
 
     loop_handle
         .insert_source(winit_events, move |event, _, session: &mut Session| {

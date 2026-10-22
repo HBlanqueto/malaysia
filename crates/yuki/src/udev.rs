@@ -260,6 +260,21 @@ pub fn run(options: DrmOptions) -> Result<()> {
         frame_was_empty: false,
     };
 
+    // Rebuild the chrome theme when appearance.domain or wallpaper.state
+    // changes, without a restart.
+    loop_handle
+        .insert_source(
+            Timer::from_duration(Duration::from_millis(500)),
+            |_, _, data: &mut Udev| {
+                data.state.refresh_theme();
+                if data.state.take_redraw_request() {
+                    data.render();
+                }
+                TimeoutAction::ToDuration(Duration::from_millis(500))
+            },
+        )
+        .map_err(|error| anyhow!("inserting the theme watcher: {error}"))?;
+
     // DRM events: VBlank is the pacing clock.
     loop_handle
         .insert_source(

@@ -26,12 +26,13 @@ org.freedesktop.appearance: color-scheme, accent-color, contrast, reduced-motion
 - **Nombre y objeto**: `org.freedesktop.impl.portal.desktop.yuki`,
   `/org/freedesktop/portal/desktop`, interfaz
   `org.freedesktop.impl.portal.Settings` versión 2.
-- **Valores**: `color-scheme` (`0` auto, `1` dark, `2` light), `accent-color`
+- **Valores**: `color-scheme` (`1` dark, `2` light; `auto` se resuelve a light
+  con el mismo `ColorScheme::resolved()` que usa el compositor), `accent-color`
   (`(ddd)` en sRGB, del `appearance.accent_color` o el accent del palette de
   `yuki-design`), `contrast` y `reduced-motion` (`0`/`1`).
-- **En vivo**: sondea el mtime de `appearance.domain` cada 250 ms y emite
-  `SettingChanged` por cada clave que cambió. Un fichero ausente vuelve a los
-  defaults; uno mal formado conserva los últimos valores y avisa.
+- **En vivo**: sondea el mtime de `appearance.domain` y `wallpaper.state` cada
+  250 ms y emite `SettingChanged` por cada clave que cambió. Un fichero ausente
+  vuelve a los defaults; uno mal formado conserva los últimos valores y avisa.
 - **Errores**: namespace o clave desconocidos devuelven
   `org.freedesktop.portal.Error.NotFound`.
 - **Configuración**: `share/xdg-desktop-portal/portals/yuki.portal` con

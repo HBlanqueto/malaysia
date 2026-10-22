@@ -65,10 +65,13 @@ Neptunia:
 | `accent` | el acento, 6 % en claro / 8 % en oscuro | derivados del acento |
 | `wallpaper` | el color dominante del wallpaper, 7 % / 9 % | derivados del wallpaper |
 
-El color dominante se calcula reduciendo el PNG del wallpaper actual a
-histogramas de 4 bits y eligiendo el más frecuente; si no se puede leer, se usa
-el acento. `appearance.traffic_lights` permite forzar `macos`, `accent` o
-`wallpaper` en vez de `auto`.
+El color dominante lo calcula `yuki-shell wallpaper` al decodificar la imagen:
+muestreo en rejilla, histograma de 4 bits ponderado por croma, descarte de grises
+y normalización de luminosidad HSL a 45–65 %. Lo escribe en `wallpaper.state`;
+si no hay color, se usa el acento. El compositor vigila ese archivo y
+`appearance.domain` para reconstruir el tema en caliente.
+`appearance.traffic_lights` permite forzar `macos`, `accent` o `wallpaper` en
+vez de `auto`.
 
 `appearance.window_tint_scope = "desktop"` está definido en el catálogo y el
 factor de panel/dock (20 % / 26 %) vive en `yuki-design`, pero la shell todavía

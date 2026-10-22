@@ -22,8 +22,9 @@
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use yuki_scene::scene::{Edge, WindowId};
@@ -63,7 +64,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
 
-use crate::config::Config;
+use crate::config::{Config, config_dir, data_dir};
 use crate::foreign::{ForeignState, ListHandles};
 use crate::input::ShakeDetector;
 use crate::layers::Layers;
@@ -295,8 +296,11 @@ pub struct State {
     pub(crate) leaked_window: Option<WindowId>,
     /// Cached titlebar textures for server-decorated windows.
     pub(crate) chrome: crate::chrome::ChromeCache,
-    /// The Neptunia tint and traffic-light colours, resolved at startup.
+    /// The Neptunia tint and traffic-light colours, rebuilt when
+    /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
+    /// The mtimes of those two files at the last theme refresh.
+    theme_sources: Option<(Option<SystemTime>, Option<SystemTime>)>,
     /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
     /// backend renders it on the next frame.
     pub(crate) screenshot: Option<ScreenshotRequest>,
@@ -512,9 +516,26 @@ impl State {
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             chrome_theme,
+            theme_sources: None,
             screenshot: None,
             screenshot_mode: None,
         })
+    }
+
+    /// Rebuilds the chrome theme when `appearance.domain` or the wallpaper
+    /// state changes, without restarting the compositor.
+    pub(crate) fn refresh_theme(&mut self) {
+        let sources = (
+            modified(&config_dir().join("appearance.domain")),
+            modified(&data_dir().join("wallpaper.state")),
+        );
+        if self.theme_sources == Some(sources) {
+            return;
+        }
+        self.theme_sources = Some(sources);
+        self.config = Config::load();
+        self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
+        self.request_redraw();
     }
 
     /// Asks the event loop to stop and return from its `run` call.
@@ -1002,6 +1023,13 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
     );
     output.set_preferred(mode);
     output
+}
+
+/// The modification time of a file, or `None` when it does not exist.
+fn modified(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
 }
 
 /// The output scale for this session.

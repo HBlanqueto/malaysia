@@ -27,6 +27,7 @@ directorios — preferencias y estado:
 ~/.local/share/yuki/       ← ~/Library/Application Support
 ├── wallpaper.domain       ← catálogo + selección actual ([desktops]), como
 │                            com.apple.wallpaper
+├── wallpaper.state        ← color dominante del fondo (lo escribe la shell)
 └── window.domain          ← estado: la app activa, publicada por el compositor
 ```
 
@@ -46,7 +47,7 @@ Estado de cada opción:
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"light"` | `"auto"` | datos | portal `org.freedesktop.appearance`, shell |
+| `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | datos | portal `org.freedesktop.appearance`, shell. `auto` resuelve a `light` |
 | `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos | portal, shell, efectos |
 | `appearance.contrast` | bool | `false` | **activa** | portal (`org.freedesktop.appearance` `contrast`) |
 | `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
@@ -159,7 +160,9 @@ default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta 
 Editar ese archivo cambia el wallpaper **en vivo** (`yuki-shell wallpaper` vigila el
 almacén y repinta). El catálogo (qué wallpapers existen) y la selección actual (qué
 se muestra) están juntos en el dominio `wallpaper.domain`; el catálogo está en el
-sistema (`share/wallpapers/`).
+sistema (`share/wallpapers/`). Al cambiar de fondo, la shell escribe el color
+dominante en `wallpaper.state` (`dominant = [r, g, b]`) para el tinte de las
+ventanas y el `accent-color` del portal.
 
 ## `dock` — dock de la shell (`yuki-shell dock`; macOS `com.apple.dock`)
 
@@ -257,7 +260,7 @@ Como macOS, un archivo por dominio en `~/.config/yuki/`:
 
 ```toml
 # ~/.config/yuki/appearance.domain
-color_scheme = "dark"           # auto | dark | light
+color_scheme = "dark"           # auto | dark | dark_tint | light
 accent_color = [0.208, 0.518, 0.894]
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion

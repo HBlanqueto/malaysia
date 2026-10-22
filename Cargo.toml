@@ -103,8 +103,10 @@ cosmic-text = "0.19"
 # Grapheme-aware truncation of the titlebar title.
 unicode-segmentation = "1"
 
-# Wallpaper decoding (yuki-shell): the system wallpapers are PNGs.
+# Wallpaper decoding (yuki-shell): PNG via `png`, JPEG via `zune-jpeg` (light,
+# decode-only; no encoder or full image pipeline).
 png = "0.17"
+zune-jpeg = "0.5"
 
 # Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
 # Yuki while developing. Only the probe package uses this, and the package
