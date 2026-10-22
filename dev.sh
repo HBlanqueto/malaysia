@@ -32,6 +32,7 @@ Usage: dev.sh <command> [options]
 Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
+    demo                Nested session with the shell and demo windows (Ctrl-C ends it)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
     restart             Stop, then run (no rebuild)
@@ -625,6 +626,83 @@ activation() {
 }
 
 
+# demo - a nested session that shows the whole desktop, for a quick look.
+#
+# Starts the winit compositor (as `run` does), then connects the native shell
+# components and a couple of demo windows to its socket: wallpaper, menubar
+# and dock with tiles in it. Closing the host window or Ctrl-C ends it all.
+# `YUKI_SCALE` passes through, so `YUKI_SCALE=1.5 ./dev.sh demo` shows the
+# fractional-scale path.
+demo() {
+    require_devshell
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for demo: $1"
+    fi
+    if is_running; then
+        fail "$EXIT_ALREADY_RUNNING" "yuki is already running (pid $(read_pid))"
+    fi
+    if [ ! -x "$script_dir/target/debug/yuki" ] ||
+        [ ! -x "$script_dir/target/debug/yuki-shell" ]; then
+        "$script_dir/dev.sh" build
+    fi
+
+    start
+    _sock=
+    _waited=0
+    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
+        _sock=$(sed -n \
+            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+            "$LOG_FILE" 2>/dev/null | tail -n 1)
+        [ -n "$_sock" ] && break
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    if [ -z "$_sock" ]; then
+        stop
+        fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
+    fi
+
+    _pids=
+    # Every component is its own Wayland client; one log per component.
+    demo_client() {
+        _name=$1
+        shift
+        env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+            "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+        _pids="$_pids $!"
+    }
+    demo_client wallpaper "$script_dir/target/debug/yuki-shell" wallpaper
+    demo_client menubar "$script_dir/target/debug/yuki-shell" menubar
+    demo_client dock "$script_dir/target/debug/yuki-shell" dock
+    # Give the background layer a moment, then open windows so the dock has
+    # tiles and the menubar an active app.
+    sleep 0.5
+    if command -v foot >/dev/null 2>&1; then
+        demo_client foot-1 foot -a yuki-demo -T "Yuki"
+        demo_client foot-2 foot -a yuki-demo -T "Segunda ventana"
+    elif command -v wezterm >/dev/null 2>&1; then
+        demo_client wezterm wezterm start
+    else
+        printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
+    fi
+
+    printf 'demo: wallpaper, menubar and dock on %s\n' "$_sock"
+    printf 'demo: more clients: WAYLAND_DISPLAY=%s <program>\n' "$_sock"
+    printf 'demo: logs: %s/demo-*.log\n' "$RUNTIME_DIR"
+    printf 'demo: close the host window or press Ctrl-C to end\n'
+
+    _compositor=$(read_pid)
+    demo_cleanup() {
+        trap - EXIT INT TERM
+        for _pid in $_pids; do
+            kill "$_pid" 2>/dev/null || true
+        done
+        stop
+    }
+    trap demo_cleanup EXIT INT TERM
+    wait "$_compositor" 2>/dev/null || true
+}
+
 # drm-vkms - exercise the direct session on vkms, isolated from the panel.
 #
 # Loads vkms (if needed), runs the compositor with LIBSEAT_BACKEND=noop and
@@ -845,6 +923,7 @@ case "$command_name" in
     presentation) presentation "$@" ;;
     activation) activation "$@" ;;
     decoration) decoration "$@" ;;
+    demo) demo "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
     *)

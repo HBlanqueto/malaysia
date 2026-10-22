@@ -43,6 +43,7 @@ aceptación en el panel real y la escala por salida de 8b.
 ## Cómo probar
 
 ```sh
+YUKI_SCALE=1.5 ./dev.sh demo   # wallpaper, menubar, dock y dos ventanas
 YUKI_SCALE=1.5 ./dev.sh run
 # o, persistente, sin YUKI_SCALE:
 #   printf 'scale = 1.5\n' > "${XDG_CONFIG_HOME:-$HOME/.config}/yuki/display.domain"
