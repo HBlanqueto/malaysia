@@ -63,6 +63,12 @@ solo no las conoce. `enable` crea los enlaces en `yuki-session.target.wants`;
 no uses `--now` desde GNOME, porque arrancaría la shell en la sesión
 equivocada.
 
+`enable` fija cada instancia al path del store de la plantilla que encuentra.
+Al reconstruir el paquete ese path desaparece: las units quedan `bad` y
+`enable` falla con "does not exist". `scripts/yuki-drm.sh setup` borra las
+instancias y sus enlaces de `yuki-session.target.wants` antes de volver a
+enlazar. Si lo haces a mano, haz lo mismo antes del `enable`.
+
 ## Script de lanzamiento
 
 `scripts/yuki-drm.sh` automatiza el setup, el arranque desde un TTY, los

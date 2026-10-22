@@ -21,6 +21,13 @@ ejecución y se apuntan las pruebas que faltan.
   `dbus-run-session -- nautilus --no-desktop`. Nautilus 50 pide decoración
   server-side y ADR 0019 la respeta.
 - **Módulo NixOS** base: `programs.yuki.enable`, sesión, PAM, graphics y units.
+- **Capturas al estilo macOS**: `Shift+Super+3` (pantalla), `Shift+Super+4`
+  (región con cruz, `Espacio` para ventana, `Esc` cancela) y PrintScreen;
+  guardan en el Escritorio XDG. Ver
+  [`bloques/11-protocolos-de-uso-diario.md`](bloques/11-protocolos-de-uso-diario.md).
+- **Escala fraccional verificada en anidado** a 1.25/1.5/2.0, con las capturas
+  offscreen, el hotspot del cursor y el cursor ampliado del shake corregidos.
+- **`./dev.sh demo`**: sesión anidada con wallpaper, menubar, dock y ventanas.
 
 `foot` sigue siendo el cliente guionizable de `dev.sh smoke` porque negocia
 server-side; `wezterm` es el cliente manual de aceptación.
