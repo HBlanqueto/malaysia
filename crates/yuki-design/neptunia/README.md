@@ -11,15 +11,10 @@ crates/yuki-design/neptunia/
 ├── components.json    medidas y estados de cada componente aprobado (interruptor 32×18,
 │                      segmentado rectangular, pestañas de barra de herramientas…)
 ├── default.nix        traduce los JSON y compone el tema; solo builtins, sin nixpkgs
-├── neptunia.nix       paleta de terminal (colors)
-├── filecolors.nix     colores por tipo de archivo (eza/yazi)
-├── vscode.nix         tema de VS Code
-├── palette.nix        utilidades ANSI/kmscon sobre `colors`
 ├── generated/         salidas ya generadas, para quien no use Nix (SlintPad, otro repo)
 │   ├── neptunia.slint   globals Theme y Metrics para Slint
 │   ├── neptunia.css     variables CSS (GTK4, web)
-│   ├── Neptunia.qml     singleton QtQuick
-│   └── kmscon-palette   argumentos `--palette*` de kmscon
+│   └── Neptunia.qml     singleton QtQuick
 └── demo.slint         galería para ajustar a ojo con slint-viewer o SlintPad
 ```
 
@@ -33,7 +28,6 @@ cd crates/yuki-design/neptunia
 nix eval --raw -f . slint > generated/neptunia.slint
 nix eval --raw -f . css   > generated/neptunia.css
 nix eval --raw -f . qml   > generated/Neptunia.qml
-cp "$(nix build .#kmscon-palette --print-out-paths)" generated/kmscon-palette
 ```
 
 ## Modos de color del escritorio
@@ -51,7 +45,6 @@ u oscurece cada capa.
 | Proyecto | Cómo se sincroniza |
 | --- | --- |
 | Psamathe y apps Triton (Slint) | `import { Theme, Metrics } from "…/neptunia.slint";`. Desde Nix: `(import ./crates/yuki-design/neptunia).slint`; o copia `generated/neptunia.slint`. Cambiar de tema es `Theme.mode = NeptuniaMode.dark;`. |
-| Instalador (ratatui) | Sigue con la paleta de terminal de `crates/yuki-design/neptunia/neptunia.nix`. Si algún día quiere los grises de interfaz: `serde_json` sobre `tokens.json` con `include_str!`. |
 | GTK4 / web | `neptunia.css` con `data-theme="dark"` o `"dark-tint"` en la raíz. |
 | Home Manager | `xdg.configFile."neptunia".source = (import ./crates/yuki-design/neptunia).files pkgs;` deja los archivos generados y los JSON en `~/.config/neptunia/`, y cualquier app los lee de ahí. |
 | Otro repo futuro | Como input del flake (`inputs.nixdots`) y `import "${inputs.nixdots}/kits/neptunia"`, o leyendo `tokens.json` directamente. Cada proyecto genera lo suyo a su manera; los datos son los mismos. |

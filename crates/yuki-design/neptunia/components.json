@@ -1,7 +1,7 @@
 {
   "name": "neptunia-components",
   "description": "Medidas y estados de los componentes aprobados. Cada implementación (Slint, GTK, QML, web) debe respetar estos números; los colores son nombres de tokens de tokens.json.",
-  "updated": "2026-10-17",
+  "updated": "2026-10-22",
   "components": {
     "button": {
       "height": 30,
@@ -236,9 +236,9 @@
         "styles": {
           "status": "idea en estudio",
           "macos": {
-            "close": "#ff5f57",
-            "minimize": "#febc2e",
-            "zoom": "#28c840",
+            "close": "{traffic-close}",
+            "minimize": "{traffic-min}",
+            "zoom": "{traffic-zoom}",
             "glyph": "#0000008c"
           },
           "accent": {
@@ -255,10 +255,7 @@
             "rule": "misma fórmula que accent"
           }
         },
-        "inactive": {
-          "light": "#d3d3d5",
-          "dark": "#4e4e50"
-        },
+        "inactive": "{traffic-inactive}",
         "variants": [
           "derecha con orden invertido",
           "solo cerrar en diálogos",
@@ -266,11 +263,10 @@
         ],
         "margin-start": 16,
         "rim": {
-          "color": "#00000033",
+          "color": "{traffic-rim}",
           "width": 0.5
         }
       },
-      "server-titlebar-height": 32,
       "superellipse-exponent": 2.0
     },
     "dialog": {
@@ -312,12 +308,13 @@
       "rule": "Solo al navegar con teclado."
     },
     "shell": {
-      "bar-alpha": 230,
       "menubar": {
         "height": 28,
         "font-size": 13,
         "margin": 10,
-        "title-max-width": 240
+        "title-max-width": 240,
+        "bg": "{shell-bar}",
+        "text": "{ink-strong}"
       },
       "dock": {
         "tilesize": 48,
@@ -326,7 +323,10 @@
         "font-size": 11,
         "label-offset": 8,
         "text-inset": 2,
-        "text-padding": 4
+        "text-padding": 4,
+        "tile": "{bg-control}",
+        "tile-active": "{accent}",
+        "tile-text-active": "{on-accent}"
       },
       "lock": {
         "font-size": 24,

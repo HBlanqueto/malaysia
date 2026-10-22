@@ -1,9 +1,8 @@
 # Neptunia: la única fuente de tema y diseño de Keel.
 #
 # tokens.json y components.json son los datos (neutros, sin framework). Este
-# archivo los traduce a cada formato y compone también la paleta de terminal
-# (colors/filecolors/vscode). Usa únicamente builtins, así que se evalúa sin
-# nixpkgs:
+# archivo los traduce a Slint, CSS y QML. Usa únicamente builtins, así que se
+# evalúa sin nixpkgs:
 #
 #   nix eval --raw -f crates/yuki-design/neptunia slint > generated/neptunia.slint
 #   nix eval --raw -f crates/yuki-design/neptunia css   > generated/neptunia.css
@@ -12,7 +11,6 @@
 # Desde un módulo: (import ./crates/yuki-design/neptunia).slint, o `files pkgs` para una
 # derivación con los archivos generados.
 let
-  colors = import ./neptunia.nix;
   tokens = builtins.fromJSON (builtins.readFile ./tokens.json);
   components = builtins.fromJSON (builtins.readFile ./components.json);
 
@@ -221,7 +219,6 @@ let
 in
 rec {
   inherit
-    colors
     tokens
     components
     themes
@@ -229,9 +226,6 @@ rec {
     css
     qml
     ;
-
-  filecolors = import ./filecolors.nix;
-  vscode = import ./vscode.nix { inherit colors; };
 
   # Derivación con los archivos generados, para home-manager o un paquete:
   #   xdg.configFile."neptunia".source = (import ./crates/yuki-design/neptunia).files pkgs;

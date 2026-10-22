@@ -18,15 +18,18 @@ use smithay::backend::renderer::element::memory::{
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use unicode_segmentation::UnicodeSegmentation;
+use yuki_appearance::{
+    AppearanceConfig, ColorScheme, TrafficLightStyle, WindowColorMode, load_dominant,
+    palette as base_palette, resolve,
+};
 use yuki_design::{
-    ButtonKind, DARK, DARK_TINT, FocusPair, Font, LAYER_FACTOR_LINE, LIGHT, Palette, Rgba,
-    TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH,
-    TRAFFIC_ZOOM_LIGHTEN, TitlebarPosition, WINDOW, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    ButtonKind, FocusPair, Font, LAYER_FACTOR_LINE, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR,
+    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
 };
 use yuki_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use yuki_scene::scene::WindowId;
 
-use crate::config::{AppearanceConfig, ColorScheme, Config, TrafficLightStyle, WindowColorMode};
+use crate::config::Config;
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
 
@@ -42,42 +45,16 @@ pub(crate) struct ChromeTheme {
 impl ChromeTheme {
     /// Builds the theme from the configuration and the current wallpaper.
     pub(crate) fn from_config(config: &Config) -> Self {
-        let wallpaper = crate::wallpaper::dominant_color();
+        let wallpaper = load_dominant();
         Self::from_parts(&config.appearance, wallpaper)
     }
 
     fn from_parts(appearance: &AppearanceConfig, wallpaper: Option<Rgba>) -> Self {
-        let scheme = appearance.color_scheme.resolved();
-        let dark = matches!(scheme, ColorScheme::Dark | ColorScheme::DarkTint);
-        let base = match scheme {
-            ColorScheme::DarkTint => DARK_TINT,
-            _ if dark => DARK,
-            _ => LIGHT,
-        };
-        let accent = appearance
-            .accent_color
-            .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
-            .unwrap_or(base.accent);
-        let mode = appearance.window_color;
-        let resolved_accent = if mode == WindowColorMode::Wallpaper {
-            wallpaper.unwrap_or(accent)
-        } else {
-            accent
-        };
-        let source = match mode {
-            WindowColorMode::Neutral => None,
-            WindowColorMode::Accent => Some(accent),
-            WindowColorMode::Wallpaper => Some(resolved_accent),
-        };
-        let index = usize::from(dark);
-        let factor = match mode {
-            WindowColorMode::Neutral => 0.0,
-            WindowColorMode::Accent => WINDOW_TINT_ACCENT[index],
-            WindowColorMode::Wallpaper => WINDOW_TINT_WALLPAPER[index],
-        };
+        let resolved = resolve(appearance, wallpaper);
+        let base = base_palette(resolved.scheme);
         let mut palette = base;
-        palette.accent = resolved_accent;
-        if let Some(source) = source {
+        palette.accent = resolved.accent;
+        if let Some((source, factor)) = resolved.window_tint {
             palette.titlebar_bg = FocusPair {
                 focused: base.titlebar_bg.focused.mix(source, factor),
                 unfocused: base.titlebar_bg.unfocused.mix(source, factor),
@@ -85,38 +62,16 @@ impl ChromeTheme {
             palette.hairline = base.hairline.mix(source, factor * LAYER_FACTOR_LINE);
         }
 
-        let style = match appearance.traffic_lights {
-            TrafficLightStyle::Auto => match mode {
-                WindowColorMode::Neutral => TrafficLightStyle::Macos,
-                WindowColorMode::Accent => TrafficLightStyle::Accent,
-                WindowColorMode::Wallpaper => TrafficLightStyle::Wallpaper,
-            },
-            style => style,
-        };
-        let lights = match style {
-            TrafficLightStyle::Auto | TrafficLightStyle::Macos => [
-                TITLEBAR.buttons.order[0].color,
-                TITLEBAR.buttons.order[1].color,
-                TITLEBAR.buttons.order[2].color,
-            ],
-            TrafficLightStyle::Accent | TrafficLightStyle::Wallpaper => {
-                let source = if style == TrafficLightStyle::Accent {
-                    accent
-                } else {
-                    wallpaper.unwrap_or(accent)
-                };
-                [
-                    source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),
-                    source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),
-                    source.lighten(TRAFFIC_ZOOM_LIGHTEN),
-                ]
-            }
-        };
-
-        let signature = signature(scheme, mode, style, palette, lights);
+        let signature = signature(
+            resolved.scheme,
+            appearance.window_color,
+            appearance.traffic_lights,
+            palette,
+            resolved.lights,
+        );
         Self {
             palette,
-            lights,
+            lights: resolved.lights,
             signature,
         }
     }
@@ -727,7 +682,10 @@ fn blend(dst: &mut [u8], src: yuki_design::Rgba, coverage: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yuki_design::ButtonKind;
+    use yuki_design::{
+        ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN,
+        WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    };
     use yuki_scene::geometry::Rect;
 
     fn outer() -> SceneRect<f64, SceneLogical> {
@@ -817,7 +775,7 @@ mod tests {
     }
 
     #[test]
-    fn dark_tint_uses_its_own_palette_and_light_title_faint() {
+    fn dark_tint_uses_its_own_palette_and_the_inactive_title() {
         let appearance = AppearanceConfig {
             color_scheme: ColorScheme::DarkTint,
             ..AppearanceConfig::default()
@@ -826,7 +784,7 @@ mod tests {
         assert_eq!(theme.palette, DARK_TINT);
         assert_eq!(theme.palette.title.focused, Rgba::rgb8(0xf4, 0xf5, 0xf6));
         assert_eq!(theme.palette.title.unfocused, Rgba::rgb8(0x99, 0x9c, 0xa3));
-        assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x8a, 0x96, 0xa8));
+        assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x55, 0x65, 0x7e));
     }
 
     #[test]

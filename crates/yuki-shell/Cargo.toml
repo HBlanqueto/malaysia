@@ -21,6 +21,7 @@ png.workspace = true
 zune-jpeg.workspace = true
 celestial-kit.workspace = true
 grade-graphics.workspace = true
+yuki-appearance.workspace = true
 yuki-design.workspace = true
 sctk.workspace = true
 wayland-client.workspace = true

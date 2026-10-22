@@ -19,35 +19,10 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
-/// The compositor's preferred appearance, published over the appearance portal
-/// (`org.freedesktop.appearance.color-scheme`). macOS calls these values
-/// "Light", "Dark" and "Auto".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ColorScheme {
-    /// Follow the user's preference ("Auto").
-    #[default]
-    Auto,
-    /// Prefer the dark appearance ("Dark").
-    Dark,
-    /// Prefer the dark-tinted appearance ("Dark tint").
-    #[serde(rename = "dark_tint")]
-    DarkTint,
-    /// Prefer the light appearance ("Light").
-    Light,
-}
-
-impl ColorScheme {
-    /// Resolves `Auto` to the concrete appearance Yuki uses. There is no
-    /// separate system preference source yet, so it follows the light default;
-    /// the portal publishes this same resolved value.
-    pub fn resolved(self) -> Self {
-        match self {
-            Self::Auto => Self::Light,
-            scheme => scheme,
-        }
-    }
-}
+pub use yuki_appearance::{
+    AppearanceConfig, ColorScheme, TrafficLightStyle, WindowColorMode, WindowTintScope, config_dir,
+    data_dir,
+};
 
 /// Which windows get the compositor's server-side chrome.
 ///
@@ -317,70 +292,6 @@ impl Default for WallpaperConfig {
     }
 }
 
-/// Appearance options (macOS System Settings → Appearance).
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default)]
-pub struct AppearanceConfig {
-    /// "Light", "Dark", "Dark tint" or "Auto". `None` → `ColorScheme::Auto`.
-    pub color_scheme: ColorScheme,
-    /// An sRGB accent color, `[r, g, b]` in `[0, 1]`. `None` → the default.
-    pub accent_color: Option<[f32; 3]>,
-    /// "Increase contrast" (macOS Accessibility). Published as the
-    /// `org.freedesktop.appearance` `contrast` key.
-    pub contrast: bool,
-    /// "Reduce motion" (macOS Accessibility). Published as
-    /// `org.freedesktop.appearance` `reduced-motion`.
-    pub reduced_motion: bool,
-    /// What tints the window chrome: nothing, the accent or the wallpaper.
-    pub window_color: WindowColorMode,
-    /// In wallpaper mode, whether only windows or the panels and dock too are
-    /// tinted. The shell side of `desktop` is still pending.
-    pub window_tint_scope: WindowTintScope,
-    /// The traffic-light palette: follow the window colour mode, macOS fixed
-    /// colours, or derive them from the accent/wallpaper.
-    pub traffic_lights: TrafficLightStyle,
-}
-
-/// Neptunia's "Color de las ventanas" (`neutral` / `accent` / `wallpaper`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WindowColorMode {
-    /// No tint: the light/dark palette as-is.
-    #[default]
-    Neutral,
-    /// Tint the window chrome toward the accent colour.
-    Accent,
-    /// Tint the window chrome toward the wallpaper's dominant colour.
-    Wallpaper,
-}
-
-/// How far the wallpaper tint reaches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WindowTintScope {
-    /// Only the windows.
-    #[default]
-    Windows,
-    /// Windows plus the panels and dock (the shell side lands later).
-    Desktop,
-}
-
-/// Neptunia's traffic-light styles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TrafficLightStyle {
-    /// Same as the window colour mode: macOS colours for neutral, accent or
-    /// wallpaper-derived colours otherwise.
-    #[default]
-    Auto,
-    /// The fixed macOS red/amber/green.
-    Macos,
-    /// Derived from the accent colour.
-    Accent,
-    /// Derived from the wallpaper's dominant colour.
-    Wallpaper,
-}
-
 /// Window chrome and behaviour (macOS System Settings → Windows & Apps).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -408,8 +319,8 @@ impl Default for WindowConfig {
             titlebar: true,
             double_click_titlebar: DoubleClickAction::default(),
             focus: FocusPolicy::default(),
-            resize_border: 12,
-            resize_corner: 24,
+            resize_border: 10,
+            resize_corner: 20,
         }
     }
 }
@@ -605,45 +516,6 @@ impl Config {
     }
 }
 
-/// The preferences directory: `YUKI_CONFIG_DIR`, else `$XDG_CONFIG_HOME/yuki`
-/// (`~/.config/yuki` by default) — the `~/Library/Preferences` equivalent.
-pub fn config_dir() -> PathBuf {
-    std::env::var_os("YUKI_CONFIG_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_CONFIG_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".config"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".config"));
-            base.join("yuki")
-        },
-        PathBuf::from,
-    )
-}
-
-/// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`
-/// (`~/.local/share/yuki` by default) — the `~/Library/Application Support`
-/// equivalent, where the wallpaper store lives.
-pub fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".local/share"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".local/share"));
-            base.join("yuki")
-        },
-        PathBuf::from,
-    )
-}
-
 /// Reads one domain file (`<dir>/<name>.domain`) as a typed section, falling back
 /// to the domain's default when the file is missing or unparsable.
 fn load_section<T>(dir: &std::path::Path, name: &str) -> T
@@ -767,10 +639,10 @@ mod tests {
     }
 
     #[test]
-    fn the_resize_band_defaults_are_12_and_24() {
+    fn the_resize_band_defaults_are_10_and_20() {
         let window = WindowConfig::default();
-        assert_eq!(window.resize_border, 12);
-        assert_eq!(window.resize_corner, 24);
+        assert_eq!(window.resize_border, 10);
+        assert_eq!(window.resize_corner, 20);
     }
 
     #[test]

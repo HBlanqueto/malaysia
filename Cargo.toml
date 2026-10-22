@@ -6,6 +6,7 @@
 resolver = "3"
 members = [
     "crates/yuki",
+    "crates/yuki-appearance",
     "crates/yuki-design",
     "crates/yuki-scene",
     "crates/grade-graphics",
@@ -22,6 +23,7 @@ members = [
 # rustfmt-clean alongside the crates.
 default-members = [
     "crates/yuki",
+    "crates/yuki-appearance",
     "crates/yuki-design",
     "crates/yuki-scene",
     "crates/grade-graphics",
@@ -80,6 +82,7 @@ chrono = "0.4"
 
 # Yuki's own crates.
 yuki = { path = "crates/yuki" }                 # The compositor library (config, xdg helpers).
+yuki-appearance = { path = "crates/yuki-appearance" } # Appearance rules shared by compositor, shell and portal.
 yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.
 yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
 grade-graphics = { path = "crates/grade-graphics" }  # Shared GLSL shaders + parameters (glossary).

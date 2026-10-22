@@ -5,7 +5,10 @@
 - **Fecha de la copia:** 2026-10-22.
 
 Esta carpeta es una **copia real** dentro de yukiwm, no un enlace ni una
-dependencia del build.
+dependencia del build. Se han quitado los archivos que yukiwm no usa
+(`vscode.nix`, `filecolors.nix`, `palette.nix`, `neptunia.nix` y
+`generated/kmscon-palette`); la paleta de terminal y el tema de VS Code no
+forman parte del escritorio.
 
 ## Regla
 

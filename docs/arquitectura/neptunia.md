@@ -4,7 +4,9 @@ Neptunia es el sistema de diseño del escritorio (ADR 0032). En yukiwm ya no se
 lee de `~/dotfiles`: vive **dentro del repo**, en
 `crates/yuki-design/neptunia/`, y `build.rs` convierte sus JSON en las
 constantes Rust de `yuki-design`. Siguen siendo constantes de compilación
-(ADR 0011); lo que cambia es de dónde salen.
+(ADR 0011); lo que cambia es de dónde salen. `yuki-appearance` aplica esas
+constantes a `appearance.domain` y `wallpaper.state` para el compositor, la
+shell y el portal.
 
 ## Fuente de verdad
 
@@ -14,7 +16,7 @@ crates/yuki-design/neptunia/
 │                      tipografía, sombras y acentos
 ├── components.json    medidas y estados de los componentes, shell y ssd-titlebar
 ├── default.nix        generador Slint/CSS/QML (solo builtins, sin nixpkgs)
-├── generated/         neptunia.slint, neptunia.css, Neptunia.qml, kmscon-palette
+├── generated/         neptunia.slint, neptunia.css, Neptunia.qml
 ├── demo.slint         galería para slint-viewer/SlintPad
 ├── SOURCE.md          procedencia, regla de la copia y cómo regenerar
 └── README.md          catálogo de valores y guía de uso

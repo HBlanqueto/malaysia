@@ -149,6 +149,27 @@ fn theme_color(tokens: &Value, theme: &str, key: &str) -> Color {
     color(tokens, &format!("themes.{theme}.{key}"), TOKENS)
 }
 
+fn default_theme(tokens: &Value) -> &str {
+    string(tokens, "default-theme", TOKENS)
+}
+
+/// Resolves a component colour reference. `{token}` and plain token names are
+/// looked up in the theme; a literal `#rrggbb(aa)` is used as-is.
+fn color_ref(tokens: &Value, theme: &str, text: &str, path: &str, file: &str) -> Color {
+    let name = text
+        .strip_prefix('{')
+        .and_then(|value| value.strip_suffix('}'))
+        .unwrap_or(text);
+    if value(tokens, &format!("themes.{theme}"), TOKENS)
+        .get(name)
+        .is_some()
+    {
+        theme_color(tokens, theme, name)
+    } else {
+        parse_color(text, path, file)
+    }
+}
+
 fn float(value: f64) -> String {
     let text = value.to_string();
     if text.contains('.') || text.contains('e') || text.contains('E') {
@@ -185,11 +206,7 @@ fn const_doc(out: &mut String, name: &str, doc: &str) {
 }
 
 fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
-    let thickness = integer(
-        components,
-        "components.window.server-titlebar-height",
-        COMPONENTS,
-    );
+    let thickness = integer(tokens, "size.titlebar-ssd-h", TOKENS);
     let diameter = integer(
         components,
         "components.window.traffic-lights.size",
@@ -211,18 +228,37 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.traffic-lights.margin-start",
         COMPONENTS,
     );
-    let close = color(
-        components,
+    let theme = default_theme(tokens);
+    let close = color_ref(
+        tokens,
+        theme,
+        string(
+            components,
+            "components.window.traffic-lights.styles.macos.close",
+            COMPONENTS,
+        ),
         "components.window.traffic-lights.styles.macos.close",
         COMPONENTS,
     );
-    let minimize = color(
-        components,
+    let minimize = color_ref(
+        tokens,
+        theme,
+        string(
+            components,
+            "components.window.traffic-lights.styles.macos.minimize",
+            COMPONENTS,
+        ),
         "components.window.traffic-lights.styles.macos.minimize",
         COMPONENTS,
     );
-    let zoom = color(
-        components,
+    let zoom = color_ref(
+        tokens,
+        theme,
+        string(
+            components,
+            "components.window.traffic-lights.styles.macos.zoom",
+            COMPONENTS,
+        ),
         "components.window.traffic-lights.styles.macos.zoom",
         COMPONENTS,
     );
@@ -361,8 +397,14 @@ fn emit_tints(out: &mut String, tokens: &Value, components: &Value) {
 }
 
 fn emit_traffic(out: &mut String, tokens: &Value, components: &Value) {
-    let rim = color(
-        components,
+    let rim = color_ref(
+        tokens,
+        default_theme(tokens),
+        string(
+            components,
+            "components.window.traffic-lights.rim.color",
+            COMPONENTS,
+        ),
         "components.window.traffic-lights.rim.color",
         COMPONENTS,
     );
@@ -466,15 +508,15 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
     } else {
         format!("Some({})", rgba(inner))
     };
-    let title_unfocused = if theme == "light" {
-        theme_color(tokens, theme, "ink-faint")
-    } else {
-        theme_color(tokens, theme, "ink-muted")
-    };
-    let inactive_theme = if theme == "light" { "light" } else { "dark" };
-    let inactive = color(
-        components,
-        &format!("components.window.traffic-lights.inactive.{inactive_theme}"),
+    let inactive = color_ref(
+        tokens,
+        theme,
+        string(
+            components,
+            "components.window.traffic-lights.inactive",
+            COMPONENTS,
+        ),
+        "components.window.traffic-lights.inactive",
         COMPONENTS,
     );
     format!(
@@ -487,11 +529,11 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
          \x20   accent: {},\n\
          \x20   traffic_lights_inactive: {},\n\
          }}",
-        rgba(theme_color(tokens, theme, "bg-window")),
-        rgba(theme_color(tokens, theme, "bg-sunken")),
-        rgba(theme_color(tokens, theme, "line")),
-        rgba(theme_color(tokens, theme, "ink-strong")),
-        rgba(title_unfocused),
+        rgba(theme_color(tokens, theme, "titlebar-bg")),
+        rgba(theme_color(tokens, theme, "titlebar-bg-inactive")),
+        rgba(theme_color(tokens, theme, "titlebar-line")),
+        rgba(theme_color(tokens, theme, "titlebar-title")),
+        rgba(theme_color(tokens, theme, "titlebar-title-inactive")),
         rgba(theme_color(tokens, theme, "ink")),
         rgba(theme_color(tokens, theme, "ink-muted")),
         rgba(theme_color(tokens, theme, "accent")),
@@ -513,9 +555,16 @@ fn emit_palettes(out: &mut String, tokens: &Value, components: &Value) {
     }
 }
 
-fn shell(tokens: &Value, theme: &str, bar_alpha: u8) -> String {
-    let mut bar = theme_color(tokens, theme, "bg-window");
-    bar.a = bar_alpha;
+fn shell(tokens: &Value, components: &Value, theme: &str) -> String {
+    let color_at = |path: &str| {
+        color_ref(
+            tokens,
+            theme,
+            string(components, path, COMPONENTS),
+            path,
+            COMPONENTS,
+        )
+    };
     format!(
         "ShellPalette {{\n\
          \x20   bar: {},\n\
@@ -524,16 +573,15 @@ fn shell(tokens: &Value, theme: &str, bar_alpha: u8) -> String {
          \x20   tile_active: {},\n\
          \x20   tile_text_active: {},\n\
          }}",
-        rgba(bar),
-        rgba(theme_color(tokens, theme, "ink-strong")),
-        rgba(theme_color(tokens, theme, "bg-control")),
-        rgba(theme_color(tokens, theme, "accent")),
-        rgba(theme_color(tokens, theme, "on-accent"))
+        rgba(color_at("components.shell.menubar.bg")),
+        rgba(color_at("components.shell.menubar.text")),
+        rgba(color_at("components.shell.dock.tile")),
+        rgba(color_at("components.shell.dock.tile-active")),
+        rgba(color_at("components.shell.dock.tile-text-active"))
     )
 }
 
 fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
-    let bar_alpha = integer(components, "components.shell.bar-alpha", COMPONENTS) as u8;
     for (name, theme) in [
         ("SHELL_LIGHT", "light"),
         ("SHELL_DARK", "dark"),
@@ -542,7 +590,7 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
         const_doc(out, name, &format!("The {theme} shell palette."));
         out.push_str(&format!(
             ": ShellPalette = {};\n\n",
-            shell(tokens, theme, bar_alpha)
+            shell(tokens, components, theme)
         ));
     }
 

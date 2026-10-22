@@ -5,12 +5,14 @@
 //! the accent and the accessibility switches without restarting.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-use yuki::config::{AppearanceConfig, ColorScheme, WindowColorMode, config_dir, data_dir};
-use yuki_design::{DARK, DARK_TINT, LIGHT, Rgba};
+use yuki_appearance::{
+    AppearanceConfig, ColorScheme, WindowColorMode, appearance_path, read_appearance,
+    read_dominant, resolve, wallpaper_state_path,
+};
+use yuki_design::Rgba;
 use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
@@ -45,51 +47,27 @@ impl Values {
     fn from_appearance(appearance: Option<&AppearanceConfig>) -> Self {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
-        let wallpaper = if appearance.window_color == WindowColorMode::Wallpaper {
-            yuki::wallpaper::dominant_color()
+        let dominant = if appearance.window_color == WindowColorMode::Wallpaper {
+            read_dominant()
         } else {
             None
         };
-        Self::from_parts(appearance, wallpaper)
+        Self::from_parts(appearance, dominant)
     }
 
-    fn from_parts(appearance: &AppearanceConfig, wallpaper: Option<Rgba>) -> Self {
-        // Resolve `auto` here, so the portal and the compositor agree on the
-        // concrete scheme (there is no separate system preference source).
-        let scheme = appearance.color_scheme.resolved();
-        let color_scheme = match scheme {
+    fn from_parts(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Self {
+        let resolved = resolve(appearance, dominant);
+        let color_scheme = match resolved.scheme {
             ColorScheme::Light => 2,
             ColorScheme::Dark | ColorScheme::DarkTint => 1,
             ColorScheme::Auto => 2,
         };
-        // macOS's default accent is the system blue; use the palette that
-        // matches the resolved scheme when the user has not chosen one.
-        let palette = match scheme {
-            ColorScheme::Light => &LIGHT,
-            ColorScheme::DarkTint => &DARK_TINT,
-            _ => &DARK,
-        };
-        let resolved = appearance
-            .accent_color
-            .map_or(palette.accent, |[r, g, b]| Rgba {
-                r: r.clamp(0.0, 1.0),
-                g: g.clamp(0.0, 1.0),
-                b: b.clamp(0.0, 1.0),
-                a: 1.0,
-            });
-        // In wallpaper mode the dominant colour is the system accent, the same
-        // value the compositor's chrome uses, so libadwaita follows it.
-        let accent = if appearance.window_color == WindowColorMode::Wallpaper {
-            wallpaper.unwrap_or(resolved)
-        } else {
-            resolved
-        };
         Self {
             color_scheme,
             accent: (
-                f64::from(accent.r),
-                f64::from(accent.g),
-                f64::from(accent.b),
+                f64::from(resolved.accent.r),
+                f64::from(resolved.accent.g),
+                f64::from(resolved.accent.b),
             ),
             contrast: u32::from(appearance.contrast),
             reduced_motion: u32::from(appearance.reduced_motion),
@@ -236,21 +214,6 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
     });
 }
 
-fn appearance_path() -> PathBuf {
-    config_dir().join("appearance.domain")
-}
-
-fn wallpaper_state_path() -> PathBuf {
-    data_dir().join("wallpaper.state")
-}
-
-fn read_appearance() -> Result<Option<AppearanceConfig>, toml::de::Error> {
-    let Ok(text) = std::fs::read_to_string(appearance_path()) else {
-        return Ok(None);
-    };
-    toml::from_str(&text).map(Some)
-}
-
 fn mtime(path: &std::path::Path) -> Option<SystemTime> {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
@@ -274,6 +237,7 @@ fn owned(value: Value<'static>) -> OwnedValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yuki_design::{DARK, LIGHT};
 
     #[test]
     fn the_color_scheme_maps_to_the_portal_values() {

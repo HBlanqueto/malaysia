@@ -37,6 +37,5 @@ pub mod session;
 pub mod spawn;
 pub mod state;
 pub mod udev;
-pub mod wallpaper;
 pub mod window;
 pub mod xdg;

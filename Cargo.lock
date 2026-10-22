@@ -3234,7 +3234,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
- "yuki",
+ "yuki-appearance",
  "yuki-design",
  "zbus",
 ]
@@ -3338,9 +3338,19 @@ dependencies = [
  "unicode-segmentation",
  "xcursor",
  "xkbcommon 0.9.0",
+ "yuki-appearance",
  "yuki-design",
  "yuki-scene",
  "zbus",
+]
+
+[[package]]
+name = "yuki-appearance"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+ "yuki-design",
 ]
 
 [[package]]
@@ -3370,6 +3380,7 @@ dependencies = [
  "toml",
  "wayland-client",
  "wayland-egl",
+ "yuki-appearance",
  "yuki-design",
  "zeroize",
  "zune-jpeg",
