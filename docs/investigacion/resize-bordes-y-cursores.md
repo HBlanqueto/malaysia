@@ -76,16 +76,27 @@ macOS es cerrado; lo público es AppKit y el comportamiento de WindowServer:
 
 Implementado:
 
-- `window.resize_border = 12` y `window.resize_corner = 24` (configurables).
-- `edge_in()` separa lados y esquinas; la esquina gana cuando el punto cae en
-  ambas bandas.
-- Los botones de la titlebar se comprueban **antes** que el resize, para que
-  las esquinas de 24 px no se coman close/minimize/maximize.
+- `window.resize_border = 10` (banda exterior del lado) y
+  `window.resize_corner = 20` (longitud de la «L» exterior de esquina), ambos
+  configurables.
+- La banda vive **fuera** de `outer`; solo las esquinas pueden entrar 2 px.
+  No hay cuadrados grandes dentro del contenido: un punto 30 px dentro de una
+  esquina es cliente.
+- `Scene::edge_at()` recorre la pila de arriba abajo. Si el punto está dentro
+  del `outer` de una ventana pero fuera de su tolerancia de esquina, es
+  contenido y detiene la búsqueda; la banda exterior de una ventana inferior no
+  roba input al contenido de una superior. La banda de la ventana superior sí
+  gana sobre el contenido de una inferior.
+- Los botones de la titlebar se comprueban antes que el resize.
 - Solo las ventanas con decoración del servidor ofrecen resize del compositor;
-  las CSD gestionan sus propios bordes.
+  las CSD gestionan sus propios bordes. Cuando llegue el pintor de efectos
+  (ADR 0020), las CSD podrán usar las mismas bandas exteriores.
 - No se ofrece resize en maximizado ni fullscreen. Minimizado queda fuera de la
   escena.
-- Tests de escena para lados, esquinas, prioridad de esquina y ventana pequeña.
+- Tests: 1 px dentro del borde derecho → cliente; 6 px fuera → lado; 6 px fuera
+  en diagonal → esquina; 30 px dentro de una esquina → cliente; además,
+  contenido superior bloquea banda inferior y banda superior gana a contenido
+  inferior.
 
 Pendiente: sumar la sombra/CSS al área de agarre, comprobar esquinas
 redondeadas y excluir tiled cuando exista tiling en Yuki.
@@ -95,20 +106,21 @@ redondeadas y excluir tiled cuando exista tiling en Yuki.
 ### Archivos tocados
 
 - `crates/yuki-scene/src/scene.rs`: `Scene::edge_at(point, side, corner)` y
-  `edge_in(...)`; las esquinas usan un cuadrado mayor y ganan sobre los lados.
+  `edge_in(...)`; la banda vive fuera de `outer`, las esquinas son una «L» con
+  2 px de tolerancia hacia dentro y la búsqueda respeta la pila.
 - `crates/yuki/src/window.rs`: `Windows::edge_under(point, side, corner)`
   filtra por `Decoration::Server`, `!maximized` y `WindowState::Normal`.
-- `crates/yuki/src/input.rs`: `pointer_press()` comprueba primero los botones
-  de la titlebar y después el resize; `update_edge_cursor()` lee la config.
-- `crates/yuki/src/config.rs`: `window.resize_border = 12` y
-  `window.resize_corner = 24` (nuevo).
+- `crates/yuki/src/input.rs`: `pointer_press()` atiende la banda exterior
+  fuera de `outer`, comprueba los botones de la titlebar antes del resize y
+  `update_edge_cursor()` lee la config.
+- `crates/yuki/src/config.rs`: `window.resize_border = 10` y
+  `window.resize_corner = 20`.
 - `docs/configuracion/opciones.md`, `docs/por-hacer.md` y este documento.
 
 ### Decisiones tomadas
 
-- **Botones primero:** con 24 px de esquina, el área de resize se solapa con
-  los semáforos; si el resize ganara, close/minimize/maximize serían
-  inalcanzables.
+- **Botones primero:** la «L» solo entra 2 px, pero el orden se mantiene
+  explícito para que close/minimize/maximize nunca pierdan contra el resize.
 - **Solo SSD:** las ventanas CSD conservan sus propios bordes y cursor. El
   compositor no impone resize encima.
 - **Sin maximizado/fullscreen:** no hay borde libre que arrastrar.
@@ -131,5 +143,5 @@ redondeadas y excluir tiled cuando exista tiling en Yuki.
 ```sh
 ./dev.sh check
 cargo test -p yuki-scene scene::tests::edge_zones_are_measured_against_the_decorated_bounds
-cargo test -p yuki --lib config::tests::the_resize_band_defaults_are_12_and_24
+cargo test -p yuki --lib config::tests::the_resize_band_defaults_are_10_and_20
 ```

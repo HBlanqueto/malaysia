@@ -226,23 +226,32 @@ impl Scene {
             .map(|entry| entry.id)
     }
 
-    /// The topmost window under `point` and its resize edge zone, if any.
+    /// The topmost window whose resize zone contains `point`, if any.
     ///
-    /// `side` is the width of the grab band along each edge and `corner` is
-    /// the larger square that makes corners easier to hit, both in logical
-    /// pixels. A point in a corner square returns the corner, not one side.
+    /// `side` is the exterior band along each edge and `corner` is the length
+    /// of the exterior L at each corner, both in logical pixels. A point in a
+    /// corner L returns the corner, not one side.
+    ///
+    /// The search is top-to-bottom. A point inside a window's outer rectangle
+    /// but not in its 2 px corner inset is content: it stops the search, so the
+    /// exterior band of a lower window never steals input from the content of
+    /// one above. A point outside every outer rectangle may still hit the
+    /// exterior band of the topmost window whose band reaches it.
     pub fn edge_at(
         &self,
         point: Point<f64, Logical>,
         side: f64,
         corner: f64,
     ) -> Option<(WindowId, Edge)> {
-        let entry = self
-            .windows
-            .iter()
-            .rev()
-            .find(|entry| entry.outer.contains(point))?;
-        edge_in(entry.outer, point, side, corner).map(|edge| (entry.id, edge))
+        for entry in self.windows.iter().rev() {
+            if let Some(edge) = edge_in(entry.outer, point, side, corner) {
+                return Some((entry.id, edge));
+            }
+            if entry.outer.contains(point) {
+                return None;
+            }
+        }
+        None
     }
 
     /// The topmost window, if any.
@@ -357,39 +366,64 @@ impl Scene {
     }
 }
 
-/// Which edge zone of `outer` contains `point`, if any.
+/// How far a corner L may enter the window, in logical pixels.
+const CORNER_INSET: f64 = 2.0;
+
+/// Which exterior resize zone of `outer` contains `point`, if any.
 ///
-/// Sides use `side`; corners use the larger `corner` square so they are easier
-/// to hit. Corner checks come first so a point in both bands is a corner.
+/// Sides are an exterior band of `side`; corners are an exterior L of length
+/// `corner` along each side, with a 2 px inward tolerance. There are no large
+/// squares inside the content: a point 30 px inside a corner is client area.
 fn edge_in(
     outer: Rect<f64, Logical>,
     point: Point<f64, Logical>,
     side: f64,
     corner: f64,
 ) -> Option<Edge> {
-    let left = point.x <= outer.x() + side;
-    let right = point.x >= outer.right() - side;
-    let top = point.y <= outer.y() + side;
-    let bottom = point.y >= outer.bottom() - side;
+    let top_arm = point.y >= outer.y() - side && point.y <= outer.y() + CORNER_INSET;
+    let bottom_arm = point.y >= outer.bottom() - CORNER_INSET && point.y <= outer.bottom() + side;
+    let left_arm = point.x >= outer.x() - side && point.x <= outer.x() + CORNER_INSET;
+    let right_arm = point.x >= outer.right() - CORNER_INSET && point.x <= outer.right() + side;
 
-    let near_left = point.x <= outer.x() + corner;
-    let near_right = point.x >= outer.right() - corner;
-    let near_top = point.y <= outer.y() + corner;
-    let near_bottom = point.y >= outer.bottom() - corner;
-
-    match (near_top, near_bottom, near_left, near_right) {
-        (true, _, true, _) => Some(Edge::TopLeft),
-        (true, _, _, true) => Some(Edge::TopRight),
-        (_, true, true, _) => Some(Edge::BottomLeft),
-        (_, true, _, true) => Some(Edge::BottomRight),
-        _ => match (top, bottom, left, right) {
-            (true, _, _, _) => Some(Edge::Top),
-            (_, true, _, _) => Some(Edge::Bottom),
-            (_, _, true, _) => Some(Edge::Left),
-            (_, _, _, true) => Some(Edge::Right),
-            _ => None,
-        },
+    if (top_arm && point.x >= outer.x() - side && point.x <= outer.x() + corner)
+        || (left_arm && point.y >= outer.y() - side && point.y <= outer.y() + corner)
+    {
+        return Some(Edge::TopLeft);
     }
+    if (top_arm && point.x >= outer.right() - corner && point.x <= outer.right() + side)
+        || (right_arm && point.y >= outer.y() - side && point.y <= outer.y() + corner)
+    {
+        return Some(Edge::TopRight);
+    }
+    if (bottom_arm && point.x >= outer.x() - side && point.x <= outer.x() + corner)
+        || (left_arm && point.y >= outer.bottom() - corner && point.y <= outer.bottom() + side)
+    {
+        return Some(Edge::BottomLeft);
+    }
+    if (bottom_arm && point.x >= outer.right() - corner && point.x <= outer.right() + side)
+        || (right_arm && point.y >= outer.bottom() - corner && point.y <= outer.bottom() + side)
+    {
+        return Some(Edge::BottomRight);
+    }
+
+    let top = point.y >= outer.y() - side && point.y <= outer.y();
+    let bottom = point.y >= outer.bottom() && point.y <= outer.bottom() + side;
+    let left = point.x >= outer.x() - side && point.x <= outer.x();
+    let right = point.x >= outer.right() && point.x <= outer.right() + side;
+
+    if top && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
+        return Some(Edge::Top);
+    }
+    if bottom && point.x >= outer.x() + corner && point.x <= outer.right() - corner {
+        return Some(Edge::Bottom);
+    }
+    if left && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
+        return Some(Edge::Left);
+    }
+    if right && point.y >= outer.y() + corner && point.y <= outer.bottom() - corner {
+        return Some(Edge::Right);
+    }
+    None
 }
 
 /// The outer rectangle produced by dragging one edge or corner of `start`.
@@ -522,47 +556,68 @@ mod tests {
     }
 
     #[test]
-    fn edge_zones_are_measured_against_the_decorated_bounds() {
+    fn edge_zones_sit_outside_the_window() {
         let mut scene = Scene::new();
         let window = WindowId::new(1);
         scene.insert(window, rect(100.0, 100.0, 200.0, 150.0));
-        let side = 12.0;
-        let corner = 24.0;
+        let side = 10.0;
+        let corner = 20.0;
 
+        // One pixel inside the right edge, well below the corner: client.
+        assert_eq!(scene.edge_at(point(299.0, 150.0), side, corner), None);
+        // Six pixels outside the right edge: the right band.
         assert_eq!(
-            scene.edge_at(point(150.0, 104.0), side, corner),
+            scene.edge_at(point(306.0, 150.0), side, corner),
+            Some((window, Edge::Right))
+        );
+        // Six pixels outside diagonally from the top-left corner: the corner L.
+        assert_eq!(
+            scene.edge_at(point(94.0, 94.0), side, corner),
+            Some((window, Edge::TopLeft))
+        );
+        // Thirty pixels inside a corner is content, not a 24 px square.
+        assert_eq!(scene.edge_at(point(130.0, 130.0), side, corner), None);
+        // The sides still work away from the corners.
+        assert_eq!(
+            scene.edge_at(point(150.0, 94.0), side, corner),
             Some((window, Edge::Top))
         );
         assert_eq!(
-            scene.edge_at(point(150.0, 246.0), side, corner),
-            Some((window, Edge::Bottom))
-        );
-        assert_eq!(
-            scene.edge_at(point(104.0, 150.0), side, corner),
+            scene.edge_at(point(94.0, 150.0), side, corner),
             Some((window, Edge::Left))
         );
         assert_eq!(
-            scene.edge_at(point(296.0, 150.0), side, corner),
-            Some((window, Edge::Right))
-        );
-        assert_eq!(
-            scene.edge_at(point(104.0, 104.0), side, corner),
-            Some((window, Edge::TopLeft))
-        );
-        assert_eq!(
-            scene.edge_at(point(296.0, 246.0), side, corner),
+            scene.edge_at(point(306.0, 244.0), side, corner),
             Some((window, Edge::BottomRight))
         );
-        assert_eq!(scene.edge_at(point(200.0, 175.0), side, corner), None);
-        assert_eq!(scene.edge_at(point(99.0, 175.0), side, corner), None);
-        // A corner is a larger square than the side band.
+    }
+
+    #[test]
+    fn content_of_a_window_above_blocks_the_band_of_one_below() {
+        let mut scene = Scene::new();
+        let below = WindowId::new(1);
+        let above = WindowId::new(2);
+        scene.insert(below, rect(100.0, 100.0, 200.0, 150.0));
+        scene.insert(above, rect(250.0, 100.0, 200.0, 150.0));
+
+        // The point is in the below window's right exterior band, but also in
+        // the above window's content. Content wins.
+        assert_eq!(scene.edge_at(point(306.0, 150.0), 10.0, 20.0), None);
+    }
+
+    #[test]
+    fn the_top_window_band_wins_over_lower_content() {
+        let mut scene = Scene::new();
+        let below = WindowId::new(1);
+        let above = WindowId::new(2);
+        scene.insert(below, rect(400.0, 100.0, 200.0, 150.0));
+        scene.insert(above, rect(250.0, 100.0, 200.0, 150.0));
+
+        // The point is in the above window's right exterior band and over the
+        // below window's content. The top window wins.
         assert_eq!(
-            scene.edge_at(point(104.0, 123.0), side, corner),
-            Some((window, Edge::TopLeft))
-        );
-        assert_eq!(
-            scene.edge_at(point(125.0, 104.0), side, corner),
-            Some((window, Edge::Top))
+            scene.edge_at(point(456.0, 150.0), 10.0, 20.0),
+            Some((above, Edge::Right))
         );
     }
 

@@ -462,15 +462,31 @@ impl State {
             self.dismiss_all_popups();
         }
 
-        let Some(id) = self.windows.window_under(location) else {
+        let side = f64::from(self.config.window.resize_border);
+        let corner = f64::from(self.config.window.resize_corner);
+        let edge = self.windows.edge_under(location, side, corner);
+        let under = self.windows.window_under(location);
+
+        // The exterior band can reach outside every outer rectangle, so it is
+        // handled before `window_under`. If the band belongs to a window above
+        // the content under the pointer, the top window wins.
+        if let Some((edge_id, edge)) = edge
+            && under != Some(edge_id)
+        {
+            tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");
+            self.raise_and_focus(edge_id);
+            self.start_resize(edge_id, edge, location);
+            return;
+        }
+
+        let Some(id) = under else {
             tracing::info!(?location, "press landed outside every window");
             return;
         };
         self.raise_and_focus(id);
 
-        // A titlebar button wins over the resize band. With 24 px corners the
-        // top-left/right resize squares overlap the traffic lights, so checking
-        // the edge first would make close/minimize/maximize unreachable.
+        // A titlebar button wins over the resize band. The band only enters
+        // 2 px at a corner, but keeping this order makes the priority explicit.
         if button == BUTTON_LEFT
             && let (Some(outer), Some(insets)) = (self.windows.outer(id), self.windows.insets(id))
             && let Some(kind) = crate::chrome::button_at(outer, insets, location)
@@ -479,9 +495,7 @@ impl State {
             return;
         }
 
-        let side = f64::from(self.config.window.resize_border);
-        let corner = f64::from(self.config.window.resize_corner);
-        if let Some((edge_id, edge)) = self.windows.edge_under(location, side, corner)
+        if let Some((edge_id, edge)) = edge
             && edge_id == id
         {
             tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");

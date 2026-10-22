@@ -27,6 +27,20 @@ chrome; los diálogos, los popups y el fullscreen no llevan chrome. Wezterm, por
 ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
 `window.decorations = "force_server"`.
 
+## Resize por bordes
+
+Las ventanas **SSD normales** (no maximizadas ni fullscreen) se redimensionan
+desde una banda **exterior** al rectángulo de la ventana: `window.resize_border`
+(10 px por defecto) en los lados y una «L» de `window.resize_corner` (20 px) en
+las esquinas, que puede entrar 2 px. No hay cuadrados grandes dentro del
+contenido. El hit-test recorre la pila: la ventana de arriba gana y el contenido
+de una ventana superior bloquea la banda exterior de otra inferior. Los
+semáforos y la barra de título se comprueban antes que el resize.
+
+Las ventanas **CSD** gestionan sus propios bordes; cuando llegue el pintor de
+efectos (ADR 0020) podrán usar las mismas bandas exteriores. Ver
+[`../investigacion/resize-bordes-y-cursores.md`](../investigacion/resize-bordes-y-cursores.md).
+
 ## Cómo funciona
 
 ```

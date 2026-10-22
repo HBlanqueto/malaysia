@@ -63,9 +63,10 @@ semáforos de 12, tema claro por defecto.
 - [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
       en layer surfaces).
 - [ ] Esquinas redondeadas, sombra, glifos de hover y doble clic para zoom.
-- [x] Resize por bordes con banda de 12 px, esquinas de 24 px, botones de la
-      titlebar con prioridad, solo ventanas SSD y exclusión de maximizado/
-      fullscreen. Queda sumar sombra/CSS y tiled cuando exista tiling. Ver
+- [x] Resize por bordes con banda exterior de 10 px, «L» de esquina de 20 px
+      (2 px hacia dentro), botones de la titlebar con prioridad, solo ventanas
+      SSD y exclusión de maximizado/fullscreen. Queda sumar sombra/CSS y tiled
+      cuando exista tiling. Ver
       [`investigacion/resize-bordes-y-cursores.md`](investigacion/resize-bordes-y-cursores.md)
       (incluye el traspaso y los siguientes pasos).
 - [ ] Documentar/portar el resto de tokens de Neptunia y, si se puede, generar
