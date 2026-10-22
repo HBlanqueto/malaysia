@@ -86,7 +86,8 @@ pasará a ser por salida.
 | `window.titlebar` | bool | `true` | datos | renderer de decoración |
 | `window.double_click_titlebar` | `"fill"` \| `"minimize"` \| `"zoom"` \| `"none"` | `"zoom"` | datos | input |
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | datos | input |
-| `window.resize_border` | entero (px lógicos) | `6` | datos | `window::RESIZE_BORDER` (hoy constante) |
+| `window.resize_border` | entero (px lógicos) | `12` | **activa** | ancho de la banda de resize en lados |
+| `window.resize_corner` | entero (px lógicos) | `24` | **activa** | lado del cuadrado de resize en esquinas |
 
 `"default"` respeta la negociación (GTK/Libadwaita conservan su headerbar; Qt y el
 resto reciben el chrome de Yuki). `"force_server"` dibuja el chrome de Yuki en todas
@@ -280,7 +281,8 @@ decorations = "default"         # default | force_server | force_client
 titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
 focus = "click"                 # click | sloppy
-resize_border = 6
+resize_border = 12
+resize_corner = 24
 ```
 
 ```toml

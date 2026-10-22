@@ -51,7 +51,8 @@ docs/
     ├── otto-y-forks.md           Otto y los forks de HBlanqueto: qué reutilizar
     ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
     ├── escalado-macos.md         puntos, backing store y downsample en macOS
-    └── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
+    ├── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
+    └── resize-bordes-y-cursores.md  resize por bordes y cursores: GNOME, Otto y macOS
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
@@ -106,7 +107,9 @@ docs/
    separa macOS puntos, backing store y píxeles de panel
    ([escalado](investigacion/escalado-macos.md)) y cómo ponen una captura en el
    portapapeles Otto, GNOME y macOS
-   ([portapapeles](investigacion/portapapeles-capturas.md)).
+   ([portapapeles](investigacion/portapapeles-capturas.md)) y cómo detectan
+   GNOME, Otto y macOS los bordes de resize y el cursor
+   ([resize](investigacion/resize-bordes-y-cursores.md)).
 
 ## Estado actual en una línea
 
