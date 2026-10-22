@@ -21,6 +21,7 @@ xkbcommon.workspace = true
 zbus.workspace = true
 smithay.workspace = true
 calloop.workspace = true
+nix.workspace = true
 yuki-design.workspace = true
 yuki-scene.workspace = true
 

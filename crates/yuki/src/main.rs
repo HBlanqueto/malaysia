@@ -12,8 +12,27 @@ mod logging;
 use std::process::ExitCode;
 
 use anyhow::Result;
+use nix::sys::signal::{SigSet, SigmaskHow, Signal, pthread_sigmask};
+
+/// Blocks `SIGUSR1`/`SIGTERM`/`SIGINT` before any thread is spawned.
+///
+/// `calloop::signals` blocks them on the calling thread only; a signal is
+/// delivered to any thread that has it unblocked, so renderer threads created
+/// before that point could take `SIGTERM` and kill the process without the
+/// graceful shutdown (and lose the `SIGUSR1` capture). Blocking them here, as
+/// the first thing `main` does, makes every later thread inherit the mask.
+fn block_shutdown_signals() {
+    let mut set = SigSet::empty();
+    for signal in [Signal::SIGUSR1, Signal::SIGTERM, Signal::SIGINT] {
+        set.add(signal);
+    }
+    if let Err(error) = pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&set), None) {
+        eprintln!("yuki: could not block the shutdown signals: {error}");
+    }
+}
 
 fn main() -> ExitCode {
+    block_shutdown_signals();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

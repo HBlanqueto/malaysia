@@ -3290,6 +3290,7 @@ dependencies = [
  "anyhow",
  "calloop 0.14.5",
  "chrono",
+ "nix",
  "png",
  "serde",
  "smithay",
