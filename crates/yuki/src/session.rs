@@ -632,7 +632,7 @@ fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderEleme
             append_solid(
                 Point::from((0, 0)),
                 output,
-                [0.0, 0.0, 0.0, 0.15],
+                yuki_design::SCREENSHOT_IDLE_DIM,
                 scale,
                 elements,
             );
@@ -658,7 +658,7 @@ fn append_dim_outside(
     scale: f64,
     elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
 ) {
-    let dim = [0.0, 0.0, 0.0, 0.35];
+    let dim = yuki_design::SCREENSHOT_DIM;
     let left = rect.loc.x.clamp(0, output.w);
     let top = rect.loc.y.clamp(0, output.h);
     let right = (rect.loc.x + rect.size.w).clamp(left, output.w);
@@ -699,8 +699,8 @@ fn append_border(
     scale: f64,
     elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
 ) {
-    const BORDER: i32 = 1;
-    let color = [1.0, 1.0, 1.0, 0.9];
+    const BORDER: i32 = yuki_design::SCREENSHOT_BORDER_WIDTH;
+    let color = yuki_design::SCREENSHOT_BORDER;
     let (x, y) = (rect.loc.x, rect.loc.y);
     let (w, h) = (rect.size.w, rect.size.h);
     if w <= 0 || h <= 0 {

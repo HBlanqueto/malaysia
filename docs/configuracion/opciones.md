@@ -81,6 +81,8 @@ Action**".
 
 ## `screenshot` — capturas (app Captura; macOS `com.apple.screencapture`)
 
+Flujo, atajos y overlay: [`../arquitectura/capturas.md`](../arquitectura/capturas.md).
+
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
 | `screenshot.show_pointer` | bool | `false` | **activa** | captura de pantalla/región (las de ventana nunca lo llevan) |

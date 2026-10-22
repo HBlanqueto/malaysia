@@ -22,6 +22,15 @@ su capa, como en macOS (el Dock dibuja, WindowServer compone).
 | **Contenido** de las superficies de la shell (wallpaper, barra, dock, lock) | **la shell** | `celestial-kit` → píxeles |
 | Efectos de contorno (sombra, blur, inner border — ADR 0020) | **Yuki** | envuelve cualquier superficie |
 
+## Capturas: una capacidad del compositor
+
+Las capturas de pantalla (`Shift+Super+3/4`, PrintScreen) están al nivel del
+dock o del wallpaper como función del escritorio, pero **no tienen proceso de
+shell**: las hace Yuki. El compositor dibuja el overlay de selección, vuelve a
+renderizar la escena offscreen y guarda el PNG (o, en el futuro, lo copia al
+portapapeles). La shell no participa. Ver
+[`capturas.md`](capturas.md).
+
 ## Cómo se comunican
 
 1. **El almacén `.domain`** (ADR 0021): Yuki es el dueño de la configuración;
@@ -42,5 +51,5 @@ su capa, como en macOS (el Dock dibuja, WindowServer compone).
 
 Cada componente (`wallpaper`, `menubar`, `dock`, `lock`) es un proceso
 `yuki-shell` que dibuja en su capa; Yuki compone, coloca, da input y aplica los
-efectos. La supervisión (`yuki-shell@.service`) relanza cualquier componente
+efectos. Las capturas no son un proceso aparte: son una capacidad de Yuki. La supervisión (`yuki-shell@.service`) relanza cualquier componente
 que muera sin tocar a los demás.

@@ -270,6 +270,18 @@ pub const CURSOR_SHAKE_SHRINK_MS: u64 = 220;
 /// The interval between animation frames, in milliseconds (roughly 60 Hz).
 pub const CURSOR_SHAKE_TICK_MS: u64 = 16;
 
+/// Dim over everything outside the screenshot selection.
+pub const SCREENSHOT_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.35];
+
+/// Lighter dim shown while the region can still be dragged.
+pub const SCREENSHOT_IDLE_DIM: [f32; 4] = [0.0, 0.0, 0.0, 0.15];
+
+/// The screenshot selection border.
+pub const SCREENSHOT_BORDER: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
+
+/// The screenshot selection border width, in logical pixels.
+pub const SCREENSHOT_BORDER_WIDTH: i32 = 1;
+
 /// The body text face.
 pub const TEXT: Font = Font {
     family: "Inter",

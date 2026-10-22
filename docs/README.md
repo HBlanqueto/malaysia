@@ -36,7 +36,8 @@ docs/
 │   ├── wallpaper.md           el componente nativo del wallpaper (ADR 0023/0024)
 │   ├── menubar.md             la menubar nativa (app activa + reloj)
 │   ├── dock.md                el dock nativo (lista de apps + activar al clic)
-│   └── lock.md                el lock nativo (ext-session-lock-v1)
+│   ├── lock.md                el lock nativo (ext-session-lock-v1)
+│   └── capturas.md            capturas macOS: atajos, overlay, guardado y opciones
 ├── configuracion/
 │   └── opciones.md    catálogo canónico de opciones del compositor (ADR 0021)
 ├── hardware.md        línea base de hardware/gráficos de la máquina
@@ -76,8 +77,10 @@ docs/
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
    (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
-   [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md) y
-   [lock](arquitectura/lock.md).
+   [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md),
+   [lock](arquitectura/lock.md) y
+   [capturas de pantalla](arquitectura/capturas.md) (una capacidad del
+   compositor, no un proceso de la shell).
 8. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
    canónico de opciones del compositor, con **nombres y valores idénticos a macOS**
    (secciones tipo System Settings, claves tipo `com.apple.dock`). Un archivo
@@ -115,12 +118,13 @@ Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
 El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
 aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
 (hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
-está parcialmente hecho: escala real, `display.scale` persistente y redondeo
-floor/ceil; pendiente panel y escala por salida. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
+está cerrado: escala real, `display.scale` persistente y redondeo floor/ceil,
+aceptados en panel real a 1.0/1.25/1.5; la escala por salida queda para 8b. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
 recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 `wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate,
 `pointer-constraints` + `relative-pointer`, la captura de salida y de ventana y
-las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG).
+las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG)
+con su dominio `screenshot.domain` (defaults macOS, `show_pointer` activo).
 El **Bloque 12** (portales y servicios de escritorio) está
 planificado y depende de la captura del Bloque 11. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es

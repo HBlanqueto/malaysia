@@ -89,7 +89,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Arquitectura**: `docs/arquitectura/yuki-y-shell.md` (+ `yuki-y-shell.svg`)
   — **quién decide cada cosa entre Yuki (compositor) y la shell (`yuki-shell`)**:
   la shell dibuja el contenido, Yuki coloca/compone/regula. Léelo antes de tocar
-  la integración de la shell.
+  la integración de la shell. Componentes: `wallpaper.md`, `menubar.md`,
+  `dock.md`, `lock.md` y `capturas.md` (capturas: capacidad del compositor, no
+  proceso de shell).
 
 ## Estado actual
 
@@ -132,7 +134,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   el shake-to-locate, `pointer-constraints` + `relative-pointer`, la captura
   (salida y ventana, `ext-image-copy-capture-v1`) y las capturas al estilo
   macOS (`Shift+Super+3/4`, ventana con Espacio, PrintScreen; guardan en el
-  Escritorio XDG) hechas. Ver
+  Escritorio XDG) hechas. Opciones en `screenshot.domain` (defaults macOS;
+  `show_pointer` activo, el resto reservadas). Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
