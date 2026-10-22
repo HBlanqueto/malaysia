@@ -536,7 +536,16 @@ fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, String)>
         .flatten()
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .filter(|p| {
+            p.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    matches!(
+                        extension.to_ascii_lowercase().as_str(),
+                        "png" | "jpg" | "jpeg"
+                    )
+                })
+        })
         .collect();
     entries.sort();
     Ok(entries.first().cloned().map(|p| (p, store.scale)))
