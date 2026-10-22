@@ -49,8 +49,11 @@ shell; ver `bloques/09-escala-fraccional.md`.
 El diseño es **Neptunia** (ADR 0032): titlebar arriba de 44 px, radio 16,
 semáforos de 12, tema claro por defecto.
 
-- [x] Titlebar en el compositor: fondo, semáforos, título, caché y botones
-      cerrar/minimizar/maximizar. Ver `arquitectura/ventanas.md`.
+- [x] Titlebar en el compositor: fondo, semáforos redondeados, título centrado,
+      caché y botones cerrar/minimizar/maximizar. Ver
+      `arquitectura/ventanas.md`.
+- [x] Foco de puntero limitado al rectángulo del cliente (la titlebar no se
+      trata como superficie del cliente).
 - [x] Menubar y dock con la paleta clara de Neptunia.
 - [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
       en layer surfaces).

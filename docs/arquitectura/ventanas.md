@@ -2,18 +2,21 @@
 
 La titlebar de Yuki es **compositor-side** (ADR 0020) y usa el diseño de
 **Neptunia** (ADR 0032): barra **arriba** de 44 px lógicos, semáforos de 12 px
-con 8 px de separación y radio de ventana de 16 px.
+(**cuadrados redondeados** de radio 4) con 8 px de separación y radio de
+ventana de 16 px.
 
 ## Qué se dibuja hoy
 
 - Fondo de la barra con `titlebar_bg` (focused/unfocused) y una hairline de
   1 px al pie.
 - Tres semáforos a la izquierda, en orden **cerrar / minimizar / maximizar**,
-  con los colores `traffic-close`, `traffic-min` y `traffic-zoom`; grises de
+  como cuadrados redondeados de 12 px (radio 4), con los colores
+  `traffic-close`, `traffic-min` y `traffic-zoom`; grises de
   `traffic_lights_inactive` cuando la ventana no tiene foco.
-- El título de la ventana, centrado y en una línea, rasterizado con
-  `cosmic-text` (misma fuente que el resto de la UI) y coloreado con
-  `title.focused` / `title.unfocused`.
+- El título de la ventana, centrado horizontal y verticalmente (la baseline se
+  calcula desde la altura de línea), rasterizado con `cosmic-text` (misma
+  fuente que el resto de la UI) y coloreado con `title.focused` /
+  `title.unfocused`.
 
 Solo reciben titlebar las ventanas **server-side** que reservan inset (ADR
 0014/0019). Las apps GTK/Libadwaita conservan su headerbar; los diálogos, los
@@ -35,6 +38,11 @@ WindowMap::iter (topmost → bottom)
   `Abgr8888` lleva el RGBA ya en el orden que espera la textura.
 - El orden de render de ventanas es **topmost primero**; la titlebar se añade
   justo antes de la superficie de su ventana para que el apilado sea correcto.
+- `Windows::surface_under` solo devuelve la superficie del cliente cuando el
+  punto cae dentro del **rectángulo útil** (outer menos insets). La banda de la
+  titlebar no es superficie del cliente: así el foco de puntero no se va al
+  cliente con coordenadas negativas y los clics de los botones llegan al
+  compositor.
 - El texto de la titlebar es un motor pequeño dentro del compositor
   (`crates/yuki/src/chrome.rs`); no usa `celestial-kit`, que es el toolkit de
   la shell (ADR 0024).
@@ -55,8 +63,9 @@ siempre). Los botones solo actúan con el botón primario.
 
 ## Límites actuales
 
-- No se dibujan **esquinas redondeadas** (16 px) ni **sombra**; el radio y los
-  valores de sombra ya están en `yuki-design`.
+- No se dibujan aún las **esquinas redondeadas de la ventana** (16 px) ni la
+  **sombra**; el radio y los valores de sombra ya están en `yuki-design`. Los
+  semáforos sí son cuadrados redondeados.
 - Los semáforos no muestran los glifos de macOS al pasar el puntero.
 - No hay doble clic en la barra para maximizar/zoom.
 - La titlebar no aparece en la captura de **ventana** (`build_window_elements`

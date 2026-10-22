@@ -420,9 +420,7 @@ impl Windows {
         let index = self.index(id)?;
         let outer = self.scene.outer(id)?;
         let insets = self.windows[index].insets(self.decoration_of(id));
-        let origin: ScenePoint<f64, SceneLogical> =
-            ScenePoint::new(outer.x() + insets.left, outer.y() + insets.top);
-        let local: Point<f64, Logical> = Point::new(point.x - origin.x, point.y - origin.y);
+        let local = client_point(outer, insets, point)?;
         Some((self.windows[index].toplevel.wl_surface().clone(), local))
     }
 
@@ -774,11 +772,32 @@ pub(crate) fn surface_has_buffer(surface: &WlSurface) -> bool {
     with_renderer_surface_state(surface, |state| state.buffer().is_some()).unwrap_or(false)
 }
 
+/// The client-surface-local point for `point`, or `None` when it falls on the
+/// decoration band around the client.
+fn client_point(
+    outer: SceneRect<f64, SceneLogical>,
+    insets: Insets,
+    point: Point<f64, Logical>,
+) -> Option<Point<f64, Logical>> {
+    let origin: ScenePoint<f64, SceneLogical> =
+        ScenePoint::new(outer.x() + insets.left, outer.y() + insets.top);
+    let local: Point<f64, Logical> = Point::new(point.x - origin.x, point.y - origin.y);
+    let usable = usable(
+        Size::from((round(outer.width()), round(outer.height()))),
+        insets,
+    );
+    (local.x >= 0.0
+        && local.y >= 0.0
+        && local.x < f64::from(usable.w)
+        && local.y < f64::from(usable.h))
+    .then_some(local)
+}
+
 #[cfg(test)]
 mod tests {
-    use smithay::utils::{Logical, Size};
+    use smithay::utils::{Logical, Point, Size};
 
-    use super::{at_least_one_pixel, outer_size, usable};
+    use super::{at_least_one_pixel, client_point, outer_size, usable};
     use crate::decoration::Insets;
     use yuki_scene::geometry::Size as SceneSize;
 
@@ -849,6 +868,22 @@ mod tests {
         assert_eq!(
             at_least_one_pixel(outer_size(size(0, 0), Insets::ZERO)),
             SceneSize::new(1.0, 1.0)
+        );
+    }
+    #[test]
+    fn the_titlebar_band_is_not_the_client_surface() {
+        use yuki_scene::geometry::{Point as ScenePoint, Rect, Size as SceneSize};
+
+        let outer = Rect::new(ScenePoint::new(100.0, 50.0), SceneSize::new(800.0, 600.0));
+        let insets = Insets {
+            top: 44.0,
+            ..Insets::ZERO
+        };
+        // The bar is part of the window, but not of the client's surface.
+        assert_eq!(client_point(outer, insets, Point::new(110.0, 60.0)), None);
+        assert_eq!(
+            client_point(outer, insets, Point::new(110.0, 100.0)),
+            Some(Point::new(10.0, 6.0))
         );
     }
 }

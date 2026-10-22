@@ -142,6 +142,8 @@ pub struct TitlebarButtons {
     pub diameter: u32,
     /// Gap between adjacent buttons, in logical pixels.
     pub spacing: u32,
+    /// Corner radius of each button, in logical pixels.
+    pub corner_radius: u32,
     /// Gap before the first button, in logical pixels.
     pub margin_start: u32,
 }
@@ -236,6 +238,7 @@ pub const TITLEBAR: Titlebar = Titlebar {
         ],
         diameter: 12,
         spacing: 8,
+        corner_radius: 4,
         margin_start: 16,
     },
     font: Font {

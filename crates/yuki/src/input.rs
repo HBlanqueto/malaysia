@@ -693,14 +693,10 @@ impl State {
             outer.x() + outer.width() * fx,
             outer.y() + outer.height() * fy,
         );
-        let on_button = self
-            .windows
-            .outer(id)
-            .zip(self.windows.insets(id))
-            .is_some_and(|(outer, insets)| {
-                crate::chrome::button_at(outer, insets, location).is_some()
-            });
-        if self.windows.surface_under(location).is_none() && !on_button {
+        // The scripted press may land on the client or on the titlebar; the
+        // real press path decides what to do with it. It must land inside the
+        // window's decorated rectangle, which `outer` established above.
+        if self.windows.outer(id).is_none() {
             return;
         }
         let time = InputTime::from_millis(0);

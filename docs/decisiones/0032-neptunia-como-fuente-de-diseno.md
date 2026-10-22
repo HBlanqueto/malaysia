@@ -21,8 +21,9 @@ mientras Yuki se construye.
    `dark-tint` son las otras variantes. Los colores, radios, espacios,
    tipografía, sombras y medidas de ventana salen de sus JSON.
 2. **La ventana de Neptunia**: titlebar **arriba**, `size.titlebar-h = 44`,
-   semáforos de 12 px con 8 px de separación, radio de ventana `radius.lg = 16`
-   y el estilo de semáforos `macos` (colores `traffic-*`).
+   semáforos de 12 px con 8 px de separación y **radio 4** (cuadrados
+   redondeados), radio de ventana `radius.lg = 16` y el estilo de semáforos
+   `macos` (colores `traffic-*`).
 3. **Se implementa en Yuki, no en un framework ajeno.** El chrome es
    compositor-side (ADR 0020); el texto de la titlebar usa `cosmic-text` en el
    compositor. `celestial-kit` sigue siendo el toolkit de la shell y de las

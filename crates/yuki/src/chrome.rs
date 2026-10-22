@@ -141,7 +141,12 @@ pub(crate) fn button_at(
     let start = x + f64::from(titlebar.buttons.margin_start) + diameter / 2.0;
     for (index, button) in titlebar.buttons.order.iter().enumerate() {
         let center_x = start + index as f64 * (diameter + gap);
-        if (location.x - center_x).hypot(location.y - center_y) <= diameter / 2.0 {
+        let half = diameter / 2.0;
+        let radius = f64::from(titlebar.buttons.corner_radius).min(half);
+        let dx = (location.x - center_x).abs() - (half - radius);
+        let dy = (location.y - center_y).abs() - (half - radius);
+        let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
+        if distance <= 0.0 {
             return Some(button.kind);
         }
     }
@@ -209,7 +214,16 @@ impl TextEngine {
             } else {
                 palette.traffic_lights_inactive
             };
-            fill_circle(&mut pixels, w, h, center_x, center_y, diameter, color);
+            fill_rounded_square(
+                &mut pixels,
+                w,
+                h,
+                center_x,
+                center_y,
+                diameter,
+                (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32,
+                color,
+            );
         }
 
         let text_color = if focused {
@@ -274,7 +288,12 @@ impl TextEngine {
             }
         }
         let x = ((w as f32 - text_width) / 2.0).max(0.0);
-        let y = ((h as f32 - text_height) / 2.0).max(0.0);
+        let line_y = self
+            .buffer
+            .layout_runs()
+            .next()
+            .map_or(0.0, |run| run.line_y);
+        let y = ((h as f32 - text_height) / 2.0).max(0.0) + line_y;
         let color = [
             (color.r * 255.0) as u8,
             (color.g * 255.0) as u8,
@@ -326,21 +345,26 @@ fn fill_rect(
     }
 }
 
-fn fill_circle(
+#[allow(clippy::too_many_arguments)]
+fn fill_rounded_square(
     pixels: &mut [u8],
     width: i32,
     height: i32,
     cx: i32,
     cy: i32,
-    diameter: i32,
+    size: i32,
+    radius: i32,
     color: yuki_design::Rgba,
 ) {
-    let radius = diameter as f32 / 2.0;
-    for row in (cy - diameter).max(0)..(cy + diameter).min(height) {
-        for col in (cx - diameter).max(0)..(cx + diameter).min(width) {
-            let dx = (col as f32 + 0.5) - cx as f32;
-            let dy = (row as f32 + 0.5) - cy as f32;
-            let coverage = (radius - dx.hypot(dy) + 0.5).clamp(0.0, 1.0);
+    let half = size as f32 / 2.0;
+    let radius = (radius as f32).min(half);
+    let inner = half - radius;
+    for row in (cy - size).max(0)..(cy + size).min(height) {
+        for col in (cx - size).max(0)..(cx + size).min(width) {
+            let dx = ((col as f32 + 0.5) - cx as f32).abs() - inner;
+            let dy = ((row as f32 + 0.5) - cy as f32).abs() - inner;
+            let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
+            let coverage = (0.5 - distance).clamp(0.0, 1.0);
             if coverage <= 0.0 {
                 continue;
             }
@@ -480,6 +504,22 @@ mod tests {
                 Some(expected)
             );
         }
+    }
+
+    #[test]
+    fn the_buttons_are_rounded_squares() {
+        // The top-left corner of the bounding box is outside the rounded
+        // square; its centre and edge midpoints are inside.
+        let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
+        let x = 100.0 + f64::from(TITLEBAR.buttons.margin_start);
+        assert_eq!(
+            button_at(outer(), insets(), Point::from((x + 0.1, y - 5.9))),
+            None
+        );
+        assert_eq!(
+            button_at(outer(), insets(), Point::from((x + 6.0, y))),
+            Some(ButtonKind::Close)
+        );
     }
 
     #[test]
