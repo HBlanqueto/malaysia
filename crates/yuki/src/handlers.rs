@@ -58,7 +58,7 @@ use smithay::wayland::xdg_activation::{
     XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
 };
 use smithay::wayland::pointer_constraints::PointerConstraintsHandler;
-use smithay::wayland::selection::SelectionHandler;
+use smithay::wayland::selection::{SelectionHandler, SelectionTarget};
 use smithay::wayland::selection::data_device::{
     DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler,
 };
@@ -521,7 +521,30 @@ impl SeatHandler for State {
 }
 
 impl SelectionHandler for State {
-    type SelectionUserData = ();
+    type SelectionUserData = std::sync::Arc<[u8]>;
+
+    fn send_selection(
+        &mut self,
+        _ty: SelectionTarget,
+        mime_type: String,
+        fd: std::os::fd::OwnedFd,
+        _seat: Seat<Self>,
+        user_data: &Self::SelectionUserData,
+    ) {
+        if mime_type != "image/png" {
+            return; // dropping the fd gives the client an empty answer
+        }
+        let bytes = user_data.clone();
+        // A paste may ask for the bytes long after the capture; never block the
+        // compositor on a slow reader's pipe.
+        std::thread::spawn(move || {
+            use std::io::Write;
+            let mut file = std::fs::File::from(fd);
+            if let Err(error) = file.write_all(&bytes) {
+                tracing::warn!(%error, "could not write the clipboard image");
+            }
+        });
+    }
 }
 
 impl DataDeviceHandler for State {

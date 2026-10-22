@@ -21,7 +21,7 @@
 //!
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
@@ -50,7 +50,7 @@ use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::output::OutputManagerState;
-use smithay::wayland::selection::data_device::DataDeviceState;
+use smithay::wayland::selection::data_device::{DataDeviceState, set_data_device_selection};
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState};
 use smithay::wayland::viewporter::ViewporterState;
@@ -718,6 +718,20 @@ impl State {
         }
         self.cursor_boost_started
             .map_or(1.0, |started| boost_scale_at(started.elapsed()))
+    }
+
+    /// Offers a screenshot as `image/png` on the seat's clipboard.
+    ///
+    /// The bytes live here until a client pastes them (or another client takes
+    /// the selection), like any Wayland data source. No file is written.
+    pub(crate) fn set_clipboard_png(&mut self, png: Vec<u8>) {
+        let data: Arc<[u8]> = png.into();
+        set_data_device_selection(
+            &self.display_handle,
+            &self.seat,
+            vec!["image/png".to_string()],
+            data,
+        );
     }
 
     /// Starts the shake-to-locate animation and arms its first frame.

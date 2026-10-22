@@ -57,6 +57,7 @@ use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
+use crate::config::ScreenshotTarget;
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
@@ -892,22 +893,22 @@ pub(crate) fn save_screenshot(
     output_size: Size<i32, Physical>,
     transform: Transform,
     request: crate::state::ScreenshotRequest,
-) -> std::io::Result<std::path::PathBuf> {
+) -> std::io::Result<ScreenshotOutcome> {
     let scale = state.scale.fractional_scale();
-    match request {
+    let png = match request {
         crate::state::ScreenshotRequest::Focused => match state.focused_window() {
-            Some(id) => capture_window(state, renderer, id, transform),
-            None => capture_output(state, renderer, cursor, output_size, transform, scale),
+            Some(id) => capture_window_png(state, renderer, id, transform),
+            None => capture_output_png(state, renderer, cursor, output_size, transform, scale),
         },
         crate::state::ScreenshotRequest::Output => {
-            capture_output(state, renderer, cursor, output_size, transform, scale)
+            capture_output_png(state, renderer, cursor, output_size, transform, scale)
         }
         crate::state::ScreenshotRequest::Window(id) => {
-            capture_window(state, renderer, id, transform)
+            capture_window_png(state, renderer, id, transform)
         }
         crate::state::ScreenshotRequest::Region(region) => {
             let elements = screenshot_elements(state, renderer, cursor);
-            crate::capture::screenshot_region(
+            crate::capture::screenshot_region_png(
                 renderer,
                 &elements,
                 output_size,
@@ -916,7 +917,23 @@ pub(crate) fn save_screenshot(
                 scale,
             )
         }
+    }?;
+
+    if matches!(state.config.screenshot.target, ScreenshotTarget::Clipboard) {
+        state.set_clipboard_png(png);
+        Ok(ScreenshotOutcome::Copied)
+    } else {
+        crate::capture::save_png(&png)?;
+        Ok(ScreenshotOutcome::Saved)
     }
+}
+
+/// Where a screenshot went.
+pub(crate) enum ScreenshotOutcome {
+    /// Written to the screenshot path (already logged).
+    Saved,
+    /// Offered as `image/png` on the clipboard.
+    Copied,
 }
 
 /// The output elements a screenshot should draw: the same scene as the frame,
@@ -930,13 +947,13 @@ fn screenshot_elements(
     build_output_elements(state, renderer, cursor, include_cursor)
 }
 
-/// Renders one window (its client content) into a screenshot.
-fn capture_window(
+/// Renders one window (its client content) as PNG bytes.
+fn capture_window_png(
     state: &State,
     renderer: &mut GlesRenderer,
     id: yuki_scene::scene::WindowId,
     transform: Transform,
-) -> std::io::Result<std::path::PathBuf> {
+) -> std::io::Result<Vec<u8>> {
     let scale = state.scale.fractional_scale();
     let surface = state
         .windows
@@ -949,7 +966,7 @@ fn capture_window(
         .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
     let size = rect.size.to_f64().to_physical(scale).to_i32_round();
     let elements = build_window_elements(renderer, &surface, scale);
-    crate::capture::screenshot(
+    crate::capture::screenshot_png(
         renderer,
         &elements,
         size,
@@ -959,17 +976,17 @@ fn capture_window(
     )
 }
 
-/// Renders the whole output into a screenshot.
-fn capture_output(
+/// Renders the whole output as PNG bytes.
+fn capture_output_png(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
-) -> std::io::Result<std::path::PathBuf> {
+) -> std::io::Result<Vec<u8>> {
     let elements = screenshot_elements(state, renderer, cursor);
-    crate::capture::screenshot(
+    crate::capture::screenshot_png(
         renderer,
         &elements,
         size,
@@ -979,10 +996,12 @@ fn capture_output(
     )
 }
 
-/// Logs a screenshot result. The success path already logs the saved path.
-pub(crate) fn log_screenshot(result: std::io::Result<std::path::PathBuf>) {
-    if let Err(error) = result {
-        tracing::warn!(%error, "screenshot failed");
+/// Logs a screenshot result. The save path already logs itself.
+pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
+    match result {
+        Ok(ScreenshotOutcome::Copied) => tracing::info!("screenshot copied to the clipboard"),
+        Ok(ScreenshotOutcome::Saved) => {}
+        Err(error) => tracing::warn!(%error, "screenshot failed"),
     }
 }
 

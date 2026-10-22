@@ -95,44 +95,39 @@ pub(crate) fn capture_output(
     let dir = capture_dir();
     fs::create_dir_all(&dir)?;
     let path = dir.join(format!("capture-{}.png", stamp()));
-    write_png(&path, w, h, &flipped)?;
+    write_png(&path, &encode_png(w, h, &flipped)?)?;
     tracing::info!(path = %path.display(), "debug capture written");
     Ok(path)
 }
 
-/// Saves a screenshot to the user's Desktop.
+/// Renders the whole output and encodes it as PNG bytes.
 ///
-/// The destination is the XDG Desktop directory (localised, see
-/// [`crate::xdg::desktop_dir`]), not a fixed name. `clear` is the background:
-/// transparent for a window so only its content is kept, opaque for an output.
-pub(crate) fn screenshot(
+/// `clear` is the background: transparent for a window so only its content is
+/// kept, opaque for an output.
+pub(crate) fn screenshot_png(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
     clear: [f32; 4],
-) -> std::io::Result<PathBuf> {
-    let (w, h, flipped) = render_and_read(renderer, elements, size, transform, scale, clear)?;
-    let path = screenshot_path()?;
-    write_png(&path, w, h, &flipped)?;
-    tracing::info!(path = %path.display(), "screenshot saved");
-    Ok(path)
+) -> std::io::Result<Vec<u8>> {
+    render_png(renderer, elements, size, transform, scale, clear)
 }
 
-/// Saves a rectangular crop of the output to the user's Desktop.
+/// Renders the output, crops a logical region and encodes it as PNG bytes.
 ///
 /// The whole output is rendered and then cropped, so the region sees exactly
 /// what is on screen. `region` is in logical coordinates; `scale` converts it
 /// to the physical pixels of the rendered buffer.
-pub(crate) fn screenshot_region(
+pub(crate) fn screenshot_region_png(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     region: Rectangle<i32, Logical>,
     scale: f64,
-) -> std::io::Result<PathBuf> {
+) -> std::io::Result<Vec<u8>> {
     let (w, h, rgba) = render_and_read(
         renderer,
         elements,
@@ -141,6 +136,39 @@ pub(crate) fn screenshot_region(
         scale,
         [0.06, 0.06, 0.09, 1.0],
     )?;
+    let (width, height, cropped) = crop_region(region, scale, w, h, &rgba)?;
+    encode_png(width, height, &cropped)
+}
+
+/// Writes PNG bytes to the screenshot path and logs it.
+pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
+    let path = screenshot_path()?;
+    write_png(&path, png)?;
+    tracing::info!(path = %path.display(), "screenshot saved");
+    Ok(path)
+}
+
+/// Renders `elements` and encodes them as PNG.
+fn render_png(
+    renderer: &mut GlesRenderer,
+    elements: &[OutputRenderElement<GlesRenderer>],
+    size: Size<i32, Physical>,
+    transform: Transform,
+    scale: f64,
+    clear: [f32; 4],
+) -> std::io::Result<Vec<u8>> {
+    let (w, h, rgba) = render_and_read(renderer, elements, size, transform, scale, clear)?;
+    encode_png(w, h, &rgba)
+}
+
+/// Crops a logical region out of a physical RGBA frame.
+fn crop_region(
+    region: Rectangle<i32, Logical>,
+    scale: f64,
+    w: usize,
+    h: usize,
+    rgba: &[u8],
+) -> std::io::Result<(usize, usize, Vec<u8>)> {
     let x = (f64::from(region.loc.x) * scale).round() as i32;
     let y = (f64::from(region.loc.y) * scale).round() as i32;
     let width = (f64::from(region.size.w) * scale).round() as i32;
@@ -161,10 +189,7 @@ pub(crate) fn screenshot_region(
         let start = (row * w + x as usize) * 4;
         cropped.extend_from_slice(&rgba[start..start + row_bytes]);
     }
-    let path = screenshot_path()?;
-    write_png(&path, width as usize, height as usize, &cropped)?;
-    tracing::info!(path = %path.display(), "screenshot saved");
-    Ok(path)
+    Ok((width as usize, height as usize, cropped))
 }
 
 /// `Screenshot <date> at <time>.png` in the XDG Desktop directory.
@@ -196,16 +221,21 @@ fn stamp() -> u128 {
         .unwrap_or(0)
 }
 
-/// Writes `rgba` as an RGBA8 PNG.
-fn write_png(path: &Path, width: usize, height: usize, rgba: &[u8]) -> std::io::Result<()> {
-    let file = fs::File::create(path)?;
-    let mut encoder = png::Encoder::new(file, width as u32, height as u32);
+/// Encodes RGBA8 pixels as a PNG.
+fn encode_png(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let mut encoder = png::Encoder::new(&mut bytes, width as u32, height as u32);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header()?;
     writer.write_image_data(rgba)?;
     writer.finish()?;
-    Ok(())
+    Ok(bytes)
+}
+
+/// Writes already-encoded PNG bytes.
+fn write_png(path: &Path, png: &[u8]) -> std::io::Result<()> {
+    fs::write(path, png)
 }
 
 /// Renders `elements` offscreen and reads them back top-down as RGBA8.

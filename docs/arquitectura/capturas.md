@@ -38,7 +38,7 @@ ScreenshotRequest { Output | Region | Window | Focused }
 save_screenshot (session.rs)
    ├── Output/Region: build_output_elements(show_pointer) + render_and_read a la escala de salida
    ├── Window: surface del cliente + render_and_read
-   └── PNG en el Escritorio XDG (capture.rs)
+   └── PNG → fichero en el Escritorio XDG o portapapeles (capture.rs)
 ```
 
 - **Selección**: el exterior se atenúa y la región lleva un borde blanco de
@@ -49,11 +49,15 @@ save_screenshot (session.rs)
 - **Render**: salida y región re-renderizan la escena completa en offscreen con
   el `Transform` del backend y la escala de la salida (no leen el framebuffer
   presentado). Ventana renderiza solo la superficie del cliente.
-- **Guardado**: `yuki::xdg::desktop_dir()` resuelve el Escritorio desde XDG
-  user-dirs (nombre localizado: Escritorio, Desktop, Schreibtisch…), nunca un
-  literal. El nombre es `Screenshot AAAA-MM-DD at HH.MM.SS.png`, con ` (2)`,
-  ` (3)`… si coincide en el mismo segundo. Ventana: PNG con fondo transparente;
-  salida/región: opaco.
+- **Guardado**: con `target = "desktop"` (default), `yuki::xdg::desktop_dir()`
+  resuelve el Escritorio desde XDG user-dirs (nombre localizado: Escritorio,
+  Desktop, Schreibtisch…), nunca un literal. El nombre es
+  `Screenshot AAAA-MM-DD at HH.MM.SS.png`, con ` (2)`, ` (3)`… si coincide en
+  el mismo segundo. Ventana: PNG con fondo transparente; salida/región: opaco.
+- **Portapapeles**: con `target = "clipboard"`, el PNG no se escribe: se
+  publica como `image/png` en la selección del asiento. Los bytes los sirve el
+  compositor en cada pega, en un hilo, hasta que otro cliente copie. Ver
+  [`../investigacion/portapapeles-capturas.md`](../investigacion/portapapeles-capturas.md).
 - **Puntero**: `screenshot.show_pointer` decide si sale en salida/región. El
   default es `false`, como macOS. Las capturas de ventana nunca lo incluyen.
 
@@ -70,7 +74,7 @@ miniatura flotante sí, temporizador desactivado.
 |---|---|---|
 | `show_pointer` | `false` | **activa** en salida/región |
 | `show_thumbnail` | `true` | reservada (miniatura flotante) |
-| `target` | `"desktop"` | reservada (`clipboard`, `preview`, `mail`, `messages`, `other`) |
+| `target` | `"desktop"` | **activa** para `desktop` y `clipboard`; `preview`, `mail`, `messages` y `other` reservadas |
 | `location` | — | reservada (carpeta propia) |
 | `type` | `"png"` | reservada (`jpg`, `heif`, `tiff`, `pdf`) |
 | `include_date` | `true` | reservada (hoy siempre fecha) |
@@ -79,8 +83,8 @@ miniatura flotante sí, temporizador desactivado.
 | `remember_selection` | `false` | reservada |
 
 «Reservada» significa que la opción se lee, se valida y se documenta, pero el
-flujo actual sigue guardando en el Escritorio, en PNG y con fecha. El estado
-real de cada una está en el catálogo de opciones.
+flujo actual sigue guardando en el Escritorio, en PNG y con fecha. `target` ya
+distingue Escritorio de portapapeles; el resto de destinos cae al Escritorio.
 
 ## Dónde vive
 
@@ -106,8 +110,11 @@ ficheros ni pasa por `screenshot.domain`. La integración con el portal
 
 ## Límites y pendientes
 
-- Miniatura flotante, portapapeles, temporizador, formatos y sombra de ventana:
-  opciones reservadas, aún sin efecto.
+- Miniatura flotante, temporizador, formatos, sombra de ventana y los destinos
+  `preview`/`mail`/`messages`/`other`: opciones reservadas, aún sin efecto.
+- `Control` para copiar al vuelo (como macOS) todavía no está; hoy se elige con
+  `target = "clipboard"` en `screenshot.domain`.
+- No hay gestor de portapapeles: la imagen dura hasta que otro cliente copie.
 - La captura de ventana dibuja solo el contenido del cliente; el chrome
   server-side y su sombra todavía no forman parte de la imagen.
 - Salida **rotada**: hoy la rotación se ignora en la captura.
@@ -124,10 +131,13 @@ ficheros ni pasa por `screenshot.domain`. La integración con el portal
 YUKI_TEST_SCREENSHOT=1 ./dev.sh smoke          # captura la ventana enfocada
 YUKI_TEST_SCREENSHOT=region ./dev.sh smoke     # captura un rectángulo fijo (100,100 300x200)
 YUKI_SCREENSHOT_DIR=/tmp/shots ./dev.sh smoke  # redirige el guardado
+# target = "clipboard" en screenshot.domain; luego, dentro de la sesión:
+WAYLAND_DISPLAY=wayland-N wl-paste --type image/png > /tmp/clip.png
 ```
 
 `YUKI_TEST_SCREENSHOT=region` con `YUKI_TEST_INPUT=1` y `YUKI_TEST_PRESS_AT`
 permite poner el puntero dentro del rectángulo y comparar las capturas con
-`show_pointer = false` y `true`. La verificación del look del cursor ampliado
+`show_pointer = false` y `true`. Con `target = "clipboard"` no aparece ningún
+fichero en el destino y `wl-paste --list-types` muestra `image/png`. La verificación del look del cursor ampliado
 usa `YUKI_TEST_CURSOR_BOOST=3`. El histórico de la implementación y sus pruebas
 está en [`../bloques/11-protocolos-de-uso-diario.md`](../bloques/11-protocolos-de-uso-diario.md).

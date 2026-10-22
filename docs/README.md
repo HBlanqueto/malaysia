@@ -46,7 +46,8 @@ docs/
     ├── wayland-vs-macos.md       comparación con Wayland y qué probar en yuki
     ├── otto-y-forks.md           Otto y los forks de HBlanqueto: qué reutilizar
     ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
-    └── escalado-macos.md         puntos, backing store y downsample en macOS
+    ├── escalado-macos.md         puntos, backing store y downsample en macOS
+    └── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
@@ -92,9 +93,11 @@ docs/
    renderiza macOS su escritorio, cómo se compara con las opciones Wayland, qué
    se puede reutilizar de [Otto y sus forks](investigacion/otto-y-forks.md) y
    qué funciones de [GNOME](investigacion/gnome.md) sirven de referencia
-   (incluido el debate portal propio frente a `xdg-desktop-portal-gtk`) y cómo
+   (incluido el debate portal propio frente a `xdg-desktop-portal-gtk`), cómo
    separa macOS puntos, backing store y píxeles de panel
-   ([escalado](investigacion/escalado-macos.md)).
+   ([escalado](investigacion/escalado-macos.md)) y cómo ponen una captura en el
+   portapapeles Otto, GNOME y macOS
+   ([portapapeles](investigacion/portapapeles-capturas.md)).
 
 ## Estado actual en una línea
 

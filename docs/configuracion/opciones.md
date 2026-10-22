@@ -87,7 +87,7 @@ Flujo, atajos y overlay: [`../arquitectura/capturas.md`](../arquitectura/captura
 |---|---|---|---|---|
 | `screenshot.show_pointer` | bool | `false` | **activa** | captura de pantalla/región (las de ventana nunca lo llevan) |
 | `screenshot.show_thumbnail` | bool | `true` | pendiente | miniatura flotante |
-| `screenshot.target` | `"desktop"` \| `"clipboard"` \| `"preview"` \| `"mail"` \| `"messages"` \| `"other"` | `"desktop"` | datos | destino (hoy siempre el Escritorio) |
+| `screenshot.target` | `"desktop"` \| `"clipboard"` \| `"preview"` \| `"mail"` \| `"messages"` \| `"other"` | `"desktop"` | **activa** (`desktop`/`clipboard`); el resto cae al Escritorio | destino: fichero o `image/png` en el portapapeles |
 | `screenshot.location` | string (ruta) o ausente | — | datos | carpeta propia para `target = "other"` |
 | `screenshot.type` | `"png"` \| `"jpg"` \| `"heif"` \| `"tiff"` \| `"pdf"` | `"png"` | datos | formato (hoy siempre PNG) |
 | `screenshot.include_date` | bool | `true` | datos | fecha y hora en el nombre |
@@ -101,10 +101,12 @@ siguen la app Captura ("Show Mouse Pointer", "Show Floating Thumbnail", "Save to
 "Timer", "Remember Last Selection") y `com.apple.screencapture` (`type`,
 `location`, `include-date`, `disable-shadow`).
 
-Estado: `show_pointer` ya se aplica. El resto se lee y valida, pero el flujo actual
-sigue guardando en el Escritorio, en PNG y con fecha; `target = "clipboard"`,
-miniatura, temporizador, formatos y sombra se conectarán en las siguientes
-pasadas. Las capturas de ventana nunca incluyen el puntero.
+Estado: `show_pointer` y `target = "clipboard"` ya se aplican. El resto se lee
+y valida, pero el flujo actual sigue guardando en el Escritorio, en PNG y con
+fecha; `preview`/`mail`/`messages`/`other`, miniatura, temporizador, formatos y
+sombra se conectarán en las siguientes pasadas. Las capturas de ventana nunca
+incluyen el puntero. El portapapeles es `image/png` y lo sirve el compositor;
+ver [`../investigacion/portapapeles-capturas.md`](../investigacion/portapapeles-capturas.md).
 
 ## `wallpaper` — wallpapers del sistema (System Settings → Wallpaper)
 

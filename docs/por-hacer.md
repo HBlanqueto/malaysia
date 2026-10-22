@@ -52,8 +52,9 @@ shell; ver `bloques/09-escala-fraccional.md`.
    `ext-output-image-capture-source-v1`,
    `ext-foreign-toplevel-image-capture-source-v1` y
    `ext-image-copy-capture-v1`) y las capturas macOS con `screenshot.domain`
-   están hechos. Faltan la miniatura, el portapapeles y la app de
-   `Shift+Super+5`. Ver `bloques/11-protocolos-de-uso-diario.md`.
+   están hechos (incluido `target = "clipboard"`). Faltan la miniatura,
+   `Control` al vuelo y la app de `Shift+Super+5`. Ver
+   `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** Primero `Settings` /
    `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la
    captura del Bloque 11 y PipeWire. GTK sigue sirviendo FileChooser, Print y

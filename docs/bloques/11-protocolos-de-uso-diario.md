@@ -74,9 +74,10 @@ protocolos y la captura.
     la app Captura y `com.apple.screencapture` (`show_pointer`, `target`,
     `type`, `include_date`, `disable_shadow`, `timer`, `show_thumbnail`,
     `remember_selection`, `location`). Defaults macOS: puntero oculto,
-    Escritorio, PNG, fecha. `show_pointer` ya se aplica en salida/región; las
-    demás se leen y validan pero el flujo actual sigue guardando en el
-    Escritorio en PNG con fecha.
+    Escritorio, PNG, fecha. `show_pointer` ya se aplica en salida/región y
+    `target = "clipboard"` copia `image/png` al portapapeles (el compositor es
+    el dueño y sirve los bytes); las demás se leen y validan pero el flujo
+    actual sigue guardando en el Escritorio en PNG con fecha.
   - Para pruebas, `YUKI_TEST_SCREENSHOT=1` captura la ventana enfocada al
     mapear la primera ventana, `YUKI_TEST_SCREENSHOT=region` captura un
     rectángulo fijo (100,100 300×200) y `YUKI_SCREENSHOT_DIR` redirige el
@@ -86,8 +87,9 @@ protocolos y la captura.
 
 - El portal `Screenshot`/`ScreenCast` del Bloque 12 sobre esta captura.
 - Del flujo macOS faltan: la app de `Shift+Super+5` (temporizador, opciones,
-  destino, miniatura flotante), copiar al portapapeles con `Control`, mover la
-  selección con Espacio mientras se arrastra y excluir la sombra con `Option`.
+  destino, miniatura flotante), copiar al portapapeles con `Control` al vuelo,
+  mover la selección con Espacio mientras se arrastra y excluir la sombra con
+  `Option`. El destino `clipboard` ya está en `screenshot.domain`.
   El puntero ya se puede omitir con `screenshot.show_pointer` (default `false`,
   como macOS) y las demás opciones de `screenshot.domain` quedan reservadas.
 - Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.

@@ -355,6 +355,9 @@ de Otto es solo referencia.
 | `components/xdg-desktop-portal-otto/src/portal/interface.rs` | 934 | 0 | 0 | **Portable** como capa D-Bus/PipeWire; habla con `org.otto.ScreenCast`, que Yuki tendría que implementar. |
 | `src/state/kde_appmenu.rs` | 143 | 0 | 0 | Extra portable: `org_kde_kwin_appmenu` para el menú global. |
 
+Para el portapapeles de capturas (qué hacen Otto, GNOME y macOS) ver
+[`portapapeles-capturas.md`](portapapeles-capturas.md).
+
 Otto captura con `wlr-screencopy`, atado a su renderer Skia. Yuki eligió
 `ext-image-copy-capture-v1` + `ext-image-capture-source-v1` en el roadmap
 (implementados en el Bloque 11). De Otto no se copia la captura; sí la parte PipeWire: el pool y la

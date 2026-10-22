@@ -166,6 +166,7 @@ instala los backends.
 |---|---|---|---|---|
 | FileChooser, AppChooser, Print, Notification, Access | Sí | No (usa GTK) | Parcial | GTK |
 | Settings / apariencia | Sí, desde GSettings | No | Sí, desde GNOME | **propio** |
+| Portapapeles de capturas | Sí (`St.Clipboard` + `MetaSelection`) | No | Sí | **propio** (ver [`portapapeles-capturas.md`](portapapeles-capturas.md)) |
 | Screenshot | No | Sí | Sí | **propio** (Bloque 11) |
 | ScreenCast | No | Sí | Sí | **propio** (Bloque 11) |
 | Inhibit | Sí (limitado) | No | Sí | propio o GTK |
