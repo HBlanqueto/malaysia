@@ -43,6 +43,14 @@ cmd_setup() {
     [[ -f "$units/yuki-session.target" ]] || die "no encuentro las units en $units"
 
     info "enlazando las units de la shell…"
+    local user_units="$HOME/.config/systemd/user"
+    # `enable` pins each instance to the store path of the template it found.
+    # After a rebuild that path is gone and the old links make the units "bad",
+    # so `enable` fails. Drop them (and their wants links) before re-linking.
+    for unit in yuki-shell@wallpaper.service yuki-shell@menubar.service yuki-shell@dock.service; do
+        rm -f "$user_units/$unit" "$user_units/yuki-session.target.wants/$unit"
+    done
+    systemctl --user daemon-reload
     systemctl --user link --force "$units/yuki-session.target"
     systemctl --user link --force "$units/yuki-shell@.service"
     systemctl --user daemon-reload
