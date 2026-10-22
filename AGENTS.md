@@ -137,9 +137,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Bloque 12 planificado:** portales (`xdg-desktop-portal-yuki`) y servicios
   de escritorio (notificaciones, polkit, keyring, AT-SPI); depende de la
   captura del Bloque 11. El plan corto vive en `docs/por-hacer.md`.
-- **Bloque 9 parcial:** `State::scale`, `display.scale` persistente y el
-  redondeo floor/ceil (ADR 0004) hechos; faltan la aceptación en panel real y
-  la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.
+- **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el
+  redondeo floor/ceil (ADR 0004), aceptados en panel real a 1.0/1.25/1.5.
+  Falta la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.
 
 ## Cómo compilar y probar
 

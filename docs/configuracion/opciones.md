@@ -15,6 +15,7 @@ directorios — preferencias y estado:
 ├── appearance.domain
 ├── display.domain
 ├── window.domain
+├── screenshot.domain
 ├── dock.domain
 ├── menubar.domain
 ├── lock.domain
@@ -77,6 +78,31 @@ las ventanas; `"force_client"` no dibuja ninguno.
 
 `double_click_titlebar` usa las palabras de macOS: "**Fill / Minimize / Zoom / No
 Action**".
+
+## `screenshot` — capturas (app Captura; macOS `com.apple.screencapture`)
+
+| Opción | Tipo | Default | Estado | Consumida por |
+|---|---|---|---|---|
+| `screenshot.show_pointer` | bool | `false` | **activa** | captura de pantalla/región (las de ventana nunca lo llevan) |
+| `screenshot.show_thumbnail` | bool | `true` | pendiente | miniatura flotante |
+| `screenshot.target` | `"desktop"` \| `"clipboard"` \| `"preview"` \| `"mail"` \| `"messages"` \| `"other"` | `"desktop"` | datos | destino (hoy siempre el Escritorio) |
+| `screenshot.location` | string (ruta) o ausente | — | datos | carpeta propia para `target = "other"` |
+| `screenshot.type` | `"png"` \| `"jpg"` \| `"heif"` \| `"tiff"` \| `"pdf"` | `"png"` | datos | formato (hoy siempre PNG) |
+| `screenshot.include_date` | bool | `true` | datos | fecha y hora en el nombre |
+| `screenshot.disable_shadow` | bool | `false` | datos | sombra de ventana en la captura |
+| `screenshot.timer` | entero (segundos) | `0` | datos | temporizador (0 = ninguno, 5, 10) |
+| `screenshot.remember_selection` | bool | `false` | datos | recordar la última región/ventana |
+
+Los defaults son los de macOS: puntero **oculto**, guardar en el **Escritorio** en
+**PNG** con fecha, miniatura flotante **sí** y sombra de ventana **sí**. Los nombres
+siguen la app Captura ("Show Mouse Pointer", "Show Floating Thumbnail", "Save to",
+"Timer", "Remember Last Selection") y `com.apple.screencapture` (`type`,
+`location`, `include-date`, `disable-shadow`).
+
+Estado: `show_pointer` ya se aplica. El resto se lee y valida, pero el flujo actual
+sigue guardando en el Escritorio, en PNG y con fecha; `target = "clipboard"`,
+miniatura, temporizador, formatos y sombra se conectarán en las siguientes
+pasadas. Las capturas de ventana nunca incluyen el puntero.
 
 ## `wallpaper` — wallpapers del sistema (System Settings → Wallpaper)
 
@@ -228,6 +254,19 @@ titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 6
+```
+
+```toml
+# ~/.config/yuki/screenshot.domain
+show_pointer = false            # macOS lo oculta por defecto
+show_thumbnail = true
+target = "desktop"              # desktop | clipboard | preview | mail | messages | other
+# location = "/home/yo/Capturas"  # para target = "other"
+type = "png"                    # png | jpg | heif | tiff | pdf
+include_date = true
+disable_shadow = false
+timer = 0                       # 0, 5 o 10
+remember_selection = false
 ```
 
 ```toml

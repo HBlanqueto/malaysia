@@ -32,14 +32,13 @@ ejecución y se apuntan las pruebas que faltan.
 `foot` sigue siendo el cliente guionizable de `dev.sh smoke` porque negocia
 server-side; `wezterm` es el cliente manual de aceptación.
 
-## Ahora: cerrar Bloque 9
+## Bloque 9 — cerrado
 
-Hecho: `State::scale`, `YUKI_SCALE`, `wl_output` + fractional-scale, render,
-cursor y viewporter de la shell; ver `bloques/09-escala-fraccional.md`.
+Aceptado en panel real a 1.0, 1.25 y 1.5 (2026-10-21). Hecho: `State::scale`,
+`YUKI_SCALE`, `wl_output` + fractional-scale, render, cursor y viewporter de la
+shell; ver `bloques/09-escala-fraccional.md`.
 
-Falta:
-
-- [ ] Aceptación en panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
+- [x] Aceptación en panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
 - [x] `display.scale` persistente en `display.domain` (`YUKI_SCALE` queda como
       override de desarrollo).
 - [ ] Escala por salida/monitor cuando 8b introduzca varios outputs.
@@ -52,8 +51,9 @@ Falta:
    `relative-pointer` y la captura (salida y ventana:
    `ext-output-image-capture-source-v1`,
    `ext-foreign-toplevel-image-capture-source-v1` y
-   `ext-image-copy-capture-v1`) ya están hechos. Ver
-   `bloques/11-protocolos-de-uso-diario.md`.
+   `ext-image-copy-capture-v1`) y las capturas macOS con `screenshot.domain`
+   están hechos. Faltan la miniatura, el portapapeles y la app de
+   `Shift+Super+5`. Ver `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** Primero `Settings` /
    `org.freedesktop.appearance`; después `Screenshot` y `ScreenCast` sobre la
    captura del Bloque 11 y PipeWire. GTK sigue sirviendo FileChooser, Print y

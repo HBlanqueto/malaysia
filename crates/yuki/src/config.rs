@@ -132,6 +132,8 @@ pub struct Config {
     /// Display scale (System Settings → Displays). Yuki-specific: macOS has no
     /// fractional-scale preference, it picks a mode per display.
     pub display: DisplayConfig,
+    /// Screenshots (macOS Screenshot app and `com.apple.screencapture`).
+    pub screenshot: ScreenshotConfig,
     /// The lock screen and automatic locking.
     pub lock: LockConfig,
     /// Compositor-side surface effects (inner border, shadow, blur). ADR 0020.
@@ -170,6 +172,90 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         Self { scale: 1.0 }
     }
+}
+
+/// What the screenshot hotkeys do with the capture.
+///
+/// The words follow the macOS Screenshot app ("Save to: Desktop / Clipboard /
+/// Mail / ...") and `com.apple.screencapture` (`type`, `location`,
+/// `include-date`, `disable-shadow`). The defaults are macOS's: save to the
+/// Desktop as PNG with the date, pointer hidden, floating thumbnail shown.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ScreenshotConfig {
+    /// Show the mouse pointer in full-screen and region captures. macOS hides
+    /// it by default. Window captures never include it.
+    pub show_pointer: bool,
+    /// Show the floating thumbnail after a capture (Screenshot app option).
+    pub show_thumbnail: bool,
+    /// Where the capture goes ("Save to").
+    pub target: ScreenshotTarget,
+    /// A custom folder for `target = "other"` or to override the desktop.
+    pub location: Option<PathBuf>,
+    /// File type (`com.apple.screencapture type`).
+    #[serde(rename = "type")]
+    pub format: ScreenshotFormat,
+    /// Include the date and time in the file name (`include-date`).
+    pub include_date: bool,
+    /// Leave the window's shadow out of window captures (`disable-shadow`).
+    pub disable_shadow: bool,
+    /// Seconds to wait before capturing (Screenshot app "Timer"): 0, 5 or 10.
+    pub timer: u32,
+    /// Remember the last region or window selection (Screenshot app).
+    pub remember_selection: bool,
+}
+
+impl Default for ScreenshotConfig {
+    fn default() -> Self {
+        Self {
+            show_pointer: false,
+            show_thumbnail: true,
+            target: ScreenshotTarget::Desktop,
+            location: None,
+            format: ScreenshotFormat::Png,
+            include_date: true,
+            disable_shadow: false,
+            timer: 0,
+            remember_selection: false,
+        }
+    }
+}
+
+/// The Screenshot app's "Save to" choices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreenshotTarget {
+    /// The XDG Desktop directory (macOS's default).
+    #[default]
+    Desktop,
+    /// Copy to the clipboard instead of writing a file.
+    Clipboard,
+    /// Open the capture in Preview.
+    Preview,
+    /// Attach it to a new Mail message.
+    Mail,
+    /// Attach it to a new Messages conversation.
+    Messages,
+    /// The folder in [`ScreenshotConfig::location`].
+    Other,
+}
+
+/// `com.apple.screencapture type`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScreenshotFormat {
+    /// PNG (macOS's default).
+    #[default]
+    Png,
+    /// JPEG; `jpg` is what macOS writes in `type`, `jpeg` is accepted too.
+    #[serde(rename = "jpg", alias = "jpeg")]
+    Jpg,
+    /// HEIF.
+    Heif,
+    /// TIFF.
+    Tiff,
+    /// PDF.
+    Pdf,
 }
 
 /// Lock screen and idle options.
@@ -416,7 +502,8 @@ impl Config {
     ///
     /// Like macOS, the configuration is split **one `.domain` file per domain**
     /// instead of a single monolithic file. Preference domains (`appearance`,
-    /// `window`, `shell`, `dock`, `menubar`, `effects`, `debug`) load from
+    /// `window`, `dock`, `menubar`, `screenshot`, `display`, `lock`, `effects`,
+    /// `debug`) load from
     /// `~/.config/yuki/` — the `~/Library/Preferences` equivalent. The wallpaper
     /// domain — catalog *and* current selection — loads from
     /// `~/.local/share/yuki/`, the `~/Library/Application Support` equivalent,
@@ -438,6 +525,7 @@ impl Config {
             menubar: load_section(config_dir, "menubar"),
             wallpaper: load_section(data_dir, "wallpaper"),
             display: load_section(config_dir, "display"),
+            screenshot: load_section(config_dir, "screenshot"),
             lock: load_section(config_dir, "lock"),
             effects: load_section(config_dir, "effects"),
             debug: load_section(config_dir, "debug"),
@@ -526,6 +614,11 @@ mod tests {
         std::fs::write(config_dir.join("display.domain"), "scale = 1.5\n")
             .expect("write display.domain");
         std::fs::write(
+            config_dir.join("screenshot.domain"),
+            "show_pointer = true\nshow_thumbnail = false\ntarget = \"clipboard\"\nlocation = \"/tmp/shots\"\ntype = \"jpg\"\ninclude_date = false\ndisable_shadow = true\ntimer = 5\nremember_selection = true\n",
+        )
+        .expect("write screenshot.domain");
+        std::fs::write(
             data_dir.join("wallpaper.domain"),
             "dir = \"/run/current-system/sw/share/wallpapers/solid-colors\"\nscale = \"fit\"\n\n[desktops]\ndefault = \"file:///w/Solid Mint.png\"\n",
         )
@@ -541,6 +634,18 @@ mod tests {
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(!config.effects.blur.enabled);
         assert_eq!(config.display.scale, 1.5);
+        assert!(config.screenshot.show_pointer);
+        assert!(!config.screenshot.show_thumbnail);
+        assert_eq!(config.screenshot.target, ScreenshotTarget::Clipboard);
+        assert_eq!(
+            config.screenshot.location.as_deref(),
+            Some(std::path::Path::new("/tmp/shots"))
+        );
+        assert_eq!(config.screenshot.format, ScreenshotFormat::Jpg);
+        assert!(!config.screenshot.include_date);
+        assert!(config.screenshot.disable_shadow);
+        assert_eq!(config.screenshot.timer, 5);
+        assert!(config.screenshot.remember_selection);
 
         let _ = std::fs::remove_dir_all(&base);
     }
@@ -564,6 +669,14 @@ mod tests {
         assert!(!config.effects.shadow.enabled);
         assert!(!config.effects.blur.enabled);
         assert_eq!(config.display.scale, 1.0);
+        assert!(!config.screenshot.show_pointer);
+        assert!(config.screenshot.show_thumbnail);
+        assert_eq!(config.screenshot.target, ScreenshotTarget::Desktop);
+        assert_eq!(config.screenshot.format, ScreenshotFormat::Png);
+        assert!(config.screenshot.include_date);
+        assert!(!config.screenshot.disable_shadow);
+        assert_eq!(config.screenshot.timer, 0);
+        assert!(!config.screenshot.remember_selection);
         assert_eq!(config.lock.idle_timeout_seconds, 300);
     }
 

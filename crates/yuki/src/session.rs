@@ -769,6 +769,7 @@ pub(crate) fn build_output_elements(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
+    include_cursor: bool,
 ) -> Vec<OutputRenderElement<GlesRenderer>> {
     let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
     let scale = state.scale.fractional_scale();
@@ -780,7 +781,9 @@ pub(crate) fn build_output_elements(
         reset_dead_cursor(state);
         // Front-to-back (smithay's `render_output` order): the cursor is on
         // top, the lock surfaces behind it.
-        append_cursor(renderer, &mut elements, state, cursor);
+        if include_cursor {
+            append_cursor(renderer, &mut elements, state, cursor);
+        }
         for lock_surface in &state.lock_surfaces {
             if !lock_surface.alive() {
                 continue;
@@ -807,7 +810,9 @@ pub(crate) fn build_output_elements(
         // every window), then popups, then windows, then the Background /
         // Bottom layers (the wallpaper). See `layers.rs` and ADR 0023.
         reset_dead_cursor(state);
-        append_cursor(renderer, &mut elements, state, cursor);
+        if include_cursor {
+            append_cursor(renderer, &mut elements, state, cursor);
+        }
         append_screenshot_overlay(state, &mut elements);
         append_layers(state, renderer, &mut elements, LayerSide::Front);
         for (id, _parent, rect) in state.windows.iter_popups() {
@@ -883,7 +888,7 @@ pub(crate) fn build_window_elements(
 pub(crate) fn save_screenshot(
     state: &mut State,
     renderer: &mut GlesRenderer,
-    output_elements: &[OutputRenderElement<GlesRenderer>],
+    cursor: &Cursors,
     output_size: Size<i32, Physical>,
     transform: Transform,
     request: crate::state::ScreenshotRequest,
@@ -892,23 +897,37 @@ pub(crate) fn save_screenshot(
     match request {
         crate::state::ScreenshotRequest::Focused => match state.focused_window() {
             Some(id) => capture_window(state, renderer, id, transform),
-            None => capture_output(renderer, output_elements, output_size, transform, scale),
+            None => capture_output(state, renderer, cursor, output_size, transform, scale),
         },
         crate::state::ScreenshotRequest::Output => {
-            capture_output(renderer, output_elements, output_size, transform, scale)
+            capture_output(state, renderer, cursor, output_size, transform, scale)
         }
         crate::state::ScreenshotRequest::Window(id) => {
             capture_window(state, renderer, id, transform)
         }
-        crate::state::ScreenshotRequest::Region(region) => crate::capture::screenshot_region(
-            renderer,
-            output_elements,
-            output_size,
-            transform,
-            region,
-            scale,
-        ),
+        crate::state::ScreenshotRequest::Region(region) => {
+            let elements = screenshot_elements(state, renderer, cursor);
+            crate::capture::screenshot_region(
+                renderer,
+                &elements,
+                output_size,
+                transform,
+                region,
+                scale,
+            )
+        }
     }
+}
+
+/// The output elements a screenshot should draw: the same scene as the frame,
+/// with the pointer following `screenshot.show_pointer` (macOS hides it).
+fn screenshot_elements(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    let include_cursor = state.config.screenshot.show_pointer;
+    build_output_elements(state, renderer, cursor, include_cursor)
 }
 
 /// Renders one window (its client content) into a screenshot.
@@ -942,15 +961,17 @@ fn capture_window(
 
 /// Renders the whole output into a screenshot.
 fn capture_output(
+    state: &mut State,
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    cursor: &Cursors,
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
 ) -> std::io::Result<std::path::PathBuf> {
+    let elements = screenshot_elements(state, renderer, cursor);
     crate::capture::screenshot(
         renderer,
-        elements,
+        &elements,
         size,
         transform,
         scale,
@@ -985,7 +1006,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     let (damage, sync) = {
         let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
 
-        let elements = build_output_elements(state, renderer, cursor);
+        let elements = build_output_elements(state, renderer, cursor, true);
 
         state.init_capture_dma(renderer);
 
@@ -1013,7 +1034,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             log_screenshot(save_screenshot(
                 state,
                 renderer,
-                &elements,
+                cursor,
                 capture_size,
                 winit_render_transform(),
                 request,

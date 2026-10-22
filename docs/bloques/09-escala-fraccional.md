@@ -1,7 +1,8 @@
 # Bloque 9 — Escala fraccional
 
-Estado: **parcial.** La base de escala ya no es un literal global; falta la
-aceptación en el panel real y la escala por salida de 8b.
+Estado: **cerrado.** Aceptado en el panel real a 1.0, 1.25 y 1.5 el
+2026-10-21. La escala por salida/monitor queda para 8b, cuando existan varios
+outputs.
 
 ## Implementado
 
@@ -28,10 +29,9 @@ aceptación en el panel real y la escala por salida de 8b.
 
 ## Pendiente
 
-- Aceptación en el panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
 - Escala por salida y por monitor cuando 8b introduzca varios outputs.
-- Probar clientes que no negocian fractional-scale y clientes con
-  `viewporter` propio.
+- (Los clientes sin fractional-scale y con viewporter propio se probaron en
+  anidado a 1.5; ver la verificación de abajo.)
 
 ## Hecho después de la primera pasada
 
@@ -72,7 +72,8 @@ shell. El puntero debe caer en el mismo píxel que se ve y la captura por
 - `smoke`, `block4`, `move` y `decoration` a escala 1: PASS.
 - `./dev.sh check` y `nix build .#default`: PASS.
 
-Falta la comprobación visual en el panel real (nitidez, cursor y alineación).
+Aceptación en panel real (2026-10-21): `wezterm`, shell y puntero a 1.0,
+1.25 y 1.5; nitidez, alineación y cursor correctos.
 
 ## Arreglado al verificar la aceptación (2026-10-21)
 

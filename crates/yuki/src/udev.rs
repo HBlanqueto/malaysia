@@ -525,6 +525,7 @@ impl Udev {
             &mut self.state,
             &mut self.renderer,
             &self.cursor,
+            true,
         );
         self.state.init_capture_dma(&self.renderer);
         if self.capture_requested {
@@ -553,7 +554,7 @@ impl Udev {
             crate::session::log_screenshot(crate::session::save_screenshot(
                 &mut self.state,
                 &mut self.renderer,
-                &elements,
+                &self.cursor,
                 size,
                 Transform::Flipped180,
                 request,
