@@ -4,7 +4,7 @@ Estado: **aceptado** (2026-10-22).
 
 ## Contexto
 
-El diseño del escritorio vive en `/home/humbe/dotfiles/kits/neptunia`
+El diseño del escritorio vive en `crates/yuki-design/neptunia`
 (`tokens.json`, `components.json`, `demo.slint` y las salidas de
 `generated/`). Neptunia es un sistema de diseño **como datos**, no un toolkit
 de runtime: define colores (light, dark, dark-tint), radios, espacios,
@@ -30,11 +30,9 @@ mientras Yuki se construye.
    compositor-side (ADR 0020); el texto de la titlebar usa `cosmic-text` en el
    compositor. `celestial-kit` sigue siendo el toolkit de la shell y de las
    apps, y el compositor no lo usa (ADR 0024): comparten shaders, no contexto.
-4. **Snapshot y sincronización.** Por ahora los valores aprobados se copian en
-   `yuki-design` y se mantienen sincronizados a mano con los JSON (no hay
-   generador todavía). Un cambio de Neptunia se revisa y se traslada; el
-   objetivo es generar las constantes desde los JSON para que nadie escriba un
-   color a mano.
+4. **La copia vive en `crates/yuki-design/neptunia` y `build.rs` genera las
+   constantes; ya no hay sincronización a mano.** Los cambios se hacen en los
+   JSON de esa copia (y, si se quiere, se devuelven a dotfiles a mano).
 5. **Otto es referencia, no dependencia.** Se leen sus ideas (ventana, shell,
    launcher, ajustes, portal); **no se adopta Skia** por peso y porque Yuki ya
    tiene GLES + `grade-graphics` + `celestial-kit`. Si algún día se copia
@@ -56,7 +54,7 @@ mientras Yuki se construye.
 
 ## Referencias
 
-- `kits/neptunia/README.md`, `tokens.json`, `components.json`.
+- `crates/yuki-design/neptunia/README.md`, `tokens.json`, `components.json`.
 - [`0011`](0011-los-valores-de-diseno-son-constantes-rust.md) — los valores
   viven en `yuki-design`.
 - [`0020`](0020-politica-de-diseno-y-unificacion.md) — chrome compositor-side.

@@ -9,8 +9,9 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
 
 1. **Neptunia es el diseño** (ADR 0032). Los colores, radios, espacios,
    tipografía, sombras y medidas de componentes salen de
-   `~/dotfiles/kits/neptunia` (`tokens.json` + `components.json`); `yuki-design`
-   guarda la copia aprobada. Nadie inventa un color o una medida en el código.
+   `crates/yuki-design/neptunia/` (`tokens.json` + `components.json`);
+   `build.rs` genera las constantes de `yuki-design`. Nadie inventa un color o
+   una medida en el código.
 2. **Chrome separado, efectos para todos** (ADR 0020). GTK/Libadwaita conservan
    su headerbar; el resto de apps reciben el chrome del compositor. Los
    efectos de superficie (borde interior, sombra, blur) son del compositor y

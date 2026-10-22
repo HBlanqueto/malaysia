@@ -148,13 +148,13 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback). Siguen
   `Screenshot`/`ScreenCast` y el Bloque 12b (notificaciones, polkit, keyring,
   AT-SPI). Ver `docs/bloques/12-portales-y-servicios.md`.
-- **Diseño:** **Neptunia** (`~/dotfiles/kits/neptunia`, `tokens.json` +
-  `components.json`) es la fuente por defecto del escritorio (ADR 0032):
-  titlebar **arriba** de 32 px para ventanas SSD, semáforos de 12, radio 16,
-  tema claro, y modos de color `neutral`/`accent`/`wallpaper` (tinte de la
-  titlebar y semáforos). Los
-  valores se copian a `yuki-design`; no inventes colores/medidas. Ver
-  `docs/arquitectura/ventanas.md`.
+- **Diseño:** **Neptunia** vive en `crates/yuki-design/neptunia/`
+  (`tokens.json` + `components.json`) y es la fuente por defecto del escritorio
+  (ADR 0032): titlebar **arriba** de 32 px para ventanas SSD, semáforos de 12,
+  radio 16, tema claro, y modos de color `neutral`/`accent`/`wallpaper` (tinte
+  de la titlebar y semáforos). `build.rs` genera las constantes; **para cambiar
+  un valor de diseño, edita `neptunia/*.json`, nunca `src/`**. No inventes
+  colores/medidas. Ver `docs/arquitectura/ventanas.md`.
 - **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el
   redondeo floor/ceil (ADR 0004), aceptados en panel real a 1.0/1.25/1.5.
   Falta la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.
