@@ -351,6 +351,8 @@ dependencies = [
  "grade-graphics",
  "khronos-egl",
  "thiserror 2.0.20",
+ "tracing",
+ "yuki-design",
  "zeroize",
 ]
 
@@ -3314,6 +3316,7 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-subscriber",
+ "unicode-segmentation",
  "xcursor",
  "xkbcommon 0.9.0",
  "yuki-design",

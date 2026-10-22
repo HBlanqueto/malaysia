@@ -7,8 +7,9 @@
 //! come through here.
 
 use std::collections::HashMap;
+use std::sync::Once;
 
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache};
+use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::{
@@ -16,6 +17,7 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
+use unicode_segmentation::UnicodeSegmentation;
 use yuki_design::{
     ButtonKind, DARK, FocusPair, Font, LIGHT, Palette, Rgba, TITLEBAR,
     TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, TitlebarPosition, WINDOW_TINT_ACCENT,
@@ -304,18 +306,30 @@ struct TextEngine {
     font_system: FontSystem,
     cache: SwashCache,
     buffer: Buffer,
-    family: String,
+    family: Family<'static>,
+}
+
+static MISSING_FAMILY_WARNING: Once = Once::new();
+
+fn resolve_family(font_system: &mut FontSystem, family: &'static str) -> Family<'static> {
+    let found = font_system
+        .db()
+        .faces()
+        .any(|face| face.families.iter().any(|(name, _)| name == family));
+    if found {
+        Family::Name(family)
+    } else {
+        MISSING_FAMILY_WARNING.call_once(|| {
+            tracing::warn!(family, "font family not found; falling back to sans-serif");
+        });
+        Family::SansSerif
+    }
 }
 
 impl TextEngine {
     fn new() -> Self {
         let mut font_system = FontSystem::new();
-        let family = font_system
-            .db_mut()
-            .faces()
-            .find(|face| !face.monospaced && !face.post_script_name.contains("Emoji"))
-            .and_then(|face| face.families.first().map(|(name, _)| name.clone()))
-            .unwrap_or_else(|| "sans-serif".to_string());
+        let family = resolve_family(&mut font_system, TITLEBAR.font.family);
         let cache = SwashCache::new();
         let buffer = Buffer::new(&mut font_system, Metrics::new(13.0, 17.0));
         Self {
@@ -375,8 +389,9 @@ impl TextEngine {
         } else {
             palette.title.unfocused
         };
-        let buttons_width = margin * 2 + 3 * diameter + 2 * gap;
-        let max_width = (w - buttons_width).max(w / 2);
+        let group_width = 3 * diameter + 2 * gap;
+        let reserve = margin + group_width + (12.0 * scale).round() as i32;
+        let max_width = (w - 2 * reserve).max(1);
         self.draw_title(
             &mut pixels,
             w,
@@ -386,11 +401,58 @@ impl TextEngine {
             TITLEBAR.font,
             scale,
             max_width,
+            reserve,
         );
 
         let line = (scale.round() as i32).max(1);
         fill_rect(&mut pixels, w, h, 0, h - line, w, line, palette.hairline);
         (pixels, w, h)
+    }
+
+    fn shape(&mut self, text: &str, font: Font, scale: f64, max_width: Option<f32>) {
+        let size = (f64::from(font.size) * scale).max(1.0) as f32;
+        self.buffer.set_metrics(Metrics::new(size, size * 1.3));
+        self.buffer.set_size(max_width, None);
+        self.buffer.set_wrap(Wrap::None);
+        self.buffer.set_text(
+            text,
+            &Attrs::new().family(self.family).weight(Weight(font.weight)),
+            Shaping::Advanced,
+            None,
+        );
+        self.buffer.shape_until_scroll(&mut self.font_system, false);
+    }
+
+    fn measured_width(&self) -> f32 {
+        self.buffer
+            .layout_runs()
+            .flat_map(|run| run.glyphs.iter())
+            .map(|glyph| glyph.x + glyph.w)
+            .fold(0.0f32, f32::max)
+    }
+
+    fn fit_title(&mut self, title: &str, font: Font, scale: f64, max_width: f32) -> String {
+        self.shape(title, font, scale, None);
+        if self.measured_width() <= max_width {
+            return title.to_string();
+        }
+        let mut boundaries = title
+            .grapheme_indices(true)
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        boundaries.push(title.len());
+        let (mut low, mut high) = (0, boundaries.len() - 1);
+        while low < high {
+            let mid = (low + high).div_ceil(2);
+            let candidate = format!("{}…", &title[..boundaries[mid]]);
+            self.shape(&candidate, font, scale, None);
+            if self.measured_width() <= max_width {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        format!("{}…", &title[..boundaries[low]])
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -404,34 +466,21 @@ impl TextEngine {
         font: Font,
         scale: f64,
         max_width: i32,
+        reserve: i32,
     ) {
         if title.is_empty() {
             return;
         }
-        let size = (f64::from(font.size) * scale).max(1.0) as f32;
-        self.buffer.set_metrics(Metrics::new(size, size * 1.3));
-        self.buffer
-            .set_size(Some(f64::from(max_width) as f32), Some(h as f32));
-        self.buffer.set_text(
-            title,
-            &Attrs::new().family(Family::Name(&self.family)),
-            Shaping::Advanced,
-            None,
-        );
-        self.buffer.shape_until_scroll(&mut self.font_system, false);
+        let title = self.fit_title(title, font, scale, max_width as f32);
+        self.shape(&title, font, scale, Some(max_width as f32));
 
-        let mut text_width = 0.0f32;
+        let text_width = self.measured_width();
         let text_height = self
             .buffer
             .layout_runs()
             .map(|run| run.line_height)
             .fold(0.0f32, f32::max);
-        for run in self.buffer.layout_runs() {
-            for glyph in run.glyphs.iter() {
-                text_width = text_width.max(glyph.x + glyph.w);
-            }
-        }
-        let x = ((w as f32 - text_width) / 2.0).max(0.0);
+        let x = ((w as f32 - text_width) / 2.0).max(reserve as f32);
         let line_y = self
             .buffer
             .layout_runs()
@@ -439,10 +488,10 @@ impl TextEngine {
             .map_or(0.0, |run| run.line_y);
         let y = ((h as f32 - text_height) / 2.0).max(0.0) + line_y;
         let color = [
-            (color.r * 255.0) as u8,
-            (color.g * 255.0) as u8,
-            (color.b * 255.0) as u8,
-            (color.a * 255.0) as u8,
+            (color.r * 255.0).round() as u8,
+            (color.g * 255.0).round() as u8,
+            (color.b * 255.0).round() as u8,
+            (color.a * 255.0).round() as u8,
         ];
         for run in self.buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
@@ -571,17 +620,17 @@ fn blend(dst: &mut [u8], src: yuki_design::Rgba, coverage: f32) {
         src.b * a + (f32::from(dst[2]) / 255.0) * (1.0 - a),
     ];
     for (index, value) in out.iter().enumerate() {
-        dst[index] = (value * 255.0).clamp(0.0, 255.0) as u8;
+        dst[index] = (value * 255.0).round().clamp(0.0, 255.0) as u8;
     }
     dst[3] = 255;
 }
 
 fn rgba8(color: yuki_design::Rgba) -> [u8; 4] {
     [
-        (color.r * 255.0) as u8,
-        (color.g * 255.0) as u8,
-        (color.b * 255.0) as u8,
-        (color.a * 255.0) as u8,
+        (color.r * 255.0).round() as u8,
+        (color.g * 255.0).round() as u8,
+        (color.b * 255.0).round() as u8,
+        (color.a * 255.0).round() as u8,
     ]
 }
 
@@ -733,5 +782,45 @@ mod tests {
             button_at(outer(), insets(), Point::from((500.0, 100.0))),
             None
         );
+    }
+
+    #[test]
+    fn a_long_title_is_one_truncated_line_that_keeps_the_reserve() {
+        let title = "W".repeat(300);
+        for scale in [1.0_f64, 1.5] {
+            let mut text = TextEngine::new();
+            let width = (800.0 * scale).round() as i32;
+            let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale).round() as i32;
+            let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
+            let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
+            let reserve = margin + 3 * diameter + 2 * gap + (12.0 * scale).round() as i32;
+            let max_width = width - 2 * reserve;
+
+            let fitted = text.fit_title(&title, TITLEBAR.font, scale, max_width as f32);
+            assert!(fitted.ends_with('…'), "scale {scale}: {fitted:?}");
+            assert!(!fitted.contains('\n'), "scale {scale}: title has a newline");
+
+            text.shape(&fitted, TITLEBAR.font, scale, Some(max_width as f32));
+            assert_eq!(
+                text.buffer.layout_runs().count(),
+                1,
+                "scale {scale}: title wrapped"
+            );
+            let text_width = text.measured_width();
+            assert!(
+                text_width <= max_width as f32,
+                "scale {scale}: text {text_width} exceeds {max_width}"
+            );
+            let x = ((width as f32 - text_width) / 2.0).max(reserve as f32);
+            assert!(
+                x >= reserve as f32 - 0.01,
+                "scale {scale}: left edge {x} invades the reserve {reserve}"
+            );
+            assert!(
+                x + text_width <= (width - reserve) as f32 + 0.01,
+                "scale {scale}: right edge {} invades the reserve",
+                x + text_width
+            );
+        }
     }
 }
