@@ -53,8 +53,8 @@ solo se dibujan sus superficies (y el cursor).
 - **Forma**: radio de ventana 16, semáforos de 12 con radio 4, titlebar de
   cliente **32 px** arriba. Los 44 px de `components.window` son la ventana de
   las apps propias de Neptunia, no el chrome de terceros.
-- **Tipografía**: Inter; el título usa la escala `headline` (13/600) y el
-  cuerpo de la shell 11–13 px según el componente.
+- **Tipografía**: Geist; el título usa la escala `headline` (13/600) y el
+  cuerpo de la shell es `body` (13 px, 400), 11–13 px según el componente.
 - **Sombras**: los valores de Neptunia están en `SHADOW`; el render de sombra y
   esquinas redondeadas aún no está conectado.
 - **Modos de color de ventana** (`appearance.window_color`):
