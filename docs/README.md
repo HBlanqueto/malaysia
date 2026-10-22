@@ -32,6 +32,7 @@ docs/
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
 │   ├── interfaz.md             mapa completo de la UI (diseño, shell, ventanas, capas)
+│   ├── neptunia.md             Neptunia vendorizado, build.rs y comprobaciones
 │   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
 │   ├── yuki-y-shell.svg       diagrama de la división de trabajo
 │   ├── modelo-de-procesos.md  distribución de procesos del shell (ADR 0023)
@@ -79,7 +80,9 @@ docs/
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
    de la interfaz: Neptunia, capas, shell, ventanas, capturas, cursor y
-   configuración. Empieza aquí si vas a tocar algo visual.
+   configuración. Empieza aquí si vas a tocar algo visual. El detalle del
+   [Neptunia vendorizado](arquitectura/neptunia.md), su `build.rs` y sus
+   comprobaciones está en su propia página.
 8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
    (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell

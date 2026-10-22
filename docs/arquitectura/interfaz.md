@@ -11,7 +11,7 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
    tipografía, sombras y medidas de componentes salen de
    `crates/yuki-design/neptunia/` (`tokens.json` + `components.json`);
    `build.rs` genera las constantes de `yuki-design`. Nadie inventa un color o
-   una medida en el código.
+   una medida en el código. Detalle en [`neptunia.md`](neptunia.md).
 2. **Chrome separado, efectos para todos** (ADR 0020). GTK/Libadwaita conservan
    su headerbar; el resto de apps reciben el chrome del compositor. Los
    efectos de superficie (borde interior, sombra, blur) son del compositor y
