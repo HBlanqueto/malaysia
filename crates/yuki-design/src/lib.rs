@@ -12,19 +12,15 @@
 //! documentation: lengths are logical pixels, font sizes are points, an
 //! exponent and opacities are unitless.
 //!
-//! # Where the accent came from
+//! # Where the values come from
 //!
-//! The accent is extracted from the host's somewm configuration, which is the
-//! desktop Yuki is being built on:
-//!
-//! - `~/.config/somewm/settings.json` selects it: `theme.accent = "blue"`.
-//! - `~/.config/somewm/themes/accents.lua` line 13 defines it, in the original
-//!   format of two lowercase `#rrggbb` hex strings:
-//!   `light = "#007aff"`, `dark = "#0a84ff"`.
-//!
-//! That file provides a light and a dark variant, so [`LIGHT`] and [`DARK`]
-//! each carry the accent that belongs to them. This is the only value in the
-//! module taken from the host rather than decided here.
+//! The desktop design is **Neptunia** (`~/dotfiles/kits/neptunia` in the
+//! author's setup): `tokens.json` holds colors, radii, spaces, typography and
+//! shadows; `components.json` holds component metrics. Its window is a 44 px
+//! top titlebar with 12 px traffic lights, a 16 px corner radius and the
+//! `light`/`dark` palettes copied below. The titlebar lives at the top by
+//! default. Until the Rust constants are generated from those JSON files, this
+//! module is the approved snapshot; keep them in sync (ADR 0032).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -142,8 +138,6 @@ pub struct TitlebarButtons {
     /// Buttons in order from the start of the titlebar; top to bottom when the
     /// titlebar is vertical.
     pub order: [Button; 3],
-    /// The color of every button when the window does not have focus.
-    pub unfocused: Rgba,
     /// Button diameter, in logical pixels.
     pub diameter: u32,
     /// Gap between adjacent buttons, in logical pixels.
@@ -216,44 +210,46 @@ pub struct Palette {
     pub text: FocusPair,
     /// The accent color.
     pub accent: Rgba,
+    /// The traffic lights when the window does not have focus. Neptunia uses a
+    /// different grey per theme, so it belongs to the palette, not the bar.
+    pub traffic_lights_inactive: Rgba,
 }
 
-/// The titlebar: a 32 logical pixel bar on the left, with macOS-style buttons.
+/// The titlebar: Neptunia's 44 px bar at the top, with 12 px traffic lights.
 pub const TITLEBAR: Titlebar = Titlebar {
-    position: TitlebarPosition::Left,
-    thickness: 32,
+    position: TitlebarPosition::Top,
+    thickness: 44,
     buttons: TitlebarButtons {
         order: [
             Button {
                 kind: ButtonKind::Close,
-                color: Rgba::rgb8(255, 95, 87),
+                color: Rgba::rgb8(0xe0, 0x62, 0x5d),
             },
             Button {
                 kind: ButtonKind::Minimize,
-                color: Rgba::rgb8(254, 188, 46),
+                color: Rgba::rgb8(0xd9, 0xa6, 0x3a),
             },
             Button {
                 kind: ButtonKind::Maximize,
-                color: Rgba::rgb8(40, 200, 64),
+                color: Rgba::rgb8(0x4f, 0xae, 0x5f),
             },
         ],
-        unfocused: Rgba::rgb8(142, 142, 147),
         diameter: 12,
         spacing: 8,
         margin_start: 16,
     },
     font: Font {
         family: "Inter",
-        size: 10,
+        size: 13,
         weight: FontWeight::Bold,
     },
-    rotation: TitleRotation::BottomToTop,
+    rotation: TitleRotation::Horizontal,
 };
 
-/// The window shape: a 12 logical pixel rounded superellipse.
+/// The window shape: Neptunia's 16 logical pixel rounded corner.
 pub const WINDOW: WindowStyle = WindowStyle {
-    corner_radius: 12,
-    superellipse_exponent: 5.0,
+    corner_radius: 16,
+    superellipse_exponent: 2.0,
 };
 
 /// The pointer scale while the user shakes the mouse to locate it, like
@@ -292,55 +288,72 @@ pub const TEXT: Font = Font {
 /// The window shadow, the same in both modes.
 pub const SHADOW: ShadowStyle = ShadowStyle {
     ambient: ShadowLayer {
-        blur: 40,
-        y_offset: 12,
+        blur: 48,
+        y_offset: 18,
         opacity: 0.18,
     },
     contact: ShadowLayer {
-        blur: 6,
-        y_offset: 2,
-        opacity: 0.28,
+        blur: 12,
+        y_offset: 4,
+        opacity: 0.08,
     },
     unfocused_scale: 0.5,
 };
 
-/// The light mode palette. Its inner line is absent.
+/// The light mode palette: Neptunia `light`.
 pub const LIGHT: Palette = Palette {
     titlebar_bg: FocusPair {
-        focused: Rgba::rgb8(236, 236, 236),
-        unfocused: Rgba::rgb8(246, 246, 246),
+        focused: Rgba::rgb8(0xf2, 0xf4, 0xf7),
+        unfocused: Rgba::rgb8(0xe7, 0xeb, 0xf1),
     },
-    hairline: Rgba::rgba8(0, 0, 0, 0.25),
+    hairline: Rgba::rgb8(0xd6, 0xdc, 0xe5),
     inner_line: None,
     title: FocusPair {
-        focused: Rgba::rgba8(0, 0, 0, 0.80),
-        unfocused: Rgba::rgba8(0, 0, 0, 0.45),
+        focused: Rgba::rgb8(0x0d, 0x12, 0x19),
+        unfocused: Rgba::rgb8(0x55, 0x65, 0x7e),
     },
     text: FocusPair {
-        focused: Rgba::rgba8(0, 0, 0, 0.80),
-        unfocused: Rgba::rgba8(0, 0, 0, 0.45),
+        focused: Rgba::rgb8(0x1b, 0x23, 0x30),
+        unfocused: Rgba::rgb8(0x55, 0x65, 0x7e),
     },
-    accent: Rgba::rgb8(0x00, 0x7a, 0xff),
+    accent: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    traffic_lights_inactive: Rgba::rgb8(0xd3, 0xd3, 0xd5),
 };
 
-/// The dark mode palette. Its inner line is present.
+/// The dark mode palette: Neptunia `dark`.
 pub const DARK: Palette = Palette {
     titlebar_bg: FocusPair {
-        focused: Rgba::rgb8(42, 42, 44),
-        unfocused: Rgba::rgb8(31, 31, 33),
+        focused: Rgba::rgb8(0x1e, 0x1e, 0x1e),
+        unfocused: Rgba::rgb8(0x16, 0x16, 0x16),
     },
-    hairline: Rgba::rgba8(0, 0, 0, 0.60),
-    inner_line: Some(Rgba::rgba8(255, 255, 255, 0.12)),
+    hairline: Rgba::rgb8(0x33, 0x33, 0x33),
+    inner_line: Some(Rgba::rgba8(0xff, 0xff, 0xff, 0.14)),
     title: FocusPair {
-        focused: Rgba::rgba8(255, 255, 255, 0.80),
-        unfocused: Rgba::rgba8(255, 255, 255, 0.45),
+        focused: Rgba::rgb8(0xf5, 0xf5, 0xf5),
+        unfocused: Rgba::rgb8(0x9b, 0x9b, 0x9b),
     },
     text: FocusPair {
-        focused: Rgba::rgba8(255, 255, 255, 0.80),
-        unfocused: Rgba::rgba8(255, 255, 255, 0.45),
+        focused: Rgba::rgb8(0xdc, 0xdc, 0xdc),
+        unfocused: Rgba::rgb8(0x9b, 0x9b, 0x9b),
     },
-    accent: Rgba::rgb8(0x0a, 0x84, 0xff),
+    accent: Rgba::rgb8(0x2f, 0x6f, 0xe4),
+    traffic_lights_inactive: Rgba::rgb8(0x4e, 0x4e, 0x50),
 };
+
+/// The menubar/dock surface: Neptunia `bg-window` with a slight transparency.
+pub const SHELL_BAR: [u8; 4] = [0xf2, 0xf4, 0xf7, 0xe6];
+
+/// The menubar/dock text: Neptunia `ink-strong`.
+pub const SHELL_TEXT: [u8; 4] = [0x0d, 0x12, 0x19, 0xff];
+
+/// A dock tile: Neptunia `bg-control`.
+pub const SHELL_TILE: [u8; 4] = [0xe3, 0xe8, 0xef, 0xff];
+
+/// An active dock tile: Neptunia `accent`.
+pub const SHELL_TILE_ACTIVE: [u8; 4] = [0x2f, 0x6f, 0xe4, 0xff];
+
+/// Text on an active dock tile: Neptunia `on-accent`.
+pub const SHELL_TILE_TEXT_ACTIVE: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 
 /// Where the wallpapers Yuki ships are installed, like GNOME's
 /// `/usr/share/backgrounds`. The flake installs `share/wallpapers/` under

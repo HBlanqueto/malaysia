@@ -38,6 +38,7 @@ docs/
 │   ├── menubar.md             la menubar nativa (app activa + reloj)
 │   ├── dock.md                el dock nativo (lista de apps + activar al clic)
 │   ├── lock.md                el lock nativo (ext-session-lock-v1)
+│   ├── ventanas.md            la titlebar Neptunia del compositor
 │   └── capturas.md            capturas macOS: atajos, overlay, guardado y opciones
 ├── configuracion/
 │   └── opciones.md    catálogo canónico de opciones del compositor (ADR 0021)
@@ -80,9 +81,9 @@ docs/
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
    (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
    [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md),
-   [lock](arquitectura/lock.md) y
-   [capturas de pantalla](arquitectura/capturas.md) (una capacidad del
-   compositor, no un proceso de la shell).
+   [lock](arquitectura/lock.md),
+   [capturas de pantalla](arquitectura/capturas.md) y
+   [ventanas/titlebar](arquitectura/ventanas.md).
 8. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
    canónico de opciones del compositor, con **nombres y valores idénticos a macOS**
    (secciones tipo System Settings, claves tipo `com.apple.dock`). Un archivo
@@ -130,8 +131,12 @@ recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
 las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG
 o el portapapeles) con su dominio `screenshot.domain`. El **Bloque 12a** está
 empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
-`appearance.domain`; faltan `Screenshot`/`ScreenCast`. El **Bloque 12b**
-(notificaciones, polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
+`appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
+ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
+la titlebar Neptunia arriba (44 px) ya se dibuja y sus botones funcionan; el
+launcher es lo siguiente. Neptunia (`kits/neptunia`) es la fuente de diseño
+(ADR 0032); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
+polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
 **lock** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y

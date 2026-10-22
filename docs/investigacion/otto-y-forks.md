@@ -355,6 +355,10 @@ de Otto es solo referencia.
 | `components/xdg-desktop-portal-otto/src/portal/interface.rs` | 934 | 0 | 0 | **Portable** como capa D-Bus/PipeWire; habla con `org.otto.ScreenCast`, que Yuki tendría que implementar. |
 | `src/state/kde_appmenu.rs` | 143 | 0 | 0 | Extra portable: `org_kde_kwin_appmenu` para el menú global. |
 
+El diseño aprobado no es de Otto: es **Neptunia** (ADR 0032), y se implementa
+con GLES + `celestial-kit`, sin Skia. Otto se lee como referencia de ideas; si
+se copia código MIT suyo, se actualiza `NOTICE`.
+
 Para el portapapeles de capturas (qué hacen Otto, GNOME y macOS) ver
 [`portapapeles-capturas.md`](portapapeles-capturas.md).
 

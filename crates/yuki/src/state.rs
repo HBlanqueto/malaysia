@@ -21,6 +21,7 @@
 //!
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -277,6 +278,8 @@ pub struct State {
     pub list_handles: ListHandles,
     /// Windows minimized to the dock (kept out of the scene).
     pub minimized: std::collections::HashSet<WindowId>,
+    /// Windows maximized by Yuki's titlebar, with the rectangle to restore.
+    pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// The last dock icon rectangle (`set_rectangle`), for the minimize anim.
     pub dock_rectangle: Option<(WindowId, Rectangle<i32, Logical>)>,
     /// The runtime configuration, loaded from the per-domain files in
@@ -290,6 +293,8 @@ pub struct State {
     pub(crate) test_press: Option<TestPress>,
     /// Test-only: the window left behind by `YUKI_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
+    /// Cached titlebar textures for server-decorated windows.
+    pub(crate) chrome: crate::chrome::ChromeCache,
     /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
     /// backend renders it on the next frame.
     pub(crate) screenshot: Option<ScreenshotRequest>,
@@ -496,11 +501,13 @@ impl State {
             foreign: ForeignState::new(display_handle),
             list_handles: Vec::new(),
             minimized: std::collections::HashSet::new(),
+            maximized: HashMap::new(),
             dock_rectangle: None,
             config,
             grab: None,
             test_press: None,
             leaked_window: None,
+            chrome: crate::chrome::ChromeCache::new(),
             screenshot: None,
             screenshot_mode: None,
         })

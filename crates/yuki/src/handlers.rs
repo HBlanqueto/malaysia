@@ -177,7 +177,7 @@ impl CompositorHandler for State {
         // A layer surface gets configured and placed here too (ADR 0023).
         self.layers.commit(surface, self.logical_output_size());
         if let Some(mapped) = self.windows.commit(surface) {
-            self.focus_window(mapped);
+            self.raise_and_focus(mapped);
             self.foreign_window_mapped(mapped);
             self.inject_test_shake();
             self.inject_test_press(mapped);

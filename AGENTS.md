@@ -90,8 +90,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   — **quién decide cada cosa entre Yuki (compositor) y la shell (`yuki-shell`)**:
   la shell dibuja el contenido, Yuki coloca/compone/regula. Léelo antes de tocar
   la integración de la shell. Componentes: `wallpaper.md`, `menubar.md`,
-  `dock.md`, `lock.md` y `capturas.md` (capturas: capacidad del compositor, no
-  proceso de shell).
+  `dock.md`, `lock.md`, `capturas.md` (capturas: capacidad del compositor, no
+  proceso de shell) y `ventanas.md` (titlebar Neptunia).
 
 ## Estado actual
 
@@ -137,11 +137,19 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   Escritorio XDG) hechas. Opciones en `screenshot.domain` (defaults macOS;
   `show_pointer` activo, el resto reservadas). Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
+- **Bloque 13 adelantado:** titlebar Neptunia con botones (cerrar, minimizar,
+  maximizar), menubar/dock en paleta clara; el launcher es lo siguiente. Los
+  portales quedan después.
 - **Bloque 12a empezado:** backend `xdg-desktop-portal-yuki` con `Settings`
   (`org.freedesktop.appearance` desde `appearance.domain`, `SettingChanged`,
   `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback). Siguen
   `Screenshot`/`ScreenCast` y el Bloque 12b (notificaciones, polkit, keyring,
   AT-SPI). Ver `docs/bloques/12-portales-y-servicios.md`.
+- **Diseño:** **Neptunia** (`~/dotfiles/kits/neptunia`, `tokens.json` +
+  `components.json`) es la fuente por defecto del escritorio (ADR 0032):
+  titlebar **arriba** de 44 px, semáforos de 12, radio 16, tema claro. Los
+  valores se copian a `yuki-design`; no inventes colores/medidas. Ver
+  `docs/arquitectura/ventanas.md`.
 - **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el
   redondeo floor/ceil (ADR 0004), aceptados en panel real a 1.0/1.25/1.5.
   Falta la escala por salida de 8b. Ver `docs/bloques/09-escala-fraccional.md`.

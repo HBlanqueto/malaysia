@@ -21,6 +21,7 @@
 mod active;
 mod blockers;
 pub mod capture;
+mod chrome;
 pub mod config;
 mod cursor;
 pub mod decoration;

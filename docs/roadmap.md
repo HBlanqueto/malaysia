@@ -213,6 +213,24 @@ Se divide en dos entregas. Depende de la captura del Bloque 11.
   operación privilegiada pide contraseña por el agente polkit; Orca puede
   leer la shell.
 
+## Bloque 13 — Chrome y launcher (adelantado)
+
+Antes de seguir con los portales, el escritorio necesita chrome y una forma de
+abrir apps. El diseño es **Neptunia** (ADR 0032).
+
+- **Titlebar Neptunia — hecha.** Barra superior de 44 px, semáforos de 12 px,
+  título centrado con `cosmic-text`, caché por ventana y botones de cerrar,
+  minimizar y maximizar; también se elevan las ventanas al enfocarlas. Ver
+  [`arquitectura/ventanas.md`](arquitectura/ventanas.md).
+- **Launcher — siguiente.** `yuki-shell launcher` en la capa Overlay,
+  `Super+Space`, búsqueda en `.desktop`, lanzamiento y cierre con `Esc`.
+  Requiere foco de teclado para layer surfaces con
+  `KeyboardInteractivity::Exclusive`.
+- **Pendiente de chrome:** esquinas redondeadas (16 px), sombra, glifos de los
+  semáforos al hover, doble clic para zoom y titlebar en la captura de ventana.
+- **Después:** retomar el Bloque 12a (`Settings` con una app real,
+  `Screenshot`/`ScreenCast`), 12b, 8b y 8c.
+
 ## Transversal — NixOS
 
 - **Hecho:** `nixosModules.default` (`programs.yuki.enable`) instala el

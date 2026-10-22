@@ -94,6 +94,21 @@ impl Window<'_> {
         )
     }
 
+    /// The window's title, as the client last set it.
+    pub fn title(&self) -> String {
+        with_states(self.surface(), |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .expect("a tracked toplevel has xdg toplevel data")
+                .lock()
+                .unwrap()
+                .title
+                .clone()
+                .unwrap_or_default()
+        })
+    }
+
     /// The size configured to the client: the window minus its insets.
     pub fn usable_size(&self) -> Size<i32, Logical> {
         usable(self.size(), self.insets())
@@ -133,6 +148,8 @@ struct WindowData {
     /// Whether the user is currently resizing, so the configure carries the
     /// xdg `resizing` state.
     resizing: bool,
+    /// Whether Yuki's titlebar requested the maximized state.
+    maximized: bool,
 }
 
 impl WindowData {
@@ -212,7 +229,7 @@ impl Windows {
     }
 
     /// The tracked windows, back to front, so the last is drawn on top.
-    pub fn iter(&self) -> impl Iterator<Item = Window<'_>> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = Window<'_>> {
         self.scene.iter().filter_map(|(id, outer)| {
             self.windows
                 .iter()
@@ -260,6 +277,7 @@ impl Windows {
             mapped: false,
             configured: None,
             resizing: false,
+            maximized: false,
         });
         self.send_configure(self.windows.len() - 1);
     }
@@ -471,6 +489,25 @@ impl Windows {
         self.scene.topmost()
     }
 
+    /// The decoration insets for `id`, or `None` when it is not tracked.
+    pub fn insets(&self, id: WindowId) -> Option<Insets> {
+        let index = self.index(id)?;
+        Some(self.windows[index].insets(self.decoration_of(id)))
+    }
+
+    /// Sets the maximized state the next configure carries and reconfigures.
+    pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if self.windows[index].maximized == maximized {
+            return false;
+        }
+        self.windows[index].maximized = maximized;
+        self.send_configure(index);
+        true
+    }
+
     /// A window's decorated outer rectangle.
     pub fn outer(&self, id: WindowId) -> Option<SceneRect<f64, SceneLogical>> {
         self.scene.outer(id)
@@ -627,6 +664,11 @@ impl Windows {
                 state.states.set(xdg_toplevel::State::Resizing);
             } else {
                 state.states.unset(xdg_toplevel::State::Resizing);
+            }
+            if data.maximized {
+                state.states.set(xdg_toplevel::State::Maximized);
+            } else {
+                state.states.unset(xdg_toplevel::State::Maximized);
             }
         });
         data.pending_configure = Some(data.toplevel.send_configure());

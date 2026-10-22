@@ -38,6 +38,7 @@ continua.
 | 0029 | El backend se elige con un flag explícito | aceptado |
 | 0030 | Direct Session 8a: un plano primario y una sola salida | aceptado |
 | 0031 | Portal backend propio (`xdg-desktop-portal-yuki`) | aceptado |
+| 0032 | Neptunia es la fuente de diseño del escritorio | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

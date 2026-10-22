@@ -52,9 +52,9 @@ const BAR_HEIGHT: i32 = 28;
 /// The font size, in logical pixels.
 const FONT_SIZE: f32 = 13.0;
 /// The bar background, translucent (macOS vibrancy will come with blur).
-const BAR_BG: [u8; 4] = [0x1c, 0x1c, 0x1f, 0xe0];
+const BAR_BG: [u8; 4] = yuki_design::SHELL_BAR;
 /// The text colour.
-const TEXT_COLOR: [u8; 4] = [0xf2, 0xf2, 0xf5, 0xff];
+const TEXT_COLOR: [u8; 4] = yuki_design::SHELL_TEXT;
 /// The margin from the edges, in logical pixels.
 const MARGIN: i32 = 10;
 

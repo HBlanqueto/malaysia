@@ -72,13 +72,13 @@ const PADDING: i32 = 8;
 /// The bar height, in logical pixels.
 const BAR_HEIGHT: i32 = DEFAULT_TILESIZE + PADDING * 2;
 /// The bar background.
-const BAR_BG: [u8; 4] = [0x1c, 0x1c, 0x1f, 0xe0];
+const BAR_BG: [u8; 4] = yuki_design::SHELL_BAR;
 /// A running app tile.
-const TILE_BG: [u8; 4] = [0x3a, 0x3a, 0x40, 0xff];
+const TILE_BG: [u8; 4] = yuki_design::SHELL_TILE;
 /// The active app tile.
-const TILE_ACTIVE: [u8; 4] = [0x2f, 0x6f, 0xd8, 0xff];
+const TILE_ACTIVE: [u8; 4] = yuki_design::SHELL_TILE_ACTIVE;
 /// The tile text colour.
-const TEXT_COLOR: [u8; 4] = [0xf2, 0xf2, 0xf5, 0xff];
+const TEXT_COLOR: [u8; 4] = yuki_design::SHELL_TEXT;
 
 /// One app in the dock.
 #[derive(Clone)]
@@ -321,7 +321,11 @@ impl Dock {
                 w as i32,
                 h as i32,
                 (entry.x + 2, baseline),
-                TEXT_COLOR,
+                if active {
+                    yuki_design::SHELL_TILE_TEXT_ACTIVE
+                } else {
+                    TEXT_COLOR
+                },
             );
         }
 

@@ -31,6 +31,13 @@ renderizar la escena offscreen y guarda el PNG (o, en el futuro, lo copia al
 portapapeles). La shell no participa. Ver
 [`capturas.md`](capturas.md).
 
+## Chrome de ventana
+
+La titlebar de las ventanas server-side la dibuja **Yuki**, no la shell:
+Neptunia arriba (44 px), semáforos de 12 y botones de cerrar/minimizar/
+maximizar. Ver [`ventanas.md`](ventanas.md). La shell no participa en el chrome
+de las apps.
+
 ## Cómo se comunican
 
 1. **El almacén `.domain`** (ADR 0021): Yuki es el dueño de la configuración;

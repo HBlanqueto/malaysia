@@ -44,6 +44,20 @@ shell; ver `bloques/09-escala-fraccional.md`.
 - [ ] Escala por salida/monitor cuando 8b introduzca varios outputs.
 - [x] Redondeo de rectángulos lógicos (ADR 0004): floor posición, ceil tamaño.
 
+## Ahora: escritorio usable (Bloque 13, adelantado)
+
+El diseño es **Neptunia** (ADR 0032): titlebar arriba de 44 px, radio 16,
+semáforos de 12, tema claro por defecto.
+
+- [x] Titlebar en el compositor: fondo, semáforos, título, caché y botones
+      cerrar/minimizar/maximizar. Ver `arquitectura/ventanas.md`.
+- [x] Menubar y dock con la paleta clara de Neptunia.
+- [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
+      en layer surfaces).
+- [ ] Esquinas redondeadas, sombra, glifos de hover y doble clic para zoom.
+- [ ] Documentar/portar el resto de tokens de Neptunia y, si se puede, generar
+      `yuki-design` desde sus JSON.
+
 ## Después, en orden
 
 1. **Bloque 11 — protocolos de uso diario.** `wp_presentation`,

@@ -57,7 +57,7 @@ use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
-use crate::config::ScreenshotTarget;
+use crate::config::{ColorScheme, ScreenshotTarget};
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
@@ -816,7 +816,7 @@ pub(crate) fn build_output_elements(
         }
         append_screenshot_overlay(state, &mut elements);
         append_layers(state, renderer, &mut elements, LayerSide::Front);
-        for (id, _parent, rect) in state.windows.iter_popups() {
+        for (id, _parent, rect) in state.windows.iter_popups().rev() {
             let Some(surface) = state.popups.surface_of(id) else {
                 continue;
             };
@@ -833,9 +833,30 @@ pub(crate) fn build_output_elements(
                 .map(OutputRenderElement::from),
             );
         }
-        for window in state.windows.iter() {
+        let focused = state.focused_window();
+        let dark = matches!(state.config.appearance.color_scheme, ColorScheme::Dark);
+        let palette = if dark {
+            &yuki_design::DARK
+        } else {
+            &yuki_design::LIGHT
+        };
+        for window in state.windows.iter().rev() {
             if !window.is_mapped() {
                 continue;
+            }
+            let id = window.id();
+            if let Some(element) = state.chrome.element(
+                renderer,
+                id,
+                &window.title(),
+                focused == Some(id),
+                window.size().w,
+                window.location(),
+                scale,
+                palette,
+                dark,
+            ) {
+                elements.push(element);
             }
             let location = physical_point(window.location() + window.surface_location(), scale);
             elements.extend(

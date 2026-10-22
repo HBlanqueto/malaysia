@@ -476,6 +476,14 @@ impl State {
         };
         self.raise_and_focus(id);
 
+        if button == BUTTON_LEFT
+            && let (Some(outer), Some(insets)) = (self.windows.outer(id), self.windows.insets(id))
+            && let Some(kind) = crate::chrome::button_at(outer, insets, location)
+        {
+            self.window_button(id, kind);
+            return;
+        }
+
         if self.windows.surface_under(location).is_some() {
             tracing::info!(?location, window = ?id, "press landed on the client surface");
             return;
@@ -493,6 +501,39 @@ impl State {
         self.request_redraw();
     }
 
+    /// Applies a titlebar button.
+    fn window_button(&mut self, id: WindowId, kind: yuki_design::ButtonKind) {
+        match kind {
+            yuki_design::ButtonKind::Close => self.windows.send_close(id),
+            yuki_design::ButtonKind::Minimize => self.set_minimized(id, true),
+            yuki_design::ButtonKind::Maximize => self.toggle_maximize(id),
+        }
+        self.request_redraw();
+    }
+
+    /// Maximizes or restores a window from Yuki's titlebar.
+    pub(crate) fn toggle_maximize(&mut self, id: WindowId) {
+        let Some(outer) = self.windows.outer(id) else {
+            return;
+        };
+        if let Some(saved) = self.maximized.remove(&id) {
+            tracing::info!(window = id.get(), "window restored");
+            self.windows.set_maximized(id, false);
+            self.windows.resize(id, saved);
+        } else {
+            tracing::info!(window = id.get(), "window maximized");
+            let (origin, size) = self.workspace();
+            let target = yuki_scene::geometry::Rect::new(
+                yuki_scene::geometry::Point::new(f64::from(origin.x), f64::from(origin.y)),
+                yuki_scene::geometry::Size::new(f64::from(size.w), f64::from(size.h)),
+            );
+            self.maximized.insert(id, outer);
+            self.windows.set_maximized(id, true);
+            self.windows.resize(id, target);
+        }
+        self.request_redraw();
+    }
+
     /// Gives keyboard focus to a window.
     pub(crate) fn focus_window(&mut self, id: WindowId) {
         // While the session is locked, focus belongs to the lock surface; a
@@ -503,6 +544,7 @@ impl State {
         let Some(surface) = self.windows.surface_of(id).cloned() else {
             return;
         };
+        self.windows.raise(id);
         let serial = SERIAL_COUNTER.next_serial();
         match self.seat.get_keyboard() {
             Some(keyboard) => {
@@ -558,6 +600,8 @@ impl State {
             return;
         };
         self.foreign_window_destroyed(id);
+        self.maximized.remove(&id);
+        self.chrome.remove(id);
         if self.grab.map(Grab::window) == Some(id) {
             self.grab = None;
         }
@@ -649,7 +693,14 @@ impl State {
             outer.x() + outer.width() * fx,
             outer.y() + outer.height() * fy,
         );
-        if self.windows.surface_under(location).is_none() {
+        let on_button = self
+            .windows
+            .outer(id)
+            .zip(self.windows.insets(id))
+            .is_some_and(|(outer, insets)| {
+                crate::chrome::button_at(outer, insets, location).is_some()
+            });
+        if self.windows.surface_under(location).is_none() && !on_button {
             return;
         }
         let time = InputTime::from_millis(0);
