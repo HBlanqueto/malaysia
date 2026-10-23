@@ -70,8 +70,9 @@ orden `⌃⌥⇧❖`, sin `+` ni el glifo de Command.
 Para muestras sin entrada real, `MENU_POPUP_SHOW=<caso>` abre el menú por la
 API (sin grab) y lo deja abierto: `ir` abre «Ir» bajo su título, `editar-sub`
 abre «Editar» con «Ordenar por» y «Orden» desplegados, y `borde` abre «Editar»
-desde el borde derecho para que el raíz se desplace y los submenús se abran a
-la izquierda. La barra del ejemplo no reserva zona exclusiva en este modo.
+desde el borde derecho: el compositor voltea el raíz y el primer submenú a la
+izquierda; el nieto, que cabe, abre a la derecha. La barra del ejemplo no
+reserva zona exclusiva en este modo.
 
 ## Capturas
 
@@ -92,7 +93,8 @@ escribiendo `color_scheme = "light"|"dark"` en `appearance.domain` y apuntando
 ![Editar con submenús en claro](img/14a/editar-sub-claro.png)
 
 `editar-sub-claro.png`: «Editar» + «Ordenar por» + «Orden» (raíz, hijo y
-nieto), con «Deshacer», «Nombre» y «Ascendente» resaltados.
+nieto), con «Deshacer», «Nombre» y «Ascendente» resaltados; cada submenú
+empieza a la altura de la fila que lo abre.
 
 ![Editar con submenús en oscuro](img/14a/editar-sub-oscuro.png)
 
@@ -100,8 +102,15 @@ nieto), con «Deshacer», «Nombre» y «Ascendente» resaltados.
 
 ![Menú en el borde en claro](img/14a/borde-claro.png)
 
-`borde-claro.png`: «Editar» abierto desde el borde derecho; el raíz se
-desplaza para caber y los submenús se abren hacia la izquierda.
+`borde-claro.png`: «Editar» abierto desde el borde derecho; el compositor
+voltea el raíz y el primer submenú hacia la izquierda. El nieto, que sí cabe,
+abre a la derecha.
+
+![Detalle del flip del submenú](img/14a/borde-flip-claro.png)
+
+`borde-flip-claro.png`: detalle del primer submenú «Nombre», volteado a la
+izquierda por el compositor; su fila coincide con «Ordenar por» y el ejemplo no
+tiene ninguna rama especial para abrirlo a la izquierda.
 
 ![Menú en el borde en oscuro](img/14a/borde-oscuro.png)
 
@@ -109,7 +118,7 @@ desplaza para caber y los submenús se abren hacia la izquierda.
 
 Nota de honestidad: la barra del ejemplo comparte la franja superior con el
 menubar real del demo y queda debajo de él, así que el título visible sobre el
-menú es el de la ventana activa (p. ej. `&sergio_ribera`), no las etiquetas
+menú es el de la ventana activa («Yuki CSD»/«Yuki SSD»), no las etiquetas
 «Ir»/«Editar»/«Borde» del ejemplo. El menú sí está anclado en la posición de
 esas etiquetas.
 
