@@ -28,6 +28,7 @@ use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Serial, Size};
 use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_constraint};
 use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
+use smithay::wayland::shell::wlr_layer::LayerSurface;
 use xkbcommon::xkb::{self, keysyms};
 use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
@@ -465,9 +466,28 @@ impl State {
         // Top/Overlay layers (menubar, dock, OSD) win over the exterior band.
         // The layer surface receives the press through the pointer focus set
         // in `pointer_motion`; there is no window press to process.
-        if self.layers.surface_under(location).is_some() {
+        if let Some((surface, _)) = self.layers.surface_under(location) {
             tracing::info!(?location, "press landed on a layer surface");
+            let focused_window = self
+                .seat
+                .get_keyboard()
+                .and_then(|keyboard| keyboard.current_focus())
+                .and_then(|focused| self.windows.id_of(&focused));
+            if let Some(entry) = self.layers.entry_of(&surface) {
+                let mode = entry.keyboard_interactivity;
+                if self
+                    .layer_focus
+                    .clicked(surface.clone(), mode, focused_window)
+                {
+                    self.focus_layer_surface(&surface);
+                }
+            }
             return;
+        }
+        // A click outside an on-demand layer releases its keyboard focus; the
+        // window under the pointer (if any) takes it next in this same path.
+        if self.layer_focus.clicked_outside() {
+            self.clear_keyboard_focus();
         }
 
         let side = f64::from(self.config.window.resize_border);
@@ -568,6 +588,15 @@ impl State {
         if self.locked {
             return;
         }
+        // An exclusive layer (the launcher) owns the keyboard while it exists;
+        // clicking or activating a window must not take focus from it.
+        if self.layer_focus.blocks_window_focus() {
+            tracing::info!(
+                window = id.get(),
+                "window focus ignored: an exclusive layer owns it"
+            );
+            return;
+        }
         let Some(surface) = self.windows.surface_of(id).cloned() else {
             return;
         };
@@ -589,6 +618,101 @@ impl State {
         // Publish the active window for the menu bar (the store the shell
         // watches, same as the wallpaper).
         self.publish_active(Some(id));
+    }
+
+    /// Opens the launcher, or asks the running one to exit.
+    pub(crate) fn toggle_launcher(&mut self) {
+        if self.locked {
+            return;
+        }
+        if let Some(child) = &mut self.launcher_child {
+            if child.try_wait().ok().flatten().is_none() {
+                let pid = nix::unistd::Pid::from_raw(child.id() as i32);
+                let _ = nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGTERM);
+                tracing::info!("Super+Space: stopping the launcher");
+                return;
+            }
+            self.launcher_child = None;
+        }
+
+        let shell = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join("yuki-shell")))
+            .unwrap_or_else(|| "yuki-shell".into());
+        let mut command = crate::spawn::shell_command(shell);
+        command.arg("launcher");
+        if let Some(display) = self.idle.wayland_display() {
+            command.env("WAYLAND_DISPLAY", display);
+        }
+        match crate::spawn::spawn_shell(command) {
+            Ok(child) => {
+                self.launcher_child = Some(child);
+                tracing::info!("Super+Space: started the launcher");
+            }
+            Err(error) => tracing::error!(%error, "starting the launcher"),
+        }
+    }
+
+    /// Sets keyboard focus to a layer surface without changing the active
+    /// window store: the menu bar keeps naming the app, as macOS does while
+    /// Spotlight is open.
+    fn focus_layer_surface(&mut self, surface: &WlSurface) {
+        if self.locked {
+            return;
+        }
+        let serial = SERIAL_COUNTER.next_serial();
+        if let Some(keyboard) = self.seat.get_keyboard() {
+            tracing::info!(surface = ?surface.id(), "giving keyboard focus to a layer surface");
+            let client = surface.client();
+            keyboard.set_focus(self, Some(surface.clone()), serial);
+            set_data_device_focus(&self.display_handle, &self.seat, client.clone());
+            set_primary_focus(&self.display_handle, &self.seat, client);
+        }
+    }
+
+    /// Applies the focus policy for a layer surface that just mapped.
+    pub(crate) fn layer_surface_mapped(&mut self, layer: &LayerSurface) {
+        let surface = layer.wl_surface().clone();
+        let Some(entry) = self.layers.entry_of(&surface) else {
+            return;
+        };
+        if !matches!(
+            entry.layer,
+            smithay::wayland::shell::wlr_layer::Layer::Top
+                | smithay::wayland::shell::wlr_layer::Layer::Overlay
+        ) {
+            return;
+        }
+        let focused_window = self
+            .seat
+            .get_keyboard()
+            .and_then(|keyboard| keyboard.current_focus())
+            .and_then(|focused| self.windows.id_of(&focused));
+        let mode = entry.keyboard_interactivity;
+        if self
+            .layer_focus
+            .mapped(surface.clone(), mode, focused_window)
+        {
+            self.focus_layer_surface(&surface);
+        }
+    }
+
+    /// Releases a layer surface's focus, restoring the remembered window if it
+    /// still exists.
+    pub(crate) fn layer_surface_destroyed(&mut self, surface: &WlSurface) {
+        use crate::layers::LayerUnfocus;
+        match self.layer_focus.unmapped(surface) {
+            LayerUnfocus::None => {}
+            LayerUnfocus::Layer(next) => self.focus_layer_surface(&next),
+            LayerUnfocus::Window(Some(id)) => {
+                if self.windows.surface_of(id).is_some() {
+                    self.focus_window(id);
+                } else {
+                    self.clear_keyboard_focus();
+                }
+            }
+            LayerUnfocus::Window(None) => self.clear_keyboard_focus(),
+        }
     }
 
     /// Drops keyboard focus entirely.

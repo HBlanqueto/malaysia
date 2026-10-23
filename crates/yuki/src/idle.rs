@@ -303,6 +303,11 @@ impl IdleState {
         }
     }
 
+    /// The compositor's own Wayland socket, for shell processes it launches.
+    pub(crate) fn wayland_display(&self) -> Option<&str> {
+        self.wayland_display.as_deref()
+    }
+
     /// Starts `yuki-shell lock` if there is no live lock child.
     ///
     /// Shared by the idle timeout and by the compositor's lock recovery, so

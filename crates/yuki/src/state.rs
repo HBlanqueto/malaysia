@@ -183,6 +183,8 @@ pub struct State {
     capture_dma_checked: bool,
     /// The last key or pointer-button press serial, for activation tokens.
     pub(crate) last_activation_serial: Option<(Serial, Instant)>,
+    /// The `yuki-shell launcher` child while it is running.
+    pub(crate) launcher_child: Option<std::process::Child>,
     /// When the shake enlargement started; `None` when the pointer is at its
     /// normal size. The scale is derived from this instant so the growth and
     /// shrink are animated rather than snapped.
@@ -218,6 +220,8 @@ pub struct State {
     pub presentation_state: PresentationState,
     /// The placed layer surfaces.
     pub layers: Layers,
+    /// Keyboard-focus policy for layer surfaces (launcher, menus, OSD).
+    pub layer_focus: crate::layers::LayerFocus<WlSurface>,
     /// The `wl_data_device_manager` state.
     ///
     /// Advertising the global completes the seat's protocol surface; the
@@ -479,6 +483,7 @@ impl State {
             capture_dma: None,
             capture_dma_checked: false,
             last_activation_serial: None,
+            launcher_child: None,
             cursor_boost_started: None,
             shake: ShakeDetector::default(),
             xdg_shell_state,
@@ -489,6 +494,7 @@ impl State {
             fractional_scale_state,
             presentation_state,
             layers: Layers::new(),
+            layer_focus: crate::layers::LayerFocus::default(),
             data_device_state,
             primary_selection_state,
             lock_state,

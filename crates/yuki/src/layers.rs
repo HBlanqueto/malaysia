@@ -16,6 +16,7 @@ use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::wlr_layer::{
     Anchor, ExclusiveZone, KeyboardInteractivity, Layer, LayerSurface, LayerSurfaceCachedState,
 };
+use yuki_scene::scene::WindowId;
 
 /// A layer surface Yuki has placed on the output.
 #[derive(Debug)]
@@ -63,7 +64,14 @@ impl Layers {
 
     /// Handles a surface commit: configures a new layer surface, or re-places a
     /// mapped one whose anchors/size changed.
-    pub fn commit(&mut self, surface: &WlSurface, output_size: Size<i32, Logical>) {
+    ///
+    /// Returns the surface when it maps for the first time, so the caller can
+    /// apply the keyboard-focus policy exactly once.
+    pub fn commit(
+        &mut self,
+        surface: &WlSurface,
+        output_size: Size<i32, Logical>,
+    ) -> Option<LayerSurface> {
         // Prune any layer surface whose wl_surface died.
         self.mapped.retain(|e| e.surface.wl_surface().alive());
         self.unmapped.retain(|s| s.wl_surface().alive());
@@ -71,7 +79,7 @@ impl Layers {
         if let Some(pos) = self.unmapped.iter().position(|s| s.wl_surface() == surface) {
             let layer_surface = self.unmapped.remove(pos);
             self.configure(&layer_surface, output_size);
-            return;
+            return Some(layer_surface);
         }
 
         if let Some(entry) = self
@@ -92,6 +100,14 @@ impl Layers {
                 entry.exclusive_zone = exclusive_zone;
             }
         }
+        None
+    }
+
+    /// The tracked entry for a layer surface.
+    pub fn entry_of(&self, surface: &WlSurface) -> Option<&LayerEntry> {
+        self.mapped
+            .iter()
+            .find(|entry| entry.surface.wl_surface() == surface)
     }
 
     /// Places a newly committed layer surface: computes its geometry, sends the
@@ -196,6 +212,145 @@ impl Layers {
     }
 }
 
+/// What to focus after a layer surface disappears.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LayerUnfocus<S> {
+    /// Nothing had this layer's focus.
+    None,
+    /// Another exclusive layer takes over.
+    Layer(S),
+    /// Focus returns to the window remembered before the layer took it, if it
+    /// still exists (`None` when it does not).
+    Window(Option<WindowId>),
+}
+
+/// Keyboard-focus policy for layer surfaces, independent of Wayland types so it
+/// can be tested with plain ids.
+///
+/// Exclusive surfaces take the keyboard when they map and keep it while they
+/// exist. On-demand surfaces take it on a click and drop it when the click
+/// lands outside. The window that had focus before a layer took it is
+/// remembered only to restore it when that layer goes away.
+#[derive(Debug)]
+pub struct LayerFocus<S> {
+    exclusive: Vec<S>,
+    on_demand: Option<S>,
+    focused: Option<S>,
+    previous_window: Option<WindowId>,
+}
+
+impl<S> Default for LayerFocus<S> {
+    fn default() -> Self {
+        Self {
+            exclusive: Vec::new(),
+            on_demand: None,
+            focused: None,
+            previous_window: None,
+        }
+    }
+}
+
+impl<S: Clone + Eq> LayerFocus<S> {
+    /// Records a newly mapped layer and returns whether it must take focus.
+    pub fn mapped(
+        &mut self,
+        surface: S,
+        mode: KeyboardInteractivity,
+        focused_window: Option<WindowId>,
+    ) -> bool {
+        match mode {
+            KeyboardInteractivity::Exclusive => {
+                if !self.exclusive.contains(&surface) {
+                    self.exclusive.push(surface.clone());
+                }
+                if self.previous_window.is_none() {
+                    self.previous_window = focused_window;
+                }
+                self.on_demand = None;
+                self.focused = Some(surface);
+                true
+            }
+            KeyboardInteractivity::OnDemand | KeyboardInteractivity::None => false,
+        }
+    }
+
+    /// Records a click on a layer and returns whether it must take focus.
+    pub fn clicked(
+        &mut self,
+        surface: S,
+        mode: KeyboardInteractivity,
+        focused_window: Option<WindowId>,
+    ) -> bool {
+        match mode {
+            KeyboardInteractivity::Exclusive => {
+                if !self.exclusive.contains(&surface) {
+                    self.exclusive.push(surface.clone());
+                }
+                if self.previous_window.is_none() {
+                    self.previous_window = focused_window;
+                }
+                let changed = self.focused.as_ref() != Some(&surface);
+                self.focused = Some(surface);
+                changed
+            }
+            KeyboardInteractivity::OnDemand => {
+                if self.focused.as_ref() == Some(&surface) {
+                    return false;
+                }
+                if self.previous_window.is_none() {
+                    self.previous_window = focused_window;
+                }
+                self.on_demand = Some(surface.clone());
+                self.focused = Some(surface);
+                true
+            }
+            KeyboardInteractivity::None => false,
+        }
+    }
+
+    /// Clears an on-demand focus after a click outside. Exclusive focus stays.
+    pub fn clicked_outside(&mut self) -> bool {
+        let Some(focused) = self.focused.as_ref() else {
+            return false;
+        };
+        if self.exclusive.contains(focused) {
+            return false;
+        }
+        self.focused = None;
+        self.on_demand = None;
+        self.previous_window = None;
+        true
+    }
+
+    /// Forgets a layer that disappeared and says where focus goes next.
+    pub fn unmapped(&mut self, surface: &S) -> LayerUnfocus<S> {
+        self.exclusive.retain(|entry| entry != surface);
+        if self.on_demand.as_ref() == Some(surface) {
+            self.on_demand = None;
+        }
+        if self.focused.as_ref() != Some(surface) {
+            return LayerUnfocus::None;
+        }
+        self.focused = None;
+        if let Some(next) = self.exclusive.last().cloned() {
+            self.focused = Some(next.clone());
+            return LayerUnfocus::Layer(next);
+        }
+        LayerUnfocus::Window(self.previous_window.take())
+    }
+
+    /// Whether an exclusive layer owns the keyboard, so a window click must not
+    /// take focus from it.
+    pub fn blocks_window_focus(&self) -> bool {
+        !self.exclusive.is_empty()
+    }
+
+    /// The layer that currently owns the keyboard.
+    pub fn focused(&self) -> Option<&S> {
+        self.focused.as_ref()
+    }
+}
+
 /// Reads the client-committed layer state from the surface's cached state.
 fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
     with_states(surface, |states| {
@@ -225,15 +380,22 @@ fn geometry_of(
         state.size.h
     };
 
-    let x = if anchors.contains(Anchor::RIGHT) {
+    // A surface with no horizontal anchor is centred (the launcher), and one
+    // with no vertical anchor is centred vertically. Layer-shell lets the
+    // compositor place unanchored surfaces; centring is the useful choice here.
+    let x = if anchors.contains(Anchor::LEFT) {
+        margins.left
+    } else if anchors.contains(Anchor::RIGHT) {
         output_size.w - margins.right - width
     } else {
-        margins.left
+        (output_size.w - width) / 2
     };
-    let y = if anchors.contains(Anchor::BOTTOM) {
+    let y = if anchors.contains(Anchor::TOP) {
+        margins.top
+    } else if anchors.contains(Anchor::BOTTOM) {
         output_size.h - margins.bottom - height
     } else {
-        margins.top
+        (output_size.h - height) / 2
     };
 
     Rectangle::new(
@@ -247,5 +409,67 @@ fn exclusive_zone_of(state: &LayerSurfaceCachedState) -> i32 {
     match state.exclusive_zone {
         ExclusiveZone::Exclusive(value) => value as i32,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exclusive_takes_focus_on_map_and_blocks_window_focus() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        assert!(focus.mapped(7, KeyboardInteractivity::Exclusive, Some(WindowId::new(3))));
+        assert_eq!(focus.focused(), Some(&7));
+        assert!(focus.blocks_window_focus());
+        assert!(!focus.clicked(7, KeyboardInteractivity::Exclusive, None));
+    }
+
+    #[test]
+    fn on_demand_takes_focus_on_click_and_loses_it_outside() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        assert!(!focus.mapped(4, KeyboardInteractivity::OnDemand, Some(WindowId::new(2))));
+        assert_eq!(focus.focused(), None);
+        assert!(focus.clicked(4, KeyboardInteractivity::OnDemand, Some(WindowId::new(2))));
+        assert_eq!(focus.focused(), Some(&4));
+        assert!(!focus.blocks_window_focus());
+        assert!(focus.clicked_outside());
+        assert_eq!(focus.focused(), None);
+        assert!(!focus.clicked_outside());
+    }
+
+    #[test]
+    fn exclusive_keeps_focus_when_the_user_clicks_outside() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        focus.mapped(9, KeyboardInteractivity::Exclusive, None);
+        assert!(!focus.clicked_outside());
+        assert_eq!(focus.focused(), Some(&9));
+    }
+
+    #[test]
+    fn unmapping_restores_the_window_that_had_focus() {
+        let window = WindowId::new(5);
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        focus.mapped(1, KeyboardInteractivity::Exclusive, Some(window));
+        assert_eq!(focus.unmapped(&1), LayerUnfocus::Window(Some(window)));
+        assert_eq!(focus.focused(), None);
+        assert!(!focus.blocks_window_focus());
+    }
+
+    #[test]
+    fn unmapping_does_not_restore_a_window_that_is_gone() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        focus.mapped(2, KeyboardInteractivity::OnDemand, None);
+        focus.clicked(2, KeyboardInteractivity::OnDemand, None);
+        assert_eq!(focus.unmapped(&2), LayerUnfocus::Window(None));
+    }
+
+    #[test]
+    fn the_next_exclusive_layer_takes_over_when_one_unmaps() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        focus.mapped(1, KeyboardInteractivity::Exclusive, None);
+        focus.mapped(2, KeyboardInteractivity::Exclusive, None);
+        assert_eq!(focus.unmapped(&2), LayerUnfocus::Layer(1));
+        assert_eq!(focus.focused(), Some(&1));
     }
 }

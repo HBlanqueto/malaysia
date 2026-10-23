@@ -175,7 +175,9 @@ impl CompositorHandler for State {
         // first; the window tracker then reads that state to decide on mapping.
         on_commit_buffer_handler::<Self>(surface);
         // A layer surface gets configured and placed here too (ADR 0023).
-        self.layers.commit(surface, self.logical_output_size());
+        if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
+            self.layer_surface_mapped(&layer);
+        }
         if let Some(mapped) = self.windows.commit(surface) {
             self.raise_and_focus(mapped);
             self.foreign_window_mapped(mapped);
@@ -640,6 +642,7 @@ impl WlrLayerShellHandler for State {
 
     fn layer_destroyed(&mut self, surface: LayerSurface) {
         tracing::info!(surface = ?surface.wl_surface().id(), "layer surface destroyed");
+        self.layer_surface_destroyed(surface.wl_surface());
         self.layers.destroy(surface.wl_surface());
         self.request_redraw();
     }
