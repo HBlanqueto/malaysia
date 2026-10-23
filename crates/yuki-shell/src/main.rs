@@ -9,6 +9,7 @@ mod dock;
 mod lock;
 mod menubar;
 mod pam;
+mod present;
 mod wallpaper;
 
 use std::process::ExitCode;

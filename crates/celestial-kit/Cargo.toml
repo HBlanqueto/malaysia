@@ -28,6 +28,8 @@ calloop.workspace = true
 wayland-client.workspace = true
 wayland-egl.workspace = true
 khronos-egl = { workspace = true, features = ["dynamic"] }
+glow.workspace = true
+cosmic-text.workspace = true
 futures-util.workspace = true
 futures-channel.workspace = true
 rustc-hash.workspace = true
