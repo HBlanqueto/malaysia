@@ -19,6 +19,9 @@ pub mod password;
 /// The Freya theme generated from `yuki-design` and `yuki-appearance`.
 pub mod theme;
 
+/// Client-side traffic lights (ADR 0035).
+pub mod traffic;
+
 /// Grade Animation (≈ Core Animation): a module over `freya-animation`.
 pub mod animation;
 

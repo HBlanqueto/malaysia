@@ -119,6 +119,8 @@ pub struct Resolved {
     pub panel_tint: Option<(Rgba, f32)>,
     /// The three traffic lights.
     pub lights: [Rgba; 3],
+    /// The resolved traffic-light style (`Auto` already expanded).
+    pub traffic_style: TrafficLightStyle,
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -191,6 +193,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         window_tint,
         panel_tint,
         lights,
+        traffic_style: style,
     }
 }
 

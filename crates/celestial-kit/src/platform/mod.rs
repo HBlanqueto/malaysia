@@ -891,6 +891,19 @@ fn drain_user_events(events: &Rc<RefCell<Vec<UserEvent>>>) -> Vec<UserEvent> {
     std::mem::take(&mut *events.borrow_mut())
 }
 
+// TODO(ADR 0035): when the runner creates xdg_toplevel windows for Yuki's own
+// apps, every such window must:
+// - be created with SCTK `WindowDecorations::RequestClient`;
+// - call `set_app_id` with an id starting with `yuki_design::NATIVE_APP_ID_PREFIX`
+//   before its first commit;
+// - draw its titlebar with `celestial_kit::traffic::TrafficLights`;
+// - move with `xdg_toplevel.move` and resize with `xdg_toplevel.resize`;
+// - set `min_size == max_size` for fixed-size windows so the compositor
+//   disables zoom (ADR 0035).
+//
+// The compositor already recognises the prefix and never adds its titlebar to
+// those windows, including under `window.decorations = "force_server"`.
+
 /// Runs a layer-shell surface with a Freya app until the compositor closes it.
 pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     let (conn, event_queue, qh, mut shell) = Shell::connect(app, spec)?;
