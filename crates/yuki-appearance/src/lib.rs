@@ -8,6 +8,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+pub mod traffic;
+
 use yuki_design::{
     DARK, DARK_TINT, LIGHT, PANEL_TINT_WALLPAPER, Palette, Rgba, TITLEBAR,
     TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
