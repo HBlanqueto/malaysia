@@ -12,7 +12,10 @@
 
 mod input;
 
-use std::{cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context, time::Duration};
+use std::{
+    borrow::Cow, cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context,
+    time::Duration,
+};
 
 use accesskit::Role;
 use freya_clipboard::copypasta::ClipboardProvider;
@@ -56,9 +59,15 @@ use sctk::{
             ext_foreign_toplevel_handle_v1::{Event as FtlHandleEvent, ExtForeignToplevelHandleV1},
             ext_foreign_toplevel_list_v1::{Event as FtlListEvent, ExtForeignToplevelListV1},
         },
+        protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{
+            Shape as CursorShape, WpCursorShapeDeviceV1,
+        },
         protocols_wlr::{
             foreign_toplevel::v1::client::{
-                zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1,
+                zwlr_foreign_toplevel_handle_v1::{
+                    Event as ZwlrForeignToplevelHandleV1Event,
+                    State as ZwlrForeignToplevelHandleV1State, ZwlrForeignToplevelHandleV1,
+                },
                 zwlr_foreign_toplevel_manager_v1::{
                     Event as MgmtListEvent, ZwlrForeignToplevelManagerV1,
                 },
@@ -70,7 +79,7 @@ use sctk::{
     seat::{
         Capability, SeatHandler, SeatState,
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers as SctkModifiers, RepeatInfo},
-        pointer::{PointerEvent, PointerHandler},
+        pointer::{PointerEvent, PointerHandler, cursor_shape::CursorShapeManager},
         touch::TouchHandler,
     },
     session_lock::{
@@ -371,6 +380,7 @@ struct AppInstance {
     ticker_sender: RenderingTickerSender,
     font_collection: FontCollection,
     font_manager: FontMgr,
+    fallback_fonts: Vec<Cow<'static, str>>,
     scale_factor: f64,
     size: Size2D,
     needs_layout: bool,
@@ -407,7 +417,7 @@ impl AppInstance {
         font_collection.set_dynamic_font_manager(custom_manager.clone());
         font_collection.paragraph_cache_mut().turn_on(false);
 
-        let tree = Tree::default();
+        let mut tree = Tree::default();
 
         let platform = runner.provide_root_context({
             let size = Size2D::new(size.0 as f32, size.1 as f32);
@@ -435,6 +445,11 @@ impl AppInstance {
         runner.provide_root_context(|| tree.accessibility_generator.clone());
         runner.provide_root_context(|| font_collection.clone());
 
+        // Build the root node before the first layout pass: measuring an empty
+        // tree panics inside Torin.
+        let mutations = runner.sync_and_update();
+        let _ = runner.run_in(|| tree.apply_mutations(mutations));
+
         Self {
             runner,
             tree,
@@ -446,6 +461,7 @@ impl AppInstance {
             ticker_sender,
             font_collection,
             font_manager: custom,
+            fallback_fonts: default_fonts(),
             scale_factor,
             size: Size2D::new(size.0 as f32, size.1 as f32),
             needs_layout: true,
@@ -519,7 +535,7 @@ impl AppInstance {
             &self.font_manager,
             &self.events_sender,
             self.scale_factor,
-            &[],
+            &self.fallback_fonts,
         );
         self.needs_layout = false;
     }
@@ -533,19 +549,47 @@ impl AppInstance {
         let _ = self
             .events_sender
             .unbounded_send(EventsChunk::Processed(processed));
+        // The event must be dispatched on the next loop wake; without this the
+        // frame callback draws before Freya has processed the input.
+        self.waker.wake_by_ref();
     }
 }
 
 /// One running toplevel, as the dock lists it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ToplevelInfo {
     pub title: String,
     pub app_id: String,
+    pub active: bool,
+}
+
+/// A change that only touches one toplevel's metadata. Kept pure so the
+/// interleaved-event ordering can be tested without Wayland.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum InfoEvent {
+    Title(String),
+    AppId(String),
+    Active(bool),
+    Closed,
+}
+
+fn apply_info_event(infos: &mut Vec<ToplevelInfo>, index: usize, event: InfoEvent) {
+    let Some(info) = infos.get_mut(index) else {
+        return;
+    };
+    match event {
+        InfoEvent::Title(title) => info.title = title,
+        InfoEvent::AppId(app_id) => info.app_id = app_id,
+        InfoEvent::Active(active) => info.active = active,
+        InfoEvent::Closed => {
+            infos.remove(index);
+        }
+    }
 }
 
 #[derive(Clone)]
 struct ToplevelEntry {
-    list: ExtForeignToplevelHandleV1,
+    list: Option<ExtForeignToplevelHandleV1>,
     mgmt: Option<ZwlrForeignToplevelHandleV1>,
     info: ToplevelInfo,
 }
@@ -558,6 +602,7 @@ type Activate = Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>;
 pub struct Toplevels {
     pub list: State<Vec<ToplevelInfo>>,
     activate: Activate,
+    close: Activate,
 }
 
 impl Toplevels {
@@ -567,6 +612,12 @@ impl Toplevels {
 
     pub fn activate(&self, index: usize) {
         if let Some(f) = self.activate.borrow().as_ref() {
+            f(index);
+        }
+    }
+
+    pub fn close(&self, index: usize) {
+        if let Some(f) = self.close.borrow().as_ref() {
             f(index);
         }
     }
@@ -695,7 +746,7 @@ impl SurfaceWindow {
             }
             .render();
         }
-        graphics.gr.flush_submit_and_sync_cpu();
+        graphics.gr.flush_and_submit();
         if graphics.swap().is_err() {
             return false;
         }
@@ -714,6 +765,15 @@ impl ArcWake for PingWake {
     }
 }
 
+struct RepeatState {
+    event: KeyEvent,
+    delay: Duration,
+    rate: Duration,
+    first: bool,
+    pending: bool,
+    generation: u64,
+}
+
 struct Shell {
     conn: Connection,
     registry: RegistryState,
@@ -725,8 +785,14 @@ struct Shell {
     surfaces: Vec<SurfaceWindow>,
     seat: SeatState,
     pointer: Option<wl_pointer::WlPointer>,
+    cursor_shape: Option<CursorShapeManager>,
+    cursor_shape_device: Option<WpCursorShapeDeviceV1>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     touch: Option<wl_touch::WlTouch>,
+    keyboard_focus: Option<WlSurface>,
+    repeat: Option<RepeatState>,
+    repeat_info: Option<RepeatInfo>,
+    repeat_generation: u64,
     modifiers: SctkModifiers,
     loop_signal: Option<LoopSignal>,
     app: AppComponent,
@@ -860,6 +926,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
     insert_ping(&mut event_loop, &mut shell)?;
+    let flush_conn = conn.clone();
     WaylandSource::new(conn, event_queue)
         .insert(event_loop.handle())
         .map_err(|_| RunError::Egl("inserting the Wayland source"))?;
@@ -869,6 +936,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         shell.session_unlock = Some(SessionUnlock {
             unlock: Rc::new(move || {
                 lock.unlock();
+                let _ = flush_conn.flush();
                 signal.stop();
             }),
         });
@@ -901,6 +969,7 @@ pub fn run_lock(app: AppComponent) -> Result<(), RunError> {
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
     insert_ping(&mut event_loop, &mut shell)?;
+    let flush_conn = conn.clone();
     WaylandSource::new(conn, event_queue)
         .insert(event_loop.handle())
         .map_err(|_| RunError::Egl("inserting the Wayland source"))?;
@@ -910,6 +979,7 @@ pub fn run_lock(app: AppComponent) -> Result<(), RunError> {
         shell.session_unlock = Some(SessionUnlock {
             unlock: Rc::new(move || {
                 lock.unlock();
+                let _ = flush_conn.flush();
                 signal.stop();
             }),
         });
@@ -942,6 +1012,7 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
             }
             shell.poll_all();
             shell.install_timers(&handle);
+            shell.install_repeat(&handle);
             shell.redraw_all();
         })
         .map_err(|_| RunError::Egl("inserting the Freya ping source"))?;
@@ -964,13 +1035,21 @@ impl Shell {
         let conn = Connection::connect_to_env().map_err(|_| RunError::NoDisplay)?;
         let (globals, event_queue) = registry_queue_init::<Shell>(&conn)?;
         let qh = event_queue.handle();
-        let queue = Rc::new(RefCell::new(Vec::new()));
+        let queue: Rc<RefCell<Vec<UserEvent>>> = Rc::new(RefCell::new(Vec::new()));
         let (ping, ping_source) =
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop ping failed"))?;
-        let toplevel_entries = Rc::new(RefCell::new(Vec::new()));
+        let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
+        let close_entries = toplevel_entries.clone();
         let toplevels = Toplevels {
             list: State::create_global(Vec::new()),
             activate: Rc::new(RefCell::new(None)),
+            close: Rc::new(RefCell::new(Some(Rc::new(move |index| {
+                if let Some(entry) = close_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                {
+                    mgmt.close();
+                }
+            })))),
         };
         let foreign_list = globals
             .bind::<ExtForeignToplevelListV1, _, _>(&qh, 1..=1, ())
@@ -990,8 +1069,14 @@ impl Shell {
             surfaces: Vec::new(),
             seat: SeatState::new(&globals, &qh),
             pointer: None,
+            cursor_shape: CursorShapeManager::bind(&globals, &qh).ok(),
+            cursor_shape_device: None,
             keyboard: None,
             touch: None,
+            keyboard_focus: None,
+            repeat: None,
+            repeat_info: None,
+            repeat_generation: 0,
             modifiers: SctkModifiers::default(),
             loop_signal: None,
             app,
@@ -1295,6 +1380,9 @@ impl SeatHandler for Shell {
         match capability {
             Capability::Pointer => {
                 if let Ok(pointer) = self.seat.get_pointer::<Self>(qh, &seat) {
+                    if let Some(manager) = &self.cursor_shape {
+                        self.cursor_shape_device = Some(manager.get_shape_device(&pointer, qh));
+                    }
                     self.pointer = Some(pointer);
                 }
             }
@@ -1320,7 +1408,10 @@ impl SeatHandler for Shell {
         capability: Capability,
     ) {
         match capability {
-            Capability::Pointer => self.pointer = None,
+            Capability::Pointer => {
+                self.pointer = None;
+                self.cursor_shape_device = None;
+            }
             Capability::Keyboard => self.keyboard = None,
             Capability::Touch => self.touch = None,
             _ => {}
@@ -1342,7 +1433,12 @@ impl PointerHandler for Shell {
             let Some(index) = self.surface_for(&event.surface) else {
                 continue;
             };
-            let position = CursorPoint::from(event.position);
+            if let sctk::seat::pointer::PointerEventKind::Enter { serial } = event.kind
+                && let Some(device) = &self.cursor_shape_device
+            {
+                device.set_shape(serial, CursorShape::Default);
+            }
+            let position = physical_point(event.position, self.surfaces[index].scale);
             use sctk::seat::pointer::PointerEventKind;
             let platform_event = match event.kind {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
@@ -1390,11 +1486,12 @@ impl KeyboardHandler for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: &WlSurface,
+        surface: &WlSurface,
         _: u32,
         _: &[u32],
         _: &[Keysym],
     ) {
+        self.keyboard_focus = Some(surface.clone());
     }
 
     fn leave(
@@ -1402,9 +1499,12 @@ impl KeyboardHandler for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: &WlSurface,
+        surface: &WlSurface,
         _: u32,
     ) {
+        if self.keyboard_focus.as_ref() == Some(surface) {
+            self.keyboard_focus = None;
+        }
     }
 
     fn press_key(
@@ -1415,7 +1515,18 @@ impl KeyboardHandler for Shell {
         _: u32,
         event: KeyEvent,
     ) {
-        self.key_event(qh, event, KeyboardEventName::KeyDown);
+        self.key_event(qh, event.clone(), KeyboardEventName::KeyDown);
+        let (delay, rate) = self.repeat_timing();
+        self.repeat_generation = self.repeat_generation.wrapping_add(1);
+        self.repeat = Some(RepeatState {
+            event,
+            delay,
+            rate,
+            first: true,
+            pending: false,
+            generation: self.repeat_generation,
+        });
+        self.ping.ping();
     }
 
     fn release_key(
@@ -1427,6 +1538,8 @@ impl KeyboardHandler for Shell {
         event: KeyEvent,
     ) {
         self.key_event(qh, event, KeyboardEventName::KeyUp);
+        self.repeat = None;
+        self.repeat_generation = self.repeat_generation.wrapping_add(1);
     }
 
     fn update_modifiers(
@@ -1446,8 +1559,9 @@ impl KeyboardHandler for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: RepeatInfo,
+        info: RepeatInfo,
     ) {
+        self.repeat_info = Some(info);
     }
 }
 
@@ -1461,12 +1575,59 @@ impl Shell {
             code,
             modifiers,
         };
-        // Lock surfaces all show the same app: deliver to the first one. Layer
-        // surfaces usually have a single surface as well.
-        if let Some(window) = self.surfaces.first_mut() {
-            window.app.push(platform_event);
-            window.request_redraw(qh);
+        let index = self
+            .keyboard_focus
+            .as_ref()
+            .and_then(|surface| self.surface_for(surface))
+            .or_else(|| (!self.surfaces.is_empty()).then_some(0));
+        if let Some(index) = index {
+            self.surfaces[index].app.push(platform_event);
+            self.surfaces[index].request_redraw(qh);
         }
+    }
+
+    fn repeat_timing(&self) -> (Duration, Duration) {
+        match self.repeat_info {
+            Some(RepeatInfo::Repeat { rate, delay }) => (
+                Duration::from_millis(u64::from(delay)),
+                Duration::from_micros(1_000_000 / u64::from(rate.get())),
+            ),
+            _ => (Duration::from_millis(200), Duration::from_millis(40)),
+        }
+    }
+
+    fn install_repeat(&mut self, handle: &LoopHandle<Shell>) {
+        let Some(state) = &mut self.repeat else {
+            return;
+        };
+        if state.pending || self.repeat_info.is_none() {
+            return;
+        }
+        state.pending = true;
+        let delay = if state.first { state.delay } else { state.rate };
+        state.first = false;
+        let generation = state.generation;
+        let _ = handle.insert_source(
+            Timer::from_duration(delay),
+            move |_, _, shell: &mut Shell| {
+                if shell
+                    .repeat
+                    .as_ref()
+                    .is_some_and(|state| state.generation == generation)
+                {
+                    let event = shell.repeat.as_ref().map(|state| state.event.clone());
+                    if let Some(event) = event {
+                        let qh = shell.qh.clone();
+                        shell.key_event(&qh, event, KeyboardEventName::KeyDown);
+                    }
+                    if let Some(state) = &mut shell.repeat {
+                        state.pending = false;
+                    }
+                    shell.ping.ping();
+                }
+                TimeoutAction::Drop
+            },
+        );
     }
 }
 
@@ -1576,7 +1737,7 @@ impl Shell {
                 freya_core::prelude::TouchPhase::Ended => TouchEventName::TouchEnd,
                 freya_core::prelude::TouchPhase::Cancelled => TouchEventName::TouchCancel,
             },
-            location: CursorPoint::from(position),
+            location: physical_point(position, self.surfaces[index].scale),
             finger_id: id as u64,
             phase,
             force: None,
@@ -1595,14 +1756,13 @@ impl Dispatch<ExtForeignToplevelListV1, (), Shell> for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let FtlListEvent::Toplevel { toplevel } = event {
+        if let FtlListEvent::Toplevel { toplevel } = event
+            && state._foreign_mgmt.is_none()
+        {
             state.toplevel_entries.borrow_mut().push(ToplevelEntry {
-                list: toplevel,
+                list: Some(toplevel),
                 mgmt: None,
-                info: ToplevelInfo {
-                    title: String::new(),
-                    app_id: String::new(),
-                },
+                info: ToplevelInfo::default(),
             });
             state.sync_toplevels();
         }
@@ -1622,20 +1782,33 @@ impl Dispatch<ExtForeignToplevelHandleV1, (), Shell> for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        if state._foreign_mgmt.is_some() {
+            return;
+        }
         if matches!(event, FtlHandleEvent::Closed) {
-            state
-                .toplevel_entries
-                .borrow_mut()
-                .retain(|entry| entry.list.id() != handle.id());
+            state.toplevel_entries.borrow_mut().retain(|entry| {
+                entry
+                    .list
+                    .as_ref()
+                    .is_none_or(|list| list.id() != handle.id())
+            });
             state.sync_toplevels();
             return;
         }
         let mut entries = state.toplevel_entries.borrow_mut();
-        if let Some(entry) = entries.iter_mut().find(|e| e.list.id() == handle.id()) {
-            match event {
-                FtlHandleEvent::Title { title } => entry.info.title = title,
-                FtlHandleEvent::AppId { app_id } => entry.info.app_id = app_id,
-                _ => {}
+        let index = entries
+            .iter()
+            .position(|e| e.list.as_ref().is_some_and(|list| list.id() == handle.id()));
+        if let Some(index) = index {
+            let mut infos: Vec<ToplevelInfo> = entries.iter().map(|e| e.info.clone()).collect();
+            let info_event = match event {
+                FtlHandleEvent::Title { title } => Some(InfoEvent::Title(title)),
+                FtlHandleEvent::AppId { app_id } => Some(InfoEvent::AppId(app_id)),
+                _ => None,
+            };
+            if let Some(info_event) = info_event {
+                apply_info_event(&mut infos, index, info_event);
+                entries[index].info = infos[index].clone();
             }
         }
         drop(entries);
@@ -1652,10 +1825,13 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, (), Shell> for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let MgmtListEvent::Toplevel { toplevel } = event
-            && let Some(entry) = state.toplevel_entries.borrow_mut().last_mut()
-        {
-            entry.mgmt = Some(toplevel);
+        if let MgmtListEvent::Toplevel { toplevel } = event {
+            state.toplevel_entries.borrow_mut().push(ToplevelEntry {
+                list: None,
+                mgmt: Some(toplevel),
+                info: ToplevelInfo::default(),
+            });
+            state.sync_toplevels();
         }
     }
 
@@ -1666,14 +1842,48 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, (), Shell> for Shell {
 
 impl Dispatch<ZwlrForeignToplevelHandleV1, (), Shell> for Shell {
     fn event(
-        _: &mut Self,
-        _: &ZwlrForeignToplevelHandleV1,
-        _: <ZwlrForeignToplevelHandleV1 as Proxy>::Event,
+        state: &mut Self,
+        handle: &ZwlrForeignToplevelHandleV1,
+        event: <ZwlrForeignToplevelHandleV1 as Proxy>::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        let mut entries = state.toplevel_entries.borrow_mut();
+        let index = entries
+            .iter()
+            .position(|e| e.mgmt.as_ref().is_some_and(|mgmt| mgmt.id() == handle.id()));
+        let Some(index) = index else {
+            return;
+        };
+        if matches!(event, ZwlrForeignToplevelHandleV1Event::Closed) {
+            let mut infos: Vec<ToplevelInfo> = entries.iter().map(|e| e.info.clone()).collect();
+            apply_info_event(&mut infos, index, InfoEvent::Closed);
+            entries.remove(index);
+            drop(entries);
+            state.sync_toplevels();
+            return;
+        }
+        let info_event = match event {
+            ZwlrForeignToplevelHandleV1Event::Title { title } => Some(InfoEvent::Title(title)),
+            ZwlrForeignToplevelHandleV1Event::AppId { app_id } => Some(InfoEvent::AppId(app_id)),
+            ZwlrForeignToplevelHandleV1Event::State { state } => Some(InfoEvent::Active(
+                state.contains(&(ZwlrForeignToplevelHandleV1State::Activated as u8)),
+            )),
+            _ => None,
+        };
+        if let Some(info_event) = info_event {
+            let mut infos: Vec<ToplevelInfo> = entries.iter().map(|e| e.info.clone()).collect();
+            apply_info_event(&mut infos, index, info_event);
+            entries[index].info = infos[index].clone();
+        }
+        drop(entries);
+        state.sync_toplevels();
     }
+}
+
+fn physical_point(position: (f64, f64), scale: f64) -> CursorPoint {
+    CursorPoint::from((position.0 * scale, position.1 * scale))
 }
 
 delegate_compositor!(Shell);
@@ -1686,3 +1896,40 @@ delegate_touch!(Shell);
 delegate_session_lock!(Shell);
 delegate_dispatch!(Shell: [zwlr_layer_shell_v1::ZwlrLayerShellV1: sctk::globals::GlobalData] => LayerShell);
 delegate_dispatch!(Shell: [zwlr_layer_surface_v1::ZwlrLayerSurfaceV1: LayerSurfaceData] => LayerShell);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pointer_and_touch_coordinates_become_physical() {
+        assert_eq!(
+            physical_point((10.0, 20.0), 1.5),
+            CursorPoint::from((15.0, 30.0))
+        );
+        assert_eq!(
+            physical_point((3.0, 4.0), 2.0),
+            CursorPoint::from((6.0, 8.0))
+        );
+    }
+
+    #[test]
+    fn interleaved_info_events_update_their_own_toplevel() {
+        let mut infos = vec![ToplevelInfo::default(), ToplevelInfo::default()];
+        apply_info_event(&mut infos, 0, InfoEvent::Title("Editor".into()));
+        apply_info_event(&mut infos, 1, InfoEvent::Title("Navegador".into()));
+        apply_info_event(&mut infos, 0, InfoEvent::AppId("editor".into()));
+        apply_info_event(&mut infos, 1, InfoEvent::Active(true));
+        apply_info_event(&mut infos, 0, InfoEvent::Active(false));
+
+        assert_eq!(infos[0].title, "Editor");
+        assert_eq!(infos[0].app_id, "editor");
+        assert!(!infos[0].active);
+        assert_eq!(infos[1].title, "Navegador");
+        assert!(infos[1].active);
+
+        apply_info_event(&mut infos, 0, InfoEvent::Closed);
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].title, "Navegador");
+    }
+}
