@@ -4,13 +4,14 @@
 //! shell's global menus and context menus: it opens submenus as child popups,
 //! supports keyboard navigation and reports actions through `on_activate`.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use freya_core::integration::AppComponent;
+use freya_core::integration::{AppComponent, default_fonts};
 use freya_core::prelude::*;
+use freya_engine::prelude::{FontCollection, FontMgr, ParagraphBuilder, ParagraphStyle, TextStyle};
 use keyboard_types::{Key, NamedKey};
-use skia_safe as skia;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 
 // Freya re-exports `State` as the reactive handle returned by `use_state`.
@@ -21,31 +22,59 @@ use crate::platform::{
 };
 use yuki_design::{MenuPalette, Rgba};
 
+/// The sans stack from `yuki-design` (`neptunia/tokens.json`). The renderer
+/// receives the same list through [`MenuView::render`], so measuring and
+/// drawing always shape the same glyphs.
+const FONT_FAMILIES: &[&str] = &["Geist", "Noto Sans CJK SC", "system-ui", "sans-serif"];
+
 thread_local! {
-    static FONT_CACHE: RefCell<Option<skia::Font>> = const { RefCell::new(None) };
+    static FONT_COLLECTION: RefCell<Option<FontCollection>> = const { RefCell::new(None) };
 }
 
-/// Measures the horizontal advance of `text` using the same Skia font as the
-/// renderer. A missing system font falls back to Skia's default so the test
-/// still produces deterministic sizes on headless runners.
+/// The process-wide text stack for measurement. Mirrors the renderer's
+/// `FontCollection` (system manager plus the shell's fallback families).
+fn font_families() -> Vec<Cow<'static, str>> {
+    let mut families: Vec<Cow<'static, str>> = FONT_FAMILIES
+        .iter()
+        .map(|name| Cow::Borrowed(*name))
+        .collect();
+    families.extend(default_fonts());
+    families
+}
+
+fn font_collection() -> FontCollection {
+    FONT_COLLECTION.with(|cache| {
+        cache
+            .borrow_mut()
+            .get_or_insert_with(|| {
+                let mut collection = FontCollection::new();
+                collection.set_default_font_manager(FontMgr::default(), None);
+                collection.set_dynamic_font_manager(FontMgr::custom_empty().unwrap_or_default());
+                collection.paragraph_cache_mut().turn_on(false);
+                collection
+            })
+            .clone()
+    })
+}
+
+/// Measures `text` with the same paragraph stack Freya draws it with. The
+/// previous implementation used its own `FontMgr`, which missed the fallback
+/// faces that carry `⇧`, `⌃` or accented glyphs and returned a too-small width.
 fn measure_text(text: &str, size: f32) -> f32 {
     if text.is_empty() {
         return 0.0;
     }
-    FONT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        let font = cache.get_or_insert_with(|| {
-            let font_mgr = skia::FontMgr::new();
-            let typeface = font_mgr
-                .match_family_style("Geist", skia::FontStyle::normal())
-                .or_else(|| font_mgr.match_family_style("Noto Sans", skia::FontStyle::normal()))
-                .unwrap_or_else(|| skia::Font::default().typeface());
-            skia::Font::new(typeface, None)
-        });
-        font.set_size(size);
-        // `measure_text` returns (width, bounds).
-        font.measure_text(text, None).0
-    })
+    let mut paragraph_style = ParagraphStyle::default();
+    let mut text_style = TextStyle::default();
+    text_style.set_font_size(size);
+    text_style.set_font_families(&font_families());
+    paragraph_style.set_text_style(&text_style);
+
+    let mut builder = ParagraphBuilder::new(&paragraph_style, font_collection());
+    builder.add_text(text);
+    let mut paragraph = builder.build();
+    paragraph.layout(f32::MAX);
+    paragraph.max_intrinsic_width()
 }
 
 /// State of a check/radio mark in a menu item.
@@ -244,7 +273,7 @@ impl App for MenuView {
             .direction(Direction::Vertical)
             .children(rows);
 
-        rect()
+        let mut root = rect()
             .width(Size::px(size.0))
             .height(Size::px(size.1))
             .corner_radius(m.radius)
@@ -254,81 +283,84 @@ impl App for MenuView {
                     .alignment(BorderAlignment::Inner)
                     .fill(rgba(m.outer_border)),
             )
-            .child(content)
-            .on_key_down(move |event: Event<KeyboardEventData>| {
-                let mut focused = focused;
-                let open_child_id = open_child_id.clone();
-                let current = *focused.read();
-                match event.key {
-                    Key::Named(NamedKey::ArrowDown) => {
-                        focused.set(next_selectable(&items, current, 1));
-                    }
-                    Key::Named(NamedKey::ArrowUp) => {
-                        focused.set(next_selectable(&items, current, -1));
-                    }
-                    Key::Named(NamedKey::Home) => {
-                        focused.set(first_selectable(&items));
-                    }
-                    Key::Named(NamedKey::End) => {
-                        focused.set(last_selectable(&items));
-                    }
-                    Key::Named(NamedKey::Enter) => {
-                        if let Some(index) = *focused.read() {
-                            activate_or_open(
-                                &items,
-                                index,
-                                popup.clone(),
-                                size,
-                                m,
-                                on_activate.clone(),
-                                on_dismiss_all.clone(),
-                                open_child_id,
-                            );
-                        }
-                    }
-                    Key::Character(ref ch) if ch == " " => {
-                        if let Some(index) = *focused.read() {
-                            activate_or_open(
-                                &items,
-                                index,
-                                popup.clone(),
-                                size,
-                                m,
-                                on_activate.clone(),
-                                on_dismiss_all.clone(),
-                                open_child_id,
-                            );
-                        }
-                    }
-                    Key::Named(NamedKey::ArrowRight) => {
-                        if let Some(index) = *focused.read()
-                            && let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
-                            && let Some(popup) = popup.clone()
-                        {
-                            open_child_popup(
-                                index,
-                                sub,
-                                popup,
-                                size,
-                                m,
-                                on_activate.clone(),
-                                on_dismiss_all.clone(),
-                                open_child_id,
-                                items.clone(),
-                            );
-                        }
-                    }
-                    Key::Named(NamedKey::ArrowLeft) => {
-                        if let Some(popup) = &popup {
-                            popup.close();
-                        }
-                    }
-                    // Esc is handled compositor-side: it dismisses the topmost
-                    // popup and sends `popup_done`. The client must not close an
-                    // extra level here. See `State::dismiss_topmost_popup`.
-                    _ => {}
+            .child(content);
+        for family in FONT_FAMILIES {
+            root = root.font_family(*family);
+        }
+        root.on_key_down(move |event: Event<KeyboardEventData>| {
+            let mut focused = focused;
+            let open_child_id = open_child_id.clone();
+            let current = *focused.read();
+            match event.key {
+                Key::Named(NamedKey::ArrowDown) => {
+                    focused.set(next_selectable(&items, current, 1));
                 }
-            })
+                Key::Named(NamedKey::ArrowUp) => {
+                    focused.set(next_selectable(&items, current, -1));
+                }
+                Key::Named(NamedKey::Home) => {
+                    focused.set(first_selectable(&items));
+                }
+                Key::Named(NamedKey::End) => {
+                    focused.set(last_selectable(&items));
+                }
+                Key::Named(NamedKey::Enter) => {
+                    if let Some(index) = *focused.read() {
+                        activate_or_open(
+                            &items,
+                            index,
+                            popup.clone(),
+                            size,
+                            m,
+                            on_activate.clone(),
+                            on_dismiss_all.clone(),
+                            open_child_id,
+                        );
+                    }
+                }
+                Key::Character(ref ch) if ch == " " => {
+                    if let Some(index) = *focused.read() {
+                        activate_or_open(
+                            &items,
+                            index,
+                            popup.clone(),
+                            size,
+                            m,
+                            on_activate.clone(),
+                            on_dismiss_all.clone(),
+                            open_child_id,
+                        );
+                    }
+                }
+                Key::Named(NamedKey::ArrowRight) => {
+                    if let Some(index) = *focused.read()
+                        && let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
+                        && let Some(popup) = popup.clone()
+                    {
+                        open_child_popup(
+                            index,
+                            sub,
+                            popup,
+                            size,
+                            m,
+                            on_activate.clone(),
+                            on_dismiss_all.clone(),
+                            open_child_id,
+                            items.clone(),
+                        );
+                    }
+                }
+                Key::Named(NamedKey::ArrowLeft) => {
+                    if let Some(popup) = &popup {
+                        popup.close();
+                    }
+                }
+                // Esc is handled compositor-side: it dismisses the topmost
+                // popup and sends `popup_done`. The client must not close an
+                // extra level here. See `State::dismiss_topmost_popup`.
+                _ => {}
+            }
+        })
     }
 }
 
@@ -542,7 +574,7 @@ fn render_item(
                 .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
                 .corner_radius(m.item_radius)
                 .direction(Direction::Horizontal)
-                .main_align(Alignment::Start)
+                .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
                 .on_pointer_enter(move |_| {
                     if enabled {
@@ -559,14 +591,18 @@ fn render_item(
             if let Some(bg) = bg {
                 row = row.background(rgba(bg));
             }
-            row.child(mark_element(check, fg, m.font_size, m.mark_width))
+            let left = rect()
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .child(mark_element(check, fg, m.font_size, m.mark_width))
                 .child(
                     label()
                         .text(label_text)
                         .font_size(m.font_size)
                         .color(rgba(fg))
-                        .width(Size::fill()),
-                )
+                        .max_lines(1),
+                );
+            row.child(left)
                 .child(
                     label()
                         .text(shortcut_text.unwrap_or_default())
@@ -617,7 +653,7 @@ fn render_item(
                 .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
                 .corner_radius(m.item_radius)
                 .direction(Direction::Horizontal)
-                .main_align(Alignment::Start)
+                .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
                 .on_pointer_enter(move |_| {
                     if enabled {
@@ -655,21 +691,23 @@ fn render_item(
             if let Some(bg) = bg {
                 row = row.background(rgba(bg));
             }
-            row.child(mark_element(
-                CheckState::None,
-                fg,
-                m.font_size,
-                m.mark_width,
-            ))
-            .child(
-                label()
-                    .text(label_text)
-                    .font_size(m.font_size)
-                    .color(rgba(fg))
-                    .width(Size::fill()),
-            )
-            .child(chevron_element(m))
-            .into_element()
+            let left = rect()
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .child(mark_element(
+                    CheckState::None,
+                    fg,
+                    m.font_size,
+                    m.mark_width,
+                ))
+                .child(
+                    label()
+                        .text(label_text)
+                        .font_size(m.font_size)
+                        .color(rgba(fg))
+                        .max_lines(1),
+                );
+            row.child(left).child(chevron_element(m)).into_element()
         }
     }
 }

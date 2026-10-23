@@ -9,7 +9,7 @@ use celestial_kit::menu::{CheckState, MenuItem, MenuView};
 use freya_core::integration::AppComponent;
 use freya_testing::TestingRunner;
 use torin::prelude::Size2D;
-use yuki_design::{MENU_DARK, MENU_LIGHT};
+use yuki_design::{MENU_DARK, MENU_LIGHT, MenuPalette};
 
 const TOLERANCE: u8 = 3;
 
@@ -148,8 +148,7 @@ fn golden_path_accents(dark: bool) -> PathBuf {
         ))
 }
 
-fn decode(path: &Path) -> (u32, u32, Vec<u8>) {
-    let bytes = fs::read(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+fn decode_bytes(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().unwrap();
@@ -166,9 +165,49 @@ fn decode(path: &Path) -> (u32, u32, Vec<u8>) {
     (info.width, info.height, rgba)
 }
 
-fn compare(golden: &Path, actual_png: &[u8], dark: bool) {
+fn decode(path: &Path) -> (u32, u32, Vec<u8>) {
+    let bytes = fs::read(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
+    decode_bytes(&bytes)
+}
+
+/// The right `padding + border_width` columns are outside every row, so only
+/// the panel background may appear there. A shortcut or label that does not
+/// fit paints into that band; the previous measurer did exactly that.
+fn assert_right_padding_is_background(png: &[u8], palette: MenuPalette, label: &str) {
+    let (width, height, pixels) = decode_bytes(png);
+    let border = palette.border_width.ceil() as u32;
+    let padding = palette.padding.ceil() as u32;
+    // Torin lays padding inside the border, so the text-free band is the last
+    // `padding` columns; the last `border` column is the frame itself.
+    let start = width.saturating_sub(padding);
+    let end = width.saturating_sub(border);
+    let radius = palette.radius.ceil() as u32 + 1;
+    let background = palette.bg.to_rgba8();
+    let mut offenders = Vec::new();
+    for y in radius..height.saturating_sub(radius) {
+        for x in start..end {
+            let offset = ((y * width + x) * 4) as usize;
+            let pixel = &pixels[offset..offset + 4];
+            if pixel
+                .iter()
+                .zip(&background)
+                .any(|(actual, expected)| actual.abs_diff(*expected) > TOLERANCE)
+            {
+                offenders.push((x, y));
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "{label}: {} text pixels in the right padding (first at {:?})",
+        offenders.len(),
+        offenders.first()
+    );
+}
+
+fn compare(golden: &Path, actual_png: &[u8], dark: bool, name: &str) {
     let actual_path = std::env::temp_dir().join(format!(
-        "yuki-menu-view-{}.png",
+        "yuki-menu-{name}-{}.png",
         if dark { "dark" } else { "light" }
     ));
     fs::write(&actual_path, actual_png).unwrap();
@@ -198,7 +237,7 @@ fn menu_matches_its_golden_images() {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(&path, &actual).unwrap();
         } else {
-            compare(&path, &actual, dark);
+            compare(&path, &actual, dark, "view");
         }
     }
 }
@@ -213,7 +252,17 @@ fn menu_renders_accents_and_long_shortcuts_without_wrapping() {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(&path, &actual).unwrap();
         } else {
-            compare(&path, &actual, dark);
+            compare(&path, &actual, dark, "accents");
         }
+    }
+}
+
+#[test]
+fn menu_text_stays_out_of_the_right_padding() {
+    for dark in [false, true] {
+        let palette = if dark { MENU_DARK } else { MENU_LIGHT };
+        let theme = if dark { "dark" } else { "light" };
+        assert_right_padding_is_background(&render(dark), palette, theme);
+        assert_right_padding_is_background(&render_accents(dark), palette, theme);
     }
 }
