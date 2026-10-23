@@ -47,7 +47,9 @@ documentado en [`../configuracion/opciones.md`](../configuracion/opciones.md).
 - El proceso se lanza con `setsid`, sin la environment de Mesa del compositor
   (mismo criterio que ADR 0007). Antes de lanzar pide un token de
   `xdg-activation` con el serial de la última tecla y lo pasa como
-  `XDG_ACTIVATION_TOKEN` y `DESKTOP_STARTUP_ID`.
+  `XDG_ACTIVATION_TOKEN` y `DESKTOP_STARTUP_ID`. Si el token no llega en 250 ms,
+lanza igualmente sin él para que `Enter` no se quede bloqueado; el proceso
+arranca, solo pierde el traspaso de foco.
 - Iconos: `YUKI_ICON_THEME` (por defecto `Adwaita`), después `hicolor` y
   `pixmaps`; SVG con Skia y PNG por tamaño. Si no hay icono, la inicial en un
   cuadrado de Neptunia.

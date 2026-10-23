@@ -5,6 +5,7 @@
 //! `.desktop` entries with the XDG precedence rules in [`crate::desktop`].
 
 use std::{
+    cell::Cell,
     env,
     os::unix::process::CommandExt,
     path::PathBuf,
@@ -115,15 +116,32 @@ impl App for LauncherApp {
         let progress = *self.progress.read();
 
         let activation = Activation::get();
+        let timers = Timers::get();
         let launch = {
             let activation = activation.clone();
             let close = self.close.clone();
             Rc::new(move |entry: AppEntry| {
                 let activation = activation.clone();
                 let close = close.clone();
+                let timers = timers.clone();
+                let launched = Rc::new(Cell::new(false));
+                let fallback_entry = entry.clone();
+                let fallback_close = close.clone();
+                let fallback_launched = launched.clone();
+                // The compositor can refuse or delay the activation token.
+                // Launching without it after a short grace keeps Enter usable;
+                // the app still starts, only without the focus hand-off.
+                timers.after(Duration::from_millis(250), move || {
+                    if !fallback_launched.replace(true) {
+                        spawn_entry(&fallback_entry.desktop, None);
+                        fallback_close();
+                    }
+                });
                 activation.request(move |token| {
-                    spawn_entry(&entry.desktop, token.as_deref());
-                    close();
+                    if !launched.replace(true) {
+                        spawn_entry(&entry.desktop, token.as_deref());
+                        close();
+                    }
                 });
             }) as Rc<dyn Fn(AppEntry)>
         };

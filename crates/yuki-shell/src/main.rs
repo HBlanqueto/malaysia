@@ -33,6 +33,7 @@ fn main() -> ExitCode {
         Some("menubar") => menubar::run(),
         Some("dock") => dock::run(),
         Some("lock") => lock::run(),
+        Some("launcher") => launcher::run(),
         Some(other) => {
             eprintln!("yuki-shell: unknown component '{other}'");
             eprintln!("{USAGE}");
