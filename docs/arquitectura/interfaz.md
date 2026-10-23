@@ -33,13 +33,22 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
 | Quién | Qué dibuja | Cómo |
 |---|---|---|
 | Shell (`yuki-shell wallpaper/menubar/dock/lock/launcher`) | Toda su UI, en su propio proceso | CelestialKit (Freya + Skia) sobre su superficie |
-| Apps propias | Su UI, **su titlebar y sus semáforos** (CSD, `xdg-decoration` client-side) | CelestialKit + tokens de `yuki-design` |
+| Apps propias con `Decorations::Client` (por defecto) | Su UI, **su titlebar de 44 px y sus semáforos** | CelestialKit + tokens de `yuki-design` |
+| Apps propias con `Decorations::Server` | Su UI; Yuki dibuja la titlebar SSD de 32 px | CelestialKit para el contenido; compositor para el chrome |
 | Apps ajenas que piden SSD | Su contenido | El compositor les añade la titlebar SSD (`chrome.rs`) |
 | Compositor (Yuki) | Composición, sombras, esquinas, desenfoque y animaciones de ventana | GLES + `grade-graphics`, como WindowServer |
 
-La shell y las apps propias **no** usan la titlebar del compositor. El kit
+La shell nunca usa la titlebar del compositor. Las apps propias eligen: Client
+dibuja su barra de 44 px; Server acepta la de Yuki de 32 px. El kit
 pedirá los efectos del compositor por Infinity cuando esté disponible; hasta
 entonces el compositor los aplica igualmente a todas las superficies.
+
+### Cuándo usar cada modo
+
+| Modo | Barra | Cuándo |
+|---|---|---|
+| `Decorations::Client` | CelestialKit, 44 px, con toolbar | Apps con toolbar o sidebar, como Ajustes |
+| `Decorations::Server` | Yuki, 32 px | Utilidades simples, sin toolbar |
 
 ## Capas y orden de composición
 

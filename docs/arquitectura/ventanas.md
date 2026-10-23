@@ -30,14 +30,22 @@ ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
 ## Apps propias y CSD (ADR 0035)
 
 Una app de CelestialKit se identifica con un `app_id` que empieza por
-`NATIVE_APP_ID_PREFIX` (`io.github.hblanqueto.yuki.`) y pide CSD explícito por
-`xdg-decoration` (`ClientSide`) antes de su primer commit. Para esas ventanas el
-modo efectivo es siempre `Client`: Yuki no les pone barra ni con
-`window.decorations = "force_server"`. La app dibuja su titlebar y sus
-`TrafficLights` con CelestialKit. El prefijo no autentica nada y solo decide si
-se dibuja una barra; Infinity lo reemplazará cuando exista. Si una app propia
-pide explícitamente `Server`, el compositor avisa una vez por ventana («app
-propia que no pidió CSD») y sigue sin barra.
+`NATIVE_APP_ID_PREFIX` (`io.github.hblanqueto.yuki.`) y pide siempre su modo de
+decoración por `xdg-decoration` antes del primer commit:
+
+- `Decorations::Client` (por defecto): dibuja su barra unificada de **44 px**
+  (`titlebar-h`) con `TrafficLights` y hueco de toolbar. Es la opción para apps
+  con toolbar o sidebar, como Ajustes.
+- `Decorations::Server`: Yuki dibuja su barra de **32 px** (`titlebar-ssd-h`).
+  Es la opción para utilidades simples sin toolbar.
+
+Para estas ventanas Yuki respeta el modo pedido y no aplica
+`window.decorations`: `force_server`/`force_client` solo afectan a apps ajenas.
+Si una app propia no envía `request_mode`, negocia `Client` y el compositor
+avisa una vez por ventana («app propia sin modo de decoración»). Si el
+compositor no soporta `xdg-decoration`, el kit dibuja su barra de 44 px. El
+prefijo no autentica nada y solo decide quién dibuja la barra; Infinity lo
+reemplazará cuando exista.
 
 ## Resize por bordes
 

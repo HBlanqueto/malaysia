@@ -74,10 +74,9 @@ semáforos de 12, tema claro por defecto.
 
 ## Shell sobre Freya — pendientes
 
-- [ ] **Ventanas de apps propias (`xdg_toplevel`)**: el runner todavía no crea
-      toplevels. El contrato de CSD, app-id con `NATIVE_APP_ID_PREFIX` y foco
-      está en el [ADR 0035](decisiones/0035-identificacion-de-apps-propias-y-csd.md)
-      y en el `TODO(ADR 0035)` de `crates/celestial-kit/src/platform/mod.rs`.
+- [ ] **Doble clic de la titlebar CSD**: leer `window.double_click_titlebar`
+      de `~/.config/yuki/window.domain`; hoy el kit usa
+      `TITLEBAR_DOUBLE_CLICK` como `TODO(ADR 0035)`.
 - [ ] **Portapapeles propio por `wl_data_device`** (y selección primaria
       `zwp_primary_selection`). Hoy `freya-clipboard` aporta `copypasta`, que
       arrastra `x11rb` y una segunda copia de SCTK 0.20/calloop 0.14; el kit
