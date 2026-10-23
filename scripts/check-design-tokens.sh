@@ -38,7 +38,8 @@ ui_files="crates/yuki-shell/src/menubar.rs
 crates/yuki-shell/src/dock.rs
 crates/yuki-shell/src/lock.rs
 crates/celestial-kit/src/password.rs
-crates/celestial-kit/src/text.rs"
+crates/celestial-kit/src/controls.rs
+crates/celestial-kit/src/theme.rs"
 if matches=$(production $ui_files |
     grep -E ':[0-9]+:[[:space:]]*const [A-Z0-9_]+: (i32|u32|f32) = [0-9]'); then
     report "UI measurements must live in yuki-design" "$matches"

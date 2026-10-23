@@ -23,6 +23,8 @@
         mesa
         wayland
         udev
+        freetype
+        fontconfig
       ];
     in
     {
