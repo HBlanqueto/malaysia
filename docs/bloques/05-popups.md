@@ -24,9 +24,10 @@ cliente.
   El popup se configura con la geometría ajustada **antes** de mapear.
 - **Geometría del padre.** El popup se ancla contra el rect usable del toplevel
   (`Windows::usable_rect` — el `window_geometry` xdg), contra el rect de otro
-  popup, o contra la geometría de una layer surface — `get_popup` de
-  `zwlr_layer_surface_v1` ya funciona porque `WlrLayerShellState` engancha el
-  padre y `Layers::geometry_of` lo devuelve.
+  popup, o contra la geometría de una layer surface. `get_popup` de
+  `zwlr_layer_surface_v1` engancha el padre y `Layers::geometry_of` lo
+  devuelve, pero eso solo no bastaba para que el popup se configurara y
+  mapeara: ver la nota del 2026-10-23.
 - **Render.** Los popups mapeados se dibujan encima de las ventanas (entre las
   capas `Bottom` y `Top`) en `session.rs`, y reciben frame callbacks.
 - **Cierre.**
@@ -69,9 +70,24 @@ cliente.
 
 ## Notas
 
+### Nota (2026-10-23): popups hijos de layer-shell
+
+La afirmación anterior de que `get_popup` de layer-shell «ya funcionaba» era
+incompleta. Smithay engancha el padre con `get_popup`, pero **hasta `ab8e0b5`
+el compositor no implementaba `WlrLayerShellHandler::new_popup`**, así que
+`add_popup` nunca se ejecutaba para un popup hijo de una layer surface: no se
+enviaba configure, no se rastreaba y no se mapeaba. Además, el cliente de
+CelestialKit esperaba un frame callback antes de adjuntar el primer buffer, y
+un popup no recibe frame callbacks hasta estar mapeado. `ab8e0b5` corrige
+ambas mitades: `new_popup` lee el positioner ya enviado y llama a `add_popup`,
+commitea la layer padre tras `get_popup`, y el cliente dibuja el primer frame
+en el configure. Las capturas del Bloque 14 son la verificación en vivo; el
+detalle está en [`14-menu-global.md`](14-menu-global.md).
+
 - `get_popup` de layer-shell se sirve por el propio `WlrLayerShellState` de
   Smithay (engancha el padre a la layer surface); el compositor solo tiene que
-  conocer la geometría del padre, que `Layers::geometry_of` ya da.
+  conocer la geometría del padre, que `Layers::geometry_of` ya da. Esto sigue
+  siendo cierto, pero no suficiente sin `new_popup`; ver la nota de arriba.
 - Los popups no toman foco de teclado: el foco sigue en el toplevel padre
   (o donde estuviera), como manda el protocolo.
 - El reposicionado reactivo (`reactive` en el positioner) no se implementa aún;

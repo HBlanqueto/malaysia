@@ -115,6 +115,10 @@ esas etiquetas.
 
 ## Divergencias
 
+- **Prerrequisito de los popups de layer**: los menús no se veían hasta
+  `ab8e0b5`; faltaba `WlrLayerShellHandler::new_popup` en el compositor y el
+  primer buffer del cliente. Está corregido y documentado en la
+  [nota del Bloque 5](05-popups.md#nota-2026-10-23-popups-hijos-de-layer-shell).
 - **Sombra (`shadow-float`)**: el cliente no la dibuja. El panel solo pinta el
   fondo, los bordes `window-outer`/`window-inner` y el contenido; la sombra de
   la ventana flotante la aplicará el compositor, como indica ADR 0024. Esto
