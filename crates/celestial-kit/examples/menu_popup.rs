@@ -27,6 +27,7 @@ impl App for Demo {
     fn render(&self) -> impl IntoElement {
         let root_id = self.root_id.clone();
         let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
+        let show = std::env::var("MENU_POPUP_SHOW").ok();
 
         if std::env::var_os("MENU_POPUP_SELFTEST").is_some() {
             let root_id = root_id.clone();
@@ -107,16 +108,57 @@ impl App for Demo {
             });
         }
 
-        rect()
+        if let Some(case) = show.clone() {
+            let root_id = root_id.clone();
+            let popups = Popups::get();
+            let timers = Timers::get();
+            // The layer surface is configured after the first render, so read
+            // the output width when the timer fires, not now.
+            let platform = Platform::get();
+            use_hook(move || {
+                let root_id = root_id.clone();
+                let popups = popups.clone();
+                let case = case.clone();
+                let platform = platform.clone();
+                timers.after(Duration::from_millis(500), move || {
+                    let output_width = platform.root_size.read().width;
+                    open_show(&root_id, &case, palette, popups.clone(), output_width);
+                });
+            });
+        }
+
+        let yuki_root = root_id.clone();
+        let ir_root = root_id.clone();
+        let editar_root = root_id.clone();
+        let left = rect()
+            .direction(Direction::Horizontal)
+            .main_align(Alignment::Start)
+            .child(menu_label("Yuki", move || {
+                open_menu(&yuki_root, yuki_menu(palette), palette);
+            }))
+            .child(menu_label("Ir", move || {
+                open_direct(&ir_root, go_menu(), palette, 56);
+            }))
+            .child(menu_label("Editar", move || {
+                open_direct(&editar_root, edit_menu(), palette, 82);
+            }));
+        let mut bar = rect()
             .width(Size::fill())
             .height(Size::px(BAR_HEIGHT))
             .direction(Direction::Horizontal)
-            .main_align(Alignment::Start)
+            .main_align(Alignment::SpaceBetween)
             .padding(Gaps::new(0.0, 12.0, 0.0, 12.0))
             .background(rgba(palette.bg))
-            .child(menu_label("Yuki", move || {
-                open_menu(&root_id, yuki_menu(palette), palette);
-            }))
+            .child(left);
+        if show.as_deref() == Some("borde") {
+            bar = bar.child(
+                label()
+                    .text("Borde")
+                    .font_size(13.0)
+                    .padding(Gaps::new(0.0, 8.0, 0.0, 8.0)),
+            );
+        }
+        bar
     }
 }
 
@@ -210,6 +252,230 @@ fn open_root_for_selftest(
         },
         AppComponent::new(view),
     )
+}
+
+/// Opens a root menu from a clicked bar title.
+fn open_direct(
+    root_id: &Arc<Mutex<Option<PopupId>>>,
+    items: Vec<MenuItem>,
+    palette: yuki_design::MenuPalette,
+    anchor_x: i32,
+) {
+    let size = MenuView::preferred_size(&items, palette);
+    let cell = root_id.clone();
+    let on_dismiss_all = move || {
+        if let Some(id) = cell.lock().unwrap().take() {
+            Popups::get().close(id);
+        }
+    };
+    let view = MenuView::new(
+        items,
+        |id| eprintln!("menu example: activated {id}"),
+        on_dismiss_all,
+        palette,
+    );
+    let id = Popups::get().open(
+        PopupSpec {
+            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor: PopupAnchor::BottomLeft,
+            gravity: PopupGravity::BottomLeft,
+            offset: (0, 0),
+            size: (size.0 as u32, size.1 as u32),
+            constraint_adjustment: PopupConstraintAdjustment {
+                flip_x: true,
+                flip_y: true,
+                slide_x: true,
+                slide_y: true,
+            },
+            grab: true,
+            on_dismissed: None,
+        },
+        AppComponent::new(view),
+    );
+    root_id.lock().unwrap().replace(id);
+}
+
+/// Opens the menu named by `MENU_POPUP_SHOW`, without grab or real input.
+fn open_show(
+    root_id: &Arc<Mutex<Option<PopupId>>>,
+    case: &str,
+    palette: yuki_design::MenuPalette,
+    popups: Popups,
+    output_width: f32,
+) {
+    let (items, anchor_x, nested) = match case {
+        "ir" => (go_menu(), 56, false),
+        "editar-sub" => (edit_menu(), 82, true),
+        "borde" => (edit_menu(), (output_width - 40.0).max(0.0) as i32, true),
+        other => {
+            eprintln!("menu_popup: MENU_POPUP_SHOW has no case {other:?}");
+            return;
+        }
+    };
+    let size = MenuView::preferred_size(&items, palette);
+    let cell = root_id.clone();
+    let on_dismiss_all: Rc<dyn Fn()> = Rc::new(move || {
+        if let Some(id) = cell.lock().unwrap().take() {
+            Popups::get().close(id);
+        }
+    });
+    let content = if nested {
+        let next = first_submenu(&items);
+        AppComponent::new(NestedMenu {
+            items,
+            palette,
+            on_activate: Rc::new(|id| eprintln!("menu example: activated {id}")),
+            on_dismiss_all,
+            parent_size: size,
+            next,
+            delay_ms: 350,
+            open_left: case == "borde",
+        })
+    } else {
+        let view = MenuView::new(
+            items,
+            |id| eprintln!("menu example: activated {id}"),
+            move || on_dismiss_all(),
+            palette,
+        );
+        AppComponent::new(view)
+    };
+    let id = popups.open(
+        PopupSpec {
+            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor: PopupAnchor::BottomLeft,
+            gravity: PopupGravity::BottomLeft,
+            offset: (0, 0),
+            size: (size.0 as u32, size.1 as u32),
+            constraint_adjustment: PopupConstraintAdjustment {
+                flip_x: case != "borde",
+                flip_y: true,
+                slide_x: true,
+                slide_y: true,
+            },
+            grab: false,
+            on_dismissed: None,
+        },
+        content,
+    );
+    root_id.lock().unwrap().replace(id);
+}
+
+fn first_submenu(items: &[MenuItem]) -> Option<usize> {
+    items
+        .iter()
+        .position(|item| matches!(item, MenuItem::Submenu { .. }))
+}
+
+fn item_top(index: usize, items: &[MenuItem], m: yuki_design::MenuPalette) -> f32 {
+    let mut y = 0.0;
+    for (i, item) in items.iter().enumerate() {
+        if i == index {
+            return y;
+        }
+        match item {
+            MenuItem::Separator => y += m.separator_height + m.separator_margin_y * 2.0,
+            _ => y += m.item_height,
+        }
+    }
+    0.0
+}
+
+/// Renders a menu and opens its first submenu through the API, recursively,
+/// so `MENU_POPUP_SHOW=editar-sub` shows root, child and grandchild.
+struct NestedMenu {
+    items: Vec<MenuItem>,
+    palette: yuki_design::MenuPalette,
+    on_activate: Rc<dyn Fn(String)>,
+    on_dismiss_all: Rc<dyn Fn()>,
+    parent_size: (f32, f32),
+    next: Option<usize>,
+    delay_ms: u64,
+    open_left: bool,
+}
+
+impl App for NestedMenu {
+    fn render(&self) -> impl IntoElement {
+        let palette = self.palette;
+        let parent_size = self.parent_size;
+        let items = self.items.clone();
+        let next = self.next;
+        let delay = self.delay_ms;
+        let on_activate = self.on_activate.clone();
+        let on_dismiss_all = self.on_dismiss_all.clone();
+        let hook_activate = on_activate.clone();
+        let hook_dismiss = on_dismiss_all.clone();
+        let handle = PopupHandle::get();
+        let timers = Timers::get();
+        use_hook(move || {
+            let Some(index) = next else {
+                return;
+            };
+            let Some(MenuItem::Submenu {
+                items: child_items, ..
+            }) = items.get(index)
+            else {
+                return;
+            };
+            let child_items = child_items.clone();
+            let child_size = MenuView::preferred_size(&child_items, palette);
+            let top = item_top(index, &items, palette);
+            let activate = hook_activate.clone();
+            let dismiss = hook_dismiss.clone();
+            let open_left = self.open_left;
+            timers.after(Duration::from_millis(delay), move || {
+                let child = NestedMenu {
+                    next: first_submenu(&child_items),
+                    items: child_items.clone(),
+                    palette,
+                    on_activate: activate.clone(),
+                    on_dismiss_all: dismiss.clone(),
+                    parent_size: child_size,
+                    delay_ms: 250,
+                    open_left,
+                };
+                let (anchor, gravity, anchor_x, offset) = if open_left {
+                    (
+                        PopupAnchor::TopLeft,
+                        PopupGravity::BottomLeft,
+                        0,
+                        -(palette.submenu_offset as i32),
+                    )
+                } else {
+                    (
+                        PopupAnchor::TopRight,
+                        PopupGravity::TopRight,
+                        parent_size.0 as i32 - 1,
+                        palette.submenu_offset as i32,
+                    )
+                };
+                handle.open_child(
+                    PopupSpec {
+                        anchor_rect: (anchor_x, top as i32, 1, palette.item_height as u32),
+                        anchor,
+                        gravity,
+                        offset: (offset, 0),
+                        size: (child_size.0 as u32, child_size.1 as u32),
+                        constraint_adjustment: PopupConstraintAdjustment {
+                            flip_x: true,
+                            flip_y: true,
+                            slide_x: true,
+                            slide_y: true,
+                        },
+                        grab: false,
+                        on_dismissed: None,
+                    },
+                    AppComponent::new(child),
+                );
+            });
+        });
+        AppComponent::new(MenuView::new(
+            self.items.clone(),
+            move |id| on_activate(id),
+            move || on_dismiss_all(),
+            palette,
+        ))
+    }
 }
 
 fn menu_label(text: &'static str, on_click: impl Fn() + 'static) -> Element {
@@ -474,13 +740,20 @@ fn main() {
     let app = AppComponent::new(Demo {
         root_id: Arc::new(Mutex::new(None)),
     });
+    // In show mode the bar is only a popup parent: it must not reserve the
+    // menubar strip on top of the demo session.
+    let exclusive_zone = if std::env::var_os("MENU_POPUP_SHOW").is_some() {
+        0
+    } else {
+        BAR_HEIGHT as i32
+    };
     run_layer(
         app,
         SurfaceSpec::Layer {
             namespace: "yuki-menu-example".to_string(),
             layer: Layer::Top,
             anchors: Anchors::TOP,
-            exclusive_zone: BAR_HEIGHT as i32,
+            exclusive_zone,
             keyboard: KeyboardInteractivity::None,
             size: Some((0, BAR_HEIGHT as u32)),
         },

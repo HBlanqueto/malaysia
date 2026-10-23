@@ -61,9 +61,55 @@ let view = MenuView::new(
 ## Ejemplo
 
 `celestial-kit/examples/menu_popup.rs` levanta una barra `layer-shell` de 28 px
-con `keyboard_interactivity = None`. Tiene dos entradas (`Ir`, `Editar`) que
-abren menús con submenús de dos niveles, casillas, radios y items
+con `keyboard_interactivity = None`. Tiene entradas (`Yuki`, `Ir`, `Editar`)
+que abren menús con submenús de dos niveles, casillas, radios y items
 deshabilitados.
+
+Para muestras sin entrada real, `MENU_POPUP_SHOW=<caso>` abre el menú por la
+API (sin grab) y lo deja abierto: `ir` abre «Ir» bajo su título, `editar-sub`
+abre «Editar» con «Ordenar por» y «Orden» desplegados, y `borde` abre «Editar»
+desde el borde derecho para que el raíz se desplace y los submenús se abran a
+la izquierda. La barra del ejemplo no reserva zona exclusiva en este modo.
+
+## Capturas
+
+Sesión anidada (`./dev.sh demo`: wallpaper, menubar real, dock y ventanas) con
+el ejemplo en cada caso y captura por `SIGUSR1`. Claro y oscuro se obtienen
+escribiendo `color_scheme = "light"|"dark"` en `appearance.domain` y apuntando
+`YUKI_CONFIG_DIR` a ese directorio para el demo y el ejemplo.
+
+![Menú Ir en claro](img/14a/ir-claro.png)
+
+`ir-claro.png`: menú «Ir» en tema claro, «Inicio» resaltado y «Alt+Inicio»,
+«⇧⌘D», «⌥⌘L», etc. completos.
+
+![Menú Ir en oscuro](img/14a/ir-oscuro.png)
+
+`ir-oscuro.png`: el mismo menú «Ir» en tema oscuro.
+
+![Editar con submenús en claro](img/14a/editar-sub-claro.png)
+
+`editar-sub-claro.png`: «Editar» + «Ordenar por» + «Orden» (raíz, hijo y
+nieto), con «Deshacer», «Nombre» y «Ascendente» resaltados.
+
+![Editar con submenús en oscuro](img/14a/editar-sub-oscuro.png)
+
+`editar-sub-oscuro.png`: el mismo árbol de tres niveles en oscuro.
+
+![Menú en el borde en claro](img/14a/borde-claro.png)
+
+`borde-claro.png`: «Editar» abierto desde el borde derecho; el raíz se
+desplaza para caber y los submenús se abren hacia la izquierda.
+
+![Menú en el borde en oscuro](img/14a/borde-oscuro.png)
+
+`borde-oscuro.png`: la misma disposición de borde en oscuro.
+
+Nota de honestidad: la barra del ejemplo comparte la franja superior con el
+menubar real del demo y queda debajo de él, así que el título visible sobre el
+menú es el de la ventana activa (p. ej. `&sergio_ribera`), no las etiquetas
+«Ir»/«Editar»/«Borde» del ejemplo. El menú sí está anclado en la posición de
+esas etiquetas.
 
 ## Divergencias
 
