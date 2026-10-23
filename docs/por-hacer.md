@@ -1,6 +1,6 @@
 # Por hacer — plan de trabajo
 
-Última actualización: 2026-10-21.
+Última actualización: 2026-10-22.
 
 Este documento es la lista corta de lo que toca ahora. El plan de bloques de
 largo plazo vive en [`roadmap.md`](roadmap.md); aquí solo se ordena la
@@ -71,6 +71,23 @@ semáforos de 12, tema claro por defecto.
       (incluye el traspaso y los siguientes pasos).
 - [ ] Documentar/portar el resto de tokens de Neptunia y, si se puede, generar
       `yuki-design` desde sus JSON.
+
+## Shell sobre Freya — pendientes
+
+- [ ] **Portapapeles propio por `wl_data_device`** (y selección primaria
+      `zwp_primary_selection`). Hoy `freya-clipboard` aporta `copypasta`, que
+      arrastra `x11rb` y una segunda copia de SCTK 0.20/calloop 0.14; el kit
+      entrega un portapapeles vacío. Sustituirlo por un cliente Wayland propio
+      y quitar `freya-clipboard` del grafo del kit cuando ningún control lo
+      necesite.
+- [ ] **Eliminar la segunda copia de SCTK y calloop**: la trae
+      `freya-clipboard → smithay-clipboard → smithay-client-toolkit 0.20`
+      frente a la 0.19 del runner. Se va con el portapapeles propio o subiendo
+      el runner a 0.20 cuando sea compatible.
+- [ ] **Recuperación del lock con el runner nuevo** verificada (superficie de
+      recuperación creada y sin bucle); falta el desbloqueo PAM real y medir
+      con `WAYLAND_DEBUG=1` que cada lock nuevo crea una sola
+      `get_lock_surface` por salida.
 
 ## Después, en orden
 

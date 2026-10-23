@@ -156,6 +156,7 @@
         });
       in {
         default = yuki;
+        "yuki-shell" = yuki;
         skia-binaries = skia;
       });
 
@@ -264,6 +265,9 @@
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.
           shellHook = ''
+            ${pkgs.lib.optionalString hasFreyaSkia ''
+              export SKIA_BINARIES_URL="file://${skia}/skia-binaries.tar.gz"
+            ''}
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
             # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
@@ -272,8 +276,6 @@
             export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri''${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
             export GBM_BACKENDS_PATH="${pkgs.mesa}/lib/gbm''${GBM_BACKENDS_PATH:+:$GBM_BACKENDS_PATH}"
           '';
-        } // pkgs.lib.optionalAttrs hasFreyaSkia {
-          SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
         };
       });
     };
