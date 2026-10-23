@@ -2,7 +2,8 @@
 
 El segundo componente nativo del shell (ADR 0023/0034): la barra superior,
 como la menu bar de macOS. Primera versión: **nombre de la app activa** a la
-izquierda y **reloj** a la derecha. Sin menús globales por app todavía.
+izquierda y **reloj** a la derecha. El menú global por app está planeado
+(Bloque 14); ver [Menú global](#menú-global-planeado-bloque-14).
 
 ## Cómo funciona
 
@@ -79,6 +80,67 @@ el área útil).
 - El texto se rasteriza (el bug de `layout_runs` vacío se corrigió en 7.1);
   la menubar muestra la app activa y el reloj sobre la paleta clara de Neptunia.
 - Todo verde: clippy `-D warnings`, fmt y tests.
+
+## Menú global (planeado, Bloque 14)
+
+Todavía no hay código. La decisión está en el
+[ADR 0036](../decisiones/0036-menu-global.md) y la investigación en
+[`global-menu.md`](../investigacion/global-menu.md).
+
+### Flujo
+
+```
+app ──org_kde_kwin_appmenu──► compositor ──window.domain──► menubar
+                                                              │
+                                              com.canonical.dbusmenu
+                                                              ▼
+                                                     popups CelestialKit
+```
+
+El cliente anuncia el servicio y la ruta de su menú por superficie. El
+compositor guarda el par y publica el de la ventana enfocada en `window.domain`.
+La menubar pide el árbol dbusmenu y lo dibuja en popups de CelestialKit.
+
+### Los cuatro modos
+
+1. **Escritorio** (sin ventana enfocada): menú «Yuki».
+2. **Menú real**: la app entrega su menú por dbusmenu.
+3. **Respaldo**: la app no entrega menú; se usan nombre y acciones del
+   `.desktop`, los controles reales de la ventana y Salir.
+4. **App propia**: una app de CelestialKit exporta su menú por la misma vía
+   dbusmenu.
+
+### Menú «Yuki» aprobado (sin ventana enfocada)
+
+Título «Yuki». Las acciones de carpetas usan el gestor de archivos por defecto
+(`xdg-open`, carpetas de `xdg-user-dirs`).
+
+- **Sistema** (glifo de copo): Acerca de este equipo · Ajustes del sistema… ·
+  Suspender · Reiniciar… · Apagar… · Bloquear pantalla · Cerrar sesión…
+- **Yuki**: Acerca de Yuki · Ajustes… · Vaciar papelera…
+- **Archivo**: Nueva ventana (gestor de archivos en ~) · Nueva carpeta en el
+  escritorio · Abrir… · Buscar (abre el launcher)
+- **Edición**: Deshacer, Cortar, Copiar, Pegar, Seleccionar todo (deshabilitados
+  sin selección)
+- **Visualización**: Mostrar/ocultar dock · Cambiar fondo de pantalla…
+- **Ir**: Atrás/Adelante (deshabilitados) · Inicio · Escritorio · Documentos ·
+  Descargas · Imágenes · Música · Vídeos · Papelera · Ir a la carpeta…
+- **Ventana**: Minimizar todo · Mostrar escritorio · lista de ventanas
+- **Ayuda**: Atajos de teclado · Documentación de Yuki
+
+### Medidas de Neptunia
+
+Menubar 28 px, menús con radio 12, elementos de menú de 24 px con radio 8 y
+texto 13. Se dibujaron como maquetas en el lienzo de diseño «Yuki — Global
+menu».
+
+### Decisiones abiertas
+
+- Glifos de atajos: `⌃`/`❖` o texto tipo «Ctrl+S».
+- Menús sólidos o translúcidos (Neptunia reserva el cristal para el primer
+  arranque).
+- Desbordamiento de la barra, navegación con teclado (F10/Alt) y comportamiento
+  con una app sin respuesta.
 
 ## Relación
 

@@ -12,7 +12,7 @@ docs/
 ├── README.md          ← este índice
 ├── yuki.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
 ├── glossary.md        glosario de nombres (celestial-kit, grade-graphics, ...)
-├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–12 + lo siguiente)
+├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–14 + lo siguiente)
 ├── por-hacer.md       plan corto: aceptación de 8a/10 y orden de 9, 11, 12
 ├── bloques/           qué se ha hecho e implementado, bloque por bloque
 │   ├── 00-cimientos.md
@@ -52,7 +52,8 @@ docs/
     ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
     ├── escalado-macos.md         puntos, backing store y downsample en macOS
     ├── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
-    └── resize-bordes-y-cursores.md  resize por bordes y cursores: GNOME, Otto y macOS
+    ├── resize-bordes-y-cursores.md  resize por bordes y cursores: GNOME, Otto y macOS
+    └── global-menu.md            menú global: proyectos de referencia y qué toma Yuki
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
@@ -128,7 +129,7 @@ Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
    (Bloque 13), el cierre de 12a/12b y el hardware real. El roadmap es el plan
    largo; este documento es la lista de ahora.
 6. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0035, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0036, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
    de la interfaz: Neptunia, capas, shell, ventanas, capturas, cursor y
