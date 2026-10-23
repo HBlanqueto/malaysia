@@ -369,8 +369,11 @@ impl ImageCopyCaptureHandler for State {
             frame.fail(CaptureFailureReason::Unknown);
             return;
         };
-        self.pending_captures
-            .push(crate::capture::PendingCapture { frame, target });
+        self.pending_captures.push(crate::capture::PendingCapture {
+            frame,
+            target,
+            draw_cursor: session.draw_cursor(),
+        });
         // The backend completes it on the next render pass.
         self.request_redraw();
     }

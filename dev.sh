@@ -606,7 +606,12 @@ build_probes() {
 # does.
 run_one_probe() {
     _probe=$1
-    _with_input=${2:-}
+    shift
+    _with_input=
+    if [ "${1:-}" = "--test-input" ]; then
+        _with_input=1
+        shift
+    fi
     stop >/dev/null 2>&1 || true
     if [ -n "$_with_input" ]; then
         YUKI_TEST_INPUT=1 start
@@ -627,7 +632,7 @@ run_one_probe() {
         stop >/dev/null 2>&1 || true
         fail "$EXIT_SMOKE" "$_probe: the compositor never opened a socket"
     fi
-    if ! WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
+    if ! env "$@" WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
         stop >/dev/null 2>&1 || true
         fail "$EXIT_SMOKE" "$_probe failed"
     fi
@@ -651,31 +656,39 @@ pointers() {
 
 # screencopy - capture the output through `ext-image-copy-capture-v1`.
 #
-# `screencopy` opens a capture session for the output, allocates an SHM buffer
-# from the offered constraints and asserts the frame is ready and not blank.
+# `screencopy` opens capture sessions for the output over SHM and dma-buf, with
+# the cursor painted and omitted, and asserts the frame is ready and not blank.
 screencopy() {
     require_devshell
     require cargo
     build_probes "$@"
     run_one_probe screencopy
+    run_one_probe screencopy CAPTURE_EXPECT_NO_CURSOR=1
+    run_one_probe screencopy CAPTURE_PAINT_CURSORS=1 CAPTURE_EXPECT_CURSOR=1
+    run_one_probe screencopy CAPTURE_DMABUF=1 CAPTURE_EXPECT_NO_CURSOR=1
+    run_one_probe screencopy CAPTURE_DMABUF=1 CAPTURE_PAINT_CURSORS=1 CAPTURE_EXPECT_CURSOR=1
 }
 
 # screencopy-window - capture a window through `ext-image-copy-capture-v1`.
 #
 # `screencopy_window` maps a window, creates a capture source from its
 # `ext-foreign-toplevel-list` handle and asserts the frame is ready and shows
-# the window's own content.
+# the window's own content, over SHM and dma-buf. `CAPTURE_SSD=1` requests
+# server-side decorations to check that the titlebar stays out of the capture.
 screencopy_window() {
     require_devshell
     require cargo
     build_probes "$@"
     run_one_probe screencopy_window
+    run_one_probe screencopy_window CAPTURE_DMABUF=1
+    run_one_probe screencopy_window CAPTURE_SSD=1
 }
 
 # presentation - assert `wp_presentation` feedback reaches a client.
 #
-# `presentation` maps a window, asks for feedback and asserts the `presented`
-# event arrives with a monotonic timestamp and a refresh.
+# `presentation` commits two damaged frames and one without damage, asking for
+# feedback on each. It asserts increasing timestamps, a response to every
+# commit, and (with PRESENTATION_REQUIRE_VSYNC=1) a non-zero refresh and Vsync.
 presentation() {
     require_devshell
     require cargo
@@ -685,8 +698,9 @@ presentation() {
 
 # activation - assert `xdg-activation-v1` focuses a window in the same client.
 #
-# `activation` maps two windows, requests a token with the scripted press serial
-# and activates the first, asserting focus moves back to it.
+# `activation` runs two clients: A gets the scripted press and creates tokens,
+# B activates itself with the valid one. Tokens without a serial, from an
+# unfocused surface and older than 30 s must not move focus to B.
 activation() {
     require_devshell
     require cargo
@@ -803,6 +817,7 @@ drm_vkms() {
     _run=$(mktemp -d "${TMPDIR:-/tmp}/yuki-vkms.XXXXXX")
     _log="$_run/yuki.log"
     _pattern_log="$_run/pattern.log"
+    _presentation_log="$_run/presentation.log"
     _pidfile="$_run/yuki.pid"
     _client_pidfile="$_run/pattern.pid"
     _yuki_pid=
@@ -864,10 +879,11 @@ drm_vkms() {
     done
     [ -n "$_vkms" ] || fail "$EXIT_DRM_VKMS" "no DRM card with driver=vkms"
 
-    cargo build -p yuki -p sctk-probe --bin yuki --bin pattern_live ||
-        fail "$EXIT_DRM_VKMS" "could not build yuki and pattern_live"
+    cargo build -p yuki -p sctk-probe --bin yuki --bin pattern_live --bin presentation ||
+        fail "$EXIT_DRM_VKMS" "could not build yuki, pattern_live and presentation"
     _yuki="$script_dir/target/debug/yuki"
     _pattern="$script_dir/target/debug/pattern_live"
+    _presentation="$script_dir/target/debug/presentation"
 
     # The user's shell owns the log redirects, so the test can read them.
     # shellcheck disable=SC2024
@@ -966,6 +982,7 @@ drm_vkms() {
     printf '  capture: %s\n' "$_capture"
     printf '  mode: %s\n' "$(sed -n 's/.*mode chosen \(.*\)/\1/p' "$_log" | tail -n 1)"
     printf '  vblanks: %s, damaged frames queued: %s\n' "$_vblanks" "$_queued"
+    printf '  presentation: %s\n' "$(grep 'presentation: presented' "$_presentation_log" | tail -n 1)"
 }
 
 if [ "$#" -eq 0 ]; then

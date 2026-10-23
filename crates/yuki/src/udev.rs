@@ -594,8 +594,19 @@ impl Udev {
                     )
                 }
             };
-            let drawn: &[OutputRenderElement<GlesRenderer>] =
-                window_elements.as_deref().unwrap_or(&elements);
+            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
+            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
+                crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
+                    without_cursor = crate::session::build_output_elements(
+                        &mut self.state,
+                        &mut self.renderer,
+                        &self.cursor,
+                        false,
+                    );
+                    &without_cursor
+                }
+                _ => window_elements.as_deref().unwrap_or(&elements),
+            };
             let damage = Rectangle::from_size(Size::from((size.w, size.h)));
             match crate::capture::capture_into_buffer(
                 &mut self.renderer,

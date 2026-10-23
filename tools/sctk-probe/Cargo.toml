@@ -9,3 +9,4 @@ publish = false
 
 [dependencies]
 smithay-client-toolkit.workspace = true
+libc.workspace = true

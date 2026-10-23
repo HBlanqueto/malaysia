@@ -1108,8 +1108,14 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                     )
                 }
             };
-            let drawn: &[OutputRenderElement<GlesRenderer>] =
-                window_elements.as_deref().unwrap_or(&elements);
+            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
+            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
+                crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
+                    without_cursor = build_output_elements(state, renderer, cursor, false);
+                    &without_cursor
+                }
+                _ => window_elements.as_deref().unwrap_or(&elements),
+            };
             let damage = Rectangle::from_size(Size::from((size.w, size.h)));
             match crate::capture::capture_into_buffer(
                 renderer,

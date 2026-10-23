@@ -20,25 +20,31 @@ use smithay_client_toolkit::{
             self as wayland_client, globals::GlobalList, Connection, Dispatch, Proxy, QueueHandle,
             WEnum,
         },
-        protocols::ext::{
-            foreign_toplevel_list::v1::client::{
-                ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
-                ext_foreign_toplevel_list_v1::{
-                    self, Event as ListEvent, ExtForeignToplevelListV1,
+        protocols::{
+            ext::{
+                foreign_toplevel_list::v1::client::{
+                    ext_foreign_toplevel_handle_v1::ExtForeignToplevelHandleV1,
+                    ext_foreign_toplevel_list_v1::{
+                        self, Event as ListEvent, ExtForeignToplevelListV1,
+                    },
+                },
+                image_capture_source::v1::client::{
+                    ext_foreign_toplevel_image_capture_source_manager_v1::ExtForeignToplevelImageCaptureSourceManagerV1,
+                    ext_image_capture_source_v1::ExtImageCaptureSourceV1,
+                },
+                image_copy_capture::v1::client::{
+                    ext_image_copy_capture_frame_v1::{
+                        Event as FrameEvent, ExtImageCopyCaptureFrameV1,
+                    },
+                    ext_image_copy_capture_manager_v1::{ExtImageCopyCaptureManagerV1, Options},
+                    ext_image_copy_capture_session_v1::{
+                        Event as SessionEvent, ExtImageCopyCaptureSessionV1,
+                    },
                 },
             },
-            image_capture_source::v1::client::{
-                ext_foreign_toplevel_image_capture_source_manager_v1::ExtForeignToplevelImageCaptureSourceManagerV1,
-                ext_image_capture_source_v1::ExtImageCaptureSourceV1,
-            },
-            image_copy_capture::v1::client::{
-                ext_image_copy_capture_frame_v1::{
-                    Event as FrameEvent, ExtImageCopyCaptureFrameV1,
-                },
-                ext_image_copy_capture_manager_v1::{ExtImageCopyCaptureManagerV1, Options},
-                ext_image_copy_capture_session_v1::{
-                    Event as SessionEvent, ExtImageCopyCaptureSessionV1,
-                },
+            wp::linux_dmabuf::zv1::client::{
+                zwp_linux_buffer_params_v1::{self, ZwpLinuxBufferParamsV1},
+                zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1,
             },
         },
     },
@@ -57,6 +63,7 @@ use smithay_client_toolkit::{
     },
 };
 use wayland_client::protocol::{
+    wl_buffer::WlBuffer,
     wl_output::{self, WlOutput},
     wl_shm,
     wl_surface::WlSurface,
@@ -78,10 +85,24 @@ fn main() {
     let list = bind_list(&globals, &qh);
     let sources = bind_sources(&globals, &qh);
     let capture = bind_capture(&globals, &qh);
+    let dmabuf_global = if std::env::var_os("CAPTURE_DMABUF").is_some() {
+        Some(
+            globals
+                .bind::<ZwpLinuxDmabufV1, App, ()>(&qh, 3..=5, ())
+                .expect("no zwp_linux_dmabuf_v1"),
+        )
+    } else {
+        None
+    };
     let pool = SlotPool::new((SIDE * SIDE * 4) as usize, &shm).expect("no shm pool");
 
+    let decorations = if std::env::var_os("CAPTURE_SSD").is_some() {
+        WindowDecorations::RequestServer
+    } else {
+        WindowDecorations::RequestClient
+    };
     let surface = compositor.create_surface(&qh);
-    let window = xdg_shell.create_window(surface, WindowDecorations::RequestClient, &qh);
+    let window = xdg_shell.create_window(surface, decorations, &qh);
     window.commit();
 
     let mut app = App {
@@ -91,6 +112,7 @@ fn main() {
         _list: list,
         sources,
         capture,
+        dmabuf_global,
         _window: window,
         pool,
         window_buffer: None,
@@ -101,6 +123,9 @@ fn main() {
         capture_buffer: None,
         size: None,
         shm_format: None,
+        dma_format: None,
+        dma: None,
+        dma_buffer: None,
         done: false,
         ready: false,
         failed: false,
@@ -164,6 +189,7 @@ struct App {
     _list: ExtForeignToplevelListV1,
     sources: ExtForeignToplevelImageCaptureSourceManagerV1,
     capture: ExtImageCopyCaptureManagerV1,
+    dmabuf_global: Option<ZwpLinuxDmabufV1>,
     _window: Window,
     pool: SlotPool,
     window_buffer: Option<Buffer>,
@@ -174,6 +200,9 @@ struct App {
     capture_buffer: Option<Buffer>,
     size: Option<(i32, i32)>,
     shm_format: Option<wl_shm::Format>,
+    dma_format: Option<(u32, u64)>,
+    dma: Option<sctk_probe::dmabuf::DmaBuffer>,
+    dma_buffer: Option<WlBuffer>,
     done: bool,
     ready: bool,
     failed: bool,
@@ -203,34 +232,92 @@ impl App {
         if !self.done || self.frame.is_some() {
             return;
         }
-        let (Some((width, height)), Some(format), Some(session)) =
-            (self.size, self.shm_format, self.session.as_ref())
-        else {
-            eprintln!("screencopy_window: FAIL the session never offered a size and format");
+        let (Some((width, height)), Some(session)) = (self.size, self.session.as_ref()) else {
+            eprintln!("screencopy_window: FAIL the session never offered a size");
             self.failed = true;
             self.loop_signal.stop();
             return;
         };
         let stride = width * 4;
-        let (buffer, _canvas) = match self.pool.create_buffer(width, height, stride, format) {
-            Ok(pair) => pair,
-            Err(error) => {
-                eprintln!("screencopy_window: FAIL no shm buffer: {error:?}");
+        let frame = session.create_frame(qh, ());
+        if let Some(dmabuf) = &self.dmabuf_global {
+            let Some((format, modifier)) = self.dma_format else {
+                eprintln!("screencopy_window: FAIL the session offered no linear dma-buf format");
                 self.failed = true;
                 self.loop_signal.stop();
                 return;
-            }
-        };
-        let frame = session.create_frame(qh, ());
-        frame.attach_buffer(buffer.wl_buffer());
+            };
+            let dma = match sctk_probe::dmabuf::DmaBuffer::new(width, height, stride as usize) {
+                Ok(dma) => dma,
+                Err(error) => {
+                    eprintln!("screencopy_window: FAIL could not create the dma-buf: {error:?}");
+                    self.failed = true;
+                    self.loop_signal.stop();
+                    return;
+                }
+            };
+            let params = dmabuf.create_params(qh, ());
+            params.add(
+                dma.fd(),
+                0,
+                0,
+                stride as u32,
+                (modifier >> 32) as u32,
+                (modifier & 0xffff_ffff) as u32,
+            );
+            let buffer = params.create_immed(
+                width,
+                height,
+                format,
+                zwp_linux_buffer_params_v1::Flags::empty(),
+                qh,
+                (),
+            );
+            self.dma = Some(dma);
+            self.dma_buffer = Some(buffer.clone());
+            println!(
+                "screencopy_window: capturing {width}x{height} as dma-buf {format:#x} modifier {modifier:#x}"
+            );
+            frame.attach_buffer(&buffer);
+        } else {
+            let Some(format) = self.shm_format else {
+                eprintln!("screencopy_window: FAIL the session never offered a shm format");
+                self.failed = true;
+                self.loop_signal.stop();
+                return;
+            };
+            let (buffer, _canvas) = match self.pool.create_buffer(width, height, stride, format) {
+                Ok(pair) => pair,
+                Err(error) => {
+                    eprintln!("screencopy_window: FAIL no shm buffer: {error:?}");
+                    self.failed = true;
+                    self.loop_signal.stop();
+                    return;
+                }
+            };
+            println!("screencopy_window: capturing {width}x{height} as {format:?}");
+            frame.attach_buffer(buffer.wl_buffer());
+            self.capture_buffer = Some(buffer);
+        }
         frame.capture();
-        println!("screencopy_window: capturing {width}x{height} as {format:?}");
-        self.capture_buffer = Some(buffer);
         self.frame = Some(frame);
     }
 
     /// Reads the captured pixels back and checks the window's grey content.
     fn check_pixels(&mut self) {
+        let Some((width, height)) = self.size else {
+            return;
+        };
+        let (x, y) = ((width / 2) as usize, (height / 2) as usize);
+        if let Some(dma) = &self.dma {
+            let pixel = dma.pixel(x, y);
+            println!("screencopy_window: centre pixel {pixel:?} (dma-buf)");
+            if pixel == [0, 0, 0, 0] {
+                eprintln!("screencopy_window: FAIL the captured window is blank");
+                self.failed = true;
+            }
+            return;
+        }
         let Some(buffer) = &self.capture_buffer else {
             return;
         };
@@ -239,13 +326,12 @@ impl App {
             self.failed = true;
             return;
         };
-        let (Some((width, height)), Some(format)) = (self.size, self.shm_format) else {
-            return;
-        };
-        let (x, y) = (width / 2, height / 2);
-        let offset = (y * width + x) as usize * 4;
+        let offset = (y * width as usize + x) * 4;
         let pixel = &canvas[offset..offset + 4];
-        println!("screencopy_window: centre pixel {pixel:?} ({format:?})");
+        println!(
+            "screencopy_window: centre pixel {pixel:?} ({:?})",
+            self.shm_format
+        );
         if pixel == [0, 0, 0, 0] {
             eprintln!("screencopy_window: FAIL the captured window is blank");
             self.failed = true;
@@ -305,6 +391,7 @@ impl WindowHandler for App {
         let width = configure.new_size.0.map_or(0, |w| w.get() as i32);
         let height = configure.new_size.1.map_or(0, |h| h.get() as i32);
         if width > 0 && height > 0 && self.window_size != Some((width, height)) {
+            println!("screencopy_window: configured content {width}x{height}");
             match self
                 .pool
                 .create_buffer(width, height, width * 4, wl_shm::Format::Xrgb8888)
@@ -431,6 +518,19 @@ impl Dispatch<ExtImageCopyCaptureSessionV1, ()> for App {
                     }
                 }
             }
+            SessionEvent::DmabufFormat { format, modifiers } => {
+                if state.dma_format.is_none() && is_linear_capture_format(format) {
+                    let linear = modifiers
+                        .as_chunks::<8>()
+                        .0
+                        .iter()
+                        .map(|chunk| u64::from_le_bytes(*chunk))
+                        .find(|modifier| *modifier == 0);
+                    if let Some(modifier) = linear {
+                        state.dma_format = Some((format, modifier));
+                    }
+                }
+            }
             SessionEvent::Done => {
                 state.done = true;
                 state.start_capture(qh);
@@ -484,3 +584,43 @@ delegate_registry!(App);
 delegate_shm!(App);
 delegate_xdg_shell!(App);
 delegate_xdg_window!(App);
+
+impl Dispatch<ZwpLinuxDmabufV1, ()> for App {
+    fn event(
+        _: &mut Self,
+        _: &ZwpLinuxDmabufV1,
+        _: <ZwpLinuxDmabufV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ZwpLinuxBufferParamsV1, ()> for App {
+    fn event(
+        _: &mut Self,
+        _: &ZwpLinuxBufferParamsV1,
+        _: <ZwpLinuxBufferParamsV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<WlBuffer, ()> for App {
+    fn event(
+        _: &mut Self,
+        _: &WlBuffer,
+        _: <WlBuffer as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+fn is_linear_capture_format(format: u32) -> bool {
+    matches!(format, 0x3432_5241 | 0x3432_5258)
+}

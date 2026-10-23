@@ -57,6 +57,8 @@ pub(crate) enum CaptureTarget {
 pub(crate) struct PendingCapture {
     pub frame: Frame,
     pub target: CaptureTarget,
+    /// Whether the client asked for the cursor to be composited.
+    pub draw_cursor: bool,
 }
 
 /// Derives the DMA-BUF constraints for capture from the renderer's device.

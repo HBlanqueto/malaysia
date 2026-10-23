@@ -11,6 +11,8 @@
 //!
 //! See the crate README for the commands.
 
+pub mod dmabuf;
+
 use smithay_client_toolkit::reexports::{
     calloop,
     calloop_wayland_source::WaylandSource,
