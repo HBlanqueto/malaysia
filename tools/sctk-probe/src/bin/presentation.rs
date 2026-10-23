@@ -1,9 +1,14 @@
 //! Asserts that `wp_presentation` feedback reaches a client.
 //!
-//! Maps a client-decorated toplevel, asks for presentation feedback on its
-//! surface and commits a frame. It passes when the `presented` event arrives
-//! with a plausible monotonic timestamp and refresh; a `discarded` event, or a
-//! timeout, fails.
+//! Maps a client-decorated toplevel and commits three frames, requesting
+//! feedback for each one: two with damage (which must be presented with
+//! increasing timestamps) and one with no damage (which must be discarded or
+//! presented, never left unanswered). Every event is printed with its
+//! timestamp, refresh, sequence and flags.
+//!
+//! On `./dev.sh drm-vkms` (`PRESENTATION_REQUIRE_VSYNC=1`) every presented
+//! event must also carry a non-zero refresh and the `vsync` flag, which only
+//! the DRM backend can provide.
 //!
 //! Run against a running compositor, or `./dev.sh presentation`.
 
@@ -16,7 +21,7 @@ use smithay_client_toolkit::{
     output::{OutputHandler, OutputState},
     reexports::{
         calloop,
-        client::{self as wayland_client, Connection, Dispatch, Proxy, QueueHandle},
+        client::{self as wayland_client, Connection, Dispatch, Proxy, QueueHandle, WEnum},
         protocols::wp::presentation_time::client::{
             wp_presentation::WpPresentation,
             wp_presentation_feedback::{self, WpPresentationFeedback},
@@ -44,8 +49,10 @@ use wayland_client::protocol::{
 
 /// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long to wait for the presented event.
-const TIMEOUT: Duration = Duration::from_secs(5);
+/// How long to wait for each feedback event.
+const TIMEOUT: Duration = Duration::from_secs(10);
+/// Damaged frames committed before the no-damage one.
+const DAMAGED_FRAMES: u8 = 2;
 
 fn main() {
     let (mut event_loop, globals, qh) = sctk_probe::init_connection::<App>();
@@ -73,24 +80,40 @@ fn main() {
         presentation,
         window,
         buffer,
-        attached: false,
-        requested: false,
-        presented: false,
+        configured: false,
+        configure_at: std::time::Instant::now(),
+        started: false,
+        frame: 0,
+        pending: 0,
+        last_time: None,
+        require_vsync: std::env::var_os("PRESENTATION_REQUIRE_VSYNC").is_some(),
+        done: false,
         failed: false,
         loop_signal: event_loop.get_signal(),
     };
 
     let start = std::time::Instant::now();
+    let qh_for_timer = qh.clone();
     let timer = calloop::timer::Timer::immediate();
     event_loop
         .handle()
         .insert_source(timer, move |_, _, app| {
-            if app.presented || app.failed {
+            if !app.started
+                && app.configured
+                && app.configure_at.elapsed() >= Duration::from_millis(50)
+            {
+                app.started = true;
+                app.commit(&qh_for_timer);
+            }
+            if app.done || app.failed {
                 app.loop_signal.stop();
                 return calloop::timer::TimeoutAction::Drop;
             }
             if start.elapsed() >= TIMEOUT {
-                eprintln!("presentation: FAIL no presented event within {TIMEOUT:?}");
+                eprintln!(
+                    "presentation: FAIL no feedback for frame {} within {TIMEOUT:?}",
+                    app.frame
+                );
                 app.failed = true;
                 app.loop_signal.stop();
                 return calloop::timer::TimeoutAction::Drop;
@@ -103,7 +126,7 @@ fn main() {
         .run(None, &mut app, |_| {})
         .expect("event loop failed");
 
-    if app.failed || !app.presented {
+    if app.failed || !app.done {
         std::process::exit(1);
     }
     println!("presentation: PASS");
@@ -116,21 +139,48 @@ struct App {
     presentation: WpPresentation,
     window: Window,
     buffer: Buffer,
-    attached: bool,
-    requested: bool,
-    presented: bool,
+    configured: bool,
+    configure_at: std::time::Instant,
+    started: bool,
+    /// 0..DAMAGED_FRAMES are damaged; DAMAGED_FRAMES is the no-damage commit.
+    frame: u8,
+    pending: u32,
+    last_time: Option<(u64, u32)>,
+    require_vsync: bool,
+    done: bool,
     failed: bool,
     loop_signal: calloop::LoopSignal,
 }
 
 impl App {
-    /// Requests feedback for the next commit, once, after the first configure.
-    fn request_feedback(&mut self, qh: &QueueHandle<Self>) {
-        if self.requested {
-            return;
+    /// Requests feedback and commits the current frame.
+    fn commit(&mut self, qh: &QueueHandle<Self>) {
+        self.presentation
+            .feedback(self.window.wl_surface(), qh, self.frame);
+        self.pending += 1;
+        if self.frame < DAMAGED_FRAMES {
+            self.window.attach(Some(self.buffer.wl_buffer()), 0, 0);
+            self.window.wl_surface().damage_buffer(0, 0, SIDE, SIDE);
         }
-        self.requested = true;
-        self.presentation.feedback(self.window.wl_surface(), qh, ());
+        self.window.commit();
+        println!("presentation: committed frame {}", self.frame);
+    }
+
+    /// Moves to the next frame, or finishes after the no-damage one.
+    fn advance(&mut self, qh: &QueueHandle<Self>) {
+        if self.frame < DAMAGED_FRAMES {
+            self.frame += 1;
+            self.commit(qh);
+        } else {
+            self.done = true;
+            self.loop_signal.stop();
+        }
+    }
+
+    fn fail(&mut self, message: &str) {
+        eprintln!("presentation: FAIL {message}");
+        self.failed = true;
+        self.loop_signal.stop();
     }
 }
 
@@ -177,17 +227,17 @@ impl WindowHandler for App {
         &mut self,
         _: &Connection,
         qh: &QueueHandle<Self>,
-        window: &Window,
+        _: &Window,
         _: WindowConfigure,
         _: u32,
     ) {
-        if !self.attached {
-            self.attached = true;
-            window.attach(Some(self.buffer.wl_buffer()), 0, 0);
+        // Wait for the decoration negotiation's burst of configures to settle,
+        // then attach and map once (the timer does the commit).
+        if !self.configured {
+            self.configured = true;
+            self.configure_at = std::time::Instant::now();
         }
-        // Feedback is for the next commit, so request it before committing.
-        self.request_feedback(qh);
-        window.commit();
+        let _ = qh;
     }
 }
 
@@ -218,14 +268,14 @@ impl Dispatch<WpPresentation, ()> for App {
     }
 }
 
-impl Dispatch<WpPresentationFeedback, ()> for App {
+impl Dispatch<WpPresentationFeedback, u8> for App {
     fn event(
         state: &mut Self,
         _: &WpPresentationFeedback,
         event: wp_presentation_feedback::Event,
-        _: &(),
+        frame: &u8,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         match event {
             wp_presentation_feedback::Event::Presented {
@@ -240,19 +290,53 @@ impl Dispatch<WpPresentationFeedback, ()> for App {
                 let seconds = (u64::from(tv_sec_hi) << 32) | u64::from(tv_sec_lo);
                 let sequence = (u64::from(seq_hi) << 32) | u64::from(seq_lo);
                 println!(
-                    "presentation: presented at {seconds}.{tv_nsec:09}s refresh {refresh} seq {sequence} flags {flags:?}"
+                    "presentation: presented frame {frame} at {seconds}.{tv_nsec:09}s refresh {refresh} seq {sequence} flags {flags:?}"
                 );
                 if tv_nsec >= 1_000_000_000 {
-                    eprintln!("presentation: FAIL nanosecond timestamp out of range");
-                    state.failed = true;
+                    state.fail("nanosecond timestamp out of range");
+                    return;
                 }
-                state.presented = true;
-                state.loop_signal.stop();
+                let time = (seconds, tv_nsec);
+                if let Some(previous) = state.last_time {
+                    if time <= previous {
+                        state.fail("the timestamp did not increase");
+                        return;
+                    }
+                }
+                state.last_time = Some(time);
+                if state.require_vsync {
+                    if refresh == 0 {
+                        state.fail("the refresh is zero");
+                        return;
+                    }
+                    match flags {
+                        WEnum::Value(flags)
+                            if flags.contains(wp_presentation_feedback::Kind::Vsync) => {}
+                        _ => {
+                            state.fail("the vsync flag is missing");
+                            return;
+                        }
+                    }
+                }
+                if *frame != state.frame {
+                    state.fail("feedback arrived for a different frame");
+                    return;
+                }
+                state.pending = state.pending.saturating_sub(1);
+                state.advance(qh);
             }
             wp_presentation_feedback::Event::Discarded => {
-                eprintln!("presentation: FAIL the frame was discarded");
-                state.failed = true;
-                state.loop_signal.stop();
+                println!("presentation: discarded frame {frame}");
+                if *frame < DAMAGED_FRAMES {
+                    state.fail("a damaged frame was discarded");
+                    return;
+                }
+                if *frame != state.frame {
+                    state.fail("feedback arrived for a different frame");
+                    return;
+                }
+                state.pending = state.pending.saturating_sub(1);
+                state.advance(qh);
             }
             _ => {}
         }
