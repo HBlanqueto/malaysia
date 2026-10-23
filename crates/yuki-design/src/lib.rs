@@ -342,6 +342,10 @@ pub struct MenuPalette {
     pub separator_margin_y: f32,
     /// Width reserved for the check/radio mark column.
     pub mark_width: f32,
+    /// Radio dot diameter.
+    pub mark_dot: f32,
+    /// Check glyph font size.
+    pub mark_check: f32,
     /// Submenu chevron size.
     pub chevron_size: f32,
     /// Submenu chevron colour (`ink-muted`).

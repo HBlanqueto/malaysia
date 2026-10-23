@@ -874,6 +874,8 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   separator_margin_x: {},\n\
          \x20   separator_margin_y: {},\n\
          \x20   mark_width: {},\n\
+         \x20   mark_dot: {},\n\
+         \x20   mark_check: {},\n\
          \x20   chevron_size: {},\n\
          \x20   chevron_color: {},\n\
          }}",
@@ -947,6 +949,16 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
         float(number(
             components,
             "components.shell.menu.mark.width",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.mark.dot",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.mark.check",
             COMPONENTS
         )),
         float(number(

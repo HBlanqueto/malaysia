@@ -607,7 +607,7 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .child(mark_element(check, fg, m.font_size, m.mark_width))
+                .child(mark_element(check, fg, m))
                 .child(
                     label()
                         .text(label_text)
@@ -703,12 +703,7 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .child(mark_element(
-                    CheckState::None,
-                    fg,
-                    m.font_size,
-                    m.mark_width,
-                ))
+                .child(mark_element(CheckState::None, fg, m))
                 .child(
                     label()
                         .text(label_text)
@@ -723,21 +718,32 @@ fn render_item(
     }
 }
 
-fn mark_element(check: CheckState, color: Rgba, font_size: f32, width: f32) -> Element {
-    let text = match check {
-        CheckState::None => "",
-        CheckState::Checkbox(true) => "✓",
-        CheckState::Checkbox(false) => "",
-        CheckState::Radio(true) => "●",
-        CheckState::Radio(false) => "",
-    };
-    label()
-        .text(text)
-        .font_size(font_size)
-        .color(rgba(color))
-        .width(Size::px(width))
-        .max_lines(1)
-        .into_element()
+fn mark_element(check: CheckState, color: Rgba, m: MenuPalette) -> Element {
+    match check {
+        CheckState::None | CheckState::Checkbox(false) | CheckState::Radio(false) => {
+            rect().width(Size::px(m.mark_width)).into_element()
+        }
+        CheckState::Checkbox(true) => label()
+            .text("✓")
+            .font_size(m.mark_check)
+            .color(rgba(color))
+            .width(Size::px(m.mark_width))
+            .text_align(TextAlign::Center)
+            .max_lines(1)
+            .into_element(),
+        CheckState::Radio(true) => rect()
+            .width(Size::px(m.mark_width))
+            .direction(Direction::Horizontal)
+            .main_align(Alignment::Center)
+            .child(
+                rect()
+                    .width(Size::px(m.mark_dot))
+                    .height(Size::px(m.mark_dot))
+                    .corner_radius(m.mark_dot / 2.0)
+                    .background(rgba(color)),
+            )
+            .into_element(),
+    }
 }
 
 fn chevron_element(color: Rgba, m: MenuPalette) -> Element {
@@ -880,6 +886,25 @@ mod tests {
         let a = relative_luminance(a);
         let b = relative_luminance(b);
         (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    #[test]
+    fn mark_sizes_fit_the_mark_column() {
+        for (name, m) in [("light", MENU_LIGHT), ("dark", MENU_DARK)] {
+            assert!(
+                (6.0..=8.0).contains(&m.mark_dot),
+                "{name}: radio dot {} is outside 6-8 px",
+                m.mark_dot
+            );
+            assert!(
+                m.mark_dot <= m.mark_width,
+                "{name}: radio dot is wider than its column"
+            );
+            assert!(
+                m.mark_check > 0.0 && m.mark_check <= m.mark_width,
+                "{name}: check glyph does not fit its column"
+            );
+        }
     }
 
     #[test]
