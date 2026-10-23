@@ -8,11 +8,12 @@
 
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Size};
+use smithay::wayland::shell::wlr_layer::KeyboardInteractivity;
 use smithay::wayland::shell::xdg::{PopupSurface, PositionerState};
 use yuki_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
-use yuki_scene::scene::{PopupId, PopupParent};
+use yuki_scene::scene::{PopupId, PopupParent, WindowId};
 
 use crate::state::State;
 use crate::window::surface_has_buffer;
@@ -31,12 +32,35 @@ struct PopupData {
     mapped: bool,
 }
 
+/// What to do with keyboard focus after a popup subtree is removed.
+#[derive(Debug)]
+pub(crate) enum FocusRestore {
+    /// Focus the nearest still-alive parent popup.
+    Popup(WlSurface),
+    /// Focus the layer surface the root popup hung from.
+    Layer(WlSurface),
+    /// Focus the surface/window that had focus before the root popup opened.
+    Previous(Option<WlSurface>, Option<WindowId>),
+}
+
+struct PopupFocusFrame {
+    surface: WlSurface,
+    /// If the root popup hung from a layer surface, its surface and interactivity.
+    root_layer: Option<(WlSurface, KeyboardInteractivity)>,
+    /// Surface that had focus before the root popup opened.
+    previous_focus: Option<WlSurface>,
+    /// Window that had focus before the root popup opened.
+    previous_window: Option<WindowId>,
+}
+
 /// The tracked popups.
 #[derive(Default)]
 pub struct Popups {
     popups: Vec<PopupData>,
     /// The next scene id to hand out.
     next_id: u64,
+    /// Stack of popups that have been explicitly given keyboard focus by grab.
+    focus_stack: Vec<PopupFocusFrame>,
 }
 
 impl Popups {
@@ -77,6 +101,80 @@ impl Popups {
             .iter()
             .find(|data| data.id == id)
             .map(|data| &data.popup)
+    }
+
+    pub(crate) fn is_popup_surface(&self, surface: &WlSurface) -> bool {
+        self.id_of(surface).is_some()
+    }
+
+    pub(crate) fn current_root_layer(&self) -> Option<(WlSurface, KeyboardInteractivity)> {
+        self.focus_stack.last().and_then(|f| f.root_layer.clone())
+    }
+
+    pub(crate) fn push_focus_frame(
+        &mut self,
+        surface: WlSurface,
+        root_layer: Option<(WlSurface, KeyboardInteractivity)>,
+        previous_focus: Option<WlSurface>,
+        previous_window: Option<WindowId>,
+    ) {
+        self.focus_stack.push(PopupFocusFrame {
+            surface,
+            root_layer,
+            previous_focus,
+            previous_window,
+        });
+    }
+
+    /// Removes focus frames for popups in `surfaces`. If keyboard focus was in
+    /// the removed subtree, returns where it should go.
+    pub(crate) fn remove_focus_frames(
+        &mut self,
+        surfaces: &[WlSurface],
+        current_focus: Option<&WlSurface>,
+    ) -> Option<FocusRestore> {
+        let focus_in_removed =
+            current_focus.is_some_and(|focus| surfaces.iter().any(|surface| surface == focus));
+
+        let mut removed = Vec::new();
+        let mut i = 0;
+        while i < self.focus_stack.len() {
+            if surfaces
+                .iter()
+                .any(|surface| *surface == self.focus_stack[i].surface)
+            {
+                removed.push(self.focus_stack.remove(i));
+            } else {
+                i += 1;
+            }
+        }
+
+        if !focus_in_removed || removed.is_empty() {
+            return None;
+        }
+
+        // The nearest surviving popup frame is now the parent.
+        if let Some(parent) = self.focus_stack.last() {
+            return Some(FocusRestore::Popup(parent.surface.clone()));
+        }
+
+        // No parent popup: use the root frame's layer or previous focus.
+        let root = removed
+            .iter()
+            .find(|frame| frame.root_layer.is_some())
+            .or_else(|| removed.first())?;
+        if let Some((layer_surface, mode)) = &root.root_layer
+            && matches!(
+                mode,
+                KeyboardInteractivity::Exclusive | KeyboardInteractivity::OnDemand
+            )
+        {
+            return Some(FocusRestore::Layer(layer_surface.clone()));
+        }
+        Some(FocusRestore::Previous(
+            root.previous_focus.clone(),
+            root.previous_window,
+        ))
     }
 
     /// The index of the popup for `surface`.
@@ -206,6 +304,10 @@ impl State {
     pub(crate) fn dismiss_popups(&mut self, seed: PopupId) {
         let subtree = self.windows.popup_subtree(seed);
         tracing::info!(seed = seed.get(), ?subtree, "dismissing popups");
+        let surfaces: Vec<WlSurface> = subtree
+            .iter()
+            .filter_map(|id| self.popups.surface_of(*id).cloned())
+            .collect();
         for id in &subtree {
             if let Some(popup) = self.popups.popup_of(*id) {
                 popup.send_popup_done();
@@ -215,6 +317,7 @@ impl State {
             self.windows.remove_popup(id);
             self.popups.remove_id(id);
         }
+        self.restore_popup_focus(&surfaces);
         self.request_redraw();
     }
 
@@ -238,10 +341,15 @@ impl State {
     fn remove_popup_subtree(&mut self, id: PopupId) {
         let subtree = self.windows.popup_subtree(id);
         tracing::info!(root = id.get(), ?subtree, "popup subtree removed");
+        let surfaces: Vec<WlSurface> = subtree
+            .iter()
+            .filter_map(|id| self.popups.surface_of(*id).cloned())
+            .collect();
         for id in subtree {
             self.windows.remove_popup(id);
             self.popups.remove_id(id);
         }
+        self.restore_popup_focus(&surfaces);
         self.request_redraw();
     }
 
@@ -265,6 +373,20 @@ impl State {
             return rect;
         }
         Rectangle::new(Point::from((0, 0)), Size::from((1, 1)))
+    }
+
+    /// Restores keyboard focus after a popup subtree disappears.
+    fn restore_popup_focus(&mut self, surfaces: &[WlSurface]) {
+        let current_focus = self
+            .seat
+            .get_keyboard()
+            .and_then(|keyboard| keyboard.current_focus());
+        if let Some(restore) = self
+            .popups
+            .remove_focus_frames(surfaces, current_focus.as_ref())
+        {
+            self.apply_focus_restore(restore);
+        }
     }
 
     /// The popup's parent in scene terms.

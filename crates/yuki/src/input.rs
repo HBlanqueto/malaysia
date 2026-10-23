@@ -851,12 +851,79 @@ impl State {
             return;
         }
         if let Some(keyboard) = self.seat.get_keyboard() {
+            let previous_focus = keyboard.current_focus();
+            let previous_window = previous_focus
+                .as_ref()
+                .and_then(|focus| self.windows.id_of(focus));
+            let root_layer = previous_focus.as_ref().and_then(|focus| {
+                if let Some(entry) = self.layers.entry_of(focus) {
+                    Some((focus.clone(), entry.keyboard_interactivity))
+                } else if self.popups.is_popup_surface(focus) {
+                    self.popups.current_root_layer()
+                } else {
+                    None
+                }
+            });
+            self.popups.push_focus_frame(
+                surface.clone(),
+                root_layer,
+                previous_focus.clone(),
+                previous_window,
+            );
             keyboard.set_focus(self, Some(surface.clone()), serial);
             if let Some(client) = surface.client() {
                 set_data_device_focus(&self.display_handle, &self.seat, Some(client.clone()));
                 set_primary_focus(&self.display_handle, &self.seat, Some(client));
             }
         }
+    }
+
+    /// Returns focus after a popup closes.
+    pub(crate) fn apply_focus_restore(&mut self, restore: crate::popup::FocusRestore) {
+        if self.locked {
+            return;
+        }
+        let serial = SERIAL_COUNTER.next_serial();
+        match restore {
+            crate::popup::FocusRestore::Popup(surface) => {
+                if let Some(keyboard) = self.seat.get_keyboard() {
+                    keyboard.set_focus(self, Some(surface), serial);
+                    // data_device follows on the next keyboard focus event.
+                }
+            }
+            crate::popup::FocusRestore::Layer(surface) => {
+                self.focus_layer_surface(&surface);
+            }
+            crate::popup::FocusRestore::Previous(surface, window) => {
+                let target = surface.filter(|surface| self.surface_still_exists(surface));
+                if let Some(surface) = target {
+                    if let Some(keyboard) = self.seat.get_keyboard() {
+                        keyboard.set_focus(self, Some(surface.clone()), serial);
+                        if let Some(client) = surface.client() {
+                            set_data_device_focus(
+                                &self.display_handle,
+                                &self.seat,
+                                Some(client.clone()),
+                            );
+                            set_primary_focus(&self.display_handle, &self.seat, Some(client));
+                        }
+                    }
+                } else if let Some(id) = window
+                    .filter(|id| self.windows.surface_of(*id).is_some())
+                    .or_else(|| self.focused_window())
+                {
+                    self.focus_window(id);
+                } else {
+                    self.clear_keyboard_focus();
+                }
+            }
+        }
+    }
+
+    fn surface_still_exists(&self, surface: &WlSurface) -> bool {
+        self.windows.id_of(surface).is_some()
+            || self.popups.id_of(surface).is_some()
+            || self.layers.entry_of(surface).is_some()
     }
 
     /// Sets keyboard focus to a layer surface without changing the active
