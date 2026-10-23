@@ -41,6 +41,7 @@ continua.
 | 0032 | Neptunia es la fuente de diseño del escritorio | aceptado |
 | 0033 | Skia en clientes y CelestialKit desde otto-kit | reemplazado por 0034 |
 | 0034 | CelestialKit sobre Freya | aceptado (reemplaza 0033; modifica 0024) |
+| 0035 | Identificación de apps propias y CSD | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
