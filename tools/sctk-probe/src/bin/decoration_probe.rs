@@ -382,6 +382,19 @@ fn run() -> Result<(), String> {
         Err(reason) => failed.push(format!("mode change after mapping: {reason}")),
     }
 
+    match run_native_decoration(host_display.as_deref()) {
+        Ok(lines) => {
+            for line in lines
+                .iter()
+                .filter(|line| line.contains("native_decoration:"))
+            {
+                println!("{line}");
+            }
+            println!("native app ids: PASS");
+        }
+        Err(reason) => failed.push(format!("native app ids: {reason}")),
+    }
+
     if failed.is_empty() {
         Ok(())
     } else {
@@ -446,6 +459,88 @@ fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> 
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Runs the ADR 0035 client against a fresh Yuki configured with
+/// `force_server`, so the only reason a native app can lack a titlebar is the
+/// app-id prefix.
+fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, String> {
+    let client = std::env::var_os("YUKI_NATIVE_DECORATION")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("native_decoration")))
+        })
+        .filter(|path| path.is_file())
+        .ok_or_else(|| {
+            "native_decoration not found next to the probe; run `cargo build -p sctk-probe` first"
+                .to_string()
+        })?;
+    let binary = std::env::var_os("YUKI_BIN")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("yuki"));
+    if !binary.is_file() {
+        return Err(format!(
+            "compositor binary not found at {}; run `cargo build -p yuki` first",
+            binary.display()
+        ));
+    }
+
+    let runtime = TempDir::create()?;
+    let config = runtime.path().join("config");
+    fs::create_dir_all(&config).map_err(|error| format!("creating config: {error}"))?;
+    fs::write(
+        config.join("window.domain"),
+        "decorations = \"force_server\"\n",
+    )
+    .map_err(|error| format!("writing window.domain: {error}"))?;
+
+    let mut compositor = ChildGuard::spawn(
+        Command::new(&binary)
+            .arg("--log-level=info")
+            .env("XDG_RUNTIME_DIR", runtime.path())
+            .env("YUKI_CONFIG_DIR", &config),
+        host_display,
+    )?;
+    let compositor_log = compositor.capture()?;
+    let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+
+    let mut lines = Vec::new();
+    for scenario in ["a", "b", "c"] {
+        let mut child = ChildGuard::spawn(
+            Command::new(&client)
+                .env("XDG_RUNTIME_DIR", runtime.path())
+                .env("WAYLAND_DISPLAY", &socket)
+                .env("YUKI_NATIVE_SCENARIO", scenario)
+                .stdin(Stdio::null()),
+            None,
+        )?;
+        let log = child.capture()?;
+        let deadline = Instant::now() + APP_TIMEOUT;
+        loop {
+            if let Some(status) = child.poll()? {
+                let output = snapshot(&log);
+                lines.extend(output.iter().cloned());
+                if !status.success()
+                    || !output
+                        .iter()
+                        .any(|line| line.contains(&format!("PASS scenario {scenario}")))
+                {
+                    return Err(format!(
+                        "scenario {scenario} failed ({status}); output:\n{}",
+                        output.join("\n")
+                    ));
+                }
+                break;
+            }
+            if Instant::now() >= deadline {
+                return Err(format!("scenario {scenario} did not exit in time"));
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+    Ok(lines)
 }
 
 /// Compares one observation against its expectation.
