@@ -195,10 +195,10 @@ empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
 `appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
 ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
 la titlebar Neptunia arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
-launcher es lo siguiente. Neptunia (`crates/yuki-design/neptunia`) es la fuente de diseño
+launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Neptunia (`crates/yuki-design/neptunia`) es la fuente de diseño
 (ADR 0032); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
 polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
-nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock** y
-**lock** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y
+nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock**,
+**lock** y **launcher** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y
 [`por-hacer.md`](por-hacer.md).

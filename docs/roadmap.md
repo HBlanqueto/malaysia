@@ -228,14 +228,15 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
   minimizar y maximizar; modos de color `neutral`/`accent`/`wallpaper` con
   tinte de la titlebar y semáforos derivados; también se elevan las ventanas al enfocarlas. Ver
   [`arquitectura/ventanas.md`](arquitectura/ventanas.md).
-- **Launcher — siguiente.** `yuki-shell launcher` en la capa Overlay,
-  `Super+Space`, búsqueda en `.desktop`, lanzamiento y cierre con `Esc`.
-  Requiere foco de teclado para layer surfaces con
-  `KeyboardInteractivity::Exclusive`.
+- **Launcher — hecho (2026-10-23).** `yuki-shell launcher` en la capa Overlay,
+  `Super+Space`, foco exclusivo de capa, búsqueda y ranking `.desktop`,
+  lanzamiento con token de activación e iconos. Latencia release 121 ms hasta
+  la superficie configurada. Ver `bloques/13-chrome-y-launcher.md`.
 - **Pendiente de chrome:** esquinas redondeadas (16 px), sombra, glifos de los
   semáforos al hover, doble clic para zoom y titlebar en la captura de ventana.
 - **Después:** retomar el Bloque 12a (`Settings` con una app real,
-  `Screenshot`/`ScreenCast`), 12b, 8b y 8c.
+  `Screenshot`/`ScreenCast`), 12b, 8b y 8c. La aceptación manual del launcher
+  con teclado real queda pendiente del ThinkPad.
 
 ## Transversal — NixOS
 

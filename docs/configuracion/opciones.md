@@ -43,6 +43,21 @@ Estado de cada opción:
 
 ---
 
+## Atajos fijos del compositor
+
+No son opciones de dominio; están fijos y documentados aquí:
+
+| Atajo | Acción |
+|---|---|
+| `Super+Space` | abre o cierra `yuki-shell launcher`; bloqueado con la sesión bloqueada |
+| `Ctrl+Alt+Backspace` | salida de emergencia (bloqueada con la sesión bloqueada) |
+| `Ctrl+Alt+L` | bloquea o relanza el lock |
+| `Ctrl+Alt+F1..F12` | cambia de VT |
+| `Shift+Super+3` / `Shift+Super+4` | captura de pantalla / región |
+| `PrintScreen` | captura la ventana enfocada |
+
+---
+
 ## `appearance` — apariencia (System Settings → Appearance)
 
 | Opción | Tipo | Default | Estado | Consumida por |

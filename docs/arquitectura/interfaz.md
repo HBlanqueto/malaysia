@@ -32,7 +32,7 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
 
 | Quién | Qué dibuja | Cómo |
 |---|---|---|
-| Shell (`yuki-shell wallpaper/menubar/dock/lock`) | Toda su UI, en su propio proceso | CelestialKit (Freya + Skia) sobre su superficie |
+| Shell (`yuki-shell wallpaper/menubar/dock/lock/launcher`) | Toda su UI, en su propio proceso | CelestialKit (Freya + Skia) sobre su superficie |
 | Apps propias | Su UI, **su titlebar y sus semáforos** (CSD, `xdg-decoration` client-side) | CelestialKit + tokens de `yuki-design` |
 | Apps ajenas que piden SSD | Su contenido | El compositor les añade la titlebar SSD (`chrome.rs`) |
 | Compositor (Yuki) | Composición, sombras, esquinas, desenfoque y animaciones de ventana | GLES + `grade-graphics`, como WindowServer |
@@ -44,7 +44,7 @@ entonces el compositor los aplica igualmente a todas las superficies.
 ## Capas y orden de composición
 
 ```
-Overlay   launcher (futuro), capturas, popups de la shell
+Overlay   launcher, capturas, popups de la shell
    ▲
 Top       menubar (arriba) · dock (abajo) · notificaciones (futuro)
    ▲
@@ -88,7 +88,7 @@ solo se dibujan sus superficies (y el cursor).
 | Menubar | `yuki-shell menubar` | Top, 28 px | hecho; app activa + reloj, paleta clara Neptunia |
 | Dock | `yuki-shell dock` | Top, abajo | hecho; lista de ventanas, tiles y activar |
 | Lock | `yuki-shell lock` | lock surfaces | hecho; PAM, auto-lock, recuperación |
-| Launcher | `yuki-shell launcher` | Overlay | **siguiente**; requiere foco de teclado en layers |
+| Launcher | `yuki-shell launcher` | Overlay | hecho; búsqueda, ranking, iconos y activación |
 | Notificaciones | futuro | Top/Overlay | Bloque 12b |
 
 Los componentes leen preferencias de `~/.config/yuki/` y estado de
@@ -124,6 +124,14 @@ blanco; `screenshot.domain` decide puntero, destino, formato, fecha, miniatura,
 temporizador y semáforo. `target = "clipboard"` copia `image/png`; el resto de
 opciones están reservadas. Detalle en [`capturas.md`](capturas.md).
 
+## Launcher
+
+`Super+Space` abre o cierra `yuki-shell launcher` (capa Overlay exclusiva,
+centrada). Búsqueda de apps `.desktop` con ranking por prefijo, palabra,
+subcadena y palabras clave; `↑`/`↓` navegan, `Enter` o clic lanzan con token de
+`xdg-activation`, `Esc` cierra. Detalle en
+[`../bloques/13-chrome-y-launcher.md`](../bloques/13-chrome-y-launcher.md).
+
 ## Cursor, input y popups
 
 - Cursor `wp_cursor_shape_v1` (35 formas), tema Xcursor, HiDPI y shake-to-locate
@@ -132,8 +140,9 @@ opciones están reservadas. Detalle en [`capturas.md`](capturas.md).
   cascada y `Esc`, pointer constraints y relative-pointer.
 - El puntero no entra en la banda de la titlebar como superficie del cliente:
   el compositor la trata como chrome.
-- El launcher necesitará foco de teclado para `KeyboardInteractivity::Exclusive`;
-  hoy solo las ventanas reciben foco de teclado.
+- El launcher es una capa `Overlay` exclusiva: al mapearse recibe el foco de
+  teclado y lo conserva; al cerrarse lo devuelve a la ventana anterior. Las
+  capas `OnDemand` lo toman al pulsarlas y lo pierden al hacer clic fuera.
 
 ## Configuración y portal
 
@@ -156,8 +165,6 @@ también notifica a las apps).
 
 ## Lo que falta (UI)
 
-- **Launcher** (`Super+Space`), con búsqueda de `.desktop` y foco de teclado en
-  layer surfaces.
 - **Esquinas redondeadas** de ventana (16), **sombra** y **glifos de hover** en
   los semáforos.
 - **Doble clic** en la titlebar para zoom, y titlebar en la captura de ventana.
