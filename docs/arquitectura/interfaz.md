@@ -101,6 +101,11 @@ y [`lock.md`](lock.md).
 
 ## Ventanas y chrome
 
+- **Apps propias (ADR 0035)**: su `app_id` empieza por
+  `io.github.hblanqueto.yuki.` y piden CSD explícito antes del primer commit.
+  Yuki nunca les añade su titlebar, ni con `window.decorations = "force_server"`.
+  El prefijo solo decide si se dibuja una barra; no es seguridad. Infinity lo
+  sustituirá cuando exista.
 - **SSD**: titlebar de 32 px arriba, fondo de la paleta, hairline, tres
   semáforos y título centrado. Cerrar / minimizar / maximizar funcionan;
   arrastrar desde la barra mueve y los bordes redimensionan.

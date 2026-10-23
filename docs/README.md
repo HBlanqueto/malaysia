@@ -128,7 +128,7 @@ Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
    (Bloque 13), el cierre de 12a/12b y el hardware real. El roadmap es el plan
    largo; este documento es la lista de ahora.
 6. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0034, índice en [`decisiones/README.md`](decisiones/README.md),
+   implementación (ADR 0001–0035, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
    de la interfaz: Neptunia, capas, shell, ventanas, capturas, cursor y

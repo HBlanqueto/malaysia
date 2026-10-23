@@ -27,6 +27,18 @@ chrome; los diálogos, los popups y el fullscreen no llevan chrome. Wezterm, por
 ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
 `window.decorations = "force_server"`.
 
+## Apps propias y CSD (ADR 0035)
+
+Una app de CelestialKit se identifica con un `app_id` que empieza por
+`NATIVE_APP_ID_PREFIX` (`io.github.hblanqueto.yuki.`) y pide CSD explícito por
+`xdg-decoration` (`ClientSide`) antes de su primer commit. Para esas ventanas el
+modo efectivo es siempre `Client`: Yuki no les pone barra ni con
+`window.decorations = "force_server"`. La app dibuja su titlebar y sus
+`TrafficLights` con CelestialKit. El prefijo no autentica nada y solo decide si
+se dibuja una barra; Infinity lo reemplazará cuando exista. Si una app propia
+pide explícitamente `Server`, el compositor avisa una vez por ventana («app
+propia que no pidió CSD») y sigue sin barra.
+
 ## Resize por bordes
 
 Las ventanas **SSD normales** (no maximizadas ni fullscreen) se redimensionan
