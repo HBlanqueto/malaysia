@@ -168,6 +168,8 @@ enum CompositorShortcut {
     ScreenshotFull,
     /// Shift+Super+4: drag a region (then optionally Space for a window).
     ScreenshotRegion,
+    /// Super+Space: open or close the launcher.
+    Launcher,
     /// Not a compositor shortcut.
     None,
 }
@@ -193,6 +195,14 @@ fn compositor_shortcut(
     // PrintScreen works on its own, so it is checked before the modifier gate.
     if syms.iter().any(|sym| u32::from(*sym) == keysyms::KEY_Print) {
         return CompositorShortcut::Screenshot;
+    }
+    // Super+Space is the launcher. While locked it is a no-op.
+    if logo && !ctrl && !alt && !shift && syms.iter().any(|sym| u32::from(*sym) == 0x20) {
+        return if locked {
+            CompositorShortcut::None
+        } else {
+            CompositorShortcut::Launcher
+        };
     }
     if !(ctrl && alt) {
         return CompositorShortcut::None;
@@ -332,6 +342,9 @@ impl State {
                                                     "Shift+Super+4: selecting a screenshot region"
                                                 );
                                                 state.start_region_screenshot();
+                                            }
+                                            CompositorShortcut::Launcher => {
+                                                state.toggle_launcher();
                                             }
                                             CompositorShortcut::None => {}
                                         }
@@ -1504,6 +1517,23 @@ mod tests {
         assert!((1.0..=yuki_design::CURSOR_SHAKE_SCALE).contains(&scale));
         state.cursor_boost_started = None;
         assert_eq!(state.cursor_boost_scale(), 1.0);
+    }
+
+    #[test]
+    fn super_space_toggles_the_launcher_unless_locked() {
+        let space = [xkb::Keysym::new(0x20)];
+        assert_eq!(
+            compositor_shortcut(false, false, false, true, &space, false),
+            CompositorShortcut::Launcher
+        );
+        assert_eq!(
+            compositor_shortcut(false, false, false, true, &space, true),
+            CompositorShortcut::None
+        );
+        assert_eq!(
+            compositor_shortcut(false, false, true, true, &space, false),
+            CompositorShortcut::None
+        );
     }
 
     #[test]
