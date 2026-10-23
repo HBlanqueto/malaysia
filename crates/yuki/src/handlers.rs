@@ -645,6 +645,14 @@ impl WlrLayerShellHandler for State {
         self.layers.destroy(surface.wl_surface());
         self.request_redraw();
     }
+
+    fn new_popup(&mut self, _parent: LayerSurface, popup: PopupSurface) {
+        // A layer-shell popup gets its parent only when `get_popup` runs, so
+        // xdg-shell's `new_popup` saw no parent and skipped it. Position and
+        // configure it here with the positioner the client already sent.
+        let positioner = popup.with_pending_state(|state| state.positioner);
+        self.add_popup(popup, positioner);
+    }
 }
 
 impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {

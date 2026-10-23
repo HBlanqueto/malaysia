@@ -1976,6 +1976,8 @@ impl Shell {
             && let SurfaceRole::Layer(layer_surface) = &self.surfaces[owner_index].role
         {
             layer_surface.get_popup(popup.xdg_popup());
+            // `get_popup` takes effect when the parent layer surface commits.
+            self.surfaces[owner_index].surface.commit();
         }
 
         if spec.grab
@@ -2366,7 +2368,11 @@ impl PopupHandler for Shell {
         let scale = self.surfaces[index].scale;
         let size = (config.width.max(0) as u32, config.height.max(0) as u32);
         self.surfaces[index].configure(size, scale);
-        self.surfaces[index].request_redraw(qh);
+        // Like a toplevel, a popup must attach its first buffer before it can
+        // map; there is no frame callback to wait for yet.
+        if self.surfaces[index].draw() && self.surfaces[index].needs_redraw {
+            self.surfaces[index].request_redraw(qh);
+        }
     }
 
     fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
