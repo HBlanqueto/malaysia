@@ -5,7 +5,9 @@
 //! later. A component must be able to crash and restart on its own without
 //! taking any other component (or the compositor) down.
 
+mod desktop;
 mod dock;
+mod launcher;
 mod lock;
 mod menubar;
 mod pam;
