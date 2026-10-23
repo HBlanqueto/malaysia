@@ -487,57 +487,74 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
         ));
     }
 
-    let runtime = TempDir::create()?;
-    let config = runtime.path().join("config");
-    fs::create_dir_all(&config).map_err(|error| format!("creating config: {error}"))?;
-    fs::write(
-        config.join("window.domain"),
-        "decorations = \"force_server\"\n",
-    )
-    .map_err(|error| format!("writing window.domain: {error}"))?;
-
-    let mut compositor = ChildGuard::spawn(
-        Command::new(&binary)
-            .arg("--log-level=info")
-            .env("XDG_RUNTIME_DIR", runtime.path())
-            .env("YUKI_CONFIG_DIR", &config),
-        host_display,
-    )?;
-    let compositor_log = compositor.capture()?;
-    let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
-
     let mut lines = Vec::new();
-    for scenario in ["a", "b", "c"] {
-        let mut child = ChildGuard::spawn(
-            Command::new(&client)
+    for (policy, scenarios) in [
+        ("force_client", &["a"][..]),
+        ("force_server", &["b", "c", "d"][..]),
+    ] {
+        let runtime = TempDir::create()?;
+        let config = runtime.path().join("config");
+        fs::create_dir_all(&config).map_err(|error| format!("creating config: {error}"))?;
+        fs::write(
+            config.join("window.domain"),
+            format!("decorations = \"{policy}\"\n"),
+        )
+        .map_err(|error| format!("writing window.domain: {error}"))?;
+
+        let mut compositor = ChildGuard::spawn(
+            Command::new(&binary)
+                .arg("--log-level=info")
                 .env("XDG_RUNTIME_DIR", runtime.path())
-                .env("WAYLAND_DISPLAY", &socket)
-                .env("YUKI_NATIVE_SCENARIO", scenario)
-                .stdin(Stdio::null()),
-            None,
+                .env("YUKI_CONFIG_DIR", &config),
+            host_display,
         )?;
-        let log = child.capture()?;
-        let deadline = Instant::now() + APP_TIMEOUT;
-        loop {
-            if let Some(status) = child.poll()? {
-                let output = snapshot(&log);
-                lines.extend(output.iter().cloned());
-                if !status.success()
-                    || !output
-                        .iter()
-                        .any(|line| line.contains(&format!("PASS scenario {scenario}")))
-                {
-                    return Err(format!(
-                        "scenario {scenario} failed ({status}); output:\n{}",
-                        output.join("\n")
-                    ));
+        let compositor_log = compositor.capture()?;
+        let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
+
+        for scenario in scenarios {
+            let mut child = ChildGuard::spawn(
+                Command::new(&client)
+                    .env("XDG_RUNTIME_DIR", runtime.path())
+                    .env("WAYLAND_DISPLAY", &socket)
+                    .env("YUKI_NATIVE_SCENARIO", scenario)
+                    .stdin(Stdio::null()),
+                None,
+            )?;
+            let log = child.capture()?;
+            let deadline = Instant::now() + APP_TIMEOUT;
+            loop {
+                if let Some(status) = child.poll()? {
+                    let output = snapshot(&log);
+                    lines.extend(output.iter().cloned());
+                    if !status.success()
+                        || !output
+                            .iter()
+                            .any(|line| line.contains(&format!("PASS scenario {scenario}")))
+                    {
+                        return Err(format!(
+                            "scenario {scenario} failed ({status}); output:\n{}",
+                            output.join("\n")
+                        ));
+                    }
+                    break;
                 }
-                break;
+                if Instant::now() >= deadline {
+                    return Err(format!("scenario {scenario} did not exit in time"));
+                }
+                thread::sleep(Duration::from_millis(50));
             }
-            if Instant::now() >= deadline {
-                return Err(format!("scenario {scenario} did not exit in time"));
+        }
+        if policy == "force_server" {
+            let compositor_lines = snapshot(&compositor_log);
+            if !compositor_lines
+                .iter()
+                .any(|line| line.contains("app propia sin modo de decoración"))
+            {
+                return Err(format!(
+                    "scenario c produced no native-app warning; compositor log:\n{}",
+                    compositor_lines.join("\n")
+                ));
             }
-            thread::sleep(Duration::from_millis(50));
         }
     }
     Ok(lines)

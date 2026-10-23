@@ -5,9 +5,10 @@
 //! native app ids must never get Yuki's titlebar, while a foreign app still
 //! does.
 //!
-//! - `a`: ask for client-side, then set the native app id.
-//! - `b`: set the native app id, then ask for client-side.
-//! - `c`: a foreign app id and no client-side request.
+//! - `a`: a native app asking for server-side.
+//! - `b`: a native app asking for client-side after setting its app id.
+//! - `c`: a native app that never sends `request_mode`.
+//! - `d`: a foreign app with no request.
 
 use std::time::Duration;
 
@@ -59,9 +60,9 @@ fn main() {
     let output_state = OutputState::new(&globals, &qh);
 
     let surface = compositor.create_surface(&qh);
-    let (window, expected_native) = match scenario.as_str() {
+    let (window, expected_bar) = match scenario.as_str() {
         "a" => {
-            let window = xdg_shell.create_window(surface, WindowDecorations::RequestClient, &qh);
+            let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
             window.set_app_id(format!("{NATIVE_PREFIX}demo"));
             (window, true)
         }
@@ -71,12 +72,17 @@ fn main() {
             let decoration =
                 decoration_manager.get_toplevel_decoration(window.xdg_toplevel(), &qh, ());
             decoration.set_mode(Mode::ClientSide);
-            (window, true)
+            (window, false)
         }
         "c" => {
             let window = xdg_shell.create_window(surface, WindowDecorations::None, &qh);
-            window.set_app_id("foot");
+            window.set_app_id(format!("{NATIVE_PREFIX}demo"));
             (window, false)
+        }
+        "d" => {
+            let window = xdg_shell.create_window(surface, WindowDecorations::None, &qh);
+            window.set_app_id("foot");
+            (window, true)
         }
         other => panic!("unknown scenario {other:?}"),
     };
@@ -89,7 +95,7 @@ fn main() {
         _decoration_manager: decoration_manager,
         _window: window,
         scenario: scenario.clone(),
-        expected_native,
+        expected_bar,
         checked: false,
         failed: false,
         loop_signal: event_loop.get_signal(),
@@ -131,7 +137,7 @@ struct App {
     _decoration_manager: ZxdgDecorationManagerV1,
     _window: Window,
     scenario: String,
-    expected_native: bool,
+    expected_bar: bool,
     checked: bool,
     failed: bool,
     loop_signal: calloop::LoopSignal,
@@ -196,10 +202,10 @@ impl WindowHandler for App {
             .and_then(|info| info.logical_size)
             .map(|(_, height)| height)
             .unwrap_or(800);
-        let expected_height = if self.expected_native {
-            output_height
-        } else {
+        let expected_height = if self.expected_bar {
             output_height - TITLEBAR
+        } else {
+            output_height
         };
         println!(
             "native_decoration: scenario {} mode {:?} size {width}x{height} (output height {output_height})",

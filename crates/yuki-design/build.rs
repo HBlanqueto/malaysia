@@ -207,6 +207,7 @@ fn const_doc(out: &mut String, name: &str, doc: &str) {
 
 fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
     let thickness = integer(tokens, "size.titlebar-ssd-h", TOKENS);
+    let client_thickness = integer(tokens, "size.titlebar-h", TOKENS);
     let diameter = integer(
         components,
         "components.window.traffic-lights.size",
@@ -287,6 +288,12 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         rgba(zoom),
         font(tokens, "headline")
     ));
+    const_doc(
+        out,
+        "TITLEBAR_CLIENT_HEIGHT",
+        "The height of a CelestialKit app's own titlebar, in logical pixels.",
+    );
+    out.push_str(&format!(": u32 = {client_thickness};\n\n"));
 
     let interval = integer(
         components,

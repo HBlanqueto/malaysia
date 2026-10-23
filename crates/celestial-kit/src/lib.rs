@@ -19,6 +19,9 @@ pub mod password;
 /// The Freya theme generated from `yuki-design` and `yuki-appearance`.
 pub mod theme;
 
+/// Client-side titlebar (ADR 0035).
+pub mod titlebar;
+
 /// Client-side traffic lights (ADR 0035).
 pub mod traffic;
 

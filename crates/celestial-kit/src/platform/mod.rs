@@ -36,7 +36,7 @@ use sctk::reexports::client::event_created_child;
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_session_lock, delegate_touch,
+    delegate_seat, delegate_session_lock, delegate_touch, delegate_xdg_shell, delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::{
@@ -66,6 +66,7 @@ use sctk::{
             xdg_activation_token_v1::{self, XdgActivationTokenV1},
             xdg_activation_v1::XdgActivationV1,
         },
+        protocols::xdg::shell::client::xdg_toplevel,
         protocols_wlr::{
             foreign_toplevel::v1::client::{
                 zwlr_foreign_toplevel_handle_v1::{
@@ -90,10 +91,17 @@ use sctk::{
         SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
         SessionLockSurfaceConfigure,
     },
-    shell::wlr_layer::{
-        Anchor as SctkAnchor, KeyboardInteractivity as SctkKeyboardInteractivity,
-        Layer as SctkLayer, LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
-        LayerSurfaceData,
+    shell::{
+        WaylandSurface,
+        wlr_layer::{
+            Anchor as SctkAnchor, KeyboardInteractivity as SctkKeyboardInteractivity,
+            Layer as SctkLayer, LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
+            LayerSurfaceData,
+        },
+        xdg::{
+            XdgShell,
+            window::{DecorationMode, Window, WindowConfigure, WindowDecorations, WindowHandler},
+        },
     },
 };
 use std::task::Waker;
@@ -152,6 +160,143 @@ pub enum KeyboardInteractivity {
     OnDemand,
 }
 
+/// Who draws a Yuki app's titlebar (ADR 0035).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Decorations {
+    /// CelestialKit draws its 44 px titlebar.
+    #[default]
+    Client,
+    /// Yuki's compositor draws the 32 px titlebar.
+    Server,
+}
+
+/// Which edge of a client-side window is being resized.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowEdge {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// How the compositor answered the decoration request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DecorationResponse {
+    Client,
+    Server,
+}
+
+/// Public options for a normal CelestialKit window, without SCTK types.
+#[derive(Clone, Debug)]
+pub struct WindowOptions {
+    pub title: String,
+    pub app_name: String,
+    pub decorations: Decorations,
+    pub size: (u32, u32),
+    pub min_size: Option<(u32, u32)>,
+    pub max_size: Option<(u32, u32)>,
+}
+
+impl WindowOptions {
+    /// A 640×420 window with client-side chrome and the given title/app name.
+    pub fn new(title: impl Into<String>, app_name: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            app_name: app_name.into(),
+            decorations: Decorations::Client,
+            size: (640, 420),
+            min_size: None,
+            max_size: None,
+        }
+    }
+
+    pub fn decorations(mut self, decorations: Decorations) -> Self {
+        self.decorations = decorations;
+        self
+    }
+
+    pub fn size(mut self, size: (u32, u32)) -> Self {
+        self.size = size;
+        self
+    }
+
+    pub fn min_size(mut self, size: Option<(u32, u32)>) -> Self {
+        self.min_size = size;
+        self
+    }
+
+    pub fn max_size(mut self, size: Option<(u32, u32)>) -> Self {
+        self.max_size = size;
+        self
+    }
+}
+
+/// The state a CelestialKit window's titlebar reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WindowStatus {
+    pub activated: bool,
+    pub maximized: bool,
+    pub decoration: DecorationResponse,
+    pub fixed: bool,
+}
+
+/// Actions a titlebar can request from the runner.
+#[derive(Clone)]
+pub struct WindowControls {
+    queue: Rc<RefCell<Vec<WindowCommand>>>,
+    ping: Ping,
+    pub(crate) pointer_serial: Rc<std::cell::Cell<u32>>,
+    pub status: State<WindowStatus>,
+    pub title: String,
+    pub fixed: bool,
+}
+
+impl WindowControls {
+    pub fn get() -> Self {
+        freya_core::prelude::consume_root_context()
+    }
+
+    pub fn pointer_serial(&self) -> u32 {
+        self.pointer_serial.get()
+    }
+
+    pub fn minimize(&self) {
+        self.queue.borrow_mut().push(WindowCommand::Minimize);
+        self.ping.ping();
+    }
+
+    pub fn toggle_maximize(&self) {
+        self.queue.borrow_mut().push(WindowCommand::ToggleMaximize);
+        self.ping.ping();
+    }
+
+    pub fn move_window(&self) {
+        self.queue
+            .borrow_mut()
+            .push(WindowCommand::Move(self.pointer_serial.get()));
+        self.ping.ping();
+    }
+
+    pub fn resize(&self, edge: WindowEdge) {
+        self.queue
+            .borrow_mut()
+            .push(WindowCommand::Resize(self.pointer_serial.get(), edge));
+        self.ping.ping();
+    }
+}
+
+#[derive(Debug)]
+enum WindowCommand {
+    Minimize,
+    ToggleMaximize,
+    Move(u32),
+    Resize(u32, WindowEdge),
+}
+
 /// What kind of surface the runner owns.
 #[derive(Clone, Debug)]
 pub enum SurfaceSpec {
@@ -167,6 +312,8 @@ pub enum SurfaceSpec {
     },
     /// One `ext-session-lock-v1` surface per output.
     Lock,
+    /// A normal xdg_toplevel owned by a CelestialKit app.
+    Window(WindowOptions),
 }
 
 /// A failure while setting up or running the surface.
@@ -402,6 +549,7 @@ impl AppInstance {
         toplevels: Option<Toplevels>,
         session_unlock: Option<SessionUnlock>,
         activation: Activation,
+        window: Option<WindowControls>,
         timers: Timers,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
@@ -446,6 +594,9 @@ impl AppInstance {
             runner.provide_root_context(move || unlock);
         }
         runner.provide_root_context(move || activation);
+        if let Some(window) = window {
+            runner.provide_root_context(move || window);
+        }
         runner.provide_root_context(move || timers);
         runner.provide_root_context(|| State::create(None::<Box<dyn ClipboardProvider>>));
         runner.provide_root_context(|| tree.accessibility_generator.clone());
@@ -719,6 +870,7 @@ struct SurfaceWindow {
 enum SurfaceRole {
     Layer(LayerSurface),
     Lock(SessionLockSurface),
+    Window(Window),
 }
 
 impl SurfaceWindow {
@@ -826,6 +978,7 @@ struct Shell {
     compositor: CompositorState,
     output: OutputState,
     layer_shell: Option<LayerShell>,
+    xdg_shell: Option<XdgShell>,
     session_lock: Option<SessionLockState>,
     active_lock: Option<SessionLock>,
     surfaces: Vec<SurfaceWindow>,
@@ -861,6 +1014,15 @@ struct Shell {
     activation_callbacks: Vec<Option<ActivationCallback>>,
     activation_seat: Option<wl_seat::WlSeat>,
     last_key_serial: u32,
+    window_context: Option<WindowContext>,
+    decoration_manager: bool,
+    decoration_warned: bool,
+}
+
+#[derive(Clone)]
+struct WindowContext {
+    controls: WindowControls,
+    queue: Rc<RefCell<Vec<WindowCommand>>>,
 }
 
 fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(UserEvent)> {
@@ -868,6 +1030,19 @@ fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(User
         queue.borrow_mut().push(event);
         ping.ping();
     })
+}
+
+fn resize_edge(edge: WindowEdge) -> xdg_toplevel::ResizeEdge {
+    match edge {
+        WindowEdge::Top => xdg_toplevel::ResizeEdge::Top,
+        WindowEdge::Bottom => xdg_toplevel::ResizeEdge::Bottom,
+        WindowEdge::Left => xdg_toplevel::ResizeEdge::Left,
+        WindowEdge::Right => xdg_toplevel::ResizeEdge::Right,
+        WindowEdge::TopLeft => xdg_toplevel::ResizeEdge::TopLeft,
+        WindowEdge::TopRight => xdg_toplevel::ResizeEdge::TopRight,
+        WindowEdge::BottomLeft => xdg_toplevel::ResizeEdge::BottomLeft,
+        WindowEdge::BottomRight => xdg_toplevel::ResizeEdge::BottomRight,
+    }
 }
 
 fn anchors_to_sctk(a: Anchors) -> SctkAnchor {
@@ -890,19 +1065,6 @@ fn anchors_to_sctk(a: Anchors) -> SctkAnchor {
 fn drain_user_events(events: &Rc<RefCell<Vec<UserEvent>>>) -> Vec<UserEvent> {
     std::mem::take(&mut *events.borrow_mut())
 }
-
-// TODO(ADR 0035): when the runner creates xdg_toplevel windows for Yuki's own
-// apps, every such window must:
-// - be created with SCTK `WindowDecorations::RequestClient`;
-// - call `set_app_id` with an id starting with `yuki_design::NATIVE_APP_ID_PREFIX`
-//   before its first commit;
-// - draw its titlebar with `celestial_kit::traffic::TrafficLights`;
-// - move with `xdg_toplevel.move` and resize with `xdg_toplevel.resize`;
-// - set `min_size == max_size` for fixed-size windows so the compositor
-//   disables zoom (ADR 0035).
-//
-// The compositor already recognises the prefix and never adds its titlebar to
-// those windows, including under `window.decorations = "force_server"`.
 
 /// Runs a layer-shell surface with a Freya app until the compositor closes it.
 pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
@@ -929,7 +1091,9 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
             *keyboard,
             *size,
         ),
-        SurfaceSpec::Lock => return Err(RunError::MissingGlobal("layer surface")),
+        SurfaceSpec::Lock | SurfaceSpec::Window(_) => {
+            return Err(RunError::MissingGlobal("layer surface"));
+        }
     };
 
     let surface = shell.compositor.create_surface(&qh);
@@ -969,6 +1133,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         Some(shell.toplevels.clone()),
         None,
         shell.activation.clone(),
+        None,
         Timers {
             queue: shell.timers.clone(),
             ping: shell.ping.clone(),
@@ -1006,6 +1171,112 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
             }),
         });
     }
+    event_loop
+        .run(None, &mut shell, |shell| {
+            if shell.needs_exit
+                && let Some(signal) = &shell.loop_signal
+            {
+                signal.stop();
+            }
+        })
+        .map_err(|_| RunError::Egl("calloop event loop failed"))?;
+    Ok(())
+}
+
+/// Runs a normal CelestialKit window (`xdg_toplevel`, ADR 0035).
+pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunError> {
+    let (conn, event_queue, qh, mut shell) =
+        Shell::connect(app, SurfaceSpec::Window(options.clone()))?;
+    shell.qh = qh.clone();
+    let xdg_shell = shell
+        .xdg_shell
+        .as_ref()
+        .ok_or(RunError::MissingGlobal("xdg_wm_base"))?;
+    let surface = shell.compositor.create_surface(&qh);
+    let decorations = match options.decorations {
+        Decorations::Client => WindowDecorations::RequestClient,
+        Decorations::Server => WindowDecorations::RequestServer,
+    };
+    let window = xdg_shell.create_window(surface.clone(), decorations, &qh);
+    window.set_app_id(format!(
+        "{}{}",
+        yuki_design::NATIVE_APP_ID_PREFIX,
+        options.app_name
+    ));
+    window.set_title(options.title.clone());
+    if let Some(min) = options.min_size {
+        window.set_min_size(Some(min));
+    }
+    if let Some(max) = options.max_size {
+        window.set_max_size(Some(max));
+    }
+    window.commit();
+
+    let queue: Rc<RefCell<Vec<WindowCommand>>> = Rc::new(RefCell::new(Vec::new()));
+    let pointer_serial = Rc::new(std::cell::Cell::new(0));
+    let fixed = options.min_size.is_some() && options.min_size == options.max_size;
+    let status = State::create_global(WindowStatus {
+        activated: true,
+        maximized: false,
+        decoration: match options.decorations {
+            Decorations::Client => DecorationResponse::Client,
+            Decorations::Server => DecorationResponse::Server,
+        },
+        fixed,
+    });
+    let controls = WindowControls {
+        queue: queue.clone(),
+        ping: shell.ping.clone(),
+        pointer_serial,
+        status,
+        title: options.title.clone(),
+        fixed,
+    };
+    shell.window_context = Some(WindowContext {
+        controls: controls.clone(),
+        queue,
+    });
+
+    let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
+    let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
+    let sender = make_sender(shell.queue.clone(), shell.ping.clone());
+    let app_instance = AppInstance::new(
+        shell.app.clone(),
+        1.0,
+        options.size,
+        sender,
+        waker,
+        Some(shell.toplevels.clone()),
+        None,
+        shell.activation.clone(),
+        Some(controls),
+        Timers {
+            queue: shell.timers.clone(),
+            ping: shell.ping.clone(),
+        },
+    );
+    shell.surfaces.push(SurfaceWindow {
+        surface,
+        role: SurfaceRole::Window(window),
+        display_ptr,
+        graphics: None,
+        app: app_instance,
+        logical_size: options.size,
+        buffer_size: (0, 0),
+        scale: 1.0,
+        output: None,
+        needs_redraw: true,
+        frame_pending: false,
+    });
+
+    let mut event_loop: EventLoop<Shell> =
+        EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
+    insert_ping(&mut event_loop, &mut shell)?;
+    WaylandSource::new(conn, event_queue)
+        .insert(event_loop.handle())
+        .map_err(|_| RunError::Egl("inserting the Wayland source"))?;
+    let signal = event_loop.get_signal();
+    shell.loop_signal = Some(signal);
     event_loop
         .run(None, &mut shell, |shell| {
             if shell.needs_exit
@@ -1130,6 +1401,7 @@ impl Shell {
                 .map_err(|_| RunError::MissingGlobal("wl_compositor"))?,
             output: OutputState::new(&globals, &qh),
             layer_shell: LayerShell::bind(&globals, &qh).ok(),
+            xdg_shell: XdgShell::bind(&globals, &qh).ok(),
             session_lock: Some(SessionLockState::new(&globals, &qh)),
             active_lock: None,
             surfaces: Vec::new(),
@@ -1168,6 +1440,12 @@ impl Shell {
             activation_callbacks: Vec::new(),
             activation_seat: None,
             last_key_serial: 0,
+            window_context: None,
+            decoration_manager: globals.contents().with_list(|list| {
+                list.iter()
+                    .any(|global| global.interface == "zxdg_decoration_manager_v1")
+            }),
+            decoration_warned: false,
         };
         Ok((conn, event_queue, qh, shell))
     }
@@ -1199,6 +1477,7 @@ impl Shell {
             Some(self.toplevels.clone()),
             self.session_unlock.clone(),
             self.activation.clone(),
+            None,
             Timers {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
@@ -1233,6 +1512,47 @@ impl Shell {
         }
         self.request_redraw_all = false;
         self.poll_activation();
+        self.process_window_commands();
+    }
+
+    fn process_window_commands(&mut self) {
+        let Some(context) = self.window_context.clone() else {
+            return;
+        };
+        let commands = std::mem::take(&mut *context.queue.borrow_mut());
+        for command in commands {
+            let Some(index) = self
+                .surfaces
+                .iter()
+                .position(|surface| matches!(surface.role, SurfaceRole::Window(_)))
+            else {
+                continue;
+            };
+            let SurfaceRole::Window(window) = &self.surfaces[index].role else {
+                continue;
+            };
+            match command {
+                WindowCommand::Minimize => window.set_minimized(),
+                WindowCommand::ToggleMaximize => {
+                    if context.controls.status.read().maximized {
+                        window.unset_maximized();
+                    } else {
+                        window.set_maximized();
+                    }
+                }
+                WindowCommand::Move(serial) => {
+                    if let Some(seat) = &self.activation_seat {
+                        window.move_(seat, serial);
+                    }
+                }
+                WindowCommand::Resize(serial, edge) => {
+                    if let Some(seat) = &self.activation_seat {
+                        window.resize(seat, serial, resize_edge(edge));
+                    }
+                }
+            }
+            self.surfaces[index].needs_redraw = true;
+        }
     }
 
     fn poll_activation(&mut self) {
@@ -1373,6 +1693,85 @@ impl CompositorHandler for Shell {
         _: &WlSurface,
         _: &wl_output::WlOutput,
     ) {
+    }
+}
+
+impl WindowHandler for Shell {
+    fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
+        self.needs_exit = true;
+        if let Some(context) = &self.window_context {
+            let mut status = context.controls.status;
+            status.set(WindowStatus {
+                activated: false,
+                ..*status.read()
+            });
+        }
+    }
+
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        window: &Window,
+        configure: WindowConfigure,
+        _: u32,
+    ) {
+        let Some(index) = self.surface_for(window.wl_surface()) else {
+            return;
+        };
+        let scale = self.surfaces[index].scale;
+        let size = (
+            configure.new_size.0.map_or(0, |value| value.get()),
+            configure.new_size.1.map_or(0, |value| value.get()),
+        );
+        if size.0 > 0 && size.1 > 0 {
+            self.surfaces[index].configure(size, scale);
+        }
+        let requested_server = matches!(
+            self.spec,
+            SurfaceSpec::Window(WindowOptions {
+                decorations: Decorations::Server,
+                ..
+            })
+        );
+        // Yuki always grants an explicit Server request. Some compositors do
+        // not send the decoration configure at all, so keep the requested mode
+        // when they advertise the protocol; without it, fall back to the
+        // client-side bar.
+        let decoration = if requested_server && self.decoration_manager {
+            DecorationResponse::Server
+        } else {
+            match configure.decoration_mode {
+                DecorationMode::Server => DecorationResponse::Server,
+                DecorationMode::Client => DecorationResponse::Client,
+            }
+        };
+        if let Some(context) = &self.window_context {
+            if requested_server
+                && decoration == DecorationResponse::Client
+                && !self.decoration_warned
+            {
+                self.decoration_warned = true;
+                tracing::info!(
+                    "the compositor did not grant server-side decorations; drawing the kit titlebar"
+                );
+            }
+            let mut status = context.controls.status;
+            status.set(WindowStatus {
+                activated: configure.is_activated(),
+                maximized: configure.is_maximized(),
+                decoration,
+                fixed: context.controls.fixed,
+            });
+        }
+        // Acknowledge the configure and let SCTK apply the decoration mode
+        // before drawing the first frame.
+        window.commit();
+        // A toplevel must attach its first buffer before it can map; unlike a
+        // layer surface there is no frame callback to wait for yet.
+        if self.surfaces[index].draw() && self.surfaces[index].needs_redraw {
+            self.surfaces[index].request_redraw(qh);
+        }
     }
 }
 
@@ -1553,11 +1952,16 @@ impl PointerHandler for Shell {
                     cursor: CursorPoint::from((-1.0, -1.0)),
                     button: None,
                 },
-                PointerEventKind::Press { button, .. } => PlatformEvent::Mouse {
-                    name: MouseEventName::MouseDown,
-                    cursor: position,
-                    button: Some(input::mouse_button(button)),
-                },
+                PointerEventKind::Press { button, serial, .. } => {
+                    if let Some(context) = &self.window_context {
+                        context.controls.pointer_serial.set(serial);
+                    }
+                    PlatformEvent::Mouse {
+                        name: MouseEventName::MouseDown,
+                        cursor: position,
+                        button: Some(input::mouse_button(button)),
+                    }
+                }
                 PointerEventKind::Release { button, .. } => PlatformEvent::Mouse {
                     name: MouseEventName::MouseUp,
                     cursor: position,
@@ -2030,6 +2434,8 @@ delegate_output!(Shell);
 delegate_registry!(Shell);
 delegate_seat!(Shell);
 delegate_pointer!(Shell);
+delegate_xdg_shell!(Shell);
+delegate_xdg_window!(Shell);
 delegate_keyboard!(Shell);
 delegate_touch!(Shell);
 delegate_session_lock!(Shell);
