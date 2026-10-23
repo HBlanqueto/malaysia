@@ -33,15 +33,15 @@ correspondiente entra en `NOTICE` en el mismo commit.
 ventana enfocada en algo que la barra de Noctalia pueda dibujar.
 
 **Cómo obtiene los menús.** Por AT-SPI: recorre el árbol de accesibilidad del
-cliente y localiza la barra de menús y sus elementos. No habla dbusmenu ni el
-protocolo appmenu de KDE.
+cliente y localiza la barra de menús y sus elementos. No habla `dbusmenu` ni
+`org_kde_kwin_appmenu`.
 
 **X11 / Wayland.** Es Wayland puro (niri). AT-SPI funciona en los dos, pero el
 resultado depende de lo que el cliente exponga.
 
 **Límites que documenta.** Firefox solo publica su menú si este se abre
-visualmente, y en niri la ventana del menú queda fijada en pantalla. Su propio
-README dice que la solución limpia es que el compositor anuncie
+visualmente, y la propia barra de menús de Firefox queda fijada en pantalla.
+Su propio README dice que la solución limpia es que el compositor anuncie
 `org_kde_kwin_appmenu_manager` y que el cliente entregue el menú por D-Bus, en
 vez de reconstruirlo por accesibilidad.
 
@@ -110,13 +110,15 @@ menú real.
 
 ## 6. Firefox nativo — MPL-2.0
 
-**Qué es.** Soporte de menú global dentro de Firefox desde la versión 126.
-Está **apagado por defecto** y se activa con dos preferencias:
+**Qué es.** Soporte de menú global dentro de Firefox. Está **apagado por
+defecto** y se activa con dos preferencias:
 `widget.gtk.global-menu.enabled` y `widget.gtk.global-menu.wayland.enabled`.
 
-**Cómo obtiene los menús.** Firefox empezó con `xdg-dbus-annotation`, un
-mecanismo que nunca aterrizó upstream; terminó implementando el **protocolo
-appmenu de KDE** (servicio D-Bus `com.canonical.dbusmenu`).
+**Cómo obtiene los menús.** Firefox 126 lo implementó con
+`xdg-dbus-annotation`, un mecanismo que nunca aterrizó upstream; posteriormente
+(cambio D243251, disponible desde aproximadamente la versión 138) pasó al
+**protocolo appmenu de KDE** (`org_kde_kwin_appmenu` para anunciar el servicio,
+`com.canonical.dbusmenu` para el contenido).
 
 **X11 / Wayland.** El soporte existe para los dos. **No verificado:** si en
 Wayland necesita además `appmenu-gtk-module` o si las dos preferencias bastan.
@@ -128,12 +130,13 @@ no las tocan. Firefox es el cliente de aceptación del menú real en Wayland.
 
 ## 7. El ecosistema: el protocolo appmenu de KDE
 
-El par `org_kde_kwin_appmenu` + `com.canonical.dbusmenu` es el **estándar de
-facto** del menú global en Wayland:
+El par `org_kde_kwin_appmenu` (Wayland) + `com.canonical.dbusmenu` (D-Bus) es
+el **estándar de facto** del menú global en Wayland:
 
-- Firefox lo usa desde 126.
+- Firefox pasó de `xdg-dbus-annotation` a este protocolo de KDE (cambio
+  D243251, disponible desde aproximadamente la versión 138).
 - El plugin de JetBrains lo implementa.
-- El PR de menú global de Zed lo adopta.
+- Un PR de menú global de Zed lo adopta.
 - Qt 6 lo lista entre sus protocolos Wayland.
 
 Eso no lo convierte en un protocolo de freedesktop, pero sí en la única vía con
@@ -146,7 +149,7 @@ piezas tocan este bloque:
 
 | Pieza | Dónde | Tamaño | Qué aporta |
 |---|---|---|---|
-| `src/state/kde_appmenu.rs` | compositor de Otto | 143 líneas | Servidor `org_kde_kwin_appmenu`: guarda por superficie el servicio y la ruta D-Bus, y los publica para la ventana enfocada. |
+| `src/state/kde_appmenu.rs` | compositor de Otto | 143 líneas | `org_kde_kwin_appmenu` para el menú global. |
 | `app_menu.rs` de `otto-kit` | kit de cliente | 816 líneas | `org_kde_kwin_appmenu` + `com.canonical.dbusmenu`: dirección del menú global y consumo del árbol D-Bus. |
 
 Ambas son **portables** (cero referencias a Skia o layers). Si se copian, el

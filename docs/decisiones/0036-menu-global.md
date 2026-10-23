@@ -6,8 +6,10 @@ Estado: **aceptado** (2026-10-23). Documenta el Bloque 14; no hay código todav�
 
 La menubar de Yuki (`yuki-shell menubar`) muestra hoy el nombre de la app activa
 y el reloj. macOS pone además los menús de la app enfocada en la barra superior.
-Wayland no tiene un protocolo de menú global de freedesktop: lo que existe es el
-protocolo appmenu de KDE, ya adoptado por Firefox, Qt 6, JetBrains y Zed (ver
+Wayland no tiene un protocolo de menú global de freedesktop: lo que existe es
+`org_kde_kwin_appmenu` (Wayland) más `com.canonical.dbusmenu` (D-Bus). Lo usan
+Firefox, el plugin de JetBrains y un PR de menú global de Zed; Qt 6 lo lista
+entre sus protocolos Wayland (ver
 [la investigación](../investigacion/global-menu.md)).
 
 Hace falta decidir **quién habla cada protocolo**. El compositor conoce la
@@ -17,9 +19,10 @@ accesibilidad es frágil y fija ventanas en pantalla.
 
 ## Decisión
 
-1. **El menú global usa `org_kde_kwin_appmenu` + `com.canonical.dbusmenu`.** El
-   cliente anuncia, por superficie, el servicio y la ruta de su menú D-Bus; la
-   shell lee el árbol dbusmenu y lo dibuja.
+1. **El menú global usa `org_kde_kwin_appmenu` (Wayland) + `com.canonical.dbusmenu`
+   (D-Bus).** `org_kde_kwin_appmenu` solo transporta por superficie el servicio
+   y la ruta D-Bus del menú; `com.canonical.dbusmenu` es la interfaz D-Bus que
+   la shell lee para obtener el árbol de items.
 2. **El compositor sirve `org_kde_kwin_appmenu`.** Guarda por superficie el par
    (servicio D-Bus, ruta) y publica el de la ventana enfocada por el canal que ya
    usa la menubar: el estado `window.domain` (`crates/yuki/src/active.rs`), hasta
@@ -59,7 +62,8 @@ app ──org_kde_kwin_appmenu──► compositor ──window.domain──► 
    acciones a combinaciones de teclas.
 4. **Respaldo por `.desktop`.** Si no hay menú: nombre y acciones del `.desktop`,
    un menú **Ventana** con los controles reales (minimizar, maximizar, cerrar) y
-   **Salir**. Salir cierra la ventana con `xdg_toplevel.close`, **nunca con
+   **Salir**. Salir llama a `zwlr_foreign_toplevel_handle_v1.close` desde la
+   menubar; el compositor responde enviando `xdg_toplevel.close`, **nunca con
    SIGKILL**.
 
 ## Menú «Yuki» sin ventana enfocada
