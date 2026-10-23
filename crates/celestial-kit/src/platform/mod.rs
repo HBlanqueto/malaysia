@@ -456,43 +456,38 @@ impl AppInstance {
     }
 
     /// Drains Freya's events and UI events; returns true when the tree is dirty.
+    /// Polls Freya once. `handle_events` returns ready while dirty scopes are
+    /// pending; looping on it without calling `sync_and_update` spins forever,
+    /// so the caller clears them in `update` and polls again on its next wake.
     fn poll(&mut self) -> bool {
         let mut cx = Context::from_waker(&self.waker);
-        let mut dirty = false;
+        let ready = {
+            let future = pin!(self.runner.handle_events());
+            future.poll(&mut cx).is_ready()
+        };
 
-        loop {
-            let ready = {
-                let future = pin!(self.runner.handle_events());
-                future.poll(&mut cx).is_ready()
-            };
-
-            while let Ok(chunk) = self.events_receiver.try_recv() {
-                match chunk {
-                    EventsChunk::Processed(events) => {
-                        EventsExecutorAdapter {
-                            runner: &mut self.runner,
-                        }
-                        .run(&mut self.nodes_state, events);
-                        dirty = true;
+        let mut dirty = ready;
+        while let Ok(chunk) = self.events_receiver.try_recv() {
+            match chunk {
+                EventsChunk::Processed(events) => {
+                    EventsExecutorAdapter {
+                        runner: &mut self.runner,
                     }
-                    EventsChunk::Batch(events) => {
-                        for event in events {
-                            self.runner.handle_event(
-                                event.node_id,
-                                event.name,
-                                event.data,
-                                event.bubbles,
-                            );
-                        }
-                        dirty = true;
+                    .run(&mut self.nodes_state, events);
+                    dirty = true;
+                }
+                EventsChunk::Batch(events) => {
+                    for event in events {
+                        self.runner.handle_event(
+                            event.node_id,
+                            event.name,
+                            event.data,
+                            event.bubbles,
+                        );
                     }
+                    dirty = true;
                 }
             }
-
-            if !ready {
-                break;
-            }
-            dirty = true;
         }
         dirty
     }
