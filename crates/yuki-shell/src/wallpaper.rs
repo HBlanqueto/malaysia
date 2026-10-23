@@ -5,10 +5,7 @@
 //! when it changes. The picture is drawn by CelestialKit on Freya (ADR 0034)
 //! as a Skia image scaled to cover the output (macOS default `fill`).
 
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
 
 use celestial_kit::platform::{Anchors, KeyboardInteractivity, Layer, SurfaceSpec, run_layer};
 use freya_core::elements::image::ImageHandle;
@@ -27,42 +24,13 @@ struct DecodedImage {
     rgba: Vec<u8>,
 }
 
-/// What the component draws and the files it last read.
-#[derive(Clone, Default, PartialEq)]
-struct Snapshot {
-    image: Option<ImageHandle>,
-    current: Option<PathBuf>,
-}
-
 struct WallpaperApp {
-    state: State<Snapshot>,
-    store_path: PathBuf,
-    state_path: PathBuf,
+    image: Option<ImageHandle>,
 }
 
 impl App for WallpaperApp {
     fn render(&self) -> impl IntoElement {
-        let state = self.state;
-        let store_path = self.store_path.clone();
-        let state_path = self.state_path.clone();
-
-        use_future(move || {
-            let store_path = store_path.clone();
-            let state_path = state_path.clone();
-            let mut state = state;
-            async move {
-                loop {
-                    async_io::Timer::after(Duration::from_millis(500)).await;
-                    let next =
-                        load_snapshot(&store_path, &state_path, state.peek().current.clone());
-                    if next != *state.peek() {
-                        state.set(next);
-                    }
-                }
-            }
-        });
-
-        let Some(handle) = state.read().image.clone() else {
+        let Some(handle) = self.image.clone() else {
             return rect()
                 .width(Size::fill())
                 .height(Size::fill())
@@ -82,13 +50,8 @@ pub fn run() -> anyhow::Result<()> {
     let store_path = data_dir().join("wallpaper.domain");
     let state_path = data_dir().join("wallpaper.state");
 
-    let snapshot = load_snapshot(&store_path, &state_path, None);
-    let state = State::create_global(snapshot);
-    let app = AppComponent::new(WallpaperApp {
-        state,
-        store_path,
-        state_path,
-    });
+    let image = load_snapshot(&store_path, &state_path);
+    let app = AppComponent::new(WallpaperApp { image });
 
     run_layer(
         app,
@@ -106,17 +69,11 @@ pub fn run() -> anyhow::Result<()> {
 
 /// Loads the selection, decodes it when it changed, and writes the dominant
 /// colour for the compositor and the portal.
-fn load_snapshot(store_path: &Path, state_path: &Path, current: Option<PathBuf>) -> Snapshot {
+fn load_snapshot(store_path: &Path, state_path: &Path) -> Option<ImageHandle> {
     match load_wallpaper(store_path) {
         Ok(Some((path, scale))) => {
             if !scale.is_empty() && scale != "fill" {
                 eprintln!("wallpaper: scale '{scale}' is not implemented yet; using 'fill'");
-            }
-            if current.as_deref() == Some(path.as_path()) {
-                return Snapshot {
-                    image: None,
-                    current: Some(path),
-                };
             }
             eprintln!("wallpaper: {path:?}");
             match decode_image(&path) {
@@ -125,30 +82,23 @@ fn load_snapshot(store_path: &Path, state_path: &Path, current: Option<PathBuf>)
                     if let Err(error) = write_state(state_path, dominant) {
                         eprintln!("wallpaper: failed to write the state: {error:#}");
                     }
-                    let handle = ImageHandle::from_rgba(
+                    ImageHandle::from_rgba(
                         decoded.size.0,
                         decoded.size.1,
                         Bytes::from(decoded.rgba),
                         AlphaType::Premul,
-                    );
-                    Snapshot {
-                        image: handle,
-                        current: Some(path),
-                    }
+                    )
                 }
                 Err(error) => {
                     eprintln!("wallpaper: failed to decode {path:?}: {error:#}");
-                    Snapshot {
-                        image: None,
-                        current: Some(path),
-                    }
+                    None
                 }
             }
         }
-        Ok(_) => Snapshot::default(),
+        Ok(_) => None,
         Err(error) => {
             eprintln!("wallpaper: {error:#}");
-            Snapshot::default()
+            None
         }
     }
 }

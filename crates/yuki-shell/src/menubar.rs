@@ -5,10 +5,7 @@
 //! `window.domain` state store) on the left and the **clock** on the right.
 //! Drawing is CelestialKit on Freya (ADR 0034).
 
-use std::{
-    path::PathBuf,
-    time::{Duration, SystemTime},
-};
+use std::path::PathBuf;
 
 use celestial_kit::platform::{
     Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, run_layer,
@@ -20,66 +17,22 @@ use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_TIT
 
 use yuki_appearance::data_dir;
 
-#[derive(Clone, PartialEq)]
-struct Model {
-    title: String,
-    clock: String,
-    /// Changes when the appearance files change, forcing a re-theme.
-    theme_revision: u64,
-}
-
 struct MenubarApp {
-    model: State<Model>,
+    clock: State<String>,
     window_store: PathBuf,
 }
 
 impl App for MenubarApp {
     fn render(&self) -> impl IntoElement {
-        let model = self.model;
-        let store = self.window_store.clone();
+        let timers = celestial_kit::platform::Timers::get();
+        let clock = self.clock;
+        use_hook(move || schedule_next_minute(timers, clock));
 
-        use_future(move || {
-            let store = store.clone();
-            let mut model = model;
-            async move {
-                let mut last_window: Option<Option<SystemTime>> = None;
-                let mut last_theme = theme_revision();
-                loop {
-                    async_io::Timer::after(Duration::from_millis(500)).await;
-                    let window = std::fs::metadata(&store).and_then(|m| m.modified()).ok();
-                    let theme = theme_revision();
-                    if last_window != Some(window) || last_theme != theme {
-                        last_window = Some(window);
-                        last_theme = theme;
-                        let title = load_active_window(&store).unwrap_or_default();
-                        let clock = chrono::Local::now().format("%H:%M").to_string();
-                        let next = Model {
-                            title,
-                            clock,
-                            theme_revision: theme,
-                        };
-                        if next != *model.peek() {
-                            model.set(next);
-                        }
-                    }
-                }
-            }
-        });
-
-        let model = self.model.read();
+        let now = self.clock.read().clone();
+        let title = load_active_window(&self.window_store).unwrap_or_default();
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
-        let text = Color::from_argb(
-            (palette.text.a * 255.0) as u8,
-            (palette.text.r * 255.0) as u8,
-            (palette.text.g * 255.0) as u8,
-            (palette.text.b * 255.0) as u8,
-        );
-        let bar = Color::from_argb(
-            (palette.bar.a * 255.0) as u8,
-            (palette.bar.r * 255.0) as u8,
-            (palette.bar.g * 255.0) as u8,
-            (palette.bar.b * 255.0) as u8,
-        );
+        let text = rgba(palette.text);
+        let bar = rgba(palette.bar);
 
         rect()
             .width(Size::fill())
@@ -98,23 +51,43 @@ impl App for MenubarApp {
                 label()
                     .max_lines(1)
                     .width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
-                    .text(model.title.clone())
+                    .text(title)
                     .color(text),
             )
-            .child(label().text(model.clock.clone()).color(text))
+            .child(label().text(now).color(text))
     }
+}
+
+fn schedule_next_minute(timers: celestial_kit::platform::Timers, clock: State<String>) {
+    let retry = timers.clone();
+    timers.after(seconds_to_next_minute(), move || {
+        let mut clock = clock;
+        clock.set(chrono::Local::now().format("%H:%M").to_string());
+        schedule_next_minute(retry.clone(), clock);
+    });
+}
+
+fn seconds_to_next_minute() -> std::time::Duration {
+    use chrono::Timelike;
+    let seconds = chrono::Local::now().second();
+    std::time::Duration::from_secs(if seconds == 0 {
+        60
+    } else {
+        (60 - seconds) as u64
+    })
+}
+
+fn rgba(c: yuki_design::Rgba) -> Color {
+    let [r, g, b, a] = c.to_rgba8();
+    Color::from_argb(a, r, g, b)
 }
 
 /// Connects to the compositor and runs the menu bar until closed.
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
-    let model = State::create_global(Model {
-        title: load_active_window(&window_store).unwrap_or_default(),
-        clock: chrono::Local::now().format("%H:%M").to_string(),
-        theme_revision: theme_revision(),
-    });
+    let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let app = AppComponent::new(MenubarApp {
-        model,
+        clock,
         window_store,
     });
 
@@ -130,21 +103,6 @@ pub fn run() -> anyhow::Result<()> {
         },
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
-}
-
-fn theme_revision() -> u64 {
-    let mut hash = 0u64;
-    for path in [
-        yuki_appearance::appearance_path(),
-        yuki_appearance::wallpaper_state_path(),
-    ] {
-        if let Ok(modified) = std::fs::metadata(path).and_then(|m| m.modified())
-            && let Ok(value) = modified.duration_since(SystemTime::UNIX_EPOCH)
-        {
-            hash = hash.wrapping_mul(31).wrapping_add(value.as_nanos() as u64);
-        }
-    }
-    hash
 }
 
 /// Reads the active window title from the compositor's store.

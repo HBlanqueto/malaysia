@@ -21,7 +21,6 @@ thiserror.workspace = true
 tracing.workspace = true
 yuki-design.workspace = true
 yuki-appearance.workspace = true
-async-io.workspace = true
 zeroize.workspace = true
 sctk.workspace = true
 calloop.workspace = true

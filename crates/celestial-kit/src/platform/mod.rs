@@ -12,7 +12,7 @@
 
 mod input;
 
-use std::{cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context};
+use std::{cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context, time::Duration};
 
 use accesskit::Role;
 use freya_clipboard::copypasta::ClipboardProvider;
@@ -37,8 +37,9 @@ use sctk::{
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::{
-            self, EventLoop, LoopSignal,
+            self, EventLoop, LoopHandle, LoopSignal,
             ping::{Ping, PingSource},
+            timer::{TimeoutAction, Timer},
         },
         calloop_wayland_source::WaylandSource,
         client::{
@@ -373,6 +374,7 @@ struct AppInstance {
 }
 
 impl AppInstance {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         app: AppComponent,
         scale_factor: f64,
@@ -381,6 +383,7 @@ impl AppInstance {
         waker: Waker,
         toplevels: Option<Toplevels>,
         session_unlock: Option<SessionUnlock>,
+        timers: Timers,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
         let mut runner = Runner::new(move || integration(app.clone()).into_element());
@@ -423,6 +426,7 @@ impl AppInstance {
         if let Some(unlock) = session_unlock {
             runner.provide_root_context(move || unlock);
         }
+        runner.provide_root_context(move || timers);
         runner.provide_root_context(|| State::create(None::<Box<dyn ClipboardProvider>>));
         runner.provide_root_context(|| tree.accessibility_generator.clone());
         runner.provide_root_context(|| font_collection.clone());
@@ -580,6 +584,27 @@ impl SessionUnlock {
     }
 }
 
+type TimerQueue = Rc<RefCell<Vec<(Duration, Rc<dyn Fn()>)>>>;
+
+/// Schedules one-shot callbacks on the runner's calloop loop. The app uses it
+/// for the menubar clock; there is no periodic polling.
+#[derive(Clone)]
+pub struct Timers {
+    queue: TimerQueue,
+    ping: Ping,
+}
+
+impl Timers {
+    pub fn get() -> Self {
+        freya_core::prelude::consume_root_context()
+    }
+
+    pub fn after(&self, delay: Duration, callback: impl Fn() + 'static) {
+        self.queue.borrow_mut().push((delay, Rc::new(callback)));
+        self.ping.ping();
+    }
+}
+
 /// A surface plus its Freya app and GL context.
 struct SurfaceWindow {
     surface: WlSurface,
@@ -714,6 +739,7 @@ struct Shell {
     toplevels: Toplevels,
     session_unlock: Option<SessionUnlock>,
     session_locked: bool,
+    timers: TimerQueue,
 }
 
 fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(UserEvent)> {
@@ -808,6 +834,10 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         waker,
         Some(shell.toplevels.clone()),
         None,
+        Timers {
+            queue: shell.timers.clone(),
+            ping: shell.ping.clone(),
+        },
     );
     shell.surfaces.push(SurfaceWindow {
         surface: surface.clone(),
@@ -897,15 +927,17 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
         .ping_source
         .take()
         .ok_or(RunError::Egl("the Freya ping source is already installed"))?;
+    let handle = event_loop.handle();
     event_loop
         .handle()
-        .insert_source(source, |_, _, shell: &mut Shell| {
+        .insert_source(source, move |_, _, shell: &mut Shell| {
             for event in drain_user_events(&shell.queue) {
                 if matches!(event, UserEvent::RequestRedraw) {
                     shell.request_redraw_all = true;
                 }
             }
             shell.poll_all();
+            shell.install_timers(&handle);
             shell.redraw_all();
         })
         .map_err(|_| RunError::Egl("inserting the Freya ping source"))?;
@@ -972,6 +1004,7 @@ impl Shell {
             toplevels,
             session_unlock: None,
             session_locked: false,
+            timers: Rc::new(RefCell::new(Vec::new())),
         };
         Ok((conn, event_queue, qh, shell))
     }
@@ -1002,6 +1035,10 @@ impl Shell {
             waker,
             Some(self.toplevels.clone()),
             self.session_unlock.clone(),
+            Timers {
+                queue: self.timers.clone(),
+                ping: self.ping.clone(),
+            },
         );
         self.surfaces.push(SurfaceWindow {
             surface,
@@ -1044,6 +1081,21 @@ impl Shell {
         if *list.peek() != infos {
             list.set(infos);
             self.request_redraw_all = true;
+        }
+    }
+
+    fn install_timers(&mut self, handle: &LoopHandle<Shell>) {
+        let pending: Vec<(Duration, Rc<dyn Fn()>)> = std::mem::take(&mut *self.timers.borrow_mut());
+        for (delay, callback) in pending {
+            let _ = handle.insert_source(
+                Timer::from_duration(delay),
+                move |_, _, shell: &mut Shell| {
+                    callback();
+                    shell.poll_all();
+                    shell.redraw_all();
+                    TimeoutAction::Drop
+                },
+            );
         }
     }
 
