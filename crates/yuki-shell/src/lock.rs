@@ -15,7 +15,7 @@ use std::{
     time::SystemTime,
 };
 
-use celestial_kit::password::PasswordField;
+use celestial_kit::password::{PasswordField, State as FieldState};
 use celestial_kit::platform::{SessionUnlock, run_lock};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -26,14 +26,83 @@ use yuki_design::{
 };
 
 use crate::pam::{self, EventBuffer};
+use zeroize::Zeroizing;
 
 #[derive(Clone, PartialEq)]
 struct Model {
     label: String,
     masked: String,
     status: Option<String>,
-    verifying: bool,
     theme_revision: u64,
+}
+
+/// What the compositor should do after one PAM event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Action {
+    Continue,
+    Unlock,
+}
+
+fn apply_pam_event(model: &mut Model, field: &mut PasswordField, event: &pam::Event) -> Action {
+    match event {
+        pam::Event::Said(pam::Message::Prompt { text, .. }) => {
+            model.label = pam::prompt_label(text);
+            Action::Continue
+        }
+        pam::Event::Said(pam::Message::Info(text)) => {
+            eprintln!("lock: PAM: {text}");
+            Action::Continue
+        }
+        pam::Event::Said(pam::Message::Error(text)) => {
+            field.set_error(text.clone());
+            model.status = Some(text.clone());
+            model.masked = field.masked();
+            Action::Continue
+        }
+        pam::Event::Ended(pam::Outcome::Authenticated) => Action::Unlock,
+        pam::Event::Ended(pam::Outcome::Denied(message)) => {
+            eprintln!("lock: PAM refused: {message}");
+            field.set_error(message.clone());
+            model.status = Some(message.clone());
+            model.masked = field.masked();
+            Action::Continue
+        }
+    }
+}
+
+/// Applies one key to the field. Returns the secret to send when Enter takes
+/// a non-empty value; keys are ignored while the field is verifying.
+fn handle_key(
+    model: &mut Model,
+    field: &mut PasswordField,
+    key: &Key,
+    text: Option<&str>,
+    modifiers_empty: bool,
+) -> Option<Zeroizing<String>> {
+    if matches!(field.state(), FieldState::Verifying) {
+        return None;
+    }
+    let secret = match key {
+        Key::Named(NamedKey::Enter) => field.take(),
+        Key::Named(NamedKey::Backspace) => {
+            field.backspace();
+            None
+        }
+        Key::Character(_) if modifiers_empty => {
+            if let Some(text) = text {
+                for ch in text.chars() {
+                    field.insert(ch);
+                }
+            }
+            None
+        }
+        _ => None,
+    };
+    model.masked = field.masked();
+    if secret.is_some() || !matches!(field.state(), FieldState::Error(_)) {
+        model.status = None;
+    }
+    secret
 }
 
 struct LockApp {
@@ -86,35 +155,17 @@ impl App for LockApp {
                         continue;
                     }
                     for event in pending {
-                        match event {
-                            pam::Event::Said(pam::Message::Prompt { text, .. }) => {
-                                let mut next = model.peek().clone();
-                                next.label = pam::prompt_label(&text);
-                                next.verifying = true;
-                                next.status = None;
-                                model.set(next);
-                            }
-                            pam::Event::Said(pam::Message::Info(text)) => {
-                                eprintln!("lock: PAM: {text}");
-                            }
-                            pam::Event::Said(pam::Message::Error(text)) => {
-                                let mut next = model.peek().clone();
-                                next.status = Some(text);
-                                next.verifying = false;
-                                model.set(next);
-                            }
-                            pam::Event::Ended(pam::Outcome::Authenticated) => {
-                                unlock.unlock();
-                            }
-                            pam::Event::Ended(pam::Outcome::Denied(message)) => {
-                                eprintln!("lock: PAM refused: {message}");
-                                *attempt.borrow_mut() = None;
-                                let mut next = model.peek().clone();
-                                next.status = Some(message);
-                                next.masked.clear();
-                                next.verifying = false;
-                                model.set(next);
-                            }
+                        let mut next = model.peek().clone();
+                        let action = {
+                            let mut field = field.write();
+                            apply_pam_event(&mut next, &mut field, &event)
+                        };
+                        if matches!(event, pam::Event::Ended(pam::Outcome::Denied(_))) {
+                            *attempt.borrow_mut() = None;
+                        }
+                        model.set(next);
+                        if action == Action::Unlock {
+                            unlock.unlock();
                         }
                     }
                 }
@@ -139,39 +190,29 @@ impl App for LockApp {
             .cross_align(Alignment::Center)
             .spacing(LOCK_LABEL_OFFSET as f32)
             .on_global_key_down(move |event: Event<KeyboardEventData>| {
-                if model.peek().verifying {
-                    return;
-                }
-                match &event.key {
-                    Key::Named(NamedKey::Enter) => {
-                        submit(
-                            field,
-                            attempt.clone(),
-                            events_for_keys.clone(),
-                            user.clone(),
-                            notify.as_ref().and_then(|s| s.try_clone().ok()),
-                        );
-                    }
-                    Key::Named(NamedKey::Backspace) => {
-                        field.write().backspace();
-                        let mut next = model.peek().clone();
-                        next.masked = field.read().masked();
-                        next.status = None;
-                        model.set(next);
-                    }
-                    Key::Character(text) if event.modifiers.is_empty() => {
-                        {
-                            let mut field = field.write();
-                            for ch in text.chars() {
-                                field.insert(ch);
-                            }
-                        }
-                        let mut next = model.peek().clone();
-                        next.masked = field.read().masked();
-                        next.status = None;
-                        model.set(next);
-                    }
-                    _ => {}
+                let mut next = model.peek().clone();
+                let secret = {
+                    let mut field = field.write();
+                    handle_key(
+                        &mut next,
+                        &mut field,
+                        &event.key,
+                        match &event.key {
+                            Key::Character(text) => Some(text.as_str()),
+                            _ => None,
+                        },
+                        event.modifiers.is_empty(),
+                    )
+                };
+                model.set(next);
+                if let Some(secret) = secret {
+                    submit(
+                        secret,
+                        attempt.clone(),
+                        events_for_keys.clone(),
+                        user.clone(),
+                        notify.as_ref().and_then(|s| s.try_clone().ok()),
+                    );
                 }
             })
             .child(
@@ -228,7 +269,6 @@ pub fn run() -> anyhow::Result<()> {
         label: "Contraseña".to_string(),
         masked: String::new(),
         status: None,
-        verifying: false,
         theme_revision: theme_revision(),
     });
     let field = State::create_global(PasswordField::default());
@@ -264,15 +304,12 @@ fn start_auth(
 }
 
 fn submit(
-    mut field: State<PasswordField>,
+    secret: Zeroizing<String>,
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
     events: EventBuffer,
     user: String,
     notify: Option<UnixStream>,
 ) {
-    let Some(secret) = field.write().take() else {
-        return;
-    };
     if attempt.borrow().is_none() && !user.is_empty() {
         *attempt.borrow_mut() = Some(pam::Attempt::start(
             events,
@@ -304,4 +341,171 @@ fn theme_revision() -> u64 {
         }
     }
     hash
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model() -> Model {
+        Model {
+            label: "Contraseña".to_string(),
+            masked: String::new(),
+            status: None,
+            theme_revision: 0,
+        }
+    }
+
+    fn typed(model: &mut Model, field: &mut PasswordField, text: &str) {
+        for ch in text.chars() {
+            assert!(
+                handle_key(
+                    model,
+                    field,
+                    &Key::Character(ch.to_string()),
+                    Some(&ch.to_string()),
+                    true
+                )
+                .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn a_prompt_keeps_the_field_open() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        apply_pam_event(
+            &mut model,
+            &mut field,
+            &pam::Event::Said(pam::Message::Prompt {
+                text: "Password:".to_string(),
+                secret: true,
+            }),
+        );
+        assert_eq!(model.label, "Password");
+        assert!(matches!(field.state(), FieldState::Idle));
+        typed(&mut model, &mut field, "a");
+        assert_eq!(field.masked(), "•");
+    }
+
+    #[test]
+    fn enter_blocks_input_until_the_attempt_ends() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        typed(&mut model, &mut field, "a");
+        let secret = handle_key(
+            &mut model,
+            &mut field,
+            &Key::Named(NamedKey::Enter),
+            None,
+            true,
+        )
+        .expect("submit a non-empty field");
+        assert_eq!(secret.as_str(), "a");
+        assert!(matches!(field.state(), FieldState::Verifying));
+        assert!(
+            handle_key(
+                &mut model,
+                &mut field,
+                &Key::Character("b".to_string()),
+                Some("b"),
+                true,
+            )
+            .is_none()
+        );
+        assert_eq!(field.masked(), "");
+    }
+
+    #[test]
+    fn a_refusal_clears_the_field_and_accepts_keys_again() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        typed(&mut model, &mut field, "a");
+        let _ = handle_key(
+            &mut model,
+            &mut field,
+            &Key::Named(NamedKey::Enter),
+            None,
+            true,
+        );
+        apply_pam_event(
+            &mut model,
+            &mut field,
+            &pam::Event::Ended(pam::Outcome::Denied("Authentication failure".to_string())),
+        );
+        assert!(matches!(field.state(), FieldState::Error(_)));
+        assert_eq!(field.masked(), "");
+        assert_eq!(model.status.as_deref(), Some("Authentication failure"));
+
+        typed(&mut model, &mut field, "b");
+        assert!(matches!(field.state(), FieldState::Idle));
+        assert_eq!(field.masked(), "•");
+        assert_eq!(model.status, None);
+    }
+
+    #[test]
+    fn a_second_attempt_submits_the_new_secret() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        typed(&mut model, &mut field, "old");
+        let _ = handle_key(
+            &mut model,
+            &mut field,
+            &Key::Named(NamedKey::Enter),
+            None,
+            true,
+        );
+        apply_pam_event(
+            &mut model,
+            &mut field,
+            &pam::Event::Ended(pam::Outcome::Denied("no".to_string())),
+        );
+
+        typed(&mut model, &mut field, "new");
+        let secret = handle_key(
+            &mut model,
+            &mut field,
+            &Key::Named(NamedKey::Enter),
+            None,
+            true,
+        )
+        .expect("submit the second secret");
+        assert_eq!(secret.as_str(), "new");
+    }
+
+    #[test]
+    fn an_error_also_reopens_the_field() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        typed(&mut model, &mut field, "a");
+        let _ = handle_key(
+            &mut model,
+            &mut field,
+            &Key::Named(NamedKey::Enter),
+            None,
+            true,
+        );
+        apply_pam_event(
+            &mut model,
+            &mut field,
+            &pam::Event::Said(pam::Message::Error("try again".to_string())),
+        );
+        typed(&mut model, &mut field, "b");
+        assert_eq!(field.masked(), "•");
+    }
+
+    #[test]
+    fn authenticated_asks_for_the_unlock() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        assert_eq!(
+            apply_pam_event(
+                &mut model,
+                &mut field,
+                &pam::Event::Ended(pam::Outcome::Authenticated),
+            ),
+            Action::Unlock
+        );
+    }
 }
