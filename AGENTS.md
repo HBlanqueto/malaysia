@@ -133,6 +133,10 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   bindear (`ext-foreign-toplevel-list` y `zwlr`). Probes nuevos `popup_live` y
   `decor_live` (sctk-probe). Nota: la captura re-renderiza offscreen, así que
   no detecta bugs de daño parcial en pantalla.
+- **Shell sobre Freya (ADR 0034, 2026-10-22):** `yuki-shell` dibuja con
+  CelestialKit sobre los crates de núcleo de Freya 0.4.3 y su runner Wayland
+  propio (SCTK + calloop + EGL); el camino GLES/`cosmic-text` de la shell se
+  eliminó. Nix precompila Skia para `freya-skia-bindings` 0.98.0.
 - Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +

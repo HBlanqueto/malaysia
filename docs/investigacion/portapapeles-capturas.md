@@ -104,3 +104,12 @@ la siguiente pasada.
 - macOS: [`screencapture(1)`](https://ss64.com/mac/screencapture.html),
   [Take a screenshot on Mac](https://support.apple.com/guide/mac-help/take-a-screenshot-mh26782/mac),
   [`NSPasteboard`](https://developer.apple.com/documentation/appkit/nspasteboard).
+
+
+## Nota tras el ADR 0034
+
+`freya-clipboard` (la dependencia que trae Freya) usa `copypasta`, que arrastra
+`x11rb` y una segunda versión de SCTK/calloop. CelestialKit no lo usa: el
+portapapeles del kit queda vacío hasta que un control lo necesite, y entonces
+debe ir por `wl_data_device` propio. El guard
+`scripts/check-client-only-deps.sh` lo avisa en cada `./dev.sh check`.

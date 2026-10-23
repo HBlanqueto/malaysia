@@ -374,3 +374,9 @@ Derivado del ADR 0034; no es un bloque nuevo ni renumera nada.
 - Migrar `yuki-shell` componente a componente (wallpaper, menubar, dock, lock) y
   eliminar el camino GLES de la shell.
 - Mantener Grade Animation como módulo del kit sobre `freya-animation`.
+
+Estado (2026-10-22): runner Wayland, tema, controles y los cuatro componentes
+migrados; Skia de Nix para `freya-skia-bindings` 0.98.0. Pendiente: recuperación
+del lock tras la muerte del cliente (Smithay conserva `locked_outputs` y el
+cliente de recuperación recibe `duplicate_output`), escalas fraccionales y
+accesibilidad en el runner.
