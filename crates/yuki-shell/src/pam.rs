@@ -9,9 +9,13 @@
 //! runs as the session's user, authenticates that user.
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::sync::{
-    Arc, Mutex,
-    mpsc::{Receiver, Sender},
+use std::{
+    io::Write,
+    os::unix::net::UnixStream,
+    sync::{
+        Arc, Mutex,
+        mpsc::{Receiver, Sender},
+    },
 };
 
 use zeroize::Zeroizing;
@@ -128,15 +132,24 @@ pub struct Attempt {
 impl Attempt {
     /// Starts authenticating `user` against `service`, pushing events into
     /// `events` from a dedicated thread.
-    pub fn start(events: EventBuffer, service: Service, user: String) -> Self {
+    pub fn start(
+        events: EventBuffer,
+        notify: Option<UnixStream>,
+        service: Service,
+        user: String,
+    ) -> Self {
         let (answers, answer_rx) = std::sync::mpsc::channel();
 
         std::thread::Builder::new()
             .name("yuki-pam".to_string())
             .spawn(move || {
-                let outcome = converse(&service, &user, &events, &answer_rx);
+                let outcome = converse(&service, &user, &events, &notify, &answer_rx);
                 if let Ok(mut buffer) = events.lock() {
                     buffer.push(Event::Ended(outcome));
+                }
+                if let Some(stream) = &notify {
+                    let mut stream = stream;
+                    let _ = stream.write_all(&[1]);
                 }
             })
             .expect("could not start the PAM thread");
@@ -181,6 +194,7 @@ fn converse(
     service: &Service,
     user: &str,
     events: &EventBuffer,
+    notify: &Option<UnixStream>,
     answers: &Receiver<Zeroizing<String>>,
 ) -> Outcome {
     let Ok(user_c) = CString::new(user) else {
@@ -188,7 +202,11 @@ fn converse(
     };
     let service = service_name(*service);
 
-    let mut state = ConversationState { events, answers };
+    let mut state = ConversationState {
+        events,
+        notify,
+        answers,
+    };
     let conv = PamConv {
         conv: Some(conversation),
         appdata_ptr: &mut state as *mut ConversationState as *mut c_void,
@@ -241,6 +259,7 @@ fn strerror(pamh: *mut PamHandle, status: c_int) -> String {
 
 struct ConversationState<'a> {
     events: &'a EventBuffer,
+    notify: &'a Option<UnixStream>,
     answers: &'a Receiver<Zeroizing<String>>,
 }
 
@@ -287,6 +306,10 @@ unsafe extern "C" fn conversation(
                 let secret = style == PAM_PROMPT_ECHO_OFF;
                 if let Ok(mut buffer) = state.events.lock() {
                     buffer.push(Event::Said(Message::Prompt { text, secret }));
+                    if let Some(stream) = state.notify.as_ref() {
+                        let mut stream = stream;
+                        let _ = stream.write_all(&[1]);
+                    }
                 } else {
                     unsafe { libc::free(responses as *mut c_void) };
                     return PAM_CONV_ERR;
@@ -307,6 +330,10 @@ unsafe extern "C" fn conversation(
                 };
                 if let Ok(mut buffer) = state.events.lock() {
                     buffer.push(Event::Said(message));
+                    if let Some(stream) = state.notify.as_ref() {
+                        let mut stream = stream;
+                        let _ = stream.write_all(&[1]);
+                    }
                 }
                 None
             }

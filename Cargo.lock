@@ -436,6 +436,7 @@ dependencies = [
  "futures-util",
  "keyboard-types",
  "khronos-egl",
+ "png",
  "ragnarok",
  "rustc-hash",
  "smithay-client-toolkit 0.19.2",

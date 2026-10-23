@@ -8,9 +8,11 @@
 
 use std::{
     cell::RefCell,
+    io::Read,
+    os::unix::net::UnixStream,
     rc::Rc,
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use celestial_kit::password::PasswordField;
@@ -40,6 +42,8 @@ struct LockApp {
     events: EventBuffer,
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
     user: String,
+    reader: UnixStream,
+    notify: Option<UnixStream>,
 }
 
 impl App for LockApp {
@@ -51,6 +55,8 @@ impl App for LockApp {
         let attempt_for_future = attempt.clone();
         let events_for_keys = self.events.clone();
         let user = self.user.clone();
+        let notify = self.notify.as_ref().and_then(|s| s.try_clone().ok());
+        let reader = Rc::new(RefCell::new(self.reader.try_clone().ok()));
         let unlock = SessionUnlock::get();
 
         use_future(move || {
@@ -58,9 +64,18 @@ impl App for LockApp {
             let attempt = attempt_for_future.clone();
             let mut model = model;
             let unlock = unlock.clone();
+            let reader = reader.borrow_mut().take();
             async move {
+                let Some(reader) = reader.and_then(|stream| async_io::Async::new(stream).ok())
+                else {
+                    return;
+                };
+                let mut wake = [0u8; 64];
                 loop {
-                    async_io::Timer::after(Duration::from_millis(100)).await;
+                    if reader.readable().await.is_err() {
+                        break;
+                    }
+                    while reader.get_ref().read(&mut wake).is_ok() {}
                     let pending = {
                         let Ok(mut buffer) = events.lock() else {
                             continue;
@@ -134,6 +149,7 @@ impl App for LockApp {
                             attempt.clone(),
                             events_for_keys.clone(),
                             user.clone(),
+                            notify.as_ref().and_then(|s| s.try_clone().ok()),
                         );
                     }
                     Key::Named(NamedKey::Backspace) => {
@@ -203,7 +219,10 @@ impl App for LockApp {
 pub fn run() -> anyhow::Result<()> {
     let events: EventBuffer = Arc::new(Mutex::new(Vec::new()));
     let attempt = Rc::new(RefCell::new(None));
-    let user = start_auth(events.clone(), attempt.clone());
+    let (reader, notify) = UnixStream::pair()?;
+    reader.set_nonblocking(true)?;
+    notify.set_nonblocking(true)?;
+    let user = start_auth(events.clone(), attempt.clone(), Some(notify.try_clone()?));
 
     let model = State::create_global(Model {
         label: "Contraseña".to_string(),
@@ -219,11 +238,17 @@ pub fn run() -> anyhow::Result<()> {
         events,
         attempt,
         user,
+        reader,
+        notify: Some(notify),
     });
     run_lock(app).map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-fn start_auth(events: EventBuffer, attempt: Rc<RefCell<Option<pam::Attempt>>>) -> String {
+fn start_auth(
+    events: EventBuffer,
+    attempt: Rc<RefCell<Option<pam::Attempt>>>,
+    notify: Option<UnixStream>,
+) -> String {
     let Some(user) = pam::current_user() else {
         eprintln!("lock: cannot resolve the current user for PAM");
         return String::new();
@@ -231,6 +256,7 @@ fn start_auth(events: EventBuffer, attempt: Rc<RefCell<Option<pam::Attempt>>>) -
     eprintln!("lock: starting PAM for {user}");
     *attempt.borrow_mut() = Some(pam::Attempt::start(
         events,
+        notify,
         pam::Service::LOCK,
         user.clone(),
     ));
@@ -242,12 +268,18 @@ fn submit(
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
     events: EventBuffer,
     user: String,
+    notify: Option<UnixStream>,
 ) {
     let Some(secret) = field.write().take() else {
         return;
     };
     if attempt.borrow().is_none() && !user.is_empty() {
-        *attempt.borrow_mut() = Some(pam::Attempt::start(events, pam::Service::LOCK, user));
+        *attempt.borrow_mut() = Some(pam::Attempt::start(
+            events,
+            notify,
+            pam::Service::LOCK,
+            user,
+        ));
     }
     if let Some(attempt) = attempt.borrow().as_ref() {
         attempt.answer(secret);
