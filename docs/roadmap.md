@@ -150,6 +150,8 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 11 — Protocolos de uso diario
 
+Estado: **casi cerrado**; falta el probe de presentación y la aceptación.
+
 - **`wp_presentation` — hecho.** Global v2 con `CLOCK_MONOTONIC`, feedback
   `presented`/`discarded` tras presentar el frame y en `vblank` para DRM. Ver
   `bloques/11-protocolos-de-uso-diario.md`; falta el probe de un cliente que
@@ -345,8 +347,8 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   `nixosModules.default` (`programs.yuki.enable`): paquete, sesión, PAM,
   `hardware.graphics` y units de la shell. Faltan portal, keyring, AT-SPI,
   polkit y una VM de prueba (sección Transversal).
-- **Bloque 12 — planificado.** Portales y servicios de escritorio; depende de
-  la captura del Bloque 11. No hay código todavía.
+- **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
+  los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
 
 ## Numeración de bloques
 
@@ -384,5 +386,6 @@ recuperación y otro manual), no de un lock nuevo heredando estado. El
 desbloqueo PAM del lock migrado estaba roto (el campo se quedaba en
 `Verifying`/`Error` y no aceptaba más teclas); corregido con el estado de
 `PasswordField` como fuente de verdad. Siguen escalas fraccionales,
-accesibilidad y la prueba con credenciales reales. Las medidas de RSS/PSS se
-tomaron con radeonsi (GPU real), no con llvmpipe.
+accesibilidad y la prueba con credenciales reales. **Pendiente la aceptación en
+el ThinkPad.** Las medidas de RSS/PSS se tomaron con radeonsi (GPU real), no con
+llvmpipe.
