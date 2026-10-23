@@ -441,7 +441,7 @@ impl App for NestedMenu {
                         ),
                         anchor: PopupAnchor::Right,
                         gravity: PopupGravity::BottomRight,
-                        offset: (palette.submenu_offset as i32, 0),
+                        offset: (palette.submenu_offset as i32, -(inset as i32)),
                         size: (child_size.0 as u32, child_size.1 as u32),
                         constraint_adjustment: PopupConstraintAdjustment {
                             flip_x: true,

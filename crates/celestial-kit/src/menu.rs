@@ -432,6 +432,23 @@ fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
     0.0
 }
 
+/// The anchor rectangle of a submenu: the full row, inset by the panel's
+/// padding and border. `y` is the same row top `item_top` feeds the layout.
+fn submenu_anchor_rect(
+    index: usize,
+    items: &[MenuItem],
+    m: MenuPalette,
+    parent_width: f32,
+) -> (i32, i32, u32, u32) {
+    let inset = m.padding + m.border_width;
+    (
+        inset as i32,
+        item_top(index, items, m) as i32,
+        (parent_width - inset * 2.0).max(1.0) as u32,
+        m.item_height as u32,
+    )
+}
+
 fn close_child(open_child_id: Rc<Cell<Option<PopupId>>>) {
     if let Some(id) = open_child_id.get() {
         if let Some(popups) = try_consume_root_context::<Popups>() {
@@ -454,7 +471,6 @@ fn open_child_popup(
     parent_items: Rc<Vec<MenuItem>>,
 ) -> Option<PopupId> {
     close_child(open_child_id.clone());
-    let top = item_top(index, &parent_items, m);
     let child_size = MenuView::preferred_size(sub_items, m);
     let on_dismiss_for_action = on_dismiss_all.clone();
     let child_view = MenuView::new(
@@ -472,15 +488,10 @@ fn open_child_popup(
     };
     let inset = m.padding + m.border_width;
     let spec = PopupSpec {
-        anchor_rect: (
-            inset as i32,
-            top as i32,
-            (parent_size.0 - inset * 2.0).max(1.0) as u32,
-            m.item_height as u32,
-        ),
+        anchor_rect: submenu_anchor_rect(index, &parent_items, m, parent_size.0),
         anchor: PopupAnchor::Right,
         gravity: PopupGravity::BottomRight,
-        offset: (m.submenu_offset as i32, 0),
+        offset: (m.submenu_offset as i32, -(inset as i32)),
         size: (child_size.0 as u32, child_size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
@@ -792,6 +803,47 @@ mod tests {
         assert_eq!(activate_at(&items, 1), None);
         assert_eq!(activate_at(&items, 2), None);
         assert_eq!(activate_at(&items, 3), None);
+    }
+
+    #[test]
+    fn submenu_anchor_rect_matches_the_row_top() {
+        let items = vec![
+            MenuItem::Action {
+                id: "one".to_string(),
+                label: "One".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+            },
+            MenuItem::Separator,
+            MenuItem::Action {
+                id: "two".to_string(),
+                label: "Two".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+            },
+            MenuItem::Separator,
+            MenuItem::Submenu {
+                label: "More".to_string(),
+                enabled: true,
+                items: vec![MenuItem::Action {
+                    id: "deep".to_string(),
+                    label: "Deep".to_string(),
+                    shortcut: None,
+                    enabled: true,
+                    check: CheckState::None,
+                }],
+            },
+        ];
+        let m = MENU_LIGHT;
+        let (width, _) = MenuView::preferred_size(&items, m);
+        let (x, y, w, h) = submenu_anchor_rect(4, &items, m, width);
+        let inset = m.padding + m.border_width;
+        assert_eq!(y as f32, item_top(4, &items, m));
+        assert_eq!(x as f32, inset);
+        assert_eq!(w as f32, width - inset * 2.0);
+        assert_eq!(h as f32, m.item_height);
     }
 
     #[test]
