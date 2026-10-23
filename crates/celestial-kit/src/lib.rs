@@ -13,13 +13,6 @@
 /// input.
 pub mod platform;
 
-/// The GLES renderer over EGL, kept only for the lock while its recovery is
-/// debugged.
-pub mod gl;
-
-/// Text shaping with `cosmic-text`, kept only for the lock's password prompt.
-pub mod text;
-
 /// The lock screen's minimal password field and status UI.
 pub mod password;
 

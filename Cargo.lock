@@ -426,7 +426,6 @@ dependencies = [
  "accesskit",
  "async-io",
  "calloop 0.14.5",
- "cosmic-text",
  "freya-animation",
  "freya-clipboard",
  "freya-components",
@@ -436,7 +435,6 @@ dependencies = [
  "freya-testing",
  "futures-channel",
  "futures-util",
- "glow",
  "keyboard-types",
  "khronos-egl",
  "ragnarok",
@@ -1206,18 +1204,6 @@ name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
-
-[[package]]
-name = "glow"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d51fa363f025f5c111e03f13eda21162faeacb6911fe8caa0c0349f9cf0c4483"
-dependencies = [
- "js-sys",
- "slotmap",
- "wasm-bindgen",
- "web-sys",
-]
 
 [[package]]
 name = "grade-graphics"

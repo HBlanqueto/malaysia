@@ -9,9 +9,11 @@
 //! runs as the session's user, authenticates that user.
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{
+    Arc, Mutex,
+    mpsc::{Receiver, Sender},
+};
 
-use sctk::reexports::calloop;
 use zeroize::Zeroizing;
 
 const PAM_SUCCESS: c_int = 0;
@@ -87,6 +89,10 @@ pub enum Outcome {
     Denied(String),
 }
 
+/// The buffer the PAM thread pushes events into; the lock polls it from a
+/// Freya task. `Arc<Mutex<...>>` keeps the thread boundary explicit.
+pub type EventBuffer = Arc<Mutex<Vec<Event>>>;
+
 /// One event from the PAM thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -120,17 +126,18 @@ pub struct Attempt {
 }
 
 impl Attempt {
-    /// Starts authenticating `user` against `service`, sending events to
-    /// `events` from a dedicated thread. `events` is a calloop channel, so the
-    /// lock's event loop wakes up without polling.
-    pub fn start(events: calloop::channel::Sender<Event>, service: Service, user: String) -> Self {
+    /// Starts authenticating `user` against `service`, pushing events into
+    /// `events` from a dedicated thread.
+    pub fn start(events: EventBuffer, service: Service, user: String) -> Self {
         let (answers, answer_rx) = std::sync::mpsc::channel();
 
         std::thread::Builder::new()
             .name("yuki-pam".to_string())
             .spawn(move || {
                 let outcome = converse(&service, &user, &events, &answer_rx);
-                let _ = events.send(Event::Ended(outcome));
+                if let Ok(mut buffer) = events.lock() {
+                    buffer.push(Event::Ended(outcome));
+                }
             })
             .expect("could not start the PAM thread");
 
@@ -173,7 +180,7 @@ fn resolve_service(service: Service, installed: impl Fn(&str) -> bool) -> CStrin
 fn converse(
     service: &Service,
     user: &str,
-    events: &calloop::channel::Sender<Event>,
+    events: &EventBuffer,
     answers: &Receiver<Zeroizing<String>>,
 ) -> Outcome {
     let Ok(user_c) = CString::new(user) else {
@@ -233,7 +240,7 @@ fn strerror(pamh: *mut PamHandle, status: c_int) -> String {
 }
 
 struct ConversationState<'a> {
-    events: &'a calloop::channel::Sender<Event>,
+    events: &'a EventBuffer,
     answers: &'a Receiver<Zeroizing<String>>,
 }
 
@@ -278,11 +285,9 @@ unsafe extern "C" fn conversation(
         let answer = match style {
             PAM_PROMPT_ECHO_OFF | PAM_PROMPT_ECHO_ON => {
                 let secret = style == PAM_PROMPT_ECHO_OFF;
-                if state
-                    .events
-                    .send(Event::Said(Message::Prompt { text, secret }))
-                    .is_err()
-                {
+                if let Ok(mut buffer) = state.events.lock() {
+                    buffer.push(Event::Said(Message::Prompt { text, secret }));
+                } else {
                     unsafe { libc::free(responses as *mut c_void) };
                     return PAM_CONV_ERR;
                 }
@@ -300,7 +305,9 @@ unsafe extern "C" fn conversation(
                 } else {
                     Message::Info(text)
                 };
-                let _ = state.events.send(Event::Said(message));
+                if let Ok(mut buffer) = state.events.lock() {
+                    buffer.push(Event::Said(message));
+                }
                 None
             }
             _ => {

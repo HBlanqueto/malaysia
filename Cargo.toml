@@ -118,7 +118,6 @@ wayland-egl = "0.32"
 # Skia; there is no glutin and no `gl` crate (ADR 0034). `glow` is only for the
 # lock's GLES fallback while recovery is debugged.
 khronos-egl = "6"
-glow = "0.14"
 
 # Text shaping for the compositor's chrome (Smithay + cosmic-text). The kit
 # uses Skia's paragraph layout.
