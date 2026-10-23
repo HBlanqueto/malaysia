@@ -68,7 +68,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %) |
-| `appearance.traffic_lights` | `"auto"` \| `"macos"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar |
+| `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
 contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
@@ -77,7 +77,7 @@ namespace del portal.
 `window_color` es la idea de Neptunia "Ajustes › Apariencia › Color de las
 ventanas": `neutral` no tiñe, `accent` mezcla el acento con el fondo de la
 titlebar (6 % en claro, 8 % en oscuro) y `wallpaper` usa el color dominante del
-wallpaper (7 % / 9 %). Los semáforos en `auto` siguen el modo (macOS en neutral,
+wallpaper (7 % / 9 %). Los semáforos en `auto` siguen el modo (estándar en neutral,
 derivados del acento/wallpaper en los otros).
 
 ## `display` — escala de salida (System Settings → Displays)
@@ -286,7 +286,7 @@ contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tiñe menubar/dock)
-traffic_lights = "auto"         # auto | macos | accent | wallpaper
+traffic_lights = "auto"         # auto | standard | accent | wallpaper
 ```
 
 ```toml

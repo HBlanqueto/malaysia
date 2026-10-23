@@ -35,7 +35,7 @@ nix eval --raw -f . qml   > generated/Neptunia.qml
 El bloque `appearance` de `components.json` describe (como idea en estudio) el
 color de las ventanas: `neutral` (sin tinte), `accent` (tintado por el acento) y
 `wallpaper` (tintado por el color dominante del fondo, en toda la ventana o en
-todo el escritorio). El mismo bloque elige el estilo de los semáforos —`macos`
+todo el escritorio). El mismo bloque elige el estilo de los semáforos —`standard`
 (colores fijos), `accent` o `wallpaper` (derivados de su color)—; los `sys-*`
 (avisos, error, éxito…) nunca se tintan y `layer-factors` fija cuánto se aclara
 u oscurece cada capa.

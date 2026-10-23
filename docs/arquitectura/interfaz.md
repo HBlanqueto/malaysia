@@ -72,11 +72,11 @@ solo se dibujan sus superficies (y el cursor).
 - **Sombras**: los valores de Neptunia están en `SHADOW`; el render de sombra y
   esquinas redondeadas aún no está conectado.
 - **Modos de color de ventana** (`appearance.window_color`):
-  - `neutral`: paleta base, semáforos macOS fijos.
+  - `neutral`: paleta base, semáforos estándar fijos.
   - `accent`: tinte del acento (6 % claro / 8 % oscuro), semáforos derivados.
   - `wallpaper`: tinte del color dominante del wallpaper (7 % / 9 %), semáforos
     derivados.
-  - `traffic_lights` puede forzar `macos`, `accent` o `wallpaper`.
+  - `traffic_lights` puede forzar `standard`, `accent` o `wallpaper`.
   - `window_tint_scope = "desktop"` tiñe menubar y dock con el dominante
     (20 % claro / 26 % oscuro).
 

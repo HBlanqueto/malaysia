@@ -75,7 +75,7 @@ Neptunia:
 
 | Modo | Tinte | Semáforos en `auto` |
 |---|---|---|
-| `neutral` | ninguno | macOS fijos |
+| `neutral` | ninguno | estándar fijos |
 | `accent` | el acento, 6 % en claro / 8 % en oscuro | derivados del acento |
 | `wallpaper` | el color dominante del wallpaper, 7 % / 9 % | derivados del wallpaper |
 
@@ -84,7 +84,7 @@ muestreo en rejilla, histograma de 4 bits ponderado por croma, descarte de grise
 y normalización de luminosidad HSL a 45–65 %. Lo escribe en `wallpaper.state`;
 si no hay color, se usa el acento. El compositor vigila ese archivo y
 `appearance.domain` para reconstruir el tema en caliente.
-`appearance.traffic_lights` permite forzar `macos`, `accent` o `wallpaper` en
+`appearance.traffic_lights` permite forzar `standard`, `accent` o `wallpaper` en
 vez de `auto`.
 
 `appearance.window_tint_scope = "desktop"` tiñe menubar y dock con el dominante
@@ -108,14 +108,11 @@ siempre). Los botones solo actúan con el botón primario.
 - No se dibujan aún las **esquinas redondeadas de la ventana** (16 px) ni la
   **sombra**; el radio y los valores de sombra ya están en `yuki-design`. Los
   semáforos sí son cuadrados redondeados.
-- Los semáforos no muestran los glifos de macOS al pasar el puntero.
+- Los semáforos todavía no dibujan sus glifos al pasar el puntero.
 - No hay doble clic en la barra para maximizar/zoom.
 - La titlebar no aparece en la captura de **ventana** (`build_window_elements`
   sigue capturando solo el contenido del cliente); sí aparece en la captura de
   salida/región.
-- El cambio de tema en vivo (light/dark) aún no reconstruye la caché de chrome
-  al editar `appearance.domain`; se aplica al arrancar.
-- Los botones no respetan aún las variantes `accent`/`wallpaper` de Neptunia.
 
 ## Verificación
 
