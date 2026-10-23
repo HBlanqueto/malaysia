@@ -236,6 +236,10 @@ impl Graphics {
                 &[egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE],
             )
             .map_err(|_| RunError::Egl("eglCreateContext failed"))?;
+        // Skia's GL direct context needs a current EGL context to query the
+        // driver; the window surface is made current later in `configure`.
+        egl.make_current(display, None, None, Some(context))
+            .map_err(|_| RunError::Egl("eglMakeCurrent(surfaceless) failed"))?;
 
         // The Skia GL interface loads every function through EGL.
         let interface = Interface::new_load_with(|name| {
