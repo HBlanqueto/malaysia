@@ -350,6 +350,26 @@ fn rgba(color: Rgba) -> Color {
     Color::from_argb(a, r, g, b)
 }
 
+fn shortcut_fg(enabled: bool, focused: bool, m: MenuPalette) -> Rgba {
+    if !enabled {
+        m.disabled_fg
+    } else if focused {
+        m.hover_fg
+    } else {
+        m.shortcut_color
+    }
+}
+
+fn chevron_fg(enabled: bool, focused: bool, m: MenuPalette) -> Rgba {
+    if !enabled {
+        m.disabled_fg
+    } else if focused {
+        m.hover_fg
+    } else {
+        m.chevron_color
+    }
+}
+
 fn first_selectable(items: &[MenuItem]) -> Option<usize> {
     items.iter().position(|item| item.selectable())
 }
@@ -555,6 +575,7 @@ fn render_item(
             } else {
                 m.disabled_fg
             };
+            let shortcut_fg = shortcut_fg(enabled, is_focused, m);
             let bg = if is_focused && enabled {
                 Some(m.hover_bg)
             } else {
@@ -599,11 +620,7 @@ fn render_item(
                     label()
                         .text(shortcut_text.unwrap_or_default())
                         .font_size(m.font_size)
-                        .color(rgba(if enabled {
-                            m.shortcut_color
-                        } else {
-                            m.disabled_fg
-                        }))
+                        .color(rgba(shortcut_fg))
                         .width(Size::px(shortcut_w))
                         .max_lines(1),
                 )
@@ -699,7 +716,9 @@ fn render_item(
                         .color(rgba(fg))
                         .max_lines(1),
                 );
-            row.child(left).child(chevron_element(m)).into_element()
+            row.child(left)
+                .child(chevron_element(chevron_fg(enabled, is_focused, m), m))
+                .into_element()
         }
     }
 }
@@ -721,11 +740,11 @@ fn mark_element(check: CheckState, color: Rgba, font_size: f32, width: f32) -> E
         .into_element()
 }
 
-fn chevron_element(m: MenuPalette) -> Element {
+fn chevron_element(color: Rgba, m: MenuPalette) -> Element {
     label()
         .text("›")
         .font_size(m.font_size)
-        .color(rgba(m.chevron_color))
+        .color(rgba(color))
         .width(Size::px(m.chevron_size))
         .max_lines(1)
         .into_element()
@@ -734,7 +753,7 @@ fn chevron_element(m: MenuPalette) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yuki_design::MENU_LIGHT;
+    use yuki_design::{MENU_DARK, MENU_LIGHT};
 
     fn sample() -> Vec<MenuItem> {
         vec![
@@ -844,6 +863,40 @@ mod tests {
         assert_eq!(x as f32, inset);
         assert_eq!(w as f32, width - inset * 2.0);
         assert_eq!(h as f32, m.item_height);
+    }
+
+    fn relative_luminance(color: Rgba) -> f32 {
+        fn linear(channel: f32) -> f32 {
+            if channel <= 0.04045 {
+                channel / 12.92
+            } else {
+                ((channel + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+    }
+
+    fn contrast(a: Rgba, b: Rgba) -> f32 {
+        let a = relative_luminance(a);
+        let b = relative_luminance(b);
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    #[test]
+    fn focused_shortcut_and_chevron_keep_4_5_contrast() {
+        for (name, m) in [("light", MENU_LIGHT), ("dark", MENU_DARK)] {
+            for color in [
+                shortcut_fg(true, true, m),
+                chevron_fg(true, true, m),
+                m.hover_fg,
+            ] {
+                let ratio = contrast(color, m.hover_bg);
+                assert!(
+                    ratio >= 4.5,
+                    "{name}: focused row color has {ratio:.2}:1 contrast on accent"
+                );
+            }
+        }
     }
 
     #[test]
