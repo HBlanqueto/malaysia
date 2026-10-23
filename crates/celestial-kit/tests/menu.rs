@@ -18,7 +18,7 @@ fn accent_items() -> Vec<MenuItem> {
         MenuItem::Action {
             id: "images".to_string(),
             label: "Imágenes".to_string(),
-            shortcut: Some("⇧⌃G".to_string()),
+            shortcut: Some("Ctrl+Shift+G".to_string()),
             enabled: true,
             check: CheckState::None,
         },

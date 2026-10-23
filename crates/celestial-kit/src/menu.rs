@@ -41,6 +41,42 @@ fn font_families() -> Vec<Cow<'static, str>> {
 /// Measures `text` with the same paragraph stack Freya draws it with. The
 /// previous implementation used its own `FontMgr`, which missed the fallback
 /// faces that carry `⇧`, `⌃` or accented glyphs and returned a too-small width.
+/// Formats a shortcut written as text (`Ctrl+Shift+G`, `Alt+Inicio`) with the
+/// macOS key glyphs and order: `⌃` Ctrl, `⌥` Alt, `⇧` Shift, `❖` Super.
+/// There is no `+` between them and the Command glyph is never emitted.
+pub fn format_shortcut(text: &str) -> String {
+    let text = text.trim();
+    if !text.contains('+') {
+        return text.to_string();
+    }
+    let (mut ctrl, mut alt, mut shift, mut sup) = (false, false, false, false);
+    let mut key = String::new();
+    for token in text.split('+').map(str::trim).filter(|t| !t.is_empty()) {
+        match token.to_ascii_lowercase().as_str() {
+            "ctrl" | "control" => ctrl = true,
+            "alt" | "option" | "opt" => alt = true,
+            "shift" => shift = true,
+            "super" | "meta" | "cmd" | "command" => sup = true,
+            _ => key.push_str(token),
+        }
+    }
+    let mut out = String::new();
+    if ctrl {
+        out.push('⌃');
+    }
+    if alt {
+        out.push('⌥');
+    }
+    if shift {
+        out.push('⇧');
+    }
+    if sup {
+        out.push('❖');
+    }
+    out.push_str(&key);
+    out
+}
+
 fn measure_text(text: &str, size: f32) -> f32 {
     if text.is_empty() {
         return 0.0;
@@ -111,9 +147,9 @@ impl MenuItem {
         }
     }
 
-    fn shortcut(&self) -> Option<&str> {
+    fn shortcut(&self) -> Option<String> {
         match self {
-            MenuItem::Action { shortcut, .. } => shortcut.as_deref(),
+            MenuItem::Action { shortcut, .. } => shortcut.as_deref().map(format_shortcut),
             MenuItem::Submenu { .. } | MenuItem::Separator => None,
         }
     }
@@ -169,7 +205,7 @@ impl MenuView {
             let label_w = measure_text(label, m.font_size);
             let shortcut_w = item
                 .shortcut()
-                .map(|s| measure_text(s, m.font_size))
+                .map(|s| measure_text(&s, m.font_size))
                 .unwrap_or(0.0);
             let trailing = if matches!(item, MenuItem::Submenu { .. }) {
                 m.chevron_size
@@ -561,7 +597,7 @@ fn render_item(
         } => {
             let id = id.clone();
             let label_text = label_text.clone();
-            let shortcut_text = shortcut_text.clone();
+            let shortcut_text = shortcut_text.as_ref().map(|s| format_shortcut(s));
             let enabled = *enabled;
             let check = *check;
             let mut focused = focused;
@@ -889,6 +925,18 @@ mod tests {
     }
 
     #[test]
+    fn shortcuts_use_macos_glyphs_in_order() {
+        assert_eq!(format_shortcut("Ctrl+Shift+G"), "⌃⇧G");
+        assert_eq!(format_shortcut("Alt+Inicio"), "⌥Inicio");
+        assert_eq!(format_shortcut("Super+L"), "❖L");
+        assert_eq!(format_shortcut("Ctrl+Shift+Z"), "⌃⇧Z");
+        assert_eq!(format_shortcut("Shift+Ctrl+G"), "⌃⇧G");
+        assert_eq!(format_shortcut("Cmd+D"), "❖D");
+        assert!(!format_shortcut("Command+D").contains('\u{2318}'));
+        assert_eq!(format_shortcut("F5"), "F5");
+    }
+
+    #[test]
     fn mark_sizes_fit_the_mark_column() {
         for (name, m) in [("light", MENU_LIGHT), ("dark", MENU_DARK)] {
             assert!(
@@ -930,7 +978,7 @@ mod tests {
             MenuItem::Action {
                 id: "images".to_string(),
                 label: "Imágenes".to_string(),
-                shortcut: Some("⇧⌃G".to_string()),
+                shortcut: Some("Ctrl+Shift+G".to_string()),
                 enabled: true,
                 check: CheckState::None,
             },
@@ -946,7 +994,7 @@ mod tests {
         let (w, h) = MenuView::preferred_size(&items, m);
 
         let label_w = measure_text("Imágenes", m.font_size);
-        let shortcut_w = measure_text("⇧⌃G", m.font_size);
+        let shortcut_w = measure_text(&format_shortcut("Ctrl+Shift+G"), m.font_size);
         let expected_min = m.item_padding_x * 2.0
             + m.mark_width
             + label_w

@@ -134,9 +134,17 @@ Menubar 28 px, menús con radio 12, elementos de menú de 24 px con radio 8 y
 texto 13. Se dibujaron como maquetas en el lienzo de diseño «Yuki — Global
 menu».
 
+### Glifos de atajos (decidido)
+
+Los atajos se muestran con glifos de teclas reales, como macOS, en el orden
+`⌃` `⌥` `⇧` `❖` seguido de la tecla: `⌃` Ctrl, `⌥` Alt, `⇧` Shift, `❖` Super.
+Sin `+` entre ellos y sin el glifo de Command en ningún sitio. El control recibe el atajo como
+texto (`Ctrl+Shift+G`, `Alt+Inicio`) y lo formatea; ningún menú escribe glifos a
+mano. Ejemplos: `Ctrl+Shift+G` → `⌃⇧G`, `Alt+Inicio` → `⌥Inicio`,
+`Super+L` → `❖L`.
+
 ### Decisiones abiertas
 
-- Glifos de atajos: `⌃`/`❖` o texto tipo «Ctrl+S».
 - Menús sólidos o translúcidos (Neptunia reserva el cristal para el primer
   arranque).
 - Desbordamiento de la barra, navegación con teclado (F10/Alt) y comportamiento

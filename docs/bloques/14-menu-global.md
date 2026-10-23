@@ -63,7 +63,9 @@ let view = MenuView::new(
 `celestial-kit/examples/menu_popup.rs` levanta una barra `layer-shell` de 28 px
 con `keyboard_interactivity = None`. Tiene entradas (`Yuki`, `Ir`, `Editar`)
 que abren menús con submenús de dos niveles, casillas, radios y items
-deshabilitados.
+deshabilitados. Los atajos se pasan como texto (`Ctrl+Shift+G`, `Alt+Inicio`)
+y el control los formatea con los glifos de macOS (`⌃⇧G`, `⌥Inicio`) en el
+orden `⌃⌥⇧❖`, sin `+` ni el glifo de Command.
 
 Para muestras sin entrada real, `MENU_POPUP_SHOW=<caso>` abre el menú por la
 API (sin grab) y lo deja abierto: `ir` abre «Ir» bajo su título, `editar-sub`
@@ -80,8 +82,8 @@ escribiendo `color_scheme = "light"|"dark"` en `appearance.domain` y apuntando
 
 ![Menú Ir en claro](img/14a/ir-claro.png)
 
-`ir-claro.png`: menú «Ir» en tema claro, «Inicio» resaltado y «Alt+Inicio»,
-«⇧⌘D», «⌥⌘L», etc. completos.
+`ir-claro.png`: menú «Ir» en tema claro, «Inicio» resaltado y «⌥Inicio»,
+«⇧❖D», «⌥❖L», etc. completos.
 
 ![Menú Ir en oscuro](img/14a/ir-oscuro.png)
 
