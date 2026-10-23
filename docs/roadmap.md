@@ -380,5 +380,9 @@ migrados; Skia de Nix para `freya-skia-bindings` 0.98.0. La recuperación del
 lock con el runner nuevo se verificó (matar el cliente con `kill -9` crea una
 superficie nueva, una sola `get_lock_surface` por salida y sin bucle). El
 `duplicate_output` anterior era de dos clientes de lock a la vez (uno de
-recuperación y otro manual), no de un lock nuevo heredando estado. Siguen
-escalas fraccionales, accesibilidad y el desbloqueo PAM de extremo a extremo.
+recuperación y otro manual), no de un lock nuevo heredando estado. El
+desbloqueo PAM del lock migrado estaba roto (el campo se quedaba en
+`Verifying`/`Error` y no aceptaba más teclas); corregido con el estado de
+`PasswordField` como fuente de verdad. Siguen escalas fraccionales,
+accesibilidad y la prueba con credenciales reales. Las medidas de RSS/PSS se
+tomaron con radeonsi (GPU real), no con llvmpipe.

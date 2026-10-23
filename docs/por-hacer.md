@@ -87,8 +87,23 @@ semáforos de 12, tema claro por defecto.
 - [x] **Recuperación del lock con el runner nuevo**: matar el cliente con
       `kill -9` crea la superficie de recuperación, sin bucle (0 % de CPU) y
       con una sola `get_lock_surface` por salida y objeto `ext_session_lock_v1`
-      (`WAYLAND_DEBUG=1`). Falta probar el desbloqueo PAM real con credenciales
-      y en panel físico.
+      (`WAYLAND_DEBUG=1`).
+- [x] **Desbloqueo PAM**: el lock migrado se quedaba en `Verifying` tras el
+      primer `Prompt` y no volvía a aceptar teclas tras un `Denied`; el campo
+      quedaba bloqueado y el lock no se podía desbloquear. Corregido en
+      `d4bd12c` usando el estado de `PasswordField` como única fuente de
+      verdad, con el secreto nuevo en el segundo intento y `unlock` + `flush`.
+      Probado a mano con un servicio PAM de prueba (contraseña mala → mensaje →
+      contraseña buena → desbloqueo, sin recuperación). Falta repetirlo con
+      credenciales reales y en panel físico.
+
+### Contexto de las medidas de memoria
+
+El RSS/PSS en reposo (wallpaper, menubar, dock) se midió en esta máquina con
+**GPU real AMD radeonsi/renoir** (`GL_RENDERER: AMD Radeon Graphics (radeonsi,
+renoir, ACO)`), **no con llvmpipe**. La propuesta de presentar la shell con
+Skia raster sigue sobre la mesa hasta medir en el ThinkPad; el peso observado
+es sobre todo `libLLVM`/`libgallium` compartidos, no ICU.
 
 ## Después, en orden
 
