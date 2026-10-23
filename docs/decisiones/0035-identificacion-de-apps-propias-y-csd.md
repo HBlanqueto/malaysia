@@ -22,9 +22,10 @@ una app propia podría olvidarse de pedirlo.
 2. **CSD explícito.** Antes de su primer commit, la app pide
    `zxdg_toplevel_decoration_v1.set_mode(ClientSide)`, como hace `otto-kit` con
    `WindowDecorations::RequestClient`.
-3. **Precedencia.** Para una ventana con el prefijo, el modo efectivo es
-   siempre `Client`, incluso con `force_server`. Para el resto, la política no
-   cambia.
+3. **Precedencia.** ~~Para una ventana con el prefijo, el modo efectivo es
+   siempre `Client`, incluso con `force_server`.~~ **Sustituido por la sección
+   «Elección de la app»**: una app propia elige `Client` o `Server` y Yuki
+   respeta esa elección.
 4. **Orden irrelevante.** El compositor guarda el modo *pedido* por ventana y
    recalcula el efectivo cuando llega `app_id_changed` y antes del configure
    inicial. Una petición KDE que llega antes del `xdg_toplevel` se guarda como
@@ -46,3 +47,27 @@ una app propia podría olvidarse de pedirlo.
   que es el fallo visible que el aviso pretende detectar.
 - `yuki_appearance::traffic` sigue siendo puro y sin Skia; el componente de
   CelestialKit es el único que dibuja.
+
+## Elección de la app (enmienda 2026-10-23)
+
+Sustituye la regla «native → Client siempre» del punto 3.
+
+- Cada ventana de CelestialKit declara su decoración:
+  - `Decorations::Client`, por defecto: dibuja su barra unificada de 44 px
+    (`titlebar-h`), con `TrafficLights` y hueco de toolbar.
+  - `Decorations::Server`: Yuki dibuja su barra de 32 px (`titlebar-ssd-h`).
+- El kit pide **siempre** el modo de forma explícita con
+  `xdg-decoration.set_mode` antes del primer commit, junto con
+  `set_app_id(NATIVE_APP_ID_PREFIX + nombre)`.
+- Para una ventana propia, Yuki respeta el modo pedido y no aplica
+  `window.decorations`: `force_server` y `force_client` solo afectan a apps
+  ajenas.
+- `requested` es `None` hasta que llega `request_mode`; crear el objeto de
+  decoración o hacer `unset_mode` no cuentan. Una app propia sin modo negocia
+  `Client` y el compositor avisa una vez por ventana («app propia sin modo de
+  decoración»).
+- Si el compositor no anuncia `xdg-decoration` o responde `ClientSide` a una
+  petición `Server`, el kit dibuja su barra de 44 px. Bajo Yuki recibe lo que
+  pidió.
+- Client es para apps con toolbar o sidebar (Ajustes); Server para utilidades
+  simples sin toolbar.
