@@ -788,10 +788,10 @@ mod tests {
     }
 
     #[test]
-    fn an_explicit_macos_style_keeps_the_fixed_lights() {
+    fn an_explicit_standard_style_keeps_the_fixed_lights() {
         let appearance = AppearanceConfig {
             window_color: WindowColorMode::Accent,
-            traffic_lights: TrafficLightStyle::Macos,
+            traffic_lights: TrafficLightStyle::Standard,
             ..AppearanceConfig::default()
         };
         let theme = ChromeTheme::from_parts(&appearance, None);

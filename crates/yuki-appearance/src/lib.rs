@@ -69,12 +69,13 @@ pub enum WindowTintScope {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrafficLightStyle {
-    /// Same as the window colour mode: macOS colours for neutral, accent or
-    /// wallpaper-derived colours otherwise.
+    /// Same as the window colour mode: standard colours for neutral, accent
+    /// or wallpaper-derived colours otherwise.
     #[default]
     Auto,
-    /// The fixed macOS red/amber/green.
-    Macos,
+    /// The fixed standard red/amber/green.
+    #[serde(alias = "macos")]
+    Standard,
     /// Derived from the accent colour.
     Accent,
     /// Derived from the wallpaper's dominant colour.
@@ -166,14 +167,14 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
 
     let style = match appearance.traffic_lights {
         TrafficLightStyle::Auto => match appearance.window_color {
-            WindowColorMode::Neutral => TrafficLightStyle::Macos,
+            WindowColorMode::Neutral => TrafficLightStyle::Standard,
             WindowColorMode::Accent => TrafficLightStyle::Accent,
             WindowColorMode::Wallpaper => TrafficLightStyle::Wallpaper,
         },
         style => style,
     };
     let lights = match style {
-        TrafficLightStyle::Auto | TrafficLightStyle::Macos => [
+        TrafficLightStyle::Auto | TrafficLightStyle::Standard => [
             TITLEBAR.buttons.order[0].color,
             TITLEBAR.buttons.order[1].color,
             TITLEBAR.buttons.order[2].color,
@@ -253,8 +254,31 @@ pub fn read_appearance() -> Result<Option<AppearanceConfig>, toml::de::Error> {
 /// Reads an appearance file at `path`.
 pub fn read_appearance_from(path: &Path) -> Result<Option<AppearanceConfig>, toml::de::Error> {
     match std::fs::read_to_string(path) {
-        Ok(text) => toml::from_str(&text).map(Some),
+        Ok(text) => {
+            warn_legacy_traffic_light_name(&text);
+            toml::from_str(&text).map(Some)
+        }
         Err(_) => Ok(None),
+    }
+}
+
+/// Warns once when an existing `appearance.domain` still says `macos`.
+fn warn_legacy_traffic_light_name(text: &str) {
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    let legacy = text.lines().any(|line| {
+        let line = line.split('#').next().unwrap_or(line).trim();
+        line.starts_with("traffic_lights")
+            && line
+                .split_once('=')
+                .map(|(_, value)| value.trim().trim_matches('"') == "macos")
+                .unwrap_or(false)
+    });
+    if legacy {
+        WARNED.call_once(|| {
+            tracing::warn!(
+                "traffic_lights = \"macos\" is deprecated; the style is named \"standard\""
+            );
+        });
     }
 }
 
@@ -560,19 +584,27 @@ mod tests {
     }
 
     #[test]
+    fn the_legacy_macos_style_name_deserializes_to_standard() {
+        let config: AppearanceConfig = toml::from_str("traffic_lights = \"macos\"\n").unwrap();
+        assert_eq!(config.traffic_lights, TrafficLightStyle::Standard);
+        let config: AppearanceConfig = toml::from_str("traffic_lights = \"standard\"\n").unwrap();
+        assert_eq!(config.traffic_lights, TrafficLightStyle::Standard);
+    }
+
+    #[test]
     fn traffic_light_styles_are_resolved() {
-        let macos = resolve(
+        let standard = resolve(
             &appearance(
                 ColorScheme::Light,
                 WindowColorMode::Accent,
                 WindowTintScope::Windows,
-                TrafficLightStyle::Macos,
+                TrafficLightStyle::Standard,
                 None,
             ),
             None,
         );
         assert_eq!(
-            macos.lights,
+            standard.lights,
             [
                 TITLEBAR.buttons.order[0].color,
                 TITLEBAR.buttons.order[1].color,

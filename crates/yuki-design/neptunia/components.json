@@ -1,7 +1,7 @@
 {
   "name": "neptunia-components",
   "description": "Medidas y estados de los componentes aprobados. Cada implementación (Slint, GTK, QML, web) debe respetar estos números; los colores son nombres de tokens de tokens.json.",
-  "updated": "2026-10-22",
+  "updated": "2026-10-23",
   "components": {
     "button": {
       "height": 30,
@@ -234,13 +234,6 @@
         ],
         "rule": "Mismos colores en todos los temas.",
         "styles": {
-          "status": "idea en estudio",
-          "macos": {
-            "close": "{traffic-close}",
-            "minimize": "{traffic-min}",
-            "zoom": "{traffic-zoom}",
-            "glyph": "#0000008c"
-          },
           "accent": {
             "source": "accent",
             "close-minimize": "mezcla 28 % hacia negro",
@@ -253,14 +246,15 @@
           "wallpaper": {
             "source": "color dominante del fondo",
             "rule": "misma fórmula que accent"
+          },
+          "standard": {
+            "close": "{traffic-close}",
+            "minimize": "{traffic-min}",
+            "zoom": "{traffic-zoom}",
+            "glyph": "#0000008c"
           }
         },
         "inactive": "{traffic-inactive}",
-        "variants": [
-          "derecha con orden invertido",
-          "solo cerrar en diálogos",
-          "sobre la barra lateral"
-        ],
         "margin-start": 16,
         "rim": {
           "color": "{traffic-rim}",
@@ -369,7 +363,7 @@
       "neutral": {
         "tint": null,
         "accent": "el que elige el usuario",
-        "traffic-lights": "macos"
+        "traffic-lights": "standard"
       },
       "accent": {
         "tint": "accent",
