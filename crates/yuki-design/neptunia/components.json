@@ -259,9 +259,65 @@
         "rim": {
           "color": "{traffic-rim}",
           "width": 0.5
+        },
+        "glyphs": {
+          "box": 8,
+          "stroke": 1.2,
+          "close": {
+            "segments": [
+              [
+                2.2,
+                2.2,
+                5.8,
+                5.8
+              ],
+              [
+                5.8,
+                2.2,
+                2.2,
+                5.8
+              ]
+            ]
+          },
+          "minimize": {
+            "segments": [
+              [
+                1.8,
+                4.0,
+                6.2,
+                4.0
+              ]
+            ]
+          },
+          "zoom": {
+            "triangles": [
+              [
+                2.0,
+                6.0,
+                2.0,
+                3.1,
+                4.9,
+                6.0
+              ],
+              [
+                6.0,
+                2.0,
+                6.0,
+                4.9,
+                3.1,
+                2.0
+              ]
+            ]
+          }
         }
       },
-      "superellipse-exponent": 2.0
+      "superellipse-exponent": 2.0,
+      "titlebar": {
+        "double-click": {
+          "interval-ms": 400,
+          "slop": 4
+        }
+      }
     },
     "dialog": {
       "radius": "radius.lg",

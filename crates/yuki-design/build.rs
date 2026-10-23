@@ -234,10 +234,10 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         theme,
         string(
             components,
-            "components.window.traffic-lights.styles.macos.close",
+            "components.window.traffic-lights.styles.standard.close",
             COMPONENTS,
         ),
-        "components.window.traffic-lights.styles.macos.close",
+        "components.window.traffic-lights.styles.standard.close",
         COMPONENTS,
     );
     let minimize = color_ref(
@@ -245,10 +245,10 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         theme,
         string(
             components,
-            "components.window.traffic-lights.styles.macos.minimize",
+            "components.window.traffic-lights.styles.standard.minimize",
             COMPONENTS,
         ),
-        "components.window.traffic-lights.styles.macos.minimize",
+        "components.window.traffic-lights.styles.standard.minimize",
         COMPONENTS,
     );
     let zoom = color_ref(
@@ -256,10 +256,10 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         theme,
         string(
             components,
-            "components.window.traffic-lights.styles.macos.zoom",
+            "components.window.traffic-lights.styles.standard.zoom",
             COMPONENTS,
         ),
-        "components.window.traffic-lights.styles.macos.zoom",
+        "components.window.traffic-lights.styles.standard.zoom",
         COMPONENTS,
     );
     out.push_str(&format!(
@@ -286,6 +286,26 @@ fn emit_titlebar(out: &mut String, tokens: &Value, components: &Value) {
         rgba(minimize),
         rgba(zoom),
         font(tokens, "headline")
+    ));
+
+    let interval = integer(
+        components,
+        "components.window.titlebar.double-click.interval-ms",
+        COMPONENTS,
+    );
+    let slop = number(
+        components,
+        "components.window.titlebar.double-click.slop",
+        COMPONENTS,
+    );
+    const_doc(
+        out,
+        "TITLEBAR_DOUBLE_CLICK",
+        "The double-click interval and pointer slop for the titlebar.",
+    );
+    out.push_str(&format!(
+        ": DoubleClick = DoubleClick {{ interval_ms: {interval}, slop: {} }};\n\n",
+        float(slop)
     ));
 }
 
@@ -447,7 +467,193 @@ fn emit_traffic(out: &mut String, tokens: &Value, components: &Value) {
         "How much the zoom light lightens its source colour.",
     );
     out.push_str(&format!(": f32 = {};\n\n", float(lighten)));
+    let pressed = number(
+        components,
+        "components.window.traffic-lights.pressed-darken",
+        COMPONENTS,
+    );
+    const_doc(
+        out,
+        "TRAFFIC_PRESSED_DARKEN",
+        "How much a pressed traffic light darkens its fill.",
+    );
+    out.push_str(&format!(": f32 = {};\n\n", float(pressed)));
+
+    let standard_glyph = color_ref(
+        tokens,
+        default_theme(tokens),
+        string(
+            components,
+            "components.window.traffic-lights.styles.standard.glyph",
+            COMPONENTS,
+        ),
+        "components.window.traffic-lights.styles.standard.glyph",
+        COMPONENTS,
+    );
+    let glyph_on_dark = color_ref(
+        tokens,
+        default_theme(tokens),
+        string(
+            components,
+            "components.window.traffic-lights.styles.accent.glyph-on-dark",
+            COMPONENTS,
+        ),
+        "components.window.traffic-lights.styles.accent.glyph-on-dark",
+        COMPONENTS,
+    );
+    let glyph_on_light = color_ref(
+        tokens,
+        default_theme(tokens),
+        string(
+            components,
+            "components.window.traffic-lights.styles.accent.glyph-on-light",
+            COMPONENTS,
+        ),
+        "components.window.traffic-lights.styles.accent.glyph-on-light",
+        COMPONENTS,
+    );
+    for (name, doc, color) in [
+        (
+            "TRAFFIC_GLYPH_STANDARD",
+            "The glyph colour on standard traffic lights.",
+            standard_glyph,
+        ),
+        (
+            "TRAFFIC_GLYPH_ON_DARK",
+            "The glyph colour on dark accent/wallpaper lights.",
+            glyph_on_dark,
+        ),
+        (
+            "TRAFFIC_GLYPH_ON_LIGHT",
+            "The glyph colour on light accent/wallpaper lights.",
+            glyph_on_light,
+        ),
+    ] {
+        const_doc(out, name, doc);
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(color)));
+    }
+
+    let box_size = number(
+        components,
+        "components.window.traffic-lights.glyphs.box",
+        COMPONENTS,
+    );
+    let stroke = number(
+        components,
+        "components.window.traffic-lights.glyphs.stroke",
+        COMPONENTS,
+    );
+    let close = glyph_segments(components, "components.window.traffic-lights.glyphs.close");
+    let minimize = glyph_segments(
+        components,
+        "components.window.traffic-lights.glyphs.minimize",
+    );
+    let zoom = glyph_triangles(components, "components.window.traffic-lights.glyphs.zoom");
+    const_doc(
+        out,
+        "TRAFFIC_GLYPHS",
+        "The close, minimize and zoom glyph geometry for traffic lights.",
+    );
+    out.push_str(&format!(
+        ": TrafficGlyphs = TrafficGlyphs {{\n\
+         \x20   box_size: {},\n\
+         \x20   stroke: {},\n\
+         \x20   close: &[{}],\n\
+         \x20   minimize: &[{}],\n\
+         \x20   zoom: &[{}],\n\
+         }};\n\n",
+        float(box_size),
+        float(stroke),
+        close,
+        minimize,
+        zoom
+    ));
+
     let _ = tokens;
+}
+
+fn glyph_segments(components: &Value, path: &str) -> String {
+    let array_path = format!("{path}.segments");
+    let values = value(components, &array_path, COMPONENTS)
+        .as_array()
+        .unwrap_or_else(|| panic!("yuki-design: `{array_path}` in {COMPONENTS} is not an array"));
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let item = item.as_array().unwrap_or_else(|| {
+                panic!("yuki-design: `{array_path}[{index}]` in {COMPONENTS} is not an array")
+            });
+            if item.len() != 4 {
+                panic!(
+                    "yuki-design: `{array_path}[{index}]` in {COMPONENTS} must have 4 numbers"
+                );
+            }
+            let point = |offset: usize, label: &str| {
+                item[offset].as_f64().unwrap_or_else(|| {
+                    panic!(
+                        "yuki-design: `{array_path}[{index}][{label}]` in {COMPONENTS} is not a number"
+                    )
+                })
+            };
+            format!(
+                "Segment {{ a: ({}, {}), b: ({}, {}) }}",
+                float(point(0, "0")),
+                float(point(1, "1")),
+                float(point(2, "2")),
+                float(point(3, "3"))
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn glyph_triangles(components: &Value, path: &str) -> String {
+    let array_path = format!("{path}.triangles");
+    let values = value(components, &array_path, COMPONENTS)
+        .as_array()
+        .unwrap_or_else(|| panic!("yuki-design: `{array_path}` in {COMPONENTS} is not an array"));
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let item = item.as_array().unwrap_or_else(|| {
+                panic!("yuki-design: `{array_path}[{index}]` in {COMPONENTS} is not an array")
+            });
+            if item.len() != 6 {
+                panic!(
+                    "yuki-design: `{array_path}[{index}]` in {COMPONENTS} must have 6 numbers"
+                );
+            }
+            let point = |offset: usize| {
+                let x = item[offset].as_f64().unwrap_or_else(|| {
+                    panic!(
+                        "yuki-design: `{array_path}[{index}][{offset}]` in {COMPONENTS} is not a number"
+                    )
+                });
+                let y = item[offset + 1].as_f64().unwrap_or_else(|| {
+                    panic!(
+                        "yuki-design: `{array_path}[{index}][{}]` in {COMPONENTS} is not a number",
+                        offset + 1
+                    )
+                });
+                (x, y)
+            };
+            let (x0, y0) = point(0);
+            let (x1, y1) = point(2);
+            let (x2, y2) = point(4);
+            format!(
+                "Triangle([({}, {}), ({}, {}), ({}, {})])",
+                float(x0),
+                float(y0),
+                float(x1),
+                float(y1),
+                float(x2),
+                float(y2)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn emit_typography(out: &mut String, tokens: &Value) {

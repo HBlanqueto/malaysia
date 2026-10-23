@@ -155,6 +155,43 @@ pub struct Button {
     pub color: Rgba,
 }
 
+/// One straight line of a traffic-light glyph, in the glyph's canvas units.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Segment {
+    /// Start point.
+    pub a: (f32, f32),
+    /// End point.
+    pub b: (f32, f32),
+}
+
+/// One filled triangle of a traffic-light glyph, in the glyph's canvas units.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Triangle(pub [(f32, f32); 3]);
+
+/// The geometry of the close, minimize and zoom traffic-light glyphs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TrafficGlyphs {
+    /// Side of the square glyph canvas, centred in the traffic light.
+    pub box_size: f32,
+    /// Stroke width in canvas units; ends are rounded.
+    pub stroke: f32,
+    /// The two diagonal strokes of the close glyph.
+    pub close: &'static [Segment],
+    /// The horizontal stroke of the minimize glyph.
+    pub minimize: &'static [Segment],
+    /// The two triangles of the zoom glyph.
+    pub zoom: &'static [Triangle],
+}
+
+/// The titlebar double-click gesture.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DoubleClick {
+    /// Maximum time between clicks, in milliseconds.
+    pub interval_ms: u32,
+    /// Maximum pointer movement between clicks, in logical pixels.
+    pub slop: f64,
+}
+
 /// The titlebar buttons, their order along the bar and their shared metrics.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TitlebarButtons {
@@ -307,3 +344,13 @@ pub const WALLPAPER_DIR: &str = "/run/current-system/sw/share/wallpapers/solid-c
 pub const WALLPAPER: &str = "Solid Aqua Blue.png";
 
 include!(concat!(env!("OUT_DIR"), "/neptunia.rs"));
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn traffic_glyphs_have_the_expected_shapes() {
+        assert_eq!(super::TRAFFIC_GLYPHS.close.len(), 2);
+        assert_eq!(super::TRAFFIC_GLYPHS.minimize.len(), 1);
+        assert_eq!(super::TRAFFIC_GLYPHS.zoom.len(), 2);
+    }
+}
