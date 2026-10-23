@@ -99,7 +99,7 @@ pasará a ser por salida.
 |---|---|---|---|---|
 | `window.decorations` | `"default"` \| `"force_server"` \| `"force_client"` | `"default"` | **activa** | handlers de decoración (ADR 0019/0020) |
 | `window.titlebar` | bool | `true` | datos | renderer de decoración |
-| `window.double_click_titlebar` | `"fill"` \| `"minimize"` \| `"zoom"` \| `"none"` | `"zoom"` | datos | input |
+| `window.double_click_titlebar` | `"fill"` \| `"minimize"` \| `"zoom"` \| `"none"` | `"zoom"` | **activa** | input |
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | datos | input |
 | `window.resize_border` | entero (px lógicos) | `10` | **activa** | ancho de la banda exterior de resize en lados |
 | `window.resize_corner` | entero (px lógicos) | `20` | **activa** | longitud de la «L» exterior de resize en esquinas |

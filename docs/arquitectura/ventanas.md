@@ -99,17 +99,33 @@ cambian `appearance.domain` o `wallpaper.state`.
 | Minimizar | sale de la escena y queda en el dock (`State::set_minimized`) |
 | Maximizar | guarda el rectángulo, ocupa el workspace, envía `maximized`; al repetir, restaura |
 
-El hit-testing está en `chrome::button_at` y se comprueba antes de iniciar un
-move; un clic en el resto de la barra mueve la ventana (el comportamiento de
-siempre). Los botones solo actúan con el botón primario.
+El hit-testing vive en `yuki_appearance::traffic` y se comprueba antes de
+iniciar un move; un clic en el resto de la barra mueve la ventana. Los botones
+solo actúan con el botón primario.
+
+## Hover, iconos y pulsado
+
+- Al entrar el puntero en el grupo de semáforos, los tres se encienden aunque
+  la ventana no tenga foco y muestran su glifo: aspa, línea o dos triángulos.
+  El glifo se rasteriza dentro del semáforo; su lienzo de 8 unidades se escala
+  a `diameter * 8 / 12` y se centra.
+- Los segmentos se pintan como cápsulas y los triángulos con 4×4 submuestras,
+  con el mismo blend de alfa que el aro. Todo sigue la escala de la barra.
+- Al pulsar un semáforo se oscurece solo si el puntero sigue sobre ese mismo
+  botón; soltar en otro botón o fuera del grupo no dispara nada.
+- Un botón de zoom no admitido (ventana con mínimo y máximo iguales) se dibuja
+  gris y sin glifo; pulsarlo o hacer doble clic para zoom no hace nada.
+- Doble clic en la barra, fuera del grupo: dos pulsaciones primarias dentro de
+  400 ms y a menos de 4 px ejecutan `window.double_click_titlebar` (`zoom` y
+  `fill` maximizan; `fill` aún no ocupa el workspace sin el estado maximizado;
+  `minimize` minimiza; `none` no hace nada). La segunda pulsación no inicia un
+  move.
 
 ## Límites actuales
 
 - No se dibujan aún las **esquinas redondeadas de la ventana** (16 px) ni la
   **sombra**; el radio y los valores de sombra ya están en `yuki-design`. Los
   semáforos sí son cuadrados redondeados.
-- Los semáforos todavía no dibujan sus glifos al pasar el puntero.
-- No hay doble clic en la barra para maximizar/zoom.
 - La titlebar no aparece en la captura de **ventana** (`build_window_elements`
   sigue capturando solo el contenido del cliente); sí aparece en la captura de
   salida/región.

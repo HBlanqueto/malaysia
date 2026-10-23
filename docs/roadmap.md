@@ -232,8 +232,8 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
   `Super+Space`, foco exclusivo de capa, búsqueda y ranking `.desktop`,
   lanzamiento con token de activación e iconos. Latencia release 121 ms hasta
   la superficie configurada. Ver `bloques/13-chrome-y-launcher.md`.
-- **Pendiente de chrome:** esquinas redondeadas (16 px), sombra, glifos de los
-  semáforos al hover, doble clic para zoom y titlebar en la captura de ventana.
+- **Pendiente de chrome:** esquinas redondeadas (16 px), sombra y titlebar en la
+  captura de ventana.
 - **Después:** retomar el Bloque 12a (`Settings` con una app real,
   `Screenshot`/`ScreenCast`), 12b, 8b y 8c. La aceptación manual del launcher
   con teclado real queda pendiente del ThinkPad.
