@@ -843,6 +843,22 @@ impl State {
         action
     }
 
+    /// Sets keyboard focus to a popup surface, so keyboard navigation works
+    /// inside grabbed popups even when the parent layer surface has
+    /// `keyboard_interactivity = None`.
+    pub(crate) fn focus_popup_surface(&mut self, surface: &WlSurface, serial: Serial) {
+        if self.locked {
+            return;
+        }
+        if let Some(keyboard) = self.seat.get_keyboard() {
+            keyboard.set_focus(self, Some(surface.clone()), serial);
+            if let Some(client) = surface.client() {
+                set_data_device_focus(&self.display_handle, &self.seat, Some(client.clone()));
+                set_primary_focus(&self.display_handle, &self.seat, Some(client));
+            }
+        }
+    }
+
     /// Sets keyboard focus to a layer surface without changing the active
     /// window store: the menu bar keeps naming the app, as macOS does while
     /// Spotlight is open.

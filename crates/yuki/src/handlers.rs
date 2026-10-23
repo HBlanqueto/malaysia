@@ -807,6 +807,7 @@ impl XdgShellHandler for State {
             return;
         }
         tracing::info!(popup = ?surface.wl_surface().id(), "popup grab accepted");
+        self.focus_popup_surface(surface.wl_surface(), serial);
     }
 
     fn popup_destroyed(&mut self, surface: PopupSurface) {
