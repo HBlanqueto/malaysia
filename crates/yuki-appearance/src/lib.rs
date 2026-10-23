@@ -262,7 +262,7 @@ pub fn read_appearance_from(path: &Path) -> Result<Option<AppearanceConfig>, tom
     }
 }
 
-/// Warns once when an existing `appearance.domain` still says `macos`.
+/// Warns once when an existing `appearance.domain` still uses the legacy name.
 fn warn_legacy_traffic_light_name(text: &str) {
     static WARNED: std::sync::Once = std::sync::Once::new();
     let legacy = text.lines().any(|line| {
@@ -584,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    fn the_legacy_macos_style_name_deserializes_to_standard() {
+    fn the_legacy_style_name_deserializes_to_standard() {
         let config: AppearanceConfig = toml::from_str("traffic_lights = \"macos\"\n").unwrap();
         assert_eq!(config.traffic_lights, TrafficLightStyle::Standard);
         let config: AppearanceConfig = toml::from_str("traffic_lights = \"standard\"\n").unwrap();
