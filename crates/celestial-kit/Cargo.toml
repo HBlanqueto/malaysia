@@ -1,6 +1,6 @@
 [package]
 name = "celestial-kit"
-description = "CelestialKit (≈ AppKit): the toolkit for the shell and Yuki's own apps (glossary, ADR 0024)."
+description = "CelestialKit (≈ AppKit): the toolkit for the shell and Yuki's own apps (glossary, ADR 0034)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,31 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-cosmic-text.workspace = true
-grade-graphics.workspace = true
-glow.workspace = true
-khronos-egl = { workspace = true, features = ["dynamic"] }
+freya-core.workspace = true
+freya-components.workspace = true
+freya-animation.workspace = true
+freya-engine.workspace = true
+freya-skia-safe.workspace = true
+freya-clipboard.workspace = true
+torin.workspace = true
+ragnarok.workspace = true
+accesskit.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 yuki-design.workspace = true
+yuki-appearance.workspace = true
+async-io.workspace = true
 zeroize.workspace = true
+sctk.workspace = true
+calloop.workspace = true
+wayland-client.workspace = true
+wayland-egl.workspace = true
+khronos-egl = { workspace = true, features = ["dynamic"] }
+futures-util.workspace = true
+futures-channel.workspace = true
+rustc-hash.workspace = true
+keyboard-types.workspace = true
+xkbcommon.workspace = true
+
+[dev-dependencies]
+freya-testing.workspace = true

@@ -98,9 +98,15 @@ freya-animation = "=0.4.3"
 freya-engine = "=0.4.3"
 freya-testing = "=0.4.3"
 freya-skia-safe = "=0.98.0"
+freya-clipboard = "=0.4.3"
+async-io = "2"
 torin = "=0.4.3"
 ragnarok = "=0.4.3"
 # accesskit version Freya 0.4.3 generates; 0.24 for the shell's Unix adapter.
+futures-util = "0.3"
+futures-channel = "0.3"
+rustc-hash = "2"
+keyboard-types = "0.8"
 accesskit = "0.24"
 accesskit_unix = { version = "0.17", default-features = false, features = ["async-io"] }
 
