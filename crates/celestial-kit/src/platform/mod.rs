@@ -774,6 +774,12 @@ struct RepeatState {
     generation: u64,
 }
 
+/// Cancels the current repeat and invalidates any timer already in flight.
+fn stop_repeat(repeat: &mut Option<RepeatState>, generation: &mut u64) {
+    *repeat = None;
+    *generation = generation.wrapping_add(1);
+}
+
 struct Shell {
     conn: Connection,
     registry: RegistryState,
@@ -1505,6 +1511,7 @@ impl KeyboardHandler for Shell {
         if self.keyboard_focus.as_ref() == Some(surface) {
             self.keyboard_focus = None;
         }
+        stop_repeat(&mut self.repeat, &mut self.repeat_generation);
     }
 
     fn press_key(
@@ -1538,8 +1545,7 @@ impl KeyboardHandler for Shell {
         event: KeyEvent,
     ) {
         self.key_event(qh, event, KeyboardEventName::KeyUp);
-        self.repeat = None;
-        self.repeat_generation = self.repeat_generation.wrapping_add(1);
+        stop_repeat(&mut self.repeat, &mut self.repeat_generation);
     }
 
     fn update_modifiers(
@@ -1911,6 +1917,28 @@ mod tests {
             physical_point((3.0, 4.0), 2.0),
             CursorPoint::from((6.0, 8.0))
         );
+    }
+
+    #[test]
+    fn losing_focus_cancels_repeat_and_invalidates_old_timers() {
+        let event = KeyEvent {
+            time: 0,
+            raw_code: 0,
+            keysym: Keysym::new(0),
+            utf8: None,
+        };
+        let mut repeat = Some(RepeatState {
+            event,
+            delay: Duration::from_millis(200),
+            rate: Duration::from_millis(40),
+            first: false,
+            pending: true,
+            generation: 7,
+        });
+        let mut generation = 7;
+        stop_repeat(&mut repeat, &mut generation);
+        assert!(repeat.is_none());
+        assert_eq!(generation, 8);
     }
 
     #[test]
