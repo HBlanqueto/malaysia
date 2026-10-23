@@ -85,7 +85,6 @@ yuki = { path = "crates/yuki" }                 # The compositor library (config
 yuki-appearance = { path = "crates/yuki-appearance" } # Appearance rules shared by compositor, shell and portal.
 yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.
 yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
-grade-graphics = { path = "crates/grade-graphics" }  # Shared GLSL shaders + parameters (glossary).
 celestial-kit = { path = "crates/celestial-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
 
 # Freya's core crates for CelestialKit (ADR 0034), pinned exact: the Nix Skia
@@ -108,7 +107,6 @@ futures-channel = "0.3"
 rustc-hash = "2"
 keyboard-types = "0.8"
 accesskit = "0.24"
-accesskit_unix = { version = "0.17", default-features = false, features = ["async-io"] }
 
 # Wayland client stack for `yuki-shell` and the probe clients.
 # `system` enables `ObjectId::as_ptr`, which is how the EGL setup hands the
@@ -116,13 +114,12 @@ accesskit_unix = { version = "0.17", default-features = false, features = ["asyn
 wayland-client = { version = "0.31", features = ["system"] }
 wayland-egl = "0.32"
 
-# Shell graphics (celestial-kit): a GLES renderer over EGL, like the
-# compositor's own renderer (ADR 0024).
+# CelestialKit's Wayland runner presents with EGL and hands the GL context to
+# Skia; there is no glutin and no `gl` crate (ADR 0034).
 khronos-egl = "6"
-glow = "0.14"
 
-# Shell text (celestial-kit): shaping with cosmic-text (harfrust) and glyph
-# rasterization with swash (ADR 0024).
+# Text shaping for the compositor's chrome (Smithay + cosmic-text). The kit
+# uses Skia's paragraph layout.
 cosmic-text = "0.19"
 
 # Grapheme-aware truncation of the titlebar title.
