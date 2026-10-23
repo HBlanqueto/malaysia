@@ -484,6 +484,16 @@ impl Windows {
         at_least_one_pixel(self.outer_size_bounds(id, |min, _| min))
     }
 
+    /// Whether the window can be zoomed: its client minimum is not a fixed
+    /// size shared with the maximum.
+    pub fn zoom_supported(&self, id: WindowId) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        let (min, max) = self.windows[index].size_bounds();
+        !(min.w > 0 && min.h > 0 && min == max)
+    }
+
     /// The largest decorated outer size, or zero where the client left it
     /// unbounded.
     pub fn maximum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {

@@ -466,9 +466,9 @@ block4() {
         fail "$EXIT_SMOKE" "block4 test failed"
 }
 
-# titlebar - press each titlebar button with the scripted input and check the
-# compositor log. A real click cannot be synthesized from a probe, so this uses
-# the same test hook that moves the pointer to an exact button centre.
+# titlebar - press and release each titlebar button with the scripted input and
+# check the compositor log. A real click cannot be synthesized from a probe, so
+# this uses the same test hook that moves the pointer to an exact button centre.
 titlebar() {
     require_devshell
     require cargo

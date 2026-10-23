@@ -30,6 +30,7 @@ use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
 use smithay::wayland::shell::wlr_layer::LayerSurface;
 use xkbcommon::xkb::{self, keysyms};
+use yuki_design::TITLEBAR;
 use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
 
@@ -37,6 +38,9 @@ use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
+
+/// A titlebar press remembered for double-click detection.
+pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 /// The number of motions the scripted input sends after its press.
 ///
 /// A real drag gesture does not ask for a move on the press: GTK's, for one,
@@ -422,9 +426,10 @@ impl State {
                         .get_pointer()
                         .map(|pointer| pointer.current_location())
                     {
-                        self.pointer_press(button, location);
+                        self.pointer_press(button, location, event.time());
                     }
                 } else {
+                    self.chrome_release();
                     self.end_grab();
                 }
 
@@ -457,7 +462,7 @@ impl State {
     /// off the client surface starts a move; over the client's own surface the
     /// press just raises and focuses the window. A press outside every open
     /// popup dismisses them first (leaf to root).
-    fn pointer_press(&mut self, button: u32, location: Point<f64, Logical>) {
+    fn pointer_press(&mut self, button: u32, location: Point<f64, Logical>, time: InputTime) {
         // While the session is locked, presses target the lock surface only;
         // the protocol event is still forwarded to it by the caller. No window
         // may be raised, focused, moved or resized from under the lock.
@@ -481,6 +486,7 @@ impl State {
         // in `pointer_motion`; there is no window press to process.
         if let Some((surface, _)) = self.layers.surface_under(location) {
             tracing::info!(?location, "press landed on a layer surface");
+            self.clear_chrome_pointer();
             let focused_window = self
                 .seat
                 .get_keyboard()
@@ -529,11 +535,49 @@ impl State {
         // A titlebar button wins over the resize band. The band only enters
         // 2 px at a corner, but keeping this order makes the priority explicit.
         if button == BUTTON_LEFT
-            && let (Some(outer), Some(insets)) = (self.windows.outer(id), self.windows.insets(id))
-            && let Some(kind) = crate::chrome::button_at(outer, insets, location)
+            && let Some(local) = self.titlebar_point(id, location)
         {
-            self.window_button(id, kind);
-            return;
+            let button_kind = self
+                .windows
+                .outer(id)
+                .zip(self.windows.insets(id))
+                .and_then(|(outer, insets)| crate::chrome::button_at(outer, insets, location));
+            if let Some(kind) = button_kind {
+                self.clear_chrome_pointer();
+                if kind == yuki_design::ButtonKind::Maximize && !self.windows.zoom_supported(id) {
+                    return;
+                }
+                let entry = self
+                    .chrome_pointer
+                    .get_or_insert_with(|| (id, Default::default()));
+                if entry.0 != id {
+                    *entry = (id, Default::default());
+                }
+                entry.1.on_press(Some(kind), true);
+                self.request_redraw();
+                return;
+            }
+            // A double click on the bar, outside the lights, applies the
+            // configured action. The second press must not start a move.
+            if let Some(action) = self.register_titlebar_click(id, local, time) {
+                match action {
+                    crate::config::DoubleClickAction::Zoom => {
+                        if self.windows.zoom_supported(id) {
+                            self.toggle_maximize(id);
+                        }
+                    }
+                    crate::config::DoubleClickAction::Fill => {
+                        // fill should occupy the menu-bar-to-dock workspace
+                        // without the maximized state; still pending.
+                        if self.windows.zoom_supported(id) {
+                            self.toggle_maximize(id);
+                        }
+                    }
+                    crate::config::DoubleClickAction::Minimize => self.set_minimized(id, true),
+                    crate::config::DoubleClickAction::None => {}
+                }
+                return;
+            }
         }
 
         if let Some((edge_id, edge)) = edge
@@ -563,6 +607,13 @@ impl State {
 
     /// Applies a titlebar button.
     fn window_button(&mut self, id: WindowId, kind: yuki_design::ButtonKind) {
+        if kind == yuki_design::ButtonKind::Maximize && !self.windows.zoom_supported(id) {
+            tracing::info!(
+                window = id.get(),
+                "maximize ignored: the window is fixed-size"
+            );
+            return;
+        }
         match kind {
             yuki_design::ButtonKind::Close => self.windows.send_close(id),
             yuki_design::ButtonKind::Minimize => self.set_minimized(id, true),
@@ -666,6 +717,132 @@ impl State {
         }
     }
 
+    /// The bar-relative point for `location`, when it is on a top titlebar.
+    fn titlebar_point(
+        &self,
+        id: WindowId,
+        location: Point<f64, Logical>,
+    ) -> Option<Point<f64, Logical>> {
+        if TITLEBAR.position != yuki_design::TitlebarPosition::Top {
+            return None;
+        }
+        let outer = self.windows.outer(id)?;
+        let insets = self.windows.insets(id)?;
+        if insets.top < f64::from(TITLEBAR.thickness) {
+            return None;
+        }
+        let local = Point::new(location.x - outer.x(), location.y - outer.y());
+        (local.y >= 0.0 && local.y < f64::from(TITLEBAR.thickness)).then_some(local)
+    }
+
+    fn chrome_hover_at(
+        &self,
+        id: WindowId,
+        location: Point<f64, Logical>,
+    ) -> Option<(Option<yuki_design::ButtonKind>, bool)> {
+        let local = self.titlebar_point(id, location)?;
+        let hit = yuki_appearance::traffic::hit((local.x, local.y));
+        let (gx, gy, gw, gh) = yuki_appearance::traffic::group_rect();
+        let over_group = local.x >= gx && local.x < gx + gw && local.y >= gy && local.y < gy + gh;
+        Some((hit, over_group))
+    }
+
+    fn update_chrome_pointer(
+        &mut self,
+        location: Point<f64, Logical>,
+        window: Option<WindowId>,
+        blocked_by_layer: bool,
+    ) -> bool {
+        let window = if blocked_by_layer { None } else { window };
+        if let Some((held, mut pointer)) = self.chrome_pointer {
+            if Some(held) == window {
+                let Some((hit, over_group)) = self.chrome_hover_at(held, location) else {
+                    let changed = pointer.on_leave();
+                    self.chrome_pointer = None;
+                    return changed;
+                };
+                let changed = pointer.on_motion(hit, over_group);
+                self.chrome_pointer = Some((held, pointer));
+                return changed;
+            }
+            let changed = pointer.on_leave();
+            self.chrome_pointer = None;
+            if let Some(id) = window
+                && let Some((hit, over_group)) = self.chrome_hover_at(id, location)
+            {
+                let mut pointer = yuki_appearance::traffic::TrafficPointer::default();
+                let moved = pointer.on_motion(hit, over_group);
+                self.chrome_pointer = Some((id, pointer));
+                return changed || moved;
+            }
+            return changed;
+        }
+        let Some(id) = window else {
+            return false;
+        };
+        let Some((hit, over_group)) = self.chrome_hover_at(id, location) else {
+            return false;
+        };
+        let mut pointer = yuki_appearance::traffic::TrafficPointer::default();
+        let changed = pointer.on_motion(hit, over_group);
+        self.chrome_pointer = Some((id, pointer));
+        changed
+    }
+
+    pub(crate) fn clear_chrome_pointer(&mut self) -> bool {
+        let Some((_, mut pointer)) = self.chrome_pointer.take() else {
+            return false;
+        };
+        let changed = pointer.on_leave();
+        if changed {
+            self.request_redraw();
+        }
+        changed
+    }
+
+    fn chrome_release(&mut self) {
+        let location = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location());
+        if let Some(location) = location {
+            self.chrome_release_at(location);
+        }
+    }
+
+    fn chrome_release_at(&mut self, location: Point<f64, Logical>) {
+        let Some((id, _)) = self.chrome_pointer else {
+            return;
+        };
+        let (hit, over_group) = self.chrome_hover_at(id, location).unwrap_or((None, false));
+        let Some((_, mut pointer)) = self.chrome_pointer else {
+            return;
+        };
+        let action = pointer.on_release(hit, over_group);
+        self.chrome_pointer = Some((id, pointer));
+        self.request_redraw();
+        if let Some(kind) = action {
+            self.window_button(id, kind);
+        }
+    }
+
+    fn register_titlebar_click(
+        &mut self,
+        id: WindowId,
+        local: Point<f64, Logical>,
+        time: InputTime,
+    ) -> Option<crate::config::DoubleClickAction> {
+        let (previous, action) = double_click(
+            self.titlebar_click,
+            id,
+            local,
+            u64::from(time.millis()),
+            self.config.window.double_click_titlebar,
+        );
+        self.titlebar_click = previous;
+        action
+    }
+
     /// Sets keyboard focus to a layer surface without changing the active
     /// window store: the menu bar keeps naming the app, as macOS does while
     /// Spotlight is open.
@@ -763,6 +940,20 @@ impl State {
         let Some(id) = self.windows.remove(surface) else {
             return;
         };
+        if self
+            .chrome_pointer
+            .as_ref()
+            .is_some_and(|(held, _)| *held == id)
+        {
+            self.chrome_pointer = None;
+        }
+        if self
+            .titlebar_click
+            .as_ref()
+            .is_some_and(|(held, ..)| *held == id)
+        {
+            self.titlebar_click = None;
+        }
         self.foreign_window_destroyed(id);
         self.maximized.remove(&id);
         self.chrome.remove(id);
@@ -852,7 +1043,8 @@ impl State {
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
-        let location = if let Some(kind) = test_titlebar_button() {
+        let titlebar_button = test_titlebar_button();
+        let location = if let Some(kind) = titlebar_button {
             let Some(insets) = self.windows.insets(id) else {
                 return;
             };
@@ -880,7 +1072,7 @@ impl State {
         // The compositor's own press logic runs before the protocol event, as in
         // `process_input_event`: click-to-focus, and a move grab when the press
         // lands on Yuki's decoration rather than the client's surface.
-        self.pointer_press(BUTTON_LEFT, location);
+        self.pointer_press(BUTTON_LEFT, location, time);
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
@@ -902,12 +1094,14 @@ impl State {
             window: id,
             location,
         });
-        let mut location = location;
-        for _ in 0..TEST_DRAG_STEPS {
-            location = Point::new(location.x + TEST_DRAG_STEP.0, location.y + TEST_DRAG_STEP.1);
-            self.pointer_motion(location, time);
-            if let Some(press) = self.test_press.as_mut() {
-                press.location = location;
+        if titlebar_button.is_none() {
+            let mut location = location;
+            for _ in 0..TEST_DRAG_STEPS {
+                location = Point::new(location.x + TEST_DRAG_STEP.0, location.y + TEST_DRAG_STEP.1);
+                self.pointer_motion(location, time);
+                if let Some(press) = self.test_press.as_mut() {
+                    press.location = location;
+                }
             }
         }
         // A press on an edge band or the decorated band starts a compositor
@@ -916,7 +1110,7 @@ impl State {
         // drag the window with it. A press on the client's surface starts no
         // grab, and the client's own move or resize request is still to come,
         // so the button stays held for it.
-        if self.grab.is_some() {
+        if self.grab.is_some() || titlebar_button.is_some() {
             self.inject_test_release();
         }
     }
@@ -963,9 +1157,10 @@ impl State {
 
     /// Test-only: release the scripted press, ending any grab it started.
     pub(crate) fn inject_test_release(&mut self) {
-        if self.test_press.take().is_none() {
+        let Some(press) = self.test_press.take() else {
             return;
-        }
+        };
+        self.chrome_release_at(press.location);
         self.end_grab();
         let time = InputTime::from_millis(0);
         let Some(pointer) = self.seat.get_pointer() else {
@@ -1052,6 +1247,7 @@ impl State {
 
     /// Starts dragging a window from its decoration.
     pub(crate) fn start_move(&mut self, id: WindowId, location: Point<f64, Logical>) {
+        self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
@@ -1061,6 +1257,7 @@ impl State {
 
     /// Starts resizing a window from an edge or corner.
     pub(crate) fn start_resize(&mut self, id: WindowId, edge: Edge, location: Point<f64, Logical>) {
+        self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
@@ -1105,6 +1302,7 @@ impl State {
         // covers the whole output, so the pointer's focus is always it, at the
         // origin. No edge cursor, no layer hit-testing.
         if self.locked {
+            self.clear_chrome_pointer();
             let focus = self
                 .lock_surfaces
                 .first()
@@ -1136,6 +1334,9 @@ impl State {
             self.windows.edge_under(location, side, corner)
         };
         let under_window = self.windows.window_under(location);
+        if self.update_chrome_pointer(location, under_window, layer_under.is_some()) {
+            self.request_redraw();
+        }
         let blocked =
             pointer_focus_blocked(layer_under.is_some(), edge.map(|(id, _)| id), under_window);
         let under = if blocked {
@@ -1346,6 +1547,33 @@ fn edge_cursor(edge: Edge) -> CursorIcon {
         Edge::TopRight | Edge::BottomLeft => CursorIcon::NeswResize,
     }
 }
+/// Records a titlebar press and reports the configured double-click action.
+///
+/// Kept pure so the timing and slop rules can be tested without a window.
+fn double_click(
+    previous: Option<TitlebarClick>,
+    id: WindowId,
+    local: Point<f64, Logical>,
+    now: u64,
+    action: crate::config::DoubleClickAction,
+) -> (
+    Option<TitlebarClick>,
+    Option<crate::config::DoubleClickAction>,
+) {
+    let interval = u64::from(yuki_design::TITLEBAR_DOUBLE_CLICK.interval_ms);
+    let slop = yuki_design::TITLEBAR_DOUBLE_CLICK.slop;
+    let double = previous.is_some_and(|(window, then, point)| {
+        window == id
+            && now.saturating_sub(then) <= interval
+            && (point.x - local.x).hypot(point.y - local.y) <= slop
+    });
+    if double {
+        (None, Some(action))
+    } else {
+        (Some((id, now, local)), None)
+    }
+}
+
 /// Rounds a logical position to whole pixels.
 fn round(value: f64) -> i32 {
     value.round() as i32
@@ -1421,7 +1649,7 @@ mod tests {
 
     use super::{
         BUTTON_LEFT, CompositorShortcut, Edge, ShakeDetector, clamp_pointer, compositor_shortcut,
-        edge_cursor, pointer_focus_blocked,
+        double_click, edge_cursor, pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
@@ -1902,5 +2130,92 @@ mod tests {
             "moving the host pointer down must increase logical y ({first:?} -> {second:?})"
         );
         assert_eq!(first.x, second.x);
+    }
+    #[test]
+    fn a_second_press_within_the_double_click_interval_zooms() {
+        let id = WindowId::new(1);
+        let point = Point::from((200.0, 70.0));
+        let (previous, action) = double_click(
+            None,
+            id,
+            point,
+            1_000,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        assert_eq!(action, None);
+        let (_, action) = double_click(
+            previous,
+            id,
+            point,
+            1_300,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        assert_eq!(action, Some(crate::config::DoubleClickAction::Zoom));
+    }
+
+    #[test]
+    fn a_second_press_too_late_is_not_a_double_click() {
+        let id = WindowId::new(1);
+        let point = Point::from((200.0, 70.0));
+        let (previous, _) = double_click(
+            None,
+            id,
+            point,
+            1_000,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        let (_, action) = double_click(
+            previous,
+            id,
+            point,
+            1_500,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        assert_eq!(action, None);
+    }
+
+    #[test]
+    fn a_second_press_far_from_the_first_is_not_a_double_click() {
+        let id = WindowId::new(1);
+        let (previous, _) = double_click(
+            None,
+            id,
+            Point::from((200.0, 70.0)),
+            1_000,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        let (_, action) = double_click(
+            previous,
+            id,
+            Point::from((220.0, 70.0)),
+            1_100,
+            crate::config::DoubleClickAction::Zoom,
+        );
+        assert_eq!(action, None);
+    }
+    #[test]
+    fn releasing_a_titlebar_button_outside_does_not_fire_it() {
+        let mut pointer = yuki_appearance::traffic::TrafficPointer::default();
+        pointer.on_press(Some(yuki_design::ButtonKind::Close), true);
+        assert_eq!(pointer.on_release(None, false), None);
+    }
+
+    #[test]
+    fn pressing_and_releasing_the_same_titlebar_button_fires_it() {
+        let mut pointer = yuki_appearance::traffic::TrafficPointer::default();
+        pointer.on_press(Some(yuki_design::ButtonKind::Close), true);
+        assert_eq!(
+            pointer.on_release(Some(yuki_design::ButtonKind::Close), true),
+            Some(yuki_design::ButtonKind::Close)
+        );
+    }
+
+    #[test]
+    fn the_traffic_lights_are_not_the_double_click_title_area() {
+        let (x, y, size) = yuki_appearance::traffic::button_rect(0);
+        assert_eq!(
+            yuki_appearance::traffic::hit((x + size / 2.0, y + size / 2.0)),
+            Some(yuki_design::ButtonKind::Close)
+        );
     }
 }

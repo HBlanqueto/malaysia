@@ -855,11 +855,23 @@ pub(crate) fn build_output_elements(
                 continue;
             }
             let id = window.id();
+            let pointer = state
+                .chrome_pointer
+                .as_ref()
+                .filter(|(held, _)| *held == id)
+                .map(|(_, pointer)| pointer);
+            let input = yuki_appearance::traffic::TrafficInput {
+                focused: focused == Some(id),
+                group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
+                pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
+                zoom_supported: state.windows.zoom_supported(id),
+            };
             if let Some(element) = state.chrome.element(
                 renderer,
                 id,
                 &window.title(),
                 focused == Some(id),
+                input,
                 window.size().w,
                 window.location(),
                 scale,

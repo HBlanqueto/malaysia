@@ -60,6 +60,7 @@ impl SessionLockHandler for State {
         }
         self.arm_lock_recovery(LOCK_START_GRACE);
         self.clear_keyboard_focus();
+        self.clear_chrome_pointer();
         self.request_redraw();
         // Confirm immediately: the next frame shows the locked session (a
         // solid color until the client's lock surfaces arrive), so no normal

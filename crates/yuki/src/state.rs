@@ -303,6 +303,10 @@ pub struct State {
     /// The Neptunia tint and traffic-light colours, rebuilt when
     /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
+    /// The window whose traffic lights the pointer is interacting with.
+    pub(crate) chrome_pointer: Option<(WindowId, yuki_appearance::traffic::TrafficPointer)>,
+    /// The last primary press on a titlebar, for double click.
+    pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
     /// The mtimes of those two files at the last theme refresh.
     theme_sources: Option<(Option<SystemTime>, Option<SystemTime>)>,
     /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
@@ -522,6 +526,8 @@ impl State {
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             chrome_theme,
+            chrome_pointer: None,
+            titlebar_click: None,
             theme_sources: None,
             screenshot: None,
             screenshot_mode: None,

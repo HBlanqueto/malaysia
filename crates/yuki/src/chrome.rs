@@ -18,13 +18,14 @@ use smithay::backend::renderer::element::memory::{
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use unicode_segmentation::UnicodeSegmentation;
+use yuki_appearance::traffic::{self, TrafficInput};
 use yuki_appearance::{
     AppearanceConfig, ColorScheme, TrafficLightStyle, WindowColorMode, load_dominant,
     palette as base_palette, resolve,
 };
 use yuki_design::{
     ButtonKind, FocusPair, Font, LAYER_FACTOR_LINE, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR,
-    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
+    TRAFFIC_GLYPHS, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
 };
 use yuki_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use yuki_scene::scene::WindowId;
@@ -39,6 +40,7 @@ use crate::decoration::Insets;
 pub(crate) struct ChromeTheme {
     palette: Palette,
     lights: [Rgba; 3],
+    traffic_style: TrafficLightStyle,
     signature: u64,
 }
 
@@ -62,6 +64,14 @@ impl ChromeTheme {
             palette.hairline = base.hairline.mix(source, factor * LAYER_FACTOR_LINE);
         }
 
+        let traffic_style = match appearance.traffic_lights {
+            TrafficLightStyle::Auto => match appearance.window_color {
+                WindowColorMode::Neutral => TrafficLightStyle::Standard,
+                WindowColorMode::Accent => TrafficLightStyle::Accent,
+                WindowColorMode::Wallpaper => TrafficLightStyle::Wallpaper,
+            },
+            style => style,
+        };
         let signature = signature(
             resolved.scheme,
             appearance.window_color,
@@ -72,6 +82,7 @@ impl ChromeTheme {
         Self {
             palette,
             lights: resolved.lights,
+            traffic_style,
             signature,
         }
     }
@@ -123,6 +134,9 @@ struct Cached {
 struct Key {
     title: String,
     focused: bool,
+    group_hovered: bool,
+    pressed: Option<ButtonKind>,
+    zoom_supported: bool,
     width: i32,
     scale: u64,
     theme: u64,
@@ -149,6 +163,7 @@ impl ChromeCache {
         id: WindowId,
         title: &str,
         focused: bool,
+        input: TrafficInput,
         width: i32,
         location: Point<i32, Logical>,
         scale: f64,
@@ -157,13 +172,18 @@ impl ChromeCache {
         let key = Key {
             title: title.to_string(),
             focused,
+            group_hovered: input.group_hovered,
+            pressed: input.pressed,
+            zoom_supported: input.zoom_supported,
             width,
             scale: scale.to_bits(),
             theme: theme.signature,
         };
         let stale = self.entries.get(&id).is_none_or(|entry| entry.key != key);
         if stale {
-            let (pixels, w, h) = self.text.rasterize(title, focused, width, scale, *theme);
+            let (pixels, w, h) = self
+                .text
+                .rasterize(title, focused, width, scale, *theme, input);
             let buffer = MemoryRenderBuffer::from_slice(
                 &pixels,
                 Fourcc::Abgr8888,
@@ -218,14 +238,11 @@ pub(crate) fn button_center(
         .order
         .iter()
         .position(|button| button.kind == kind)?;
-    let diameter = f64::from(TITLEBAR.buttons.diameter);
-    let gap = f64::from(TITLEBAR.buttons.spacing);
-    let x = outer.x()
-        + f64::from(TITLEBAR.buttons.margin_start)
-        + diameter / 2.0
-        + index as f64 * (diameter + gap);
-    let y = outer.y() + f64::from(TITLEBAR.thickness) / 2.0;
-    Some(Point::new(x, y))
+    let (x, y, size) = traffic::button_rect(index);
+    Some(Point::new(
+        outer.x() + x + size / 2.0,
+        outer.y() + y + size / 2.0,
+    ))
 }
 
 /// The titlebar button at `location`, if any.
@@ -241,27 +258,10 @@ pub(crate) fn button_at(
     if titlebar.position != TitlebarPosition::Top || insets.top < f64::from(titlebar.thickness) {
         return None;
     }
-    let (x, y) = (outer.x(), outer.y());
-    let thickness = f64::from(titlebar.thickness);
-    if location.y < y || location.y >= y + thickness {
+    if location.y < outer.y() || location.y >= outer.y() + f64::from(titlebar.thickness) {
         return None;
     }
-    let center_y = y + thickness / 2.0;
-    let diameter = f64::from(titlebar.buttons.diameter);
-    let gap = f64::from(titlebar.buttons.spacing);
-    let start = x + f64::from(titlebar.buttons.margin_start) + diameter / 2.0;
-    for (index, button) in titlebar.buttons.order.iter().enumerate() {
-        let center_x = start + index as f64 * (diameter + gap);
-        let half = diameter / 2.0;
-        let radius = f64::from(titlebar.buttons.corner_radius).min(half);
-        let dx = (location.x - center_x).abs() - (half - radius);
-        let dy = (location.y - center_y).abs() - (half - radius);
-        let distance = (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius;
-        if distance <= 0.0 {
-            return Some(button.kind);
-        }
-    }
-    None
+    traffic::hit((location.x - outer.x(), location.y - outer.y()))
 }
 
 fn physical_point(point: Point<i32, Logical>, scale: f64) -> Point<i32, Physical> {
@@ -313,6 +313,7 @@ impl TextEngine {
         width: i32,
         scale: f64,
         theme: ChromeTheme,
+        input: TrafficInput,
     ) -> (Vec<u8>, i32, i32) {
         let palette = &theme.palette;
         let w = (f64::from(width) * scale).round().max(1.0) as i32;
@@ -329,16 +330,16 @@ impl TextEngine {
         let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale)
             .round()
             .max(1.0) as i32;
-        let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
-        let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
-        let center_y = h / 2;
-        for index in 0..TITLEBAR.buttons.order.len() {
-            let center_x = margin + diameter / 2 + index as i32 * (diameter + gap);
-            let color = if focused {
-                theme.lights[index]
-            } else {
-                palette.traffic_lights_inactive
-            };
+        let visuals = traffic::visual(
+            theme.lights,
+            theme.traffic_style,
+            palette.traffic_lights_inactive,
+            input,
+        );
+        for (index, visual) in visuals.iter().enumerate() {
+            let (x, y, size) = traffic::button_rect(index);
+            let center_x = ((x + size / 2.0) * scale).round() as i32;
+            let center_y = ((y + size / 2.0) * scale).round() as i32;
             let radius = (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32;
             fill_rounded_square(
                 &mut pixels,
@@ -348,7 +349,7 @@ impl TextEngine {
                 center_y,
                 diameter,
                 radius,
-                color,
+                visual.fill,
             );
             stroke_rounded_square(
                 &mut pixels,
@@ -361,7 +362,21 @@ impl TextEngine {
                 (f64::from(TRAFFIC_RIM_WIDTH) * scale) as f32,
                 TRAFFIC_RIM,
             );
+            if let Some(glyph) = visual.glyph {
+                draw_glyph(
+                    &mut pixels,
+                    w,
+                    h,
+                    center_x as f32,
+                    center_y as f32,
+                    diameter as f32,
+                    index,
+                    glyph,
+                );
+            }
         }
+        let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
+        let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
 
         let text_color = if focused {
             palette.title.focused
@@ -496,6 +511,134 @@ impl TextEngine {
             }
         }
     }
+}
+
+/// Draws one traffic-light glyph inside its button, scaled and centred.
+#[allow(clippy::too_many_arguments)]
+fn draw_glyph(
+    pixels: &mut [u8],
+    width: i32,
+    height: i32,
+    center_x: f32,
+    center_y: f32,
+    diameter: f32,
+    index: usize,
+    color: Rgba,
+) {
+    let canvas = diameter * TRAFFIC_GLYPHS.box_size / 12.0;
+    let unit = canvas / TRAFFIC_GLYPHS.box_size;
+    let origin_x = center_x - canvas / 2.0;
+    let origin_y = center_y - canvas / 2.0;
+    let min_x = origin_x.floor() as i32;
+    let max_x = (origin_x + canvas).ceil() as i32;
+    let min_y = origin_y.floor() as i32;
+    let max_y = (origin_y + canvas).ceil() as i32;
+    let stroke = TRAFFIC_GLYPHS.stroke * unit;
+
+    for row in min_y.max(0)..max_y.min(height) {
+        for col in min_x.max(0)..max_x.min(width) {
+            let coverage = match index {
+                0 => segment_coverage(
+                    TRAFFIC_GLYPHS.close,
+                    col,
+                    row,
+                    origin_x,
+                    origin_y,
+                    unit,
+                    stroke,
+                ),
+                1 => segment_coverage(
+                    TRAFFIC_GLYPHS.minimize,
+                    col,
+                    row,
+                    origin_x,
+                    origin_y,
+                    unit,
+                    stroke,
+                ),
+                _ => triangle_coverage(TRAFFIC_GLYPHS.zoom, col, row, origin_x, origin_y, unit),
+            };
+            if coverage <= 0.0 {
+                continue;
+            }
+            let index = (row * width + col) as usize * 4;
+            blend(&mut pixels[index..index + 4], color, coverage);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn segment_coverage(
+    segments: &[yuki_design::Segment],
+    col: i32,
+    row: i32,
+    origin_x: f32,
+    origin_y: f32,
+    unit: f32,
+    stroke: f32,
+) -> f32 {
+    let px = col as f32 + 0.5;
+    let py = row as f32 + 0.5;
+    let mut best = 0.0f32;
+    for segment in segments {
+        let ax = origin_x + segment.a.0 * unit;
+        let ay = origin_y + segment.a.1 * unit;
+        let bx = origin_x + segment.b.0 * unit;
+        let by = origin_y + segment.b.1 * unit;
+        let abx = bx - ax;
+        let aby = by - ay;
+        let length_sq = abx * abx + aby * aby;
+        let t = if length_sq == 0.0 {
+            0.0
+        } else {
+            (((px - ax) * abx + (py - ay) * aby) / length_sq).clamp(0.0, 1.0)
+        };
+        let dx = px - (ax + abx * t);
+        let dy = py - (ay + aby * t);
+        let distance = (dx * dx + dy * dy).sqrt() - stroke / 2.0;
+        let coverage = (0.5 - distance).clamp(0.0, 1.0);
+        best = best.max(coverage);
+    }
+    best
+}
+
+fn triangle_coverage(
+    triangles: &[yuki_design::Triangle],
+    col: i32,
+    row: i32,
+    origin_x: f32,
+    origin_y: f32,
+    unit: f32,
+) -> f32 {
+    let mut covered = 0;
+    let samples = 4;
+    for sy in 0..samples {
+        for sx in 0..samples {
+            let px = col as f32 + (sx as f32 + 0.5) / samples as f32;
+            let py = row as f32 + (sy as f32 + 0.5) / samples as f32;
+            if triangles.iter().any(|triangle| {
+                let points = triangle
+                    .0
+                    .map(|point| (origin_x + point.0 * unit, origin_y + point.1 * unit));
+                point_in_triangle((px, py), points)
+            }) {
+                covered += 1;
+            }
+        }
+    }
+    covered as f32 / (samples * samples) as f32
+}
+
+fn point_in_triangle(point: (f32, f32), triangle: [(f32, f32); 3]) -> bool {
+    let sign = |a: (f32, f32), b: (f32, f32), c: (f32, f32)| {
+        (a.0 - c.0) * (b.1 - c.1) - (b.0 - c.0) * (a.1 - c.1)
+    };
+    let d1 = sign(point, triangle[0], triangle[1]);
+    let d2 = sign(point, triangle[1], triangle[2]);
+    let d3 = sign(point, triangle[2], triangle[0]);
+    let has_negative = d1 < 0.0 || d2 < 0.0 || d3 < 0.0;
+    let has_positive = d1 > 0.0 || d2 > 0.0 || d3 > 0.0;
+    !(has_negative && has_positive)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -683,8 +826,8 @@ fn blend(dst: &mut [u8], src: yuki_design::Rgba, coverage: f32) {
 mod tests {
     use super::*;
     use yuki_design::{
-        ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN,
-        WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+        ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_GLYPH_STANDARD,
+        TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
     };
     use yuki_scene::geometry::Rect;
 
@@ -875,7 +1018,17 @@ mod tests {
     fn the_bar_rounds_its_top_corners_and_keeps_real_alpha() {
         let mut text = TextEngine::new();
         let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
-        let (pixels, w, h) = text.rasterize("", false, 800, 1.0, theme);
+        let (pixels, w, h) = text.rasterize(
+            "",
+            false,
+            800,
+            1.0,
+            theme,
+            TrafficInput {
+                zoom_supported: true,
+                ..TrafficInput::default()
+            },
+        );
         let alpha = |x: i32, y: i32| pixels[((y * w + x) * 4 + 3) as usize];
         assert_eq!(alpha(0, 0), 0, "the top-left corner stays transparent");
         assert_eq!(alpha(w - 1, 0), 0, "the top-right corner stays transparent");
@@ -919,6 +1072,137 @@ mod tests {
                 x + text_width <= (width - reserve) as f32 + 0.01,
                 "scale {scale}: right edge {} invades the reserve",
                 x + text_width
+            );
+        }
+    }
+    fn render_with(input: TrafficInput, scale: f64) -> (Vec<u8>, i32, i32) {
+        let mut text = TextEngine::new();
+        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
+        text.rasterize("", input.focused, 400, scale, theme, input)
+    }
+
+    fn pixel(pixels: &[u8], width: i32, x: i32, y: i32) -> [u8; 4] {
+        let index = ((y * width + x) * 4) as usize;
+        pixels[index..index + 4].try_into().unwrap()
+    }
+
+    #[test]
+    fn hover_draws_the_close_glyph_over_the_light() {
+        let input = TrafficInput {
+            focused: true,
+            group_hovered: true,
+            zoom_supported: true,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, 1.0);
+        let center = pixel(&pixels, width, 22, 16);
+        let fill = TITLEBAR.buttons.order[0].color.to_rgba8();
+        assert_ne!(center, fill, "the glyph must cover the light's centre");
+        let mut expected = fill;
+        blend(&mut expected, TRAFFIC_GLYPH_STANDARD, 1.0);
+        assert_eq!(center, expected);
+    }
+
+    #[test]
+    fn without_hover_there_is_no_glyph_pixel() {
+        let input = TrafficInput {
+            focused: true,
+            zoom_supported: true,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, 1.0);
+        let center = pixel(&pixels, width, 22, 16);
+        assert_eq!(center, TITLEBAR.buttons.order[0].color.to_rgba8());
+    }
+
+    #[test]
+    fn pressed_darkens_the_light_fill() {
+        let input = TrafficInput {
+            focused: true,
+            pressed: Some(ButtonKind::Close),
+            zoom_supported: true,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, 1.0);
+        let center = pixel(&pixels, width, 22, 16);
+        let expected = TITLEBAR.buttons.order[0]
+            .color
+            .darken(yuki_design::TRAFFIC_PRESSED_DARKEN)
+            .to_rgba8();
+        for (actual, expected) in center.iter().zip(expected) {
+            assert!(actual.abs_diff(expected) <= 1, "{center:?} != {expected:?}");
+        }
+    }
+
+    #[test]
+    fn an_inactive_window_lights_up_on_hover() {
+        let input = TrafficInput {
+            focused: false,
+            group_hovered: true,
+            zoom_supported: true,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, 1.0);
+        let sample = pixel(&pixels, width, 26, 16);
+        assert_eq!(sample, TITLEBAR.buttons.order[0].color.to_rgba8());
+        assert_ne!(sample, LIGHT.traffic_lights_inactive.to_rgba8());
+    }
+
+    #[test]
+    fn fixed_size_windows_show_an_inactive_zoom_without_a_glyph() {
+        let input = TrafficInput {
+            focused: true,
+            group_hovered: true,
+            zoom_supported: false,
+            ..TrafficInput::default()
+        };
+        let (pixels, width, _) = render_with(input, 1.0);
+        let center = pixel(&pixels, width, 62, 16);
+        assert_eq!(center, LIGHT.traffic_lights_inactive.to_rgba8());
+    }
+
+    #[test]
+    fn the_glyph_canvas_scales_with_the_bar() {
+        for scale in [1.0, 1.5, 2.0] {
+            let input = TrafficInput {
+                focused: true,
+                group_hovered: true,
+                zoom_supported: true,
+                ..TrafficInput::default()
+            };
+            let (pixels, width, _) = render_with(input, scale);
+            let x = (22.0 * scale).round() as i32;
+            let y = (16.0 * scale).round() as i32;
+            let center = pixel(&pixels, width, x, y);
+            assert_ne!(
+                center,
+                TITLEBAR.buttons.order[0].color.to_rgba8(),
+                "scale {scale}: no glyph at the centre"
+            );
+        }
+    }
+    #[test]
+    #[ignore = "manual rasterization benchmark"]
+    fn measure_rasterize_1200_at_150_percent() {
+        use std::time::Instant;
+        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
+        for hovered in [false, true] {
+            let input = TrafficInput {
+                focused: true,
+                group_hovered: hovered,
+                zoom_supported: true,
+                ..TrafficInput::default()
+            };
+            let mut text = TextEngine::new();
+            let _ = text.rasterize("Yuki", true, 1200, 1.5, theme, input);
+            let iterations = 20;
+            let start = Instant::now();
+            for _ in 0..iterations {
+                let _ = text.rasterize("Yuki", true, 1200, 1.5, theme, input);
+            }
+            eprintln!(
+                "rasterize 1200x32 @1.5 hovered={hovered}: {:?}",
+                start.elapsed() / iterations
             );
         }
     }
