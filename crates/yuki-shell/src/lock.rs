@@ -39,6 +39,7 @@ struct LockApp {
     field: State<PasswordField>,
     events: EventBuffer,
     attempt: Rc<RefCell<Option<pam::Attempt>>>,
+    user: String,
 }
 
 impl App for LockApp {
@@ -48,6 +49,8 @@ impl App for LockApp {
         let events = self.events.clone();
         let attempt = self.attempt.clone();
         let attempt_for_future = attempt.clone();
+        let events_for_keys = self.events.clone();
+        let user = self.user.clone();
         let unlock = SessionUnlock::get();
 
         use_future(move || {
@@ -126,7 +129,12 @@ impl App for LockApp {
                 }
                 match &event.key {
                     Key::Named(NamedKey::Enter) => {
-                        submit(field, attempt.clone());
+                        submit(
+                            field,
+                            attempt.clone(),
+                            events_for_keys.clone(),
+                            user.clone(),
+                        );
                     }
                     Key::Named(NamedKey::Backspace) => {
                         field.write().backspace();
@@ -195,7 +203,7 @@ impl App for LockApp {
 pub fn run() -> anyhow::Result<()> {
     let events: EventBuffer = Arc::new(Mutex::new(Vec::new()));
     let attempt = Rc::new(RefCell::new(None));
-    start_auth(events.clone(), attempt.clone());
+    let user = start_auth(events.clone(), attempt.clone());
 
     let model = State::create_global(Model {
         label: "Contraseña".to_string(),
@@ -210,6 +218,7 @@ pub fn run() -> anyhow::Result<()> {
         field,
         events,
         attempt,
+        user,
     });
     run_lock(app).map_err(|error| anyhow::anyhow!("{error}"))
 }
@@ -228,10 +237,18 @@ fn start_auth(events: EventBuffer, attempt: Rc<RefCell<Option<pam::Attempt>>>) -
     user
 }
 
-fn submit(mut field: State<PasswordField>, attempt: Rc<RefCell<Option<pam::Attempt>>>) {
+fn submit(
+    mut field: State<PasswordField>,
+    attempt: Rc<RefCell<Option<pam::Attempt>>>,
+    events: EventBuffer,
+    user: String,
+) {
     let Some(secret) = field.write().take() else {
         return;
     };
+    if attempt.borrow().is_none() && !user.is_empty() {
+        *attempt.borrow_mut() = Some(pam::Attempt::start(events, pam::Service::LOCK, user));
+    }
     if let Some(attempt) = attempt.borrow().as_ref() {
         attempt.answer(secret);
     }
