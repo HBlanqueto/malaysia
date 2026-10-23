@@ -12,7 +12,6 @@ publish = false
 freya-engine = "=0.4.3"
 # Pins the exact bindings version the Nix derivation and the guard expect.
 freya-skia-safe = "=0.98.0"
-freya-skia-bindings = "=0.98.0"
 
 [lib]
 path = "src/lib.rs"

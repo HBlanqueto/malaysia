@@ -458,7 +458,6 @@ name = "skia-prebuild"
 version = "0.0.0"
 dependencies = [
  "freya-engine",
- "freya-skia-bindings",
  "freya-skia-safe",
 ]
 
