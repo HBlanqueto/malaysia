@@ -5,12 +5,12 @@
 //! supports keyboard navigation and reports actions through `on_activate`.
 
 use std::borrow::Cow;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 use freya_core::integration::{AppComponent, default_fonts};
 use freya_core::prelude::*;
-use freya_engine::prelude::{FontCollection, FontMgr, ParagraphBuilder, ParagraphStyle, TextStyle};
+use freya_engine::prelude::{ParagraphBuilder, ParagraphStyle, TextStyle};
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 
@@ -27,10 +27,6 @@ use yuki_design::{MenuPalette, Rgba};
 /// drawing always shape the same glyphs.
 const FONT_FAMILIES: &[&str] = &["Geist", "Noto Sans CJK SC", "system-ui", "sans-serif"];
 
-thread_local! {
-    static FONT_COLLECTION: RefCell<Option<FontCollection>> = const { RefCell::new(None) };
-}
-
 /// The process-wide text stack for measurement. Mirrors the renderer's
 /// `FontCollection` (system manager plus the shell's fallback families).
 fn font_families() -> Vec<Cow<'static, str>> {
@@ -40,21 +36,6 @@ fn font_families() -> Vec<Cow<'static, str>> {
         .collect();
     families.extend(default_fonts());
     families
-}
-
-fn font_collection() -> FontCollection {
-    FONT_COLLECTION.with(|cache| {
-        cache
-            .borrow_mut()
-            .get_or_insert_with(|| {
-                let mut collection = FontCollection::new();
-                collection.set_default_font_manager(FontMgr::default(), None);
-                collection.set_dynamic_font_manager(FontMgr::custom_empty().unwrap_or_default());
-                collection.paragraph_cache_mut().turn_on(false);
-                collection
-            })
-            .clone()
-    })
 }
 
 /// Measures `text` with the same paragraph stack Freya draws it with. The
@@ -70,7 +51,7 @@ fn measure_text(text: &str, size: f32) -> f32 {
     text_style.set_font_families(&font_families());
     paragraph_style.set_text_style(&text_style);
 
-    let mut builder = ParagraphBuilder::new(&paragraph_style, font_collection());
+    let mut builder = ParagraphBuilder::new(&paragraph_style, crate::fonts::collection());
     builder.add_text(text);
     let mut paragraph = builder.build();
     paragraph.layout(f32::MAX);

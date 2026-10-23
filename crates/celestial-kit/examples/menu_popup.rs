@@ -3,7 +3,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use celestial_kit::menu::{CheckState, MenuItem, MenuView};
 use celestial_kit::platform::{
@@ -33,10 +33,16 @@ impl App for Demo {
             let popups = Popups::get();
             let timers = Timers::get();
             use_hook(move || {
-                let start_count = popups.surface_count();
-                let start_rss = rss_kb();
-                eprintln!("menu_popup selftest start: count={start_count} rss_kb={start_rss}");
-
+                let report: Rc<dyn Fn(&str)> = {
+                    let popups = popups.clone();
+                    Rc::new(move |stage: &str| {
+                        eprintln!(
+                            "menu_popup selftest {stage}: surfaces={} rss_kb={}",
+                            popups.surface_count(),
+                            rss_kb()
+                        );
+                    })
+                };
                 let counter = Rc::new(Cell::new(0));
                 let open_next: TimerFn = Rc::default();
 
@@ -46,13 +52,9 @@ impl App for Demo {
                     let counter = counter.clone();
                     let popups = popups.clone();
                     let timers = timers.clone();
+                    let report = report.clone();
                     move || {
                         if counter.get() >= 100 {
-                            let end_count = popups.surface_count();
-                            let end_rss = rss_kb();
-                            eprintln!(
-                                "menu_popup selftest end: count={end_count} rss_kb={end_rss}"
-                            );
                             return;
                         }
                         counter.set(counter.get() + 1);
@@ -61,16 +63,18 @@ impl App for Demo {
                             let open_next = open_next.clone();
                             let counter = counter.clone();
                             let root_id = root_id.clone();
-                            let popups = popups.clone();
                             let timers = timers.clone();
+                            let report = report.clone();
                             Rc::new(move || {
                                 root_id.lock().unwrap().take();
-                                if counter.get() >= 100 {
-                                    let end_count = popups.surface_count();
-                                    let end_rss = rss_kb();
-                                    eprintln!(
-                                        "menu_popup selftest end: count={end_count} rss_kb={end_rss}"
-                                    );
+                                let done = counter.get();
+                                if done == 10 || done >= 100 {
+                                    let stage = if done >= 100 { "end" } else { "warm10" };
+                                    let report = report.clone();
+                                    // Let `close_popup` remove the surface first.
+                                    timers.after(Duration::ZERO, move || report(stage));
+                                }
+                                if done >= 100 {
                                     return;
                                 }
                                 timers.after(Duration::from_millis(20), {
@@ -92,7 +96,9 @@ impl App for Demo {
 
                 timers.after(Duration::from_millis(500), {
                     let open_next = open_next.clone();
+                    let report = report.clone();
                     move || {
+                        report("start");
                         if let Some(f) = open_next.borrow().as_ref() {
                             f();
                         }
@@ -177,12 +183,14 @@ fn open_root_for_selftest(
             Popups::get().close(id);
         }
     };
+    let started = Instant::now();
     let view = MenuWithAutoChild {
         items,
         palette,
         on_activate: Rc::new(|id| eprintln!("menu example: activated {id}")),
         on_dismiss_all: Rc::new(on_dismiss_all),
         parent_size: size,
+        started,
     };
     popups.open(
         PopupSpec {
@@ -374,6 +382,7 @@ struct MenuWithAutoChild {
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     parent_size: (f32, f32),
+    started: Instant,
 }
 
 impl App for MenuWithAutoChild {
@@ -383,7 +392,11 @@ impl App for MenuWithAutoChild {
         let handle = PopupHandle::get();
         let popups = Popups::get();
         let timers = Timers::get();
+        let started = self.started;
         use_hook(move || {
+            if std::env::var_os("MENU_POPUP_TIMING").is_some() {
+                eprintln!("menu_popup first-render: {:?}", started.elapsed());
+            }
             timers.after(Duration::from_millis(100), {
                 let handle = handle.clone();
                 let popups = popups.clone();

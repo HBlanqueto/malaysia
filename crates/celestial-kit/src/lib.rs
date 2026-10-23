@@ -9,6 +9,9 @@
 //! shaders with the shell, through `grade-graphics` (ADR 0024); each side owns
 //! its own EGL/GLES context.
 
+/// The process-wide Skia font state shared by measurement and rendering.
+mod fonts;
+
 /// The Wayland runner for Freya's core (ADR 0034): surfaces, EGL/Skia and
 /// input.
 pub mod platform;

@@ -32,8 +32,8 @@ use freya_core::{
 };
 use freya_engine::prelude::{
     ColorType, DirectContext, FontCollection, FontMgr, Format, FramebufferInfo, Interface,
-    Surface as SkiaSurface, SurfaceOrigin, TypefaceFontProvider, backend_render_targets,
-    direct_contexts, wrap_backend_render_target,
+    Surface as SkiaSurface, SurfaceOrigin, backend_render_targets, direct_contexts,
+    wrap_backend_render_target,
 };
 use futures_util::task::ArcWake;
 use khronos_egl::{self as egl, DynamicInstance};
@@ -505,24 +505,22 @@ pub enum RunError {
     Io(#[from] std::io::Error),
 }
 
-/// The EGL + Skia GL context of one surface.
-struct Graphics {
+/// The EGL + Skia GL state shared by every surface in the process.
+struct GraphicsShared {
     egl: DynamicInstance<egl::EGL1_5>,
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
-    window: Option<WlEglSurface>,
-    surface: Option<egl::Surface>,
-    gr: DirectContext,
-    skia: Option<SkiaSurface>,
-    size: (u32, u32),
+    gr: RefCell<DirectContext>,
+    font_collection: FontCollection,
+    font_manager: FontMgr,
 }
 
 // Safety: EGL display/context handles are used only on the thread that created
 // them (the calloop loop); the raw pointers are not shared across threads.
-unsafe impl Send for Graphics {}
+unsafe impl Send for GraphicsShared {}
 
-impl Graphics {
+impl GraphicsShared {
     fn new(display_ptr: *mut c_void) -> Result<Self, RunError> {
         // Safety: the caller passes the live `wl_display*` of the connection.
         let egl = unsafe { DynamicInstance::<egl::EGL1_5>::load_required() }
@@ -588,12 +586,44 @@ impl Graphics {
             display,
             config,
             context,
+            gr: RefCell::new(gr),
+            font_collection: crate::fonts::collection(),
+            font_manager: crate::fonts::manager(),
+        })
+    }
+}
+
+impl Drop for GraphicsShared {
+    fn drop(&mut self) {
+        let _ = self.egl.make_current(self.display, None, None, None);
+        self.gr.borrow_mut().abandon();
+        let _ = self.egl.destroy_context(self.display, self.context);
+    }
+}
+
+/// The per-surface EGL window/surface and Skia render target. The expensive
+/// process-wide state (EGL context, `DirectContext`, fonts) lives in
+/// [`GraphicsShared`].
+struct Graphics {
+    shared: Rc<GraphicsShared>,
+    window: Option<WlEglSurface>,
+    surface: Option<egl::Surface>,
+    skia: Option<SkiaSurface>,
+    size: (u32, u32),
+}
+
+// Safety: the EGLSurface is only used on the calloop thread.
+unsafe impl Send for Graphics {}
+
+impl Graphics {
+    fn new(shared: Rc<GraphicsShared>) -> Self {
+        Self {
+            shared,
             window: None,
             surface: None,
-            gr,
             skia: None,
             size: (0, 0),
-        })
+        }
     }
 
     /// Builds the `wl_egl_window` and EGL surface on a real configure, then
@@ -602,13 +632,14 @@ impl Graphics {
         if size.0 == 0 || size.1 == 0 {
             return Ok(());
         }
+        let shared = self.shared.clone();
         if self.window.is_none() || self.size != size {
             self.window = Some(
                 WlEglSurface::new(surface.id(), size.0 as i32, size.1 as i32)
                     .map_err(|_| RunError::Egl("wl_egl_window_create failed"))?,
             );
             if let Some(old) = self.surface.take() {
-                let _ = self.egl.destroy_surface(self.display, old);
+                let _ = shared.egl.destroy_surface(shared.display, old);
             }
             let window_ptr = self
                 .window
@@ -618,8 +649,9 @@ impl Graphics {
             // Safety: the wl_egl_window is owned here and lives as long as the
             // EGL surface.
             let egl_surface = unsafe {
-                self.egl
-                    .create_window_surface(self.display, self.config, window_ptr, None)
+                shared
+                    .egl
+                    .create_window_surface(shared.display, shared.config, window_ptr, None)
             }
             .map_err(|_| RunError::Egl("eglCreateWindowSurface failed"))?;
             self.surface = Some(egl_surface);
@@ -627,12 +659,13 @@ impl Graphics {
         }
 
         let egl_surface = *self.surface.as_ref().expect("surface created above");
-        self.egl
+        shared
+            .egl
             .make_current(
-                self.display,
+                shared.display,
                 Some(egl_surface),
                 Some(egl_surface),
-                Some(self.context),
+                Some(shared.context),
             )
             .map_err(|_| RunError::Egl("eglMakeCurrent failed"))?;
 
@@ -644,7 +677,7 @@ impl Graphics {
         let render_target =
             backend_render_targets::make_gl((size.0 as i32, size.1 as i32), 0, 0, fb_info);
         self.skia = wrap_backend_render_target(
-            &mut self.gr,
+            &mut shared.gr.borrow_mut(),
             &render_target,
             SurfaceOrigin::BottomLeft,
             ColorType::RGBA8888,
@@ -658,12 +691,13 @@ impl Graphics {
         let Some(surface) = self.surface else {
             return Err(RunError::Egl("no window surface"));
         };
-        self.egl
+        self.shared
+            .egl
             .make_current(
-                self.display,
+                self.shared.display,
                 Some(surface),
                 Some(surface),
-                Some(self.context),
+                Some(self.shared.context),
             )
             .map_err(|_| RunError::Egl("eglMakeCurrent failed"))
     }
@@ -672,20 +706,29 @@ impl Graphics {
         let Some(surface) = self.surface else {
             return Err(RunError::Egl("no window surface"));
         };
-        self.egl
-            .swap_buffers(self.display, surface)
+        self.shared
+            .egl
+            .swap_buffers(self.shared.display, surface)
             .map_err(|_| RunError::Egl("eglSwapBuffers failed"))
     }
 }
 
 impl Drop for Graphics {
     fn drop(&mut self) {
-        let _ = self.egl.make_current(self.display, None, None, None);
-        if let Some(surface) = self.surface.take() {
-            let _ = self.egl.destroy_surface(self.display, surface);
+        // Flush and release the GPU work that belonged to this surface before
+        // its EGL window disappears. The shared context outlives the popup.
+        let mut gr = self.shared.gr.borrow_mut();
+        if let Some(mut skia) = self.skia.take() {
+            gr.flush_and_submit_surface(&mut skia, None);
         }
-        let _ = self.egl.destroy_context(self.display, self.context);
-        self.gr.abandon();
+        gr.free_gpu_resources();
+        if let Some(surface) = self.surface.take() {
+            let _ = self
+                .shared
+                .egl
+                .destroy_surface(self.shared.display, surface);
+        }
+        self.window = None;
     }
 }
 
@@ -723,6 +766,8 @@ impl AppInstance {
         timers: Timers,
         popups: Popups,
         popup_handle: Option<PopupHandle>,
+        font_collection: FontCollection,
+        font_manager: FontMgr,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
         let mut runner = Runner::new(move || integration(app.clone()).into_element());
@@ -733,15 +778,6 @@ impl AppInstance {
         runner.provide_root_context(|| ticker);
         let animation_clock = runner.provide_root_context(AnimationClock::new);
         runner.provide_root_context(AssetCacher::create);
-
-        let mut font_collection = FontCollection::new();
-        let default_manager = FontMgr::default();
-        let custom_manager = FontMgr::custom_empty().unwrap_or_default();
-        let provider = TypefaceFontProvider::new();
-        let custom: FontMgr = provider.into();
-        font_collection.set_default_font_manager(default_manager, None);
-        font_collection.set_dynamic_font_manager(custom_manager.clone());
-        font_collection.paragraph_cache_mut().turn_on(false);
 
         let mut tree = Tree::default();
 
@@ -793,7 +829,7 @@ impl AppInstance {
             _animation_clock: animation_clock,
             ticker_sender,
             font_collection,
-            font_manager: custom,
+            font_manager,
             fallback_fonts: default_fonts(),
             scale_factor,
             size: Size2D::new(size.0 as f32, size.1 as f32),
@@ -1053,7 +1089,7 @@ struct SurfaceWindow {
     surface: WlSurface,
     role: SurfaceRole,
     popup: Option<PopupInfo>,
-    display_ptr: *mut c_void,
+    shared: Rc<GraphicsShared>,
     graphics: Option<Graphics>,
     app: AppInstance,
     logical_size: (u32, u32),
@@ -1095,13 +1131,7 @@ impl SurfaceWindow {
         self.surface.set_buffer_scale(scale.round().max(1.0) as i32);
 
         if self.graphics.is_none() {
-            match Graphics::new(self.display_ptr) {
-                Ok(graphics) => self.graphics = Some(graphics),
-                Err(error) => {
-                    tracing::error!("CelestialKit: {error}");
-                    return;
-                }
-            }
+            self.graphics = Some(Graphics::new(self.shared.clone()));
         }
         let Some(graphics) = self.graphics.as_mut() else {
             return;
@@ -1137,7 +1167,7 @@ impl SurfaceWindow {
             }
             .render();
         }
-        graphics.gr.flush_and_submit();
+        graphics.shared.gr.borrow_mut().flush_and_submit();
         if graphics.swap().is_err() {
             return false;
         }
@@ -1172,7 +1202,6 @@ fn stop_repeat(repeat: &mut Option<RepeatState>, generation: &mut u64) {
 }
 
 struct Shell {
-    conn: Connection,
     registry: RegistryState,
     compositor: CompositorState,
     output: OutputState,
@@ -1181,6 +1210,7 @@ struct Shell {
     session_lock: Option<SessionLockState>,
     active_lock: Option<SessionLock>,
     surfaces: Vec<SurfaceWindow>,
+    graphics: Rc<GraphicsShared>,
     seat: SeatState,
     pointer: Option<wl_pointer::WlPointer>,
     cursor_shape: Option<CursorShapeManager>,
@@ -1216,7 +1246,7 @@ struct Shell {
     last_input_serial: Rc<Cell<u32>>,
     popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
     popup_next_id: Rc<Cell<u64>>,
-    popup_count: Rc<Cell<usize>>,
+    surface_count: Rc<Cell<usize>>,
     window_context: Option<WindowContext>,
     decoration_manager: bool,
     decoration_warned: bool,
@@ -1367,7 +1397,6 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     }
     surface.commit();
 
-    let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
     let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
     let sender = make_sender(shell.queue.clone(), shell.ping.clone());
     let popups = Popups {
@@ -1377,7 +1406,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         last_serial: shell.last_input_serial.clone(),
         owner: surface.id(),
         current: None,
-        surface_count: shell.popup_count.clone(),
+        surface_count: shell.surface_count.clone(),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1395,12 +1424,14 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         },
         popups,
         None,
+        shell.graphics.font_collection.clone(),
+        shell.graphics.font_manager.clone(),
     );
     shell.surfaces.push(SurfaceWindow {
         surface: surface.clone(),
         role: SurfaceRole::Layer(layer_surface),
         popup: None,
-        display_ptr,
+        shared: shell.graphics.clone(),
         graphics: None,
         app: app_instance,
         logical_size: size.unwrap_or((0, 0)),
@@ -1410,6 +1441,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         needs_redraw: true,
         frame_pending: false,
     });
+    shell.surface_count.set(shell.surfaces.len());
 
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
@@ -1495,7 +1527,6 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         queue,
     });
 
-    let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
     let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
     let sender = make_sender(shell.queue.clone(), shell.ping.clone());
     let popups = Popups {
@@ -1505,7 +1536,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         last_serial: shell.last_input_serial.clone(),
         owner: surface.id(),
         current: None,
-        surface_count: shell.popup_count.clone(),
+        surface_count: shell.surface_count.clone(),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1523,12 +1554,14 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         },
         popups,
         None,
+        shell.graphics.font_collection.clone(),
+        shell.graphics.font_manager.clone(),
     );
     shell.surfaces.push(SurfaceWindow {
         surface,
         role: SurfaceRole::Window(window),
         popup: None,
-        display_ptr,
+        shared: shell.graphics.clone(),
         graphics: None,
         app: app_instance,
         logical_size: options.size,
@@ -1538,6 +1571,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         needs_redraw: true,
         frame_pending: false,
     });
+    shell.surface_count.set(shell.surfaces.len());
 
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
@@ -1666,7 +1700,6 @@ impl Shell {
             .ok();
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
         let shell = Shell {
-            conn: conn.clone(),
             registry: RegistryState::new(&globals),
             compositor: CompositorState::bind(&globals, &qh)
                 .map_err(|_| RunError::MissingGlobal("wl_compositor"))?,
@@ -1676,6 +1709,10 @@ impl Shell {
             session_lock: Some(SessionLockState::new(&globals, &qh)),
             active_lock: None,
             surfaces: Vec::new(),
+            graphics: {
+                let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
+                Rc::new(GraphicsShared::new(display_ptr)?)
+            },
             seat: SeatState::new(&globals, &qh),
             pointer: None,
             cursor_shape: CursorShapeManager::bind(&globals, &qh).ok(),
@@ -1714,7 +1751,7 @@ impl Shell {
             last_input_serial: Rc::new(Cell::new(0)),
             popup_commands: Rc::new(RefCell::new(Vec::new())),
             popup_next_id: Rc::new(Cell::new(1)),
-            popup_count: Rc::new(Cell::new(0)),
+            surface_count: Rc::new(Cell::new(0)),
             window_context: None,
             decoration_manager: globals.contents().with_list(|list| {
                 list.iter()
@@ -1740,7 +1777,6 @@ impl Shell {
         let lock = self.active_lock.as_ref()?;
         let surface = self.compositor.create_surface(qh);
         let lock_surface = lock.create_lock_surface(surface.clone(), output, qh);
-        let display_ptr = self.conn.display().id().as_ptr().cast::<c_void>();
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
         let sender = make_sender(self.queue.clone(), self.ping.clone());
         let popups = Popups {
@@ -1750,7 +1786,7 @@ impl Shell {
             last_serial: self.last_input_serial.clone(),
             owner: surface.id(),
             current: None,
-            surface_count: self.popup_count.clone(),
+            surface_count: self.surface_count.clone(),
         };
         let app = AppInstance::new(
             self.app.clone(),
@@ -1768,12 +1804,14 @@ impl Shell {
             },
             popups,
             None,
+            self.graphics.font_collection.clone(),
+            self.graphics.font_manager.clone(),
         );
         self.surfaces.push(SurfaceWindow {
             surface,
             role: SurfaceRole::Lock(lock_surface),
             popup: None,
-            display_ptr,
+            shared: self.graphics.clone(),
             graphics: None,
             app,
             logical_size: (0, 0),
@@ -1783,6 +1821,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
         });
+        self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
     }
 
@@ -1946,7 +1985,6 @@ impl Shell {
         }
         wl_surface.commit();
 
-        let display_ptr = self.conn.display().id().as_ptr().cast::<c_void>();
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
         let sender = make_sender(self.queue.clone(), self.ping.clone());
         let popups = Popups {
@@ -1956,7 +1994,7 @@ impl Shell {
             last_serial: self.last_input_serial.clone(),
             owner: wl_surface.id(),
             current: Some(id),
-            surface_count: self.popup_count.clone(),
+            surface_count: self.surface_count.clone(),
         };
         let handle = PopupHandle {
             id,
@@ -1978,6 +2016,8 @@ impl Shell {
             },
             popups,
             Some(handle),
+            self.graphics.font_collection.clone(),
+            self.graphics.font_manager.clone(),
         );
 
         self.surfaces.push(SurfaceWindow {
@@ -1988,7 +2028,7 @@ impl Shell {
                 parent,
                 on_dismissed: spec.on_dismissed,
             }),
-            display_ptr,
+            shared: self.graphics.clone(),
             graphics: None,
             app,
             logical_size: spec.size,
@@ -1998,7 +2038,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
         });
-        self.popup_count.set(self.popup_count.get() + 1);
+        self.surface_count.set(self.surfaces.len());
     }
 
     fn close_popup(&mut self, id: PopupId) {
@@ -2024,14 +2064,13 @@ impl Shell {
         else {
             return;
         };
-        self.popup_count
-            .set(self.popup_count.get().saturating_sub(1));
         if let Some(info) = self.surfaces[index].popup.take()
             && let Some(callback) = info.on_dismissed
         {
             callback();
         }
         self.surfaces.remove(index);
+        self.surface_count.set(self.surfaces.len());
     }
 
     fn poll_activation(&mut self) {
