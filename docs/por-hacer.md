@@ -101,9 +101,10 @@ semáforos de 12, tema claro por defecto.
 
 El RSS/PSS en reposo (wallpaper, menubar, dock) se midió en esta máquina con
 **GPU real AMD radeonsi/renoir** (`GL_RENDERER: AMD Radeon Graphics (radeonsi,
-renoir, ACO)`), **no con llvmpipe**. La propuesta de presentar la shell con
-Skia raster sigue sobre la mesa hasta medir en el ThinkPad; el peso observado
-es sobre todo `libLLVM`/`libgallium` compartidos, no ICU.
+renoir, ACO)`), **no con llvmpipe**. El PSS de ~47 MB ya reparte `libLLVM` entre
+los procesos y en reposo solo corren tres componentes; Skia raster cargaría a
+la CPU las animaciones y el redibujado de la shell. **Queda descartado.** Solo
+se revisará si el ThinkPad mide algo muy distinto.
 
 ## Después, en orden
 
