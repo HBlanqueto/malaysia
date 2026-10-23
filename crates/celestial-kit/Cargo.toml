@@ -35,3 +35,4 @@ xkbcommon.workspace = true
 
 [dev-dependencies]
 freya-testing.workspace = true
+png.workspace = true

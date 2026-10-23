@@ -5,6 +5,7 @@
 //! sharing one source.
 
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
+use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::Color;
 use yuki_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
 use yuki_design::{LockPalette, Rgba, SHELL_DARK, SHELL_DARK_TINT, SHELL_LIGHT, ShellPalette};
@@ -12,6 +13,13 @@ use yuki_design::{LockPalette, Rgba, SHELL_DARK, SHELL_DARK_TINT, SHELL_LIGHT, S
 fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+fn themed(name: &'static str, dark: bool, colors: ColorsSheet) -> Theme {
+    let mut theme = if dark { dark_theme() } else { light_theme() };
+    theme.name = name;
+    theme.colors = colors;
+    theme
 }
 
 fn sheet(background: Rgba, surface: Rgba, text: Rgba, accent: Rgba, border: Rgba) -> ColorsSheet {
@@ -67,6 +75,31 @@ pub fn shell_palette(resolved: &Resolved) -> ShellPalette {
     palette
 }
 
+/// The shell theme for an explicit scheme (tests and previews).
+pub fn for_scheme(dark: bool) -> Theme {
+    let appearance = yuki_appearance::AppearanceConfig {
+        color_scheme: if dark {
+            ColorScheme::Dark
+        } else {
+            ColorScheme::Light
+        },
+        ..Default::default()
+    };
+    let resolved = resolve(&appearance, None);
+    let palette = shell_palette(&resolved);
+    let text = palette.text;
+    let border = if dark { palette.tile } else { palette.bar };
+    themed(
+        if dark {
+            "neptunia-shell-dark"
+        } else {
+            "neptunia-shell-light"
+        },
+        dark,
+        sheet(palette.bar, palette.tile, text, palette.tile_active, border),
+    )
+}
+
 /// The theme for menubar/dock-style surfaces.
 pub fn shell() -> Theme {
     let resolved = resolved();
@@ -74,8 +107,9 @@ pub fn shell() -> Theme {
     let dark = matches!(resolved.scheme, ColorScheme::Dark | ColorScheme::DarkTint);
     let text = palette.text;
     let border = if dark { palette.tile } else { palette.bar };
-    Theme::new(
+    themed(
         "neptunia-shell",
+        dark,
         sheet(palette.bar, palette.tile, text, palette.tile_active, border),
     )
 }
@@ -84,8 +118,9 @@ pub fn shell() -> Theme {
 pub fn lock() -> Theme {
     let resolved = resolved();
     let palette = lock_palette(&resolved);
-    Theme::new(
+    themed(
         "neptunia-lock",
+        true,
         sheet(
             palette.bg_surface,
             palette.bg_surface,
