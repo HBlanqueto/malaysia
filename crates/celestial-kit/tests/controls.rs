@@ -44,7 +44,9 @@ impl App for Case {
     }
 }
 
-fn cases() -> Vec<(&'static str, fn() -> Element)> {
+type Control = (&'static str, fn() -> Element);
+
+fn cases() -> Vec<Control> {
     vec![
         ("button", button),
         ("switch", switch),
