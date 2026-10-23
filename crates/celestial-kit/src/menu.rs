@@ -275,10 +275,16 @@ impl App for MenuView {
             })
             .collect();
 
+        let inner_padding = (m.padding - m.border_width).max(0.0);
         let content = rect()
             .width(Size::fill())
             .height(Size::fill())
-            .padding(Gaps::new(m.padding, m.padding, m.padding, m.padding))
+            .padding(Gaps::new(
+                inner_padding,
+                inner_padding,
+                inner_padding,
+                inner_padding,
+            ))
             .background(rgba(m.bg))
             .corner_radius((m.radius - m.border_width).max(0.0))
             .border(
@@ -293,13 +299,14 @@ impl App for MenuView {
         let mut root = rect()
             .width(Size::px(size.0))
             .height(Size::px(size.1))
+            .background(rgba(m.outer_border))
             .corner_radius(m.radius)
-            .border(
-                Border::new()
-                    .width(m.border_width)
-                    .alignment(BorderAlignment::Inner)
-                    .fill(rgba(m.outer_border)),
-            )
+            .padding(Gaps::new(
+                m.border_width,
+                m.border_width,
+                m.border_width,
+                m.border_width,
+            ))
             .child(content);
         for family in FONT_FAMILIES {
             root = root.font_family(*family);

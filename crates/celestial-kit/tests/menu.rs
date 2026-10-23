@@ -177,10 +177,10 @@ fn assert_right_padding_is_background(png: &[u8], palette: MenuPalette, label: &
     let (width, height, pixels) = decode_bytes(png);
     let border = palette.border_width.ceil() as u32;
     let padding = palette.padding.ceil() as u32;
-    // Torin lays padding inside the border, so the text-free band is the last
-    // `padding` columns; the last `border` column is the frame itself.
+    // The outer and inner frames occupy the last `2 * border` columns; the
+    // text-free padding band is between the rows and those frames.
     let start = width.saturating_sub(padding);
-    let end = width.saturating_sub(border);
+    let end = width.saturating_sub(border * 2);
     let radius = palette.radius.ceil() as u32 + 1;
     let background = palette.bg.to_rgba8();
     let mut offenders = Vec::new();
@@ -203,6 +203,54 @@ fn assert_right_padding_is_background(png: &[u8], palette: MenuPalette, label: &
         offenders.len(),
         offenders.first()
     );
+}
+
+fn pixel_at(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+    let offset = ((y * width + x) * 4) as usize;
+    pixels[offset..offset + 4].try_into().unwrap()
+}
+
+fn luminance(pixel: [u8; 4]) -> f32 {
+    fn linear(channel: u8) -> f32 {
+        let channel = channel as f32 / 255.0;
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2])
+}
+
+fn assert_panel_has_double_border(dark: bool, png: &[u8], name: &str) {
+    let (width, _, pixels) = decode_bytes(png);
+    let x = width / 2;
+    let outer = pixel_at(&pixels, width, x, 0);
+    let inner = pixel_at(&pixels, width, x, 1);
+    let background = pixel_at(&pixels, width, x, 2);
+    if dark {
+        assert!(
+            outer[0] < 32 && outer[1] < 32 && outer[2] < 32,
+            "{name}: the outer border is not almost black: {outer:?}"
+        );
+        assert!(
+            luminance(inner) > luminance(background),
+            "{name}: the inner border is not lighter than the panel: {inner:?} vs {background:?}"
+        );
+    } else {
+        let gray = outer[..3].iter().max().unwrap() - outer[..3].iter().min().unwrap();
+        assert!(
+            gray <= 4 && luminance(outer) < luminance(inner),
+            "{name}: y=0 is not the gray outer border: {outer:?}"
+        );
+        assert!(
+            inner[..3]
+                .iter()
+                .zip(&background[..3])
+                .all(|(a, b)| a.abs_diff(*b) <= TOLERANCE),
+            "{name}: y=1 is not the panel background: {inner:?} vs {background:?}"
+        );
+    }
 }
 
 fn compare(golden: &Path, actual_png: &[u8], dark: bool, name: &str) {
@@ -254,6 +302,15 @@ fn menu_renders_accents_and_long_shortcuts_without_wrapping() {
         } else {
             compare(&path, &actual, dark, "accents");
         }
+    }
+}
+
+#[test]
+fn panels_paint_outer_and_inner_borders() {
+    for dark in [false, true] {
+        let theme = if dark { "dark" } else { "light" };
+        assert_panel_has_double_border(dark, &render(dark), &format!("{theme}/view"));
+        assert_panel_has_double_border(dark, &render_accents(dark), &format!("{theme}/accents"));
     }
 }
 
