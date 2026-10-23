@@ -1,12 +1,13 @@
-# Skia precompilado (skia-safe/skia-bindings 0.93) en su propia derivación, para
-# que el build de Yuki lo reutilice en vez de reconstruirlo en cada cambio.
+# Skia precompilado para freya-skia-bindings 0.98.0 (el que usa freya-engine
+# 0.4.3) en su propia derivación, para que el build de Yuki lo reutilice en vez
+# de reconstruirlo en cada cambio.
 #
-# Copia adaptada del patrón de Otto (MIT, Riccardo Canalicchio): compila el
-# crate mínimo de nix/skia-prebuild con las features que usará CelestialKit
-# (`all-linux` + defaults) y empaqueta lo que skia-bindings deja en
-# `$OUT_DIR/skia` como un .tar.gz. Los consumidores lo usan con
-# `SKIA_BINARIES_URL = file://…`; el build.rs de skia-bindings solo entonces
-# baja «binarios» en vez de compilar Skia.
+# Compila el crate mínimo de nix/skia-prebuild (que depende de freya-engine
+# =0.4.3) y empaqueta lo que freya-skia-bindings deja en `$OUT_DIR/skia` como
+# un .tar.gz. Los consumidores lo usan con `SKIA_BINARIES_URL = file://…`; el
+# build.rs de skia-bindings solo entonces baja «binarios» en vez de compilar
+# Skia. La etiqueta de Skia y el conjunto de features salen del propio crate:
+# `[package.metadata] skia = "m148-0.97.0"` y las deps de freya-engine en Linux.
 {
   lib,
   pkgs,
@@ -26,15 +27,15 @@
 let
   deps = import ./skia-deps.nix { inherit pkgs; };
 
-  # Árbol de Skia que espera skia-bindings 0.93 (tag y externals: ver
-  # skia-bindings/Cargo.toml#package.metadata y skia/DEPS).
+  # Árbol de Skia que espera freya-skia-bindings 0.98.0
+  # (tag y externals: ver skia-bindings/Cargo.toml#package.metadata y skia/DEPS).
   skia-source =
     let
       repo = fetchFromGitHub {
         owner = "rust-skia";
         repo = "skia";
-        tag = "m145-0.92.0";
-        hash = "sha256-9N780AwheKBJRcZC4l/uWFNq+oOyoNp4M6dJAVVAFeo=";
+        tag = "m148-0.97.0";
+        hash = "sha256-uFnYX6ZDg+cJwLyCe6IGB6M3aCyI/+q2aYP4JfHm544=";
       };
       externals = linkFarm "skia-externals" (
         lib.mapAttrsToList
@@ -50,7 +51,7 @@ let
 in
 rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
   pname = "skia-binaries";
-  version = "0.93.1";
+  version = "0.98.0";
 
   src = ./skia-prebuild;
   cargoLock.lockFile = ./skia-prebuild/Cargo.lock;
@@ -76,9 +77,9 @@ rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
   installPhase = ''
     runHook preInstall
 
-    skia_out=$(find . -type d -path '*/release/build/skia-bindings-*/out/skia' | head -n1)
+    skia_out=$(find . -type d -path '*/release/build/freya-skia-bindings-*/out/skia' | head -n1)
     if [ -z "$skia_out" ]; then
-      echo "skia-binaries: no encuentro el OUT_DIR/skia de skia-bindings" >&2
+      echo "skia-binaries: no encuentro el OUT_DIR/skia de freya-skia-bindings" >&2
       exit 1
     fi
 
@@ -92,13 +93,16 @@ rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
     if [ -f "$skia_out/icudtl.dat" ]; then
       cp "$skia_out/icudtl.dat" $out/skia-binaries/
     fi
+    # Mismo formato que publica rust-skia: skia-binaries-{key}.tar.gz con el
+    # directorio skia-binaries dentro. La URL es local, así que el nombre no
+    # necesita la clave; el contenido sí debe coincidir con las features.
     tar -czf $out/skia-binaries.tar.gz -C $out skia-binaries
     rm -rf $out/skia-binaries
 
     # Features con las que se compiló, para que el preBuild del paquete
-    # compruebe que las de CelestialKit no cambiaron.
-    cargo tree --offline -e features -i skia-bindings --prefix none \
-      | sed -n 's/^skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > $out/features.txt
+    # compruebe que las de freya-engine/CelestialKit no cambiaron.
+    cargo tree --offline -e features -i freya-skia-bindings --prefix none \
+      | sed -n 's/^freya-skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > $out/features.txt
 
     runHook postInstall
   '';
@@ -108,7 +112,7 @@ rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
   disallowedReferences = [ skia-source ];
 
   meta = {
-    description = "Prebuilt Skia for skia-safe/skia-bindings 0.93";
+    description = "Prebuilt Skia for freya-skia-bindings 0.98.0";
     license = lib.licenses.bsd3;
     platforms = [ "x86_64-linux" "aarch64-linux" ];
   };

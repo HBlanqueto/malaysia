@@ -1,7 +1,7 @@
 # Crate mínimo que solo existe para que nix/skia.nix compile Skia (vía
-# skia-bindings) una vez, en su propia derivación. Las features de skia-safe
-# deben coincidir con las que usará CelestialKit (all-linux + defaults); el
-# preBuild del paquete lo comprueba contra $out/features.txt.
+# freya-skia-bindings) una vez, en su propia derivación. freya-engine =0.4.3
+# activa en Linux exactamente las features que usará CelestialKit; el preBuild
+# del paquete las comprueba contra $out/features.txt.
 [package]
 name = "skia-prebuild"
 version = "0.0.0"
@@ -9,9 +9,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-skia-safe = { version = "=0.93", features = ["all-linux"] }
-# Directa, para que el árbol de features coincida con el de CelestialKit.
-skia-bindings = "=0.93"
+freya-engine = "=0.4.3"
+# Pins the exact bindings version the Nix derivation and the guard expect.
+freya-skia-safe = "=0.98.0"
+freya-skia-bindings = "=0.98.0"
 
 [lib]
 path = "src/lib.rs"

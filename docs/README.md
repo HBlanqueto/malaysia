@@ -94,6 +94,25 @@ después Skia y las dependencias salen de la caché de Nix. Los checks del flake
 (`design-tokens`, `neptunia-generated`) usan un `lib.fileset` reducido, no el
 árbol entero.
 
+### Regenerar Skia al cambiar de versión de Freya
+
+Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
+`freya-engine` 0.4.3. Al subir Freya:
+
+1. Actualiza `nix/skia-prebuild/Cargo.toml` (versiones exactas de
+   `freya-engine`, `freya-skia-safe` y `freya-skia-bindings`) y regenera su
+   `Cargo.lock` con `cargo generate-lockfile` dentro de `nix/skia-prebuild`.
+2. Lee la etiqueta de Skia en el `Cargo.toml` del nuevo
+   `freya-skia-bindings` (`[package.metadata] skia`) y actualiza `tag` y `hash`
+   de `skia-source` en `nix/skia.nix`.
+3. Regenera `nix/skia-externals.json` desde el `DEPS` de esa etiqueta y el hash
+   de `nix/skia-deps.nix` si cambiaron las bibliotecas del sistema.
+4. Ajusta el número de versión del guard en `flake.nix` y compila
+   `nix build .#default`. Si las features no coinciden, el `preBuild` muestra
+   el `diff` contra `${skia}/features.txt`.
+5. En desarrollo, `SKIA_BINARIES_URL` apunta al `.tar.gz` de la derivación; sin
+   red, el build de Skia no se intenta.
+
 ## Cómo leerlo
 
 1. **[`yuki.md`](yuki.md)** — qué es el proyecto y cómo compilarlo/ejecutarlo.

@@ -44,6 +44,10 @@
           ];
         };
         skia = pkgs.callPackage ./nix/skia.nix { };
+        # Skia only enters the build when the workspace actually pulls
+        # freya-skia-bindings (CelestialKit on Freya). Until then the package
+        # and the dev shell must not advertise a prebuild that nothing uses.
+        hasFreyaSkia = lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         commonArgs = {
           pname = "yuki";
           version = "0.1.0";
@@ -60,6 +64,8 @@
           # (ADR 0007). The package build is a sanctioned, hermetic build path.
           env = {
             YUKI_DEV_SHELL = "1";
+          }
+          // lib.optionalAttrs hasFreyaSkia {
             SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
           };
 
@@ -74,25 +80,24 @@
           nativeBuildInputs = with pkgs; [ diffutils pkg-config makeWrapper ];
           buildInputs = nativeDeps pkgs;
 
-          # Skia is prebuilt. When CelestialKit uses it, this fails if its
-          # version or features drift from nix/skia-prebuild; today it is a
-          # no-op.
+          # Skia is prebuilt for freya-skia-bindings 0.98.0. This fails if the
+          # version or the resolved feature set drifts from nix/skia-prebuild.
           preBuild = ''
-            if cargo tree --offline -i skia-bindings --depth 0 --prefix none >/dev/null 2>&1; then
-              version="$(cargo tree --offline -i skia-bindings --depth 0 --prefix none \
-                | sed -n 's/.*skia-bindings v\([0-9.]*\).*/\1/p' | head -n1)"
-              if [ "$version" != "0.93.1" ] && [ "$version" != "0.93.0" ]; then
-                echo "skia-bindings $version no coincide con la derivación 0.93" >&2
+            if cargo tree --offline -i freya-skia-bindings --depth 0 --prefix none >/dev/null 2>&1; then
+              version="$(cargo tree --offline -i freya-skia-bindings --depth 0 --prefix none \
+                | sed -n 's/.*freya-skia-bindings v\([0-9.]*\).*/\1/p' | head -n1)"
+              if [ "$version" != "0.98.0" ]; then
+                echo "freya-skia-bindings $version no coincide con la derivación 0.98.0" >&2
                 exit 1
               fi
-              cargo tree --offline -e features -i skia-bindings --prefix none \
-                | sed -n 's/^skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > skia-features.txt
+              cargo tree --offline -e features -i freya-skia-bindings --prefix none \
+                | sed -n 's/^freya-skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > skia-features.txt
               if ! diff -u ${skia}/features.txt skia-features.txt; then
-                echo "las features de Skia cambiaron: actualiza nix/skia-prebuild/Cargo.toml" >&2
+                echo "las features de Skia cambiaron: actualiza nix/skia-prebuild" >&2
                 exit 1
               fi
             else
-              echo "skia-bindings no está en el grafo todavía; Skia precompilado queda listo" >&2
+              echo "freya-skia-bindings no está en el grafo todavía; Skia precompilado queda listo" >&2
             fi
           '';
         };
@@ -194,6 +199,7 @@
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
         skia = pkgs.callPackage ./nix/skia.nix { };
+        hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         # weston with its simple test clients enabled. nixpkgs builds weston
         # with `-Dsimple-clients=`, so `weston-simple-egl`, `weston-simple-shm`
         # and `weston-simple-dmabuf-feedback` do not exist; Bloque 7 drives
@@ -252,7 +258,6 @@
           # where the linker flag above would be missing and the binary would
           # be linked differently (ADR 0007).
           YUKI_DEV_SHELL = "1";
-          SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
 
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.
@@ -265,6 +270,8 @@
             export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri''${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"
             export GBM_BACKENDS_PATH="${pkgs.mesa}/lib/gbm''${GBM_BACKENDS_PATH:+:$GBM_BACKENDS_PATH}"
           '';
+        } // pkgs.lib.optionalAttrs hasFreyaSkia {
+          SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
         };
       });
     };
