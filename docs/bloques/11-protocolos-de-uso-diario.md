@@ -1,7 +1,8 @@
 # Bloque 11 — Protocolos de uso diario
 
-Estado: **parcial.** Empezado por `wp_presentation`; faltan el resto de
-protocolos y la captura.
+Estado: **aceptado en anidado el 2026-10-23** (winit y probes). Falta repetir
+la presentación en DRM real; `drm-vkms` ya ejecuta el probe y exige `refresh`
+no nulo y `Vsync`, pero no se pudo lanzar en esta máquina por falta de `sudo`.
 
 ## Implementado
 
@@ -47,14 +48,17 @@ protocolos y la captura.
   `ext-image-copy-capture-v1`. El compositor anuncia las constraints de la
   sesión (tamaño del modo, `Argb8888`/`Xrgb8888` y, si el backend encontró un
   render node, los formatos dmabuf con ese nodo). `frame()` encola la petición
-  (el handler no ve el renderer, ADR 0012) y el backend la completa en el
-  siguiente frame: re-renderiza offscreen con `Transform::Flipped` (cancela el
-  framebuffer GL bottom-up) y copia a un SHM por filas o renderiza directo al
-  dmabuf del cliente. Probe: `./dev.sh screencopy`.
+  y guarda el flag `paint_cursors` de la sesión (el handler no ve el renderer,
+  ADR 0012); el backend la completa en el siguiente frame: re-renderiza
+  offscreen con `Transform::Flipped` y copia a un SHM por filas o renderiza
+  directo al dmabuf del cliente, incluyendo o no el cursor según ese flag.
+  Probe: `./dev.sh screencopy`, que alterna SHM/dmabuf y cursor activado/omitido.
 - **Captura de ventana**: `ext-foreign-toplevel-image-capture-source-v1`. La
   fuente guarda el `WindowId` en el `ext-foreign-toplevel-list` handle y el
-  compositor dibuja solo la superficie del cliente, a su tamaño usable. Probe:
-  `./dev.sh screencopy-window`.
+  compositor dibuja solo la superficie del cliente, a su tamaño usable. En una
+  ventana SSD la titlebar de Yuki queda **fuera** de la captura: con una ventana
+  de 1280×800 y titlebar de 32 px, el contenido configurado y el frame capturado
+  miden 1280×768. Probe: `./dev.sh screencopy-window` (SHM y dmabuf).
 
 - **Capturas al estilo macOS** (Command = Super en Linux):
   - `Shift+Super+3`: captura la **pantalla completa**.
@@ -94,34 +98,33 @@ protocolos y la captura.
   como macOS) y las demás opciones de `screenshot.domain` quedan reservadas.
 - Opcional: `keyboard-shortcuts-inhibit` para escritorio remoto.
 
-## Aceptación pendiente
+## Aceptación (anidado, 2026-10-23)
 
-- Un cliente con `wp_presentation` recibe `presented` con un timestamp
-  monótono y un `refresh` razonable: probado con `./dev.sh presentation`
-  (timestamp monótono, `refresh` 16666000 ns, flag `Vsync`).
-- Una app activa otra con un token válido y una ventana existente sube y
-  recibe foco; un token viejo, sin foco o sin serial no activa: la vía positiva
-  está probada con `./dev.sh activation` (dos ventanas del mismo cliente, token
-  con el serial del press scriptado y foco vuelve a la primera); los rechazos
-  tienen tests unitarios.
-- Un cliente pide `cursor-shape` y el cursor cambia sin enviar un buffer;
-  wezterm pide `Text` en el primer enter y Yuki lo aplica.
-- Al agitar el ratón el cursor crece con animación suave hasta 3× y, al
-  dejar de moverse, empieza a encogerse de inmediato.
-- Un juego confina/bloquea el puntero y `relative-pointer` da deltas: probado
-  con `./dev.sh pointers` (`pointer_lock` recibe `locked` sobre la superficie
-  con foco; `relative_pointer` recibe un delta no nulo).
-- La captura entrega frames: probado con `./dev.sh screencopy` (salida, SHM,
-  píxel central igual al color de fondo y no en blanco) y
-  `./dev.sh screencopy-window` (ventana, píxel central igual al contenido gris
-  de la ventana). Las constraints anuncian dmabuf con el render node, pero
-  falta un cliente que capture por dmabuf.
-- Falta la captura con salida rotada (hoy se ignora la rotación).
-- PrintScreen probado con `YUKI_TEST_SCREENSHOT=1` y `YUKI_SCREENSHOT_DIR`:
-  PNG RGBA de la ventana (1248×800 con foot), contenido correcto y guardado en
-  el directorio indicado.
-- Región probada con `YUKI_TEST_SCREENSHOT=region`: PNG de 300×200, el
-  rectángulo exacto pedido.
+- **`wp_presentation`**: `./dev.sh presentation` commitea tres frames (dos con
+  daño y uno sin daño) y pide feedback en cada uno. En winit los tres llegan
+  como `presented`, con timestamps crecientes (`0.163826178`, `0.167814207`,
+  `0.185793123`), `refresh` 16666000 ns, secuencia creciente y `Vsync`. El
+  frame sin daño también recibió respuesta (presented), que es una de las dos
+  salidas aceptadas; nunca se quedó sin feedback.
+- **`xdg-activation`**: `./dev.sh activation` usa dos procesos. A mapea
+  primero, recibe el clic scriptado y pide cinco tokens con foco; B mapea
+  después. B activa su propia ventana con el token válido y recibe el foco. Un
+  token sin serial, un token pedido por la superficie sin foco de B y un token
+  usado después de 31 s no mueven el foco a B.
+- **Captura de salida**: `./dev.sh screencopy` pasa las cuatro combinaciones
+  SHM/dmabuf × cursor incluido/omitido. La escena está vacía, así que el probe
+  compara los píxeles con el fondo: sin `paint_cursors` hay 0 píxeles distintos;
+  con el flag hay 185 (el cursor). La ruta dmabuf usa `/dev/udmabuf` con el
+  formato y modificador lineales anunciados por la sesión.
+- **Captura de ventana**: `./dev.sh screencopy-window` pasa por SHM y dmabuf y
+  verifica el gris del contenido. Con `CAPTURE_SSD=1` la ventana pide
+  decoración de servidor: el contenido se configura a 1280×768 y el frame
+  capturado mide exactamente 1280×768, sin los 32 px de titlebar.
+- **Pendiente en vkms/panel real**: `./dev.sh drm-vkms` compila y ejecuta
+  `presentation` con `PRESENTATION_REQUIRE_VSYNC=1`, pero no se pudo lanzar aquí
+  porque la máquina pide contraseña para `sudo`. Falta confirmar en el ThinkPad
+  que el DRM real entrega `refresh` y `Vsync` en vblank.
+- **Pendiente**: captura con salida rotada (hoy se ignora la rotación).
 
 ## Notas
 
@@ -131,20 +134,21 @@ protocolos y la captura.
   `hypr-dynamic-cursors` (GPL-3.0, por eso no se copia código), con 4×,
   crecimiento mientras sigues agitando y 2 s de espera tras parar. Yuki sigue
   el comportamiento de macOS: 3× y encogido inmediato.
-- `wp_presentation` se prueba con `./dev.sh presentation`: el probe pide
-  feedback, commitea y comprueba que llega `presented` con timestamp monótono y
-  `refresh`. No cubre `discarded` (haría falta un frame sin daño).
-- `xdg-activation` se prueba con `./dev.sh activation`: dos ventanas del mismo
-  cliente, token con el serial del press scriptado, y foco vuelve a la primera.
-  El rechazo (sin foco, serial viejo o fabricado) lo cubren los tests unitarios
-  de la política, no el probe.
+- `wp_presentation` se prueba con `./dev.sh presentation`: pide feedback en
+  cada commit, imprime timestamp, refresh, secuencia y flags, y acepta
+  `discarded` en el frame sin daño. En `drm-vkms` exige además refresh no nulo y
+  `Vsync`.
+- `xdg-activation` se prueba con `./dev.sh activation`: dos clientes distintos,
+  token con el serial del press scriptado, y los tres rechazos (sin serial, sin
+  foco y caducado) se ejercitan contra el compositor, no solo en tests puros.
 - El gesto de agitar no se puede provocar con el input scriptado actual; el
   detector y sus umbrales tienen tests unitarios, pero falta confirmación
   visual en el panel real.
 - La captura dmabuf renderiza directo al buffer del cliente con
-  `renderer.bind(&mut dmabuf)`; no hay un cliente que la ejercite todavía, así
-  que esa ruta está implementada pero sin probar. La de SHM sí pasa por
-  `./dev.sh screencopy` y `./dev.sh screencopy-window`.
+  `renderer.bind(&mut dmabuf)`; `./dev.sh screencopy` y
+  `./dev.sh screencopy-window` la ejercitan con un buffer lineal creado por
+  `/dev/udmabuf`. El probe solo acepta modificador lineal; si el compositor no
+  anuncia ninguno, falla con un mensaje explícito.
 - El volcado PNG de depuración (`SIGUSR1`) sigue escribiendo en
   `$XDG_RUNTIME_DIR/yuki`; no es la vía de guardado del usuario. El portal
   (Bloque 12a) usará `yuki::xdg::desktop_dir()` para el destino por defecto de

@@ -150,12 +150,13 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 11 — Protocolos de uso diario
 
-Estado: **casi cerrado**; falta el probe de presentación y la aceptación.
+Estado: **aceptado en anidado el 2026-10-23**; falta la presentación en vkms o
+panel real (el probe existe y `drm-vkms` lo ejecuta con `Vsync` obligatorio).
 
-- **`wp_presentation` — hecho.** Global v2 con `CLOCK_MONOTONIC`, feedback
-  `presented`/`discarded` tras presentar el frame y en `vblank` para DRM. Ver
-  `bloques/11-protocolos-de-uso-diario.md`; falta el probe de un cliente que
-  pida feedback.
+- **`wp_presentation` — hecho y probado en anidado.** Global v2 con
+  `CLOCK_MONOTONIC`, feedback `presented`/`discarded` tras presentar el frame y
+  en `vblank` para DRM. `./dev.sh presentation` cubre timestamps crecientes y
+  commit sin daño. Ver `bloques/11-protocolos-de-uso-diario.md`.
 - **`xdg-activation-v1` — hecho.** Política estricta: superficie enfocada,
   serial del último teclado/botón y token de menos de 30 s; activa/restaura la
   ventana.
@@ -180,10 +181,11 @@ Estado: **casi cerrado**; falta el probe de presentación y la aceptación.
   Bloque 7.1) sigue como herramienta de desarrollo.
 - Opcional para uso diario: `keyboard-shortcuts-inhibit` (escritorio remoto).
   No bloquea la aceptación del Bloque 11.
-- Aceptación: una app de captura puede pedir un monitor o una ventana, los
-  frames llegan por SHM o dmabuf y el cursor se dibuja o se omite según la
-  petición; `wp_presentation` entrega timestamps; `xdg-activation` activa una
-  ventana con token válido.
+- Aceptación en anidado (2026-10-23): SHM y dmabuf, cursor incluido/omitido,
+  ventana con y sin titlebar SSD, `wp_presentation` con timestamps crecientes y
+  `xdg-activation` con token válido y tres rechazos. Ver
+  `bloques/11-protocolos-de-uso-diario.md`. Pendiente: repetir presentation en
+  vkms/DRM real.
 
 ## Bloque 12 — Portales y servicios de escritorio
 
