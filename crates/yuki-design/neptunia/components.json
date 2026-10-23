@@ -343,6 +343,22 @@
         "label-font-size": 16,
         "mask-font-size": 22,
         "status-font-size": 14
+      },
+      "launcher": {
+        "width": 560,
+        "height": 460,
+        "padding": 12,
+        "search-height": 44,
+        "result-height": 44,
+        "result-gap": 4,
+        "corner-radius": 16,
+        "icon-size": 32,
+        "font-size": 14,
+        "subtitle-font-size": 12,
+        "max-results": 8,
+        "open-duration": 180,
+        "close-duration": 120,
+        "scale-from": 0.96
       }
     }
   },

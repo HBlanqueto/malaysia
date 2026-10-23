@@ -718,6 +718,79 @@ fn emit_metrics(out: &mut String, components: &Value) {
         }
     }
 
+    for (name, path) in [
+        ("LAUNCHER_WIDTH", "components.shell.launcher.width"),
+        ("LAUNCHER_HEIGHT", "components.shell.launcher.height"),
+        ("LAUNCHER_PADDING", "components.shell.launcher.padding"),
+        (
+            "LAUNCHER_SEARCH_HEIGHT",
+            "components.shell.launcher.search-height",
+        ),
+        (
+            "LAUNCHER_RESULT_HEIGHT",
+            "components.shell.launcher.result-height",
+        ),
+        (
+            "LAUNCHER_RESULT_GAP",
+            "components.shell.launcher.result-gap",
+        ),
+        ("LAUNCHER_ICON_SIZE", "components.shell.launcher.icon-size"),
+        (
+            "LAUNCHER_MAX_RESULTS",
+            "components.shell.launcher.max-results",
+        ),
+    ] {
+        const_doc(out, name, &format!("Neptunia launcher metric `{path}`."));
+        out.push_str(&format!(
+            ": i32 = {};\n\n",
+            integer(components, path, COMPONENTS)
+        ));
+    }
+    for (name, ty, path) in [
+        (
+            "LAUNCHER_CORNER_RADIUS",
+            "f32",
+            "components.shell.launcher.corner-radius",
+        ),
+        (
+            "LAUNCHER_FONT_SIZE",
+            "f32",
+            "components.shell.launcher.font-size",
+        ),
+        (
+            "LAUNCHER_SUBTITLE_FONT_SIZE",
+            "f32",
+            "components.shell.launcher.subtitle-font-size",
+        ),
+        (
+            "LAUNCHER_SCALE_FROM",
+            "f32",
+            "components.shell.launcher.scale-from",
+        ),
+    ] {
+        const_doc(out, name, &format!("Neptunia launcher metric `{path}`."));
+        out.push_str(&format!(
+            ": {ty} = {};\n\n",
+            float(number(components, path, COMPONENTS))
+        ));
+    }
+    for (name, path) in [
+        (
+            "LAUNCHER_OPEN_MS",
+            "components.shell.launcher.open-duration",
+        ),
+        (
+            "LAUNCHER_CLOSE_MS",
+            "components.shell.launcher.close-duration",
+        ),
+    ] {
+        const_doc(out, name, &format!("Neptunia launcher metric `{path}`."));
+        out.push_str(&format!(
+            ": u64 = {};\n\n",
+            integer(components, path, COMPONENTS)
+        ));
+    }
+
     let tilesize = number(components, "components.shell.dock.tilesize", COMPONENTS) as i64;
     let padding = number(components, "components.shell.dock.padding", COMPONENTS) as i64;
     const_doc(

@@ -62,6 +62,10 @@ use sctk::{
         protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{
             Shape as CursorShape, WpCursorShapeDeviceV1,
         },
+        protocols::xdg::activation::v1::client::{
+            xdg_activation_token_v1::{self, XdgActivationTokenV1},
+            xdg_activation_v1::XdgActivationV1,
+        },
         protocols_wlr::{
             foreign_toplevel::v1::client::{
                 zwlr_foreign_toplevel_handle_v1::{
@@ -397,6 +401,7 @@ impl AppInstance {
         waker: Waker,
         toplevels: Option<Toplevels>,
         session_unlock: Option<SessionUnlock>,
+        activation: Activation,
         timers: Timers,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
@@ -440,6 +445,7 @@ impl AppInstance {
         if let Some(unlock) = session_unlock {
             runner.provide_root_context(move || unlock);
         }
+        runner.provide_root_context(move || activation);
         runner.provide_root_context(move || timers);
         runner.provide_root_context(|| State::create(None::<Box<dyn ClipboardProvider>>));
         runner.provide_root_context(|| tree.accessibility_generator.clone());
@@ -467,6 +473,12 @@ impl AppInstance {
             needs_layout: true,
             waker,
         }
+    }
+
+    /// Mirrors the compositor's keyboard focus into the Freya platform state.
+    fn set_focused(&mut self, focused: bool) {
+        self.platform.is_app_focused.set(focused);
+        self.waker.wake_by_ref();
     }
 
     fn resize(&mut self, size: (u32, u32), scale_factor: f64) {
@@ -660,6 +672,34 @@ impl Timers {
     }
 }
 
+type ActivationCallback = Box<dyn Fn(Option<String>)>;
+type ActivationQueue = Rc<RefCell<Vec<ActivationCallback>>>;
+
+/// Requests an `xdg-activation-v1` token for the next launched app.
+///
+/// The compositor only accepts a token created by the client that currently
+/// has keyboard focus and that carries the last key press serial. The runner
+/// owns both, so the app asks here and receives the token (or `None` when the
+/// protocol is unavailable) in a callback.
+#[derive(Clone)]
+pub struct Activation {
+    queue: ActivationQueue,
+    ping: Ping,
+}
+
+impl Activation {
+    pub fn get() -> Self {
+        freya_core::prelude::consume_root_context()
+    }
+
+    /// Queues one token request. The callback runs on the Wayland loop with the
+    /// token string, or with `None` if the compositor does not support it.
+    pub fn request(&self, callback: impl Fn(Option<String>) + 'static) {
+        self.queue.borrow_mut().push(Box::new(callback));
+        self.ping.ping();
+    }
+}
+
 /// A surface plus its Freya app and GL context.
 struct SurfaceWindow {
     surface: WlSurface,
@@ -816,6 +856,11 @@ struct Shell {
     session_unlock: Option<SessionUnlock>,
     session_locked: bool,
     timers: TimerQueue,
+    activation: Activation,
+    activation_global: Option<XdgActivationV1>,
+    activation_callbacks: Vec<Option<ActivationCallback>>,
+    activation_seat: Option<wl_seat::WlSeat>,
+    last_key_serial: u32,
 }
 
 fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(UserEvent)> {
@@ -910,6 +955,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         waker,
         Some(shell.toplevels.clone()),
         None,
+        shell.activation.clone(),
         Timers {
             queue: shell.timers.clone(),
             ping: shell.ping.clone(),
@@ -1063,6 +1109,7 @@ impl Shell {
         let foreign_mgmt = globals
             .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 3..=3, ())
             .ok();
+        let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
         let shell = Shell {
             conn: conn.clone(),
             registry: RegistryState::new(&globals),
@@ -1090,7 +1137,7 @@ impl Shell {
             needs_exit: false,
             request_redraw_all: false,
             queue,
-            ping,
+            ping: ping.clone(),
             ping_source: Some(ping_source),
             qh: qh.clone(),
             _foreign_list: foreign_list,
@@ -1100,6 +1147,14 @@ impl Shell {
             session_unlock: None,
             session_locked: false,
             timers: Rc::new(RefCell::new(Vec::new())),
+            activation: Activation {
+                queue: Rc::new(RefCell::new(Vec::new())),
+                ping: ping.clone(),
+            },
+            activation_global,
+            activation_callbacks: Vec::new(),
+            activation_seat: None,
+            last_key_serial: 0,
         };
         Ok((conn, event_queue, qh, shell))
     }
@@ -1130,6 +1185,7 @@ impl Shell {
             waker,
             Some(self.toplevels.clone()),
             self.session_unlock.clone(),
+            self.activation.clone(),
             Timers {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
@@ -1163,6 +1219,31 @@ impl Shell {
             }
         }
         self.request_redraw_all = false;
+        self.poll_activation();
+    }
+
+    fn poll_activation(&mut self) {
+        let requests = std::mem::take(&mut *self.activation.queue.borrow_mut());
+        for callback in requests {
+            let (Some(global), Some(seat), Some(window)) = (
+                self.activation_global.as_ref(),
+                self.activation_seat.as_ref(),
+                self.surfaces.first(),
+            ) else {
+                callback(None);
+                continue;
+            };
+            if self.last_key_serial == 0 {
+                callback(None);
+                continue;
+            }
+            let id = self.activation_callbacks.len();
+            self.activation_callbacks.push(Some(callback));
+            let token = global.get_activation_token(&self.qh, id);
+            token.set_serial(self.last_key_serial, seat);
+            token.set_surface(&window.surface);
+            token.commit();
+        }
     }
 
     fn sync_toplevels(&mut self) {
@@ -1498,6 +1579,9 @@ impl KeyboardHandler for Shell {
         _: &[Keysym],
     ) {
         self.keyboard_focus = Some(surface.clone());
+        if let Some(index) = self.surface_for(surface) {
+            self.surfaces[index].app.set_focused(true);
+        }
     }
 
     fn leave(
@@ -1510,6 +1594,9 @@ impl KeyboardHandler for Shell {
     ) {
         if self.keyboard_focus.as_ref() == Some(surface) {
             self.keyboard_focus = None;
+            if let Some(index) = self.surface_for(surface) {
+                self.surfaces[index].app.set_focused(false);
+            }
         }
         stop_repeat(&mut self.repeat, &mut self.repeat_generation);
     }
@@ -1519,9 +1606,10 @@ impl KeyboardHandler for Shell {
         _: &Connection,
         qh: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        _: u32,
+        serial: u32,
         event: KeyEvent,
     ) {
+        self.last_key_serial = serial;
         self.key_event(qh, event.clone(), KeyboardEventName::KeyDown);
         let (delay, rate) = self.repeat_timing();
         self.repeat_generation = self.repeat_generation.wrapping_add(1);
@@ -1890,6 +1978,38 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, (), Shell> for Shell {
 
 fn physical_point(position: (f64, f64), scale: f64) -> CursorPoint {
     CursorPoint::from((position.0 * scale, position.1 * scale))
+}
+
+impl Dispatch<XdgActivationV1, ()> for Shell {
+    fn event(
+        _: &mut Self,
+        _: &XdgActivationV1,
+        _: <XdgActivationV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<XdgActivationTokenV1, usize> for Shell {
+    fn event(
+        state: &mut Self,
+        _: &XdgActivationTokenV1,
+        event: xdg_activation_token_v1::Event,
+        id: &usize,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let xdg_activation_token_v1::Event::Done { token } = event
+            && let Some(callback) = state
+                .activation_callbacks
+                .get_mut(*id)
+                .and_then(Option::take)
+        {
+            callback(Some(token));
+        }
+    }
 }
 
 delegate_compositor!(Shell);
