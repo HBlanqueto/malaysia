@@ -30,7 +30,7 @@ continua.
 | 0020 | Política de diseño y unificación: chrome separado, efectos para todos | aceptado |
 | 0021 | Superficie de configuración y control: valores, comandos e IPC | aceptado |
 | 0023 | Los componentes del shell corren como procesos separados | aceptado (supervisión propuesta; overview abierta) |
-| 0024 | Stack de render del toolkit | aceptado (opción A: GLES + cosmic-text + shaders propios) |
+| 0024 | Stack de render del toolkit | aceptado (opción A); modificado por 0034 para clientes |
 | 0025 | La shell es nativa (`yuki-shell`); se elimina Quickshell | aceptado |
 | 0026 | linux-dmabuf y explicit sync (Bloque 7a/7b) | aceptado |
 | 0027 | La shell presenta por EGL (Bloque 7c) | aceptado |
@@ -39,7 +39,8 @@ continua.
 | 0030 | Direct Session 8a: un plano primario y una sola salida | aceptado |
 | 0031 | Portal backend propio (`xdg-desktop-portal-yuki`) | aceptado |
 | 0032 | Neptunia es la fuente de diseño del escritorio | aceptado |
-| 0033 | Skia en clientes y CelestialKit desde otto-kit | aceptado (modifica 0024) |
+| 0033 | Skia en clientes y CelestialKit desde otto-kit | reemplazado por 0034 |
+| 0034 | CelestialKit sobre Freya | aceptado (reemplaza 0033; modifica 0024) |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
@@ -49,8 +50,8 @@ continua.
 - ~~Shell in-process contra clientes layer-shell~~ — **resuelta por el ADR 0023**:
   clientes layer-shell, un proceso por componente.
 - ~~Stack de render del toolkit~~ — **resuelta por el ADR 0024** (opción A) y
-  **modificada por el ADR 0033**: Skia en clientes, GLES/cosmic-text en el
-  compositor.
+  **modificada por los ADR 0033 y 0034**: Skia en clientes con CelestialKit
+  sobre Freya, GLES/cosmic-text en el compositor.
 - **Stack de render del compositor** — abierta (hoy winit + GLES2; ver hito Direct
   Session).
 - **Si el repositorio es privado o abierto** — abierta.

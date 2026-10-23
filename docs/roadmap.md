@@ -363,3 +363,14 @@ con un bloque del roadmap:
 
 Ningún documento ni comentario de este repositorio usa "Bloque N" para algo distinto
 del bloque N de este roadmap.
+## Trabajo fuera de bloque — migración de CelestialKit a Freya
+
+Derivado del ADR 0034; no es un bloque nuevo ni renumera nada.
+
+- Construir CelestialKit sobre los crates de núcleo de Freya `=0.4.3` y añadir su
+  runner Wayland (layer-shell, ext-session-lock, xdg_toplevel futuro).
+- Compilar Skia para `freya-skia-bindings` 0.98.0 en Nix y guardar versión y
+  features contra el árbol de Cargo.
+- Migrar `yuki-shell` componente a componente (wallpaper, menubar, dock, lock) y
+  eliminar el camino GLES de la shell.
+- Mantener Grade Animation como módulo del kit sobre `freya-animation`.

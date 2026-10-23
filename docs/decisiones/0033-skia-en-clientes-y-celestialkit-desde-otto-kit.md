@@ -1,6 +1,6 @@
 # 0033 — Skia en clientes y CelestialKit desde otto-kit
 
-Estado: **aceptado** (2026-10-22). Modifica el [ADR 0024](0024-stack-de-render-del-toolkit.md).
+Estado: **reemplazado por [0034](0034-celestialkit-sobre-freya.md)**. Modificaba el [ADR 0024](0024-stack-de-render-del-toolkit.md).
 
 ## Contexto
 
@@ -82,3 +82,11 @@ no hay `LICENSE` ni campo `license` en su `Cargo.toml`. Por tanto:
   `docs/investigacion/otto-y-forks.md`.
 - Si upstream publica una licencia compatible, una ADR nueva podrá revisar la
   decisión.
+
+
+## Corrección
+
+`laye-rs` no tiene licencia y **nunca fue una dependencia** del repositorio. El
+ADR 0034 reemplaza esta decisión: CelestialKit se construye sobre los crates de
+núcleo de Freya y el motor de animación es un módulo propio sobre
+`freya-animation`.

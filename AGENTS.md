@@ -56,14 +56,16 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
    diseño y los mismos tokens que decoraciones y efectos.
 
 8. **Skia solo en clientes.** La shell y las apps propias (`celestial-kit`,
-   ADR 0033) pueden usar Skia. El **compositor nunca** usa Skia: sigue con GLES,
-   `grade-graphics` y `cosmic-text`. `celestial-kit` parte selectivamente de
-   `otto-kit` (MIT), se renombra a nombres propios (nada de `otto_*`) y usa los
-   tokens de `yuki-design`. `grade-animation` es propio (curvas, resortes y
-   transacciones) y **no depende de `laye-rs` mientras no tenga licencia**;
-   Infinity es el protocolo privado app↔compositor (opcional hasta que el
-   compositor lo implemente). No se usan `otto-foundations`, `otto-dbus` ni
-   `otto-surface-style`.
+   ADR 0034) pueden usar Skia. El **compositor nunca** usa Skia ni enlaza
+   `freya-*`: sigue con GLES, `grade-graphics` y `cosmic-text`. `celestial-kit`
+   se construye sobre los crates de núcleo de Freya `=0.4.3` (`freya-core`,
+   `freya-components` con `default-features = false`, `freya-animation`,
+   `freya-engine`, `torin`, `ragnarok`), **nunca** `freya` ni `freya-winit`, y
+   usa los tokens de `yuki-design`. Grade Animation es un módulo del kit sobre
+   `freya-animation`, con un resorte propio. Infinity es el protocolo privado
+   app↔compositor (opcional hasta que el compositor lo implemente). No se usan
+   `otto-kit`, `otto-foundations`, `otto-dbus`, `otto-surface-style` ni
+   `laye-rs`.
 
 ---
 
@@ -77,7 +79,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   **0023** (los componentes del shell corren como procesos separados, uno por
   cliente Wayland; ver `docs/arquitectura/modelo-de-procesos.md`), **0024**
   (stack de render del toolkit), **0025** (la shell es nativa, `yuki-shell`) y
-  **0033** (Skia en clientes, CelestialKit desde otto-kit).
+  **0033** (Skia en clientes, reemplazado por **0034**: CelestialKit sobre
+  Freya).
   La 0019 documenta cómo negocian GTK3/GTK4/Qt. Índice y decisiones abiertas:
   `docs/decisiones/README.md`.
 - **Configuración**: `docs/configuracion/opciones.md` — **catálogo canónico de

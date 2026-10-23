@@ -406,3 +406,16 @@ no en uno posterior.
 5. **Antes de copiar una línea de Otto**: añadir el aviso de Otto al `NOTICE` ya
    existente en el mismo commit. Antes de copiar de `layers`: no hacerlo; no hay
    licencia.
+
+
+---
+
+## Cambio a Freya
+
+Tras el ADR 0033 se revisó el código de Otto y de `laye-rs`. `laye-rs` no tiene
+licencia, así que no puede ser dependencia; `otto-kit` no se adopta como base.
+El ADR 0034 fija el cambio: CelestialKit se construye sobre los crates de núcleo
+de Freya 0.4.3 y Grade Animation es un módulo propio sobre `freya-animation`.
+`otto-kit` queda solo como referencia de lógica de menús y DBusMenu. Lo que sigue
+en este documento sobre los parches de Smithay y de Otto es contexto histórico,
+no una fuente de código para el kit.

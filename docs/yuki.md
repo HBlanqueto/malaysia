@@ -57,7 +57,8 @@ SkyLight.
 
 La shell corre como **procesos nativos separados** (ADR 0023/0025): un binario
 `yuki-shell`, un proceso por componente, cada uno un cliente Wayland propio.
-No hay dependencias de shell externas; el toolkit es `celestial-kit` (ADR 0024).
+No hay dependencias de shell externas; el toolkit es `celestial-kit`, construido
+sobre los crates de núcleo de Freya con Skia en los procesos cliente (ADR 0034).
 
 Estado de los componentes:
 

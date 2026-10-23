@@ -1,6 +1,6 @@
 # El wallpaper (`yuki-shell wallpaper`)
 
-El primer componente nativo del shell (ADR 0023/0024): un proceso Rust que dibuja
+El primer componente nativo del shell (ADR 0023/0034): un proceso Rust que dibuja
 la imagen de escritorio en la capa `Background`, como macOS. Es parte de la shell
 nativa (`yuki-shell`, ADR 0025).
 
@@ -70,7 +70,8 @@ wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
 - ADR 0023 — el modelo de procesos (un proceso por componente).
-- ADR 0024 — el stack de render del toolkit (GLES + cosmic-text + shaders).
+- ADR 0034 — el stack de render del toolkit (CelestialKit sobre Freya, Skia en
+  los clientes).
 - ADR 0027 — la shell presenta por EGL (Bloque 7c).
 - `modelo-de-procesos.md` — la distribución de procesos resultante.
 - `glossary.md` — celestial-kit / grade-graphics / Grade Animation / Infinity.

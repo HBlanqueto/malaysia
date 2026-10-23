@@ -1,6 +1,6 @@
 # La menubar (`yuki-shell menubar`)
 
-El segundo componente nativo del shell (ADR 0023/0024): la barra superior,
+El segundo componente nativo del shell (ADR 0023/0034): la barra superior,
 como la menu bar de macOS. Primera versión: **nombre de la app activa** a la
 izquierda y **reloj** a la derecha. Sin menús globales por app todavía.
 
@@ -63,7 +63,7 @@ el área útil).
 - **Render CPU** (cosmic-text a un frame RGBA) en vez de GLES para el texto:
   los glifos se rasterizan con swash de todos modos; el contenido es casi
   estático, así que la subida a la textura es parcial y barata. Las animaciones
-  (blur de la barra, ADR 0020/0024, futuras) deben renderizarse en GPU, nunca
+  (blur de la barra, ADR 0020/0034, futuras) deben renderizarse en GPU, nunca
   CPU + subida por frame (ADR 0027).
 - `menubar.autohide` se lee del catálogo pero aún no se implementa (el
   comportamiento de autohide es trabajo futuro).
@@ -83,7 +83,8 @@ el área útil).
 ## Relación
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
-- ADR 0023 (procesos), ADR 0024 (texto con cosmic-text), ADR 0032 (Neptunia).
+- ADR 0023 (procesos), ADR 0034 (CelestialKit sobre Freya), ADR 0032
+  (Neptunia).
 - `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
 - `modelo-de-procesos.md` — la distribución de procesos.
 - `configuracion/opciones.md` — `menubar.autohide` (catálogo).

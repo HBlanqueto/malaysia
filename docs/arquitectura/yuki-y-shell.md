@@ -18,6 +18,7 @@ su capa, como en macOS (el Dock dibuja, WindowServer compone).
 | Aspecto | Quién decide | Cómo |
 |---|---|---|
 | Protocolos (wl_surface, xdg_shell, layer-shell...) | **Yuki** | es el display server |
+| Render de la shell (Skia, Freya) | **yuki-shell** | proceso cliente; el compositor nunca enlaza Skia (ADR 0034) |
 | Orden de composición (Background → Ventanas → Top → Overlay) | **Yuki** | scene + damage |
 | Geometría de cada superficie (dónde, tamaño, anchors, exclusive zone) | **Yuki** | valida y coloca; la shell *pide* |
 | **Contenido** de las superficies de la shell (wallpaper, barra, dock, lock) | **la shell** | `celestial-kit` → píxeles |

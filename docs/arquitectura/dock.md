@@ -59,7 +59,7 @@ window.domain ──► app activa (resaltada)
   (genie/scale) es trabajo futuro; el rectángulo del ícono queda guardado en
   `State::dock_rectangle`.
 - **Íconos**: la primera versión muestra el título de la app en cada tile; los
-  íconos SVG (`resvg`, ADR 0024) se integrarán en el toolkit cuando toque.
+  íconos SVG se dibujan con Skia en el toolkit (ADR 0034).
 - El `activate` de este protocolo solo lleva el seat (sin serial de pulsación
   en esta versión del XML), así que no se valida contra el grab implícito.
 
@@ -82,7 +82,8 @@ window.domain ──► app activa (resaltada)
 ## Relación
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
-- ADR 0023 (procesos y protocolos), ADR 0024 (texto), ADR 0032 (Neptunia).
+- ADR 0023 (procesos y protocolos), ADR 0034 (CelestialKit sobre Freya),
+  ADR 0032 (Neptunia).
 - `menubar.md` / `wallpaper.md` — componentes hermanos (presentación EGL,
   ADR 0027).
 - `configuracion/opciones.md` — `dock.*` (catálogo; `tilesize` en uso).
