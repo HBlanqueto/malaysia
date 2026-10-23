@@ -65,6 +65,14 @@ con `keyboard_interactivity = None`. Tiene dos entradas (`Ir`, `Editar`) que
 abren menús con submenús de dos niveles, casillas, radios y items
 deshabilitados.
 
+## Divergencias
+
+- **Sombra (`shadow-float`)**: el cliente no la dibuja. El panel solo pinta el
+  fondo, los bordes `window-outer`/`window-inner` y el contenido; la sombra de
+  la ventana flotante la aplicará el compositor, como indica ADR 0024. Esto
+  evita que cada popup cliente renderice una sombra que luego el compositor
+  componga de todos modos.
+
 ## Pendiente
 
 - Conectar el menú del `yuki-shell menubar` con `MenuView` y el estado de la

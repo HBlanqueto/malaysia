@@ -300,10 +300,16 @@ pub struct MenuPalette {
     pub radius: f32,
     /// Panel padding.
     pub padding: f32,
+    /// Panel border width (outer + inner line).
+    pub border_width: f32,
+    /// Panel outer border colour (`window-outer`).
+    pub outer_border: Rgba,
+    /// Panel inner line colour (`window-inner`, transparent in light mode).
+    pub inner_line: Rgba,
     /// Panel shadow colour.
     pub shadow: Rgba,
-    /// Panel border colour.
-    pub border: Rgba,
+    /// Panel minimum logical width.
+    pub min_width: f32,
     /// Item height.
     pub item_height: f32,
     /// Item corner radius.
@@ -312,6 +318,10 @@ pub struct MenuPalette {
     pub item_padding_x: f32,
     /// Item font size.
     pub font_size: f32,
+    /// Gap between label and shortcut columns.
+    pub shortcut_gap: f32,
+    /// Horizontal offset of a child submenu from the parent edge.
+    pub submenu_offset: f32,
     /// Item text colour (`ink`).
     pub fg: Rgba,
     /// Shortcut text colour (`ink-muted`).

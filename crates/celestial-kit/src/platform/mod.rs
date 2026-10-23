@@ -267,6 +267,7 @@ pub struct Popups {
     last_serial: Rc<Cell<u32>>,
     owner: ObjectId,
     current: Option<PopupId>,
+    surface_count: Rc<Cell<usize>>,
 }
 
 impl Popups {
@@ -294,6 +295,12 @@ impl Popups {
     pub fn close(&self, id: PopupId) {
         self.queue.borrow_mut().push(PopupCommand::Close { id });
         self.ping.ping();
+    }
+
+    /// The number of popup surfaces currently tracked by the runner. Useful for
+    /// leak checks in tests and self-tests.
+    pub fn surface_count(&self) -> usize {
+        self.surface_count.get()
     }
 }
 
@@ -1209,6 +1216,7 @@ struct Shell {
     last_input_serial: Rc<Cell<u32>>,
     popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
     popup_next_id: Rc<Cell<u64>>,
+    popup_count: Rc<Cell<usize>>,
     window_context: Option<WindowContext>,
     decoration_manager: bool,
     decoration_warned: bool,
@@ -1369,6 +1377,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         last_serial: shell.last_input_serial.clone(),
         owner: surface.id(),
         current: None,
+        surface_count: shell.popup_count.clone(),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1496,6 +1505,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         last_serial: shell.last_input_serial.clone(),
         owner: surface.id(),
         current: None,
+        surface_count: shell.popup_count.clone(),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1704,6 +1714,7 @@ impl Shell {
             last_input_serial: Rc::new(Cell::new(0)),
             popup_commands: Rc::new(RefCell::new(Vec::new())),
             popup_next_id: Rc::new(Cell::new(1)),
+            popup_count: Rc::new(Cell::new(0)),
             window_context: None,
             decoration_manager: globals.contents().with_list(|list| {
                 list.iter()
@@ -1739,6 +1750,7 @@ impl Shell {
             last_serial: self.last_input_serial.clone(),
             owner: surface.id(),
             current: None,
+            surface_count: self.popup_count.clone(),
         };
         let app = AppInstance::new(
             self.app.clone(),
@@ -1944,6 +1956,7 @@ impl Shell {
             last_serial: self.last_input_serial.clone(),
             owner: wl_surface.id(),
             current: Some(id),
+            surface_count: self.popup_count.clone(),
         };
         let handle = PopupHandle {
             id,
@@ -1985,6 +1998,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
         });
+        self.popup_count.set(self.popup_count.get() + 1);
     }
 
     fn close_popup(&mut self, id: PopupId) {
@@ -2010,6 +2024,8 @@ impl Shell {
         else {
             return;
         };
+        self.popup_count
+            .set(self.popup_count.get().saturating_sub(1));
         if let Some(info) = self.surfaces[index].popup.take()
             && let Some(callback) = info.on_dismissed
         {

@@ -853,12 +853,17 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   bg: {},\n\
          \x20   radius: {},\n\
          \x20   padding: {},\n\
+         \x20   border_width: {},\n\
+         \x20   outer_border: {},\n\
+         \x20   inner_line: {},\n\
          \x20   shadow: {},\n\
-         \x20   border: {},\n\
+         \x20   min_width: {},\n\
          \x20   item_height: {},\n\
          \x20   item_radius: {},\n\
          \x20   item_padding_x: {},\n\
          \x20   font_size: {},\n\
+         \x20   shortcut_gap: {},\n\
+         \x20   submenu_offset: {},\n\
          \x20   fg: {},\n\
          \x20   shortcut_color: {},\n\
          \x20   hover_bg: {},\n\
@@ -879,8 +884,19 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
             "components.shell.menu.panel.padding",
             COMPONENTS
         )),
+        float(number(
+            components,
+            "components.shell.menu.panel.border-width",
+            COMPONENTS
+        )),
+        rgba(color_at("components.shell.menu.panel.outer-border")),
+        rgba(color_at("components.shell.menu.panel.inner-line")),
         rgba(color_at("components.shell.menu.panel.shadow")),
-        rgba(color_at("components.shell.menu.panel.border")),
+        float(number(
+            components,
+            "components.shell.menu.panel.min-width",
+            COMPONENTS
+        )),
         float(number(
             components,
             "components.shell.menu.item.height",
@@ -895,6 +911,16 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
         float(number(
             components,
             "components.shell.menu.item.font-size",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.item.shortcut-gap",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.item.submenu-offset",
             COMPONENTS
         )),
         rgba(color_at("components.shell.menu.item.fg")),

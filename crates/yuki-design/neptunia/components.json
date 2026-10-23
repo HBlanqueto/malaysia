@@ -413,16 +413,21 @@
       "menu": {
         "panel": {
           "padding": 5,
+          "border-width": 1,
+          "min-width": 120,
           "radius": "radius.md",
           "bg": "bg-raised",
           "shadow": "shadow-float",
-          "border": "line"
+          "outer-border": "window-outer",
+          "inner-line": "window-inner"
         },
         "item": {
           "height": 24,
           "radius": "radius.sm",
           "padding-x": 10,
           "font-size": 13,
+          "shortcut-gap": 16,
+          "submenu-offset": 4,
           "fg": "ink",
           "shortcut-color": "ink-muted",
           "hover-bg": "accent",

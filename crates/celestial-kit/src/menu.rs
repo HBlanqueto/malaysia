@@ -4,11 +4,13 @@
 //! shell's global menus and context menus: it opens submenus as child popups,
 //! supports keyboard navigation and reports actions through `on_activate`.
 
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
+use skia_safe as skia;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 
 // Freya re-exports `State` as the reactive handle returned by `use_state`.
@@ -18,6 +20,33 @@ use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
 };
 use yuki_design::{MenuPalette, Rgba};
+
+thread_local! {
+    static FONT_CACHE: RefCell<Option<skia::Font>> = const { RefCell::new(None) };
+}
+
+/// Measures the horizontal advance of `text` using the same Skia font as the
+/// renderer. A missing system font falls back to Skia's default so the test
+/// still produces deterministic sizes on headless runners.
+fn measure_text(text: &str, size: f32) -> f32 {
+    if text.is_empty() {
+        return 0.0;
+    }
+    FONT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let font = cache.get_or_insert_with(|| {
+            let font_mgr = skia::FontMgr::new();
+            let typeface = font_mgr
+                .match_family_style("Geist", skia::FontStyle::normal())
+                .or_else(|| font_mgr.match_family_style("Noto Sans", skia::FontStyle::normal()))
+                .unwrap_or_else(|| skia::Font::default().typeface());
+            skia::Font::new(typeface, None)
+        });
+        font.set_size(size);
+        // `measure_text` returns (width, bounds).
+        font.measure_text(text, None).0
+    })
+}
 
 /// State of a check/radio mark in a menu item.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -64,6 +93,20 @@ impl MenuItem {
     fn selectable(&self) -> bool {
         matches!(self, MenuItem::Action { .. } | MenuItem::Submenu { .. }) && self.enabled()
     }
+
+    fn label(&self) -> Option<&str> {
+        match self {
+            MenuItem::Action { label, .. } | MenuItem::Submenu { label, .. } => Some(label),
+            MenuItem::Separator => None,
+        }
+    }
+
+    fn shortcut(&self) -> Option<&str> {
+        match self {
+            MenuItem::Action { shortcut, .. } => shortcut.as_deref(),
+            MenuItem::Submenu { .. } | MenuItem::Separator => None,
+        }
+    }
 }
 
 /// A Neptunia menu rendered inside a popup.
@@ -96,49 +139,42 @@ impl MenuView {
 
     /// Returns the logical size needed to render `items` with `palette`.
     ///
-    /// This is a heuristic based on the Neptunia font size; it is not a full
-    /// text shaping measurement because the popup must know its size before it
-    /// is created.
-    pub fn preferred_size(items: &[MenuItem], palette: MenuPalette) -> (f32, f32) {
-        let m = palette;
-        let char_width = m.font_size * 0.55;
-        let shortcut_char_width = m.font_size * 0.5;
-        let mut max_width: f32 = 120.0;
-        let mut height = m.padding * 2.0;
+    /// The width is measured with Skia using the same font size as the render,
+    /// so labels with accents and long shortcuts are never truncated or wrapped.
+    pub fn preferred_size(items: &[MenuItem], m: MenuPalette) -> (f32, f32) {
+        let inset = 2.0 * m.border_width + m.padding;
+        let content_height: f32 = items
+            .iter()
+            .map(|item| match item {
+                MenuItem::Separator => m.separator_height + m.separator_margin_y * 2.0,
+                _ => m.item_height,
+            })
+            .sum();
+        let mut max_content_width = m.min_width;
 
         for item in items {
-            match item {
-                MenuItem::Action {
-                    label, shortcut, ..
-                } => {
-                    let label_w = label.len() as f32 * char_width;
-                    let shortcut_w = shortcut
-                        .as_ref()
-                        .map(|s| s.len() as f32 * shortcut_char_width + 16.0)
-                        .unwrap_or(0.0);
-                    let content_w = m.mark_width
-                        + label_w
-                        + shortcut_w
-                        + m.chevron_size
-                        + m.item_padding_x * 2.0
-                        + 24.0;
-                    max_width = max_width.max(content_w);
-                    height += m.item_height;
-                }
-                MenuItem::Submenu { label, .. } => {
-                    let label_w = label.len() as f32 * char_width;
-                    let content_w =
-                        m.mark_width + label_w + m.chevron_size + m.item_padding_x * 2.0 + 24.0;
-                    max_width = max_width.max(content_w);
-                    height += m.item_height;
-                }
-                MenuItem::Separator => {
-                    max_width = max_width.max(m.separator_margin_x * 2.0 + 32.0);
-                    height += m.separator_height + m.separator_margin_y * 2.0;
-                }
-            }
+            let Some(label) = item.label() else {
+                continue;
+            };
+            let label_w = measure_text(label, m.font_size);
+            let shortcut_w = item
+                .shortcut()
+                .map(|s| measure_text(s, m.font_size))
+                .unwrap_or(0.0);
+            let trailing = if matches!(item, MenuItem::Submenu { .. }) {
+                m.chevron_size
+            } else if shortcut_w > 0.0 {
+                m.shortcut_gap + shortcut_w
+            } else {
+                0.0
+            };
+            let content_w = m.item_padding_x * 2.0 + m.mark_width + label_w + trailing;
+            max_content_width = max_content_width.max(content_w);
         }
-        (max_width.ceil(), height.ceil())
+
+        let width = max_content_width + inset * 2.0;
+        let height = content_height + inset * 2.0;
+        (width.ceil(), height.ceil())
     }
 }
 
@@ -169,43 +205,59 @@ impl App for MenuView {
         let size = self.size;
         let popup: Option<PopupHandle> = try_consume_root_context();
         let focused = use_state(|| first_selectable(&items));
-        let open_child_id = use_state::<Option<PopupId>>(|| None);
+        let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
 
-        let width = size.0;
         let focused_index = *focused.read();
 
         let rows: Vec<Element> = items
             .iter()
             .enumerate()
             .map(|(index, item)| {
-                let is_focused = focused_index == Some(index);
                 render_item(
                     item,
                     index,
-                    is_focused,
+                    focused_index == Some(index),
                     m,
-                    width,
                     popup.clone(),
                     on_activate.clone(),
                     on_dismiss_all.clone(),
                     items.clone(),
                     focused,
-                    open_child_id,
+                    open_child_id.clone(),
                     size,
                 )
             })
             .collect();
 
+        let content = rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .padding(Gaps::new(m.padding, m.padding, m.padding, m.padding))
+            .background(rgba(m.bg))
+            .corner_radius((m.radius - m.border_width).max(0.0))
+            .border(
+                Border::new()
+                    .width(m.border_width)
+                    .alignment(BorderAlignment::Inner)
+                    .fill(rgba(m.inner_line)),
+            )
+            .direction(Direction::Vertical)
+            .children(rows);
+
         rect()
             .width(Size::px(size.0))
             .height(Size::px(size.1))
-            .direction(Direction::Vertical)
-            .padding(Gaps::new(m.padding, m.padding, m.padding, m.padding))
-            .background(rgba(m.bg))
             .corner_radius(m.radius)
+            .border(
+                Border::new()
+                    .width(m.border_width)
+                    .alignment(BorderAlignment::Inner)
+                    .fill(rgba(m.outer_border)),
+            )
+            .child(content)
             .on_key_down(move |event: Event<KeyboardEventData>| {
                 let mut focused = focused;
-                let open_child_id = open_child_id;
+                let open_child_id = open_child_id.clone();
                 let current = *focused.read();
                 match event.key {
                     Key::Named(NamedKey::ArrowDown) => {
@@ -222,48 +274,30 @@ impl App for MenuView {
                     }
                     Key::Named(NamedKey::Enter) => {
                         if let Some(index) = *focused.read() {
-                            if let Some(id) = activate_at(&items, index) {
-                                on_activate(id);
-                                on_dismiss_all();
-                            } else if let Some(MenuItem::Submenu { items: sub, .. }) =
-                                items.get(index)
-                                && let Some(popup) = popup.clone()
-                            {
-                                open_child_popup(
-                                    index,
-                                    sub,
-                                    popup,
-                                    size,
-                                    m,
-                                    on_activate.clone(),
-                                    on_dismiss_all.clone(),
-                                    open_child_id,
-                                    items.clone(),
-                                );
-                            }
+                            activate_or_open(
+                                &items,
+                                index,
+                                popup.clone(),
+                                size,
+                                m,
+                                on_activate.clone(),
+                                on_dismiss_all.clone(),
+                                open_child_id,
+                            );
                         }
                     }
                     Key::Character(ref ch) if ch == " " => {
                         if let Some(index) = *focused.read() {
-                            if let Some(id) = activate_at(&items, index) {
-                                on_activate(id);
-                                on_dismiss_all();
-                            } else if let Some(MenuItem::Submenu { items: sub, .. }) =
-                                items.get(index)
-                                && let Some(popup) = popup.clone()
-                            {
-                                open_child_popup(
-                                    index,
-                                    sub,
-                                    popup,
-                                    size,
-                                    m,
-                                    on_activate.clone(),
-                                    on_dismiss_all.clone(),
-                                    open_child_id,
-                                    items.clone(),
-                                );
-                            }
+                            activate_or_open(
+                                &items,
+                                index,
+                                popup.clone(),
+                                size,
+                                m,
+                                on_activate.clone(),
+                                on_dismiss_all.clone(),
+                                open_child_id,
+                            );
                         }
                     }
                     Key::Named(NamedKey::ArrowRight) => {
@@ -289,10 +323,12 @@ impl App for MenuView {
                             popup.close();
                         }
                     }
+                    // Esc is handled compositor-side: it dismisses the topmost
+                    // popup and sends `popup_done`. The client must not close an
+                    // extra level here. See `State::dismiss_topmost_popup`.
                     _ => {}
                 }
             })
-            .children(rows)
     }
 }
 
@@ -338,8 +374,39 @@ fn activate_at(items: &[MenuItem], index: usize) -> Option<String> {
     None
 }
 
+#[allow(clippy::too_many_arguments)]
+fn activate_or_open(
+    items: &[MenuItem],
+    index: usize,
+    popup: Option<PopupHandle>,
+    size: (f32, f32),
+    m: MenuPalette,
+    on_activate: Rc<dyn Fn(String)>,
+    on_dismiss_all: Rc<dyn Fn()>,
+    open_child_id: Rc<Cell<Option<PopupId>>>,
+) {
+    if let Some(id) = activate_at(items, index) {
+        on_activate(id);
+        on_dismiss_all();
+    } else if let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
+        && let Some(popup) = popup
+    {
+        open_child_popup(
+            index,
+            sub,
+            popup,
+            size,
+            m,
+            on_activate,
+            on_dismiss_all,
+            open_child_id,
+            Rc::new(items.to_vec()),
+        );
+    }
+}
+
 fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
-    let mut y = m.padding;
+    let mut y = 0.0;
     for (i, item) in items.iter().enumerate() {
         if i == index {
             return y;
@@ -352,8 +419,8 @@ fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
     0.0
 }
 
-fn close_child(mut open_child_id: UseState<Option<PopupId>>) {
-    if let Some(id) = *open_child_id.read() {
+fn close_child(open_child_id: Rc<Cell<Option<PopupId>>>) {
+    if let Some(id) = open_child_id.get() {
         if let Some(popups) = try_consume_root_context::<Popups>() {
             popups.close(id);
         }
@@ -370,10 +437,10 @@ fn open_child_popup(
     m: MenuPalette,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
-    mut open_child_id: UseState<Option<PopupId>>,
+    open_child_id: Rc<Cell<Option<PopupId>>>,
     parent_items: Rc<Vec<MenuItem>>,
 ) -> Option<PopupId> {
-    close_child(open_child_id);
+    close_child(open_child_id.clone());
     let top = item_top(index, &parent_items, m);
     let child_size = MenuView::preferred_size(sub_items, m);
     let on_dismiss_for_action = on_dismiss_all.clone();
@@ -386,6 +453,10 @@ fn open_child_popup(
         move || on_dismiss_all(),
         m,
     );
+    let open_child_id_set = open_child_id.clone();
+    let on_dismissed = move || {
+        open_child_id_set.set(None);
+    };
     let spec = PopupSpec {
         anchor_rect: (
             parent_size.0 as i32 - 1,
@@ -395,7 +466,7 @@ fn open_child_popup(
         ),
         anchor: PopupAnchor::TopRight,
         gravity: PopupGravity::TopRight,
-        offset: (4, 0),
+        offset: (m.submenu_offset as i32, 0),
         size: (child_size.0 as u32, child_size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
@@ -404,7 +475,7 @@ fn open_child_popup(
             slide_y: true,
         },
         grab: true,
-        on_dismissed: None,
+        on_dismissed: Some(Rc::new(on_dismissed)),
     };
     let id = popup.open_child(spec, AppComponent::new(child_view));
     open_child_id.set(Some(id));
@@ -417,24 +488,23 @@ fn render_item(
     index: usize,
     is_focused: bool,
     m: MenuPalette,
-    width: f32,
     popup: Option<PopupHandle>,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     items: Rc<Vec<MenuItem>>,
     focused: UseState<Option<usize>>,
-    open_child_id: UseState<Option<PopupId>>,
+    open_child_id: Rc<Cell<Option<PopupId>>>,
     size: (f32, f32),
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
-            .width(Size::px(width - m.separator_margin_x * 2.0))
+            .width(Size::fill())
             .height(Size::px(m.separator_height))
             .margin(Gaps::new(
                 m.separator_margin_y,
-                m.separator_margin_x,
+                0.0,
                 m.separator_margin_y,
-                m.separator_margin_x,
+                0.0,
             ))
             .background(rgba(m.separator_color))
             .into_element(),
@@ -451,6 +521,11 @@ fn render_item(
             let enabled = *enabled;
             let check = *check;
             let mut focused = focused;
+            let open_child_id_enter = open_child_id.clone();
+            let shortcut_w = shortcut_text
+                .as_ref()
+                .map(|s| measure_text(s, m.font_size))
+                .unwrap_or(0.0);
             let fg = if enabled {
                 if is_focused { m.hover_fg } else { m.fg }
             } else {
@@ -462,16 +537,17 @@ fn render_item(
                 None
             };
             let mut row = rect()
-                .width(Size::px(width - m.item_padding_x * 2.0))
+                .width(Size::fill())
                 .height(Size::px(m.item_height))
                 .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
                 .corner_radius(m.item_radius)
                 .direction(Direction::Horizontal)
-                .main_align(Alignment::Center)
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Center)
                 .on_pointer_enter(move |_| {
                     if enabled {
                         focused.set(Some(index));
-                        close_child(open_child_id);
+                        close_child(open_child_id_enter.clone());
                     }
                 })
                 .on_mouse_down(move |_: Event<MouseEventData>| {
@@ -499,7 +575,9 @@ fn render_item(
                             m.shortcut_color
                         } else {
                             m.disabled_fg
-                        })),
+                        }))
+                        .width(Size::px(shortcut_w))
+                        .max_lines(1),
                 )
                 .into_element()
         }
@@ -531,13 +609,16 @@ fn render_item(
             let on_dismiss_click = on_dismiss_all.clone();
             let items_enter = items.clone();
             let items_click = items.clone();
+            let open_child_id_enter = open_child_id.clone();
+            let open_child_id_click = open_child_id.clone();
             let mut row = rect()
-                .width(Size::px(width - m.item_padding_x * 2.0))
+                .width(Size::fill())
                 .height(Size::px(m.item_height))
                 .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
                 .corner_radius(m.item_radius)
                 .direction(Direction::Horizontal)
-                .main_align(Alignment::Center)
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Center)
                 .on_pointer_enter(move |_| {
                     if enabled {
                         focused.set(Some(index));
@@ -551,7 +632,7 @@ fn render_item(
                             m,
                             on_activate_enter.clone(),
                             on_dismiss_enter.clone(),
-                            open_child_id,
+                            open_child_id_enter.clone(),
                             items_enter.clone(),
                         );
                     }
@@ -566,7 +647,7 @@ fn render_item(
                             m,
                             on_activate_click.clone(),
                             on_dismiss_click.clone(),
-                            open_child_id,
+                            open_child_id_click.clone(),
                             items_click.clone(),
                         );
                     }
@@ -606,6 +687,7 @@ fn mark_element(check: CheckState, color: Rgba, font_size: f32, width: f32) -> E
         .font_size(font_size)
         .color(rgba(color))
         .width(Size::px(width))
+        .max_lines(1)
         .into_element()
 }
 
@@ -615,6 +697,7 @@ fn chevron_element(m: MenuPalette) -> Element {
         .font_size(m.font_size)
         .color(rgba(m.chevron_color))
         .width(Size::px(m.chevron_size))
+        .max_lines(1)
         .into_element()
 }
 
@@ -690,5 +773,47 @@ mod tests {
         assert_eq!(activate_at(&items, 1), None);
         assert_eq!(activate_at(&items, 2), None);
         assert_eq!(activate_at(&items, 3), None);
+    }
+
+    #[test]
+    fn preferred_size_handles_accents_and_long_shortcuts() {
+        let items = vec![
+            MenuItem::Action {
+                id: "images".to_string(),
+                label: "Imágenes".to_string(),
+                shortcut: Some("⇧⌃G".to_string()),
+                enabled: true,
+                check: CheckState::None,
+            },
+            MenuItem::Action {
+                id: "videos".to_string(),
+                label: "Vídeos".to_string(),
+                shortcut: Some("Ctrl+Shift+Z".to_string()),
+                enabled: true,
+                check: CheckState::None,
+            },
+        ];
+        let m = MENU_LIGHT;
+        let (w, h) = MenuView::preferred_size(&items, m);
+
+        let label_w = measure_text("Imágenes", m.font_size);
+        let shortcut_w = measure_text("⇧⌃G", m.font_size);
+        let expected_min = m.item_padding_x * 2.0
+            + m.mark_width
+            + label_w
+            + m.shortcut_gap
+            + shortcut_w
+            + (2.0 * m.border_width + m.padding) * 2.0;
+        assert!(
+            w >= expected_min,
+            "menu width {w} should fit the widest accented label + shortcut ({expected_min})"
+        );
+
+        // Height must fit two rows plus panel insets.
+        let expected_height = m.item_height * 2.0 + (2.0 * m.border_width + m.padding) * 2.0;
+        assert!(
+            h >= expected_height,
+            "menu height {h} should fit two rows ({expected_height})"
+        );
     }
 }
