@@ -470,22 +470,22 @@ fn open_child_popup(
     let on_dismissed = move || {
         open_child_id_set.set(None);
     };
+    let inset = m.padding + m.border_width;
     let spec = PopupSpec {
         anchor_rect: (
-            parent_size.0 as i32 - 1,
+            inset as i32,
             top as i32,
-            1,
+            (parent_size.0 - inset * 2.0).max(1.0) as u32,
             m.item_height as u32,
         ),
-        anchor: PopupAnchor::TopRight,
-        gravity: PopupGravity::TopRight,
+        anchor: PopupAnchor::Right,
+        gravity: PopupGravity::BottomRight,
         offset: (m.submenu_offset as i32, 0),
         size: (child_size.0 as u32, child_size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
-            flip_y: true,
-            slide_x: true,
             slide_y: true,
+            ..PopupConstraintAdjustment::default()
         },
         grab: true,
         on_dismissed: Some(Rc::new(on_dismissed)),

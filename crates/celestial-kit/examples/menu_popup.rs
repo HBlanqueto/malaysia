@@ -329,7 +329,6 @@ fn open_show(
             parent_size: size,
             next,
             delay_ms: 350,
-            open_left: case == "borde",
         })
     } else {
         let view = MenuView::new(
@@ -348,7 +347,7 @@ fn open_show(
             offset: (0, 0),
             size: (size.0 as u32, size.1 as u32),
             constraint_adjustment: PopupConstraintAdjustment {
-                flip_x: case != "borde",
+                flip_x: true,
                 flip_y: true,
                 slide_x: true,
                 slide_y: true,
@@ -391,7 +390,6 @@ struct NestedMenu {
     parent_size: (f32, f32),
     next: Option<usize>,
     delay_ms: u64,
-    open_left: bool,
 }
 
 impl App for NestedMenu {
@@ -422,7 +420,6 @@ impl App for NestedMenu {
             let top = item_top(index, &items, palette);
             let activate = hook_activate.clone();
             let dismiss = hook_dismiss.clone();
-            let open_left = self.open_left;
             timers.after(Duration::from_millis(delay), move || {
                 let child = NestedMenu {
                     next: first_submenu(&child_items),
@@ -432,35 +429,24 @@ impl App for NestedMenu {
                     on_dismiss_all: dismiss.clone(),
                     parent_size: child_size,
                     delay_ms: 250,
-                    open_left,
                 };
-                let (anchor, gravity, anchor_x, offset) = if open_left {
-                    (
-                        PopupAnchor::TopLeft,
-                        PopupGravity::BottomLeft,
-                        0,
-                        -(palette.submenu_offset as i32),
-                    )
-                } else {
-                    (
-                        PopupAnchor::TopRight,
-                        PopupGravity::TopRight,
-                        parent_size.0 as i32 - 1,
-                        palette.submenu_offset as i32,
-                    )
-                };
+                let inset = palette.padding + palette.border_width;
                 handle.open_child(
                     PopupSpec {
-                        anchor_rect: (anchor_x, top as i32, 1, palette.item_height as u32),
-                        anchor,
-                        gravity,
-                        offset: (offset, 0),
+                        anchor_rect: (
+                            inset as i32,
+                            top as i32,
+                            (parent_size.0 - inset * 2.0).max(1.0) as u32,
+                            palette.item_height as u32,
+                        ),
+                        anchor: PopupAnchor::Right,
+                        gravity: PopupGravity::BottomRight,
+                        offset: (palette.submenu_offset as i32, 0),
                         size: (child_size.0 as u32, child_size.1 as u32),
                         constraint_adjustment: PopupConstraintAdjustment {
                             flip_x: true,
-                            flip_y: true,
-                            slide_x: true,
                             slide_y: true,
+                            ..PopupConstraintAdjustment::default()
                         },
                         grab: false,
                         on_dismissed: None,
