@@ -13,7 +13,13 @@
 mod input;
 
 use std::{
-    borrow::Cow, cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context,
+    borrow::Cow,
+    cell::{Cell, RefCell},
+    ffi::c_void,
+    pin::pin,
+    rc::Rc,
+    sync::Arc,
+    task::Context,
     time::Duration,
 };
 
@@ -33,10 +39,14 @@ use futures_util::task::ArcWake;
 use khronos_egl::{self as egl, DynamicInstance};
 use ragnarok::{EventsExecutorRunner, EventsMeasurerRunner, NodesState};
 use sctk::reexports::client::event_created_child;
+use sctk::reexports::protocols::xdg::shell::client::xdg_positioner::{
+    Anchor as SctkAnchorPos, ConstraintAdjustment as SctkConstraint, Gravity as SctkGravity,
+};
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_session_lock, delegate_touch, delegate_xdg_shell, delegate_xdg_window,
+    delegate_seat, delegate_session_lock, delegate_touch, delegate_xdg_popup, delegate_xdg_shell,
+    delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::{
@@ -99,7 +109,8 @@ use sctk::{
             LayerSurfaceData,
         },
         xdg::{
-            XdgShell,
+            XdgPositioner, XdgShell,
+            popup::{Popup, PopupConfigure, PopupHandler},
             window::{DecorationMode, Window, WindowConfigure, WindowDecorations, WindowHandler},
         },
     },
@@ -158,6 +169,158 @@ pub enum KeyboardInteractivity {
     None,
     Exclusive,
     OnDemand,
+}
+
+/// Identifier of an open popup within this process.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct PopupId(u64);
+
+impl PopupId {
+    fn next(counter: &Rc<Cell<u64>>) -> Self {
+        let id = counter.get();
+        counter.set(id + 1);
+        Self(id)
+    }
+
+    pub fn get(&self) -> u64 {
+        self.0
+    }
+}
+
+/// Which edge of the anchor rectangle a popup attaches to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PopupAnchor {
+    #[default]
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+/// In which direction a popup grows from its anchor.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PopupGravity {
+    /// Up and left.
+    #[default]
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+/// How the compositor may adjust a popup that does not fit.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PopupConstraintAdjustment {
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub slide_x: bool,
+    pub slide_y: bool,
+}
+
+/// Options for opening a popup from the shell (menubar, submenus).
+#[derive(Clone)]
+pub struct PopupSpec {
+    /// Rectangle on the parent surface, in logical pixels, that the popup anchors to.
+    pub anchor_rect: (i32, i32, u32, u32),
+    pub anchor: PopupAnchor,
+    pub gravity: PopupGravity,
+    /// Offset in logical pixels applied after anchoring and gravity.
+    pub offset: (i32, i32),
+    /// Preferred logical size of the popup.
+    pub size: (u32, u32),
+    pub constraint_adjustment: PopupConstraintAdjustment,
+    /// Request an implicit grab with the last input serial.
+    pub grab: bool,
+    /// Called once when the popup is dismissed for any reason.
+    pub on_dismissed: Option<Rc<dyn Fn()>>,
+}
+
+impl Default for PopupSpec {
+    fn default() -> Self {
+        Self {
+            anchor_rect: (0, 0, 0, 0),
+            anchor: PopupAnchor::default(),
+            gravity: PopupGravity::default(),
+            offset: (0, 0),
+            size: (100, 100),
+            constraint_adjustment: PopupConstraintAdjustment::default(),
+            grab: false,
+            on_dismissed: None,
+        }
+    }
+}
+
+/// Opens and closes popups from inside a CelestialKit surface.
+#[derive(Clone)]
+pub struct Popups {
+    queue: Rc<RefCell<Vec<PopupCommand>>>,
+    ping: Ping,
+    next_id: Rc<Cell<u64>>,
+    last_serial: Rc<Cell<u32>>,
+    owner: ObjectId,
+    current: Option<PopupId>,
+}
+
+impl Popups {
+    pub fn get() -> Self {
+        freya_core::prelude::consume_root_context()
+    }
+
+    /// Opens a popup attached to the current surface (or to this popup, if the
+    /// context belongs to a popup).
+    pub fn open(&self, spec: PopupSpec, content: AppComponent) -> PopupId {
+        let id = PopupId::next(&self.next_id);
+        self.queue.borrow_mut().push(PopupCommand::Open {
+            owner: self.owner.clone(),
+            parent: self.current,
+            id,
+            spec,
+            content,
+            serial: self.last_serial.get(),
+        });
+        self.ping.ping();
+        id
+    }
+
+    /// Closes a popup and its descendants.
+    pub fn close(&self, id: PopupId) {
+        self.queue.borrow_mut().push(PopupCommand::Close { id });
+        self.ping.ping();
+    }
+}
+
+/// Handle available inside the content of a popup surface.
+#[derive(Clone)]
+pub struct PopupHandle {
+    id: PopupId,
+    popups: Popups,
+}
+
+impl PopupHandle {
+    pub fn get() -> Self {
+        freya_core::prelude::consume_root_context()
+    }
+
+    pub fn id(&self) -> PopupId {
+        self.id
+    }
+
+    pub fn close(&self) {
+        self.popups.close(self.id);
+    }
+
+    /// Opens a submenu attached to this popup.
+    pub fn open_child(&self, spec: PopupSpec, content: AppComponent) -> PopupId {
+        self.popups.open(spec, content)
+    }
 }
 
 /// Who draws a Yuki app's titlebar (ADR 0035).
@@ -551,11 +714,14 @@ impl AppInstance {
         activation: Activation,
         window: Option<WindowControls>,
         timers: Timers,
+        popups: Popups,
+        popup_handle: Option<PopupHandle>,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
         let mut runner = Runner::new(move || integration(app.clone()).into_element());
 
         runner.provide_root_context(ScreenReader::new);
+        runner.provide_root_context(move || popups.clone());
         let (ticker_sender, ticker) = RenderingTicker::new();
         runner.provide_root_context(|| ticker);
         let animation_clock = runner.provide_root_context(AnimationClock::new);
@@ -596,6 +762,9 @@ impl AppInstance {
         runner.provide_root_context(move || activation);
         if let Some(window) = window {
             runner.provide_root_context(move || window);
+        }
+        if let Some(handle) = popup_handle {
+            runner.provide_root_context(move || handle);
         }
         runner.provide_root_context(move || timers);
         runner.provide_root_context(|| State::create(None::<Box<dyn ClipboardProvider>>));
@@ -851,10 +1020,32 @@ impl Activation {
     }
 }
 
+/// Popup bookkeeping attached to a `SurfaceWindow` whose role is `Popup`.
+struct PopupInfo {
+    id: PopupId,
+    parent: Option<PopupId>,
+    on_dismissed: Option<Rc<dyn Fn()>>,
+}
+
+enum PopupCommand {
+    Open {
+        owner: ObjectId,
+        parent: Option<PopupId>,
+        id: PopupId,
+        spec: PopupSpec,
+        content: AppComponent,
+        serial: u32,
+    },
+    Close {
+        id: PopupId,
+    },
+}
+
 /// A surface plus its Freya app and GL context.
 struct SurfaceWindow {
     surface: WlSurface,
     role: SurfaceRole,
+    popup: Option<PopupInfo>,
     display_ptr: *mut c_void,
     graphics: Option<Graphics>,
     app: AppInstance,
@@ -871,6 +1062,7 @@ enum SurfaceRole {
     Layer(LayerSurface),
     Lock(SessionLockSurface),
     Window(Window),
+    Popup(Popup),
 }
 
 impl SurfaceWindow {
@@ -1014,6 +1206,9 @@ struct Shell {
     activation_callbacks: Vec<Option<ActivationCallback>>,
     activation_seat: Option<wl_seat::WlSeat>,
     last_key_serial: u32,
+    last_input_serial: Rc<Cell<u32>>,
+    popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
+    popup_next_id: Rc<Cell<u64>>,
     window_context: Option<WindowContext>,
     decoration_manager: bool,
     decoration_warned: bool,
@@ -1058,6 +1253,49 @@ fn anchors_to_sctk(a: Anchors) -> SctkAnchor {
     }
     if a.right {
         out |= SctkAnchor::RIGHT;
+    }
+    out
+}
+
+fn anchor_to_sctk(anchor: PopupAnchor) -> SctkAnchorPos {
+    match anchor {
+        PopupAnchor::TopLeft => SctkAnchorPos::TopLeft,
+        PopupAnchor::Top => SctkAnchorPos::Top,
+        PopupAnchor::TopRight => SctkAnchorPos::TopRight,
+        PopupAnchor::Left => SctkAnchorPos::Left,
+        PopupAnchor::Right => SctkAnchorPos::Right,
+        PopupAnchor::BottomLeft => SctkAnchorPos::BottomLeft,
+        PopupAnchor::Bottom => SctkAnchorPos::Bottom,
+        PopupAnchor::BottomRight => SctkAnchorPos::BottomRight,
+    }
+}
+
+fn gravity_to_sctk(gravity: PopupGravity) -> SctkGravity {
+    match gravity {
+        PopupGravity::TopLeft => SctkGravity::TopLeft,
+        PopupGravity::Top => SctkGravity::Top,
+        PopupGravity::TopRight => SctkGravity::TopRight,
+        PopupGravity::Left => SctkGravity::Left,
+        PopupGravity::Right => SctkGravity::Right,
+        PopupGravity::BottomLeft => SctkGravity::BottomLeft,
+        PopupGravity::Bottom => SctkGravity::Bottom,
+        PopupGravity::BottomRight => SctkGravity::BottomRight,
+    }
+}
+
+fn constraint_to_sctk(c: PopupConstraintAdjustment) -> SctkConstraint {
+    let mut out = SctkConstraint::empty();
+    if c.flip_x {
+        out |= SctkConstraint::FlipX;
+    }
+    if c.flip_y {
+        out |= SctkConstraint::FlipY;
+    }
+    if c.slide_x {
+        out |= SctkConstraint::SlideX;
+    }
+    if c.slide_y {
+        out |= SctkConstraint::SlideY;
     }
     out
 }
@@ -1124,6 +1362,14 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
     let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
     let sender = make_sender(shell.queue.clone(), shell.ping.clone());
+    let popups = Popups {
+        queue: shell.popup_commands.clone(),
+        ping: shell.ping.clone(),
+        next_id: shell.popup_next_id.clone(),
+        last_serial: shell.last_input_serial.clone(),
+        owner: surface.id(),
+        current: None,
+    };
     let app_instance = AppInstance::new(
         shell.app.clone(),
         1.0,
@@ -1138,10 +1384,13 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
             queue: shell.timers.clone(),
             ping: shell.ping.clone(),
         },
+        popups,
+        None,
     );
     shell.surfaces.push(SurfaceWindow {
         surface: surface.clone(),
         role: SurfaceRole::Layer(layer_surface),
+        popup: None,
         display_ptr,
         graphics: None,
         app: app_instance,
@@ -1240,6 +1489,14 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
     let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
     let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
     let sender = make_sender(shell.queue.clone(), shell.ping.clone());
+    let popups = Popups {
+        queue: shell.popup_commands.clone(),
+        ping: shell.ping.clone(),
+        next_id: shell.popup_next_id.clone(),
+        last_serial: shell.last_input_serial.clone(),
+        owner: surface.id(),
+        current: None,
+    };
     let app_instance = AppInstance::new(
         shell.app.clone(),
         1.0,
@@ -1254,10 +1511,13 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
             queue: shell.timers.clone(),
             ping: shell.ping.clone(),
         },
+        popups,
+        None,
     );
     shell.surfaces.push(SurfaceWindow {
         surface,
         role: SurfaceRole::Window(window),
+        popup: None,
         display_ptr,
         graphics: None,
         app: app_instance,
@@ -1347,6 +1607,7 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
                 }
             }
             shell.poll_all();
+            shell.process_popup_commands();
             shell.install_timers(&handle);
             shell.install_repeat(&handle);
             shell.redraw_all();
@@ -1440,6 +1701,9 @@ impl Shell {
             activation_callbacks: Vec::new(),
             activation_seat: None,
             last_key_serial: 0,
+            last_input_serial: Rc::new(Cell::new(0)),
+            popup_commands: Rc::new(RefCell::new(Vec::new())),
+            popup_next_id: Rc::new(Cell::new(1)),
             window_context: None,
             decoration_manager: globals.contents().with_list(|list| {
                 list.iter()
@@ -1468,6 +1732,14 @@ impl Shell {
         let display_ptr = self.conn.display().id().as_ptr().cast::<c_void>();
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
         let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let popups = Popups {
+            queue: self.popup_commands.clone(),
+            ping: self.ping.clone(),
+            next_id: self.popup_next_id.clone(),
+            last_serial: self.last_input_serial.clone(),
+            owner: surface.id(),
+            current: None,
+        };
         let app = AppInstance::new(
             self.app.clone(),
             1.0,
@@ -1482,10 +1754,13 @@ impl Shell {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
             },
+            popups,
+            None,
         );
         self.surfaces.push(SurfaceWindow {
             surface,
             role: SurfaceRole::Lock(lock_surface),
+            popup: None,
             display_ptr,
             graphics: None,
             app,
@@ -1553,6 +1828,194 @@ impl Shell {
             }
             self.surfaces[index].needs_redraw = true;
         }
+    }
+
+    fn process_popup_commands(&mut self) {
+        let commands = std::mem::take(&mut *self.popup_commands.borrow_mut());
+        for command in commands {
+            match command {
+                PopupCommand::Open {
+                    owner,
+                    parent,
+                    id,
+                    spec,
+                    content,
+                    serial,
+                } => {
+                    self.open_popup(owner, parent, id, spec, content, serial);
+                }
+                PopupCommand::Close { id } => {
+                    self.close_popup(id);
+                }
+            }
+        }
+    }
+
+    fn open_popup(
+        &mut self,
+        owner: ObjectId,
+        parent: Option<PopupId>,
+        id: PopupId,
+        spec: PopupSpec,
+        content: AppComponent,
+        serial: u32,
+    ) {
+        let Some(owner_index) = self.surfaces.iter().position(|s| s.surface.id() == owner) else {
+            return;
+        };
+        let Some(xdg_shell) = self.xdg_shell.as_ref() else {
+            return;
+        };
+        let scale = self.surfaces[owner_index].scale;
+
+        let parent_xdg_surface = parent.and_then(|parent_id| {
+            self.surfaces.iter().find_map(|s| {
+                if let SurfaceRole::Popup(popup) = &s.role
+                    && s.popup.as_ref().is_some_and(|info| info.id == parent_id)
+                {
+                    Some(popup.xdg_surface().clone())
+                } else {
+                    None
+                }
+            })
+        });
+
+        let positioner = match XdgPositioner::new(xdg_shell) {
+            Ok(positioner) => positioner,
+            Err(error) => {
+                tracing::error!(%error, "CelestialKit: could not create xdg_positioner");
+                return;
+            }
+        };
+        let (ax, ay, aw, ah) = spec.anchor_rect;
+        positioner.set_anchor_rect(ax, ay, aw as i32, ah as i32);
+        positioner.set_anchor(anchor_to_sctk(spec.anchor));
+        positioner.set_gravity(gravity_to_sctk(spec.gravity));
+        let (ox, oy) = spec.offset;
+        positioner.set_offset(ox, oy);
+        positioner.set_size(spec.size.0 as i32, spec.size.1 as i32);
+        positioner.set_constraint_adjustment(constraint_to_sctk(spec.constraint_adjustment));
+
+        let surface = match sctk::compositor::Surface::new(&self.compositor, &self.qh) {
+            Ok(surface) => surface,
+            Err(error) => {
+                tracing::error!(%error, "CelestialKit: could not create popup surface");
+                return;
+            }
+        };
+        let wl_surface = surface.wl_surface().clone();
+        let popup = match Popup::from_surface(
+            parent_xdg_surface.as_ref(),
+            &positioner,
+            &self.qh,
+            surface,
+            xdg_shell,
+        ) {
+            Ok(popup) => popup,
+            Err(error) => {
+                tracing::error!(%error, "CelestialKit: could not create xdg_popup");
+                return;
+            }
+        };
+
+        // If the parent is a layer surface, use get_popup to set it as the
+        // implicit parent (an xdg_popup cannot have a layer surface as its
+        // direct xdg parent).
+        if parent.is_none()
+            && let SurfaceRole::Layer(layer_surface) = &self.surfaces[owner_index].role
+        {
+            layer_surface.get_popup(popup.xdg_popup());
+        }
+
+        if spec.grab
+            && let Some(seat) = self.activation_seat.as_ref()
+        {
+            popup.xdg_popup().grab(seat, serial);
+        }
+        wl_surface.commit();
+
+        let display_ptr = self.conn.display().id().as_ptr().cast::<c_void>();
+        let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
+        let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let popups = Popups {
+            queue: self.popup_commands.clone(),
+            ping: self.ping.clone(),
+            next_id: self.popup_next_id.clone(),
+            last_serial: self.last_input_serial.clone(),
+            owner: wl_surface.id(),
+            current: Some(id),
+        };
+        let handle = PopupHandle {
+            id,
+            popups: popups.clone(),
+        };
+        let app = AppInstance::new(
+            content,
+            scale,
+            spec.size,
+            sender,
+            waker,
+            Some(self.toplevels.clone()),
+            None,
+            self.activation.clone(),
+            None,
+            Timers {
+                queue: self.timers.clone(),
+                ping: self.ping.clone(),
+            },
+            popups,
+            Some(handle),
+        );
+
+        self.surfaces.push(SurfaceWindow {
+            surface: wl_surface,
+            role: SurfaceRole::Popup(popup),
+            popup: Some(PopupInfo {
+                id,
+                parent,
+                on_dismissed: spec.on_dismissed,
+            }),
+            display_ptr,
+            graphics: None,
+            app,
+            logical_size: spec.size,
+            buffer_size: (0, 0),
+            scale,
+            output: self.surfaces[owner_index].output.clone(),
+            needs_redraw: true,
+            frame_pending: false,
+        });
+    }
+
+    fn close_popup(&mut self, id: PopupId) {
+        // Close descendants first so Wayland objects are destroyed leaf-to-root.
+        let children: Vec<PopupId> = self
+            .surfaces
+            .iter()
+            .filter_map(|s| {
+                s.popup
+                    .as_ref()
+                    .filter(|info| info.parent == Some(id))
+                    .map(|info| info.id)
+            })
+            .collect();
+        for child in children {
+            self.close_popup(child);
+        }
+
+        let Some(index) = self
+            .surfaces
+            .iter()
+            .position(|s| s.popup.as_ref().is_some_and(|info| info.id == id))
+        else {
+            return;
+        };
+        if let Some(info) = self.surfaces[index].popup.take()
+            && let Some(callback) = info.on_dismissed
+        {
+            callback();
+        }
+        self.surfaces.remove(index);
     }
 
     fn poll_activation(&mut self) {
@@ -1833,6 +2296,35 @@ impl SessionLockHandler for Shell {
     }
 }
 
+impl PopupHandler for Shell {
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        popup: &Popup,
+        config: PopupConfigure,
+    ) {
+        let surface = popup.wl_surface();
+        let Some(index) = self.surface_for(surface) else {
+            return;
+        };
+        let scale = self.surfaces[index].scale;
+        let size = (config.width.max(0) as u32, config.height.max(0) as u32);
+        self.surfaces[index].configure(size, scale);
+        self.surfaces[index].request_redraw(qh);
+    }
+
+    fn done(&mut self, _: &Connection, _: &QueueHandle<Self>, popup: &Popup) {
+        let surface = popup.wl_surface();
+        if let Some(index) = self.surface_for(surface)
+            && let Some(info) = self.surfaces[index].popup.as_ref()
+        {
+            let id = info.id;
+            self.close_popup(id);
+        }
+    }
+}
+
 impl OutputHandler for Shell {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.output
@@ -1858,6 +2350,7 @@ impl SeatHandler for Shell {
     }
 
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, seat: wl_seat::WlSeat) {
+        self.activation_seat = Some(seat.clone());
         let entries = self.toplevel_entries.clone();
         let seat = seat.clone();
         *self.toplevels.activate.borrow_mut() = Some(Rc::new(move |index| {
@@ -1953,6 +2446,7 @@ impl PointerHandler for Shell {
                     button: None,
                 },
                 PointerEventKind::Press { button, serial, .. } => {
+                    self.last_input_serial.set(serial);
                     if let Some(context) = &self.window_context {
                         context.controls.pointer_serial.set(serial);
                     }
@@ -2027,6 +2521,7 @@ impl KeyboardHandler for Shell {
         event: KeyEvent,
     ) {
         self.last_key_serial = serial;
+        self.last_input_serial.set(serial);
         self.key_event(qh, event.clone(), KeyboardEventName::KeyDown);
         let (delay, rate) = self.repeat_timing();
         self.repeat_generation = self.repeat_generation.wrapping_add(1);
@@ -2439,6 +2934,7 @@ delegate_xdg_window!(Shell);
 delegate_keyboard!(Shell);
 delegate_touch!(Shell);
 delegate_session_lock!(Shell);
+delegate_xdg_popup!(Shell);
 delegate_dispatch!(Shell: [zwlr_layer_shell_v1::ZwlrLayerShellV1: sctk::globals::GlobalData] => LayerShell);
 delegate_dispatch!(Shell: [zwlr_layer_surface_v1::ZwlrLayerSurfaceV1: LayerSurfaceData] => LayerShell);
 
