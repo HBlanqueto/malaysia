@@ -109,6 +109,13 @@ los procesos y en reposo solo corren tres componentes; Skia raster cargaría a
 la CPU las animaciones y el redibujado de la shell. **Queda descartado.** Solo
 se revisará si el ThinkPad mide algo muy distinto.
 
+## Deuda técnica
+
+- `crates/yuki-design/neptunia/default.nix` (generador de `neptunia.slint`)
+  convierte duraciones, recuentos e intervalos en `px` porque Slint no tiene
+  unidades para todo. Hay que separar esos tokens numéricos puros de las
+  longitudes con unidad para no mentir en los outputs de otros toolkits.
+
 ## Después, en orden
 
 1. **Bloque 11 — protocolos de uso diario.** `wp_presentation`,

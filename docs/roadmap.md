@@ -243,10 +243,11 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
 
 Documentado en el [ADR 0036](decisiones/0036-menu-global.md) y en
 [`investigacion/global-menu.md`](investigacion/global-menu.md). Usa
-`org_kde_kwin_appmenu` + `com.canonical.dbusmenu`. **Nada implementado todavía.**
+`org_kde_kwin_appmenu` + `com.canonical.dbusmenu`.
 
-- **14a — Popups en CelestialKit.** `xdg_popup` con padre layer-shell en el
-  runner propio; navegación con teclado y cierre al clic fuera.
+- **14a — Popups en CelestialKit.** Implementado: `xdg_popup` con padre
+  layer-shell en el runner propio, navegación con teclado, cierre al clic
+  fuera y restauración del foco. Falta aceptación en el ThinkPad.
 - **14b — Menú «Yuki» de escritorio.** Sin dependencias externas; el menú
   Ventana usa `zwlr_foreign_toplevel_management_v1`.
 - **14c — Respaldo por app.** Reutiliza `yuki-shell/src/desktop.rs`: nombre y

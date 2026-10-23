@@ -27,7 +27,9 @@ docs/
 │   ├── 09-escala-fraccional.md
 │   ├── 10-lock.md
 │   ├── 11-protocolos-de-uso-diario.md
-│   └── 12-portales-y-servicios.md
+│   ├── 12-portales-y-servicios.md
+│   ├── 13-chrome-y-launcher.md
+│   └── 14-menu-global.md
 ├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
