@@ -390,6 +390,7 @@ check() {
     cargo fmt --all -- --check
     "$script_dir/scripts/check-design-tokens.sh"
     "$script_dir/scripts/check-neptunia-generated.sh"
+    "$script_dir/scripts/check-client-only-deps.sh"
     if command -v slint-compiler >/dev/null 2>&1; then
         _slint_out=$(mktemp)
         slint-compiler "$script_dir/crates/yuki-design/neptunia/demo.slint" -o "$_slint_out"

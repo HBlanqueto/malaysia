@@ -88,6 +88,22 @@ yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stack
 grade-graphics = { path = "crates/grade-graphics" }  # Shared GLSL shaders + parameters (glossary).
 celestial-kit = { path = "crates/celestial-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
 
+# Freya's core crates for CelestialKit (ADR 0034), pinned exact: the Nix Skia
+# derivation and the client-only guard are written against these versions.
+# `freya-components` runs with default features off and no window backend.
+# Never add `freya` (defaults to winit) or `freya-winit`.
+freya-core = "=0.4.3"
+freya-components = { version = "=0.4.3", default-features = false }
+freya-animation = "=0.4.3"
+freya-engine = "=0.4.3"
+freya-testing = "=0.4.3"
+freya-skia-safe = "=0.98.0"
+torin = "=0.4.3"
+ragnarok = "=0.4.3"
+# accesskit version Freya 0.4.3 generates; 0.24 for the shell's Unix adapter.
+accesskit = "0.24"
+accesskit_unix = { version = "0.17", default-features = false, features = ["async-io"] }
+
 # Wayland client stack for `yuki-shell` and the probe clients.
 # `system` enables `ObjectId::as_ptr`, which is how the EGL setup hands the
 # raw `wl_display*`/`wl_surface*` to libwayland-egl (see celestial-kit).
