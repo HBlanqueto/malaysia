@@ -110,6 +110,28 @@ pub enum WindowState {
     Fullscreen,
 }
 
+/// The effective decoration for one window.
+///
+/// Yuki's own apps (`native`) always keep client-side chrome: their app-id
+/// prefix reserves the compositor titlebar, even under `force_server`. Any
+/// other window follows the configured policy exactly as before. This function
+/// is pure; the caller is responsible for warning when a native app did not
+/// request CSD.
+pub(crate) fn effective_decoration(
+    policy: crate::config::DecorationPolicy,
+    requested: Decoration,
+    native: bool,
+) -> Decoration {
+    if native {
+        return Decoration::Client;
+    }
+    match policy {
+        crate::config::DecorationPolicy::ForceServer => Decoration::Server,
+        crate::config::DecorationPolicy::ForceClient => Decoration::Client,
+        crate::config::DecorationPolicy::Default => requested,
+    }
+}
+
 /// The inset that a titlebar occupies on the edge it is configured on.
 fn titlebar_inset(titlebar: &Titlebar) -> Insets {
     let thickness = f64::from(titlebar.thickness);

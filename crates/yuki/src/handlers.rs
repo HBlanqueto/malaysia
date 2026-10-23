@@ -77,7 +77,6 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 use yuki_scene::scene::Decoration;
 
 use crate::capture::CaptureTarget;
-use crate::config::DecorationPolicy;
 use crate::delegate_foreign_management;
 use crate::state::{ClientState, State};
 
@@ -674,8 +673,18 @@ impl XdgShellHandler for State {
         // The window is sized and placed within the workspace (below the menu
         // bar, above the future dock).
         let (origin, size) = self.workspace();
+        let wl_surface = surface.wl_surface().clone();
         self.windows.add_toplevel(surface, size, origin);
+        self.apply_initial_decoration(&wl_surface);
         self.request_redraw();
+    }
+
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
+        let requested = self
+            .windows
+            .requested_decoration(surface.wl_surface())
+            .unwrap_or(Decoration::Server);
+        self.apply_requested_decoration(surface.wl_surface(), requested, false);
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
@@ -843,16 +852,59 @@ fn decoration_for_kde_mode(mode: KdeMode) -> Decoration {
     }
 }
 
-/// Applies the configured decoration policy (ADR 0021) to a requested mode.
-///
-/// `Default` honours the client negotiation (ADR 0019/0020); the two forcing
-/// values override it for theming experiments. `ForceServer` draws Yuki's
-/// chrome on every window, even a GTK headerbar; `ForceClient` draws none.
-fn apply_decoration_policy(policy: DecorationPolicy, requested: Decoration) -> Decoration {
-    match policy {
-        DecorationPolicy::ForceServer => Decoration::Server,
-        DecorationPolicy::ForceClient => Decoration::Client,
-        DecorationPolicy::Default => requested,
+impl State {
+    /// Records a requested mode, resolves the effective one and reconfigures.
+    fn apply_requested_decoration(
+        &mut self,
+        surface: &WlSurface,
+        requested: Decoration,
+        explicit: bool,
+    ) {
+        self.windows
+            .set_requested_decoration(surface, requested, explicit);
+        let native = self.windows.is_native(surface);
+        if native
+            && self.windows.decoration_was_requested(surface)
+            && self.windows.requested_decoration(surface) == Some(Decoration::Server)
+            && self.windows.mark_native_warning(surface)
+        {
+            tracing::warn!(
+                app_id = %self.windows.app_id(surface),
+                "app propia que no pidió CSD"
+            );
+        }
+        let effective = crate::decoration::effective_decoration(
+            self.config.window.decorations,
+            requested,
+            native,
+        );
+        self.windows.set_decoration(surface, effective);
+    }
+
+    /// Applies the initial decoration and sends the first configure.
+    fn apply_initial_decoration(&mut self, surface: &WlSurface) {
+        let requested = self
+            .windows
+            .requested_decoration(surface)
+            .unwrap_or(Decoration::Server);
+        let native = self.windows.is_native(surface);
+        if native
+            && self.windows.decoration_was_requested(surface)
+            && requested == Decoration::Server
+            && self.windows.mark_native_warning(surface)
+        {
+            tracing::warn!(
+                app_id = %self.windows.app_id(surface),
+                "app propia que no pidió CSD"
+            );
+        }
+        let effective = crate::decoration::effective_decoration(
+            self.config.window.decorations,
+            requested,
+            native,
+        );
+        self.windows.set_initial_decoration(surface, effective);
+        self.windows.send_initial_configure(surface);
     }
 }
 
@@ -862,31 +914,19 @@ impl XdgDecorationHandler for State {
         // the protocol leaves the choice to the compositor, which chooses
         // server-side. The configure goes out before the client attaches, so it
         // never draws a titlebar of its own.
-        self.windows.set_decoration(
-            toplevel.wl_surface(),
-            apply_decoration_policy(self.config.window.decorations, Decoration::Server),
-        );
+        self.apply_requested_decoration(toplevel.wl_surface(), Decoration::Server, false);
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
         // An explicit choice is honoured: a client that asks for client-side
         // chrome keeps it, and one that accepts server-side gets Yuki's.
-        self.windows.set_decoration(
-            toplevel.wl_surface(),
-            apply_decoration_policy(
-                self.config.window.decorations,
-                decoration_for_xdg_mode(mode),
-            ),
-        );
+        self.apply_requested_decoration(toplevel.wl_surface(), decoration_for_xdg_mode(mode), true);
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
         // The client withdrew its choice, so the compositor chooses again:
         // server-side, as for a fresh decoration object.
-        self.windows.set_decoration(
-            toplevel.wl_surface(),
-            apply_decoration_policy(self.config.window.decorations, Decoration::Server),
-        );
+        self.apply_requested_decoration(toplevel.wl_surface(), Decoration::Server, false);
     }
 }
 
@@ -908,13 +948,7 @@ impl KdeDecorationHandler for State {
         // request means the window has its own headerbar and must keep it. The
         // reply repeats the client's mode, because that is the mode chosen.
         decoration.mode(mode);
-        self.windows.set_decoration(
-            surface,
-            apply_decoration_policy(
-                self.config.window.decorations,
-                decoration_for_kde_mode(mode),
-            ),
-        );
+        self.apply_requested_decoration(surface, decoration_for_kde_mode(mode), true);
     }
 }
 
@@ -923,10 +957,7 @@ mod tests {
     use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
     use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode as KdeMode;
 
-    use super::{
-        BlockerKind, apply_decoration_policy, decoration_for_kde_mode, decoration_for_xdg_mode,
-        pending_blocker,
-    };
+    use super::{BlockerKind, decoration_for_kde_mode, decoration_for_xdg_mode, pending_blocker};
     use crate::config::DecorationPolicy;
     use yuki_scene::scene::Decoration;
 
@@ -962,31 +993,31 @@ mod tests {
     }
 
     #[test]
-    fn the_default_policy_honours_the_client_request() {
-        assert_eq!(
-            apply_decoration_policy(DecorationPolicy::Default, Decoration::Server),
-            Decoration::Server
-        );
-        assert_eq!(
-            apply_decoration_policy(DecorationPolicy::Default, Decoration::Client),
-            Decoration::Client
-        );
-    }
-
-    #[test]
-    fn forcing_server_gives_chrome_to_even_a_client_side_request() {
-        assert_eq!(
-            apply_decoration_policy(DecorationPolicy::ForceServer, Decoration::Client),
-            Decoration::Server
-        );
-    }
-
-    #[test]
-    fn forcing_client_draws_no_yuki_chrome_at_all() {
-        assert_eq!(
-            apply_decoration_policy(DecorationPolicy::ForceClient, Decoration::Server),
-            Decoration::Client
-        );
+    fn effective_decoration_covers_every_policy_and_native_case() {
+        use crate::decoration::effective_decoration;
+        for policy in [
+            DecorationPolicy::Default,
+            DecorationPolicy::ForceServer,
+            DecorationPolicy::ForceClient,
+        ] {
+            for requested in [Decoration::Client, Decoration::Server] {
+                assert_eq!(
+                    effective_decoration(policy, requested, true),
+                    Decoration::Client,
+                    "{policy:?} must not draw chrome for a native app"
+                );
+                let expected = match policy {
+                    DecorationPolicy::ForceServer => Decoration::Server,
+                    DecorationPolicy::ForceClient => Decoration::Client,
+                    DecorationPolicy::Default => requested,
+                };
+                assert_eq!(
+                    effective_decoration(policy, requested, false),
+                    expected,
+                    "{policy:?} must keep its policy for a foreign app"
+                );
+            }
+        }
     }
 
     #[test]

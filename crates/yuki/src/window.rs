@@ -28,7 +28,7 @@ use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg::{
     Configure, SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData,
 };
-use yuki_design::TITLEBAR;
+use yuki_design::{NATIVE_APP_ID_PREFIX, TITLEBAR};
 use yuki_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
@@ -147,6 +147,13 @@ struct WindowData {
     resizing: bool,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
+    /// The decoration mode the client last asked for, before policy.
+    requested: Decoration,
+    /// Whether the client explicitly asked for a mode (not just created the
+    /// decoration object).
+    mode_requested: bool,
+    /// Whether the native-app warning was already emitted for this window.
+    native_warned: bool,
 }
 
 impl WindowData {
@@ -199,12 +206,13 @@ pub struct Windows {
     /// The surface and configure bookkeeping, in creation order.
     windows: Vec<WindowData>,
     /// Decoration modes requested for a surface whose toplevel is not tracked
-    /// yet, by surface object id.
+    /// yet, by surface object id. The bool says whether the client explicitly
+    /// asked for the mode.
     ///
     /// GTK4 creates its KDE decoration object during realize, before it creates
     /// the xdg_toplevel at map time, so the request can arrive first. The id is
     /// stored rather than the surface so a dead surface is not kept alive.
-    pending_decorations: Vec<(ObjectId, Decoration)>,
+    pending_decorations: Vec<(ObjectId, Decoration, bool)>,
     /// The next scene id to hand out.
     next_id: u64,
 }
@@ -253,16 +261,18 @@ impl Windows {
     ) {
         let id = WindowId::new(self.next_id);
         self.next_id += 1;
-        // A mode negotiated before the toplevel existed is applied now, so the
-        // initial configure already carries it and the right usable size.
+        // A mode negotiated before the toplevel existed is remembered now; the
+        // caller applies the policy and sends the initial configure.
         let object = toplevel.wl_surface().id();
+        let (mut requested, mut mode_requested) = (Decoration::Server, false);
         if let Some(index) = self
             .pending_decorations
             .iter()
-            .position(|(pending, _)| *pending == object)
+            .position(|(pending, _, _)| *pending == object)
         {
-            let (_, decoration) = self.pending_decorations.remove(index);
-            self.scene.set_decoration(id, decoration);
+            let (_, pending_requested, explicit) = self.pending_decorations.remove(index);
+            requested = pending_requested;
+            mode_requested = explicit;
         }
         self.windows.push(WindowData {
             id,
@@ -275,8 +285,10 @@ impl Windows {
             configured: None,
             resizing: false,
             maximized: false,
+            requested,
+            mode_requested,
+            native_warned: false,
         });
-        self.send_configure(self.windows.len() - 1);
     }
 
     /// Handles a surface commit.
@@ -342,7 +354,7 @@ impl Windows {
     pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
         let object = surface.id();
         self.pending_decorations
-            .retain(|(pending, _)| *pending != object);
+            .retain(|(pending, _, _)| *pending != object);
         let index = self.index_of(surface)?;
         let id = self.windows.remove(index).id;
         self.scene.remove(id);
@@ -618,24 +630,77 @@ impl Windows {
         }
     }
 
-    /// Stores a window's decoration mode and re-configures it if it changed.
+    /// Stores the requested decoration mode without applying it.
     ///
-    /// This is how a client's negotiation reaches the scene (ADR 0019). A new
-    /// configure carries both the mode and the usable size for the new mode, so
-    /// a client that maps later gets the right surface size and a client that
-    /// changes mode after mapping is resized. Returns whether a configure was
-    /// sent: the mode is always stored, but an effective no-op sends nothing.
+    /// The caller resolves the policy and native-app rule, then stores the
+    /// effective mode with [`Windows::set_decoration`].
+    pub fn set_requested_decoration(
+        &mut self,
+        surface: &WlSurface,
+        requested: Decoration,
+        explicit: bool,
+    ) {
+        let object = surface.id();
+        if let Some(index) = self.index_of(surface) {
+            self.windows[index].requested = requested;
+            self.windows[index].mode_requested |= explicit;
+            return;
+        }
+        match self
+            .pending_decorations
+            .iter_mut()
+            .find(|(pending, _, _)| *pending == object)
+        {
+            Some((_, stored, stored_explicit)) => {
+                *stored = requested;
+                *stored_explicit |= explicit;
+            }
+            None => self.pending_decorations.push((object, requested, explicit)),
+        }
+    }
+
+    /// The decoration mode the client asked for, if known.
+    pub fn requested_decoration(&self, surface: &WlSurface) -> Option<Decoration> {
+        if let Some(index) = self.index_of(surface) {
+            return Some(self.windows[index].requested);
+        }
+        let object = surface.id();
+        self.pending_decorations
+            .iter()
+            .find(|(pending, _, _)| *pending == object)
+            .map(|(_, requested, _)| *requested)
+    }
+
+    /// Whether the client explicitly requested a decoration mode.
+    pub fn decoration_was_requested(&self, surface: &WlSurface) -> bool {
+        self.index_of(surface)
+            .is_some_and(|index| self.windows[index].mode_requested)
+    }
+
+    /// Stores the effective mode without sending a configure (the initial
+    /// configure follows separately).
+    pub fn set_initial_decoration(&mut self, surface: &WlSurface, decoration: Decoration) {
+        if let Some(index) = self.index_of(surface) {
+            let id = self.windows[index].id;
+            self.scene.set_decoration(id, decoration);
+        }
+    }
+
+    /// Sends the first configure, once the initial decoration is stored.
+    pub fn send_initial_configure(&mut self, surface: &WlSurface) {
+        if let Some(index) = self.index_of(surface) {
+            self.send_configure(index);
+        }
+    }
+
+    /// Stores a window's effective decoration mode and re-configures it if it
+    /// changed.
     pub fn set_decoration(&mut self, surface: &WlSurface, decoration: Decoration) -> bool {
         let Some(index) = self.index_of(surface) else {
-            // The toplevel may not exist yet (GTK4 requests through the KDE
-            // protocol in realize); remember it for when it is created.
-            self.remember_decoration(surface, decoration);
             return false;
         };
         let id = self.windows[index].id;
         let previous = self.decoration_of(id);
-        // Store even when the effective mode does not change, so an explicit
-        // client-side request is recorded rather than left unset.
         self.scene.set_decoration(id, decoration);
         if previous == decoration {
             return false;
@@ -644,17 +709,32 @@ impl Windows {
         true
     }
 
-    /// Remembers a mode for a surface whose toplevel is not tracked yet.
-    fn remember_decoration(&mut self, surface: &WlSurface, decoration: Decoration) {
-        let object = surface.id();
-        match self
-            .pending_decorations
-            .iter_mut()
-            .find(|(pending, _)| *pending == object)
-        {
-            Some((_, stored)) => *stored = decoration,
-            None => self.pending_decorations.push((object, decoration)),
+    /// The window's app id, as the client last set it.
+    pub fn app_id(&self, surface: &WlSurface) -> String {
+        with_states(surface, |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .map(|data| data.lock().unwrap().app_id.clone().unwrap_or_default())
+                .unwrap_or_default()
+        })
+    }
+
+    /// Whether the window is one of Yuki's own apps (ADR 0035).
+    pub fn is_native(&self, surface: &WlSurface) -> bool {
+        self.app_id(surface).starts_with(NATIVE_APP_ID_PREFIX)
+    }
+
+    /// Marks the native-app warning as emitted; returns false if it was already.
+    pub fn mark_native_warning(&mut self, surface: &WlSurface) -> bool {
+        let Some(index) = self.index_of(surface) else {
+            return false;
+        };
+        if self.windows[index].native_warned {
+            return false;
         }
+        self.windows[index].native_warned = true;
+        true
     }
 
     /// The decoration mode of a window, or client-side when none was stored.

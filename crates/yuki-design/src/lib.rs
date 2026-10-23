@@ -338,6 +338,12 @@ pub const SCREENSHOT_BORDER_WIDTH: i32 = 1;
 /// `/run/current-system/sw/share/wallpapers`.
 pub const WALLPAPER_DIR: &str = "/run/current-system/sw/share/wallpapers/solid-colors";
 
+/// The app-id prefix of Yuki's own CelestialKit applications (ADR 0035).
+///
+/// It only decides whether the compositor draws a titlebar; it is not a
+/// security boundary. Infinity will replace it when it exists.
+pub const NATIVE_APP_ID_PREFIX: &str = "io.github.hblanqueto.yuki.";
+
 /// The wallpaper a session shows when the store selects none: a fresh
 /// account's desktop, like macOS ships one default picture. A file name inside
 /// [`WALLPAPER_DIR`] (or inside a custom `wallpaper.dir`).
