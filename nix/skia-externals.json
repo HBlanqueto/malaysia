@@ -7,12 +7,12 @@
   "expat": {
     "url": "https://chromium.googlesource.com/external/github.com/libexpat/libexpat.git",
     "rev": "6154446fccefbf3ca644894f598969113b0c7bcd",
-    "sha256": "sha256-V8mzuJJj7kO24YNN7nBL913lzB911QUvy0CJzsTcF90="
+    "sha256": "sha256-ifMDdEWu9H8iJ/VSKuXlisJKx1s1F8ecT74bwXnBWcA="
   },
   "freetype": {
     "url": "https://chromium.googlesource.com/chromium/src/third_party/freetype2.git",
     "rev": "264b5fbf5b912b39f98d038bf75d39be0a73f21b",
-    "sha256": "sha256-UeV2TAEDylx72nRVrzIVquzfduHgHWvO2Lw+OTWZrqE="
+    "sha256": "sha256-RRoTXV063rJBTL/JkVXuRZiNbPZLjtUP/kvt6XybG/k="
   },
   "harfbuzz": {
     "url": "https://chromium.googlesource.com/external/github.com/harfbuzz/harfbuzz.git",
