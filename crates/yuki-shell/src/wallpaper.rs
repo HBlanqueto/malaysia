@@ -10,11 +10,11 @@ use std::{
     time::Duration,
 };
 
-use freya_core::prelude::*;
-use freya_engine::prelude::AlphaType;
 use celestial_kit::platform::{Anchors, KeyboardInteractivity, Layer, SurfaceSpec, run_layer};
 use freya_core::elements::image::ImageHandle;
 use freya_core::integration::AppComponent;
+use freya_core::prelude::*;
+use freya_engine::prelude::AlphaType;
 use torin::prelude::Size;
 use yuki_design::Rgba;
 
@@ -62,7 +62,8 @@ impl App for WallpaperApp {
             async move {
                 loop {
                     async_io::Timer::after(Duration::from_millis(500)).await;
-                    let next = load_snapshot(&store_path, &state_path, state.peek().current.clone());
+                    let next =
+                        load_snapshot(&store_path, &state_path, state.peek().current.clone());
                     if next != *state.peek() {
                         state.set(next);
                     }

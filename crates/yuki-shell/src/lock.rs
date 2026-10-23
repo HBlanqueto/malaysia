@@ -104,9 +104,7 @@ impl App for LockApp {
         });
 
         let view = self.model.read();
-        let palette = celestial_kit::theme::lock_palette(
-            &celestial_kit::theme::resolved(),
-        );
+        let palette = celestial_kit::theme::lock_palette(&celestial_kit::theme::resolved());
         let background = rgba(palette.bg_surface);
         let ink = rgba(palette.ink);
         let muted = rgba(palette.ink_muted);
@@ -158,16 +156,22 @@ impl App for LockApp {
                     .font_size(LOCK_FONT_SIZE * LOCK_TITLE_SCALE)
                     .color(ink),
             )
-            .child(label()
+            .child(
+                label()
                     .text(view.label.clone())
                     .font_size(LOCK_LABEL_FONT_SIZE)
-                    .color(muted))
+                    .color(muted),
+            )
             .child(
                 rect()
                     .width(Size::px(LOCK_FIELD_WIDTH as f32))
                     .height(Size::px(LOCK_FIELD_HEIGHT as f32))
                     .center()
-                    .background(if view.status.is_some() { danger } else { accent })
+                    .background(if view.status.is_some() {
+                        danger
+                    } else {
+                        accent
+                    })
                     .corner_radius((LOCK_FIELD_HEIGHT / 4) as f32)
                     .child(
                         label()
@@ -224,10 +228,7 @@ fn start_auth(events: EventBuffer, attempt: Rc<RefCell<Option<pam::Attempt>>>) -
     user
 }
 
-fn submit(
-    mut field: State<PasswordField>,
-    attempt: Rc<RefCell<Option<pam::Attempt>>>,
-) {
+fn submit(mut field: State<PasswordField>, attempt: Rc<RefCell<Option<pam::Attempt>>>) {
     let Some(secret) = field.write().take() else {
         return;
     };

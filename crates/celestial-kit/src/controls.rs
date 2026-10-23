@@ -36,7 +36,8 @@ impl List {
     }
 
     pub fn children(mut self, children: impl IntoIterator<Item = impl IntoElement>) -> Self {
-        self.children.extend(children.into_iter().map(IntoElement::into_element));
+        self.children
+            .extend(children.into_iter().map(IntoElement::into_element));
         self
     }
 
@@ -54,9 +55,10 @@ impl KeyExt for List {
 
 impl Component for List {
     fn render(&self) -> impl IntoElement {
-        rect().direction(Direction::Vertical).spacing(TEXT_LINE_HEIGHT).children(
-            self.children.iter().cloned(),
-        )
+        rect()
+            .direction(Direction::Vertical)
+            .spacing(TEXT_LINE_HEIGHT)
+            .children(self.children.iter().cloned())
     }
 }
 

@@ -1,10 +1,8 @@
 //! Wayland input to Freya's `PlatformEvent`, following `freya-winit`'s
 //! `winit_mappings.rs` but with the keys SCTK gives us.
 
-use freya_core::prelude::{
-    Code, Key, MouseButton, NamedKey,
-};
-use sctk::seat::keyboard::{Modifiers as SctkModifiers, Keysym};
+use freya_core::prelude::{Code, Key, MouseButton, NamedKey};
+use sctk::seat::keyboard::{Keysym, Modifiers as SctkModifiers};
 
 pub fn modifiers(m: SctkModifiers) -> keyboard_types::Modifiers {
     let mut out = keyboard_types::Modifiers::empty();

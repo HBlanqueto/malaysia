@@ -12,18 +12,10 @@
 
 mod input;
 
-use std::{
-    cell::RefCell,
-    ffi::c_void,
-    pin::pin,
-    rc::Rc,
-    sync::Arc,
-    task::Context,
-};
+use std::{cell::RefCell, ffi::c_void, pin::pin, rc::Rc, sync::Arc, task::Context};
 
 use accesskit::Role;
 use freya_clipboard::copypasta::ClipboardProvider;
-use ragnarok::{EventsExecutorRunner, EventsMeasurerRunner, NodesState};
 use freya_components::{cache::AssetCacher, integration::integration};
 use freya_core::{
     integration::*,
@@ -35,8 +27,8 @@ use freya_engine::prelude::{
     direct_contexts, wrap_backend_render_target,
 };
 use futures_util::task::ArcWake;
-use std::task::Waker;
 use khronos_egl::{self as egl, DynamicInstance};
+use ragnarok::{EventsExecutorRunner, EventsMeasurerRunner, NodesState};
 use sctk::reexports::client::event_created_child;
 use sctk::{
     compositor::{CompositorHandler, CompositorState},
@@ -50,7 +42,9 @@ use sctk::{
         },
         calloop_wayland_source::WaylandSource,
         client::{
-            Connection, Dispatch, Proxy, QueueHandle, backend::ObjectId, delegate_dispatch,
+            Connection, Dispatch, Proxy, QueueHandle,
+            backend::ObjectId,
+            delegate_dispatch,
             globals::registry_queue_init,
             protocol::{
                 wl_callback::WlCallback, wl_keyboard, wl_output, wl_pointer, wl_seat,
@@ -58,12 +52,8 @@ use sctk::{
             },
         },
         protocols::ext::foreign_toplevel_list::v1::client::{
-            ext_foreign_toplevel_handle_v1::{
-                Event as FtlHandleEvent, ExtForeignToplevelHandleV1,
-            },
-            ext_foreign_toplevel_list_v1::{
-                Event as FtlListEvent, ExtForeignToplevelListV1,
-            },
+            ext_foreign_toplevel_handle_v1::{Event as FtlHandleEvent, ExtForeignToplevelHandleV1},
+            ext_foreign_toplevel_list_v1::{Event as FtlListEvent, ExtForeignToplevelListV1},
         },
         protocols_wlr::{
             foreign_toplevel::v1::client::{
@@ -92,6 +82,7 @@ use sctk::{
         LayerSurfaceData,
     },
 };
+use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
 use wayland_egl::WlEglSurface;
 
@@ -292,12 +283,8 @@ impl Graphics {
             // Safety: the wl_egl_window is owned here and lives as long as the
             // EGL surface.
             let egl_surface = unsafe {
-                self.egl.create_window_surface(
-                    self.display,
-                    self.config,
-                    window_ptr,
-                    None,
-                )
+                self.egl
+                    .create_window_surface(self.display, self.config, window_ptr, None)
             }
             .map_err(|_| RunError::Egl("eglCreateWindowSurface failed"))?;
             self.surface = Some(egl_surface);
@@ -319,12 +306,8 @@ impl Graphics {
             format: Format::RGBA8.into(),
             ..Default::default()
         };
-        let render_target = backend_render_targets::make_gl(
-            (size.0 as i32, size.1 as i32),
-            0,
-            0,
-            fb_info,
-        );
+        let render_target =
+            backend_render_targets::make_gl((size.0 as i32, size.1 as i32), 0, 0, fb_info);
         self.skia = wrap_backend_render_target(
             &mut self.gr,
             &render_target,
@@ -543,12 +526,10 @@ impl AppInstance {
             scale_factor: self.scale_factor,
             tree: &mut self.tree,
         };
-        let processed = adapter.run(
-            &mut vec![event],
-            &mut self.nodes_state,
-            None,
-        );
-        let _ = self.events_sender.unbounded_send(EventsChunk::Processed(processed));
+        let processed = adapter.run(&mut vec![event], &mut self.nodes_state, None);
+        let _ = self
+            .events_sender
+            .unbounded_send(EventsChunk::Processed(processed));
     }
 }
 
@@ -643,8 +624,7 @@ impl SurfaceWindow {
             (size.0 as f64 * scale).round().max(1.0) as u32,
             (size.1 as f64 * scale).round().max(1.0) as u32,
         );
-        self.surface
-            .set_buffer_scale(scale.round().max(1.0) as i32);
+        self.surface.set_buffer_scale(scale.round().max(1.0) as i32);
 
         if self.graphics.is_none() {
             match Graphics::new(self.display_ptr) {
@@ -862,14 +842,15 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
             }),
         });
     }
-    event_loop.run(None, &mut shell, |shell| {
-        if shell.needs_exit {
-            if let Some(signal) = &shell.loop_signal {
-                signal.stop();
+    event_loop
+        .run(None, &mut shell, |shell| {
+            if shell.needs_exit {
+                if let Some(signal) = &shell.loop_signal {
+                    signal.stop();
+                }
             }
-        }
-    })
-    .map_err(|_| RunError::Egl("calloop event loop failed"))?;
+        })
+        .map_err(|_| RunError::Egl("calloop event loop failed"))?;
     Ok(())
 }
 
@@ -902,14 +883,15 @@ pub fn run_lock(app: AppComponent) -> Result<(), RunError> {
             }),
         });
     }
-    event_loop.run(None, &mut shell, |shell| {
-        if shell.needs_exit {
-            if let Some(signal) = &shell.loop_signal {
-                signal.stop();
+    event_loop
+        .run(None, &mut shell, |shell| {
+            if shell.needs_exit {
+                if let Some(signal) = &shell.loop_signal {
+                    signal.stop();
+                }
             }
-        }
-    })
-    .map_err(|_| RunError::Egl("calloop event loop failed"))?;
+        })
+        .map_err(|_| RunError::Egl("calloop event loop failed"))?;
     Ok(())
 }
 
@@ -1093,14 +1075,7 @@ impl ProvidesRegistryState for Shell {
     ) {
     }
 
-    fn runtime_remove_global(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: u32,
-        _: &str,
-    ) {
-    }
+    fn runtime_remove_global(&mut self, _: &Connection, _: &QueueHandle<Self>, _: u32, _: &str) {}
 }
 
 impl CompositorHandler for Shell {
@@ -1176,9 +1151,9 @@ impl LayerShellHandler for Shell {
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        let Some(index) = self.surfaces.iter().position(|s| {
-            matches!(&s.role, SurfaceRole::Layer(existing) if existing == layer_surface)
-        }) else {
+        let Some(index) = self.surfaces.iter().position(
+            |s| matches!(&s.role, SurfaceRole::Layer(existing) if existing == layer_surface),
+        ) else {
             return;
         };
         let scale = self.surfaces[index].scale;
@@ -1229,10 +1204,7 @@ impl OutputHandler for Shell {
     fn new_output(&mut self, _: &Connection, qh: &QueueHandle<Self>, output: wl_output::WlOutput) {
         if self.session_locked
             && matches!(self.spec, SurfaceSpec::Lock)
-            && !self
-                .surfaces
-                .iter()
-                .any(|s| s.output == Some(output.id()))
+            && !self.surfaces.iter().any(|s| s.output == Some(output.id()))
         {
             self.create_lock_surface(qh, &output);
         }
@@ -1457,7 +1429,13 @@ impl TouchHandler for Shell {
         id: i32,
         position: (f64, f64),
     ) {
-        self.touch_event(qh, surface, id, position, freya_core::prelude::TouchPhase::Started);
+        self.touch_event(
+            qh,
+            surface,
+            id,
+            position,
+            freya_core::prelude::TouchPhase::Started,
+        );
     }
 
     fn up(
@@ -1472,7 +1450,13 @@ impl TouchHandler for Shell {
         let Some(surface) = self.surfaces.first().map(|s| s.surface.clone()) else {
             return;
         };
-        self.touch_event(qh, surface, id, (0.0, 0.0), freya_core::prelude::TouchPhase::Ended);
+        self.touch_event(
+            qh,
+            surface,
+            id,
+            (0.0, 0.0),
+            freya_core::prelude::TouchPhase::Ended,
+        );
     }
 
     fn motion(
@@ -1487,7 +1471,13 @@ impl TouchHandler for Shell {
         let Some(surface) = self.surfaces.first().map(|s| s.surface.clone()) else {
             return;
         };
-        self.touch_event(qh, surface, id, position, freya_core::prelude::TouchPhase::Moved);
+        self.touch_event(
+            qh,
+            surface,
+            id,
+            position,
+            freya_core::prelude::TouchPhase::Moved,
+        );
     }
 
     fn shape(

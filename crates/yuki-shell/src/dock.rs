@@ -15,9 +15,7 @@ use celestial_kit::platform::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_design::{
-    DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE,
-};
+use yuki_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
 use yuki_appearance::data_dir;
 
@@ -83,12 +81,7 @@ impl App for DockApp {
                 .background(if is_active { active } else { tile })
                 .center()
                 .on_press(move |_| toplevels.activate(index))
-                .child(
-                    label()
-                        .text(initial)
-                        .font_size(DOCK_FONT_SIZE)
-                        .color(text),
-                )
+                .child(label().text(initial).font_size(DOCK_FONT_SIZE).color(text))
                 .into_element()
         });
 

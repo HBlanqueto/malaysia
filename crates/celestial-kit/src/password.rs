@@ -7,7 +7,6 @@
 
 use zeroize::{Zeroize, Zeroizing};
 
-
 /// What the field is doing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum State {

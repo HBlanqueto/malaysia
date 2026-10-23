@@ -10,13 +10,13 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use celestial_kit::platform::{Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, run_layer};
+use celestial_kit::platform::{
+    Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, run_layer,
+};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_design::{
-    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_TITLE_MAX_WIDTH,
-};
+use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_TITLE_MAX_WIDTH};
 
 use yuki_appearance::data_dir;
 
@@ -87,7 +87,12 @@ impl App for MenubarApp {
             .background(bar)
             .direction(Direction::Horizontal)
             .main_align(Alignment::SpaceBetween)
-            .padding(Gaps::new(0.0, MENUBAR_MARGIN as f32, 0.0, MENUBAR_MARGIN as f32))
+            .padding(Gaps::new(
+                0.0,
+                MENUBAR_MARGIN as f32,
+                0.0,
+                MENUBAR_MARGIN as f32,
+            ))
             .font_size(MENUBAR_FONT_SIZE)
             .child(
                 label()
