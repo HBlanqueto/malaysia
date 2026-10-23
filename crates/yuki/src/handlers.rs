@@ -680,11 +680,8 @@ impl XdgShellHandler for State {
     }
 
     fn app_id_changed(&mut self, surface: ToplevelSurface) {
-        let requested = self
-            .windows
-            .requested_decoration(surface.wl_surface())
-            .unwrap_or(Decoration::Server);
-        self.apply_requested_decoration(surface.wl_surface(), requested, false);
+        let requested = self.windows.requested_decoration(surface.wl_surface());
+        self.apply_requested_decoration(surface.wl_surface(), requested);
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {
@@ -854,23 +851,15 @@ fn decoration_for_kde_mode(mode: KdeMode) -> Decoration {
 
 impl State {
     /// Records a requested mode, resolves the effective one and reconfigures.
-    fn apply_requested_decoration(
-        &mut self,
-        surface: &WlSurface,
-        requested: Decoration,
-        explicit: bool,
-    ) {
-        self.windows
-            .set_requested_decoration(surface, requested, explicit);
+    fn apply_requested_decoration(&mut self, surface: &WlSurface, requested: Option<Decoration>) {
+        if let Some(requested) = requested {
+            self.windows.set_requested_decoration(surface, requested);
+        }
         let native = self.windows.is_native(surface);
-        if native
-            && self.windows.decoration_was_requested(surface)
-            && self.windows.requested_decoration(surface) == Some(Decoration::Server)
-            && self.windows.mark_native_warning(surface)
-        {
+        if native && requested.is_none() && self.windows.mark_native_warning(surface) {
             tracing::warn!(
                 app_id = %self.windows.app_id(surface),
-                "app propia que no pidió CSD"
+                "app propia sin modo de decoración"
             );
         }
         let effective = crate::decoration::effective_decoration(
@@ -883,19 +872,12 @@ impl State {
 
     /// Applies the initial decoration and sends the first configure.
     fn apply_initial_decoration(&mut self, surface: &WlSurface) {
-        let requested = self
-            .windows
-            .requested_decoration(surface)
-            .unwrap_or(Decoration::Server);
+        let requested = self.windows.requested_decoration(surface);
         let native = self.windows.is_native(surface);
-        if native
-            && self.windows.decoration_was_requested(surface)
-            && requested == Decoration::Server
-            && self.windows.mark_native_warning(surface)
-        {
+        if native && requested.is_none() && self.windows.mark_native_warning(surface) {
             tracing::warn!(
                 app_id = %self.windows.app_id(surface),
-                "app propia que no pidió CSD"
+                "app propia sin modo de decoración"
             );
         }
         let effective = crate::decoration::effective_decoration(
@@ -914,19 +896,23 @@ impl XdgDecorationHandler for State {
         // the protocol leaves the choice to the compositor, which chooses
         // server-side. The configure goes out before the client attaches, so it
         // never draws a titlebar of its own.
-        self.apply_requested_decoration(toplevel.wl_surface(), Decoration::Server, false);
+        self.windows
+            .clear_requested_decoration(toplevel.wl_surface());
+        self.apply_requested_decoration(toplevel.wl_surface(), None);
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
         // An explicit choice is honoured: a client that asks for client-side
         // chrome keeps it, and one that accepts server-side gets Yuki's.
-        self.apply_requested_decoration(toplevel.wl_surface(), decoration_for_xdg_mode(mode), true);
+        self.apply_requested_decoration(toplevel.wl_surface(), Some(decoration_for_xdg_mode(mode)));
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
         // The client withdrew its choice, so the compositor chooses again:
         // server-side, as for a fresh decoration object.
-        self.apply_requested_decoration(toplevel.wl_surface(), Decoration::Server, false);
+        self.windows
+            .clear_requested_decoration(toplevel.wl_surface());
+        self.apply_requested_decoration(toplevel.wl_surface(), None);
     }
 }
 
@@ -948,7 +934,7 @@ impl KdeDecorationHandler for State {
         // request means the window has its own headerbar and must keep it. The
         // reply repeats the client's mode, because that is the mode chosen.
         decoration.mode(mode);
-        self.apply_requested_decoration(surface, decoration_for_kde_mode(mode), true);
+        self.apply_requested_decoration(surface, Some(decoration_for_kde_mode(mode)));
     }
 }
 
@@ -1000,20 +986,21 @@ mod tests {
             DecorationPolicy::ForceServer,
             DecorationPolicy::ForceClient,
         ] {
-            for requested in [Decoration::Client, Decoration::Server] {
+            for requested in [None, Some(Decoration::Client), Some(Decoration::Server)] {
+                let native_expected = requested.unwrap_or(Decoration::Client);
                 assert_eq!(
                     effective_decoration(policy, requested, true),
-                    Decoration::Client,
-                    "{policy:?} must not draw chrome for a native app"
+                    native_expected,
+                    "{policy:?} must honour a native app's requested mode"
                 );
-                let expected = match policy {
+                let foreign_expected = match policy {
                     DecorationPolicy::ForceServer => Decoration::Server,
                     DecorationPolicy::ForceClient => Decoration::Client,
-                    DecorationPolicy::Default => requested,
+                    DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
                 };
                 assert_eq!(
                     effective_decoration(policy, requested, false),
-                    expected,
+                    foreign_expected,
                     "{policy:?} must keep its policy for a foreign app"
                 );
             }

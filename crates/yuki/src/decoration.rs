@@ -119,16 +119,16 @@ pub enum WindowState {
 /// request CSD.
 pub(crate) fn effective_decoration(
     policy: crate::config::DecorationPolicy,
-    requested: Decoration,
+    requested: Option<Decoration>,
     native: bool,
 ) -> Decoration {
     if native {
-        return Decoration::Client;
+        return requested.unwrap_or(Decoration::Client);
     }
     match policy {
         crate::config::DecorationPolicy::ForceServer => Decoration::Server,
         crate::config::DecorationPolicy::ForceClient => Decoration::Client,
-        crate::config::DecorationPolicy::Default => requested,
+        crate::config::DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
     }
 }
 

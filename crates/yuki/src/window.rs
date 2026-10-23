@@ -147,11 +147,9 @@ struct WindowData {
     resizing: bool,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
-    /// The decoration mode the client last asked for, before policy.
-    requested: Decoration,
-    /// Whether the client explicitly asked for a mode (not just created the
-    /// decoration object).
-    mode_requested: bool,
+    /// The decoration mode the client last asked for, before policy. `None`
+    /// until `request_mode`; creating or unsetting the object does not count.
+    requested: Option<Decoration>,
     /// Whether the native-app warning was already emitted for this window.
     native_warned: bool,
 }
@@ -206,13 +204,12 @@ pub struct Windows {
     /// The surface and configure bookkeeping, in creation order.
     windows: Vec<WindowData>,
     /// Decoration modes requested for a surface whose toplevel is not tracked
-    /// yet, by surface object id. The bool says whether the client explicitly
-    /// asked for the mode.
+    /// yet, by surface object id.
     ///
     /// GTK4 creates its KDE decoration object during realize, before it creates
     /// the xdg_toplevel at map time, so the request can arrive first. The id is
     /// stored rather than the surface so a dead surface is not kept alive.
-    pending_decorations: Vec<(ObjectId, Decoration, bool)>,
+    pending_decorations: Vec<(ObjectId, Decoration)>,
     /// The next scene id to hand out.
     next_id: u64,
 }
@@ -264,15 +261,14 @@ impl Windows {
         // A mode negotiated before the toplevel existed is remembered now; the
         // caller applies the policy and sends the initial configure.
         let object = toplevel.wl_surface().id();
-        let (mut requested, mut mode_requested) = (Decoration::Server, false);
+        let mut requested = None;
         if let Some(index) = self
             .pending_decorations
             .iter()
-            .position(|(pending, _, _)| *pending == object)
+            .position(|(pending, _)| *pending == object)
         {
-            let (_, pending_requested, explicit) = self.pending_decorations.remove(index);
-            requested = pending_requested;
-            mode_requested = explicit;
+            let (_, pending_requested) = self.pending_decorations.remove(index);
+            requested = Some(pending_requested);
         }
         self.windows.push(WindowData {
             id,
@@ -286,7 +282,6 @@ impl Windows {
             resizing: false,
             maximized: false,
             requested,
-            mode_requested,
             native_warned: false,
         });
     }
@@ -354,7 +349,7 @@ impl Windows {
     pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
         let object = surface.id();
         self.pending_decorations
-            .retain(|(pending, _, _)| *pending != object);
+            .retain(|(pending, _)| *pending != object);
         let index = self.index_of(surface)?;
         let id = self.windows.remove(index).id;
         self.scene.remove(id);
@@ -634,47 +629,39 @@ impl Windows {
     ///
     /// The caller resolves the policy and native-app rule, then stores the
     /// effective mode with [`Windows::set_decoration`].
-    pub fn set_requested_decoration(
-        &mut self,
-        surface: &WlSurface,
-        requested: Decoration,
-        explicit: bool,
-    ) {
+    pub fn set_requested_decoration(&mut self, surface: &WlSurface, requested: Decoration) {
         let object = surface.id();
         if let Some(index) = self.index_of(surface) {
-            self.windows[index].requested = requested;
-            self.windows[index].mode_requested |= explicit;
+            self.windows[index].requested = Some(requested);
             return;
         }
         match self
             .pending_decorations
             .iter_mut()
-            .find(|(pending, _, _)| *pending == object)
+            .find(|(pending, _)| *pending == object)
         {
-            Some((_, stored, stored_explicit)) => {
-                *stored = requested;
-                *stored_explicit |= explicit;
-            }
-            None => self.pending_decorations.push((object, requested, explicit)),
+            Some((_, stored)) => *stored = requested,
+            None => self.pending_decorations.push((object, requested)),
         }
     }
 
-    /// The decoration mode the client asked for, if known.
+    /// Clears the requested mode (`new_decoration` or `unset_mode`).
+    pub fn clear_requested_decoration(&mut self, surface: &WlSurface) {
+        if let Some(index) = self.index_of(surface) {
+            self.windows[index].requested = None;
+        }
+    }
+
+    /// The decoration mode the client asked for, if it sent `request_mode`.
     pub fn requested_decoration(&self, surface: &WlSurface) -> Option<Decoration> {
         if let Some(index) = self.index_of(surface) {
-            return Some(self.windows[index].requested);
+            return self.windows[index].requested;
         }
         let object = surface.id();
         self.pending_decorations
             .iter()
-            .find(|(pending, _, _)| *pending == object)
-            .map(|(_, requested, _)| *requested)
-    }
-
-    /// Whether the client explicitly requested a decoration mode.
-    pub fn decoration_was_requested(&self, surface: &WlSurface) -> bool {
-        self.index_of(surface)
-            .is_some_and(|index| self.windows[index].mode_requested)
+            .find(|(pending, _)| *pending == object)
+            .map(|(_, requested)| *requested)
     }
 
     /// Stores the effective mode without sending a configure (the initial
