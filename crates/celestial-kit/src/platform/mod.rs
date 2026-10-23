@@ -549,10 +549,12 @@ struct ToplevelEntry {
 
 /// The running toplevels, provided as a root context. The dock reads
 /// [`Toplevels::list`] and calls [`Toplevels::activate`] on a click.
+type Activate = Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>;
+
 #[derive(Clone)]
 pub struct Toplevels {
     pub list: State<Vec<ToplevelInfo>>,
-    activate: Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>,
+    activate: Activate,
 }
 
 impl Toplevels {
@@ -684,7 +686,7 @@ struct PingWake(Ping);
 
 impl ArcWake for PingWake {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        let _ = arc_self.0.ping();
+        arc_self.0.ping();
     }
 }
 
@@ -722,7 +724,7 @@ struct Shell {
 fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(UserEvent)> {
     Rc::new(move |event| {
         queue.borrow_mut().push(event);
-        let _ = ping.ping();
+        ping.ping();
     })
 }
 
@@ -844,10 +846,10 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     }
     event_loop
         .run(None, &mut shell, |shell| {
-            if shell.needs_exit {
-                if let Some(signal) = &shell.loop_signal {
-                    signal.stop();
-                }
+            if shell.needs_exit
+                && let Some(signal) = &shell.loop_signal
+            {
+                signal.stop();
             }
         })
         .map_err(|_| RunError::Egl("calloop event loop failed"))?;
@@ -885,10 +887,10 @@ pub fn run_lock(app: AppComponent) -> Result<(), RunError> {
     }
     event_loop
         .run(None, &mut shell, |shell| {
-            if shell.needs_exit {
-                if let Some(signal) = &shell.loop_signal {
-                    signal.stop();
-                }
+            if shell.needs_exit
+                && let Some(signal) = &shell.loop_signal
+            {
+                signal.stop();
             }
         })
         .map_err(|_| RunError::Egl("calloop event loop failed"))?;
@@ -1599,10 +1601,10 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, (), Shell> for Shell {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let MgmtListEvent::Toplevel { toplevel } = event {
-            if let Some(entry) = state.toplevel_entries.borrow_mut().last_mut() {
-                entry.mgmt = Some(toplevel);
-            }
+        if let MgmtListEvent::Toplevel { toplevel } = event
+            && let Some(entry) = state.toplevel_entries.borrow_mut().last_mut()
+        {
+            entry.mgmt = Some(toplevel);
         }
     }
 

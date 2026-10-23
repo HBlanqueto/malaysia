@@ -122,11 +122,9 @@ impl Component for SecureField {
                 let mut field = field.write();
                 match &event.key {
                     Key::Named(NamedKey::Backspace) => field.backspace(),
-                    Key::Character(text) => {
-                        if event.modifiers.is_empty() {
-                            for ch in text.chars() {
-                                field.insert(ch);
-                            }
+                    Key::Character(text) if event.modifiers.is_empty() => {
+                        for ch in text.chars() {
+                            field.insert(ch);
                         }
                     }
                     _ => {}

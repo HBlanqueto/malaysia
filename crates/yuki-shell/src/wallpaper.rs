@@ -28,19 +28,10 @@ struct DecodedImage {
 }
 
 /// What the component draws and the files it last read.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 struct Snapshot {
     image: Option<ImageHandle>,
     current: Option<PathBuf>,
-}
-
-impl Default for Snapshot {
-    fn default() -> Self {
-        Self {
-            image: None,
-            current: None,
-        }
-    }
 }
 
 struct WallpaperApp {
