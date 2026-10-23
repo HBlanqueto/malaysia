@@ -18,15 +18,28 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
    se aplicarán a todas las ventanas.
 3. **La shell es nativa y separada** (ADR 0023/0025). Un proceso `yuki-shell`
    por componente; el compositor compone, coloca, da input y aplica efectos.
-4. **Sin Skia** (ADR 0024/0032). El stack es GLES + `grade-graphics` +
-   `celestial-kit` (toolkit de la shell y apps). El compositor dibuja su chrome
-   con su propio renderer y `cosmic-text` para el título.
+4. **Skia solo en clientes** (ADR 0034). La shell y las apps propias dibujan
+   toda su UI con `celestial-kit` (Skia/Freya); el compositor sigue con GLES,
+   `grade-graphics` y `cosmic-text`, y nunca enlaza Skia ni `freya-*`.
 5. **macOS como referencia de UX**, no de código. Otto se lee como ideas; si se
    copia código MIT suyo, se actualiza `NOTICE`.
 6. **El diseño se aprueba en Neptunia y se implementa en Yuki.** Los cambios
    visuales se prueban en `demo.slint`/`slint-viewer` (o en los lienzos de
    Neptunia) y se vuelcan a los JSON; después se portan a `yuki-design` y al
    toolkit. No se inventan pantallas directamente en Rust.
+
+## Reparto de dibujo
+
+| Quién | Qué dibuja | Cómo |
+|---|---|---|
+| Shell (`yuki-shell wallpaper/menubar/dock/lock`) | Toda su UI, en su propio proceso | CelestialKit (Freya + Skia) sobre su superficie |
+| Apps propias | Su UI, **su titlebar y sus semáforos** (CSD, `xdg-decoration` client-side) | CelestialKit + tokens de `yuki-design` |
+| Apps ajenas que piden SSD | Su contenido | El compositor les añade la titlebar SSD (`chrome.rs`) |
+| Compositor (Yuki) | Composición, sombras, esquinas, desenfoque y animaciones de ventana | GLES + `grade-graphics`, como WindowServer |
+
+La shell y las apps propias **no** usan la titlebar del compositor. El kit
+pedirá los efectos del compositor por Infinity cuando esté disponible; hasta
+entonces el compositor los aplica igualmente a todas las superficies.
 
 ## Capas y orden de composición
 

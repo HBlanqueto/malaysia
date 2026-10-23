@@ -39,6 +39,24 @@ del backend de ventanas.
 8. **Subir a Freya 0.5 cuando sea estable**, en su propio commit, regenerando
    Skia.
 
+## Reparto de dibujo
+
+El reparto sigue el de macOS (Dock, SystemUIServer y loginwindow frente a
+WindowServer), no una división por tipo de app:
+
+1. **La shell** (wallpaper, menubar, dock, lock) **y las apps propias dibujan
+   toda su UI con CelestialKit**, cada componente en su propio proceso. No hay
+   chrome dibujado por el compositor dentro de la shell.
+2. **Las apps propias dibujan su titlebar y sus semáforos con el kit** (CSD,
+   `xdg-decoration` en modo client-side) y con los tokens de `yuki-design`.
+3. **El compositor sigue componiendo y aplicando los efectos** (sombras,
+   esquinas, desenfoque y animaciones de ventana) en GLES con
+   `grade-graphics`, como WindowServer. Más adelante, el kit los pedirá por
+   Infinity.
+4. **Las apps ajenas que piden SSD siguen recibiendo la titlebar del
+   compositor.** `chrome.rs` y el camino de render del compositor no cambian
+   por esta ADR.
+
 ## Consecuencias
 
 - `celestial-kit` gana un runner Wayland propio; el kit deja de ser un módulo de
