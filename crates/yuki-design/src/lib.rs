@@ -291,6 +291,53 @@ pub struct ShellPalette {
     pub tile_text_active: Rgba,
 }
 
+/// The colours and metrics of a Neptunia menu popup.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuPalette {
+    /// Panel background (`bg-raised`).
+    pub bg: Rgba,
+    /// Panel corner radius.
+    pub radius: f32,
+    /// Panel padding.
+    pub padding: f32,
+    /// Panel shadow colour.
+    pub shadow: Rgba,
+    /// Panel border colour.
+    pub border: Rgba,
+    /// Item height.
+    pub item_height: f32,
+    /// Item corner radius.
+    pub item_radius: f32,
+    /// Item horizontal padding.
+    pub item_padding_x: f32,
+    /// Item font size.
+    pub font_size: f32,
+    /// Item text colour (`ink`).
+    pub fg: Rgba,
+    /// Shortcut text colour (`ink-muted`).
+    pub shortcut_color: Rgba,
+    /// Item hover background (`accent`).
+    pub hover_bg: Rgba,
+    /// Item hover foreground (`on-accent`).
+    pub hover_fg: Rgba,
+    /// Disabled item foreground (`ink-faint`).
+    pub disabled_fg: Rgba,
+    /// Separator line colour (`line`).
+    pub separator_color: Rgba,
+    /// Separator line height.
+    pub separator_height: f32,
+    /// Separator horizontal margin.
+    pub separator_margin_x: f32,
+    /// Separator vertical margin.
+    pub separator_margin_y: f32,
+    /// Width reserved for the check/radio mark column.
+    pub mark_width: f32,
+    /// Submenu chevron size.
+    pub chevron_size: f32,
+    /// Submenu chevron colour (`ink-muted`).
+    pub chevron_color: Rgba,
+}
+
 /// The lock screen colours: Neptunia `bg-surface`, `ink`, `ink-muted`,
 /// `danger` and `accent` for the focused field.
 #[derive(Debug, Clone, Copy, PartialEq)]

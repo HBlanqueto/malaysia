@@ -34,6 +34,7 @@ fn main() {
     emit_shadows(&mut out, &tokens);
     emit_palettes(&mut out, &tokens, &components);
     emit_shell(&mut out, &tokens, &components);
+    emit_menu(&mut out, &tokens, &components);
     emit_metrics(&mut out, &components);
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
@@ -823,6 +824,130 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
     );
     const_doc(out, "LOCK", "The lock screen palette.");
     out.push_str(&format!(": LockPalette = {lock};\n\n"));
+}
+
+fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String {
+    let color_at = |path: &str| {
+        color_ref(
+            tokens,
+            theme,
+            string(components, path, COMPONENTS),
+            path,
+            COMPONENTS,
+        )
+    };
+    let radius = metric(
+        tokens,
+        components,
+        "components.shell.menu.panel.radius",
+        COMPONENTS,
+    );
+    let item_radius = metric(
+        tokens,
+        components,
+        "components.shell.menu.item.radius",
+        COMPONENTS,
+    );
+    format!(
+        "MenuPalette {{\n\
+         \x20   bg: {},\n\
+         \x20   radius: {},\n\
+         \x20   padding: {},\n\
+         \x20   shadow: {},\n\
+         \x20   border: {},\n\
+         \x20   item_height: {},\n\
+         \x20   item_radius: {},\n\
+         \x20   item_padding_x: {},\n\
+         \x20   font_size: {},\n\
+         \x20   fg: {},\n\
+         \x20   shortcut_color: {},\n\
+         \x20   hover_bg: {},\n\
+         \x20   hover_fg: {},\n\
+         \x20   disabled_fg: {},\n\
+         \x20   separator_color: {},\n\
+         \x20   separator_height: {},\n\
+         \x20   separator_margin_x: {},\n\
+         \x20   separator_margin_y: {},\n\
+         \x20   mark_width: {},\n\
+         \x20   chevron_size: {},\n\
+         \x20   chevron_color: {},\n\
+         }}",
+        rgba(color_at("components.shell.menu.panel.bg")),
+        float(radius),
+        float(number(
+            components,
+            "components.shell.menu.panel.padding",
+            COMPONENTS
+        )),
+        rgba(color_at("components.shell.menu.panel.shadow")),
+        rgba(color_at("components.shell.menu.panel.border")),
+        float(number(
+            components,
+            "components.shell.menu.item.height",
+            COMPONENTS
+        )),
+        float(item_radius),
+        float(number(
+            components,
+            "components.shell.menu.item.padding-x",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.item.font-size",
+            COMPONENTS
+        )),
+        rgba(color_at("components.shell.menu.item.fg")),
+        rgba(color_at("components.shell.menu.item.shortcut-color")),
+        rgba(color_at("components.shell.menu.item.hover-bg")),
+        rgba(color_at("components.shell.menu.item.hover-fg")),
+        rgba(color_at("components.shell.menu.item.disabled-fg")),
+        rgba(color_at("components.shell.menu.separator.color")),
+        float(number(
+            components,
+            "components.shell.menu.separator.height",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.separator.margin-x",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.separator.margin-y",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.mark.width",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.chevron.size",
+            COMPONENTS
+        )),
+        rgba(color_at("components.shell.menu.chevron.color")),
+    )
+}
+
+fn emit_menu(out: &mut String, tokens: &Value, components: &Value) {
+    for (name, theme) in [
+        ("MENU_LIGHT", "light"),
+        ("MENU_DARK", "dark"),
+        ("MENU_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} menu popup palette and metrics."),
+        );
+        out.push_str(&format!(
+            ": MenuPalette = {};\n\n",
+            menu_palette_value(tokens, components, theme)
+        ));
+    }
 }
 
 fn emit_metrics(out: &mut String, components: &Value) {

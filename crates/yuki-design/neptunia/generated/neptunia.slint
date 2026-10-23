@@ -14,7 +14,7 @@ export global Theme {
     // Colores (por tema)
     out property <color> accent: mode == NeptuniaMode.dark ? #2f6fe4 : mode == NeptuniaMode.dark-tint ? #2f6fe4 : #2f6fe4;
     out property <color> accent-hover: mode == NeptuniaMode.dark ? #2560cf : mode == NeptuniaMode.dark-tint ? #2560cf : #2560cf;
-    out property <color> accent-soft: mode == NeptuniaMode.dark ? #1f3358 : mode == NeptuniaMode.dark-tint ? #1f3358 : #dbe7fd;
+    out property <color> accent-soft: mode == NeptuniaMode.dark ? #1f3358 : mode == NeptuniaMode.dark-tint ? #1f3358 : #1f3358;
     out property <color> accent-strong: mode == NeptuniaMode.dark ? #6aa2ff : mode == NeptuniaMode.dark-tint ? #6aa2ff : #1f53bd;
     out property <color> bg-control: mode == NeptuniaMode.dark ? #3a3a3a : mode == NeptuniaMode.dark-tint ? #38393d : #e3e8ef;
     out property <color> bg-hover: mode == NeptuniaMode.dark ? #444444 : mode == NeptuniaMode.dark-tint ? #424448 : #dde3eb;
@@ -44,6 +44,7 @@ export global Theme {
     out property <color> preview-light-sunken: mode == NeptuniaMode.dark ? #e7ebf1 : mode == NeptuniaMode.dark-tint ? #e7ebf1 : #e7ebf1;
     out property <color> preview-light-window: mode == NeptuniaMode.dark ? #f2f4f7 : mode == NeptuniaMode.dark-tint ? #f2f4f7 : #f2f4f7;
     out property <color> scrim: mode == NeptuniaMode.dark ? #00000080 : mode == NeptuniaMode.dark-tint ? #00000080 : #0d121947;
+    out property <color> shadow-float: mode == NeptuniaMode.dark ? #00000066 : mode == NeptuniaMode.dark-tint ? #00000066 : #00000066;
     out property <color> shadow-soft: mode == NeptuniaMode.dark ? #0d12192e : mode == NeptuniaMode.dark-tint ? #0d12192e : #0d12192e;
     out property <color> shell-bar: mode == NeptuniaMode.dark ? #1e1e1ee6 : mode == NeptuniaMode.dark-tint ? #1d1e20e6 : #f2f4f7e6;
     out property <color> success: mode == NeptuniaMode.dark ? #5fcf7c : mode == NeptuniaMode.dark-tint ? #5fcf7c : #1a7f37;
@@ -243,6 +244,17 @@ export global Metrics {
     out property <length> shell-lock-status-offset: 22px;
     out property <float> shell-lock-title-scale: 1.500000;
     out property <length> shell-lock-title-y-divisor: 3px;
+    out property <length> shell-menu-chevron-size: 8px;
+    out property <length> shell-menu-item-font-size: 13px;
+    out property <length> shell-menu-item-height: 24px;
+    out property <length> shell-menu-item-padding-x: 10px;
+    out property <length> shell-menu-item-radius: 8px;
+    out property <length> shell-menu-mark-width: 16px;
+    out property <length> shell-menu-panel-padding: 5px;
+    out property <length> shell-menu-panel-radius: 12px;
+    out property <length> shell-menu-separator-height: 1px;
+    out property <length> shell-menu-separator-margin-x: 10px;
+    out property <length> shell-menu-separator-margin-y: 5px;
     out property <length> shell-menubar-font-size: 13px;
     out property <length> shell-menubar-height: 28px;
     out property <length> shell-menubar-margin: 10px;

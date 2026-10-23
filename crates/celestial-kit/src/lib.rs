@@ -30,3 +30,6 @@ pub mod animation;
 
 /// The named controls the shell and apps use.
 pub mod controls;
+
+/// Neptunia menu popup control (global menus, context menus).
+pub mod menu;

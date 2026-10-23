@@ -8,7 +8,7 @@ QtObject {
   readonly property string fontScript: "Dancing Script"
   readonly property color light_accent: #2f6fe4;
   readonly property color light_accent_hover: #2560cf;
-  readonly property color light_accent_soft: #dbe7fd;
+  readonly property color light_accent_soft: #1f3358;
   readonly property color light_accent_strong: #1f53bd;
   readonly property color light_bg_control: #e3e8ef;
   readonly property color light_bg_hover: #dde3eb;
@@ -38,6 +38,7 @@ QtObject {
   readonly property color light_preview_light_sunken: #e7ebf1;
   readonly property color light_preview_light_window: #f2f4f7;
   readonly property color light_scrim: #0d121947;
+  readonly property color light_shadow_float: #00000066;
   readonly property color light_shadow_soft: #0d12192e;
   readonly property color light_shell_bar: #f2f4f7e6;
   readonly property color light_success: #1a7f37;
@@ -104,6 +105,7 @@ QtObject {
   readonly property color dark_preview_light_sunken: #e7ebf1;
   readonly property color dark_preview_light_window: #f2f4f7;
   readonly property color dark_scrim: #00000080;
+  readonly property color dark_shadow_float: #00000066;
   readonly property color dark_shadow_soft: #0d12192e;
   readonly property color dark_shell_bar: #1e1e1ee6;
   readonly property color dark_success: #5fcf7c;
@@ -170,6 +172,7 @@ QtObject {
   readonly property color dark_tint_preview_light_sunken: #e7ebf1;
   readonly property color dark_tint_preview_light_window: #f2f4f7;
   readonly property color dark_tint_scrim: #00000080;
+  readonly property color dark_tint_shadow_float: #00000066;
   readonly property color dark_tint_shadow_soft: #0d12192e;
   readonly property color dark_tint_shell_bar: #1d1e20e6;
   readonly property color dark_tint_success: #5fcf7c;

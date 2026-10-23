@@ -409,6 +409,39 @@
         "open-duration": 180,
         "close-duration": 120,
         "scale-from": 0.96
+      },
+      "menu": {
+        "panel": {
+          "padding": 5,
+          "radius": "radius.md",
+          "bg": "bg-raised",
+          "shadow": "shadow-float",
+          "border": "line"
+        },
+        "item": {
+          "height": 24,
+          "radius": "radius.sm",
+          "padding-x": 10,
+          "font-size": 13,
+          "fg": "ink",
+          "shortcut-color": "ink-muted",
+          "hover-bg": "accent",
+          "hover-fg": "on-accent",
+          "disabled-fg": "ink-faint"
+        },
+        "separator": {
+          "height": 1,
+          "margin-x": 10,
+          "margin-y": 5,
+          "color": "line"
+        },
+        "mark": {
+          "width": 16
+        },
+        "chevron": {
+          "size": 8,
+          "color": "ink-muted"
+        }
       }
     }
   },

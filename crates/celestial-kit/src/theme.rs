@@ -8,7 +8,10 @@ use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::Color;
 use yuki_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
-use yuki_design::{LockPalette, Rgba, SHELL_DARK, SHELL_DARK_TINT, SHELL_LIGHT, ShellPalette};
+use yuki_design::{
+    LockPalette, MENU_DARK, MENU_DARK_TINT, MENU_LIGHT, MenuPalette, Rgba, SHELL_DARK,
+    SHELL_DARK_TINT, SHELL_LIGHT, ShellPalette,
+};
 
 fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
@@ -98,6 +101,15 @@ pub fn for_scheme(dark: bool) -> Theme {
         dark,
         sheet(palette.bar, palette.tile, text, palette.tile_active, border),
     )
+}
+
+/// The menu palette for the current appearance.
+pub fn menu_palette(resolved: &Resolved) -> MenuPalette {
+    match resolved.scheme {
+        ColorScheme::Dark => MENU_DARK,
+        ColorScheme::DarkTint => MENU_DARK_TINT,
+        ColorScheme::Auto | ColorScheme::Light => MENU_LIGHT,
+    }
 }
 
 /// The theme for menubar/dock-style surfaces.
