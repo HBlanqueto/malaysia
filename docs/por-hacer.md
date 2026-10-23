@@ -84,10 +84,11 @@ semáforos de 12, tema claro por defecto.
       `freya-clipboard → smithay-clipboard → smithay-client-toolkit 0.20`
       frente a la 0.19 del runner. Se va con el portapapeles propio o subiendo
       el runner a 0.20 cuando sea compatible.
-- [ ] **Recuperación del lock con el runner nuevo** verificada (superficie de
-      recuperación creada y sin bucle); falta el desbloqueo PAM real y medir
-      con `WAYLAND_DEBUG=1` que cada lock nuevo crea una sola
-      `get_lock_surface` por salida.
+- [x] **Recuperación del lock con el runner nuevo**: matar el cliente con
+      `kill -9` crea la superficie de recuperación, sin bucle (0 % de CPU) y
+      con una sola `get_lock_surface` por salida y objeto `ext_session_lock_v1`
+      (`WAYLAND_DEBUG=1`). Falta probar el desbloqueo PAM real con credenciales
+      y en panel físico.
 
 ## Después, en orden
 

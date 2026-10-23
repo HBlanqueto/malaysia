@@ -376,7 +376,9 @@ Derivado del ADR 0034; no es un bloque nuevo ni renumera nada.
 - Mantener Grade Animation como módulo del kit sobre `freya-animation`.
 
 Estado (2026-10-22): runner Wayland, tema, controles y los cuatro componentes
-migrados; Skia de Nix para `freya-skia-bindings` 0.98.0. Pendiente: recuperación
-del lock tras la muerte del cliente (Smithay conserva `locked_outputs` y el
-cliente de recuperación recibe `duplicate_output`), escalas fraccionales y
-accesibilidad en el runner.
+migrados; Skia de Nix para `freya-skia-bindings` 0.98.0. La recuperación del
+lock con el runner nuevo se verificó (matar el cliente con `kill -9` crea una
+superficie nueva, una sola `get_lock_surface` por salida y sin bucle). El
+`duplicate_output` anterior era de dos clientes de lock a la vez (uno de
+recuperación y otro manual), no de un lock nuevo heredando estado. Siguen
+escalas fraccionales, accesibilidad y el desbloqueo PAM de extremo a extremo.
