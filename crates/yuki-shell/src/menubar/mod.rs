@@ -152,10 +152,10 @@ pub fn create_desktop_folder() {
     let desktop = xdg_user_dir("DESKTOP")
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
         .unwrap_or_else(|| PathBuf::from("."));
-    let mut target = desktop.join("Nueva carpeta");
+    let mut target = desktop.join("Carpeta sin título");
     if target.exists() {
         for i in 2..100 {
-            target = desktop.join(format!("Nueva carpeta {i}"));
+            target = desktop.join(format!("Carpeta sin título {i}"));
             if !target.exists() {
                 break;
             }
