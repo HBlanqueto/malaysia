@@ -650,12 +650,17 @@ impl Udev {
                     self.frame_was_empty = true;
                     tracing::debug!("frame skipped: no damage");
                 }
+                // A commit that only asked for a frame callback has no damage
+                // to queue, so there is no VBlank to send the callback. Answer
+                // it here in the next ~refresh cycle instead of stalling.
+                let time = self.start_time.elapsed();
                 crate::session::send_presentation_feedbacks_for_state(
                     &self.state,
-                    self.start_time.elapsed(),
+                    time,
                     self.vblank_count,
                     false,
                 );
+                crate::session::send_frame_callbacks_for_state(&self.state, time);
                 self.schedule_repaint();
             }
             Err(error) => {

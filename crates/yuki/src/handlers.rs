@@ -185,8 +185,26 @@ impl CompositorHandler for State {
             self.inject_test_screenshot();
         }
         self.popup_commit(surface);
-        self.request_redraw();
+        // A mapped surface that commits damage or asks for a frame callback
+        // must reach the next output repaint. Without this, a popup that
+        // updates while a sibling/parent surface is idle never gets a frame
+        // callback and stalls (Bloque 14a keyboard navigation).
+        if commit_requests_redraw(surface) {
+            self.request_redraw();
+        }
     }
+}
+
+/// Whether a committed surface needs the output to repaint (damage) or at
+/// least receive its pending frame callbacks in the next cycle.
+fn commit_requests_redraw(surface: &WlSurface) -> bool {
+    with_states(surface, |states| {
+        let mut cached = states.cached_state.get::<SurfaceAttributes>();
+        let attrs = cached.current();
+        let has_damage = attrs.buffer.is_some() || !attrs.damage.is_empty();
+        let requests_frame = !attrs.frame_callbacks.is_empty();
+        has_damage || requests_frame
+    })
 }
 
 /// Which commit blocker a pending dmabuf needs, if any (Bloque 7b).
