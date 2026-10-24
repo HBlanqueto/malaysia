@@ -197,9 +197,9 @@ instala el paquete, registra la sesión, crea `/etc/pam.d/yuki-lock` y arranca
 
 ## Convenciones de commits
 
-Los mensajes llevan tipo entre paréntesis cuando el cambio se limita a un área:
-`fix(kit): …`, `docs(14a): …`, `feat(compositor): …`. Nunca `kit: …` ni
-`compositor: …` sin tipo.
+El tipo va delante y el ámbito entre paréntesis: `fix(kit): …`,
+`docs(14a): …`, `feat(compositor): …`. Tipos: `feat`, `fix`, `docs`,
+`refactor`, `test`, `perf`, `chore`, `build`. Nunca `kit: …` sin tipo.
 
 ## Regla de entorno (permanente)
 
