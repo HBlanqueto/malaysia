@@ -25,8 +25,6 @@ use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba,
 
 const MAX_TITLES: usize = 8;
 
-type MenuBuilder = fn() -> Vec<MenuItem>;
-
 pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
@@ -82,7 +80,7 @@ impl App for BarApp {
             label: "Sistema".to_string(),
             glyph: Some(system::SNOWFLAKE_SVG),
             bold: false,
-            items: system::system_menu_items,
+            items: Rc::new(system::system_menu_items),
             on_activate: system::on_system_action,
             anchor_x: anchors[0].clone(),
             enabled: true,
@@ -92,20 +90,24 @@ impl App for BarApp {
                 label: app,
                 glyph: None,
                 bold: true,
-                items: no_items,
+                items: Rc::new(no_items),
                 on_activate: ignore_action,
                 anchor_x: anchors[1].clone(),
                 enabled: false,
             });
         } else {
-            let menus: [(&str, MenuBuilder); 7] = [
-                ("Yuki", appmenu::yuki_menu_items),
-                ("Archivo", appmenu::file_menu_items),
-                ("Edición", appmenu::edit_menu_items),
-                ("Visualización", appmenu::view_menu_items),
-                ("Ir", appmenu::go_menu_items),
-                ("Ventana", appmenu::window_menu_items),
-                ("Ayuda", appmenu::help_menu_items),
+            let entries_for_window = self.entries.clone();
+            let menus: [(&str, Rc<dyn Fn() -> Vec<MenuItem>>); 7] = [
+                ("Yuki", Rc::new(appmenu::yuki_menu_items)),
+                ("Archivo", Rc::new(appmenu::file_menu_items)),
+                ("Edición", Rc::new(appmenu::edit_menu_items)),
+                ("Visualización", Rc::new(appmenu::view_menu_items)),
+                ("Ir", Rc::new(appmenu::go_menu_items)),
+                (
+                    "Ventana",
+                    Rc::new(move || appmenu::window_menu_items(&entries_for_window)),
+                ),
+                ("Ayuda", Rc::new(appmenu::help_menu_items)),
             ];
             for (offset, (label, items)) in menus.into_iter().enumerate() {
                 specs.push(MenuTitleSpec {

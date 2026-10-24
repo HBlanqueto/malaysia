@@ -30,7 +30,7 @@ pub struct MenuTitleSpec {
     pub glyph: Option<&'static [u8]>,
     /// Draw the label in the bold app-name weight.
     pub bold: bool,
-    pub items: fn() -> Vec<MenuItem>,
+    pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
     pub on_activate: fn(String),
     pub anchor_x: Rc<Cell<f32>>,
     pub enabled: bool,

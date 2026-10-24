@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use celestial_kit::menu::{CheckState, MenuItem};
 use celestial_kit::platform::{ToplevelInfo, Toplevels};
 
-use crate::menubar::{create_desktop_folder, spawn_component, xdg_open, xdg_user_dir};
+use crate::desktop::DesktopEntry;
+use crate::menubar::{create_desktop_folder, resolve_app_name, spawn_component, xdg_open, xdg_user_dir};
 
 /// The Yuki menu (about, settings, empty trash).
 pub fn yuki_menu_items() -> Vec<MenuItem> {
@@ -77,7 +78,7 @@ pub fn go_menu_items() -> Vec<MenuItem> {
 }
 
 /// The Ventana menu: minimize/show desktop and the open windows.
-pub fn window_menu_items() -> Vec<MenuItem> {
+pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     let mut items = vec![
         action("window-minimize-all", "Minimizar todo", true),
         action("window-show-desktop", "Mostrar escritorio", true),
@@ -89,10 +90,11 @@ pub fn window_menu_items() -> Vec<MenuItem> {
         items.push(action("window-none", "No hay ventanas abiertas", false));
     } else {
         for (index, window) in windows.iter().enumerate() {
-            let label = if window.title.is_empty() {
-                window.app_id.clone()
+            let name = resolve_app_name(Some(&window.app_id), entries);
+            let label = if window.title.is_empty() || window.title == name {
+                name
             } else {
-                window.title.clone()
+                format!("{name} — {title}", title = window.title)
             };
             items.push(action(format!("window-activate-{index}"), label, true));
         }
