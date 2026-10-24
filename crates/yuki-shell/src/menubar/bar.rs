@@ -16,7 +16,7 @@ use celestial_kit::platform::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_appearance::data_dir;
+use yuki_appearance::{Resolved, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
@@ -32,6 +32,7 @@ type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
 pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
+    pub appearance: State<Option<Resolved>>,
     pub window_store: PathBuf,
     pub entries: Vec<DesktopEntry>,
 }
@@ -46,6 +47,11 @@ impl App for BarApp {
         let active_app = self.active_app;
         let window_store = self.window_store.clone();
         use_hook(move || schedule_active_poll(timers, window_store, active_app));
+
+        let timers = Timers::get();
+        let appearance = self.appearance;
+        use_hook(move || schedule_appearance_poll(timers, appearance));
+        let _appearance = *self.appearance.read();
 
         let now = self.clock.read().clone();
         let app_id = self.active_app.read().clone();
@@ -155,6 +161,18 @@ fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State
     });
 }
 
+fn schedule_appearance_poll(timers: Timers, appearance: State<Option<Resolved>>) {
+    let retry = timers.clone();
+    timers.after(std::time::Duration::from_millis(500), move || {
+        let resolved = celestial_kit::theme::resolved();
+        let mut appearance = appearance;
+        if appearance.peek().as_ref() != Some(&resolved) {
+            appearance.set(Some(resolved));
+        }
+        schedule_appearance_poll(retry.clone(), appearance);
+    });
+}
+
 fn schedule_next_minute(timers: Timers, clock: State<String>) {
     let retry = timers.clone();
     timers.after(seconds_to_next_minute(), move || {
@@ -198,9 +216,11 @@ pub fn run() -> anyhow::Result<()> {
     let entries = crate::desktop::read_entries();
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
+    let appearance = State::create_global(Some(celestial_kit::theme::resolved()));
     let app = AppComponent::new(BarApp {
         clock,
         active_app,
+        appearance,
         window_store,
         entries,
     });

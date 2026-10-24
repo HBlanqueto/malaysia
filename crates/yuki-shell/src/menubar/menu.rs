@@ -174,12 +174,17 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let anchor = spec.anchor.clone();
     let is_open = state.open_label.borrow().read().as_deref() == Some(&label_text);
 
-    let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
+    let resolved = celestial_kit::theme::resolved();
+    let palette = celestial_kit::theme::menu_palette(&resolved);
     let hover_bg = rgba(palette.bar_hover_bg);
-    let hover_fg = rgba(palette.bar_hover_fg);
-    let normal_fg =
-        rgba(celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved()).text);
-    let fg = if is_open { hover_fg } else { normal_fg };
+    let hover_fg_rgba = palette.bar_hover_fg;
+    let normal_fg_rgba = celestial_kit::theme::shell_palette(&resolved).text;
+    let fg_rgba = if is_open {
+        hover_fg_rgba
+    } else {
+        normal_fg_rgba
+    };
+    let fg = rgba(fg_rgba);
 
     let mut container = rect()
         .height(Size::px(MENUBAR_HEIGHT as f32))
@@ -195,25 +200,27 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         container = container.background(hover_bg);
     }
 
-    let content = match spec.glyph {
-        Some(glyph) => SvgViewer::new(("menubar-snowflake", Bytes::from_static(glyph)))
+    let content = if let Some(glyph) = spec.glyph {
+        let [r, g, b, _] = fg_rgba.to_rgba8();
+        let hex = format!("#{:02x}{:02x}{:02x}", r, g, b);
+        let svg = String::from_utf8_lossy(glyph).replace("currentColor", &hex);
+        SvgViewer::new(("menubar-snowflake", Bytes::from(svg)))
             .width(Size::px(16.0))
             .height(Size::px(16.0))
             .color(fg)
             .show_loader(false)
-            .into_element(),
-        None => {
-            let mut text = label()
-                .text(label_text.clone())
-                .font_size(13.0)
-                .max_lines(1)
-                .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
-                .color(fg);
-            if spec.bold {
-                text = text.font_weight(MENUBAR_APP_NAME_WEIGHT);
-            }
-            text.into_element()
+            .into_element()
+    } else {
+        let mut text = label()
+            .text(label_text.clone())
+            .font_size(13.0)
+            .max_lines(1)
+            .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
+            .color(fg);
+        if spec.bold {
+            text = text.font_weight(MENUBAR_APP_NAME_WEIGHT);
         }
+        text.into_element()
     };
     container = container.child(content);
 
