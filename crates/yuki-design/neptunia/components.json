@@ -367,7 +367,9 @@
         "margin": 10,
         "title-max-width": 240,
         "bg": "{shell-bar}",
-        "text": "{ink-strong}"
+        "text": "{ink-strong}",
+        "hover-bg": "{bg-hover}",
+        "hover-fg": "{ink-strong}"
       },
       "dock": {
         "tilesize": 48,

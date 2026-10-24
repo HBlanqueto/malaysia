@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use celestial_kit::menu::{CheckState, MenuItem, MenuView};
+use celestial_kit::menu::{CheckState, MenuItem, MenuView, measure_text};
 use celestial_kit::platform::{
     Anchors, KeyboardInteractivity, Layer, PopupAnchor, PopupConstraintAdjustment, PopupGravity,
     PopupHandle, PopupId, PopupSpec, Popups, SurfaceSpec, Timers, run_layer,
@@ -111,6 +111,18 @@ impl App for Demo {
             });
         }
 
+        // Anchor each root popup at the left edge of its title highlight.
+        // The bar has 12 px horizontal padding; each title has 8 px horizontal
+        // padding around its text, so the highlight edge is the text left edge
+        // minus 8 px.
+        let title_pad = 8.0;
+        let bar_pad = 12.0;
+        let yuki_x = bar_pad;
+        let ir_x = yuki_x + measure_text("Yuki", 13.0) + title_pad * 2.0;
+        let editar_x = ir_x + measure_text("Ir", 13.0) + title_pad * 2.0;
+
+        let open_label: OpenLabel = Rc::new(RefCell::new(use_state(|| None::<&'static str>)));
+
         if let Some(case) = show.clone() {
             let root_id = root_id.clone();
             let popups = Popups::get();
@@ -118,19 +130,29 @@ impl App for Demo {
             // The layer surface is configured after the first render, so read
             // the output width when the timer fires, not now.
             let platform = Platform::get();
+            let open_label = open_label.clone();
             use_hook(move || {
                 let root_id = root_id.clone();
                 let popups = popups.clone();
                 let case = case.clone();
                 let platform = platform.clone();
+                let open_label = open_label.clone();
                 timers.after(Duration::from_millis(500), move || {
                     let output_width = platform.root_size.read().width;
-                    open_show(&root_id, &case, palette, popups.clone(), output_width);
+                    open_show(
+                        &root_id,
+                        &case,
+                        palette,
+                        popups.clone(),
+                        output_width,
+                        yuki_x as i32,
+                        ir_x as i32,
+                        editar_x as i32,
+                        open_label.clone(),
+                    );
                 });
             });
         }
-
-        let open_label: OpenLabel = Rc::new(RefCell::new(use_state(|| None::<&'static str>)));
         let left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start)
@@ -144,14 +166,23 @@ impl App for Demo {
                         "Yuki",
                         yuki_menu(palette),
                         palette,
-                        12,
+                        yuki_x as i32,
                     )
                 }
             }))
             .child(menu_label("Ir", open_label.clone(), palette, {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
-                move || toggle_menu(&root_id, open_label.clone(), "Ir", go_menu(), palette, 56)
+                move || {
+                    toggle_menu(
+                        &root_id,
+                        open_label.clone(),
+                        "Ir",
+                        go_menu(),
+                        palette,
+                        ir_x as i32,
+                    )
+                }
             }))
             .child(menu_label("Editar", open_label.clone(), palette, {
                 let root_id = root_id.clone();
@@ -163,7 +194,7 @@ impl App for Demo {
                         "Editar",
                         edit_menu(),
                         palette,
-                        82,
+                        editar_x as i32,
                     )
                 }
             }));
@@ -319,17 +350,27 @@ fn toggle_menu(
 }
 
 /// Opens the menu named by `MENU_POPUP_SHOW`, without grab or real input.
+#[allow(clippy::too_many_arguments)]
 fn open_show(
     root_id: &Arc<Mutex<Option<PopupId>>>,
     case: &str,
     palette: yuki_design::MenuPalette,
     popups: Popups,
     output_width: f32,
+    _yuki_x: i32,
+    ir_x: i32,
+    editar_x: i32,
+    open_label: OpenLabel,
 ) {
-    let (items, anchor_x, nested) = match case {
-        "ir" => (go_menu(), 56, false),
-        "editar-sub" => (edit_menu(), 82, true),
-        "borde" => (edit_menu(), (output_width - 40.0).max(0.0) as i32, true),
+    let (items, anchor_x, nested, label) = match case {
+        "ir" => (go_menu(), ir_x, false, "Ir"),
+        "editar-sub" => (edit_menu(), editar_x, true, "Editar"),
+        "borde" => (
+            edit_menu(),
+            (output_width - 40.0).max(0.0) as i32,
+            true,
+            "Editar",
+        ),
         other => {
             eprintln!("menu_popup: MENU_POPUP_SHOW has no case {other:?}");
             return;
@@ -342,6 +383,7 @@ fn open_show(
             Popups::get().close(id);
         }
     });
+    let open_label_for_dismiss = open_label.clone();
     let content = if nested {
         let next = first_submenu(&items);
         AppComponent::new(NestedMenu {
@@ -376,11 +418,14 @@ fn open_show(
                 slide_y: true,
             },
             grab: false,
-            on_dismissed: None,
+            on_dismissed: Some(Rc::new(move || {
+                open_label_for_dismiss.borrow_mut().set(None);
+            })),
         },
         content,
     );
     root_id.lock().unwrap().replace(id);
+    open_label.borrow_mut().set(Some(label));
 }
 
 fn first_submenu(items: &[MenuItem]) -> Option<usize> {
@@ -499,17 +544,18 @@ fn menu_label(
     on_click: impl Fn() + 'static,
 ) -> Element {
     let is_open = *open_label.borrow().read() == Some(text);
+    let mut label = label().text(text).font_size(13.0);
     let mut rect = rect()
         .height(Size::px(BAR_HEIGHT - 8.0))
         .padding(Gaps::new(0.0, 8.0, 0.0, 8.0))
         .main_align(Alignment::Center)
         .corner_radius(4.0)
-        .on_mouse_down(move |_: Event<MouseEventData>| on_click())
-        .child(label().text(text).font_size(13.0));
+        .on_mouse_down(move |_: Event<MouseEventData>| on_click());
     if is_open {
-        rect = rect.background(rgba(palette.hover_bg));
+        rect = rect.background(rgba(palette.bar_hover_bg));
+        label = label.color(rgba(palette.bar_hover_fg));
     }
-    rect.into_element()
+    rect.child(label).into_element()
 }
 
 /// The "Ir" menu from docs/arquitectura/menubar.md, Spanish, with shortcuts.
@@ -761,6 +807,7 @@ fn rss_kb() -> usize {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
     let app = AppComponent::new(Demo {
         root_id: Arc::new(Mutex::new(None)),
     });

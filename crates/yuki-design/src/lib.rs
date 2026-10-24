@@ -332,6 +332,10 @@ pub struct MenuPalette {
     pub hover_bg: Rgba,
     /// Item hover foreground (`on-accent`).
     pub hover_fg: Rgba,
+    /// Open menubar-title background (`bg-hover`).
+    pub bar_hover_bg: Rgba,
+    /// Open menubar-title foreground (`ink-strong`).
+    pub bar_hover_fg: Rgba,
     /// Disabled item foreground (`ink-faint`).
     pub disabled_fg: Rgba,
     /// Separator line colour (`line`).

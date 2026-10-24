@@ -899,6 +899,8 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   mark_check: {},\n\
          \x20   chevron_size: {},\n\
          \x20   chevron_color: {},\n\
+         \x20   bar_hover_bg: {},\n\
+         \x20   bar_hover_fg: {},\n\
          }}",
         rgba(color_at("components.shell.menu.panel.bg")),
         float(radius),
@@ -993,6 +995,8 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
             COMPONENTS
         )),
         rgba(color_at("components.shell.menu.chevron.color")),
+        rgba(color_at("components.shell.menubar.hover-bg")),
+        rgba(color_at("components.shell.menubar.hover-fg")),
     )
 }
 

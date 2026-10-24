@@ -72,7 +72,8 @@ pub fn format_shortcut(text: &str) -> String {
     out
 }
 
-fn measure_text(text: &str, size: f32) -> f32 {
+/// Measures the width of `text` at `size` using the same font stack as menus.
+pub fn measure_text(text: &str, size: f32) -> f32 {
     if text.is_empty() {
         return 0.0;
     }

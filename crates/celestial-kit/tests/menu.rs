@@ -324,6 +324,18 @@ fn menu_text_stays_out_of_the_right_padding() {
     }
 }
 
+#[test]
+fn open_title_highlight_uses_neutral_hover_not_accent() {
+    for dark in [false, true] {
+        let palette = if dark { MENU_DARK } else { MENU_LIGHT };
+        let theme = if dark { "dark" } else { "light" };
+        assert_ne!(
+            palette.bar_hover_bg, palette.hover_bg,
+            "{theme}: title hover must not reuse the item accent"
+        );
+    }
+}
+
 fn long_label_items() -> Vec<MenuItem> {
     vec![MenuItem::Action {
         id: "long".to_string(),
