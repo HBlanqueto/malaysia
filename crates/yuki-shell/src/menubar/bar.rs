@@ -43,7 +43,6 @@ impl App for BarApp {
 
         let now = self.clock.read().clone();
         let app = self.app_name.read().clone();
-        let is_yuki = app == "Yuki";
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
         let text = rgba(palette.text);
         let bar = rgba(palette.bar);
@@ -81,7 +80,7 @@ impl App for BarApp {
                 items: Rc::new(appmenu::yuki_menu_items),
                 on_activate: Rc::new(appmenu::on_yuki_action),
                 anchor_x: app_anchor,
-                enabled: is_yuki,
+                enabled: true,
             },
         ]);
 

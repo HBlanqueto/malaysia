@@ -69,10 +69,17 @@ pub struct ActiveWindow {
     pub app_id: String,
 }
 
+#[derive(serde::Deserialize)]
+struct ActiveWindowStore {
+    active: ActiveWindow,
+}
+
 /// Reads the compositor's active-window store.
 pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
     let text = std::fs::read_to_string(store_path).ok()?;
-    toml::from_str(&text).ok()
+    toml::from_str::<ActiveWindowStore>(&text)
+        .ok()
+        .map(|store| store.active)
 }
 
 /// Converts a Yuki design RGBA into a Freya colour.
