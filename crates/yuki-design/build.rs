@@ -878,6 +878,7 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   inner_line: {},\n\
          \x20   shadow: {},\n\
          \x20   min_width: {},\n\
+         \x20   max_width: {},\n\
          \x20   item_height: {},\n\
          \x20   item_radius: {},\n\
          \x20   item_padding_x: {},\n\
@@ -917,6 +918,11 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
         float(number(
             components,
             "components.shell.menu.panel.min-width",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.panel.max-width",
             COMPONENTS
         )),
         float(number(

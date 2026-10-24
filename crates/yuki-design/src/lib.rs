@@ -310,6 +310,8 @@ pub struct MenuPalette {
     pub shadow: Rgba,
     /// Panel minimum logical width.
     pub min_width: f32,
+    /// Panel maximum logical width.
+    pub max_width: f32,
     /// Item height.
     pub item_height: f32,
     /// Item corner radius.
