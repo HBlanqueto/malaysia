@@ -25,11 +25,17 @@ La integración completa con `yuki-shell menubar` queda para el siguiente paso.
   - El control toma su paleta del tema activo a través de
     `celestial_kit::theme::menu_palette` (`MENU_LIGHT` / `MENU_DARK` /
     `MENU_DARK_TINT`). No hay colores fijos.
+  - El ancho del panel está limitado por `shell.menu.panel.max-width` (480 px
+    en Neptunia). Las etiquetas largas se truncan por el medio con «…»;
+    atajos y chevrons nunca se ocultan ni se parten.
+  - El menú raíz se ancla al borde inferior del rectángulo del título que lo
+    abre: queda pegado a la barra, con el título resaltado mientras el menú
+    permanece abierto.
   - Si no hay contexto de popup (previews, tests), `MenuView` se dibuja igual y
     simplemente no abre submenús.
   - Tests golden en `tests/golden/menu-view-{light,dark}.png` cubriendo item
-    normal, resaltado, deshabilitado, atajo, casilla, radio, separador y
-    chevron.
+    normal, resaltado, deshabilitado, atajo, casilla, radio, separador,
+    chevron y truncado por el medio.
 
 ## API
 
@@ -60,12 +66,15 @@ let view = MenuView::new(
 
 ## Ejemplo
 
-`celestial-kit/examples/menu_popup.rs` levanta una barra `layer-shell` de 28 px
-con `keyboard_interactivity = None`. Tiene entradas (`Yuki`, `Ir`, `Editar`)
+`celestial-kit/examples/menu_popup.rs` levanta una barra `layer-shell` cuya
+altura viene del token `MENUBAR_HEIGHT` de Neptunia y usa
+`keyboard_interactivity = None`. Tiene entradas (`Yuki`, `Ir`, `Editar`)
 que abren menús con submenús de dos niveles, casillas, radios y items
-deshabilitados. Los atajos se pasan como texto (`Ctrl+Shift+G`, `Alt+Inicio`)
-y el control los formatea con los glifos de macOS (`⌃⇧G`, `⌥Inicio`) en el
-orden `⌃⌥⇧❖`, sin `+` ni el glifo de Command.
+deshabilitados. El menú raíz se ancla al borde inferior del título (sin
+espacio extra), y el título permanece resaltado mientras su menú esté abierto.
+Los atajos se pasan como texto (`Ctrl+Shift+G`, `Alt+Inicio`) y el control
+los formatea con los glifos de macOS (`⌃⇧G`, `⌥Inicio`) en el orden
+`⌃⌥⇧❖`, sin `+` ni el glifo de Command.
 
 Para muestras sin entrada real, `MENU_POPUP_SHOW=<caso>` abre el menú por la
 API (sin grab) y lo deja abierto: `ir` abre «Ir» bajo su título, `editar-sub`
@@ -125,9 +134,12 @@ y un script de `YUKI_TEST_INPUT`:
 - **e.** Con foot enfocado, abrir y cerrar el menú produce
   `wl_keyboard.leave` y después `wl_keyboard.enter` en foot.
 - **f.** Navegación por teclado: abrir «Editar», bajar cinco veces hasta
-  «Ordenar por» (saltando «Rehacer» y los separadores), `→` abre el submenú con
-  «Nombre» enfocado y otro `key:Down` selecciona «Fecha». Se capturan los cuatro
-  estados con `SIGUSR1`; la secuencia usa solo teclado.
+  «Ordenar por» (saltando «Rehacer», separadores y items no seleccionables),
+  `→` abre el submenú con «Nombre» enfocado y otro `key:Down` selecciona
+  «Fecha». Se capturan los cuatro estados con `SIGUSR1`; la secuencia usa solo
+  teclado. El runner fuerza un redraw de todas las superficies cuando un popup
+  recibe una tecla, porque el compositor aún no repinta la salida solo por
+  daño de popup.
 - **g.** Un solo árbol abierto: abrir «Yuki» y luego pulsar «Editar» cierra el
   primero y abre el segundo; la captura muestra solo el menú de «Editar».
 
@@ -200,12 +212,13 @@ la línea exterior negra (`window-outer`) y la interior clara (`window-inner`).
 
 ![Navegación por teclado 1/4: menú abierto](img/14a/teclado-1.png)
 
-`teclado-1.png`: clic en «Editar»; el menú se abre con «Deshacer» enfocado.
+`teclado-1.png`: clic en «Editar»; el título se resalta y el menú se abre con
+«Deshacer» enfocado, pegado al borde inferior de la barra.
 
-![Navegación por teclado 2/4: «Ordenar por»](img/14a/teclado-2.png)
+![Navegación por teclado 2/4: «Iconos»](img/14a/teclado-2.png)
 
 `teclado-2.png`: `key:Down` × 5; el foco salta «Rehacer», separadores y items
-no seleccionables hasta «Ordenar por».
+no seleccionables hasta «Iconos».
 
 ![Navegación por teclado 3/4: submenú abierto](img/14a/teclado-3.png)
 
@@ -214,13 +227,24 @@ no seleccionables hasta «Ordenar por».
 ![Navegación por teclado 4/4: «Fecha»](img/14a/teclado-4.png)
 
 `teclado-4.png`: `key:Down` mueve el foco a «Fecha». La secuencia usa solo
-teclado; el runner comite un buffer nuevo tras cada evento de tecla, así que
-el compositor repinta sin necesidad de mover el puntero.
+teclado.
 
 ![Menús más anchos](img/14a/menus-anchos.png)
 
 `menus-anchos.png`: mismo menú con los tokens ajustados: ancho mínimo 220 px,
-`shortcut-gap` 24 px y relleno derecho 10 px.
+`shortcut-gap` 24 px, relleno derecho 10 px y ancla pegada al borde inferior
+de la barra con el título resaltado.
+
+![Menú anclado a la barra](img/14a/pegado-a-la-barra.png)
+
+`pegado-a-la-barra.png`: menú «Ir» abierto; el panel arranca exactamente en el
+borde inferior de la barra, sin espacio, y el título «Ir» permanece
+resaltado.
+
+![Detalle del anclado a la barra](img/14a/pegado-a-la-barra-zoom.png)
+
+`pegado-a-la-barra-zoom.png`: zoom ×4 de la unión entre el título resaltado y
+el borde superior del panel; no hay hueco entre ambos.
 
 ![Un solo árbol de menús a la vez](img/14a/un-solo-arbol.png)
 
