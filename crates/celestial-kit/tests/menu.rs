@@ -323,3 +323,40 @@ fn menu_text_stays_out_of_the_right_padding() {
         assert_right_padding_is_background(&render_accents(dark), palette, theme);
     }
 }
+
+fn long_label_items() -> Vec<MenuItem> {
+    vec![MenuItem::Action {
+        id: "long".to_string(),
+        label: "a".repeat(120),
+        shortcut: Some("Ctrl+Shift+VeryLongShortcut".to_string()),
+        enabled: true,
+        check: CheckState::None,
+    }]
+}
+
+fn render_long(dark: bool) -> Vec<u8> {
+    let palette = if dark { MENU_DARK } else { MENU_LIGHT };
+    let items = long_label_items();
+    let size = MenuView::preferred_size(&items, palette);
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}, palette));
+    let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
+    test.sync_and_update();
+    test.render().as_ref().to_vec()
+}
+
+#[test]
+fn a_120_character_label_is_truncated_in_the_middle_and_keeps_the_shortcut() {
+    for dark in [false, true] {
+        let palette = if dark { MENU_DARK } else { MENU_LIGHT };
+        let items = long_label_items();
+        let size = MenuView::preferred_size(&items, palette);
+        assert!(
+            size.0 <= palette.max_width,
+            "{}: menu width {} exceeds max_width {}",
+            if dark { "dark" } else { "light" },
+            size.0,
+            palette.max_width
+        );
+        assert_right_padding_is_background(&render_long(dark), palette, "long-label");
+    }
+}

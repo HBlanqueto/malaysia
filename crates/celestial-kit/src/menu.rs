@@ -89,6 +89,37 @@ fn measure_text(text: &str, size: f32) -> f32 {
     paragraph.max_intrinsic_width()
 }
 
+/// Truncates `text` in the middle with "…" so it fits `max_width`.
+/// The ellipsis is always included when truncating; if even that does not fit,
+/// the function falls back to the rightmost characters that do.
+fn truncate_middle(text: &str, max_width: f32, font_size: f32) -> String {
+    if max_width <= 0.0 || text.is_empty() || measure_text(text, font_size) <= max_width {
+        return text.to_string();
+    }
+    let ellipsis = "…";
+    let ellipsis_w = measure_text(ellipsis, font_size);
+    let max_body = (max_width - ellipsis_w).max(0.0);
+    let chars: Vec<char> = text.chars().collect();
+    let mut left = chars.len() / 2;
+    let mut right = chars.len() - left;
+    while left > 0 || right > 0 {
+        let body: String = chars
+            .iter()
+            .take(left)
+            .chain(chars.iter().skip(chars.len() - right))
+            .collect();
+        if measure_text(&body, font_size) <= max_body {
+            return format!("{body}{ellipsis}");
+        }
+        if left >= right && left > 0 {
+            left -= 1;
+        } else {
+            right = right.saturating_sub(1);
+        }
+    }
+    ellipsis.to_string()
+}
+
 /// State of a check/radio mark in a menu item.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CheckState {
@@ -180,8 +211,9 @@ impl MenuView {
 
     /// Returns the logical size needed to render `items` with `palette`.
     ///
-    /// The width is measured with Skia using the same font size as the render,
-    /// so labels with accents and long shortcuts are never truncated or wrapped.
+    /// Labels are measured with Skia and truncated in the middle with "…" when
+    /// they would exceed `panel.max_width`. Shortcuts and chevrons always stay
+    /// visible and are never wrapped.
     pub fn preferred_size(items: &[MenuItem], m: MenuPalette) -> (f32, f32) {
         let inset = 2.0 * m.border_width + m.padding;
         let content_height: f32 = items
@@ -191,13 +223,13 @@ impl MenuView {
                 _ => m.item_height,
             })
             .sum();
-        let mut max_content_width = m.min_width;
+        let max_content_width = (m.max_width - inset * 2.0).max(m.min_width);
+        let mut content_width = m.min_width;
 
         for item in items {
             let Some(label) = item.label() else {
                 continue;
             };
-            let label_w = measure_text(label, m.font_size);
             let shortcut_w = item
                 .shortcut()
                 .map(|s| measure_text(&s, m.font_size))
@@ -209,11 +241,15 @@ impl MenuView {
             } else {
                 0.0
             };
-            let content_w = m.item_padding_x * 2.0 + m.mark_width + label_w + trailing;
-            max_content_width = max_content_width.max(content_w);
+            let fixed = m.item_padding_x * 2.0 + m.mark_width + trailing;
+            let max_label_w = (max_content_width - fixed).max(0.0);
+            let label = truncate_middle(label, max_label_w, m.font_size);
+            let label_w = measure_text(&label, m.font_size);
+            let content_w = fixed + label_w;
+            content_width = content_width.max(content_w);
         }
 
-        let width = max_content_width + inset * 2.0;
+        let width = content_width.min(max_content_width) + inset * 2.0;
         let height = content_height + inset * 2.0;
         (width.ceil(), height.ceil())
     }
@@ -635,6 +671,18 @@ fn render_item(
                 .as_ref()
                 .map(|s| measure_text(s, m.font_size))
                 .unwrap_or(0.0);
+            let inset = 2.0 * m.border_width + m.padding;
+            let max_label_w = (m.max_width
+                - inset * 2.0
+                - m.item_padding_x * 2.0
+                - m.mark_width
+                - if shortcut_w > 0.0 {
+                    m.shortcut_gap + shortcut_w
+                } else {
+                    0.0
+                })
+            .max(0.0);
+            let label_text = truncate_middle(&label_text, max_label_w, m.font_size);
             let fg = if enabled {
                 if is_focused { m.hover_fg } else { m.fg }
             } else {
