@@ -12,7 +12,7 @@
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{IsAlive, Logical, Point, Rectangle, Size};
-use smithay::wayland::compositor::with_states;
+use smithay::wayland::compositor::{SurfaceAttributes, with_states};
 use smithay::wayland::shell::wlr_layer::{
     Anchor, ExclusiveZone, KeyboardInteractivity, Layer, LayerSurface, LayerSurfaceCachedState,
 };
@@ -135,11 +135,15 @@ impl Layers {
         });
     }
 
-    /// The surface, if any, under `point` among layers that accept input.
+    /// The surface, if any, under `point` among mapped input layers.
     ///
-    /// `Background` and `Bottom` layers never take input; `Top`/`Overlay`
-    /// surfaces with keyboard interactivity do. Returns the surface and the
-    /// surface-local coordinates, matching `Windows::surface_under`.
+    /// `Background` and `Bottom` layers never take input; every mapped
+    /// `Top`/`Overlay` surface does, regardless of its keyboard interactivity.
+    /// Keyboard interactivity is a separate policy: it decides which layer
+    /// takes keyboard focus when clicked, not whether the pointer reaches it.
+    /// The surface's input region is honored (none means the whole surface).
+    /// Returns the surface and the surface-local coordinates, matching
+    /// `Windows::surface_under`.
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,
@@ -148,9 +152,14 @@ impl Layers {
             .iter()
             .rev()
             .find(|entry| {
-                entry.keyboard_interactivity != KeyboardInteractivity::None
-                    && matches!(entry.layer, Layer::Top | Layer::Overlay)
-                    && entry.geometry.to_f64().contains(point)
+                if !matches!(entry.layer, Layer::Top | Layer::Overlay)
+                    || !entry.surface.wl_surface().alive()
+                    || !entry.geometry.to_f64().contains(point)
+                {
+                    return false;
+                }
+                let local = point - entry.geometry.to_f64().loc;
+                accepts_input(input_region_of(entry.surface.wl_surface()).as_ref(), local)
             })
             .map(|entry| {
                 let local = point - entry.geometry.to_f64().loc;
@@ -351,6 +360,38 @@ impl<S: Clone + Eq> LayerFocus<S> {
     }
 }
 
+/// Reads the surface's input region from its cached committed state.
+///
+/// `None` means the whole surface is sensitive, as `wl_surface` specifies. A
+/// region with no rectangles (`set_input_region` with an empty `wl_region`) is
+/// not `None`: it rejects every point.
+fn input_region_of(surface: &WlSurface) -> Option<smithay::wayland::compositor::RegionAttributes> {
+    with_states(surface, |states| {
+        states
+            .cached_state
+            .get::<SurfaceAttributes>()
+            .current()
+            .input_region
+            .clone()
+    })
+}
+
+/// Whether a surface's committed input region accepts `local`.
+pub(crate) fn surface_accepts_input(surface: &WlSurface, local: Point<f64, Logical>) -> bool {
+    accepts_input(input_region_of(surface).as_ref(), local)
+}
+
+/// Whether a point is inside a surface's input region.
+///
+/// No region means the whole surface accepts input. An empty region means
+/// none of it does.
+fn accepts_input(
+    region: Option<&smithay::wayland::compositor::RegionAttributes>,
+    local: Point<f64, Logical>,
+) -> bool {
+    region.is_none_or(|region| region.contains(local.to_i32_round()))
+}
+
 /// Reads the client-committed layer state from the surface's cached state.
 fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
     with_states(surface, |states| {
@@ -415,6 +456,35 @@ fn exclusive_zone_of(state: &LayerSurfaceCachedState) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_layer_without_an_input_region_accepts_the_pointer() {
+        use smithay::wayland::compositor::RectangleKind;
+
+        let region = smithay::wayland::compositor::RegionAttributes {
+            rects: vec![(
+                RectangleKind::Add,
+                Rectangle::new(Point::from((0, 0)), Size::from((10, 10))),
+            )],
+        };
+        assert!(accepts_input(None, Point::from((5.0, 5.0))));
+        assert!(accepts_input(Some(&region), Point::from((5.0, 5.0))));
+        assert!(!accepts_input(Some(&region), Point::from((15.0, 5.0))));
+    }
+
+    #[test]
+    fn an_empty_input_region_rejects_the_pointer() {
+        let region = smithay::wayland::compositor::RegionAttributes::default();
+        assert!(!accepts_input(Some(&region), Point::from((5.0, 5.0))));
+    }
+
+    #[test]
+    fn a_none_layer_click_does_not_take_keyboard_focus() {
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        assert!(!focus.clicked(3, KeyboardInteractivity::None, Some(WindowId::new(1))));
+        assert_eq!(focus.focused(), None);
+        assert!(!focus.blocks_window_focus());
+    }
 
     #[test]
     fn exclusive_takes_focus_on_map_and_blocks_window_focus() {

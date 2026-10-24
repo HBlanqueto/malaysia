@@ -1410,22 +1410,25 @@ impl State {
 
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
+        let popup_under = self.popup_surface_under(location);
         let layer_under = self.layers.surface_under(location);
-        let edge = if layer_under.is_some() {
+        let overlay_under = popup_under.is_some() || layer_under.is_some();
+        let edge = if overlay_under {
             None
         } else {
             self.windows.edge_under(location, side, corner)
         };
         let under_window = self.windows.window_under(location);
-        if self.update_chrome_pointer(location, under_window, layer_under.is_some()) {
+        if self.update_chrome_pointer(location, under_window, overlay_under) {
             self.request_redraw();
         }
-        let blocked =
-            pointer_focus_blocked(layer_under.is_some(), edge.map(|(id, _)| id), under_window);
+        let blocked = pointer_focus_blocked(overlay_under, edge.map(|(id, _)| id), under_window);
         let under = if blocked {
             None
         } else {
-            self.windows.surface_under(location).or(layer_under)
+            popup_under
+                .or_else(|| self.windows.surface_under(location))
+                .or(layer_under)
         };
 
         let serial = SERIAL_COUNTER.next_serial();
@@ -1517,6 +1520,21 @@ impl State {
         pointer.frame(self);
     }
 
+    /// The popup surface under `location`, with surface-local coordinates.
+    ///
+    /// Popups hang above their parent layer or window and are tracked in the
+    /// scene, so they are hit-tested separately from both.
+    fn popup_surface_under(
+        &self,
+        location: Point<f64, Logical>,
+    ) -> Option<(WlSurface, Point<f64, Logical>)> {
+        let id = self.windows.popup_under(location)?;
+        let rect = self.windows.popup_rect(id)?;
+        let surface = self.popups.surface_of(id)?.clone();
+        let local = Point::new(location.x - rect.x(), location.y - rect.y());
+        crate::layers::surface_accepts_input(&surface, local).then_some((surface, local))
+    }
+
     /// Advances an in-progress move or resize.
     fn drag(&mut self, grab: Grab, location: Point<f64, Logical>) {
         match grab {
@@ -1548,8 +1566,9 @@ impl State {
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
-        let layer_under = self.layers.surface_under(location).is_some();
-        let edge = if layer_under {
+        let overlay_under = self.popup_surface_under(location).is_some()
+            || self.layers.surface_under(location).is_some();
+        let edge = if overlay_under {
             None
         } else {
             self.windows.edge_under(location, side, corner)
