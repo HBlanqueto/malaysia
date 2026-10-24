@@ -38,7 +38,9 @@ use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay::reexports::calloop::{EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction};
+use smithay::reexports::calloop::{
+    EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction, RegistrationToken,
+};
 use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::BindError;
 use smithay::reexports::wayland_server::Display;
@@ -149,6 +151,10 @@ pub(crate) struct Session {
     capture_requested: bool,
     /// Sequence number for `wp_presentation` feedback.
     frame_seq: u64,
+    /// One-refresh timer for empty frames: winit only emits `Redraw` events
+    /// when the window is explicitly requested, so an idle output that only
+    /// needs to answer frame callbacks needs this fallback.
+    repaint_timer: Option<RegistrationToken>,
 }
 
 /// The buffers a finished frame read, held until their GPU work completes.
@@ -390,6 +396,7 @@ pub fn run() -> Result<(), SessionError> {
         last_objects: LiveObjects::default(),
         capture_requested: false,
         frame_seq: 0,
+        repaint_timer: None,
     };
     if session.track_objects {
         session.last_objects = live_objects(&session.display, &session.state);
@@ -1070,54 +1077,40 @@ pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
 }
 
 fn draw(session: &mut Session) -> Result<(), DrawError> {
-    let Session {
-        loop_handle,
-        backend,
-        state,
-        damage_tracker,
-        display,
-        cursor,
-        start_time,
-        capture_requested,
-        frame_seq,
-        ..
-    } = session;
-
     // Everything that borrows the renderer or the framebuffer is scoped so the
     // frame is submitted after the framebuffer is released.
-    let capture_size = backend.window_size();
+    let capture_size = session.backend.window_size();
     let (damage, sync) = {
-        let (renderer, mut framebuffer) = backend.bind().map_err(DrawError::Bind)?;
+        let (renderer, mut framebuffer) = session.backend.bind().map_err(DrawError::Bind)?;
 
-        let elements = build_output_elements(state, renderer, cursor, true);
+        let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
 
-        state.init_capture_dma(renderer);
+        session.state.init_capture_dma(renderer);
 
         // Debug capture (Bloque 7.1): `SIGUSR1` asked for it. The offscreen readback
         // makes the GL context surfaceless (`eglMakeCurrent(EGL_NO_SURFACE, ...)`
         // in smithay's `bind_texture`), so it runs *before* the window pass: the
         // `render_output` that follows re-binds the window's EGL surface and the
         // swap in `submit` still targets a current surface (Bloque 7.3).
-        if *capture_requested {
-            *capture_requested = false;
-            if let Err(error) = crate::capture::capture_output(
+        if std::mem::take(&mut session.capture_requested)
+            && let Err(error) = crate::capture::capture_output(
                 renderer,
                 &elements,
                 capture_size,
                 winit_render_transform(),
-                state.scale.fractional_scale(),
-            ) {
-                tracing::warn!(%error, "debug capture failed");
-            }
+                session.state.scale.fractional_scale(),
+            )
+        {
+            tracing::warn!(%error, "debug capture failed");
         }
 
         // PrintScreen: save the focused window (or the output when none) to the
         // Desktop. Runs before the window pass like the other offscreen reads.
-        if let Some(request) = state.take_screenshot_request() {
+        if let Some(request) = session.state.take_screenshot_request() {
             log_screenshot(save_screenshot(
-                state,
+                &mut session.state,
                 renderer,
-                cursor,
+                &session.cursor,
                 capture_size,
                 winit_render_transform(),
                 request,
@@ -1127,12 +1120,12 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         // `ext-image-copy-capture-v1` frames queued by the handler. Like the
         // debug capture they run before the window pass, so the offscreen
         // render does not leave the GL context without the window surface.
-        let capture_scale = state.scale.fractional_scale();
-        for pending in std::mem::take(&mut state.pending_captures) {
+        let capture_scale = session.state.scale.fractional_scale();
+        for pending in std::mem::take(&mut session.state.pending_captures) {
             let (size, window_elements) = match &pending.target {
                 crate::capture::CaptureTarget::Output { size } => (*size, None),
                 crate::capture::CaptureTarget::Window { id, size } => {
-                    let Some(surface) = state.windows.surface_of(*id).cloned() else {
+                    let Some(surface) = session.state.windows.surface_of(*id).cloned() else {
                         pending.frame.fail(CaptureFailureReason::Unknown);
                         continue;
                     };
@@ -1145,7 +1138,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
             let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
                 crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
-                    without_cursor = build_output_elements(state, renderer, cursor, false);
+                    without_cursor =
+                        build_output_elements(&mut session.state, renderer, &session.cursor, false);
                     &without_cursor
                 }
                 _ => window_elements.as_deref().unwrap_or(&elements),
@@ -1171,7 +1165,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             }
         }
 
-        let result = damage_tracker
+        let result = session
+            .damage_tracker
             .render_output(
                 renderer,
                 &mut framebuffer,
@@ -1184,50 +1179,95 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         (result.damage.cloned(), result.sync)
     };
 
+    let now = session.start_time.elapsed();
+    let presented = damage.is_some();
+    if !presented {
+        // No damage: there is nothing to submit, but surfaces that asked for a
+        // frame callback still need an answer. Schedule a repaint so the next
+        // batch of callbacks does not stall (same behaviour as DRM).
+        let refresh = session
+            .state
+            .output
+            .current_mode()
+            .map(|mode| mode.refresh)
+            .unwrap_or(60_000)
+            .max(1) as u64;
+        let delay = Duration::from_micros(1_000_000 / refresh);
+        let loop_handle = &session.loop_handle;
+        let repaint_timer = &mut session.repaint_timer;
+        let mut schedule_repaint = move || {
+            if repaint_timer.is_some() {
+                return;
+            }
+            match loop_handle.insert_source(
+                Timer::from_duration(delay),
+                |_, _, session: &mut Session| {
+                    session.repaint_timer = None;
+                    session.backend.window().request_redraw();
+                    TimeoutAction::Drop
+                },
+            ) {
+                Ok(token) => *repaint_timer = Some(token),
+                Err(error) => tracing::warn!(%error, "scheduling an empty-frame repaint"),
+            }
+        };
+        finish_empty_frame(
+            &mut session.state,
+            now,
+            session.frame_seq,
+            &mut schedule_repaint,
+        );
+        return Ok(());
+    }
+
     // The frame just submitted read these buffers; hold them so their release
     // waits for its fence (ADR 0026, see `PendingFrameRelease`).
-    let buffers = collect_drawn_buffers(state);
+    let buffers = collect_drawn_buffers(&session.state);
     if !buffers.is_empty() {
-        schedule_frame_release(loop_handle, PendingFrameRelease { sync, buffers });
+        schedule_frame_release(&session.loop_handle, PendingFrameRelease { sync, buffers });
     }
 
     // Send frame callbacks only once the frame has been drawn, so a client
     // cannot drive the compositor faster than the output refreshes. While the
     // session is locked, only the lock surfaces receive them; no normal client
     // may render anything under the lock.
-    let now = start_time.elapsed();
-    if state.locked {
-        for surface in &state.lock_surfaces {
+    if session.state.locked {
+        for surface in &session.state.lock_surfaces {
             if surface.alive() {
                 send_frame_callbacks(surface.wl_surface(), now);
             }
         }
     } else {
-        for window in state.windows.iter() {
+        for window in session.state.windows.iter() {
             if window.is_mapped() {
                 send_frame_callbacks(window.surface(), now);
             }
         }
-        for entry in state.layers.all() {
+        for entry in session.state.layers.all() {
             send_frame_callbacks(entry.surface.wl_surface(), now);
         }
-        for (id, _parent, _rect) in state.windows.iter_popups() {
-            if let Some(surface) = state.popups.surface_of(id) {
+        for (id, _parent, _rect) in session.state.windows.iter_popups() {
+            if let Some(surface) = session.state.popups.surface_of(id) {
                 send_frame_callbacks(surface, now);
             }
         }
     }
-    if let Err(error) = display.flush_clients() {
+    if let Err(error) = session.display.flush_clients() {
         tracing::warn!(%error, "failed to flush clients after a frame");
     }
 
-    let presented = damage.is_some();
-    backend
+    session
+        .backend
         .submit(damage.as_deref())
         .map_err(DrawError::Submit)?;
-    *frame_seq = frame_seq.wrapping_add(1);
-    send_presentation_feedbacks_for_state(state, start_time.elapsed(), *frame_seq, presented);
-    if let Err(error) = display.flush_clients() {
+    session.frame_seq = session.frame_seq.wrapping_add(1);
+    send_presentation_feedbacks_for_state(
+        &session.state,
+        session.start_time.elapsed(),
+        session.frame_seq,
+        true,
+    );
+    if let Err(error) = session.display.flush_clients() {
         tracing::warn!(%error, "failed to flush presentation feedback");
     }
     Ok(())
@@ -1595,6 +1635,23 @@ pub(crate) fn send_presentation_feedbacks_for_state(
             send(surface);
         }
     }
+}
+
+/// Sends frame callbacks and discarded presentation feedback for a frame that
+/// had no damage to present, then asks the backend to schedule another output
+/// cycle so the next pending callbacks are not left waiting.
+///
+/// Shared by the winit and DRM backends so neither has its own copy of the
+/// "answer callbacks even when there is nothing to draw" logic.
+pub(crate) fn finish_empty_frame(
+    state: &mut State,
+    time: Duration,
+    seq: u64,
+    schedule_repaint: &mut dyn FnMut(),
+) {
+    send_frame_callbacks_for_state(state, time);
+    send_presentation_feedbacks_for_state(state, time, seq, false);
+    schedule_repaint();
 }
 
 /// Failures while drawing a single frame.

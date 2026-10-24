@@ -654,14 +654,37 @@ impl Udev {
                 // to queue, so there is no VBlank to send the callback. Answer
                 // it here in the next ~refresh cycle instead of stalling.
                 let time = self.start_time.elapsed();
-                crate::session::send_presentation_feedbacks_for_state(
-                    &self.state,
+                let refresh = self
+                    .output
+                    .current_mode()
+                    .map(|mode| mode.refresh)
+                    .unwrap_or(60_000)
+                    .max(1) as u64;
+                let delay = Duration::from_micros(1_000_000 / refresh);
+                let loop_handle = &self.loop_handle;
+                let repaint_timer = &mut self.repaint_timer;
+                let mut schedule_repaint = move || {
+                    if repaint_timer.is_some() {
+                        return;
+                    }
+                    match loop_handle.insert_source(
+                        Timer::from_duration(delay),
+                        |_, _, data: &mut Udev| {
+                            data.repaint_timer = None;
+                            data.render();
+                            TimeoutAction::Drop
+                        },
+                    ) {
+                        Ok(token) => *repaint_timer = Some(token),
+                        Err(error) => warn!(%error, "scheduling a repaint"),
+                    }
+                };
+                crate::session::finish_empty_frame(
+                    &mut self.state,
                     time,
                     self.vblank_count,
-                    false,
+                    &mut schedule_repaint,
                 );
-                crate::session::send_frame_callbacks_for_state(&self.state, time);
-                self.schedule_repaint();
             }
             Err(error) => {
                 warn!(%error, "rendering a frame");
