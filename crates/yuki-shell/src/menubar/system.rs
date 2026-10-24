@@ -7,62 +7,36 @@ use crate::menubar::spawn_component;
 /// The snowflake drawn as the system-menu title.
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
-/// Items for the system menu (dummy entries for the layout commit).
+/// Items for the system menu.
 pub fn system_menu_items() -> Vec<MenuItem> {
     vec![
-        MenuItem::Action {
-            id: "about-this-computer".to_string(),
-            label: "Acerca de este equipo".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
-        MenuItem::Action {
-            id: "system-settings".to_string(),
-            label: "Ajustes del sistema…".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
+        action("about-this-computer", "Acerca de este equipo", None, false),
+        action("system-settings", "Ajustes del sistema…", None, false),
         MenuItem::Separator,
-        MenuItem::Action {
-            id: "lock-screen".to_string(),
-            label: "Bloquear pantalla".to_string(),
-            shortcut: Some("Ctrl+Alt+L".to_string()),
-            enabled: true,
-            check: CheckState::None,
-        },
+        action(
+            "force-quit",
+            "Forzar salida…",
+            Some("Alt+Super+Escape"),
+            false,
+        ),
         MenuItem::Separator,
-        MenuItem::Action {
-            id: "sleep".to_string(),
-            label: "Suspender".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
-        MenuItem::Action {
-            id: "restart".to_string(),
-            label: "Reiniciar…".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
-        MenuItem::Action {
-            id: "shutdown".to_string(),
-            label: "Apagar…".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
+        action("sleep", "Suspender", None, false),
+        action("restart", "Reiniciar…", None, false),
+        action("shutdown", "Apagar…", None, false),
         MenuItem::Separator,
-        MenuItem::Action {
-            id: "logout".to_string(),
-            label: "Cerrar sesión…".to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-        },
+        action("lock-screen", "Bloquear pantalla", Some("Ctrl+Alt+L"), true),
+        action("logout", "Cerrar sesión…", None, false),
     ]
+}
+
+fn action(id: &str, label: &str, shortcut: Option<&str>, enabled: bool) -> MenuItem {
+    MenuItem::Action {
+        id: id.to_string(),
+        label: label.to_string(),
+        shortcut: shortcut.map(ToOwned::to_owned),
+        enabled,
+        check: CheckState::None,
+    }
 }
 
 /// Handles the only enabled system action today: lock the session.

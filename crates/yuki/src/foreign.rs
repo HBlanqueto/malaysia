@@ -47,7 +47,7 @@ pub struct ForeignManagement {
 
 impl ForeignManagement {
     fn new(display: &DisplayHandle) -> Self {
-        let global = display.create_global::<State, ZwlrForeignToplevelManagerV1, ()>(1, ());
+        let global = display.create_global::<State, ZwlrForeignToplevelManagerV1, ()>(3, ());
         Self {
             _global: global,
             instances: Vec::new(),

@@ -110,16 +110,18 @@ pub fn spawn_component(component: &str) {
             Ok(())
         });
     }
-    if let Err(error) = command.spawn() {
-        eprintln!("menubar: could not spawn {component}: {error}");
+    match command.spawn() {
+        Ok(_) => eprintln!("menubar: spawn {component}"),
+        Err(error) => eprintln!("menubar: could not spawn {component}: {error}"),
     }
 }
 
 /// Opens `path` with the user's default application, stripping the wrapper
 /// environment so it does not inherit Mesa debug paths from the compositor.
 pub fn xdg_open(path: impl AsRef<std::path::Path>) {
+    let path = path.as_ref();
     let mut command = Command::new("xdg-open");
-    command.arg(path.as_ref());
+    command.arg(path);
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -133,11 +135,9 @@ pub fn xdg_open(path: impl AsRef<std::path::Path>) {
             Ok(())
         });
     }
-    if let Err(error) = command.spawn() {
-        eprintln!(
-            "menubar: could not open '{}': {error}",
-            path.as_ref().display()
-        );
+    match command.spawn() {
+        Ok(_) => eprintln!("menubar: xdg-open {}", path.display()),
+        Err(error) => eprintln!("menubar: could not open '{}': {error}", path.display()),
     }
 }
 

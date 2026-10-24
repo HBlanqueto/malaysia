@@ -52,6 +52,7 @@ pub fn format_shortcut(text: &str) -> String {
             "alt" | "option" | "opt" => alt = true,
             "shift" => shift = true,
             "super" | "meta" | "cmd" | "command" => sup = true,
+            "escape" | "esc" => key.push('⎋'),
             _ => key.push_str(token),
         }
     }
@@ -1089,6 +1090,7 @@ mod tests {
         assert_eq!(format_shortcut("Ctrl+Shift+Z"), "⌃⇧Z");
         assert_eq!(format_shortcut("Shift+Ctrl+G"), "⌃⇧G");
         assert_eq!(format_shortcut("Cmd+D"), "❖D");
+        assert_eq!(format_shortcut("Alt+Super+Escape"), "⌥❖⎋");
         assert!(!format_shortcut("Command+D").contains('\u{2318}'));
         assert_eq!(format_shortcut("F5"), "F5");
     }
