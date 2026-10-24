@@ -13,8 +13,11 @@ use celestial_kit::platform::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
+use yuki_design::MENUBAR_HEIGHT;
 
-const BAR_HEIGHT: f32 = 28.0;
+const BAR_HEIGHT: f32 = MENUBAR_HEIGHT as f32;
+type UseState<T> = State<T>;
+type OpenLabel = Rc<RefCell<UseState<Option<&'static str>>>>;
 
 type TimerFn = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 
@@ -127,11 +130,11 @@ impl App for Demo {
             });
         }
 
-        let open_label = use_hook(|| Rc::new(Cell::new(None::<&'static str>)));
+        let open_label: OpenLabel = Rc::new(RefCell::new(use_state(|| None::<&'static str>)));
         let left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start)
-            .child(menu_label("Yuki", {
+            .child(menu_label("Yuki", open_label.clone(), palette, {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
                 move || {
@@ -145,12 +148,12 @@ impl App for Demo {
                     )
                 }
             }))
-            .child(menu_label("Ir", {
+            .child(menu_label("Ir", open_label.clone(), palette, {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
                 move || toggle_menu(&root_id, open_label.clone(), "Ir", go_menu(), palette, 56)
             }))
-            .child(menu_label("Editar", {
+            .child(menu_label("Editar", open_label.clone(), palette, {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
                 move || {
@@ -218,7 +221,7 @@ fn open_root(
     );
     Popups::get().open(
         PopupSpec {
-            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor_rect: (anchor_x, BAR_HEIGHT as i32, 1, 1),
             anchor: PopupAnchor::BottomLeft,
             gravity: PopupGravity::BottomLeft,
             offset: (0, 0),
@@ -261,7 +264,7 @@ fn open_root_for_selftest(
     };
     popups.open(
         PopupSpec {
-            anchor_rect: (12, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor_rect: (12, BAR_HEIGHT as i32, 1, 1),
             anchor: PopupAnchor::BottomLeft,
             gravity: PopupGravity::BottomLeft,
             offset: (0, 0),
@@ -290,15 +293,15 @@ fn close_root(root_id: &Arc<Mutex<Option<PopupId>>>) {
 /// a different one first closes any existing root tree so only one survives.
 fn toggle_menu(
     root_id: &Arc<Mutex<Option<PopupId>>>,
-    open_label: Rc<Cell<Option<&'static str>>>,
+    open_label: OpenLabel,
     label: &'static str,
     items: Vec<MenuItem>,
     palette: yuki_design::MenuPalette,
     anchor_x: i32,
 ) {
-    if open_label.get() == Some(label) {
+    if *open_label.borrow().read() == Some(label) {
         close_root(root_id);
-        open_label.set(None);
+        open_label.borrow_mut().set(None);
         return;
     }
     close_root(root_id);
@@ -309,10 +312,10 @@ fn toggle_menu(
         palette,
         anchor_x,
         Some(Rc::new(move || {
-            open_label_for_dismiss.set(None);
+            open_label_for_dismiss.borrow_mut().set(None);
         })),
     );
-    open_label.set(Some(label));
+    open_label.borrow_mut().set(Some(label));
 }
 
 /// Opens the menu named by `MENU_POPUP_SHOW`, without grab or real input.
@@ -361,7 +364,7 @@ fn open_show(
     };
     let id = popups.open(
         PopupSpec {
-            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor_rect: (anchor_x, BAR_HEIGHT as i32, 1, 1),
             anchor: PopupAnchor::BottomLeft,
             gravity: PopupGravity::BottomLeft,
             offset: (0, 0),
@@ -489,14 +492,24 @@ impl App for NestedMenu {
     }
 }
 
-fn menu_label(text: &'static str, on_click: impl Fn() + 'static) -> Element {
-    rect()
+fn menu_label(
+    text: &'static str,
+    open_label: OpenLabel,
+    palette: yuki_design::MenuPalette,
+    on_click: impl Fn() + 'static,
+) -> Element {
+    let is_open = *open_label.borrow().read() == Some(text);
+    let mut rect = rect()
         .height(Size::px(BAR_HEIGHT - 8.0))
         .padding(Gaps::new(0.0, 8.0, 0.0, 8.0))
         .main_align(Alignment::Center)
+        .corner_radius(4.0)
         .on_mouse_down(move |_: Event<MouseEventData>| on_click())
-        .child(label().text(text).font_size(13.0))
-        .into_element()
+        .child(label().text(text).font_size(13.0));
+    if is_open {
+        rect = rect.background(rgba(palette.hover_bg));
+    }
+    rect.into_element()
 }
 
 /// The "Ir" menu from docs/arquitectura/menubar.md, Spanish, with shortcuts.
