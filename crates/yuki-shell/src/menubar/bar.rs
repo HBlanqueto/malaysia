@@ -25,6 +25,10 @@ use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba,
 
 const MAX_TITLES: usize = 8;
 
+type TitleAnchor = Rc<Cell<(f32, f32)>>;
+type TitleAnchors = Rc<Vec<TitleAnchor>>;
+type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
+
 pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
@@ -69,10 +73,10 @@ impl App for BarApp {
         }
 
         let menu_state = MenuState::new();
-        let anchors: Rc<Vec<Rc<Cell<f32>>>> = use_hook(|| {
+        let anchors: TitleAnchors = use_hook(|| {
             Rc::new(
                 (0..MAX_TITLES)
-                    .map(|_| Rc::new(Cell::new(0.0f32)))
+                    .map(|_| Rc::new(Cell::new((0.0f32, 0.0f32))))
                     .collect(),
             )
         });
@@ -82,7 +86,7 @@ impl App for BarApp {
             bold: false,
             items: Rc::new(system::system_menu_items),
             on_activate: system::on_system_action,
-            anchor_x: anchors[0].clone(),
+            anchor: anchors[0].clone(),
             enabled: true,
         }];
         if focused {
@@ -92,12 +96,12 @@ impl App for BarApp {
                 bold: true,
                 items: Rc::new(no_items),
                 on_activate: ignore_action,
-                anchor_x: anchors[1].clone(),
+                anchor: anchors[1].clone(),
                 enabled: false,
             });
         } else {
             let entries_for_window = self.entries.clone();
-            let menus: [(&str, Rc<dyn Fn() -> Vec<MenuItem>>); 7] = [
+            let menus: [(&str, MenuItems); 7] = [
                 ("Yuki", Rc::new(appmenu::yuki_menu_items)),
                 ("Archivo", Rc::new(appmenu::file_menu_items)),
                 ("Edición", Rc::new(appmenu::edit_menu_items)),
@@ -116,7 +120,7 @@ impl App for BarApp {
                     bold: offset == 0,
                     items,
                     on_activate: appmenu::on_action,
-                    anchor_x: anchors[offset + 1].clone(),
+                    anchor: anchors[offset + 1].clone(),
                     enabled: true,
                 });
             }

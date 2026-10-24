@@ -32,7 +32,8 @@ pub struct MenuTitleSpec {
     pub bold: bool,
     pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
     pub on_activate: fn(String),
-    pub anchor_x: Rc<Cell<f32>>,
+    /// Position and size of the title highlight, set by `on_sized`.
+    pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
 }
 
@@ -70,7 +71,7 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let items = (spec.items)();
     let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
     let size = MenuView::preferred_size(&items, palette);
-    let anchor_x = spec.anchor_x.get();
+    let (anchor_x, anchor_width) = spec.anchor.get();
     let label = spec.label.clone();
 
     let cell = state.root_id.clone();
@@ -94,7 +95,12 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let open_label = state.open_label.clone();
     let id = Popups::get().open(
         PopupSpec {
-            anchor_rect: (anchor_x as i32, MENUBAR_HEIGHT, 1, 1),
+            anchor_rect: (
+                anchor_x as i32,
+                0,
+                anchor_width.max(1.0) as u32,
+                MENUBAR_HEIGHT as u32,
+            ),
             anchor: PopupAnchor::BottomLeft,
             gravity: PopupGravity::BottomRight,
             offset: (0, 0),
@@ -161,7 +167,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let spec = &titles[title_index];
     let label_text = spec.label.clone();
     let enabled = spec.enabled;
-    let anchor_x = spec.anchor_x.clone();
+    let anchor = spec.anchor.clone();
     let is_open = state.open_label.borrow().read().as_deref() == Some(&label_text);
 
     let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
@@ -177,7 +183,8 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
         .on_sized(move |event: Event<SizedEventData>| {
-            anchor_x.set(event.data().area.origin.x);
+            let area = event.data().area;
+            anchor.set((area.origin.x, area.size.width));
         });
 
     if is_open {
