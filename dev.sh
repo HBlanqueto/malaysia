@@ -779,8 +779,8 @@ demo() {
     # tiles and the menubar an active app.
     sleep 0.5
     if command -v foot >/dev/null 2>&1; then
-        demo_client foot-1 foot -a yuki-demo -T "Yuki"
-        demo_client foot-2 foot -a yuki-demo -T "Segunda ventana"
+        demo_client foot-1 foot -T "Yuki"
+        demo_client foot-2 foot -T "Segunda ventana"
     elif command -v wezterm >/dev/null 2>&1; then
         demo_client wezterm wezterm start
     else

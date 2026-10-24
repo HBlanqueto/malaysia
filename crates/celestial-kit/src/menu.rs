@@ -20,23 +20,12 @@ type UseState<T> = State<T>;
 use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
 };
-use yuki_design::{MenuPalette, Rgba};
-
-/// The sans stack from `yuki-design` (`neptunia/tokens.json`). The renderer
-/// receives the same list through [`MenuView::render`], so measuring and
-/// drawing always shape the same glyphs.
-const FONT_FAMILIES: &[&str] = &[
-    "Geist",
-    "Inter",
-    "Noto Sans CJK SC",
-    "system-ui",
-    "sans-serif",
-];
+use yuki_design::{MenuPalette, Rgba, SANS_FAMILIES};
 
 /// The process-wide text stack for measurement. Mirrors the renderer's
 /// `FontCollection` (system manager plus the shell's fallback families).
 fn font_families() -> Vec<Cow<'static, str>> {
-    let mut families: Vec<Cow<'static, str>> = FONT_FAMILIES
+    let mut families: Vec<Cow<'static, str>> = SANS_FAMILIES
         .iter()
         .map(|name| Cow::Borrowed(*name))
         .collect();
@@ -316,8 +305,8 @@ impl App for MenuView {
                 m.border_width,
             ))
             .child(content);
-        for family in FONT_FAMILIES {
-            root = root.font_family(*family);
+        for family in SANS_FAMILIES {
+            root = root.font_family(family);
         }
         root.on_key_down(move |event: Event<KeyboardEventData>| {
             let mut focused = focused;

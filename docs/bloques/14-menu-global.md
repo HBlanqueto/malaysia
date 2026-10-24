@@ -107,6 +107,16 @@ menubar del demo con `--sin-menubar`.
 
 ## Capturas
 
+![Menubar con el nombre de la app en claro](img/14a/menubar-nombre-claro.png)
+
+`menubar-nombre-claro.png`: menubar real con `foot` enfocado; muestra «Foot»,
+no el título de la ventana, en negrita y con la pila Geist.
+
+![Menubar con el nombre de la app en oscuro](img/14a/menubar-nombre-oscuro.png)
+
+`menubar-nombre-oscuro.png`: el mismo estado en tema oscuro, «Foot» en
+`ink-strong`.
+
 Sesión anidada (`./dev.sh demo`: wallpaper, menubar real, dock y ventanas) con
 el ejemplo en cada caso y captura por `SIGUSR1`. Claro y oscuro se obtienen
 escribiendo `color_scheme = "light"|"dark"` en `appearance.domain` y apuntando

@@ -361,6 +361,9 @@
       "menubar": {
         "height": 28,
         "font-size": 13,
+        "app-name": {
+          "weight": 700
+        },
         "margin": 10,
         "title-max-width": 240,
         "bg": "{shell-bar}",

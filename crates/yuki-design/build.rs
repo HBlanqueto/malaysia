@@ -30,6 +30,7 @@ fn main() {
     emit_window(&mut out, &tokens, &components);
     emit_tints(&mut out, &tokens, &components);
     emit_traffic(&mut out, &tokens, &components);
+    emit_font_families(&mut out, &tokens);
     emit_typography(&mut out, &tokens);
     emit_shadows(&mut out, &tokens);
     emit_palettes(&mut out, &tokens, &components);
@@ -664,6 +665,25 @@ fn glyph_triangles(components: &Value, path: &str) -> String {
         .join(", ")
 }
 
+fn emit_font_families(out: &mut String, tokens: &Value) {
+    let stack = string(tokens, "font.families.sans", TOKENS);
+    let families: Vec<String> = stack
+        .split(',')
+        .map(|family| family.trim().trim_matches('"').to_string())
+        .collect();
+    const_doc(out, "SANS_FAMILIES", "The sans-serif family stack.");
+    out.push_str(": [&str; ");
+    out.push_str(&families.len().to_string());
+    out.push_str("] = [");
+    for (index, family) in families.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        out.push_str(&format!("{family:?}"));
+    }
+    out.push_str("];\n\n");
+}
+
 fn emit_typography(out: &mut String, tokens: &Value) {
     const_doc(out, "TEXT", "The body text face.");
     out.push_str(&format!(": Font = {};\n\n", font(tokens, "body")));
@@ -995,6 +1015,11 @@ fn emit_metrics(out: &mut String, components: &Value) {
             "MENUBAR_FONT_SIZE",
             "f32",
             "components.shell.menubar.font-size",
+        ),
+        (
+            "MENUBAR_APP_NAME_WEIGHT",
+            "i32",
+            "components.shell.menubar.app-name.weight",
         ),
         ("MENUBAR_MARGIN", "i32", "components.shell.menubar.margin"),
         (

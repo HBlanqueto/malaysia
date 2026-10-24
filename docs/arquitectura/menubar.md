@@ -8,7 +8,7 @@ izquierda y **reloj** a la derecha. El menú global por app está planeado
 ## Cómo funciona
 
 ```
-window.domain ──► título de la app activa (el compositor lo publica)
+window.domain ──► app_id de la app activa (el compositor lo publica)
    (~/.local/share/yuki)                │
                                         ▼
   frame RGBA: fondo + texto (celestial-kit::text, cosmic-text)
@@ -34,7 +34,8 @@ window.domain ──► título de la app activa (el compositor lo publica)
    minuto** (timer alineado), no cada segundo.
 4. **La app activa**: el compositor publica la ventana enfocada en el estado
    `window.domain` (`[active] title`/`app_id`) — el mismo patrón de almacén que
-   el wallpaper — y la menubar lo vigila.
+   el wallpaper — y la menubar lo vigila. La menubar usa el **app_id**, nunca
+   el título de la ventana.
 
 ## El estado de la app activa
 
@@ -46,6 +47,23 @@ El compositor conoce la ventana enfocada, y la publica en el almacén de estado
 quitarlo, vacío. Es el mecanismo de primera versión; el canal de notificación
 adecuado (D-Bus, ADR 0021) lo reemplazará cuando llegue. `ext-foreign-toplevel-list`
 sigue siendo la vía para la **lista** de ventanas del dock (paso 4).
+
+## El nombre de la app
+
+La menubar muestra el nombre de la aplicación enfocada, como macOS, no el
+título del documento. A partir del `app_id` publicado en `window.domain`:
+
+1. busca el `.desktop` cuyo id o `StartupWMClass` coincide con el app_id y usa
+   su `Name` ya localizado (el mismo lector que el launcher):
+   `foot` → «Foot», `org.wezfurlong.wezterm` → «WezTerm»;
+2. si no hay `.desktop`, usa el último segmento del app_id con mayúscula
+   inicial (`org.example.notes` → «Notes»);
+3. sin app_id ni ventana enfocada, «Yuki».
+
+El nombre va en negrita (`MENUBAR_APP_NAME_WEIGHT`, token
+`components.shell.menubar.app-name.weight`, 700), color `ink-strong` y 13 px.
+La menubar entera usa la pila sans de `yuki-design` (Geist); el reloj queda en
+el peso normal.
 
 ## La zona exclusiva en el compositor
 
@@ -73,8 +91,8 @@ el área útil).
 
 - La menubar se mapea en la capa `Top` a 1280×28 con zona exclusiva.
 - El compositor coloca las ventanas nuevas debajo de la barra (workspace).
-- Al abrir `foot`, `window.domain` pasa a `[active] title = "foot"` y la menubar
-  lo muestra; el reloj avanza al minuto (1 commit/min, `Dma`).
+- Al abrir `foot`, `window.domain` publica su app_id y la menubar muestra
+  «Foot»; el reloj avanza al minuto (1 commit/min, `Dma`).
 - `kill -9` al proceso: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
 - El texto se rasteriza (el bug de `layout_runs` vacío se corrigió en 7.1);
