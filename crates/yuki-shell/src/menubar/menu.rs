@@ -93,6 +93,7 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     );
 
     let open_label = state.open_label.clone();
+    let dismissed_label = label.clone();
     let id = Popups::get().open(
         PopupSpec {
             anchor_rect: (
@@ -113,7 +114,10 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
             },
             grab: true,
             on_dismissed: Some(Rc::new(move || {
-                open_label.borrow_mut().set(None);
+                let still_open = open_label.borrow().read().as_deref() == Some(&dismissed_label);
+                if still_open {
+                    open_label.borrow_mut().set(None);
+                }
             })),
         },
         AppComponent::new(view),
