@@ -72,12 +72,14 @@ impl App for BarApp {
             MenuTitleSpec {
                 label: "Sistema".to_string(),
                 items: Rc::new(system::system_menu_items),
+                on_activate: Rc::new(system::on_system_action),
                 anchor_x: system_anchor,
                 enabled: true,
             },
             MenuTitleSpec {
                 label: app.clone(),
                 items: Rc::new(appmenu::yuki_menu_items),
+                on_activate: Rc::new(appmenu::on_yuki_action),
                 anchor_x: app_anchor,
                 enabled: is_yuki,
             },

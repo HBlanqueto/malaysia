@@ -6,6 +6,7 @@ use celestial_kit::menu::{CheckState, MenuItem};
 use freya_core::prelude::*;
 
 use crate::menubar::menu::{MenuState, MenuTitleSpec, menu_title};
+use crate::menubar::spawn_component;
 
 /// Items for the system menu (dummy entries for the layout commit).
 pub fn system_menu_items() -> Vec<MenuItem> {
@@ -29,7 +30,7 @@ pub fn system_menu_items() -> Vec<MenuItem> {
             id: "lock-screen".to_string(),
             label: "Bloquear pantalla".to_string(),
             shortcut: Some("Ctrl+Alt+L".to_string()),
-            enabled: false,
+            enabled: true,
             check: CheckState::None,
         },
         MenuItem::Separator,
@@ -68,4 +69,11 @@ pub fn system_menu_items() -> Vec<MenuItem> {
 /// Renders the system-menu title.
 pub fn system_title(state: MenuState, titles: Rc<Vec<MenuTitleSpec>>) -> Element {
     menu_title(0, titles, state)
+}
+
+/// Handles the only enabled system action today: lock the session.
+pub fn on_system_action(id: String) {
+    if id == "lock-screen" {
+        spawn_component("lock");
+    }
 }

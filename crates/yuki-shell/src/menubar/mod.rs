@@ -20,7 +20,10 @@ pub mod system;
 
 pub use bar::run;
 
+use std::env;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
 use crate::desktop::DesktopEntry;
 
@@ -76,6 +79,107 @@ pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
 pub fn rgba(c: yuki_design::Rgba) -> freya_core::prelude::Color {
     let [r, g, b, a] = c.to_rgba8();
     freya_core::prelude::Color::from_argb(a, r, g, b)
+}
+
+/// Spawns a `yuki-shell` component detached, keeping the Wayland socket but
+/// stripping the compositor's private Mesa wrapper environment.
+pub fn spawn_component(component: &str) {
+    let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
+        eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
+        return;
+    };
+    let program = env::current_exe().unwrap_or_else(|_| PathBuf::from("yuki-shell"));
+    let mut command = Command::new(program);
+    command
+        .arg(component)
+        .env("WAYLAND_DISPLAY", display)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    sanitize_client_env(&mut command);
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    if let Err(error) = command.spawn() {
+        eprintln!("menubar: could not spawn {component}: {error}");
+    }
+}
+
+/// Opens `path` with the user's default application, stripping the wrapper
+/// environment so it does not inherit Mesa debug paths from the compositor.
+pub fn xdg_open(path: impl AsRef<std::path::Path>) {
+    let mut command = Command::new("xdg-open");
+    command.arg(path.as_ref());
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    sanitize_client_env(&mut command);
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    if let Err(error) = command.spawn() {
+        eprintln!(
+            "menubar: could not open '{}': {error}",
+            path.as_ref().display()
+        );
+    }
+}
+
+/// Resolves an XDG user dir (Documents, Downloads, Desktop...) or falls back
+/// to `HOME/<name>` when `xdg-user-dir` is unavailable.
+pub fn xdg_user_dir(kind: &str) -> Option<PathBuf> {
+    let output = Command::new("xdg-user-dir").arg(kind).output().ok()?;
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(path))
+}
+
+/// Creates a new folder on the Desktop, appending a number if the name exists.
+pub fn create_desktop_folder() {
+    let desktop = xdg_user_dir("DESKTOP")
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let mut target = desktop.join("Nueva carpeta");
+    if target.exists() {
+        for i in 2..100 {
+            target = desktop.join(format!("Nueva carpeta {i}"));
+            if !target.exists() {
+                break;
+            }
+        }
+    }
+    if let Err(error) = std::fs::create_dir(&target) {
+        eprintln!("menubar: could not create desktop folder: {error}");
+    }
+}
+
+fn sanitize_client_env(command: &mut Command) {
+    for name in [
+        "LD_LIBRARY_PATH",
+        "__EGL_VENDOR_LIBRARY_DIRS",
+        "LIBGL_DRIVERS_PATH",
+        "GBM_BACKENDS_PATH",
+    ] {
+        command.env_remove(name);
+        let saved = format!("YUKI_ORIG_{name}");
+        if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
+            command.env(name, value);
+        }
+        command.env_remove(saved);
+    }
 }
 
 #[cfg(test)]

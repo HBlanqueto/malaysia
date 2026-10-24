@@ -21,9 +21,11 @@ use yuki_design::MENUBAR_HEIGHT;
 use crate::menubar::rgba;
 
 /// One title that can open a root menu popup.
+#[derive(Clone)]
 pub struct MenuTitleSpec {
     pub label: String,
     pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
+    pub on_activate: Rc<dyn Fn(String)>,
     pub anchor_x: Rc<RefCell<State<f32>>>,
     pub enabled: bool,
 }
@@ -76,8 +78,9 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
 
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
-    let view =
-        MenuView::new(items, |_id| {}, on_dismiss_all, palette).with_navigation(move |direction| {
+    let on_activate = spec.on_activate.clone();
+    let view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all, palette)
+        .with_navigation(move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
         });
 
