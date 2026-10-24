@@ -125,8 +125,9 @@ y un script de `YUKI_TEST_INPUT`:
 - **e.** Con foot enfocado, abrir y cerrar el menú produce
   `wl_keyboard.leave` y después `wl_keyboard.enter` en foot.
 - **f.** Navegación por teclado: abrir «Editar», bajar cinco veces hasta
-  «Ordenar por» (saltando «Rehacer» y los separadores), y `→` abre el submenú
-  con «Nombre» enfocado. Se captura con `SIGUSR1`.
+  «Ordenar por» (saltando «Rehacer» y los separadores), `→` abre el submenú con
+  «Nombre» enfocado y otro `key:Down` selecciona «Fecha». Se capturan los cuatro
+  estados con `SIGUSR1`; la secuencia usa solo teclado.
 - **g.** Un solo árbol abierto: abrir «Yuki» y luego pulsar «Editar» cierra el
   primero y abre el segundo; la captura muestra solo el menú de «Editar».
 
@@ -197,12 +198,29 @@ doble visible en los paneles.
 `borde-doble-oscuro.png`: zoom ×4 del borde superior de un panel oscuro; se ve
 la línea exterior negra (`window-outer`) y la interior clara (`window-inner`).
 
-![Navegación por teclado hasta el submenú](img/14a/teclado-submenu.png)
+![Navegación por teclado 1/4: menú abierto](img/14a/teclado-1.png)
 
-`teclado-submenu.png`: «Editar» abierto con teclado, «Ordenar por» resaltado y
-su submenú visible con «Nombre» enfocado. La secuencia inyectada fue
-`key:Down` × 5 y `key:Right`; un último `move` fuerza el redibujado del buffer
-antes de la captura.
+`teclado-1.png`: clic en «Editar»; el menú se abre con «Deshacer» enfocado.
+
+![Navegación por teclado 2/4: «Ordenar por»](img/14a/teclado-2.png)
+
+`teclado-2.png`: `key:Down` × 5; el foco salta «Rehacer», separadores y items
+no seleccionables hasta «Ordenar por».
+
+![Navegación por teclado 3/4: submenú abierto](img/14a/teclado-3.png)
+
+`teclado-3.png`: `key:Right` abre el submenú con «Nombre» enfocado.
+
+![Navegación por teclado 4/4: «Fecha»](img/14a/teclado-4.png)
+
+`teclado-4.png`: `key:Down` mueve el foco a «Fecha». La secuencia usa solo
+teclado; el runner comite un buffer nuevo tras cada evento de tecla, así que
+el compositor repinta sin necesidad de mover el puntero.
+
+![Menús más anchos](img/14a/menus-anchos.png)
+
+`menus-anchos.png`: mismo menú con los tokens ajustados: ancho mínimo 220 px,
+`shortcut-gap` 24 px y relleno derecho 10 px.
 
 ![Un solo árbol de menús a la vez](img/14a/un-solo-arbol.png)
 

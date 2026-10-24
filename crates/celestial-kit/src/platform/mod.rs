@@ -1118,13 +1118,18 @@ enum SurfaceRole {
 }
 
 impl SurfaceWindow {
-    fn request_redraw(&mut self, qh: &QueueHandle<Shell>) {
-        self.needs_redraw = true;
+    /// Schedules a compositor frame callback without marking the surface dirty.
+    fn request_frame_callback(&mut self, qh: &QueueHandle<Shell>) {
         if !self.frame_pending {
             self.frame_pending = true;
             let _callback: WlCallback = self.surface.frame(qh, self.surface.clone());
             self.surface.commit();
         }
+    }
+
+    fn request_redraw(&mut self, qh: &QueueHandle<Shell>) {
+        self.needs_redraw = true;
+        self.request_frame_callback(qh);
     }
 
     fn configure(&mut self, size: (u32, u32), scale: f64) {
@@ -2152,7 +2157,12 @@ impl Shell {
         let qh = self.qh.clone();
         for window in &mut self.surfaces {
             if window.needs_redraw {
-                window.request_redraw(&qh);
+                // Draw now and commit a new buffer. The compositor only schedules
+                // a repaint (and therefore sends the frame callback) when a commit
+                // carries damage; a bare frame request would stall until another
+                // event, such as pointer motion, creates damage elsewhere.
+                window.draw();
+                window.request_frame_callback(&qh);
             }
         }
     }
