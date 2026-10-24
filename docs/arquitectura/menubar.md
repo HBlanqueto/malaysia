@@ -101,16 +101,16 @@ el área útil).
 
 ## Menú global (Bloque 14)
 
-### 14b-1 — Menú «Yuki» de escritorio (hecho)
+### 14b-1 — Menús de escritorio (implementado)
 
-La barra real ya integra `celestial_kit::menu::MenuView` para el menú de
-escritorio. Muestra los títulos **Sistema** y **Yuki/nombre de app**; el título
-de la app (o «Yuki» si no hay app activa) expone los submenús Ir, Archivo,
-Edición, Ventana y Sistema con las acciones simples habilitadas (carpetas XDG,
-Papelera, nueva carpeta en el Escritorio, launcher, minimizar todo/lista de
-ventanas y bloqueo de pantalla). Aceptado en sesión anidada el 2026-10-24.
+La barra real integra `celestial_kit::menu::MenuView`. Sin ventana enfocada
+muestra el copo (glifo SVG), «Yuki» en negrita y los títulos **Archivo**,
+**Edición**, **Visualización**, **Ir**, **Ventana** y **Ayuda**, cada uno con su
+propio menú; el reloj va a la derecha. Con una ventana enfocada quedan el copo y
+el nombre de la app en negrita. Falta el teclado en los menús y la aceptación
+manual.
 
-Ver [`docs/bloques/14-menu-global.md`](../bloques/14-menu-global.md#14b-1--menú-yuki-de-escritorio).
+Ver [`docs/bloques/14-menu-global.md`](../bloques/14-menu-global.md#14b-1--menús-de-escritorio).
 
 ### 14b-2 — Diálogos del sistema (pendiente)
 
@@ -139,22 +139,29 @@ La menubar pide el árbol dbusmenu y lo dibuja en popups de CelestialKit.
 4. **App propia**: una app de CelestialKit exporta su menú por la misma vía
    dbusmenu.
 
-### Menú «Yuki» implementado en 14b-1
+### Menús implementados en 14b-1
 
-Título «Yuki». Las acciones de carpetas usan el gestor de archivos por defecto
-(`xdg-open`, carpetas de `xdg-user-dirs`). 14b-1 incluye cinco submenús; el
-resto del diseño completo queda para iteraciones posteriores.
+Las carpetas usan `xdg-open` y los `xdg-user-dirs`. Contenido exacto:
 
-- **Ir**: Atrás/Adelante (deshabilitados) · Inicio · Escritorio · Documentos ·
-  Descargas · Imágenes · Música · Vídeos · Papelera · Ir a la carpeta…
-- **Archivo**: Nueva ventana (gestor de archivos en ~) · Nueva carpeta en el
-  escritorio · Abrir… (deshabilitado) · Buscar (abre el launcher)
-- **Edición**: Deshacer, Cortar, Copiar, Pegar, Seleccionar todo (deshabilitados
-  sin selección)
-- **Ventana**: Minimizar todo · Mostrar escritorio · lista de ventanas
-- **Sistema** (glifo de copo): Acerca de este equipo · Ajustes del sistema… ·
-  Suspender · Reiniciar… · Apagar… · Bloquear pantalla · Cerrar sesión…
-  (solo «Bloquear pantalla» está habilitado en 14b-1).
+- **❄** (sistema): Acerca de este equipo · Ajustes del sistema… · — · Forzar
+  salida… (`⌥❖⎋`) · — · Suspender · Reiniciar… · Apagar… · — · Bloquear
+  pantalla · Cerrar sesión…
+- **Yuki**: Acerca de Yuki · — · Ajustes… · — · Vaciar papelera…
+- **Archivo**: Nueva ventana (gestor de archivos en `~`) · Nueva carpeta en el
+  escritorio · Abrir… · Buscar (abre el launcher)
+- **Edición**: Deshacer · Cortar · Copiar · Pegar · Seleccionar todo
+- **Visualización**: Mostrar/ocultar dock · Cambiar fondo de pantalla…
+- **Ir**: Atrás · Adelante · — · Inicio · Escritorio · Documentos · Descargas ·
+  Imágenes · Música · Vídeos · — · Papelera · — · Ir a la carpeta…
+- **Ventana**: Minimizar todo · Mostrar escritorio · — · lista de ventanas (o
+  «No hay ventanas abiertas»)
+- **Ayuda**: Atajos de teclado · Documentación de Yuki
+
+Habilitados en esta entrega: los de Ir salvo Atrás, Adelante e Ir a la
+carpeta…; Nueva ventana, Nueva carpeta en el escritorio y Buscar; Minimizar
+todo, Mostrar escritorio y la lista de ventanas; y Bloquear pantalla. El resto
+se ve deshabilitado. `zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y
+activar la lista.
 
 ### Medidas de Neptunia
 

@@ -1,9 +1,10 @@
 # Bloque 14 — Menú global
 
 Estado: **14a aceptado** (popups y control de menú en CelestialKit, 2026-10-24,
-ThinkPad, sesión anidada). **14b-1 aceptado** (menú «Yuki» de escritorio en
-`yuki-shell menubar`, 2026-10-24, sesión anidada). 14b-2 (diálogos del sistema)
-y 14c (menú por aplicación) están pendientes.
+ThinkPad, sesión anidada). **14b-1 implementado** (menús de escritorio en
+`yuki-shell menubar`, 2026-10-24): falta el teclado en los menús y la aceptación
+manual. 14b-2 (diálogos del sistema) y 14c (menú por aplicación) están
+pendientes.
 
 ## Qué hay hecho
 
@@ -152,96 +153,107 @@ posterior entregado a ese cliente. Los tres niveles reciben
 `popup grab accepted` y el hijo toma el foco de teclado; al cerrarlo, la pila
 devuelve el foco al padre. Un hijo de un padre sin grab se sigue rechazando.
 
-## 14b-1 — Menú «Yuki» de escritorio
+## 14b-1 — Menús de escritorio
 
-Implementado y aceptado en sesión anidada el **2026-10-24**. La barra real de
-`yuki-shell menubar` muestra dos títulos a la izquierda:
+Implementado el **2026-10-24**. Sin ventana enfocada la barra muestra, de
+izquierda a derecha, el copo (glifo SVG), «Yuki» en negrita y los títulos
+**Archivo**, **Edición**, **Visualización**, **Ir**, **Ventana** y **Ayuda**,
+cada uno con su propio menú; el reloj queda a la derecha. Con una ventana
+enfocada quedan el copo y el nombre de la app en negrita.
 
-- **Sistema**: menú del sistema; solo «Bloquear pantalla» está habilitado.
-- **Yuki / nombre de app**: muestra «Yuki» cuando no hay ventana enfocada o el
-  app_id no se resuelve; muestra el nombre de la app activa (p. ej. «Foot»)
-  cuando la hay. En 14b-1 ambos casos abren el menú de escritorio.
+Contenido exacto de cada menú:
 
-El menú de escritorio tiene cinco submenús:
+- **❄** (sistema): Acerca de este equipo · Ajustes del sistema… · — · Forzar
+  salida… (`⌥❖⎋`) · — · Suspender · Reiniciar… · Apagar… · — · Bloquear
+  pantalla · Cerrar sesión…
+- **Yuki**: Acerca de Yuki · — · Ajustes… · — · Vaciar papelera…
+- **Archivo**: Nueva ventana · Nueva carpeta en el escritorio · Abrir… · Buscar
+- **Edición**: Deshacer · Cortar · Copiar · Pegar · Seleccionar todo
+- **Visualización**: Mostrar/ocultar dock · Cambiar fondo de pantalla…
+- **Ir**: Atrás · Adelante · — · Inicio · Escritorio · Documentos · Descargas ·
+  Imágenes · Música · Vídeos · — · Papelera · — · Ir a la carpeta…
+- **Ventana**: Minimizar todo · Mostrar escritorio · — · lista de ventanas (o
+  «No hay ventanas abiertas» deshabilitado)
+- **Ayuda**: Atajos de teclado · Documentación de Yuki
 
-- **Ir**: carpetas XDG (Inicio, Documentos, Descargas, Escritorio), Papelera
-  (`trash:///`) y entradas de navegación deshabilitadas.
-- **Archivo**: «Nueva ventana» (abre `$HOME`), «Nueva carpeta en el
-  Escritorio», «Buscar» (lanza `yuki-shell launcher`) y «Abrir…"
-  deshabilitado.
-- **Edición**: todo deshabilitado.
-- **Ventana**: «Minimizar todo» (`Toplevels::minimize_all`) y la lista de
-  ventanas activas (`Toplevels::activate`).
-- **Sistema**: «Bloquear pantalla» habilitada; el resto deshabilitado.
+Habilitados: los de **Ir** salvo Atrás, Adelante e Ir a la carpeta…; Nueva
+ventana, Nueva carpeta en el escritorio y Buscar; Minimizar todo, Mostrar
+escritorio y la lista de ventanas; y Bloquear pantalla. Todo lo demás se ve
+deshabilitado.
 
-Los procesos externos (`yuki-shell lock`, `yuki-shell launcher`, `xdg-open`)
-se lanzan sin heredar el entorno Mesa privado del compositor: se eliminan
-`LD_LIBRARY_PATH`, `__EGL_VENDOR_LIBRARY_DIRS`, `LIBGL_DRIVERS_PATH` y
-`GBM_BACKENDS_PATH`, se restauran los valores originales desde
-`YUKI_ORIG_*` si existen, y se llama a `setsid()` para desvincular el hijo.
+Cada título ancla su popup a su propio rectángulo. Solo hay un árbol abierto:
+pulsar un título distinto cierra el anterior y, con un menú abierto, mover el
+puntero a otro título abre el suyo. Los procesos externos (`yuki-shell lock`,
+`yuki-shell launcher`, `xdg-open`) se lanzan sin heredar el entorno Mesa privado
+del compositor: se eliminan `LD_LIBRARY_PATH`, `__EGL_VENDOR_LIBRARY_DIRS`,
+`LIBGL_DRIVERS_PATH` y `GBM_BACKENDS_PATH`, se restauran los valores originales
+desde `YUKI_ORIG_*` si existen, y se llama a `setsid()` para desvincular el
+hijo. El compositor sirve `zwlr_foreign_toplevel_management_v1` v3 para
+minimizar y activar la lista de ventanas; el copo y la barra reservan la zona
+exclusiva de 28 px.
 
-Solo puede haber un árbol de menús abierto: pulsar un título distinto cierra el
-anterior; con un menú abierto, pasar el puntero por otro título lo abre. Las
-acciones cierran la cascada antes de ejecutarse. La navegación por teclado
-(flechas, Esc, Enter) dentro de los popups aún no llega al `MenuView` del shell;
-funciona hover y click, y queda pendiente para una iteración posterior.
+Pendiente: la navegación con teclado dentro de los menús y la aceptación manual.
 
 ### Aceptación de 14b-1
 
-La aceptación se ejecutó con `/tmp/yuki-accept.sh` dentro de `nix develop`,
-usando `./dev.sh demo` y `YUKI_TEST_INPUT` para inyectar puntero/teclado. Logs
-verificados:
+La aceptación se hace con `./dev.sh demo` y `YUKI_TEST_INPUT` para inyectar
+puntero. Comprobaciones:
 
-- `Ir` → `Descargas`: `on_yuki_action go-downloads` + `xdg_open /home/humbe/Descargas`.
-- `Archivo` → `Nueva carpeta en el escritorio` dos veces:
-  `on_yuki_action file-new-folder-desktop` y carpeta creada en
-  `~/Escritorio/Carpeta sin título`.
-- `Ventana` → `Minimizar todo` y activar `foot`:
-  `window-minimize-all` + `window-activate-0`.
-- `Sistema` → `Bloquear pantalla`: `spawn_component lock`.
+- El log del compositor mapea las ventanas con
+  `origin { x: 0, y: 28 }`, debajo de la menubar.
+- Sin ventanas, `Ir` → `Descargas` registra
+  `menubar: xdg-open /home/humbe/Descargas`.
+- Con `Ir` abierto, mover el puntero a `Ventana` abre su menú y cierra el de
+  `Ir` (`popup subtree removed`).
+- `Minimizar todo` registra `window minimized` para cada ventana y la lista de
+  `Ventana` las sigue mostrando.
 
 ### Capturas de 14b-1
 
-![Menú Yuki en claro](img/14b/yuki-light.png)
+![Barra sin ventanas en claro](img/14b/barra-light.png)
 
-`yuki-light.png`: menú «Yuki» abierto en tema claro; «Ir» resaltado y los cinco
-submenús visibles.
+`barra-light.png`: barra sin ventanas sobre el wallpaper; copo, «Yuki» en
+negrita, los títulos y el reloj.
 
-![Menú Yuki en oscuro](img/14b/yuki-dark.png)
+![Barra sin ventanas en oscuro](img/14b/barra-dark.png)
 
-`yuki-dark.png`: el mismo menú en tema oscuro.
+`barra-dark.png`: la misma barra en oscuro.
 
 ![Menú Ir en claro](img/14b/ir-light.png)
 
-`ir-light.png`: submenú «Ir» en claro, con «Inicio» resaltado y los atajos
-renderizados (`⌥Inicio`, `⇧❖D`, etc.).
+`ir-light.png`: menú «Ir» bajo su título; los elementos habilitados y los
+deshabilitados se distinguen.
 
 ![Menú Ir en oscuro](img/14b/ir-dark.png)
 
-`ir-dark.png`: submenú «Ir» en oscuro.
+`ir-dark.png`: el mismo menú en oscuro.
 
 ![Menú Ventana en claro](img/14b/ventana-light.png)
 
-`ventana-light.png`: submenú «Ventana» en claro, con «Minimizar todo» y la lista
-de ventanas activas.
+`ventana-light.png`: menú «Ventana» en claro con dos ventanas en la lista,
+minimizadas para dejar ver el wallpaper.
 
 ![Menú Ventana en oscuro](img/14b/ventana-dark.png)
 
-`ventana-dark.png`: submenú «Ventana» en oscuro.
+`ventana-dark.png`: el mismo menú en oscuro.
 
-![Menú Sistema en claro](img/14b/sistema-light.png)
+![Menú del copo en claro](img/14b/sistema-light.png)
 
-`sistema-light.png`: submenú «Sistema» en claro; solo «Bloquear pantalla» está
-habilitado.
+`sistema-light.png`: menú del copo en claro, con «Bloquear pantalla»
+habilitado y «Forzar salida…» con `⌥❖⎋`.
 
-![Menú Sistema en oscuro](img/14b/sistema-dark.png)
+![Menú del copo en oscuro](img/14b/sistema-dark.png)
 
-`sistema-dark.png`: submenú «Sistema» en oscuro.
+`sistema-dark.png`: el mismo menú en oscuro.
 
-![Barra con Foot enfocado](img/14b/foot.png)
+![Foot enfocado en claro](img/14b/foot-light.png)
 
-`foot.png`: menubar con `foot` enfocado; el título izquierdo muestra «Foot» en
-lugar de «Yuki».
+`foot-light.png`: `foot` enfocado; el nombre va en negrita y su barra de título
+y semáforos quedan debajo de la menubar.
+
+![Foot enfocado en oscuro](img/14b/foot-dark.png)
+
+`foot-dark.png`: el mismo estado en oscuro.
 
 ## Aceptación de 14a
 
