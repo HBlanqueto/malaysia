@@ -1,7 +1,8 @@
 # Bloque 14 — Menú global
 
-Estado: **popups y control de menú implementados en CelestialKit** (2026-10-23).
-La integración completa con `yuki-shell menubar` queda para el siguiente paso.
+Estado: **14a aceptado** (popups y control de menú en CelestialKit, 2026-10-24,
+ThinkPad, sesión anidada). La integración completa con `yuki-shell menubar`
+queda para el siguiente paso.
 
 ## Qué hay hecho
 
@@ -150,6 +151,19 @@ posterior entregado a ese cliente. Los tres niveles reciben
 `popup grab accepted` y el hijo toma el foco de teclado; al cerrarlo, la pila
 devuelve el foco al padre. Un hijo de un padre sin grab se sigue rechazando.
 
+## Aceptación de 14a
+
+Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual:
+
+- Clic: abre el menú.
+- Submenús por hover.
+- Teclado: navegación con redibujado inmediato.
+- Esc cierra por niveles (primero el popup más profundo).
+- Clic fuera cierra toda la cascada.
+- Un solo árbol abierto a la vez.
+- Al cerrar, el foco vuelve a `foot`.
+- `kill -9` del cliente no deja restos (ni popups huérfanos ni foco perdido).
+
 ## Capturas
 
 ![Menubar con el nombre de la app en claro](img/14a/menubar-nombre-claro.png)
@@ -271,6 +285,7 @@ ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 
 ## Pendiente
 
+- Repetir la prueba de 14a en DRM real (pendiente de 14b).
 - Conectar el menú del `yuki-shell menubar` con `MenuView` y el estado de la
   aplicación activa (lectura de `~/.local/share/yuki/window.domain`).
 - Atajos de teclado: mostrar el acelerador subrayado cuando el usuario pulsa

@@ -195,6 +195,12 @@ En NixOS, el flake expone `nixosModules.default` (`programs.yuki.enable = true`)
 instala el paquete, registra la sesión, crea `/etc/pam.d/yuki-lock` y arranca
 `yuki-session.target` con los componentes de la shell.
 
+## Convenciones de commits
+
+Los mensajes llevan tipo entre paréntesis cuando el cambio se limita a un área:
+`fix(kit): …`, `docs(14a): …`, `feat(compositor): …`. Nunca `kit: …` ni
+`compositor: …` sin tipo.
+
 ## Regla de entorno (permanente)
 
 Nunca borres ni modifiques nada fuera del repo y de `$XDG_RUNTIME_DIR/yuki`:
