@@ -247,11 +247,14 @@ Documentado en el [ADR 0036](decisiones/0036-menu-global.md) y en
 
 - **14a — Popups en CelestialKit.** Aceptado (2026-10-24, ThinkPad, sesión
   anidada): `xdg_popup` con padre layer-shell en el runner propio, navegación
-  con teclado, cierre al clic fuera y restauración del foco.
-- **14b — Menú «Yuki» de escritorio.** Sin dependencias externas; el menú
-  Ventana usa `zwlr_foreign_toplevel_management_v1`.
-- **14c — Respaldo por app.** Reutiliza `yuki-shell/src/desktop.rs`: nombre y
-  acciones del `.desktop`, controles reales de la ventana y Salir.
+  con teclado en el ejemplo, cierre al clic fuera y restauración del foco.
+- **14b-1 — Menú «Yuki» de escritorio.** Aceptado (2026-10-24, sesión anidada):
+  títulos **Sistema** y **Yuki/nombre de app**, submenús Ir, Archivo, Edición,
+  Ventana y Sistema; el menú Ventana usa `zwlr_foreign_toplevel_management_v1`.
+- **14b-2 — Diálogos del sistema.** Suspender, Reiniciar, Apagar, Cerrar sesión.
+- **14c — Menú por aplicación (respaldo).** Reutiliza
+  `yuki-shell/src/desktop.rs`: nombre y acciones del `.desktop`, controles
+  reales de la ventana y Salir.
 - **14d — Compositor `org_kde_kwin_appmenu` + cliente dbusmenu.** Aceptación:
   menú real de Kate y de Firefox con sus dos preferencias.
 - **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
@@ -376,12 +379,12 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a aceptado; 14b-1 implementado y aceptado en anidado; 14b-2
-  y 14c–14e pendientes.** El menú global está decidido (`org_kde_kwin_appmenu`
-  + `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
+- **Bloque 14 — 14a y 14b-1 aceptados en anidado; 14b-2 y 14c–14e
+  pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
+  `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
   CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
-  (menú «Yuki» de escritorio en `yuki-shell menubar`) implementado y aceptado
-  en anidado el 2026-10-24.
+  (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el
+  2026-10-24.
 
 ## Numeración de bloques
 

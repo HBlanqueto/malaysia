@@ -1,8 +1,9 @@
 # Bloque 14 — Menú global
 
 Estado: **14a aceptado** (popups y control de menú en CelestialKit, 2026-10-24,
-ThinkPad, sesión anidada). La integración completa con `yuki-shell menubar`
-queda para el siguiente paso.
+ThinkPad, sesión anidada). **14b-1 aceptado** (menú «Yuki» de escritorio en
+`yuki-shell menubar`, 2026-10-24, sesión anidada). 14b-2 (diálogos del sistema)
+y 14c (menú por aplicación) están pendientes.
 
 ## Qué hay hecho
 
@@ -154,18 +155,19 @@ devuelve el foco al padre. Un hijo de un padre sin grab se sigue rechazando.
 ## 14b-1 — Menú «Yuki» de escritorio
 
 Implementado y aceptado en sesión anidada el **2026-10-24**. La barra real de
-`yuki-shell menubar` muestra dos títulos:
+`yuki-shell menubar` muestra dos títulos a la izquierda:
 
-- **Sistema** (izquierda): por ahora solo habilita «Bloquear pantalla».
-- **Yuki / nombre de app**: cuando no hay ventana enfocada o la app activa es
-  Yuki, el título dice «Yuki» y abre el menú de escritorio.
+- **Sistema**: menú del sistema; solo «Bloquear pantalla» está habilitado.
+- **Yuki / nombre de app**: muestra «Yuki» cuando no hay ventana enfocada o el
+  app_id no se resuelve; muestra el nombre de la app activa (p. ej. «Foot»)
+  cuando la hay. En 14b-1 ambos casos abren el menú de escritorio.
 
-El menú «Yuki» tiene cinco submenús:
+El menú de escritorio tiene cinco submenús:
 
 - **Ir**: carpetas XDG (Inicio, Documentos, Descargas, Escritorio), Papelera
   (`trash:///`) y entradas de navegación deshabilitadas.
 - **Archivo**: «Nueva ventana» (abre `$HOME`), «Nueva carpeta en el
-  Escritorio», «Buscar» (lanza `yuki-shell launcher`) y «Abrir…»
+  Escritorio», «Buscar» (lanza `yuki-shell launcher`) y «Abrir…"
   deshabilitado.
 - **Edición**: todo deshabilitado.
 - **Ventana**: «Minimizar todo» (`Toplevels::minimize_all`) y la lista de
@@ -180,19 +182,66 @@ se lanzan sin heredar el entorno Mesa privado del compositor: se eliminan
 
 Solo puede haber un árbol de menús abierto: pulsar un título distinto cierra el
 anterior; con un menú abierto, pasar el puntero por otro título lo abre. Las
-flechas `←`/`→` en un menú raíz saltan al título vecino. Las acciones cierran
-la cascada antes de ejecutarse.
+acciones cierran la cascada antes de ejecutarse. La navegación por teclado
+(flechas, Esc, Enter) dentro de los popups aún no llega al `MenuView` del shell;
+funciona hover y click, y queda pendiente para una iteración posterior.
+
+### Aceptación de 14b-1
+
+La aceptación se ejecutó con `/tmp/yuki-accept.sh` dentro de `nix develop`,
+usando `./dev.sh demo` y `YUKI_TEST_INPUT` para inyectar puntero/teclado. Logs
+verificados:
+
+- `Ir` → `Descargas`: `on_yuki_action go-downloads` + `xdg_open /home/humbe/Descargas`.
+- `Archivo` → `Nueva carpeta en el escritorio` dos veces:
+  `on_yuki_action file-new-folder-desktop` y carpeta creada en
+  `~/Escritorio/Carpeta sin título`.
+- `Ventana` → `Minimizar todo` y activar `foot`:
+  `window-minimize-all` + `window-activate-0`.
+- `Sistema` → `Bloquear pantalla`: `spawn_component lock`.
 
 ### Capturas de 14b-1
 
-![Menú Yuki en claro](img/14b/yuki-menu-claro.png)
+![Menú Yuki en claro](img/14b/yuki-light.png)
 
-`yuki-menu-claro.png`: menú «Yuki» abierto en tema claro; «Ir» resaltado y los
-cinco submenús visibles.
+`yuki-light.png`: menú «Yuki» abierto en tema claro; «Ir» resaltado y los cinco
+submenús visibles.
 
-![Menú Yuki en oscuro](img/14b/yuki-menu-oscuro.png)
+![Menú Yuki en oscuro](img/14b/yuki-dark.png)
 
-`yuki-menu-oscuro.png`: el mismo menú en tema oscuro.
+`yuki-dark.png`: el mismo menú en tema oscuro.
+
+![Menú Ir en claro](img/14b/ir-light.png)
+
+`ir-light.png`: submenú «Ir» en claro, con «Inicio» resaltado y los atajos
+renderizados (`⌥Inicio`, `⇧❖D`, etc.).
+
+![Menú Ir en oscuro](img/14b/ir-dark.png)
+
+`ir-dark.png`: submenú «Ir» en oscuro.
+
+![Menú Ventana en claro](img/14b/ventana-light.png)
+
+`ventana-light.png`: submenú «Ventana» en claro, con «Minimizar todo» y la lista
+de ventanas activas.
+
+![Menú Ventana en oscuro](img/14b/ventana-dark.png)
+
+`ventana-dark.png`: submenú «Ventana» en oscuro.
+
+![Menú Sistema en claro](img/14b/sistema-light.png)
+
+`sistema-light.png`: submenú «Sistema» en claro; solo «Bloquear pantalla» está
+habilitado.
+
+![Menú Sistema en oscuro](img/14b/sistema-dark.png)
+
+`sistema-dark.png`: submenú «Sistema» en oscuro.
+
+![Barra con Foot enfocado](img/14b/foot.png)
+
+`foot.png`: menubar con `foot` enfocado; el título izquierdo muestra «Foot» en
+lugar de «Yuki».
 
 ## Aceptación de 14a
 
@@ -329,7 +378,8 @@ ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 ## Pendiente
 
 - Repetir la prueba de 14a y 14b-1 en DRM real (pendiente de 8b/14b).
-- 14b-2: menú por aplicación a partir de `.desktop` y controles de ventana.
-- Atajos de teclado: mostrar el acelerador subrayado cuando el usuario pulsa
-  `Alt`.
+- 14b-2: diálogos del sistema (Suspender, Reiniciar, Apagar, Cerrar sesión).
+- 14c: menú por aplicación a partir de `.desktop` y controles de ventana reales.
+- Navegación por teclado completa dentro de los popups (flechas, Esc, Enter)
+  y atajos subrayados al pulsar `Alt`.
 - Scroll para menús largos.

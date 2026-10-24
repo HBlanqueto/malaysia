@@ -105,13 +105,18 @@ el área útil).
 
 La barra real ya integra `celestial_kit::menu::MenuView` para el menú de
 escritorio. Muestra los títulos **Sistema** y **Yuki/nombre de app**; el título
-«Yuki» expone los submenús Ir, Archivo, Edición, Ventana y Sistema con las
-acciones simples habilitadas (carpetas XDG, Papelera, nueva carpeta en el
-Escritorio, launcher, minimizar todo/lista de ventanas y bloqueo de pantalla).
+de la app (o «Yuki» si no hay app activa) expone los submenús Ir, Archivo,
+Edición, Ventana y Sistema con las acciones simples habilitadas (carpetas XDG,
+Papelera, nueva carpeta en el Escritorio, launcher, minimizar todo/lista de
+ventanas y bloqueo de pantalla). Aceptado en sesión anidada el 2026-10-24.
 
 Ver [`docs/bloques/14-menu-global.md`](../bloques/14-menu-global.md#14b-1--menú-yuki-de-escritorio).
 
-### Flujo completo (planificado para 14b-2 y siguientes)
+### 14b-2 — Diálogos del sistema (pendiente)
+
+Diálogos de confirmación para Suspender, Reiniciar, Apagar y Cerrar sesión.
+
+### Flujo completo (planificado para 14c y siguientes)
 
 ```
 app ──org_kde_kwin_appmenu──► compositor ──window.domain──► menubar
@@ -134,23 +139,22 @@ La menubar pide el árbol dbusmenu y lo dibuja en popups de CelestialKit.
 4. **App propia**: una app de CelestialKit exporta su menú por la misma vía
    dbusmenu.
 
-### Menú «Yuki» aprobado (sin ventana enfocada)
+### Menú «Yuki» implementado en 14b-1
 
 Título «Yuki». Las acciones de carpetas usan el gestor de archivos por defecto
-(`xdg-open`, carpetas de `xdg-user-dirs`).
+(`xdg-open`, carpetas de `xdg-user-dirs`). 14b-1 incluye cinco submenús; el
+resto del diseño completo queda para iteraciones posteriores.
 
-- **Sistema** (glifo de copo): Acerca de este equipo · Ajustes del sistema… ·
-  Suspender · Reiniciar… · Apagar… · Bloquear pantalla · Cerrar sesión…
-- **Yuki**: Acerca de Yuki · Ajustes… · Vaciar papelera…
-- **Archivo**: Nueva ventana (gestor de archivos en ~) · Nueva carpeta en el
-  escritorio · Abrir… · Buscar (abre el launcher)
-- **Edición**: Deshacer, Cortar, Copiar, Pegar, Seleccionar todo (deshabilitados
-  sin selección)
-- **Visualización**: Mostrar/ocultar dock · Cambiar fondo de pantalla…
 - **Ir**: Atrás/Adelante (deshabilitados) · Inicio · Escritorio · Documentos ·
   Descargas · Imágenes · Música · Vídeos · Papelera · Ir a la carpeta…
+- **Archivo**: Nueva ventana (gestor de archivos en ~) · Nueva carpeta en el
+  escritorio · Abrir… (deshabilitado) · Buscar (abre el launcher)
+- **Edición**: Deshacer, Cortar, Copiar, Pegar, Seleccionar todo (deshabilitados
+  sin selección)
 - **Ventana**: Minimizar todo · Mostrar escritorio · lista de ventanas
-- **Ayuda**: Atajos de teclado · Documentación de Yuki
+- **Sistema** (glifo de copo): Acerca de este equipo · Ajustes del sistema… ·
+  Suspender · Reiniciar… · Apagar… · Bloquear pantalla · Cerrar sesión…
+  (solo «Bloquear pantalla» está habilitado en 14b-1).
 
 ### Medidas de Neptunia
 
