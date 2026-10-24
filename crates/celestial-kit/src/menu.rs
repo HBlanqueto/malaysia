@@ -734,10 +734,22 @@ fn render_item(
                 .direction(Direction::Horizontal)
                 .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
-                .on_pointer_enter(move |_| {
-                    if enabled {
-                        focused.set(Some(index));
-                        close_child(open_child_id_enter.clone());
+                .on_pointer_enter({
+                    let open_child_id_enter = open_child_id_enter.clone();
+                    move |_| {
+                        if enabled {
+                            focused.set(Some(index));
+                            close_child(open_child_id_enter.clone());
+                        }
+                    }
+                })
+                .on_pointer_move({
+                    let open_child_id_enter = open_child_id_enter.clone();
+                    move |_| {
+                        if enabled {
+                            focused.set(Some(index));
+                            close_child(open_child_id_enter.clone());
+                        }
                     }
                 })
                 .on_mouse_down(move |_: Event<MouseEventData>| {
