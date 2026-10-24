@@ -2683,6 +2683,14 @@ impl Shell {
         if let Some(index) = index {
             self.surfaces[index].app.push(platform_event);
             self.surfaces[index].request_redraw(qh);
+            // shortcut: when a popup has keyboard focus, the compositor only
+            // schedules repaints from the parent surface's damage right now, so
+            // the popup stalls without frame callbacks. Force a redraw of all
+            // surfaces so the output repaint reaches the popup too. Remove once
+            // popup commits damage the output on their own.
+            if matches!(self.surfaces[index].role, SurfaceRole::Popup(_)) {
+                self.request_redraw_all = true;
+            }
         }
     }
 
