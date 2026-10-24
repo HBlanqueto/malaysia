@@ -212,7 +212,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
 
     let titles_for_click = titles.clone();
     let state_for_click = state.clone();
-    container = container.on_pointer_down(move |_: Event<PointerEventData>| {
+    container = container.on_mouse_down(move |_: Event<MouseEventData>| {
         toggle_menu(&titles_for_click, title_index, &state_for_click);
     });
 
