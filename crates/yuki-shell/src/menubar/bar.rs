@@ -146,6 +146,18 @@ fn load_active_app(store_path: &PathBuf, entries: &[DesktopEntry]) -> String {
     resolve_app_name(Some(&active.app_id), entries)
 }
 
+/// The layer-shell surface: top strip with its exclusive zone reserved.
+fn surface_spec() -> SurfaceSpec {
+    SurfaceSpec::Layer {
+        namespace: "yuki-menubar".to_string(),
+        layer: SurfaceLayer::Top,
+        anchors: Anchors::TOP,
+        exclusive_zone: MENUBAR_HEIGHT,
+        keyboard: KeyboardInteractivity::None,
+        size: Some((0, MENUBAR_HEIGHT as u32)),
+    }
+}
+
 /// Connects to the compositor and runs the menu bar until closed.
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
@@ -159,16 +171,30 @@ pub fn run() -> anyhow::Result<()> {
         entries,
     });
 
-    run_layer(
-        app,
-        SurfaceSpec::Layer {
-            namespace: "yuki-menubar".to_string(),
-            layer: SurfaceLayer::Top,
-            anchors: Anchors::TOP,
-            exclusive_zone: MENUBAR_HEIGHT,
-            keyboard: KeyboardInteractivity::None,
-            size: Some((0, MENUBAR_HEIGHT as u32)),
-        },
-    )
-    .map_err(|error| anyhow::anyhow!("{error}"))
+    run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_bar_reserves_the_menubar_height() {
+        match surface_spec() {
+            SurfaceSpec::Layer {
+                layer,
+                anchors,
+                exclusive_zone,
+                size,
+                ..
+            } => {
+                assert_eq!(layer, SurfaceLayer::Top);
+                assert!(anchors.top && anchors.left && anchors.right);
+                assert!(!anchors.bottom);
+                assert_eq!(exclusive_zone, MENUBAR_HEIGHT);
+                assert_eq!(size, Some((0, MENUBAR_HEIGHT as u32)));
+            }
+            _ => panic!("the menubar is a layer surface"),
+        }
+    }
 }

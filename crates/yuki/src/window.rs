@@ -315,7 +315,7 @@ impl Windows {
             );
             let id = data.id;
             self.scene.insert(id, outer);
-            tracing::info!(window = id.get(), "window mapped");
+            tracing::info!(window = id.get(), ?origin, "window mapped");
             return Some(id);
         }
         None
