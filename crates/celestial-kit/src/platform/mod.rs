@@ -268,6 +268,7 @@ pub struct Popups {
     owner: ObjectId,
     current: Option<PopupId>,
     surface_count: Rc<Cell<usize>>,
+    opens_left: Rc<Cell<bool>>,
 }
 
 impl Popups {
@@ -318,6 +319,13 @@ impl PopupHandle {
 
     pub fn id(&self) -> PopupId {
         self.id
+    }
+
+    /// True when the compositor configured this popup to the left of its
+    /// parent (its configure `x` is negative). Descendant submenus use it to
+    /// keep opening on the same side.
+    pub fn opens_left(&self) -> bool {
+        self.popups.opens_left.get()
     }
 
     pub fn close(&self) {
@@ -1068,6 +1076,7 @@ struct PopupInfo {
     id: PopupId,
     parent: Option<PopupId>,
     on_dismissed: Option<Rc<dyn Fn()>>,
+    opens_left: Rc<Cell<bool>>,
 }
 
 enum PopupCommand {
@@ -1407,6 +1416,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         owner: surface.id(),
         current: None,
         surface_count: shell.surface_count.clone(),
+        opens_left: Rc::new(Cell::new(false)),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1537,6 +1547,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         owner: surface.id(),
         current: None,
         surface_count: shell.surface_count.clone(),
+        opens_left: Rc::new(Cell::new(false)),
     };
     let app_instance = AppInstance::new(
         shell.app.clone(),
@@ -1787,6 +1798,7 @@ impl Shell {
             owner: surface.id(),
             current: None,
             surface_count: self.surface_count.clone(),
+            opens_left: Rc::new(Cell::new(false)),
         };
         let app = AppInstance::new(
             self.app.clone(),
@@ -1989,6 +2001,7 @@ impl Shell {
 
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
         let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let opens_left = Rc::new(Cell::new(false));
         let popups = Popups {
             queue: self.popup_commands.clone(),
             ping: self.ping.clone(),
@@ -1997,6 +2010,7 @@ impl Shell {
             owner: wl_surface.id(),
             current: Some(id),
             surface_count: self.surface_count.clone(),
+            opens_left: opens_left.clone(),
         };
         let handle = PopupHandle {
             id,
@@ -2029,6 +2043,7 @@ impl Shell {
                 id,
                 parent,
                 on_dismissed: spec.on_dismissed,
+                opens_left,
             }),
             shared: self.graphics.clone(),
             graphics: None,
@@ -2367,6 +2382,9 @@ impl PopupHandler for Shell {
         };
         let scale = self.surfaces[index].scale;
         let size = (config.width.max(0) as u32, config.height.max(0) as u32);
+        if let Some(info) = self.surfaces[index].popup.as_ref() {
+            info.opens_left.set(config.position.0 < 0);
+        }
         self.surfaces[index].configure(size, scale);
         // Like a toplevel, a popup must attach its first buffer before it can
         // map; there is no frame callback to wait for yet.

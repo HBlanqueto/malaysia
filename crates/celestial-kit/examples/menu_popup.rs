@@ -431,17 +431,22 @@ impl App for NestedMenu {
                     delay_ms: 250,
                 };
                 let inset = palette.padding + palette.border_width;
+                let (anchor, gravity) = if handle.opens_left() {
+                    (PopupAnchor::Left, PopupGravity::BottomLeft)
+                } else {
+                    (PopupAnchor::Right, PopupGravity::BottomRight)
+                };
                 handle.open_child(
                     PopupSpec {
                         anchor_rect: (
-                            inset as i32,
+                            0,
                             top as i32,
-                            (parent_size.0 - inset * 2.0).max(1.0) as u32,
+                            parent_size.0.max(1.0) as u32,
                             palette.item_height as u32,
                         ),
-                        anchor: PopupAnchor::Right,
-                        gravity: PopupGravity::BottomRight,
-                        offset: (palette.submenu_offset as i32, -(inset as i32)),
+                        anchor,
+                        gravity,
+                        offset: (0, -(inset as i32)),
                         size: (child_size.0 as u32, child_size.1 as u32),
                         constraint_adjustment: PopupConstraintAdjustment {
                             flip_x: true,

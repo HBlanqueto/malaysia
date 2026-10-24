@@ -250,6 +250,7 @@ impl App for MenuView {
         let m = self.palette;
         let size = self.size;
         let popup: Option<PopupHandle> = try_consume_root_context();
+        let opens_left = popup.as_ref().is_some_and(PopupHandle::opens_left);
         let focused = use_state(|| first_selectable(&items));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
 
@@ -265,6 +266,7 @@ impl App for MenuView {
                     focused_index == Some(index),
                     m,
                     popup.clone(),
+                    opens_left,
                     on_activate.clone(),
                     on_dismiss_all.clone(),
                     items.clone(),
@@ -339,6 +341,7 @@ impl App for MenuView {
                             on_activate.clone(),
                             on_dismiss_all.clone(),
                             open_child_id,
+                            opens_left,
                         );
                     }
                 }
@@ -353,6 +356,7 @@ impl App for MenuView {
                             on_activate.clone(),
                             on_dismiss_all.clone(),
                             open_child_id,
+                            opens_left,
                         );
                     }
                 }
@@ -371,6 +375,7 @@ impl App for MenuView {
                             on_dismiss_all.clone(),
                             open_child_id,
                             items.clone(),
+                            opens_left,
                         );
                     }
                 }
@@ -460,6 +465,7 @@ fn activate_or_open(
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
+    opens_left: bool,
 ) {
     if let Some(id) = activate_at(items, index) {
         on_activate(id);
@@ -477,6 +483,7 @@ fn activate_or_open(
             on_dismiss_all,
             open_child_id,
             Rc::new(items.to_vec()),
+            opens_left,
         );
     }
 }
@@ -495,19 +502,35 @@ fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
     0.0
 }
 
-/// The anchor rectangle of a submenu: the full row, inset by the panel's
-/// padding and border. `y` is the same row top `item_top` feeds the layout.
+/// Which side a submenu opens to. A popup configured left of its parent
+/// (`opens_left`) asks its children to open left too; `flip_x` lets the
+/// compositor return them to the right only when the left side does not fit.
+fn submenu_positioner(opens_left: bool) -> (PopupAnchor, PopupGravity, i32) {
+    // The compositor does not invert the offset when it flips the popup, so a
+    // non-zero horizontal offset would make one side overlap its ancestor.
+    // The anchor is the panel edge (see `submenu_anchor_rect`); zero leaves
+    // the child touching the parent on both sides.
+    if opens_left {
+        (PopupAnchor::Left, PopupGravity::BottomLeft, 0)
+    } else {
+        (PopupAnchor::Right, PopupGravity::BottomRight, 0)
+    }
+}
+
+/// The anchor rectangle of a submenu: the panel's full width at the row's
+/// vertical position. The horizontal anchor must be the panel edge, not the
+/// inset row, so a flipped child ends at the parent edge instead of covering
+/// it; `y` is still the row top `item_top` feeds the layout.
 fn submenu_anchor_rect(
     index: usize,
     items: &[MenuItem],
     m: MenuPalette,
     parent_width: f32,
 ) -> (i32, i32, u32, u32) {
-    let inset = m.padding + m.border_width;
     (
-        inset as i32,
+        0,
         item_top(index, items, m) as i32,
-        (parent_width - inset * 2.0).max(1.0) as u32,
+        parent_width.max(1.0) as u32,
         m.item_height as u32,
     )
 }
@@ -532,6 +555,7 @@ fn open_child_popup(
     on_dismiss_all: Rc<dyn Fn()>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
     parent_items: Rc<Vec<MenuItem>>,
+    opens_left: bool,
 ) -> Option<PopupId> {
     close_child(open_child_id.clone());
     let child_size = MenuView::preferred_size(sub_items, m);
@@ -550,11 +574,12 @@ fn open_child_popup(
         open_child_id_set.set(None);
     };
     let inset = m.padding + m.border_width;
+    let (anchor, gravity, dx) = submenu_positioner(opens_left);
     let spec = PopupSpec {
         anchor_rect: submenu_anchor_rect(index, &parent_items, m, parent_size.0),
-        anchor: PopupAnchor::Right,
-        gravity: PopupGravity::BottomRight,
-        offset: (m.submenu_offset as i32, -(inset as i32)),
+        anchor,
+        gravity,
+        offset: (dx, -(inset as i32)),
         size: (child_size.0 as u32, child_size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
@@ -576,6 +601,7 @@ fn render_item(
     is_focused: bool,
     m: MenuPalette,
     popup: Option<PopupHandle>,
+    opens_left: bool,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     items: Rc<Vec<MenuItem>>,
@@ -722,6 +748,7 @@ fn render_item(
                             on_dismiss_enter.clone(),
                             open_child_id_enter.clone(),
                             items_enter.clone(),
+                            opens_left,
                         );
                     }
                 })
@@ -737,6 +764,7 @@ fn render_item(
                             on_dismiss_click.clone(),
                             open_child_id_click.clone(),
                             items_click.clone(),
+                            opens_left,
                         );
                     }
                 });
@@ -874,6 +902,31 @@ mod tests {
     }
 
     #[test]
+    fn left_handed_submenus_keep_their_descendants_on_the_left() {
+        let (anchor, gravity, dx) = submenu_positioner(true);
+        assert_eq!(anchor, PopupAnchor::Left);
+        assert_eq!(gravity, PopupGravity::BottomLeft);
+        assert_eq!(dx, 0, "the panel-edge anchor needs no horizontal offset");
+
+        // Three levels: each child's right edge is at its parent's left edge,
+        // so no popup overlaps an ancestor.
+        let mut parent_left = 1000.0;
+        for _ in 0..3 {
+            let child_right = parent_left + dx as f32;
+            assert!(
+                child_right <= parent_left,
+                "a left-handed child overlaps its ancestor"
+            );
+            parent_left = child_right;
+        }
+
+        let (anchor, gravity, dx) = submenu_positioner(false);
+        assert_eq!(anchor, PopupAnchor::Right);
+        assert_eq!(gravity, PopupGravity::BottomRight);
+        assert_eq!(dx, 0);
+    }
+
+    #[test]
     fn submenu_anchor_rect_matches_the_row_top() {
         let items = vec![
             MenuItem::Action {
@@ -907,10 +960,9 @@ mod tests {
         let m = MENU_LIGHT;
         let (width, _) = MenuView::preferred_size(&items, m);
         let (x, y, w, h) = submenu_anchor_rect(4, &items, m, width);
-        let inset = m.padding + m.border_width;
         assert_eq!(y as f32, item_top(4, &items, m));
-        assert_eq!(x as f32, inset);
-        assert_eq!(w as f32, width - inset * 2.0);
+        assert_eq!(x, 0);
+        assert_eq!(w as f32, width);
         assert_eq!(h as f32, m.item_height);
     }
 
