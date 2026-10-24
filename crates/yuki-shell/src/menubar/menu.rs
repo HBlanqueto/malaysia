@@ -1,0 +1,210 @@
+//! Shared menubar popup machinery.
+//!
+//! Each title on the bar can open a root `MenuView` popup anchored to its own
+//! rectangle. Only one menu tree is open at a time; hovering over another title
+//! while a menu is open switches to that title's menu. The root menu can also
+//! navigate to the previous/next title with the Left/Right arrow keys.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+
+use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView};
+use celestial_kit::platform::{
+    PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
+};
+use freya_core::integration::AppComponent;
+use freya_core::prelude::*;
+use torin::prelude::{Alignment, Gaps, Size};
+use yuki_design::MENUBAR_HEIGHT;
+
+use crate::menubar::rgba;
+
+/// One title that can open a root menu popup.
+pub struct MenuTitleSpec {
+    pub label: String,
+    pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
+    pub anchor_x: Rc<RefCell<State<f32>>>,
+    pub enabled: bool,
+}
+
+/// State shared by all menu titles on the bar.
+#[derive(Clone)]
+pub struct MenuState {
+    pub root_id: Arc<Mutex<Option<PopupId>>>,
+    pub open_label: Rc<RefCell<State<Option<String>>>>,
+}
+
+impl MenuState {
+    pub fn new() -> Self {
+        Self {
+            root_id: Arc::new(Mutex::new(None)),
+            open_label: Rc::new(RefCell::new(use_state(|| None::<String>))),
+        }
+    }
+}
+
+/// Closes the currently open root popup, if any.
+pub fn close_root_menu(state: &MenuState) {
+    if let Some(id) = state.root_id.lock().unwrap().take() {
+        Popups::get().close(id);
+    }
+    state.open_label.borrow_mut().set(None);
+}
+
+/// Opens a root menu popup for `title_index`.
+pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
+    let Some(spec) = titles.get(title_index) else {
+        return;
+    };
+    close_root_menu(state);
+
+    let items = (spec.items)();
+    let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
+    let size = MenuView::preferred_size(&items, palette);
+    let anchor_x = *spec.anchor_x.borrow().read();
+    let label = spec.label.clone();
+
+    let cell = state.root_id.clone();
+    let open_label = state.open_label.clone();
+    let on_dismiss_all = move || {
+        if let Some(id) = cell.lock().unwrap().take() {
+            Popups::get().close(id);
+        }
+        open_label.borrow_mut().set(None);
+    };
+
+    let titles_for_nav = titles.clone();
+    let state_for_nav = state.clone();
+    let view =
+        MenuView::new(items, |_id| {}, on_dismiss_all, palette).with_navigation(move |direction| {
+            navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
+        });
+
+    let open_label = state.open_label.clone();
+    let id = Popups::get().open(
+        PopupSpec {
+            anchor_rect: (anchor_x as i32, MENUBAR_HEIGHT, 1, 1),
+            anchor: PopupAnchor::BottomLeft,
+            gravity: PopupGravity::BottomLeft,
+            offset: (0, 0),
+            size: (size.0 as u32, size.1 as u32),
+            constraint_adjustment: PopupConstraintAdjustment {
+                flip_x: true,
+                flip_y: true,
+                slide_x: true,
+                slide_y: true,
+            },
+            grab: true,
+            on_dismissed: Some(Rc::new(move || {
+                open_label.borrow_mut().set(None);
+            })),
+        },
+        AppComponent::new(view),
+    );
+    state.root_id.lock().unwrap().replace(id);
+    state.open_label.borrow_mut().set(Some(label));
+}
+
+/// Toggles a title's menu: open if closed, close if already open.
+pub fn toggle_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
+    let Some(spec) = titles.get(title_index) else {
+        return;
+    };
+    if state.open_label.borrow().read().as_deref() == Some(&spec.label) {
+        close_root_menu(state);
+        return;
+    }
+    open_root_menu(titles, title_index, state);
+}
+
+fn navigate_title(
+    direction: MenuNavigation,
+    current_index: usize,
+    titles: &Rc<Vec<MenuTitleSpec>>,
+    state: &MenuState,
+) {
+    let len = titles.len();
+    if len == 0 {
+        return;
+    }
+    let delta = match direction {
+        MenuNavigation::Prev => -1,
+        MenuNavigation::Next => 1,
+    };
+    let mut index = (current_index as isize + delta).rem_euclid(len as isize) as usize;
+    let start = index;
+    loop {
+        if titles[index].enabled {
+            open_root_menu(titles, index, state);
+            return;
+        }
+        index = (index as isize + delta).rem_euclid(len as isize) as usize;
+        if index == start {
+            break;
+        }
+    }
+}
+
+/// Renders one menubar title. When `enabled` is false it is a plain label.
+pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: MenuState) -> Element {
+    let spec = &titles[title_index];
+    let label_text = spec.label.clone();
+    let enabled = spec.enabled;
+    let anchor_x = spec.anchor_x.clone();
+    let is_open = state.open_label.borrow().read().as_deref() == Some(&label_text);
+
+    let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
+    let hover_bg = rgba(palette.bar_hover_bg);
+    let hover_fg = rgba(palette.bar_hover_fg);
+    let normal_fg =
+        rgba(celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved()).text);
+
+    let mut container = rect()
+        .height(Size::px(MENUBAR_HEIGHT as f32))
+        .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+        .main_align(Alignment::Center)
+        .cross_align(Alignment::Center)
+        .on_sized({
+            let anchor_x = anchor_x.clone();
+            move |event: Event<SizedEventData>| {
+                anchor_x.borrow_mut().set(event.data().area.origin.x);
+            }
+        });
+
+    if is_open {
+        container = container.background(hover_bg);
+    }
+
+    let label_element = label()
+        .text(label_text.clone())
+        .font_size(13.0)
+        .color(if is_open { hover_fg } else { normal_fg });
+    container = container.child(label_element);
+
+    if !enabled {
+        return container.into_element();
+    }
+
+    let titles_for_click = titles.clone();
+    let state_for_click = state.clone();
+    container = container.on_pointer_down(move |_: Event<PointerEventData>| {
+        toggle_menu(&titles_for_click, title_index, &state_for_click);
+    });
+
+    let open_label_for_hover = state.open_label.clone();
+    let titles_for_hover = titles.clone();
+    let state_for_hover = state.clone();
+    let label_for_hover = label_text.clone();
+    container = container.on_pointer_enter(move |_: Event<PointerEventData>| {
+        let binding = open_label_for_hover.borrow().read();
+        let Some(current) = binding.as_deref() else {
+            return;
+        };
+        if current != label_for_hover {
+            open_root_menu(&titles_for_hover, title_index, &state_for_hover);
+        }
+    });
+
+    container.into_element()
+}

@@ -986,6 +986,7 @@ pub struct Toplevels {
     pub list: State<Vec<ToplevelInfo>>,
     activate: Activate,
     close: Activate,
+    minimize: Activate,
 }
 
 impl Toplevels {
@@ -1002,6 +1003,20 @@ impl Toplevels {
     pub fn close(&self, index: usize) {
         if let Some(f) = self.close.borrow().as_ref() {
             f(index);
+        }
+    }
+
+    pub fn minimize(&self, index: usize) {
+        if let Some(f) = self.minimize.borrow().as_ref() {
+            f(index);
+        }
+    }
+
+    /// Minimizes every toplevel in the list.
+    pub fn minimize_all(&self) {
+        let len = self.list.read().len();
+        for index in 0..len {
+            self.minimize(index);
         }
     }
 }
@@ -1708,6 +1723,7 @@ impl Shell {
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop ping failed"))?;
         let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
         let close_entries = toplevel_entries.clone();
+        let minimize_entries = toplevel_entries.clone();
         let toplevels = Toplevels {
             list: State::create_global(Vec::new()),
             activate: Rc::new(RefCell::new(None)),
@@ -1716,6 +1732,13 @@ impl Shell {
                     && let Some(mgmt) = &entry.mgmt
                 {
                     mgmt.close();
+                }
+            })))),
+            minimize: Rc::new(RefCell::new(Some(Rc::new(move |index| {
+                if let Some(entry) = minimize_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                {
+                    mgmt.set_minimized();
                 }
             })))),
         };

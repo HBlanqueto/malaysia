@@ -2,8 +2,12 @@
 //!
 //! Owns the layer-shell surface, schedules the clock and active-app polling,
 //! and lays out the modules left-to-right with the clock pushed to the right.
+//! The two menu titles (system snowflake and Yuki/app name) share a single
+//! popup state so only one menu tree is open at a time.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use celestial_kit::platform::{
     Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, Timers, run_layer,
@@ -15,6 +19,7 @@ use yuki_appearance::data_dir;
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
+use crate::menubar::menu::{MenuState, MenuTitleSpec};
 use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba, status, system};
 
 pub struct BarApp {
@@ -38,6 +43,7 @@ impl App for BarApp {
 
         let now = self.clock.read().clone();
         let app = self.app_name.read().clone();
+        let is_yuki = app == "Yuki";
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
         let text = rgba(palette.text);
         let bar = rgba(palette.bar);
@@ -59,11 +65,33 @@ impl App for BarApp {
             root = root.font_family(family);
         }
 
+        let menu_state = MenuState::new();
+        let system_anchor = Rc::new(RefCell::new(use_state(|| 0.0f32)));
+        let app_anchor = Rc::new(RefCell::new(use_state(|| 0.0f32)));
+        let titles: Rc<Vec<MenuTitleSpec>> = Rc::new(vec![
+            MenuTitleSpec {
+                label: "Sistema".to_string(),
+                items: Rc::new(system::system_menu_items),
+                anchor_x: system_anchor,
+                enabled: true,
+            },
+            MenuTitleSpec {
+                label: app.clone(),
+                items: Rc::new(appmenu::yuki_menu_items),
+                anchor_x: app_anchor,
+                enabled: is_yuki,
+            },
+        ]);
+
         let left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start)
-            .child(system::system_title())
-            .child(appmenu::app_menu_title(app));
+            .child(system::system_title(menu_state.clone(), titles.clone()))
+            .child(appmenu::app_menu_title(
+                app,
+                menu_state.clone(),
+                titles.clone(),
+            ));
 
         root.child(left)
             .child(status::status_placeholder())

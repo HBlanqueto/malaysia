@@ -133,6 +133,15 @@ pub enum CheckState {
     Radio(bool),
 }
 
+/// Direction for root-menu keyboard navigation between menubar titles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuNavigation {
+    /// Move to the previous title on the menubar.
+    Prev,
+    /// Move to the next title on the menubar.
+    Next,
+}
+
 /// One entry in a Neptunia menu.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuItem {
@@ -187,6 +196,7 @@ pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
+    on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
     size: (f32, f32),
 }
@@ -205,9 +215,20 @@ impl MenuView {
             items: Rc::new(items),
             on_activate: Rc::new(on_activate),
             on_dismiss_all: Rc::new(on_dismiss_all),
+            on_navigation: None,
             palette,
             size,
         }
+    }
+
+    /// Attaches a root-navigation callback.
+    ///
+    /// When the menu is the root of a menubar popup, `ArrowLeft` and
+    /// `ArrowRight` move to the neighbouring title instead of closing the popup
+    /// or doing nothing.
+    pub fn with_navigation(mut self, on_navigation: impl Fn(MenuNavigation) + 'static) -> Self {
+        self.on_navigation = Some(Rc::new(on_navigation));
+        self
     }
 
     /// Returns the logical size needed to render `items` with `palette`.
@@ -262,6 +283,7 @@ impl Clone for MenuView {
             items: self.items.clone(),
             on_activate: self.on_activate.clone(),
             on_dismiss_all: self.on_dismiss_all.clone(),
+            on_navigation: self.on_navigation.clone(),
             palette: self.palette,
             size: self.size,
         }
@@ -279,6 +301,7 @@ impl App for MenuView {
         let items = self.items.clone();
         let on_activate = self.on_activate.clone();
         let on_dismiss_all = self.on_dismiss_all.clone();
+        let on_navigation = self.on_navigation.clone();
         let m = self.palette;
         let size = self.size;
         let popup: Option<PopupHandle> = try_consume_root_context();
@@ -393,23 +416,31 @@ impl App for MenuView {
                     }
                 }
                 Key::Named(NamedKey::ArrowRight) => {
-                    if let Some(index) = *focused.read()
-                        && let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
-                        && let Some(popup) = popup.clone()
-                    {
-                        open_child_popup(
-                            index,
-                            sub,
-                            popup,
-                            size,
-                            m,
-                            on_activate.clone(),
-                            on_dismiss_all.clone(),
-                            open_child_id,
-                            items.clone(),
-                            opens_left,
-                        );
+                    if let Some(index) = *focused.read() {
+                        if let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
+                            && let Some(popup) = popup.clone()
+                        {
+                            open_child_popup(
+                                index,
+                                sub,
+                                popup,
+                                size,
+                                m,
+                                on_activate.clone(),
+                                on_dismiss_all.clone(),
+                                open_child_id,
+                                items.clone(),
+                                opens_left,
+                            );
+                        } else if popup.is_some()
+                            && let Some(on_navigation) = &on_navigation
+                        {
+                            on_navigation(MenuNavigation::Next);
+                        }
                     }
+                }
+                Key::Named(NamedKey::ArrowLeft) if popup.is_some() && on_navigation.is_some() => {
+                    on_navigation.as_ref().unwrap()(MenuNavigation::Prev);
                 }
                 Key::Named(NamedKey::ArrowLeft) => {
                     if let Some(popup) = &popup {
