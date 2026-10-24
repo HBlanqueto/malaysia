@@ -506,16 +506,17 @@ fn submenu_positioner(opens_left: bool) -> (PopupAnchor, PopupGravity, i32) {
     // The anchor is the panel edge (see `submenu_anchor_rect`); zero leaves
     // the child touching the parent on both sides.
     if opens_left {
-        (PopupAnchor::Left, PopupGravity::BottomLeft, 0)
+        (PopupAnchor::TopLeft, PopupGravity::BottomLeft, 0)
     } else {
-        (PopupAnchor::Right, PopupGravity::BottomRight, 0)
+        (PopupAnchor::TopRight, PopupGravity::BottomRight, 0)
     }
 }
 
 /// The anchor rectangle of a submenu: the panel's full width at the row's
-/// vertical position. The horizontal anchor must be the panel edge, not the
-/// inset row, so a flipped child ends at the parent edge instead of covering
-/// it; `y` is still the row top `item_top` feeds the layout.
+/// surface-local top. The horizontal anchor is the panel edge so a flipped
+/// child touches the parent edge instead of covering it; the vertical anchor
+/// is the top of the highlighted row, so the child's first row can align with
+/// it after offsetting for the child's own panel inset.
 fn submenu_anchor_rect(
     index: usize,
     items: &[MenuItem],
@@ -524,7 +525,7 @@ fn submenu_anchor_rect(
 ) -> (i32, i32, u32, u32) {
     (
         0,
-        item_top(index, items, m) as i32,
+        (item_top(index, items, m) + m.padding) as i32,
         parent_width.max(1.0) as u32,
         m.item_height as u32,
     )
@@ -899,7 +900,7 @@ mod tests {
     #[test]
     fn left_handed_submenus_keep_their_descendants_on_the_left() {
         let (anchor, gravity, dx) = submenu_positioner(true);
-        assert_eq!(anchor, PopupAnchor::Left);
+        assert_eq!(anchor, PopupAnchor::TopLeft);
         assert_eq!(gravity, PopupGravity::BottomLeft);
         assert_eq!(dx, 0, "the panel-edge anchor needs no horizontal offset");
 
@@ -916,7 +917,7 @@ mod tests {
         }
 
         let (anchor, gravity, dx) = submenu_positioner(false);
-        assert_eq!(anchor, PopupAnchor::Right);
+        assert_eq!(anchor, PopupAnchor::TopRight);
         assert_eq!(gravity, PopupGravity::BottomRight);
         assert_eq!(dx, 0);
     }
@@ -955,10 +956,20 @@ mod tests {
         let m = MENU_LIGHT;
         let (width, _) = MenuView::preferred_size(&items, m);
         let (x, y, w, h) = submenu_anchor_rect(4, &items, m, width);
-        assert_eq!(y as f32, item_top(4, &items, m));
+        let row_top = item_top(4, &items, m) + m.padding;
+        assert_eq!(y as f32, row_top);
         assert_eq!(x, 0);
         assert_eq!(w as f32, width);
         assert_eq!(h as f32, m.item_height);
+
+        // With a bottom gravity and a negative inset offset, the child's first
+        // row ends up at the same y as the parent's row.
+        let (_, _, dx) = submenu_positioner(false);
+        let inset = m.padding + m.border_width;
+        assert_eq!(dx, 0);
+        let child_top = row_top - inset;
+        let child_first_row_top = child_top + inset;
+        assert_eq!(child_first_row_top, row_top);
     }
 
     fn relative_luminance(color: Rgba) -> f32 {
