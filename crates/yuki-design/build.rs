@@ -901,6 +901,9 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   chevron_color: {},\n\
          \x20   bar_hover_bg: {},\n\
          \x20   bar_hover_fg: {},\n\
+         \x20   bar_title_open_bg: {},\n\
+         \x20   bar_title_open_radius: {},\n\
+         \x20   bar_title_open_height: {},\n\
          }}",
         rgba(color_at("components.shell.menu.panel.bg")),
         float(radius),
@@ -997,6 +1000,18 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
         rgba(color_at("components.shell.menu.chevron.color")),
         rgba(color_at("components.shell.menubar.hover-bg")),
         rgba(color_at("components.shell.menubar.hover-fg")),
+        rgba(color_at("components.shell.menubar.title-open.bg")),
+        float(metric(
+            tokens,
+            components,
+            "components.shell.menubar.title-open.radius",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menubar.title-open.height",
+            COMPONENTS
+        )),
     )
 }
 

@@ -336,6 +336,12 @@ pub struct MenuPalette {
     pub bar_hover_bg: Rgba,
     /// Open menubar-title foreground (`ink-strong`).
     pub bar_hover_fg: Rgba,
+    /// Open menubar-title pill background (`shell.menubar.title-open`).
+    pub bar_title_open_bg: Rgba,
+    /// Open menubar-title pill corner radius (`radius.sm`).
+    pub bar_title_open_radius: f32,
+    /// Open menubar-title pill height, centred on the bar.
+    pub bar_title_open_height: f32,
     /// Disabled item foreground (`ink-faint`).
     pub disabled_fg: Rgba,
     /// Separator line colour (`line`).

@@ -176,19 +176,18 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
 
     let resolved = celestial_kit::theme::resolved();
     let palette = celestial_kit::theme::menu_palette(&resolved);
-    let hover_bg = rgba(palette.bar_hover_bg);
-    let hover_fg_rgba = palette.bar_hover_fg;
-    let normal_fg_rgba = celestial_kit::theme::shell_palette(&resolved).text;
-    let fg_rgba = if is_open {
-        hover_fg_rgba
-    } else {
-        normal_fg_rgba
-    };
+    let fg_rgba = celestial_kit::theme::shell_palette(&resolved).text;
     let fg = rgba(fg_rgba);
 
     let mut container = rect()
         .height(Size::px(MENUBAR_HEIGHT as f32))
+        .main_align(Alignment::Center)
+        .cross_align(Alignment::Center);
+
+    let mut title = rect()
+        .height(Size::px(palette.bar_title_open_height))
         .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+        .corner_radius(palette.bar_title_open_radius)
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
         .on_sized(move |event: Event<SizedEventData>| {
@@ -197,7 +196,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         });
 
     if is_open {
-        container = container.background(hover_bg);
+        title = title.background(rgba(palette.bar_title_open_bg));
     }
 
     let content = if let Some(glyph) = spec.glyph {
@@ -222,7 +221,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         }
         text.into_element()
     };
-    container = container.child(content);
+    container = container.child(title.child(content));
 
     if !enabled {
         return container.into_element();

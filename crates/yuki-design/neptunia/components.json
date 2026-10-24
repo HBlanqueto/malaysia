@@ -369,7 +369,12 @@
         "bg": "{shell-bar}",
         "text": "{ink-strong}",
         "hover-bg": "{bg-hover}",
-        "hover-fg": "{ink-strong}"
+        "hover-fg": "{ink-strong}",
+        "title-open": {
+          "bg": "{menubar-title-open}",
+          "radius": "radius.sm",
+          "height": 22
+        }
       },
       "dock": {
         "tilesize": 48,

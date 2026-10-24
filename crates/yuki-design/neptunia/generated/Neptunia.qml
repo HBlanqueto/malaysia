@@ -29,6 +29,7 @@ QtObject {
   readonly property color light_knob_shadow: #0d12194d;
   readonly property color light_line: #d6dce5;
   readonly property color light_line_strong: #848fa1;
+  readonly property color light_menubar_title_open: #0d12191f;
   readonly property color light_on_accent: #ffffff;
   readonly property color light_on_danger: #ffffff;
   readonly property color light_preview_dark_control: #3a3a3a;
@@ -96,6 +97,7 @@ QtObject {
   readonly property color dark_knob_shadow: #0d12194d;
   readonly property color dark_line: #333333;
   readonly property color dark_line_strong: #747474;
+  readonly property color dark_menubar_title_open: #ffffff2e;
   readonly property color dark_on_accent: #ffffff;
   readonly property color dark_on_danger: #ffffff;
   readonly property color dark_preview_dark_control: #3a3a3a;
@@ -163,6 +165,7 @@ QtObject {
   readonly property color dark_tint_knob_shadow: #0d12194d;
   readonly property color dark_tint_line: #323336;
   readonly property color dark_tint_line_strong: #73767c;
+  readonly property color dark_tint_menubar_title_open: #ffffff2e;
   readonly property color dark_tint_on_accent: #ffffff;
   readonly property color dark_tint_on_danger: #ffffff;
   readonly property color dark_tint_preview_dark_control: #3a3a3a;
