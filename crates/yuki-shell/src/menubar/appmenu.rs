@@ -11,7 +11,9 @@ use celestial_kit::menu::{CheckState, MenuItem};
 use celestial_kit::platform::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::{create_desktop_folder, resolve_app_name, spawn_component, xdg_open, xdg_user_dir};
+use crate::menubar::{
+    create_desktop_folder, resolve_app_name, spawn_component, xdg_open, xdg_user_dir,
+};
 
 /// The Yuki menu (about, settings, empty trash).
 pub fn yuki_menu_items() -> Vec<MenuItem> {
