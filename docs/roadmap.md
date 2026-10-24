@@ -376,10 +376,12 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a aceptado; 14b–14e pendientes.** El menú global está
-  decidido (`org_kde_kwin_appmenu` + `com.canonical.dbusmenu`, ADR 0036) y
-  repartido en 14a–14e. 14a (popups en CelestialKit) aceptado en el ThinkPad el
-  2026-10-24 en sesión anidada.
+- **Bloque 14 — 14a aceptado; 14b-1 implementado y aceptado en anidado; 14b-2
+  y 14c–14e pendientes.** El menú global está decidido (`org_kde_kwin_appmenu`
+  + `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
+  CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
+  (menú «Yuki» de escritorio en `yuki-shell menubar`) implementado y aceptado
+  en anidado el 2026-10-24.
 
 ## Numeración de bloques
 

@@ -99,13 +99,19 @@ el área útil).
   la menubar muestra la app activa y el reloj sobre la paleta clara de Neptunia.
 - Todo verde: clippy `-D warnings`, fmt y tests.
 
-## Menú global (planeado, Bloque 14)
+## Menú global (Bloque 14)
 
-Todavía no hay código. La decisión está en el
-[ADR 0036](../decisiones/0036-menu-global.md) y la investigación en
-[`global-menu.md`](../investigacion/global-menu.md).
+### 14b-1 — Menú «Yuki» de escritorio (hecho)
 
-### Flujo
+La barra real ya integra `celestial_kit::menu::MenuView` para el menú de
+escritorio. Muestra los títulos **Sistema** y **Yuki/nombre de app**; el título
+«Yuki» expone los submenús Ir, Archivo, Edición, Ventana y Sistema con las
+acciones simples habilitadas (carpetas XDG, Papelera, nueva carpeta en el
+Escritorio, launcher, minimizar todo/lista de ventanas y bloqueo de pantalla).
+
+Ver [`docs/bloques/14-menu-global.md`](../bloques/14-menu-global.md#14b-1--menú-yuki-de-escritorio).
+
+### Flujo completo (planificado para 14b-2 y siguientes)
 
 ```
 app ──org_kde_kwin_appmenu──► compositor ──window.domain──► menubar

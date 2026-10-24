@@ -151,6 +151,49 @@ posterior entregado a ese cliente. Los tres niveles reciben
 `popup grab accepted` y el hijo toma el foco de teclado; al cerrarlo, la pila
 devuelve el foco al padre. Un hijo de un padre sin grab se sigue rechazando.
 
+## 14b-1 — Menú «Yuki» de escritorio
+
+Implementado y aceptado en sesión anidada el **2026-10-24**. La barra real de
+`yuki-shell menubar` muestra dos títulos:
+
+- **Sistema** (izquierda): por ahora solo habilita «Bloquear pantalla».
+- **Yuki / nombre de app**: cuando no hay ventana enfocada o la app activa es
+  Yuki, el título dice «Yuki» y abre el menú de escritorio.
+
+El menú «Yuki» tiene cinco submenús:
+
+- **Ir**: carpetas XDG (Inicio, Documentos, Descargas, Escritorio), Papelera
+  (`trash:///`) y entradas de navegación deshabilitadas.
+- **Archivo**: «Nueva ventana» (abre `$HOME`), «Nueva carpeta en el
+  Escritorio», «Buscar» (lanza `yuki-shell launcher`) y «Abrir…»
+  deshabilitado.
+- **Edición**: todo deshabilitado.
+- **Ventana**: «Minimizar todo» (`Toplevels::minimize_all`) y la lista de
+  ventanas activas (`Toplevels::activate`).
+- **Sistema**: «Bloquear pantalla» habilitada; el resto deshabilitado.
+
+Los procesos externos (`yuki-shell lock`, `yuki-shell launcher`, `xdg-open`)
+se lanzan sin heredar el entorno Mesa privado del compositor: se eliminan
+`LD_LIBRARY_PATH`, `__EGL_VENDOR_LIBRARY_DIRS`, `LIBGL_DRIVERS_PATH` y
+`GBM_BACKENDS_PATH`, se restauran los valores originales desde
+`YUKI_ORIG_*` si existen, y se llama a `setsid()` para desvincular el hijo.
+
+Solo puede haber un árbol de menús abierto: pulsar un título distinto cierra el
+anterior; con un menú abierto, pasar el puntero por otro título lo abre. Las
+flechas `←`/`→` en un menú raíz saltan al título vecino. Las acciones cierran
+la cascada antes de ejecutarse.
+
+### Capturas de 14b-1
+
+![Menú Yuki en claro](img/14b/yuki-menu-claro.png)
+
+`yuki-menu-claro.png`: menú «Yuki» abierto en tema claro; «Ir» resaltado y los
+cinco submenús visibles.
+
+![Menú Yuki en oscuro](img/14b/yuki-menu-oscuro.png)
+
+`yuki-menu-oscuro.png`: el mismo menú en tema oscuro.
+
 ## Aceptación de 14a
 
 Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual:
@@ -285,9 +328,8 @@ ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 
 ## Pendiente
 
-- Repetir la prueba de 14a en DRM real (pendiente de 14b).
-- Conectar el menú del `yuki-shell menubar` con `MenuView` y el estado de la
-  aplicación activa (lectura de `~/.local/share/yuki/window.domain`).
+- Repetir la prueba de 14a y 14b-1 en DRM real (pendiente de 8b/14b).
+- 14b-2: menú por aplicación a partir de `.desktop` y controles de ventana.
 - Atajos de teclado: mostrar el acelerador subrayado cuando el usuario pulsa
   `Alt`.
 - Scroll para menús largos.
