@@ -1535,11 +1535,19 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         options.app_name
     ));
     window.set_title(options.title.clone());
-    if let Some(min) = options.min_size {
-        window.set_min_size(Some(min));
-    }
-    if let Some(max) = options.max_size {
-        window.set_max_size(Some(max));
+    // When the caller did not set explicit min/max bounds, treat the requested
+    // size as a fixed initial size so the compositor can center the window
+    // instead of maximizing it to the workspace.
+    if options.min_size.is_none() && options.max_size.is_none() {
+        window.set_min_size(Some(options.size));
+        window.set_max_size(Some(options.size));
+    } else {
+        if let Some(min) = options.min_size {
+            window.set_min_size(Some(min));
+        }
+        if let Some(max) = options.max_size {
+            window.set_max_size(Some(max));
+        }
     }
     window.commit();
 

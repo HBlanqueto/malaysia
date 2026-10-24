@@ -37,7 +37,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::output::{Output, WeakOutput};
-use smithay::utils::{Buffer as BufferCoords, Serial, Size};
+use smithay::utils::{Buffer as BufferCoords, Rectangle, Serial, Size};
 use yuki_scene::scene::WindowId;
 use smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle;
 use smithay::wayland::image_capture_source::{
@@ -177,7 +177,11 @@ impl CompositorHandler for State {
         if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
             self.layer_surface_mapped(&layer);
         }
-        if let Some(mapped) = self.windows.commit(surface) {
+        let workspace = {
+            let (origin, size) = self.workspace();
+            Rectangle::new(origin, size)
+        };
+        if let Some(mapped) = self.windows.commit(surface, workspace) {
             self.raise_and_focus(mapped);
             self.foreign_window_mapped(mapped);
             self.inject_test_shake();

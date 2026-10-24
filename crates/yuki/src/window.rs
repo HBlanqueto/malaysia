@@ -186,6 +186,8 @@ struct WindowData {
     requested: Option<Decoration>,
     /// Whether the native-app warning was already emitted for this window.
     native_warned: bool,
+    /// Whether the initial centered placement has already been applied.
+    placed: bool,
 }
 
 impl WindowData {
@@ -278,6 +280,11 @@ impl Windows {
         })
     }
 
+    /// Every tracked toplevel surface, whether mapped or not.
+    pub fn surfaces(&self) -> impl Iterator<Item = &WlSurface> {
+        self.windows.iter().map(|data| data.toplevel.wl_surface())
+    }
+
     /// Starts tracking `toplevel` at `size` and sends its initial configure.
     ///
     /// `size` is the outer window size; the configure carries it minus the
@@ -318,18 +325,68 @@ impl Windows {
             maximized: false,
             requested,
             native_warned: false,
+            placed: false,
         });
     }
 
     /// Handles a surface commit.
     ///
     /// Recomputes the insets from current state and sends a fresh configure if
-    /// they changed, then maps the window once the initial configure has been
-    /// acked and a buffer has been attached. Returns the window's id the first
-    /// time it becomes mapped, so the caller can give it keyboard focus.
-    pub fn commit(&mut self, surface: &WlSurface) -> Option<WindowId> {
+    /// they changed. The first time the initial configure is acked and a buffer
+    /// is attached, the window is centered with its requested size (or the
+    /// default 640×420) and a new configure is sent; it maps once the client
+    /// commits a buffer that matches that placement. Returns the window's id
+    /// the first time it becomes mapped, so the caller can give it keyboard
+    /// focus.
+    pub fn commit(
+        &mut self,
+        surface: &WlSurface,
+        workspace: Rectangle<i32, Logical>,
+    ) -> Option<WindowId> {
         let index = self.index_of(surface)?;
         let decoration = self.decoration_of(self.windows[index].id);
+
+        if !self.windows[index].placed && self.windows[index].acked && surface_has_buffer(surface) {
+            // The first committed buffer usually matches the initial workspace
+            // configure. Replace it with the centered requested size and send a
+            // fresh configure so the next commit already has the right geometry.
+            let insets = self.windows[index].insets(decoration);
+            let (outer_size, origin) =
+                initial_placement(self.windows[index].size_bounds(), insets, workspace);
+            self.windows[index].outer_size = outer_size;
+            self.windows[index].origin = origin;
+            self.send_configure(index);
+            self.windows[index].placed = true;
+        }
+
+        // If a normal window commits a buffer whose size differs from what we
+        // had configured, the client is answering a configure with its own
+        // constraints (e.g. a terminal's cell grid). Follow it, keeping the
+        // window centered.
+        let should_resize = {
+            let data = &self.windows[index];
+            if !data.mapped || data.resizing || data.state() != WindowState::Normal {
+                None
+            } else if let Some(buffer_size) =
+                with_renderer_surface_state(surface, |state| state.surface_size()).flatten()
+            {
+                (buffer_size != data.outer_size).then_some((data.id, buffer_size))
+            } else {
+                None
+            }
+        };
+        if let Some((id, buffer_size)) = should_resize {
+            let origin = center_origin(buffer_size, workspace);
+            let outer = SceneRect::new(
+                ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
+                SceneSize::new(f64::from(buffer_size.w), f64::from(buffer_size.h)),
+            );
+            if self.scene.set_outer(id, outer) {
+                self.windows[index].outer_size = buffer_size;
+                self.windows[index].origin = origin;
+                self.send_configure(index);
+            }
+        }
 
         let usable = usable(
             self.windows[index].outer_size,
@@ -935,6 +992,39 @@ fn outer_size(bound: Size<i32, Logical>, insets: Insets) -> SceneSize<f64, Scene
 /// Keeps an outer size from collapsing below one pixel on an axis.
 fn at_least_one_pixel(size: SceneSize<f64, SceneLogical>) -> SceneSize<f64, SceneLogical> {
     SceneSize::new(size.width.max(1.0), size.height.max(1.0))
+}
+
+/// Centers a window of `size` inside the workspace.
+fn center_origin(
+    size: Size<i32, Logical>,
+    workspace: Rectangle<i32, Logical>,
+) -> Point<i32, Logical> {
+    Point::from((
+        workspace.loc.x + (workspace.size.w - size.w) / 2,
+        workspace.loc.y + (workspace.size.h - size.h) / 2,
+    ))
+}
+
+/// The initial placement for a new window: centered in the workspace, honoring
+/// a fixed client size (min == max) or defaulting to 640×420 if the client did
+/// not request one.
+fn initial_placement(
+    bounds: (Size<i32, Logical>, Size<i32, Logical>),
+    insets: Insets,
+    workspace: Rectangle<i32, Logical>,
+) -> (Size<i32, Logical>, Point<i32, Logical>) {
+    let (min, max) = bounds;
+    let requested = if min.w > 0 && min.h > 0 && min == max {
+        min
+    } else {
+        Size::from((640, 420))
+    };
+    let outer = outer_size(requested, insets);
+    let mut outer = Size::from((round(outer.width), round(outer.height)));
+    outer.w = outer.w.min(workspace.size.w);
+    outer.h = outer.h.min(workspace.size.h);
+    let origin = center_origin(outer, workspace);
+    (outer, origin)
 }
 
 /// The configured size: the outer size minus the insets, never below one pixel.
