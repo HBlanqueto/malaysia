@@ -17,7 +17,7 @@ use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 use yuki_appearance::{Resolved, data_dir};
-use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
+use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, Rgba, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec};
@@ -59,7 +59,17 @@ impl App for BarApp {
         let focused = app_id.is_some();
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
         let text = rgba(palette.text);
-        let bar = rgba(palette.bar);
+        let menu_state = MenuState::new();
+        // With a menu open the bar turns opaque, as in macOS: the translucent
+        // bar over the wallpaper can match the open-title gray and hide it.
+        let bar = if menu_state.open_label.borrow().read().is_some() {
+            rgba(Rgba {
+                a: 1.0,
+                ..palette.bar
+            })
+        } else {
+            rgba(palette.bar)
+        };
 
         let mut root = rect()
             .width(Size::fill())
@@ -78,7 +88,6 @@ impl App for BarApp {
             root = root.font_family(family);
         }
 
-        let menu_state = MenuState::new();
         let anchors: TitleAnchors = use_hook(|| {
             Rc::new(
                 (0..MAX_TITLES)
