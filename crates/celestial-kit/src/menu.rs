@@ -308,7 +308,7 @@ impl App for MenuView {
         for family in SANS_FAMILIES {
             root = root.font_family(family);
         }
-        root.on_key_down(move |event: Event<KeyboardEventData>| {
+        root.on_global_key_down(move |event: Event<KeyboardEventData>| {
             let mut focused = focused;
             let open_child_id = open_child_id.clone();
             let current = *focused.read();
