@@ -105,6 +105,11 @@ impl Popups {
             .map(|data| &data.popup)
     }
 
+    /// Every tracked popup surface.
+    pub fn surfaces(&self) -> impl Iterator<Item = &WlSurface> {
+        self.popups.iter().map(|data| data.popup.wl_surface())
+    }
+
     pub(crate) fn is_popup_surface(&self, surface: &WlSurface) -> bool {
         self.id_of(surface).is_some()
     }

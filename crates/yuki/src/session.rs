@@ -406,6 +406,23 @@ pub fn run() -> Result<(), SessionError> {
 
     watch_for_shutdown(&loop_handle, loop_signal)?;
 
+    // When a client dies, its ClientData pushes the id into this queue and
+    // pings the loop; the ping callback drains the queue and removes all of
+    // the client's surfaces in one batch.
+    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+    let (disconnect_ping, disconnect_source) = smithay::reexports::calloop::ping::make_ping()
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
+    loop_handle
+        .insert_source(disconnect_source, {
+            let queue = disconnect_queue.clone();
+            move |_, _, session: &mut Session| {
+                for client_id in queue.drain() {
+                    session.state.client_disconnected(client_id);
+                }
+            }
+        })
+        .map_err(|error| SessionError::EventLoop(error.into()))?;
+
     // A scripted `YUKI_TEST_INPUT` sequence drives the same motion/button path
     // as the host pointer. The timer starts after the compositor is up; the
     // script itself waits for its target surface to map.
@@ -450,12 +467,16 @@ pub fn run() -> Result<(), SessionError> {
     tracing::info!(socket = %socket_name, "listening on the Wayland socket");
     session.state.set_wayland_display(socket_name);
     loop_handle
-        .insert_source(listening_socket, |stream, _, session: &mut Session| {
-            let data = Arc::new(ClientState::default());
-            let mut handle = session.display.handle();
-            match handle.insert_client(stream, data) {
-                Ok(_) => tracing::info!("client connected"),
-                Err(error) => tracing::warn!(%error, "rejected a client"),
+        .insert_source(listening_socket, {
+            let queue = disconnect_queue.clone();
+            let ping = disconnect_ping.clone();
+            move |stream, _, session: &mut Session| {
+                let data = Arc::new(ClientState::new(queue.clone(), ping.clone()));
+                let mut handle = session.display.handle();
+                match handle.insert_client(stream, data) {
+                    Ok(_) => tracing::info!("client connected"),
+                    Err(error) => tracing::warn!(%error, "rejected a client"),
+                }
             }
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
@@ -2215,6 +2236,9 @@ mod tests {
             smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
                 .expect("the test needs an event loop");
         let mut display = Display::<State>::new().expect("the test needs a display");
+        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+        let (disconnect_ping, _disconnect_source) =
+            smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
         let mut renderer = offscreen_renderer();
 
         // A v5 global advertising exactly one format, XRGB8888 linear. The
@@ -2303,7 +2327,10 @@ mod tests {
         handle
             .insert_client(
                 server_side,
-                std::sync::Arc::new(crate::state::ClientState::default()),
+                std::sync::Arc::new(crate::state::ClientState::new(
+                    disconnect_queue.clone(),
+                    disconnect_ping.clone(),
+                )),
             )
             .expect("the server should accept the client");
 

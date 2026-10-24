@@ -24,7 +24,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
@@ -35,8 +35,10 @@ use smithay::input::pointer::{CursorIcon, CursorImageStatus};
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::LoopSignal;
+use smithay::reexports::calloop::ping::Ping;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::reexports::wayland_server::backend::ClientData;
+use smithay::reexports::wayland_server::Resource;
+use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Serial, Size, Transform};
@@ -837,6 +839,54 @@ impl State {
         self.idle.set_wayland_display(display);
     }
 
+    /// Removes every window, popup and layer surface that belonged to a client
+    /// that disconnected, and moves keyboard focus to the next visible window.
+    pub(crate) fn client_disconnected(&mut self, client_id: ClientId) {
+        let windows: Vec<WlSurface> = self
+            .windows
+            .surfaces()
+            .filter(|surface| {
+                self.display_handle
+                    .get_client(surface.id())
+                    .is_ok_and(|client| client.id() == client_id)
+            })
+            .cloned()
+            .collect();
+        for surface in windows {
+            self.forget_window(&surface);
+        }
+
+        let popups: Vec<WlSurface> = self
+            .popups
+            .surfaces()
+            .filter(|surface| {
+                self.display_handle
+                    .get_client(surface.id())
+                    .is_ok_and(|client| client.id() == client_id)
+            })
+            .cloned()
+            .collect();
+        for surface in popups {
+            self.popup_destroyed(&surface);
+        }
+
+        let layers: Vec<WlSurface> = self
+            .layers
+            .surfaces()
+            .filter(|layer| {
+                self.display_handle
+                    .get_client(layer.wl_surface().id())
+                    .is_ok_and(|client| client.id() == client_id)
+            })
+            .map(|layer| layer.wl_surface().clone())
+            .collect();
+        for surface in layers {
+            self.layer_surface_destroyed(&surface);
+        }
+
+        self.request_redraw();
+    }
+
     /// The output size in logical coordinates.
     ///
     /// Every conversion from the output's physical mode size to logical
@@ -983,12 +1033,27 @@ pub(crate) struct TestPress {
     pub(crate) location: Point<f64, Logical>,
 }
 
+/// A thread-safe queue of clients that have disconnected and need cleanup.
+#[derive(Default, Clone)]
+pub(crate) struct ClientDisconnectQueue {
+    inner: Arc<Mutex<Vec<ClientId>>>,
+}
+
+impl ClientDisconnectQueue {
+    pub(crate) fn push(&self, client_id: ClientId) {
+        self.inner.lock().unwrap().push(client_id);
+    }
+
+    pub(crate) fn drain(&self) -> Vec<ClientId> {
+        std::mem::take(&mut *self.inner.lock().unwrap())
+    }
+}
+
 /// Data attached to every connected Wayland client.
 ///
 /// Smithay stores per-client protocol state behind this type; a handler
 /// retrieves it with `Client::get_data`. The compositor's `CompositorClientState`
 /// holds the per-client surface bookkeeping that `wl_compositor` needs.
-#[derive(Default)]
 pub struct ClientState {
     /// Per-client compositor bookkeeping, created by Smithay on first use.
     pub compositor_state: CompositorClientState,
@@ -998,9 +1063,21 @@ pub struct ClientState {
     /// chain or a later one this client actually received, never another
     /// client's serial.
     last_input_serial: AtomicU32,
+    /// Queue and ping used to clean up this client's surfaces when it dies.
+    disconnect_queue: ClientDisconnectQueue,
+    disconnect_ping: Ping,
 }
 
 impl ClientState {
+    pub(crate) fn new(disconnect_queue: ClientDisconnectQueue, disconnect_ping: Ping) -> Self {
+        Self {
+            compositor_state: CompositorClientState::default(),
+            last_input_serial: AtomicU32::new(0),
+            disconnect_queue,
+            disconnect_ping,
+        }
+    }
+
     /// Records a serial delivered to this client.
     pub(crate) fn note_input_serial(&self, serial: Serial) {
         self.last_input_serial
@@ -1014,7 +1091,12 @@ impl ClientState {
     }
 }
 
-impl ClientData for ClientState {}
+impl ClientData for ClientState {
+    fn disconnected(&self, client_id: ClientId, _reason: DisconnectReason) {
+        self.disconnect_queue.push(client_id);
+        self.disconnect_ping.ping();
+    }
+}
 
 /// A dmabuf a client committed, waiting for the session to import it.
 ///

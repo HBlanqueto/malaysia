@@ -56,6 +56,13 @@ impl Layers {
         self.unmapped.push(surface);
     }
 
+    /// Every tracked layer surface, mapped or not.
+    pub fn surfaces(&self) -> impl Iterator<Item = &LayerSurface> {
+        self.unmapped
+            .iter()
+            .chain(self.mapped.iter().map(|e| &e.surface))
+    }
+
     /// Forgets a destroyed layer surface.
     pub fn destroy(&mut self, surface: &WlSurface) {
         self.unmapped.retain(|s| s.wl_surface() != surface);

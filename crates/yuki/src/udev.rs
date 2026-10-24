@@ -240,6 +240,22 @@ pub fn run(options: DrmOptions) -> Result<()> {
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
     let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
+
+    // When a client dies, clean up its surfaces in the next event-loop cycle.
+    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+    let (disconnect_ping, disconnect_source) = smithay::reexports::calloop::ping::make_ping()
+        .map_err(|error| anyhow!("creating the disconnect ping: {error}"))?;
+    loop_handle
+        .insert_source(disconnect_source, {
+            let queue = disconnect_queue.clone();
+            move |_, _, data: &mut Udev| {
+                for client_id in queue.drain() {
+                    data.state.client_disconnected(client_id);
+                }
+            }
+        })
+        .map_err(|error| anyhow!("inserting the disconnect source: {error}"))?;
+
     let mut udev = Udev {
         loop_handle: loop_handle.clone(),
         display,
@@ -349,11 +365,18 @@ pub fn run(options: DrmOptions) -> Result<()> {
     info!(socket = %socket_name, "listening on the Wayland socket");
     udev.state.set_wayland_display(socket_name.clone());
     loop_handle
-        .insert_source(socket, |stream, _, data: &mut Udev| {
-            let mut handle = data.display.handle();
-            match handle.insert_client(stream, Arc::new(ClientState::default())) {
-                Ok(_) => info!("client connected"),
-                Err(error) => warn!(%error, "rejected a client"),
+        .insert_source(socket, {
+            let queue = disconnect_queue.clone();
+            let ping = disconnect_ping.clone();
+            move |stream, _, data: &mut Udev| {
+                let mut handle = data.display.handle();
+                match handle.insert_client(
+                    stream,
+                    Arc::new(ClientState::new(queue.clone(), ping.clone())),
+                ) {
+                    Ok(_) => info!("client connected"),
+                    Err(error) => warn!(%error, "rejected a client"),
+                }
             }
         })
         .map_err(|error| anyhow!("inserting the socket source: {error}"))?;
