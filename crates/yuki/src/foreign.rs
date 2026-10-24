@@ -229,10 +229,28 @@ impl State {
         }
         if minimized {
             self.minimized.insert(id);
-            self.windows.remove_by_id(id);
+            self.windows.set_hidden(id, true);
             tracing::info!(window = id.get(), "window minimized");
+            let focused = self
+                .seat
+                .get_keyboard()
+                .and_then(|keyboard| keyboard.current_focus())
+                .and_then(|focused| self.windows.id_of(&focused));
+            if focused == Some(id) {
+                let next = self
+                    .windows
+                    .iter()
+                    .rev()
+                    .find(|window| window.id() != id && !self.minimized.contains(&window.id()))
+                    .map(|window| window.id());
+                match next {
+                    Some(next) => self.focus_window(next),
+                    None => self.clear_keyboard_focus(),
+                }
+            }
         } else {
             self.minimized.remove(&id);
+            self.windows.set_hidden(id, false);
             tracing::info!(window = id.get(), "window restored");
         }
         self.request_redraw();

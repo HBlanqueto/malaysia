@@ -356,7 +356,7 @@ impl Windows {
         Some(id)
     }
 
-    /// Stops tracking the window with `id` (used by minimize and destruction).
+    /// Stops tracking the window with `id` (used by destruction).
     pub fn remove_by_id(&mut self, id: WindowId) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -364,6 +364,24 @@ impl Windows {
         self.windows.remove(index);
         self.scene.remove(id);
         true
+    }
+
+    /// Hides a window from the scene without dropping its state, or puts it
+    /// back with its last outer rectangle (minimize/restore).
+    pub fn set_hidden(&mut self, id: WindowId, hidden: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        let data = &self.windows[index];
+        let rect = if hidden {
+            SceneRect::new(ScenePoint::new(0.0, 0.0), SceneSize::new(0.0, 0.0))
+        } else {
+            SceneRect::new(
+                ScenePoint::new(f64::from(data.origin.x), f64::from(data.origin.y)),
+                SceneSize::new(f64::from(data.outer_size.w), f64::from(data.outer_size.h)),
+            )
+        };
+        self.scene.set_outer(id, rect)
     }
 
     /// The scene id of the window for `surface`.

@@ -1725,6 +1725,7 @@ impl Shell {
         let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
         let close_entries = toplevel_entries.clone();
         let minimize_entries = toplevel_entries.clone();
+        let activate_entries = toplevel_entries.clone();
         let toplevels = Toplevels {
             list: State::create_global(Vec::new()),
             activate: Rc::new(RefCell::new(None)),
@@ -1755,6 +1756,17 @@ impl Shell {
         // popup grabs. Hotplugged seats still arrive through `new_seat`.
         let seat = SeatState::new(&globals, &qh);
         let activation_seat = seat.seats().next();
+        // `SeatState::new` binds existing seats without calling `new_seat`, so
+        // install the activation command for the seat already present.
+        if let Some(seat) = activation_seat.clone() {
+            *toplevels.activate.borrow_mut() = Some(Rc::new(move |index| {
+                if let Some(entry) = activate_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                {
+                    mgmt.activate(&seat);
+                }
+            }));
+        }
         let shell = Shell {
             registry: RegistryState::new(&globals),
             compositor: CompositorState::bind(&globals, &qh)
