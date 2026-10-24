@@ -198,6 +198,11 @@ impl Popups {
     }
 }
 
+/// The root of a popup cascade: the last ancestor, or the popup itself.
+fn popup_root(topmost: PopupId, ancestors: &[PopupId]) -> PopupId {
+    ancestors.last().copied().unwrap_or(topmost)
+}
+
 impl State {
     /// Handles `xdg_shell`'s `new_popup`: positions the popup against its
     /// parent, configures it before it maps, and tracks it.
@@ -321,9 +326,13 @@ impl State {
         self.request_redraw();
     }
 
-    /// Dismisses every open popup.
+    /// Dismisses every open popup, including the whole cascade above its root.
     pub(crate) fn dismiss_all_popups(&mut self) {
-        self.dismiss_topmost_popup();
+        let Some(topmost) = self.windows.topmost_popup() else {
+            return;
+        };
+        let ancestors = self.windows.popup_ancestors(topmost);
+        self.dismiss_popups(popup_root(topmost, &ancestors));
     }
 
     /// Dismisses the topmost popup (and, with it, any submenus nested under it).
@@ -419,9 +428,10 @@ fn smithay_rect(rect: SceneRect<f64, SceneLogical>) -> Rectangle<i32, Logical> {
 
 #[cfg(test)]
 mod tests {
-    use super::scene_rect;
+    use super::{popup_root, scene_rect};
     use smithay::utils::{Point, Rectangle, Size};
     use yuki_scene::geometry::{Point as ScenePoint, Rect, Size as SceneSize};
+    use yuki_scene::scene::PopupId;
 
     #[test]
     fn scene_rect_round_trips_whole_pixels() {
@@ -431,5 +441,13 @@ mod tests {
             scene,
             Rect::new(ScenePoint::new(10.0, 20.0), SceneSize::new(300.0, 200.0))
         );
+    }
+
+    #[test]
+    fn a_click_outside_dismisses_the_whole_cascade_from_its_root() {
+        let topmost = PopupId::new(2);
+        let ancestors = [PopupId::new(1), PopupId::new(0)];
+        assert_eq!(popup_root(topmost, &ancestors), PopupId::new(0));
+        assert_eq!(popup_root(topmost, &[]), topmost);
     }
 }

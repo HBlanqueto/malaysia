@@ -105,6 +105,28 @@ YUKI_TEST_INPUT='wait:9000;move:56,14;click:56,14;wait:1000' \
 del demo, limpia `LD_LIBRARY_PATH` de rutas ajenas al dev shell y cierra la
 menubar del demo con `--sin-menubar`.
 
+## Aceptación con entrada simulada
+
+La aceptación de 14a se hace con `./dev.sh example menu_popup --sin-menubar`
+y un script de `YUKI_TEST_INPUT`:
+
+- **a.** Un clic en «Ir» llega a la barra (`wl_pointer.enter`, `button`), el
+  cliente pide `get_popup` y el compositor acepta el grab del raíz. Captura
+  por `SIGUSR1` con el menú visible.
+- **b.** Al mover sobre «Ordenar por» y «Orden» se abren el hijo y el nieto
+  por hover real (`popup created` + `popup mapped`).
+- **c.** Un clic fuera envía `popup_done` al raíz y a toda la cascada; la
+  captura posterior no muestra ningún menú.
+- **d.** Un clic en una Action registra su id en el ejemplo y cierra todo.
+- **e.** Con foot enfocado, abrir y cerrar el menú produce
+  `wl_keyboard.leave` y después `wl_keyboard.enter` en foot.
+
+**Límite conocido:** los submenús abiertos por hover piden `grab: true` con el
+serial del último clic, que ya se soltó; el compositor los rechaza
+(`rejected popup grab: no button press with this serial is held`). No se
+abren sin grab para ocultarlo: el rechazo es real y el hover/clic sigue
+funcionando.
+
 ## Capturas
 
 ![Menubar con el nombre de la app en claro](img/14a/menubar-nombre-claro.png)
