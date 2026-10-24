@@ -1107,9 +1107,11 @@ struct SurfaceWindow {
     output: Option<ObjectId>,
     needs_redraw: bool,
     frame_pending: bool,
+    draw_count: u64,
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 enum SurfaceRole {
     Layer(LayerSurface),
     Lock(SessionLockSurface),
@@ -1165,6 +1167,13 @@ impl SurfaceWindow {
         if graphics.make_current().is_err() {
             return false;
         }
+        self.draw_count += 1;
+        tracing::debug!(
+            surface = ?self.surface.id(),
+            draws = self.draw_count,
+            role = ?self.role,
+            "CelestialKit: draw"
+        );
         self.app.layout();
         {
             let Some(skia) = graphics.skia.as_mut() else {
@@ -1455,6 +1464,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         output: None,
         needs_redraw: true,
         frame_pending: false,
+        draw_count: 0,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -1586,6 +1596,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         output: None,
         needs_redraw: true,
         frame_pending: false,
+        draw_count: 0,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -1842,6 +1853,7 @@ impl Shell {
             output: Some(output.id()),
             needs_redraw: true,
             frame_pending: false,
+            draw_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
@@ -2064,6 +2076,7 @@ impl Shell {
             output: self.surfaces[owner_index].output.clone(),
             needs_redraw: true,
             frame_pending: false,
+            draw_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
     }
@@ -2157,12 +2170,11 @@ impl Shell {
         let qh = self.qh.clone();
         for window in &mut self.surfaces {
             if window.needs_redraw {
-                // Draw now and commit a new buffer. The compositor only schedules
-                // a repaint (and therefore sends the frame callback) when a commit
-                // carries damage; a bare frame request would stall until another
-                // event, such as pointer motion, creates damage elsewhere.
-                window.draw();
-                window.request_frame_callback(&qh);
+                // With the compositor now scheduling a repaint for any surface
+                // commit that carries damage or asks for a frame callback, we
+                // can go back to drawing on the frame callback instead of
+                // committing immediately on every user event.
+                window.request_redraw(&qh);
             }
         }
     }
@@ -2683,14 +2695,6 @@ impl Shell {
         if let Some(index) = index {
             self.surfaces[index].app.push(platform_event);
             self.surfaces[index].request_redraw(qh);
-            // shortcut: when a popup has keyboard focus, the compositor only
-            // schedules repaints from the parent surface's damage right now, so
-            // the popup stalls without frame callbacks. Force a redraw of all
-            // surfaces so the output repaint reaches the popup too. Remove once
-            // popup commits damage the output on their own.
-            if matches!(self.surfaces[index].role, SurfaceRole::Popup(_)) {
-                self.request_redraw_all = true;
-            }
         }
     }
 
