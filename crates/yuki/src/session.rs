@@ -399,6 +399,21 @@ pub fn run() -> Result<(), SessionError> {
 
     watch_for_shutdown(&loop_handle, loop_signal)?;
 
+    // A scripted `YUKI_TEST_INPUT` sequence drives the same motion/button path
+    // as the host pointer. The timer starts after the compositor is up; the
+    // script itself waits for its target surface to map.
+    if session.state.test_pointer.is_some() {
+        loop_handle
+            .insert_source(
+                Timer::from_duration(crate::input::test_pointer_delay()),
+                |_, _, session: &mut Session| match session.state.test_pointer_step() {
+                    Some(delay) => TimeoutAction::ToDuration(delay),
+                    None => TimeoutAction::Drop,
+                },
+            )
+            .map_err(|error| SessionError::EventLoop(error.into()))?;
+    }
+
     // Rebuild the chrome theme when appearance.domain or wallpaper.state
     // changes, without a restart.
     loop_handle
@@ -606,6 +621,13 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
             session.state.stop();
         }
         WinitEvent::Input(event) => {
+            // A scripted `YUKI_TEST_INPUT` sequence is the only pointer in the
+            // test session. Dropping host events keeps a real mouse or touchpad
+            // from interleaving with it; the script still goes through the same
+            // motion/button path.
+            if session.state.test_pointer.is_some() {
+                return;
+            }
             session.state.process_input_event(event);
             // Motion moves the cursor and any dragged window; a button changes
             // focus and stacking. Both are visible, so a frame is needed.

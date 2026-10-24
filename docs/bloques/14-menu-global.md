@@ -74,6 +74,37 @@ desde el borde derecho: el compositor voltea el raíz y el primer submenú a la
 izquierda; el nieto, que cabe, abre a la derecha. La barra del ejemplo no
 reserva zona exclusiva en este modo.
 
+## Entrada simulada
+
+`YUKI_TEST_INPUT` ya no se limita al botón de la titlebar. Con un script,
+el compositor inyecta las acciones por el mismo camino que un ratón real:
+`pointer_motion` actualiza el foco y `pointer_press`/`pointer.button` envían
+el botón. No llama al cliente directamente.
+
+La sintaxis es una lista separada por `;` con coordenadas lógicas del output:
+
+- `move:x,y` mueve el puntero a `(x, y)`.
+- `click:x,y` mueve, pulsa, espera 150 ms y suelta. La espera deja que el
+  cliente pida `get_popup` y `grab` con el serial todavía pulsado.
+- `wait:ms` pausa la secuencia.
+
+Mientras hay un script, el compositor descarta los eventos del ratón del host
+para que la prueba sea determinista; las acciones inyectadas siguen pasando
+por el mismo camino interno. Sin script, `YUKI_TEST_INPUT=1` conserva el
+comportamiento anterior (pulsación sobre la primera ventana que mapea).
+
+Ejemplo de aceptación con el demo y la barra de ejemplo:
+
+```sh
+./dev.sh demo   # en otra terminal
+YUKI_TEST_INPUT='wait:9000;move:56,14;click:56,14;wait:1000' \
+    ./dev.sh example menu_popup --sin-menubar
+```
+
+`./dev.sh example <nombre>` compila el ejemplo si hace falta, usa el socket
+del demo, limpia `LD_LIBRARY_PATH` de rutas ajenas al dev shell y cierra la
+menubar del demo con `--sin-menubar`.
+
 ## Capturas
 
 Sesión anidada (`./dev.sh demo`: wallpaper, menubar real, dock y ventanas) con

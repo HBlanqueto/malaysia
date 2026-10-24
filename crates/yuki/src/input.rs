@@ -10,6 +10,7 @@
 //! the compositor's own state, not a Smithay `PointerGrab`, because every event
 //! already passes through this module.
 
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use smithay::backend::input::{
@@ -38,9 +39,74 @@ use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
+/// The delay between two scripted pointer actions.
+const TEST_POINTER_STEP: Duration = Duration::from_millis(100);
+/// How long a scripted click holds the button so a popup grab can use its
+/// serial before the release.
+const TEST_CLICK_HOLD: Duration = Duration::from_millis(150);
 
 /// A titlebar press remembered for double-click detection.
 pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
+
+/// A scripted pointer sequence from `YUKI_TEST_INPUT`.
+///
+/// The actions go through the same motion and button path as a host mouse;
+/// they do not call a client directly. `move:x,y` moves, `click:x,y` presses
+/// and releases after [`TEST_CLICK_HOLD`] (so an xdg popup can grab with the
+/// press serial), and `wait:ms` pauses. Actions are separated by `;`.
+#[derive(Debug, Default)]
+pub(crate) struct TestPointer {
+    actions: VecDeque<TestPointerAction>,
+}
+
+#[derive(Debug)]
+enum TestPointerAction {
+    Move(Point<f64, Logical>),
+    Press(Point<f64, Logical>),
+    Release,
+    Wait(Duration),
+}
+
+impl TestPointer {
+    /// Parses `YUKI_TEST_INPUT`; returns `None` for the legacy `1` (a window
+    /// press on first map) or when there is no script.
+    pub(crate) fn from_env() -> Option<Self> {
+        let value = std::env::var("YUKI_TEST_INPUT").ok()?;
+        let mut actions = VecDeque::new();
+        for part in value
+            .split(';')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
+            if part == "1" {
+                continue;
+            }
+            if let Some(rest) = part.strip_prefix("move:") {
+                if let Some((x, y)) = parse_pair_value(rest) {
+                    actions.push_back(TestPointerAction::Move(Point::new(x, y)));
+                }
+            } else if let Some(rest) = part.strip_prefix("click:") {
+                if let Some((x, y)) = parse_pair_value(rest) {
+                    let point = Point::new(x, y);
+                    actions.push_back(TestPointerAction::Move(point));
+                    actions.push_back(TestPointerAction::Press(point));
+                    actions.push_back(TestPointerAction::Wait(TEST_CLICK_HOLD));
+                    actions.push_back(TestPointerAction::Release);
+                }
+            } else if let Some(rest) = part.strip_prefix("wait:")
+                && let Ok(millis) = rest.trim().parse::<u64>()
+            {
+                actions.push_back(TestPointerAction::Wait(Duration::from_millis(millis)));
+            }
+        }
+        (!actions.is_empty()).then_some(Self { actions })
+    }
+}
+
+/// The delay between two scripted pointer actions.
+pub(crate) fn test_pointer_delay() -> Duration {
+    TEST_POINTER_STEP
+}
 /// The number of motions the scripted input sends after its press.
 ///
 /// A real drag gesture does not ask for a move on the press: GTK's, for one,
@@ -1109,6 +1175,77 @@ impl State {
         true
     }
 
+    /// Advances a scripted `YUKI_TEST_INPUT` pointer sequence by one action.
+    ///
+    /// Returns the delay before the next action, or `None` when the script is
+    /// finished or absent. The session owns the timer; this method only drives
+    /// the real input path.
+    pub(crate) fn test_pointer_step(&mut self) -> Option<Duration> {
+        let action = self.test_pointer.as_mut()?.actions.pop_front()?;
+        tracing::info!(?action, "test pointer action");
+        let delay = match &action {
+            TestPointerAction::Wait(delay) => *delay,
+            _ => TEST_POINTER_STEP,
+        };
+        let time = InputTime::from_millis(0);
+        match action {
+            TestPointerAction::Move(location) => {
+                self.pointer_motion(location, time);
+                self.request_redraw();
+            }
+            TestPointerAction::Press(location) => {
+                self.test_pointer_press(location, time);
+            }
+            TestPointerAction::Release => {
+                self.test_pointer_release(time);
+            }
+            TestPointerAction::Wait(_) => {}
+        }
+        Some(delay)
+    }
+
+    /// Presses the primary button at `location` through the real press path.
+    fn test_pointer_press(&mut self, location: Point<f64, Logical>, time: InputTime) {
+        self.pointer_press(BUTTON_LEFT, location, time);
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        let serial = SERIAL_COUNTER.next_serial();
+        self.note_activation_serial(serial);
+        pointer.button(
+            self,
+            &ButtonEvent {
+                button: BUTTON_LEFT,
+                state: ButtonState::Pressed,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
+        self.request_redraw();
+    }
+
+    /// Releases the primary button through the real release path.
+    fn test_pointer_release(&mut self, time: InputTime) {
+        self.chrome_release();
+        self.end_grab();
+        let Some(pointer) = self.seat.get_pointer() else {
+            return;
+        };
+        pointer.button(
+            self,
+            &ButtonEvent {
+                button: BUTTON_LEFT,
+                state: ButtonState::Released,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        pointer.frame(self);
+        self.inject_test_hovers();
+        self.request_redraw();
+    }
+
     /// Test-only: press the primary button on the first window that maps.
     ///
     /// Only when `YUKI_TEST_INPUT` is set. The client-initiated
@@ -1120,7 +1257,10 @@ impl State {
     /// for a threshold still sends its request while the button is held. The
     /// release is sent by [`Self::inject_test_release`].
     pub(crate) fn inject_test_press(&mut self, id: WindowId) {
-        if std::env::var_os("YUKI_TEST_INPUT").is_none() || self.test_press.is_some() {
+        if std::env::var_os("YUKI_TEST_INPUT").is_none()
+            || self.test_press.is_some()
+            || self.test_pointer.is_some()
+        {
             return;
         }
         let Some(outer) = self.windows.outer(id) else {

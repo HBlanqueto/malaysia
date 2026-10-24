@@ -1710,6 +1710,11 @@ impl Shell {
             .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 3..=3, ())
             .ok();
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
+        // `SeatState::new` binds the seats that already exist without calling
+        // `SeatHandler::new_seat`, so remember one here for activation and
+        // popup grabs. Hotplugged seats still arrive through `new_seat`.
+        let seat = SeatState::new(&globals, &qh);
+        let activation_seat = seat.seats().next();
         let shell = Shell {
             registry: RegistryState::new(&globals),
             compositor: CompositorState::bind(&globals, &qh)
@@ -1724,7 +1729,7 @@ impl Shell {
                 let display_ptr = conn.display().id().as_ptr().cast::<c_void>();
                 Rc::new(GraphicsShared::new(display_ptr)?)
             },
-            seat: SeatState::new(&globals, &qh),
+            seat,
             pointer: None,
             cursor_shape: CursorShapeManager::bind(&globals, &qh).ok(),
             cursor_shape_device: None,
@@ -1757,7 +1762,7 @@ impl Shell {
             },
             activation_global,
             activation_callbacks: Vec::new(),
-            activation_seat: None,
+            activation_seat,
             last_key_serial: 0,
             last_input_serial: Rc::new(Cell::new(0)),
             popup_commands: Rc::new(RefCell::new(Vec::new())),

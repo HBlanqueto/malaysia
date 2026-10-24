@@ -296,6 +296,9 @@ pub struct State {
     ///
     /// Only when `YUKI_TEST_INPUT` is set. See [`TestPress`].
     pub(crate) test_press: Option<TestPress>,
+    /// Test-only: the pointer actions from `YUKI_TEST_INPUT`, if it carries a
+    /// script (`move:x,y;click:x,y`) instead of the legacy `1`.
+    pub(crate) test_pointer: Option<crate::input::TestPointer>,
     /// Test-only: the window left behind by `YUKI_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
     /// Cached titlebar textures for server-decorated windows.
@@ -523,6 +526,7 @@ impl State {
             config,
             grab: None,
             test_press: None,
+            test_pointer: crate::input::TestPointer::from_env(),
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             chrome_theme,
