@@ -34,6 +34,8 @@ Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
     demo                Nested session with the shell and demo windows (Ctrl-C ends it)
+    example <name>      Run target/debug/examples/<name> against the running demo
+                        (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
     restart             Stop, then run (no rebuild)
@@ -768,6 +770,7 @@ demo() {
         env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
             "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
         _pids="$_pids $!"
+        printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
     demo_client wallpaper "$_shell_bin" wallpaper
     demo_client menubar "$_shell_bin" menubar
@@ -805,6 +808,84 @@ demo() {
     }
     trap demo_cleanup EXIT INT TERM
     wait "$_compositor" 2>/dev/null || true
+}
+
+# example - run a CelestialKit example against the demo that is already running.
+#
+# Uses the same client environment as demo_client: the demo socket, no DISPLAY,
+# XDG_SESSION_TYPE=wayland and the dev shell's EGL/Mesa variables. LD_LIBRARY_PATH
+# keeps only Nix store entries, so a host glibc cannot leak into the client.
+# With --sin-menubar the demo's menubar process is closed first, so a test bar
+# owns the top strip.
+example() {
+    require_devshell
+    require cargo
+    _sin_menubar=
+    _name=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --sin-menubar) _sin_menubar=1 ;;
+            -*) fail "$EXIT_USAGE" "unknown option for example: $1" ;;
+            *)
+                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh example [--sin-menubar] <name>"
+                _name=$1
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$_name" ]; then
+        fail "$EXIT_USAGE" "usage: dev.sh example [--sin-menubar] <name>"
+    fi
+    case "$_name" in
+        '' | *[!A-Za-z0-9_-]*)
+            fail "$EXIT_USAGE" "invalid example name: $_name"
+            ;;
+    esac
+    if ! is_running; then
+        fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
+    fi
+    _sock=$(sed -n \
+        's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+        "$LOG_FILE" 2>/dev/null | tail -n 1)
+    [ -n "$_sock" ] ||
+        fail "$EXIT_RUN_FAILED" "the demo has no Wayland socket yet; see: ./dev.sh log"
+
+    cargo build -p celestial-kit --example "$_name" ||
+        fail "$EXIT_RUN_FAILED" "could not build the example $_name"
+    _bin="$script_dir/target/debug/examples/$_name"
+    [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the example binary is missing: $_bin"
+
+    if [ -n "$_sin_menubar" ]; then
+        _pid_file="$RUNTIME_DIR/demo-menubar.pid"
+        if [ -f "$_pid_file" ]; then
+            _pid=$(cat "$_pid_file" 2>/dev/null || true)
+            case "$_pid" in
+                '' | *[!0-9]*) ;;
+                *)
+                    kill "$_pid" 2>/dev/null || true
+                    _waited=0
+                    while kill -0 "$_pid" 2>/dev/null && [ "$_waited" -lt 50 ]; do
+                        sleep 0.02
+                        _waited=$((_waited + 1))
+                    done
+                    rm -f "$_pid_file"
+                    ;;
+            esac
+        fi
+    fi
+
+    _ld=
+    _old_ifs=$IFS
+    IFS=:
+    for _path in ${LD_LIBRARY_PATH:-}; do
+        case "$_path" in
+            /nix/store/*) _ld="${_ld:+$_ld:}$_path" ;;
+        esac
+    done
+    IFS=$_old_ifs
+    unset _path
+    env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+        LD_LIBRARY_PATH="$_ld" "$_bin"
 }
 
 # drm-vkms - exercise the direct session on vkms, isolated from the panel.
@@ -1032,6 +1113,7 @@ case "$command_name" in
     titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
+    example) example "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
     *)
