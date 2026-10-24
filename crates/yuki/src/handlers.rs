@@ -795,10 +795,51 @@ impl XdgShellHandler for State {
     }
 
     fn grab(&mut self, surface: PopupSurface, _seat: wl_seat::WlSeat, serial: Serial) {
-        // An explicit grab means the popup must be dismissed when the pointer
-        // is pressed outside it. The serial must name the pointer's implicit
-        // grab (a button press still held) made on this client's surface; a
-        // stale serial is rejected.
+        let wl_surface = surface.wl_surface().clone();
+        // A child popup inherits the grab of its parent's chain: hovering a
+        // submenu has no button press of its own. The parent frame carries the
+        // serial that began the chain, and the child may also use a later
+        // serial actually delivered to the same client.
+        if let Some(parent) = surface.get_parent_surface()
+            && self.popups.is_popup_surface(&parent)
+        {
+            let Some(chain_serial) = self.popups.grab_serial_of(&parent) else {
+                tracing::info!(
+                    popup = ?wl_surface.id(),
+                    "rejected popup grab: the parent popup has no grab"
+                );
+                return;
+            };
+            let same_client = parent.id().same_client_as(&wl_surface.id());
+            if !same_client {
+                tracing::info!(
+                    popup = ?wl_surface.id(),
+                    "rejected popup grab: the parent and child are different clients"
+                );
+                return;
+            }
+            let last_delivered = self.client_last_input_serial(&wl_surface);
+            if !child_grab_serial_ok(true, same_client, chain_serial, serial, last_delivered) {
+                tracing::info!(
+                    serial = ?serial,
+                    chain = ?chain_serial,
+                    "rejected popup grab: the serial was not delivered to this client"
+                );
+                return;
+            }
+            tracing::info!(
+                popup = ?wl_surface.id(),
+                parent = ?parent.id(),
+                "popup grab accepted"
+            );
+            self.focus_popup_surface(&wl_surface, serial);
+            return;
+        }
+
+        // An explicit root grab means the popup must be dismissed when the
+        // pointer is pressed outside it. The serial must name the pointer's
+        // implicit grab (a button press still held) made on this client's
+        // surface; a stale serial is rejected.
         let Some(start) = self.held_grab(serial) else {
             tracing::info!(
                 serial = ?serial,
@@ -809,13 +850,13 @@ impl XdgShellHandler for State {
         if !start
             .focus
             .as_ref()
-            .is_some_and(|(focus, _)| focus.id().same_client_as(&surface.wl_surface().id()))
+            .is_some_and(|(focus, _)| focus.id().same_client_as(&wl_surface.id()))
         {
             tracing::info!("rejected popup grab: the press was not on this client's surface");
             return;
         }
-        tracing::info!(popup = ?surface.wl_surface().id(), "popup grab accepted");
-        self.focus_popup_surface(surface.wl_surface(), serial);
+        tracing::info!(popup = ?wl_surface.id(), "popup grab accepted");
+        self.focus_popup_surface(&wl_surface, serial);
     }
 
     fn popup_destroyed(&mut self, surface: PopupSurface) {
@@ -830,6 +871,25 @@ impl XdgShellHandler for State {
     ) {
         self.reposition_popup(surface, positioner, token);
     }
+}
+
+/// Whether a child popup may reuse its parent's grab serial.
+///
+/// The chain serial always works. A later serial works only when it is no
+/// newer than the last one actually delivered to this client, so a serial
+/// from another client is rejected.
+fn child_grab_serial_ok(
+    parent_grabbed: bool,
+    same_client: bool,
+    chain: Serial,
+    serial: Serial,
+    last_delivered: Option<Serial>,
+) -> bool {
+    parent_grabbed
+        && same_client
+        && (serial == chain
+            || (serial.is_no_older_than(&chain)
+                && last_delivered.is_some_and(|last| serial <= last)))
 }
 
 /// The decoration a client asks for with an xdg-decoration mode.
@@ -952,8 +1012,12 @@ mod tests {
     use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
     use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration::Mode as KdeMode;
 
-    use super::{BlockerKind, decoration_for_kde_mode, decoration_for_xdg_mode, pending_blocker};
+    use super::{
+        BlockerKind, child_grab_serial_ok, decoration_for_kde_mode, decoration_for_xdg_mode,
+        pending_blocker,
+    };
     use crate::config::DecorationPolicy;
+    use smithay::utils::Serial;
     use yuki_scene::scene::Decoration;
 
     #[test]
@@ -1030,6 +1094,57 @@ mod tests {
     fn explicit_sync_wins_over_the_implicit_fence() {
         assert_eq!(pending_blocker(true, true), Some(BlockerKind::Explicit));
         assert_eq!(pending_blocker(true, false), Some(BlockerKind::Implicit));
+    }
+
+    #[test]
+    fn a_child_popup_uses_its_parent_grab_serial_or_a_later_one_it_received() {
+        let chain = Serial::from(10u32);
+        assert!(child_grab_serial_ok(true, true, chain, chain, None));
+        assert!(child_grab_serial_ok(
+            true,
+            true,
+            chain,
+            Serial::from(12u32),
+            Some(Serial::from(12u32))
+        ));
+    }
+
+    #[test]
+    fn a_child_without_a_grabbed_parent_is_rejected() {
+        let chain = Serial::from(10u32);
+        assert!(!child_grab_serial_ok(
+            false,
+            true,
+            chain,
+            chain,
+            Some(chain)
+        ));
+    }
+
+    #[test]
+    fn a_child_serial_from_another_client_is_rejected() {
+        let chain = Serial::from(10u32);
+        assert!(!child_grab_serial_ok(
+            true,
+            false,
+            chain,
+            chain,
+            Some(chain)
+        ));
+        assert!(!child_grab_serial_ok(
+            true,
+            true,
+            chain,
+            Serial::from(20u32),
+            Some(Serial::from(12u32))
+        ));
+        assert!(!child_grab_serial_ok(
+            true,
+            true,
+            chain,
+            Serial::from(9u32),
+            Some(Serial::from(12u32))
+        ));
     }
 }
 

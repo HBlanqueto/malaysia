@@ -23,6 +23,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -991,6 +992,26 @@ pub(crate) struct TestPress {
 pub struct ClientState {
     /// Per-client compositor bookkeeping, created by Smithay on first use.
     pub compositor_state: CompositorClientState,
+    /// The newest input serial delivered to this client (0 = none).
+    ///
+    /// A chained popup grab may use the serial of the grab that started the
+    /// chain or a later one this client actually received, never another
+    /// client's serial.
+    last_input_serial: AtomicU32,
+}
+
+impl ClientState {
+    /// Records a serial delivered to this client.
+    pub(crate) fn note_input_serial(&self, serial: Serial) {
+        self.last_input_serial
+            .store(serial.into(), Ordering::Relaxed);
+    }
+
+    /// The newest input serial delivered to this client.
+    pub(crate) fn last_input_serial(&self) -> Option<Serial> {
+        let serial = self.last_input_serial.load(Ordering::Relaxed);
+        (serial != 0).then(|| Serial::from(serial))
+    }
 }
 
 impl ClientData for ClientState {}

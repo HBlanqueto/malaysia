@@ -7,7 +7,7 @@
 //! outside click, and no orphans when a client dies.
 
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Point, Rectangle, Size};
+use smithay::utils::{Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::shell::wlr_layer::KeyboardInteractivity;
 use smithay::wayland::shell::xdg::{PopupSurface, PositionerState};
 use yuki_scene::geometry::{
@@ -45,6 +45,8 @@ pub(crate) enum FocusRestore {
 
 struct PopupFocusFrame {
     surface: WlSurface,
+    /// Serial of the input event that grabbed this popup.
+    grab_serial: Serial,
     /// If the root popup hung from a layer surface, its surface and interactivity.
     root_layer: Option<(WlSurface, KeyboardInteractivity)>,
     /// Surface that had focus before the root popup opened.
@@ -114,16 +116,27 @@ impl Popups {
     pub(crate) fn push_focus_frame(
         &mut self,
         surface: WlSurface,
+        grab_serial: Serial,
         root_layer: Option<(WlSurface, KeyboardInteractivity)>,
         previous_focus: Option<WlSurface>,
         previous_window: Option<WindowId>,
     ) {
         self.focus_stack.push(PopupFocusFrame {
             surface,
+            grab_serial,
             root_layer,
             previous_focus,
             previous_window,
         });
+    }
+
+    /// The serial that grabbed this popup, if it currently owns a grab.
+    pub(crate) fn grab_serial_of(&self, surface: &WlSurface) -> Option<Serial> {
+        self.focus_stack
+            .iter()
+            .rev()
+            .find(|frame| frame.surface == *surface)
+            .map(|frame| frame.grab_serial)
     }
 
     /// Removes focus frames for popups in `surfaces`. If keyboard focus was in

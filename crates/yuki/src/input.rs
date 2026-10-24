@@ -323,7 +323,8 @@ impl State {
                     self.note_activation_serial(serial);
                 }
                 if let Some(keyboard) = self.seat.get_keyboard() {
-                    keyboard.input::<(), _>(
+                    let forwarded = keyboard
+                        .input::<(), _>(
                         self,
                         event.key_code(),
                         event.state(),
@@ -433,7 +434,14 @@ impl State {
                             }
                             FilterResult::Forward
                         },
-                    );
+                        )
+                        .is_none();
+                    if pressed
+                        && forwarded
+                        && let Some(focus) = keyboard.current_focus()
+                    {
+                        self.note_client_input_serial(&focus, serial);
+                    }
                 }
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
@@ -500,6 +508,9 @@ impl State {
                 }
 
                 if let Some(pointer) = self.seat.get_pointer() {
+                    if let Some(focus) = pointer.current_focus() {
+                        self.note_client_input_serial(&focus, serial);
+                    }
                     pointer.button(
                         self,
                         &ButtonEvent {
@@ -909,6 +920,22 @@ impl State {
         action
     }
 
+    /// Records that `serial` was delivered to the client owning `surface`.
+    fn note_client_input_serial(&self, surface: &WlSurface, serial: Serial) {
+        if let Some(client) = surface.client()
+            && let Some(state) = client.get_data::<crate::state::ClientState>()
+        {
+            state.note_input_serial(serial);
+        }
+    }
+
+    /// The newest input serial delivered to the client owning `surface`.
+    pub(crate) fn client_last_input_serial(&self, surface: &WlSurface) -> Option<Serial> {
+        let client = surface.client()?;
+        let state = client.get_data::<crate::state::ClientState>()?;
+        state.last_input_serial()
+    }
+
     /// Sets keyboard focus to a popup surface, so keyboard navigation works
     /// inside grabbed popups even when the parent layer surface has
     /// `keyboard_interactivity = None`.
@@ -932,6 +959,7 @@ impl State {
             });
             self.popups.push_focus_frame(
                 surface.clone(),
+                serial,
                 root_layer,
                 previous_focus.clone(),
                 previous_window,
@@ -1212,6 +1240,9 @@ impl State {
         };
         let serial = SERIAL_COUNTER.next_serial();
         self.note_activation_serial(serial);
+        if let Some(focus) = pointer.current_focus() {
+            self.note_client_input_serial(&focus, serial);
+        }
         pointer.button(
             self,
             &ButtonEvent {
@@ -1232,12 +1263,16 @@ impl State {
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
+        let serial = SERIAL_COUNTER.next_serial();
+        if let Some(focus) = pointer.current_focus() {
+            self.note_client_input_serial(&focus, serial);
+        }
         pointer.button(
             self,
             &ButtonEvent {
                 button: BUTTON_LEFT,
                 state: ButtonState::Released,
-                serial: SERIAL_COUNTER.next_serial(),
+                serial,
                 time,
             },
         );

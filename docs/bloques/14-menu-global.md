@@ -114,18 +114,20 @@ y un script de `YUKI_TEST_INPUT`:
   cliente pide `get_popup` y el compositor acepta el grab del raíz. Captura
   por `SIGUSR1` con el menú visible.
 - **b.** Al mover sobre «Ordenar por» y «Orden» se abren el hijo y el nieto
-  por hover real (`popup created` + `popup mapped`).
+  por hover real (`popup created` + `popup mapped`), y los tres niveles
+  aceptan el grab encadenado.
 - **c.** Un clic fuera envía `popup_done` al raíz y a toda la cascada; la
   captura posterior no muestra ningún menú.
 - **d.** Un clic en una Action registra su id en el ejemplo y cierra todo.
 - **e.** Con foot enfocado, abrir y cerrar el menú produce
   `wl_keyboard.leave` y después `wl_keyboard.enter` en foot.
 
-**Límite conocido:** los submenús abiertos por hover piden `grab: true` con el
-serial del último clic, que ya se soltó; el compositor los rechaza
-(`rejected popup grab: no button press with this serial is held`). No se
-abren sin grab para ocultarlo: el rechazo es real y el hover/clic sigue
-funcionando.
+**Grab encadenado:** los submenús abiertos por hover piden `grab: true` con el
+serial del clic que abrió su raíz. El compositor acepta el grab del hijo si su
+padre ya lo tiene, es del mismo cliente y el serial es el de la cadena o uno
+posterior entregado a ese cliente. Los tres niveles reciben
+`popup grab accepted` y el hijo toma el foco de teclado; al cerrarlo, la pila
+devuelve el foco al padre. Un hijo de un padre sin grab se sigue rechazando.
 
 ## Capturas
 
