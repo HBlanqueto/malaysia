@@ -7,9 +7,12 @@ use std::{
 
 use celestial_kit::menu::{CheckState, MenuItem, MenuView};
 use freya_core::integration::AppComponent;
+use freya_core::prelude::*;
 use freya_testing::TestingRunner;
-use torin::prelude::Size2D;
+use torin::prelude::{Size, Size2D};
 use yuki_design::{MENU_DARK, MENU_LIGHT, MenuPalette};
+
+const WALLPAPER: (u8, u8, u8) = (65, 105, 170);
 
 const TOLERANCE: u8 = 3;
 
@@ -125,6 +128,38 @@ fn render_accents(dark: bool) -> Vec<u8> {
     let items = accent_items();
     let size = MenuView::preferred_size(&items, palette);
     let app = AppComponent::new(MenuView::new(items, |_| {}, || {}, palette));
+    let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
+    test.sync_and_update();
+    test.render().as_ref().to_vec()
+}
+
+struct MenuOnWallpaper {
+    items: Vec<MenuItem>,
+    palette: MenuPalette,
+}
+
+impl App for MenuOnWallpaper {
+    fn render(&self) -> impl IntoElement {
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(Color::from(WALLPAPER))
+            .child(AppComponent::new(MenuView::new(
+                self.items.clone(),
+                |_| {},
+                || {},
+                self.palette,
+            )))
+    }
+}
+
+/// Renders the menu over the Solid Aqua Blue wallpaper instead of a white
+/// surface, so a translucent border that lacks a panel underneath shows it.
+fn render_on_wallpaper(dark: bool) -> Vec<u8> {
+    let palette = if dark { MENU_DARK } else { MENU_LIGHT };
+    let items = menu_items();
+    let size = MenuView::preferred_size(&items, palette);
+    let app = AppComponent::new(MenuOnWallpaper { items, palette });
     let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
     test.sync_and_update();
     test.render().as_ref().to_vec()
@@ -311,6 +346,21 @@ fn panels_paint_outer_and_inner_borders() {
         let theme = if dark { "dark" } else { "light" };
         assert_panel_has_double_border(dark, &render(dark), &format!("{theme}/view"));
         assert_panel_has_double_border(dark, &render_accents(dark), &format!("{theme}/accents"));
+    }
+}
+
+#[test]
+fn outer_border_never_shows_the_wallpaper() {
+    for dark in [false, true] {
+        let theme = if dark { "dark" } else { "light" };
+        let (width, height, pixels) = decode_bytes(&render_on_wallpaper(dark));
+        for (x, y, edge) in [(width / 2, 0, "top"), (0, height / 2, "left")] {
+            let pixel = pixel_at(&pixels, width, x, y);
+            assert!(
+                pixel[0].abs_diff(pixel[2]) < 8,
+                "{theme}: the {edge} border shows the wallpaper: {pixel:?}"
+            );
+        }
     }
 }
 

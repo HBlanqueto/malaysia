@@ -357,8 +357,14 @@ impl App for MenuView {
         let mut root = rect()
             .width(Size::px(size.0))
             .height(Size::px(size.1))
-            .background(rgba(m.outer_border))
+            .background(rgba(m.bg))
             .corner_radius(m.radius)
+            .border(
+                Border::new()
+                    .width(m.border_width)
+                    .alignment(BorderAlignment::Inner)
+                    .fill(rgba(m.outer_border)),
+            )
             .padding(Gaps::new(
                 m.border_width,
                 m.border_width,
