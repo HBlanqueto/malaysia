@@ -219,6 +219,18 @@
           # `weston-simple-dmabuf-feedback` links pixman-1.
           buildInputs = prev.buildInputs ++ [ pkgs.pixman ];
         });
+        # Fontconfig only sees a dev shell's fonts when FONTCONFIG_FILE is
+        # explicit. Include the host config so the nested session keeps its
+        # system fonts, then add Geist and the shortcut symbol fallback.
+        fontsConf = pkgs.writeText "yuki-fonts.conf" ''
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+          <fontconfig>
+            <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+            <dir>${pkgs.geist-font}/share/fonts</dir>
+            <dir>${pkgs.inter}/share/fonts</dir>
+          </fontconfig>
+        '';
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
@@ -242,7 +254,13 @@
             amdgpu_top
           ];
 
-          buildInputs = deps;
+          # `geist-font` is the UI typeface; `inter` is the fixed fallback for
+          # the shortcut glyphs (Geist has none of them). Being in buildInputs
+          # lets fontconfig's setup hook expose both to the nested session.
+          buildInputs = deps ++ [
+            pkgs.geist-font
+            pkgs.inter
+          ];
 
           # The mold linker is part of this shell, so request it here rather
           # than in .cargo/config.toml or through PATH probing in dev.sh: a
@@ -256,6 +274,10 @@
           # working there). The paths are the same store paths the shell
           # exports, so nothing runs that the shell could not run.
           RUSTFLAGS = "-C link-arg=-fuse-ld=mold -C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath deps}";
+
+          # `fc-match Geist` resolves to Geist inside the dev shell and the
+          # nested session; `/etc/fonts/fonts.conf` keeps the host fonts.
+          FONTCONFIG_FILE = fontsConf;
 
           # Explicit marker so dev.sh can refuse to build outside this shell,
           # where the linker flag above would be missing and the binary would

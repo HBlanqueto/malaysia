@@ -39,6 +39,13 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
+    # The UI typeface and its symbol fallback. Geist has no ⌃⌥⇧❖ glyphs;
+    # Inter provides all four from the same family.
+    fonts.packages = [
+      pkgs.geist-font
+      pkgs.inter
+    ];
+
     # The session file in the package makes Yuki selectable in GDM, SDDM and
     # greetd.
     services.displayManager.sessionPackages = [ cfg.package ];

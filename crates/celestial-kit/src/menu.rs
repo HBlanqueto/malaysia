@@ -25,7 +25,13 @@ use yuki_design::{MenuPalette, Rgba};
 /// The sans stack from `yuki-design` (`neptunia/tokens.json`). The renderer
 /// receives the same list through [`MenuView::render`], so measuring and
 /// drawing always shape the same glyphs.
-const FONT_FAMILIES: &[&str] = &["Geist", "Noto Sans CJK SC", "system-ui", "sans-serif"];
+const FONT_FAMILIES: &[&str] = &[
+    "Geist",
+    "Inter",
+    "Noto Sans CJK SC",
+    "system-ui",
+    "sans-serif",
+];
 
 /// The process-wide text stack for measurement. Mirrors the renderer's
 /// `FontCollection` (system manager plus the shell's fallback families).
