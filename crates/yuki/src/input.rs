@@ -780,6 +780,25 @@ impl State {
         self.request_redraw();
     }
 
+    /// Logs the current window stack for debugging focus decisions.
+    fn log_focus_stack(&self, focused: Option<WindowId>) {
+        let mut lines = Vec::new();
+        for window in self.windows.iter() {
+            let id = window.id();
+            let minimized = self.minimized.contains(&id);
+            lines.push(format!(
+                "app_id={:?} mapped={} hidden={} minimized={} rect={:?} focused={}",
+                window.app_id(),
+                window.is_mapped(),
+                window.is_hidden(),
+                minimized,
+                window.outer(),
+                focused == Some(id),
+            ));
+        }
+        tracing::info!(focused = ?focused, "focus stack (back-to-front):\n{}", lines.join("\n"));
+    }
+
     /// Gives keyboard focus to a window.
     pub(crate) fn focus_window(&mut self, id: WindowId) {
         // While the session is locked, focus belongs to the lock surface; a
@@ -817,6 +836,7 @@ impl State {
         // Publish the active window for the menu bar (the store the shell
         // watches, same as the wallpaper).
         self.publish_active(Some(id));
+        self.log_focus_stack(Some(id));
     }
 
     /// Opens the launcher, or asks the running one to exit.
@@ -1149,6 +1169,7 @@ impl State {
             set_primary_focus(&self.display_handle, &self.seat, None);
         }
         self.publish_active(None);
+        self.log_focus_stack(None);
     }
 
     /// Publishes the active window (or its absence) to the shell's store.

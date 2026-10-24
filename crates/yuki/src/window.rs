@@ -66,6 +66,22 @@ impl Window<'_> {
         self.data.mapped
     }
 
+    /// Whether the window is hidden from the scene (minimize or similar).
+    pub fn is_hidden(&self) -> bool {
+        self.data.hidden
+    }
+
+    /// The window's app id, as the client last set it.
+    pub fn app_id(&self) -> String {
+        with_states(self.surface(), |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .map(|data| data.lock().unwrap().app_id.clone().unwrap_or_default())
+                .unwrap_or_default()
+        })
+    }
+
     /// The decorated outer rectangle, in logical coordinates.
     pub fn outer(&self) -> SceneRect<f64, SceneLogical> {
         self.outer
@@ -140,6 +156,8 @@ struct WindowData {
     pending_configure: Option<Serial>,
     /// Whether the window is mapped and should be shown.
     mapped: bool,
+    /// Whether the window is hidden from the scene (minimized or otherwise).
+    hidden: bool,
     /// The usable size last sent, so a state change can be noticed.
     configured: Option<Size<i32, Logical>>,
     /// Whether the user is currently resizing, so the configure carries the
@@ -278,6 +296,7 @@ impl Windows {
             acked: false,
             pending_configure: None,
             mapped: false,
+            hidden: false,
             configured: None,
             resizing: false,
             maximized: false,
@@ -372,6 +391,10 @@ impl Windows {
         let Some(index) = self.index(id) else {
             return false;
         };
+        if self.windows[index].hidden == hidden {
+            return false;
+        }
+        self.windows[index].hidden = hidden;
         let data = &self.windows[index];
         let rect = if hidden {
             SceneRect::new(ScenePoint::new(0.0, 0.0), SceneSize::new(0.0, 0.0))
