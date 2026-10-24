@@ -134,7 +134,16 @@ impl App for Demo {
             .child(menu_label("Yuki", {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
-                move || toggle_menu(&root_id, open_label.clone(), "Yuki", yuki_menu(palette), palette, 12)
+                move || {
+                    toggle_menu(
+                        &root_id,
+                        open_label.clone(),
+                        "Yuki",
+                        yuki_menu(palette),
+                        palette,
+                        12,
+                    )
+                }
             }))
             .child(menu_label("Ir", {
                 let root_id = root_id.clone();
@@ -144,7 +153,16 @@ impl App for Demo {
             .child(menu_label("Editar", {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
-                move || toggle_menu(&root_id, open_label.clone(), "Editar", edit_menu(), palette, 82)
+                move || {
+                    toggle_menu(
+                        &root_id,
+                        open_label.clone(),
+                        "Editar",
+                        edit_menu(),
+                        palette,
+                        82,
+                    )
+                }
             }));
         let mut bar = rect()
             .width(Size::fill())

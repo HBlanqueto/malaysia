@@ -87,8 +87,8 @@ La sintaxis es una lista separada por `;` con acciones de puntero y teclado:
 - `click:x,y` mueve, pulsa, espera 150 ms y suelta. La espera deja que el
   cliente pida `get_popup` y `grab` con el serial todavía pulsado.
 - `key:<nombre>` pulsa y suelta una tecla por el camino real del teclado,
-  con el keycode de Linux y el estado `pressed`/`released`. Nombres soportados:
-  `Up`, `Down`, `Left`, `Right`, `Return`, `Escape`, `Home`, `End`.
+  con el keycode xkb (evdev + 8) y el estado `pressed`/`released`. Nombres
+  soportados: `Up`, `Down`, `Left`, `Right`, `Return`, `Escape`, `Home`, `End`.
 - `wait:ms` pausa la secuencia.
 
 Mientras hay un script, el compositor descarta los eventos del ratón del host
@@ -124,6 +124,11 @@ y un script de `YUKI_TEST_INPUT`:
 - **d.** Un clic en una Action registra su id en el ejemplo y cierra todo.
 - **e.** Con foot enfocado, abrir y cerrar el menú produce
   `wl_keyboard.leave` y después `wl_keyboard.enter` en foot.
+- **f.** Navegación por teclado: abrir «Editar», bajar cinco veces hasta
+  «Ordenar por» (saltando «Rehacer» y los separadores), y `→` abre el submenú
+  con «Nombre» enfocado. Se captura con `SIGUSR1`.
+- **g.** Un solo árbol abierto: abrir «Yuki» y luego pulsar «Editar» cierra el
+  primero y abre el segundo; la captura muestra solo el menú de «Editar».
 
 **Grab encadenado:** los submenús abiertos por hover piden `grab: true` con el
 serial del clic que abrió su raíz. El compositor acepta el grab del hijo si su
@@ -191,6 +196,19 @@ doble visible en los paneles.
 
 `borde-doble-oscuro.png`: zoom ×4 del borde superior de un panel oscuro; se ve
 la línea exterior negra (`window-outer`) y la interior clara (`window-inner`).
+
+![Navegación por teclado hasta el submenú](img/14a/teclado-submenu.png)
+
+`teclado-submenu.png`: «Editar» abierto con teclado, «Ordenar por» resaltado y
+su submenú visible con «Nombre» enfocado. La secuencia inyectada fue
+`key:Down` × 5 y `key:Right`; un último `move` fuerza el redibujado del buffer
+antes de la captura.
+
+![Un solo árbol de menús a la vez](img/14a/un-solo-arbol.png)
+
+`un-solo-arbol.png`: se abrió «Yuki» y se pulsó «Editar`; el menú de «Yuki» se
+cerró y solo sobrevive el árbol de «Editar», demostrando que `toggle_menu`
+/cierra el árbol anterior antes de abrir uno nuevo.
 
 Nota de honestidad: la barra del ejemplo comparte la franja superior con el
 menubar real del demo y queda debajo de él, así que el título visible sobre el

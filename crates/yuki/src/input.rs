@@ -90,17 +90,17 @@ impl TestKey {
         }
     }
 
-    /// Linux input event code for this key.
+    /// xkb keycode for this key (evdev code + 8).
     fn code(self) -> Keycode {
         Keycode::new(match self {
-            Self::Up => 103,
-            Self::Down => 108,
-            Self::Left => 105,
-            Self::Right => 106,
-            Self::Return => 28,
-            Self::Escape => 1,
-            Self::Home => 102,
-            Self::End => 107,
+            Self::Up => 111,
+            Self::Down => 116,
+            Self::Left => 113,
+            Self::Right => 114,
+            Self::Return => 36,
+            Self::Escape => 9,
+            Self::Home => 110,
+            Self::End => 115,
         })
     }
 }
@@ -541,9 +541,7 @@ impl State {
                                         state.request_screenshot(ScreenshotRequest::Focused);
                                     }
                                     CompositorShortcut::ScreenshotFull => {
-                                        tracing::info!(
-                                            "Shift+Super+3: screenshotting the output"
-                                        );
+                                        tracing::info!("Shift+Super+3: screenshotting the output");
                                         state.request_screenshot(ScreenshotRequest::Output);
                                     }
                                     CompositorShortcut::ScreenshotRegion => {
@@ -1664,7 +1662,7 @@ impl State {
             // lets a click on the menubar dismiss an open menu and reach the
             // bar itself.
             layer_under
-                .or_else(|| popup_under)
+                .or(popup_under)
                 .or_else(|| self.windows.surface_under(location))
         };
 
