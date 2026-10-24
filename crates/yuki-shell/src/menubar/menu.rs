@@ -5,18 +5,20 @@
 //! while a menu is open switches to that title's menu. The root menu can also
 //! navigate to the previous/next title with the Left/Right arrow keys.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use bytes::Bytes;
 use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView};
 use celestial_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
+use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Gaps, Size};
-use yuki_design::MENUBAR_HEIGHT;
+use yuki_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH};
 
 use crate::menubar::rgba;
 
@@ -24,9 +26,13 @@ use crate::menubar::rgba;
 #[derive(Clone)]
 pub struct MenuTitleSpec {
     pub label: String,
-    pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
-    pub on_activate: Rc<dyn Fn(String)>,
-    pub anchor_x: Rc<RefCell<State<f32>>>,
+    /// Snowflake glyph drawn instead of `label`.
+    pub glyph: Option<&'static [u8]>,
+    /// Draw the label in the bold app-name weight.
+    pub bold: bool,
+    pub items: fn() -> Vec<MenuItem>,
+    pub on_activate: fn(String),
+    pub anchor_x: Rc<Cell<f32>>,
     pub enabled: bool,
 }
 
@@ -40,7 +46,7 @@ pub struct MenuState {
 impl MenuState {
     pub fn new() -> Self {
         Self {
-            root_id: Arc::new(Mutex::new(None)),
+            root_id: use_hook(|| Arc::new(Mutex::new(None))),
             open_label: Rc::new(RefCell::new(use_state(|| None::<String>))),
         }
     }
@@ -64,7 +70,7 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let items = (spec.items)();
     let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
     let size = MenuView::preferred_size(&items, palette);
-    let anchor_x = *spec.anchor_x.borrow().read();
+    let anchor_x = spec.anchor_x.get();
     let label = spec.label.clone();
 
     let cell = state.root_id.clone();
@@ -78,18 +84,19 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
 
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
-    let on_activate = spec.on_activate.clone();
-    let view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all, palette)
-        .with_navigation(move |direction| {
+    let on_activate = spec.on_activate;
+    let view = MenuView::new(items, on_activate, on_dismiss_all, palette).with_navigation(
+        move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
-        });
+        },
+    );
 
     let open_label = state.open_label.clone();
     let id = Popups::get().open(
         PopupSpec {
             anchor_rect: (anchor_x as i32, MENUBAR_HEIGHT, 1, 1),
             anchor: PopupAnchor::BottomLeft,
-            gravity: PopupGravity::BottomLeft,
+            gravity: PopupGravity::BottomRight,
             offset: (0, 0),
             size: (size.0 as u32, size.1 as u32),
             constraint_adjustment: PopupConstraintAdjustment {
@@ -162,28 +169,42 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let hover_fg = rgba(palette.bar_hover_fg);
     let normal_fg =
         rgba(celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved()).text);
+    let fg = if is_open { hover_fg } else { normal_fg };
 
     let mut container = rect()
         .height(Size::px(MENUBAR_HEIGHT as f32))
         .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
-        .on_sized({
-            let anchor_x = anchor_x.clone();
-            move |event: Event<SizedEventData>| {
-                anchor_x.borrow_mut().set(event.data().area.origin.x);
-            }
+        .on_sized(move |event: Event<SizedEventData>| {
+            anchor_x.set(event.data().area.origin.x);
         });
 
     if is_open {
         container = container.background(hover_bg);
     }
 
-    let label_element = label()
-        .text(label_text.clone())
-        .font_size(13.0)
-        .color(if is_open { hover_fg } else { normal_fg });
-    container = container.child(label_element);
+    let content = match spec.glyph {
+        Some(glyph) => SvgViewer::new(("menubar-snowflake", Bytes::from_static(glyph)))
+            .width(Size::px(16.0))
+            .height(Size::px(16.0))
+            .stroke(fg)
+            .show_loader(false)
+            .into_element(),
+        None => {
+            let mut text = label()
+                .text(label_text.clone())
+                .font_size(13.0)
+                .max_lines(1)
+                .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
+                .color(fg);
+            if spec.bold {
+                text = text.font_weight(MENUBAR_APP_NAME_WEIGHT);
+            }
+            text.into_element()
+        }
+    };
+    container = container.child(content);
 
     if !enabled {
         return container.into_element();
@@ -200,11 +221,8 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let state_for_hover = state.clone();
     let label_for_hover = label_text.clone();
     container = container.on_pointer_enter(move |_: Event<PointerEventData>| {
-        let binding = open_label_for_hover.borrow().read();
-        let Some(current) = binding.as_deref() else {
-            return;
-        };
-        if current != label_for_hover {
+        let current = open_label_for_hover.borrow().read().clone();
+        if current.is_some_and(|current| current != label_for_hover) {
             open_root_menu(&titles_for_hover, title_index, &state_for_hover);
         }
     });

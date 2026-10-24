@@ -1,12 +1,11 @@
 //! The system menu title (snowflake) on the far left of the menubar.
 
-use std::rc::Rc;
-
 use celestial_kit::menu::{CheckState, MenuItem};
-use freya_core::prelude::*;
 
-use crate::menubar::menu::{MenuState, MenuTitleSpec, menu_title};
 use crate::menubar::spawn_component;
+
+/// The snowflake drawn as the system-menu title.
+pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
 /// Items for the system menu (dummy entries for the layout commit).
 pub fn system_menu_items() -> Vec<MenuItem> {
@@ -64,11 +63,6 @@ pub fn system_menu_items() -> Vec<MenuItem> {
             check: CheckState::None,
         },
     ]
-}
-
-/// Renders the system-menu title.
-pub fn system_title(state: MenuState, titles: Rc<Vec<MenuTitleSpec>>) -> Element {
-    menu_title(0, titles, state)
 }
 
 /// Handles the only enabled system action today: lock the session.

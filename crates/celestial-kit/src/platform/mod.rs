@@ -1132,6 +1132,7 @@ enum SurfaceRole {
     Lock(SessionLockSurface),
     Window(Window),
     Popup(Popup),
+    None,
 }
 
 impl SurfaceWindow {
@@ -2132,7 +2133,12 @@ impl Shell {
         {
             callback();
         }
-        self.surfaces.remove(index);
+        // Drop the xdg_popup before its wl_surface: the other order destroys
+        // the surface first, so the compositor never sees `popup_destroyed`
+        // and keeps the old popup in its scene.
+        let mut window = self.surfaces.remove(index);
+        drop(std::mem::replace(&mut window.role, SurfaceRole::None));
+        drop(window);
         self.surface_count.set(self.surfaces.len());
     }
 

@@ -2,13 +2,14 @@
 //!
 //! Owns the layer-shell surface, schedules the clock and active-app polling,
 //! and lays out the modules left-to-right with the clock pushed to the right.
-//! The two menu titles (system snowflake and Yuki/app name) share a single
-//! popup state so only one menu tree is open at a time.
+//! Every menu title shares a single popup state so only one menu tree is open
+//! at a time.
 
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use celestial_kit::menu::MenuItem;
 use celestial_kit::platform::{
     Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, Timers, run_layer,
 };
@@ -19,12 +20,16 @@ use yuki_appearance::data_dir;
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::menu::{MenuState, MenuTitleSpec};
-use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba, status, system};
+use crate::menubar::menu::{self, MenuState, MenuTitleSpec};
+use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba, system};
+
+const MAX_TITLES: usize = 8;
+
+type MenuBuilder = fn() -> Vec<MenuItem>;
 
 pub struct BarApp {
     pub clock: State<String>,
-    pub app_name: State<String>,
+    pub active_app: State<Option<String>>,
     pub window_store: PathBuf,
     pub entries: Vec<DesktopEntry>,
 }
@@ -36,13 +41,14 @@ impl App for BarApp {
         use_hook(move || schedule_next_minute(timers, clock_state));
 
         let timers = Timers::get();
-        let app_name = self.app_name;
+        let active_app = self.active_app;
         let window_store = self.window_store.clone();
-        let entries = self.entries.clone();
-        use_hook(move || schedule_active_poll(timers, window_store, entries, app_name));
+        use_hook(move || schedule_active_poll(timers, window_store, active_app));
 
         let now = self.clock.read().clone();
-        let app = self.app_name.read().clone();
+        let app_id = self.active_app.read().clone();
+        let app = resolve_app_name(app_id.as_deref(), &self.entries);
+        let focused = app_id.is_some();
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
         let text = rgba(palette.text);
         let bar = rgba(palette.bar);
@@ -65,60 +71,81 @@ impl App for BarApp {
         }
 
         let menu_state = MenuState::new();
-        let system_anchor = Rc::new(RefCell::new(use_state(|| 0.0f32)));
-        let app_anchor = Rc::new(RefCell::new(use_state(|| 0.0f32)));
-        let titles: Rc<Vec<MenuTitleSpec>> = Rc::new(vec![
-            MenuTitleSpec {
-                label: "Sistema".to_string(),
-                items: Rc::new(system::system_menu_items),
-                on_activate: Rc::new(system::on_system_action),
-                anchor_x: system_anchor,
-                enabled: true,
-            },
-            MenuTitleSpec {
-                label: app.clone(),
-                items: Rc::new(appmenu::yuki_menu_items),
-                on_activate: Rc::new(appmenu::on_yuki_action),
-                anchor_x: app_anchor,
-                enabled: true,
-            },
-        ]);
-
-        let left = rect()
+        let anchors: Rc<Vec<Rc<Cell<f32>>>> = use_hook(|| {
+            Rc::new(
+                (0..MAX_TITLES)
+                    .map(|_| Rc::new(Cell::new(0.0f32)))
+                    .collect(),
+            )
+        });
+        let mut specs = vec![MenuTitleSpec {
+            label: "Sistema".to_string(),
+            glyph: Some(system::SNOWFLAKE_SVG),
+            bold: false,
+            items: system::system_menu_items,
+            on_activate: system::on_system_action,
+            anchor_x: anchors[0].clone(),
+            enabled: true,
+        }];
+        if focused {
+            specs.push(MenuTitleSpec {
+                label: app,
+                glyph: None,
+                bold: true,
+                items: no_items,
+                on_activate: ignore_action,
+                anchor_x: anchors[1].clone(),
+                enabled: false,
+            });
+        } else {
+            let menus: [(&str, MenuBuilder); 7] = [
+                ("Yuki", appmenu::yuki_menu_items),
+                ("Archivo", appmenu::file_menu_items),
+                ("Edición", appmenu::edit_menu_items),
+                ("Visualización", appmenu::view_menu_items),
+                ("Ir", appmenu::go_menu_items),
+                ("Ventana", appmenu::window_menu_items),
+                ("Ayuda", appmenu::help_menu_items),
+            ];
+            for (offset, (label, items)) in menus.into_iter().enumerate() {
+                specs.push(MenuTitleSpec {
+                    label: label.to_string(),
+                    glyph: None,
+                    bold: offset == 0,
+                    items,
+                    on_activate: appmenu::on_action,
+                    anchor_x: anchors[offset + 1].clone(),
+                    enabled: true,
+                });
+            }
+        }
+        let titles = Rc::new(specs);
+        let mut left = rect()
             .direction(Direction::Horizontal)
-            .main_align(Alignment::Start)
-            .child(system::system_title(menu_state.clone(), titles.clone()))
-            .child(appmenu::app_menu_title(
-                app,
-                menu_state.clone(),
-                titles.clone(),
-            ));
+            .main_align(Alignment::Start);
+        for index in 0..titles.len() {
+            left = left.child(menu::menu_title(index, titles.clone(), menu_state.clone()));
+        }
 
-        root.child(left)
-            .child(status::status_placeholder())
-            .child(clock::clock_label(now, text))
+        root.child(left).child(clock::clock_label(now, text))
     }
 }
 
-fn schedule_active_poll(
-    timers: Timers,
-    window_store: PathBuf,
-    entries: Vec<DesktopEntry>,
-    app_name: State<String>,
-) {
+fn no_items() -> Vec<MenuItem> {
+    Vec::new()
+}
+
+fn ignore_action(_id: String) {}
+
+fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State<Option<String>>) {
     let retry = timers.clone();
     timers.after(std::time::Duration::from_millis(250), move || {
-        let name = load_active_app(&window_store, &entries);
-        let mut app_name = app_name;
-        if *app_name.peek() != name {
-            app_name.set(name);
+        let id = load_active_app(&window_store);
+        let mut active_app = active_app;
+        if *active_app.peek() != id {
+            active_app.set(id);
         }
-        schedule_active_poll(
-            retry.clone(),
-            window_store.clone(),
-            entries.clone(),
-            app_name,
-        );
+        schedule_active_poll(retry.clone(), window_store.clone(), active_app);
     });
 }
 
@@ -141,9 +168,10 @@ fn seconds_to_next_minute() -> std::time::Duration {
     })
 }
 
-fn load_active_app(store_path: &PathBuf, entries: &[DesktopEntry]) -> String {
+fn load_active_app(store_path: &PathBuf) -> Option<String> {
     let active = load_active_window(store_path).unwrap_or_default();
-    resolve_app_name(Some(&active.app_id), entries)
+    let app_id = active.app_id.trim();
+    (!app_id.is_empty()).then(|| app_id.to_string())
 }
 
 /// The layer-shell surface: top strip with its exclusive zone reserved.
@@ -163,10 +191,10 @@ pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
     let entries = crate::desktop::read_entries();
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
-    let app_name = State::create_global(load_active_app(&window_store, &entries));
+    let active_app = State::create_global(load_active_app(&window_store));
     let app = AppComponent::new(BarApp {
         clock,
-        app_name,
+        active_app,
         window_store,
         entries,
     });

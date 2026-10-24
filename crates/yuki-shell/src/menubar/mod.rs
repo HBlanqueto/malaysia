@@ -4,10 +4,9 @@
 //! It is split into modules that each own a slice of the bar:
 //!
 //! - [`bar::BarApp`] lays out the surface and anchors root popups.
-//! - [`system::system_title`] is the snowflake/system menu on the far left.
-//! - [`appmenu::app_menu_title`] shows the active app's name (or «Yuki»).
-//! - [`status::status_placeholder`] reserves space for future extras.
-//! - [`clock::clock_label`] is the clock on the right.
+//! - [`system`] owns the snowflake/system menu on the far left.
+//! - [`appmenu`] owns the desktop menus and the active app's name.
+//! - [`clock::clock_label`] is the clock on the right, pushed by the layout.
 //!
 //! Drawing is CelestialKit on Freya (ADR 0034).
 
@@ -15,7 +14,6 @@ pub mod appmenu;
 pub mod bar;
 pub mod clock;
 pub mod menu;
-pub mod status;
 pub mod system;
 
 pub use bar::run;
