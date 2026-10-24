@@ -30,7 +30,7 @@ use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_cons
 use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
 use smithay::wayland::shell::wlr_layer::LayerSurface;
-use xkbcommon::xkb::{self, keysyms};
+use xkbcommon::xkb::{self, Keycode, keysyms};
 use yuki_design::TITLEBAR;
 use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
@@ -44,19 +44,65 @@ const TEST_POINTER_STEP: Duration = Duration::from_millis(100);
 /// How long a scripted click holds the button so a popup grab can use its
 /// serial before the release.
 const TEST_CLICK_HOLD: Duration = Duration::from_millis(150);
+/// How long a scripted key stays pressed before the matching release.
+const TEST_KEY_HOLD: Duration = Duration::from_millis(80);
 
 /// A titlebar press remembered for double-click detection.
 pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 
-/// A scripted pointer sequence from `YUKI_TEST_INPUT`.
+/// A scripted input sequence from `YUKI_TEST_INPUT`.
 ///
-/// The actions go through the same motion and button path as a host mouse;
+/// The actions go through the same paths as a host pointer and keyboard;
 /// they do not call a client directly. `move:x,y` moves, `click:x,y` presses
 /// and releases after [`TEST_CLICK_HOLD`] (so an xdg popup can grab with the
-/// press serial), and `wait:ms` pauses. Actions are separated by `;`.
+/// press serial), `key:<name>` presses and releases a named key after
+/// [`TEST_KEY_HOLD`], and `wait:ms` pauses. Actions are separated by `;`.
 #[derive(Debug, Default)]
 pub(crate) struct TestPointer {
     actions: VecDeque<TestPointerAction>,
+}
+
+/// A scripted key injected through the real keyboard path.
+#[derive(Debug, Clone, Copy)]
+enum TestKey {
+    Up,
+    Down,
+    Left,
+    Right,
+    Return,
+    Escape,
+    Home,
+    End,
+}
+
+impl TestKey {
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Up" => Some(Self::Up),
+            "Down" => Some(Self::Down),
+            "Left" => Some(Self::Left),
+            "Right" => Some(Self::Right),
+            "Return" => Some(Self::Return),
+            "Escape" => Some(Self::Escape),
+            "Home" => Some(Self::Home),
+            "End" => Some(Self::End),
+            _ => None,
+        }
+    }
+
+    /// Linux input event code for this key.
+    fn code(self) -> Keycode {
+        Keycode::new(match self {
+            Self::Up => 103,
+            Self::Down => 108,
+            Self::Left => 105,
+            Self::Right => 106,
+            Self::Return => 28,
+            Self::Escape => 1,
+            Self::Home => 102,
+            Self::End => 107,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -65,6 +111,8 @@ enum TestPointerAction {
     Press(Point<f64, Logical>),
     Release,
     Wait(Duration),
+    KeyDown(TestKey),
+    KeyUp(TestKey),
 }
 
 impl TestPointer {
@@ -97,6 +145,12 @@ impl TestPointer {
                 && let Ok(millis) = rest.trim().parse::<u64>()
             {
                 actions.push_back(TestPointerAction::Wait(Duration::from_millis(millis)));
+            } else if let Some(rest) = part.strip_prefix("key:")
+                && let Some(key) = TestKey::from_name(rest.trim())
+            {
+                actions.push_back(TestPointerAction::KeyDown(key));
+                actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
+                actions.push_back(TestPointerAction::KeyUp(key));
             }
         }
         (!actions.is_empty()).then_some(Self { actions })
@@ -316,133 +370,7 @@ impl State {
         self.note_idle_activity();
         match event {
             InputEvent::Keyboard { event, .. } => {
-                let serial = SERIAL_COUNTER.next_serial();
-                let time = event.time();
-                let pressed = event.state() == KeyState::Pressed;
-                if pressed {
-                    self.note_activation_serial(serial);
-                }
-                if let Some(keyboard) = self.seat.get_keyboard() {
-                    let forwarded = keyboard
-                        .input::<(), _>(
-                        self,
-                        event.key_code(),
-                        event.state(),
-                        serial,
-                        time,
-                        |state, mods, keysym| {
-                            // While picking a screenshot region or window, the
-                            // keyboard belongs to the screenshot: Esc cancels and
-                            // Space switches from region to window pick.
-                            if state.screenshot_mode().is_some() {
-                                if pressed {
-                                    for sym in keysym.raw_syms() {
-                                        match u32::from(sym) {
-                                            keysyms::KEY_Escape => state.cancel_screenshot(),
-                                            keysyms::KEY_space => {
-                                                state.start_window_screenshot()
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                                return FilterResult::Intercept(());
-                            }
-                            // Compositor shortcuts are consumed here: the
-                            // focused client must not see Ctrl+Alt+F*,
-                            // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
-                            // Backspace is blocked outright; the way out is a
-                            // VT switch and killing Yuki from another TTY.
-                            match compositor_shortcut(
-                                mods.ctrl,
-                                mods.alt,
-                                mods.shift,
-                                mods.logo,
-                                &keysym.raw_syms(),
-                                state.locked,
-                            ) {
-                                CompositorShortcut::None => {}
-                                shortcut => {
-                                    if pressed {
-                                        match shortcut {
-                                            CompositorShortcut::Vt(vt) => {
-                                                state.request_vt_switch(vt);
-                                            }
-                                            CompositorShortcut::Quit => {
-                                                tracing::info!(
-                                                    "emergency exit: Ctrl+Alt+Backspace"
-                                                );
-                                                state.stop();
-                                            }
-                                            CompositorShortcut::Blocked => {
-                                                tracing::info!(
-                                                    "Ctrl+Alt+Backspace ignored: the session is locked"
-                                                );
-                                            }
-                                            CompositorShortcut::Relock => {
-                                                if state.locked
-                                                    && !state.lock_surfaces.is_empty()
-                                                {
-                                                    tracing::info!(
-                                                        "Ctrl+Alt+L ignored: a lock surface is already live"
-                                                    );
-                                                } else if state.relaunch_lock_screen() {
-                                                    tracing::info!(
-                                                        "Ctrl+Alt+L: started the lock screen"
-                                                    );
-                                                }
-                                            }
-                                            CompositorShortcut::Screenshot => {
-                                                tracing::info!(
-                                                    "PrintScreen: screenshotting the focused window"
-                                                );
-                                                state.request_screenshot(
-                                                    ScreenshotRequest::Focused,
-                                                );
-                                            }
-                                            CompositorShortcut::ScreenshotFull => {
-                                                tracing::info!(
-                                                    "Shift+Super+3: screenshotting the output"
-                                                );
-                                                state.request_screenshot(
-                                                    ScreenshotRequest::Output,
-                                                );
-                                            }
-                                            CompositorShortcut::ScreenshotRegion => {
-                                                tracing::info!(
-                                                    "Shift+Super+4: selecting a screenshot region"
-                                                );
-                                                state.start_region_screenshot();
-                                            }
-                                            CompositorShortcut::Launcher => {
-                                                state.toggle_launcher();
-                                            }
-                                            CompositorShortcut::None => {}
-                                        }
-                                    }
-                                    return FilterResult::Intercept(());
-                                }
-                            }
-                            // Esc closes one popup level (the topmost menu).
-                            if pressed
-                                && keysym
-                                    .raw_syms()
-                                    .iter()
-                                    .any(|sym| xkb::keysym_to_utf32(*sym) == keysyms::KEY_Escape)
-                            {
-                                state.dismiss_topmost_popup();
-                            }
-                            FilterResult::Forward
-                        },
-                        )
-                        .is_none();
-                    if pressed
-                        && forwarded
-                        && let Some(focus) = keyboard.current_focus()
-                    {
-                        self.note_client_input_serial(&focus, serial);
-                    }
-                }
+                self.keyboard_key(event.key_code(), event.state(), event.time());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let location = event
@@ -530,6 +458,127 @@ impl State {
                 self.pointer_axis(&event);
             }
             _ => {}
+        }
+    }
+
+    /// Routes one key event through the seat's keyboard, handling compositor
+    /// shortcuts, Esc dismissal and client forwarding exactly like a real
+    /// backend keyboard event.
+    fn keyboard_key(&mut self, key_code: Keycode, key_state: KeyState, time: InputTime) {
+        let serial = SERIAL_COUNTER.next_serial();
+        let pressed = key_state == KeyState::Pressed;
+        if pressed {
+            self.note_activation_serial(serial);
+        }
+        let Some(keyboard) = self.seat.get_keyboard() else {
+            return;
+        };
+        let forwarded = keyboard
+            .input::<(), _>(
+                self,
+                key_code,
+                key_state,
+                serial,
+                time,
+                |state, mods, keysym| {
+                    // While picking a screenshot region or window, the
+                    // keyboard belongs to the screenshot: Esc cancels and
+                    // Space switches from region to window pick.
+                    if state.screenshot_mode().is_some() {
+                        if pressed {
+                            for sym in keysym.raw_syms() {
+                                match u32::from(sym) {
+                                    keysyms::KEY_Escape => state.cancel_screenshot(),
+                                    keysyms::KEY_space => state.start_window_screenshot(),
+                                    _ => {}
+                                }
+                            }
+                        }
+                        return FilterResult::Intercept(());
+                    }
+                    // Compositor shortcuts are consumed here: the
+                    // focused client must not see Ctrl+Alt+F*,
+                    // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
+                    // Backspace is blocked outright; the way out is a
+                    // VT switch and killing Yuki from another TTY.
+                    match compositor_shortcut(
+                        mods.ctrl,
+                        mods.alt,
+                        mods.shift,
+                        mods.logo,
+                        &keysym.raw_syms(),
+                        state.locked,
+                    ) {
+                        CompositorShortcut::None => {}
+                        shortcut => {
+                            if pressed {
+                                match shortcut {
+                                    CompositorShortcut::Vt(vt) => {
+                                        state.request_vt_switch(vt);
+                                    }
+                                    CompositorShortcut::Quit => {
+                                        tracing::info!("emergency exit: Ctrl+Alt+Backspace");
+                                        state.stop();
+                                    }
+                                    CompositorShortcut::Blocked => {
+                                        tracing::info!(
+                                            "Ctrl+Alt+Backspace ignored: the session is locked"
+                                        );
+                                    }
+                                    CompositorShortcut::Relock => {
+                                        if state.locked && !state.lock_surfaces.is_empty() {
+                                            tracing::info!(
+                                                "Ctrl+Alt+L ignored: a lock surface is already live"
+                                            );
+                                        } else if state.relaunch_lock_screen() {
+                                            tracing::info!("Ctrl+Alt+L: started the lock screen");
+                                        }
+                                    }
+                                    CompositorShortcut::Screenshot => {
+                                        tracing::info!(
+                                            "PrintScreen: screenshotting the focused window"
+                                        );
+                                        state.request_screenshot(ScreenshotRequest::Focused);
+                                    }
+                                    CompositorShortcut::ScreenshotFull => {
+                                        tracing::info!(
+                                            "Shift+Super+3: screenshotting the output"
+                                        );
+                                        state.request_screenshot(ScreenshotRequest::Output);
+                                    }
+                                    CompositorShortcut::ScreenshotRegion => {
+                                        tracing::info!(
+                                            "Shift+Super+4: selecting a screenshot region"
+                                        );
+                                        state.start_region_screenshot();
+                                    }
+                                    CompositorShortcut::Launcher => {
+                                        state.toggle_launcher();
+                                    }
+                                    CompositorShortcut::None => {}
+                                }
+                            }
+                            return FilterResult::Intercept(());
+                        }
+                    }
+                    // Esc closes one popup level (the topmost menu).
+                    if pressed
+                        && keysym
+                            .raw_syms()
+                            .iter()
+                            .any(|sym| xkb::keysym_to_utf32(*sym) == keysyms::KEY_Escape)
+                    {
+                        state.dismiss_topmost_popup();
+                    }
+                    FilterResult::Forward
+                },
+            )
+            .is_none();
+        if pressed
+            && forwarded
+            && let Some(focus) = keyboard.current_focus()
+        {
+            self.note_client_input_serial(&focus, serial);
         }
     }
 
@@ -1210,7 +1259,7 @@ impl State {
     /// the real input path.
     pub(crate) fn test_pointer_step(&mut self) -> Option<Duration> {
         let action = self.test_pointer.as_mut()?.actions.pop_front()?;
-        tracing::info!(?action, "test pointer action");
+        tracing::info!(?action, "test input action");
         let delay = match &action {
             TestPointerAction::Wait(delay) => *delay,
             _ => TEST_POINTER_STEP,
@@ -1226,6 +1275,12 @@ impl State {
             }
             TestPointerAction::Release => {
                 self.test_pointer_release(time);
+            }
+            TestPointerAction::KeyDown(key) => {
+                self.keyboard_key(key.code(), KeyState::Pressed, time);
+            }
+            TestPointerAction::KeyUp(key) => {
+                self.keyboard_key(key.code(), KeyState::Released, time);
             }
             TestPointerAction::Wait(_) => {}
         }

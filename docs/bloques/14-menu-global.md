@@ -81,11 +81,14 @@ el compositor inyecta las acciones por el mismo camino que un ratón real:
 `pointer_motion` actualiza el foco y `pointer_press`/`pointer.button` envían
 el botón. No llama al cliente directamente.
 
-La sintaxis es una lista separada por `;` con coordenadas lógicas del output:
+La sintaxis es una lista separada por `;` con acciones de puntero y teclado:
 
-- `move:x,y` mueve el puntero a `(x, y)`.
+- `move:x,y` mueve el puntero a `(x, y)` en coordenadas lógicas del output.
 - `click:x,y` mueve, pulsa, espera 150 ms y suelta. La espera deja que el
   cliente pida `get_popup` y `grab` con el serial todavía pulsado.
+- `key:<nombre>` pulsa y suelta una tecla por el camino real del teclado,
+  con el keycode de Linux y el estado `pressed`/`released`. Nombres soportados:
+  `Up`, `Down`, `Left`, `Right`, `Return`, `Escape`, `Home`, `End`.
 - `wait:ms` pausa la secuencia.
 
 Mientras hay un script, el compositor descarta los eventos del ratón del host
