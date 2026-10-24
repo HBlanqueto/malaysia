@@ -853,4 +853,27 @@ mod tests {
         assert_eq!(scene.popup_parent(popup), None);
         assert_eq!(scene.popup_under(point(80.0, 80.0)), None);
     }
+
+    #[test]
+    fn render_and_hit_test_visit_windows_in_the_same_stacking_order() {
+        let mut scene = Scene::new();
+        let bottom = WindowId::new(1);
+        let middle = WindowId::new(2);
+        let top = WindowId::new(3);
+        scene.insert(bottom, rect(0.0, 0.0, 100.0, 100.0));
+        scene.insert(middle, rect(0.0, 0.0, 100.0, 100.0));
+        scene.insert(top, rect(0.0, 0.0, 100.0, 100.0));
+
+        // `iter` produces back-to-front order; the renderer reverses it to
+        // draw front-to-back. `topmost_at` also walks the same vector in
+        // reverse, so the same window is considered on top by both paths.
+        let order: Vec<WindowId> = scene.iter().map(|(id, _)| id).collect();
+        assert_eq!(order, vec![bottom, middle, top]);
+        assert_eq!(scene.topmost_at(point(50.0, 50.0)), Some(top));
+
+        scene.remove(top);
+        let order: Vec<WindowId> = scene.iter().map(|(id, _)| id).collect();
+        assert_eq!(order, vec![bottom, middle]);
+        assert_eq!(scene.topmost_at(point(50.0, 50.0)), Some(middle));
+    }
 }
