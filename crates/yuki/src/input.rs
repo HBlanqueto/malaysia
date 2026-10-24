@@ -596,21 +596,24 @@ impl State {
             tracing::info!(?location, "press ignored: the session is locked");
             return;
         }
-        // A press on an open popup targets the popup, not the window behind it.
-        if self.windows.popup_under(location).is_some() {
-            tracing::info!(?location, "press landed on a popup");
-            return;
-        }
-        // A press outside every open popup closes them (Bloque 5).
-        if self.windows.topmost_popup().is_some() {
+        // Top/Overlay layers are rendered above popups, so a press on the
+        // menubar (or any other front layer) must dismiss open popups first
+        // and then reach the layer itself.
+        let layer_under = self.layers.surface_under(location);
+        if layer_under.is_some() && self.windows.topmost_popup().is_some() {
             tracing::info!(?location, "press outside the popups dismissed them");
             self.dismiss_all_popups();
+        }
+        // A press on an open popup targets the popup, not the window behind it.
+        if layer_under.is_none() && self.popup_surface_under(location).is_some() {
+            tracing::info!(?location, "press landed on a popup");
+            return;
         }
 
         // Top/Overlay layers (menubar, dock, OSD) win over the exterior band.
         // The layer surface receives the press through the pointer focus set
         // in `pointer_motion`; there is no window press to process.
-        if let Some((surface, _)) = self.layers.surface_under(location) {
+        if let Some((surface, _)) = layer_under {
             tracing::info!(?location, "press landed on a layer surface");
             self.clear_chrome_pointer();
             let focused_window = self
@@ -1656,9 +1659,13 @@ impl State {
         let under = if blocked {
             None
         } else {
-            popup_under
+            // Top/Overlay layer surfaces are rendered above popups (see
+            // `render_output`), so they must take pointer focus first. This
+            // lets a click on the menubar dismiss an open menu and reach the
+            // bar itself.
+            layer_under
+                .or_else(|| popup_under)
                 .or_else(|| self.windows.surface_under(location))
-                .or(layer_under)
         };
 
         let serial = SERIAL_COUNTER.next_serial();

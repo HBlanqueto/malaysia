@@ -127,20 +127,24 @@ impl App for Demo {
             });
         }
 
-        let yuki_root = root_id.clone();
-        let ir_root = root_id.clone();
-        let editar_root = root_id.clone();
+        let open_label = use_hook(|| Rc::new(Cell::new(None::<&'static str>)));
         let left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start)
-            .child(menu_label("Yuki", move || {
-                open_menu(&yuki_root, yuki_menu(palette), palette);
+            .child(menu_label("Yuki", {
+                let root_id = root_id.clone();
+                let open_label = open_label.clone();
+                move || toggle_menu(&root_id, open_label.clone(), "Yuki", yuki_menu(palette), palette, 12)
             }))
-            .child(menu_label("Ir", move || {
-                open_direct(&ir_root, go_menu(), palette, 56);
+            .child(menu_label("Ir", {
+                let root_id = root_id.clone();
+                let open_label = open_label.clone();
+                move || toggle_menu(&root_id, open_label.clone(), "Ir", go_menu(), palette, 56)
             }))
-            .child(menu_label("Editar", move || {
-                open_direct(&editar_root, edit_menu(), palette, 82);
+            .child(menu_label("Editar", {
+                let root_id = root_id.clone();
+                let open_label = open_label.clone();
+                move || toggle_menu(&root_id, open_label.clone(), "Editar", edit_menu(), palette, 82)
             }));
         let mut bar = rect()
             .width(Size::fill())
@@ -167,8 +171,10 @@ fn open_menu(
     root_id: &Arc<Mutex<Option<PopupId>>>,
     items: Vec<MenuItem>,
     palette: yuki_design::MenuPalette,
+    anchor_x: i32,
+    on_dismissed: Option<Rc<dyn Fn()>>,
 ) {
-    let id = open_root(root_id, items, palette, None);
+    let id = open_root(root_id, items, palette, anchor_x, on_dismissed);
     root_id.lock().unwrap().replace(id);
 }
 
@@ -176,6 +182,7 @@ fn open_root(
     root_id: &Arc<Mutex<Option<PopupId>>>,
     items: Vec<MenuItem>,
     palette: yuki_design::MenuPalette,
+    anchor_x: i32,
     on_dismissed: Option<Rc<dyn Fn()>>,
 ) -> PopupId {
     let size = MenuView::preferred_size(&items, palette);
@@ -193,7 +200,7 @@ fn open_root(
     );
     Popups::get().open(
         PopupSpec {
-            anchor_rect: (12, BAR_HEIGHT as i32 - 4, 1, 1),
+            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
             anchor: PopupAnchor::BottomLeft,
             gravity: PopupGravity::BottomLeft,
             offset: (0, 0),
@@ -254,45 +261,40 @@ fn open_root_for_selftest(
     )
 }
 
-/// Opens a root menu from a clicked bar title.
-fn open_direct(
+/// Closes the currently open root popup, if any.
+fn close_root(root_id: &Arc<Mutex<Option<PopupId>>>) {
+    if let Some(id) = root_id.lock().unwrap().take() {
+        Popups::get().close(id);
+    }
+}
+
+/// Toggles a root menu: clicking the same title again closes it, and opening
+/// a different one first closes any existing root tree so only one survives.
+fn toggle_menu(
     root_id: &Arc<Mutex<Option<PopupId>>>,
+    open_label: Rc<Cell<Option<&'static str>>>,
+    label: &'static str,
     items: Vec<MenuItem>,
     palette: yuki_design::MenuPalette,
     anchor_x: i32,
 ) {
-    let size = MenuView::preferred_size(&items, palette);
-    let cell = root_id.clone();
-    let on_dismiss_all = move || {
-        if let Some(id) = cell.lock().unwrap().take() {
-            Popups::get().close(id);
-        }
-    };
-    let view = MenuView::new(
+    if open_label.get() == Some(label) {
+        close_root(root_id);
+        open_label.set(None);
+        return;
+    }
+    close_root(root_id);
+    let open_label_for_dismiss = open_label.clone();
+    open_menu(
+        root_id,
         items,
-        |id| eprintln!("menu example: activated {id}"),
-        on_dismiss_all,
         palette,
+        anchor_x,
+        Some(Rc::new(move || {
+            open_label_for_dismiss.set(None);
+        })),
     );
-    let id = Popups::get().open(
-        PopupSpec {
-            anchor_rect: (anchor_x, BAR_HEIGHT as i32 - 4, 1, 1),
-            anchor: PopupAnchor::BottomLeft,
-            gravity: PopupGravity::BottomLeft,
-            offset: (0, 0),
-            size: (size.0 as u32, size.1 as u32),
-            constraint_adjustment: PopupConstraintAdjustment {
-                flip_x: true,
-                flip_y: true,
-                slide_x: true,
-                slide_y: true,
-            },
-            grab: true,
-            on_dismissed: None,
-        },
-        AppComponent::new(view),
-    );
-    root_id.lock().unwrap().replace(id);
+    open_label.set(Some(label));
 }
 
 /// Opens the menu named by `MENU_POPUP_SHOW`, without grab or real input.
