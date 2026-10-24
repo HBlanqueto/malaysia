@@ -73,9 +73,18 @@ impl Window<'_> {
         self.data.hidden
     }
 
-    /// Whether the window is visible: mapped, not hidden and not minimized.
+    /// Whether the surface currently has a buffer attached.
+    pub fn has_buffer(&self) -> bool {
+        surface_has_buffer(self.surface())
+    }
+
+    /// Whether the window is visible: mapped, not hidden, not minimized and
+    /// has a current buffer.
     pub fn is_visible(&self, minimized: &HashSet<WindowId>) -> bool {
-        self.is_mapped() && !self.is_hidden() && !minimized.contains(&self.id())
+        self.is_mapped()
+            && !self.is_hidden()
+            && !minimized.contains(&self.id())
+            && self.has_buffer()
     }
 
     /// The window's app id, as the client last set it.

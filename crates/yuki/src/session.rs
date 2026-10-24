@@ -1720,8 +1720,10 @@ mod tests {
 
     // Client side for the dmabuf import-queue test: sctk, like the shell.
     use sctk::output::{OutputHandler, OutputState};
-    use sctk::reexports::client::protocol::{wl_buffer::WlBuffer, wl_output, wl_surface};
-    use sctk::reexports::client::{Connection, QueueHandle};
+    use sctk::reexports::client::protocol::{
+        wl_buffer, wl_buffer::WlBuffer, wl_output, wl_shm, wl_shm_pool, wl_surface,
+    };
+    use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
     use sctk::reexports::protocols::wp::linux_dmabuf::zv1::client::{
         zwp_linux_buffer_params_v1, zwp_linux_dmabuf_feedback_v1,
     };
@@ -2075,6 +2077,42 @@ mod tests {
 
     sctk::delegate_output!(TestClient);
 
+    impl Dispatch<wl_shm::WlShm, ()> for TestClient {
+        fn event(
+            _state: &mut TestClient,
+            _: &wl_shm::WlShm,
+            _: wl_shm::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+        ) {
+        }
+    }
+
+    impl Dispatch<wl_shm_pool::WlShmPool, ()> for TestClient {
+        fn event(
+            _state: &mut TestClient,
+            _: &wl_shm_pool::WlShmPool,
+            _: wl_shm_pool::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+        ) {
+        }
+    }
+
+    impl Dispatch<wl_buffer::WlBuffer, ()> for TestClient {
+        fn event(
+            _state: &mut TestClient,
+            _: &wl_buffer::WlBuffer,
+            _: wl_buffer::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<TestClient>,
+        ) {
+        }
+    }
+
     impl sctk::compositor::CompositorHandler for TestClient {
         fn scale_factor_changed(
             &mut self,
@@ -2354,6 +2392,165 @@ mod tests {
         assert!(
             state.syncobj_state.is_none(),
             "without a device there must be no wp_linux_drm_syncobj_manager_v1 global"
+        );
+    }
+
+    /// A surface that has never attached a buffer has no current buffer; after
+    /// attaching one, the compositor sees it. This is the building block of the
+    /// visibility rule that keeps uncommitted windows out of render, hit-test
+    /// and focus.
+    #[test]
+    fn a_surface_without_a_current_buffer_is_not_visible() {
+        use std::os::unix::io::AsFd;
+        use std::sync::mpsc;
+
+        use sctk::reexports::client::Connection;
+        use sctk::reexports::client::globals::registry_queue_init;
+        use smithay::backend::allocator::{Format, Fourcc, Modifier};
+        use smithay::reexports::wayland_server::Display;
+        use smithay::reexports::wayland_server::Resource;
+        use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+
+        let event_loop =
+            smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
+                .expect("the test needs an event loop");
+        let mut display = Display::<State>::new().expect("the test needs a display");
+        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+        let (disconnect_ping, _disconnect_source) =
+            smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
+
+        let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
+        let mut state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+            None,
+            Box::new(event_loop.handle()),
+            Box::new(()),
+        )
+        .expect("the state should build");
+
+        let (client_side, server_side) =
+            std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (sent_tx, sent_rx) = mpsc::channel::<bool>();
+
+        std::thread::spawn(move || {
+            let conn = Connection::from_socket(client_side).expect("the client should connect");
+            let (globals, mut event_queue) =
+                registry_queue_init(&conn).expect("the registry should init");
+            let qh = event_queue.handle();
+            let mut client = TestClient::new(&globals, &qh);
+            event_queue
+                .roundtrip(&mut client)
+                .expect("the bind should roundtrip");
+
+            let surface = client
+                .compositor
+                .as_ref()
+                .expect("compositor bound")
+                .create_surface(&qh);
+            surface.commit();
+            event_queue
+                .roundtrip(&mut client)
+                .expect("the no-buffer commit should reach the compositor");
+            sent_tx
+                .send(false)
+                .expect("the main thread should read the first signal");
+
+            let shm = globals
+                .bind::<wl_shm::WlShm, _, _>(&qh, 1..=1, ())
+                .expect("the compositor advertises wl_shm");
+            let path = std::env::temp_dir().join(format!("yuki-shm-test-{}", std::process::id()));
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&path)
+                .expect("a temp file for the shm pool");
+            file.set_len(64 * 64 * 4)
+                .expect("the pool fits a 64x64 buffer");
+            let pool = shm.create_pool(file.as_fd(), 64 * 64 * 4, &qh, ());
+            let buffer = pool.create_buffer(0, 64, 64, 64 * 4, wl_shm::Format::Argb8888, &qh, ());
+            surface.attach(Some(&buffer), 0, 0);
+            surface.commit();
+            std::fs::remove_file(&path).ok();
+            event_queue
+                .roundtrip(&mut client)
+                .expect("the buffered commit should reach the compositor");
+            sent_tx
+                .send(true)
+                .expect("the main thread should read the second signal");
+        });
+
+        let mut handle = display.handle();
+        let client = handle
+            .insert_client(
+                server_side,
+                std::sync::Arc::new(crate::state::ClientState::new(
+                    disconnect_queue.clone(),
+                    disconnect_ping.clone(),
+                )),
+            )
+            .expect("the server should accept the client");
+
+        fn surface_of_client(
+            handle: &smithay::reexports::wayland_server::DisplayHandle,
+            client: &smithay::reexports::wayland_server::Client,
+        ) -> Option<WlSurface> {
+            let backend = handle.backend_handle();
+            let mut ids = Vec::new();
+            let _ = backend.with_all_objects_for(client.id(), |object_id| ids.push(object_id));
+            let surface_id = ids.into_iter().find(|id| {
+                handle
+                    .object_info(id.clone())
+                    .map(|info| info.interface.name == "wl_surface")
+                    .unwrap_or(false)
+            })?;
+            WlSurface::from_id(handle, surface_id).ok()
+        }
+
+        let mut spins = 0;
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if matches!(sent_rx.try_recv(), Ok(false)) {
+                break;
+            }
+            spins += 1;
+            assert!(
+                spins < 100_000,
+                "the client never committed without a buffer"
+            );
+        }
+        let surface = surface_of_client(&handle, &client)
+            .expect("the client should have created a wl_surface");
+        assert!(
+            !crate::window::surface_has_buffer(&surface),
+            "a surface that never attached a buffer has no current buffer"
+        );
+
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if matches!(sent_rx.try_recv(), Ok(true)) {
+                break;
+            }
+            spins += 1;
+            assert!(spins < 100_000, "the client never committed with a buffer");
+        }
+        assert!(
+            crate::window::surface_has_buffer(&surface),
+            "a surface with an attached buffer has a current buffer"
         );
     }
 }
