@@ -79,7 +79,8 @@ reserva zona exclusiva en este modo.
 Sesión anidada (`./dev.sh demo`: wallpaper, menubar real, dock y ventanas) con
 el ejemplo en cada caso y captura por `SIGUSR1`. Claro y oscuro se obtienen
 escribiendo `color_scheme = "light"|"dark"` en `appearance.domain` y apuntando
-`YUKI_CONFIG_DIR` a ese directorio para el demo y el ejemplo.
+`YUKI_CONFIG_DIR` a ese directorio para el demo y el ejemplo. El texto de los
+menús sale en Geist; los glifos ⌃⌥⇧❖, en Inter (el respaldo fijo de la pila).
 
 ![Menú Ir en claro](img/14a/ir-claro.png)
 
@@ -103,24 +104,30 @@ empieza a la altura de la fila que lo abre.
 ![Menú en el borde en claro](img/14a/borde-claro.png)
 
 `borde-claro.png`: «Editar» abierto desde el borde derecho; el compositor
-voltea el raíz y el primer submenú hacia la izquierda. El nieto, que sí cabe,
-abre a la derecha.
+voltea el raíz y sus descendientes hacia la izquierda. El árbol de tres niveles
+queda entero a la izquierda, pegado al raíz sin solaparse.
 
 ![Detalle del flip del submenú](img/14a/borde-flip-claro.png)
 
 `borde-flip-claro.png`: detalle del primer submenú «Nombre», volteado a la
-izquierda por el compositor; su fila coincide con «Ordenar por» y el ejemplo no
-tiene ninguna rama especial para abrirlo a la izquierda.
+izquierda por el compositor; su borde derecho coincide con el izquierdo del
+raíz, su fila coincide con «Ordenar por» y el ejemplo no tiene ninguna rama
+especial para abrirlo a la izquierda.
 
 ![Menú en el borde en oscuro](img/14a/borde-oscuro.png)
 
-`borde-oscuro.png`: la misma disposición de borde en oscuro.
+`borde-oscuro.png`: la misma disposición de borde en oscuro, con el borde
+doble visible en los paneles.
+
+![Detalle del borde doble](img/14a/borde-doble-oscuro.png)
+
+`borde-doble-oscuro.png`: zoom ×4 del borde superior de un panel oscuro; se ve
+la línea exterior negra (`window-outer`) y la interior clara (`window-inner`).
 
 Nota de honestidad: la barra del ejemplo comparte la franja superior con el
 menubar real del demo y queda debajo de él, así que el título visible sobre el
-menú es el de la ventana activa («Yuki CSD»/«Yuki SSD»), no las etiquetas
-«Ir»/«Editar»/«Borde» del ejemplo. El menú sí está anclado en la posición de
-esas etiquetas.
+menú es el de la ventana activa, no las etiquetas «Ir»/«Editar»/«Borde» del
+ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 
 ## Divergencias
 
