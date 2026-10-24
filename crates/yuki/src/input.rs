@@ -646,8 +646,10 @@ impl State {
 
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
-        let edge = self.windows.edge_under(location, side, corner);
-        let under = self.windows.window_under(location);
+        let edge = self
+            .windows
+            .edge_under(location, side, corner, &self.minimized);
+        let under = self.windows.window_under(location, &self.minimized);
 
         // The exterior band can reach outside every outer rectangle, so it is
         // handled before `window_under`. If the band belongs to a window above
@@ -723,7 +725,11 @@ impl State {
             return;
         }
 
-        if self.windows.surface_under(location).is_some() {
+        if self
+            .windows
+            .surface_under(location, &self.minimized)
+            .is_some()
+        {
             tracing::info!(?location, window = ?id, "press landed on the client surface");
             return;
         }
@@ -812,6 +818,13 @@ impl State {
             tracing::info!(
                 window = id.get(),
                 "window focus ignored: an exclusive layer owns it"
+            );
+            return;
+        }
+        if !self.windows.is_visible(id, &self.minimized) {
+            tracing::info!(
+                window = id.get(),
+                "window focus ignored: the window is not visible"
             );
             return;
         }
@@ -1222,7 +1235,7 @@ impl State {
             "window removed"
         );
         if focused.as_ref() == Some(surface) {
-            match self.windows.topmost() {
+            match self.windows.topmost_visible(&self.minimized) {
                 Some(next) => self.focus_window(next),
                 None => self.clear_keyboard_focus(),
             }
@@ -1676,9 +1689,10 @@ impl State {
         let edge = if overlay_under {
             None
         } else {
-            self.windows.edge_under(location, side, corner)
+            self.windows
+                .edge_under(location, side, corner, &self.minimized)
         };
-        let under_window = self.windows.window_under(location);
+        let under_window = self.windows.window_under(location, &self.minimized);
         if self.update_chrome_pointer(location, under_window, overlay_under) {
             self.request_redraw();
         }
@@ -1692,7 +1706,7 @@ impl State {
             // bar itself.
             layer_under
                 .or(popup_under)
-                .or_else(|| self.windows.surface_under(location))
+                .or_else(|| self.windows.surface_under(location, &self.minimized))
         };
 
         let serial = SERIAL_COUNTER.next_serial();
@@ -1835,7 +1849,8 @@ impl State {
         let edge = if overlay_under {
             None
         } else {
-            self.windows.edge_under(location, side, corner)
+            self.windows
+                .edge_under(location, side, corner, &self.minimized)
         };
         match edge {
             Some((_, edge)) => {

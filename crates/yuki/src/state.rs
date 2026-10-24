@@ -669,7 +669,7 @@ impl State {
         match self.screenshot_mode.as_mut() {
             Some(ScreenshotMode::Region { current, .. }) => *current = location,
             Some(ScreenshotMode::Window { under }) => {
-                *under = self.windows.window_under(location);
+                *under = self.windows.window_under(location, &self.minimized);
             }
             None => return false,
         }

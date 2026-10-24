@@ -239,9 +239,9 @@ impl State {
             if focused == Some(id) {
                 let next = self
                     .windows
-                    .iter()
+                    .iter_visible(&self.minimized)
                     .rev()
-                    .find(|window| window.id() != id && !self.minimized.contains(&window.id()))
+                    .find(|window| window.id() != id)
                     .map(|window| window.id());
                 match next {
                     Some(next) => self.focus_window(next),

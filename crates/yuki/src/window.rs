@@ -16,6 +16,8 @@
 //!   can come at any time. A configure that froze the insets at map time would
 //!   be wrong from then on (ADR 0014).
 
+use std::collections::HashSet;
+
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -69,6 +71,11 @@ impl Window<'_> {
     /// Whether the window is hidden from the scene (minimize or similar).
     pub fn is_hidden(&self) -> bool {
         self.data.hidden
+    }
+
+    /// Whether the window is visible: mapped, not hidden and not minimized.
+    pub fn is_visible(&self, minimized: &HashSet<WindowId>) -> bool {
+        self.is_mapped() && !self.is_hidden() && !minimized.contains(&self.id())
     }
 
     /// The window's app id, as the client last set it.
@@ -442,12 +449,45 @@ impl Windows {
         Some(info)
     }
 
-    /// The scene id of the topmost window under a logical point.
-    pub fn window_under(&self, point: Point<f64, Logical>) -> Option<WindowId> {
-        self.scene.topmost_at(scene_point(point))
+    /// Whether the window is currently visible.
+    ///
+    /// A window is visible when it is mapped, not hidden and not in the
+    /// minimized set kept by the compositor.
+    pub fn is_visible(&self, id: WindowId, minimized: &HashSet<WindowId>) -> bool {
+        self.index(id).is_some_and(|index| {
+            let data = &self.windows[index];
+            data.mapped && !data.hidden && !minimized.contains(&id)
+        })
     }
 
-    /// The topmost window under `point` and its resize edge zone, if any.
+    /// The tracked windows that are currently visible, back to front.
+    pub fn iter_visible<'a>(
+        &'a self,
+        minimized: &'a HashSet<WindowId>,
+    ) -> impl DoubleEndedIterator<Item = Window<'a>> + 'a {
+        self.iter()
+            .filter(move |window| window.is_visible(minimized))
+    }
+
+    /// The topmost visible window, if any.
+    pub fn topmost_visible(&self, minimized: &HashSet<WindowId>) -> Option<WindowId> {
+        self.iter_visible(minimized)
+            .next_back()
+            .map(|window| window.id())
+    }
+
+    /// The scene id of the topmost visible window under a logical point.
+    pub fn window_under(
+        &self,
+        point: Point<f64, Logical>,
+        minimized: &HashSet<WindowId>,
+    ) -> Option<WindowId> {
+        self.scene
+            .topmost_at(scene_point(point))
+            .filter(|id| self.is_visible(*id, minimized))
+    }
+
+    /// The topmost visible window under `point` and its resize edge zone, if any.
     ///
     /// Only server-decorated windows that are not maximized or fullscreen
     /// offer compositor-side resize. Client-decorated windows own their edges
@@ -457,14 +497,16 @@ impl Windows {
         point: Point<f64, Logical>,
         side: f64,
         corner: f64,
+        minimized: &HashSet<WindowId>,
     ) -> Option<(WindowId, Edge)> {
         self.scene.edge_at(scene_point(point), side, corner, |id| {
-            self.index(id).is_some_and(|index| {
-                let data = &self.windows[index];
-                self.decoration_of(id) == Decoration::Server
-                    && !data.maximized
-                    && data.state() == WindowState::Normal
-            })
+            self.is_visible(id, minimized)
+                && self.index(id).is_some_and(|index| {
+                    let data = &self.windows[index];
+                    self.decoration_of(id) == Decoration::Server
+                        && !data.maximized
+                        && data.state() == WindowState::Normal
+                })
         })
     }
 
@@ -476,8 +518,12 @@ impl Windows {
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,
+        minimized: &HashSet<WindowId>,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
-        let id = self.scene.topmost_at(scene_point(point))?;
+        let id = self
+            .scene
+            .topmost_at(scene_point(point))
+            .filter(|id| self.is_visible(*id, minimized))?;
         let index = self.index(id)?;
         let outer = self.scene.outer(id)?;
         let insets = self.windows[index].insets(self.decoration_of(id));

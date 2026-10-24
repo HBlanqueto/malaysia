@@ -879,7 +879,7 @@ pub(crate) fn build_output_elements(
             );
         }
         let focused = state.focused_window();
-        for window in state.windows.iter().rev() {
+        for window in state.windows.iter_visible(&state.minimized).rev() {
             if !window.is_mapped() || window.insets().top <= 0.0 {
                 continue;
             }
