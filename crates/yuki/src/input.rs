@@ -594,6 +594,14 @@ impl State {
             tracing::info!(?location, "press ignored: the session is locked");
             return;
         }
+        // If the pointer never moved over this surface (common for the first
+        // click on a freshly-mapped window), it has no focus yet. Send a motion
+        // event first so the following button reaches the right surface.
+        if let Some(pointer) = self.seat.get_pointer()
+            && pointer.current_focus().is_none()
+        {
+            self.pointer_motion(location, time);
+        }
         // Top/Overlay layers are rendered above popups, so a press on the
         // menubar (or any other front layer) must dismiss open popups first
         // and then reach the layer itself.
