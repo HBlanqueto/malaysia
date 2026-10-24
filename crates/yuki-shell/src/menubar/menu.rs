@@ -188,7 +188,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         Some(glyph) => SvgViewer::new(("menubar-snowflake", Bytes::from_static(glyph)))
             .width(Size::px(16.0))
             .height(Size::px(16.0))
-            .stroke(fg)
+            .color(fg)
             .show_loader(false)
             .into_element(),
         None => {
