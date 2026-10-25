@@ -949,7 +949,10 @@ fn append_window_frame(
     elements: &mut Vec<OutputRenderElement>,
 ) {
     let data = {
-        let Some(window) = state.windows.iter_visible(&state.minimized).find(|w| w.id() == id)
+        let Some(window) = state
+            .windows
+            .iter_visible(&state.minimized)
+            .find(|w| w.id() == id)
         else {
             return;
         };
@@ -1009,8 +1012,8 @@ fn append_window_frame(
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
             zoom_supported: state.windows.zoom_supported(id),
         };
-        if let Some(program) = rounded_program.clone() {
-            if let Some(element) = state.chrome.element(
+        if let Some(program) = rounded_program.clone()
+            && let Some(element) = state.chrome.element(
                 renderer,
                 id,
                 &data.title,
@@ -1023,21 +1026,25 @@ fn append_window_frame(
                 program,
                 frame_rect_physical,
                 radius_physical,
-            ) {
-                content.push(element.into());
-            }
+            )
+        {
+            content.push(element.into());
         }
     }
     let surface_location = physical_point(data.location + data.surface_location, scale);
     let surface_elements = render_elements_from_surface_tree::<
         GlesRenderer,
         WaylandSurfaceRenderElement<GlesRenderer>,
-    >(renderer, &data.surface, surface_location, scale, 1.0, Kind::Unspecified);
+    >(
+        renderer,
+        &data.surface,
+        surface_location,
+        scale,
+        1.0,
+        Kind::Unspecified,
+    );
 
-    if maximized_or_fullscreen || rounded_program.is_none() {
-        content.extend(surface_elements.into_iter().map(|e| e.into()));
-    } else {
-        let program = rounded_program.expect("checked above");
+    if let Some(program) = rounded_program.filter(|_| !maximized_or_fullscreen) {
         for element in surface_elements {
             if let Some(rounded) = crate::effects::RoundedTextureElement::from_surface_element(
                 &element,
@@ -1052,6 +1059,8 @@ fn append_window_frame(
                 content.push(element.into());
             }
         }
+    } else {
+        content.extend(surface_elements.into_iter().map(|e| e.into()));
     }
 
     if !maximized_or_fullscreen {
@@ -1059,17 +1068,11 @@ fn append_window_frame(
         // the content, then the shadow falls behind everything.
         let palette = &state.chrome_theme.palette;
         if let Some(program) = state.border.as_ref() {
-            if let Some(inner) = palette.inner_line {
-                if let Some(element) = border_element(
-                    program,
-                    frame_rect_logical,
-                    radius,
-                    scale,
-                    false,
-                    inner,
-                ) {
-                    frame_elements.push(element.into());
-                }
+            if let Some(inner) = palette.inner_line
+                && let Some(element) =
+                    border_element(program, frame_rect_logical, radius, scale, false, inner)
+            {
+                frame_elements.push(element.into());
             }
             if let Some(element) = border_element(
                 program,

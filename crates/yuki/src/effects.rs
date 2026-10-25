@@ -6,11 +6,11 @@
 //! the window. The clip is done in the fragment stage with the ROUNDED_CLIP
 //! texture shader from `grade-graphics`; subsurfaces share the same clip rect.
 
+use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexProgram, GlesTexture, Uniform};
 use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
-use smithay::backend::renderer::Texture;
 use smithay::utils::{Buffer as BufferCoords, Physical, Rectangle, Scale, Size, Transform};
 
 /// Map a physical frame rectangle into a source texture's coordinate space.
@@ -209,7 +209,7 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as Wayla
 
 #[cfg(test)]
 mod tests {
-    use smithay::utils::{Buffer as BufferCoords, Physical, Point, Rectangle, Size};
+    use smithay::utils::{Point, Rectangle, Size};
 
     use super::{frame_to_texture_geometry, texture_radius};
 
