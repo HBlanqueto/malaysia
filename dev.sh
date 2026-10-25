@@ -33,7 +33,9 @@ Usage: dev.sh <command> [options]
 Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
-    demo                Nested session with the shell and demo windows (Ctrl-C ends it)
+    demo [--dark|--light]
+                        Nested session with the shell and demo windows; the flag
+                        forces that appearance in a temporary config (Ctrl-C ends it)
     example <name>      Run target/debug/examples/<name> against the running demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
@@ -719,12 +721,58 @@ activation() {
 # `YUKI_SCALE` passes through, so `YUKI_SCALE=1.5 ./dev.sh demo` shows the
 # fractional-scale path.
 demo() {
+    _scheme=
+    case "${1:-}" in
+        --dark | --light)
+            _scheme=${1#--}
+            shift
+            ;;
+    esac
     if [ "$#" -ne 0 ]; then
         fail "$EXIT_USAGE" "unexpected argument for demo: $1"
     fi
     if is_running; then
         fail "$EXIT_ALREADY_RUNNING" "yuki is already running (pid $(read_pid))"
     fi
+    if [ -n "$_scheme" ]; then
+        # A throwaway preferences directory: the demo never writes to
+        # ~/.config/yuki. Copy the user's config so the rest of it still
+        # applies, then force color_scheme at the top level of appearance.domain
+        # (TOML keys must precede any table).
+        _demo_config=$(mktemp -d) ||
+            fail "$EXIT_RUN_FAILED" "could not create the demo config directory"
+        if [ -d "$HOME/.config/yuki" ]; then
+            cp -R "$HOME/.config/yuki/." "$_demo_config/" ||
+                fail "$EXIT_RUN_FAILED" "could not copy ~/.config/yuki"
+        fi
+        _appearance="$_demo_config/appearance.domain"
+        if [ -f "$_appearance" ]; then
+            awk -v scheme="$_scheme" '
+                BEGIN { print "color_scheme = \"" scheme "\"" }
+                /^[[:space:]]*\[/ { table = 1 }
+                !table && /^[[:space:]]*color_scheme[[:space:]]*=/ { next }
+                { print }
+            ' "$_appearance" >"$_appearance.tmp" &&
+                mv "$_appearance.tmp" "$_appearance" ||
+                fail "$EXIT_RUN_FAILED" "could not write $_appearance"
+        else
+            printf 'color_scheme = "%s"\n' "$_scheme" >"$_appearance"
+        fi
+        YUKI_CONFIG_DIR="$_demo_config"
+        export YUKI_CONFIG_DIR
+    fi
+    _pids=
+    _demo_cleanup() {
+        trap - EXIT INT TERM
+        for _pid in ${_pids:-}; do
+            kill "$_pid" 2>/dev/null || true
+        done
+        stop
+        if [ -n "${_demo_config:-}" ]; then
+            rm -rf "$_demo_config"
+        fi
+    }
+    trap _demo_cleanup EXIT INT TERM
     if [ -n "${YUKI_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/yuki-shell"
         if [ ! -x "$script_dir/target/debug/yuki" ] || [ ! -x "$_shell_bin" ]; then
@@ -762,7 +810,6 @@ demo() {
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
 
-    _pids=
     # Every component is its own Wayland client; one log per component.
     demo_client() {
         _name=$1
@@ -799,14 +846,6 @@ demo() {
     printf 'demo: close the host window or press Ctrl-C to end\n'
 
     _compositor=$(read_pid)
-    demo_cleanup() {
-        trap - EXIT INT TERM
-        for _pid in $_pids; do
-            kill "$_pid" 2>/dev/null || true
-        done
-        stop
-    }
-    trap demo_cleanup EXIT INT TERM
     wait "$_compositor" 2>/dev/null || true
 }
 

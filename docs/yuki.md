@@ -93,7 +93,16 @@ ADR 0007):
 ```sh
 nix develop
 ./dev.sh run       # arranca el compositor anidado en una ventana de winit
+./dev.sh demo      # sesión anidada con wallpaper, menubar, dock y ventanas
+./dev.sh demo --dark   # ídem, con appearance.color_scheme forzado a oscuro
+./dev.sh demo --light  # ídem, en claro
 ./dev.sh smoke     # compila y ejecuta la prueba de mapeo de toplevels
 ./dev.sh check     # formato, clippy y pruebas
 ./dev.sh --help    # todos los comandos
 ```
+
+`demo --dark|--light` copia `~/.config/yuki` a un directorio temporal, escribe
+allí `color_scheme` y lo borra al salir: nunca toca la configuración real.
+`scripts/demo.sh` hace `git pull --ff-only`, compila y lanza el demo (pasa los
+mismos argumentos) desde la raíz del repo; fuera del dev shell falla con un
+mensaje.
