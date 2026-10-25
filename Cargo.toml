@@ -81,6 +81,7 @@ zbus = "5"
 chrono = "0.4"
 
 # Yuki's own crates.
+grade-graphics = { path = "crates/grade-graphics" } # Shared GLSL shaders (compositor + shell).
 yuki = { path = "crates/yuki" }                 # The compositor library (config, xdg helpers).
 yuki-appearance = { path = "crates/yuki-appearance" } # Appearance rules shared by compositor, shell and portal.
 yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.

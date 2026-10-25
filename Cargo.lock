@@ -4275,6 +4275,7 @@ dependencies = [
  "calloop 0.14.5",
  "chrono",
  "cosmic-text",
+ "grade-graphics",
  "nix",
  "png",
  "serde",

@@ -15,7 +15,10 @@ use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::gles::Uniform;
+use smithay::backend::renderer::gles::{
+    GlesPixelProgram, GlesRenderer, element::PixelShaderElement,
+};
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use unicode_segmentation::UnicodeSegmentation;
 use yuki_appearance::traffic::{self, TrafficInput};
@@ -121,7 +124,6 @@ fn signature(
 /// The titlebar texture cache, one entry per decorated window.
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
-    shadows: HashMap<WindowId, CachedShadow>,
     text: TextEngine,
 }
 
@@ -129,21 +131,6 @@ struct Cached {
     key: Key,
     buffer: MemoryRenderBuffer,
     size: (i32, i32),
-}
-
-struct CachedShadow {
-    key: ShadowKey,
-    buffer: MemoryRenderBuffer,
-    margin: i32,
-    size: (i32, i32),
-}
-
-#[derive(PartialEq, Eq)]
-struct ShadowKey {
-    width: i32,
-    height: i32,
-    focused: bool,
-    scale: u64,
 }
 
 #[derive(PartialEq, Eq)]
@@ -163,7 +150,6 @@ impl ChromeCache {
     pub(crate) fn new() -> Self {
         Self {
             entries: HashMap::new(),
-            shadows: HashMap::new(),
             text: TextEngine::new(),
         }
     }
@@ -171,64 +157,39 @@ impl ChromeCache {
     /// Drops the cached texture of a destroyed window.
     pub(crate) fn remove(&mut self, id: WindowId) {
         self.entries.remove(&id);
-        self.shadows.remove(&id);
     }
 
-    /// The drop shadow behind a window, cached by size, focus and scale.
+    /// The drop shadow behind a window, drawn with the GPU shadow shader.
+    ///
+    /// Returns one element per shadow layer (ambient + contact). If the shader
+    /// did not compile, no shadow is drawn.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn shadow_element(
-        &mut self,
-        renderer: &mut GlesRenderer,
-        id: WindowId,
+        &self,
+        program: &GlesPixelProgram,
+        output_size: Size<i32, Physical>,
         width: i32,
         height: i32,
         focused: bool,
         location: Point<i32, Logical>,
         scale: f64,
-    ) -> Option<OutputRenderElement<GlesRenderer>> {
-        let key = ShadowKey {
-            width,
-            height,
-            focused,
-            scale: scale.to_bits(),
+    ) -> Vec<OutputRenderElement> {
+        let focus = if focused {
+            1.0
+        } else {
+            grade_graphics::params::SHADOW_UNFOCUSED_SCALE
         };
-        let stale = self.shadows.get(&id).is_none_or(|entry| entry.key != key);
-        if stale {
-            let (pixels, w, h, margin) =
-                crate::effects::rasterize_shadow(width, height, scale, focused);
-            let buffer = MemoryRenderBuffer::from_slice(
-                &pixels,
-                Fourcc::Abgr8888,
-                (w, h),
-                1,
-                Transform::Normal,
-                None,
-            );
-            self.shadows.insert(
-                id,
-                CachedShadow {
-                    key,
-                    buffer,
-                    margin,
-                    size: (w, h),
-                },
-            );
+        let window_rect = Rectangle::new(location, Size::from((width, height)));
+        let mut elements = Vec::with_capacity(2);
+        for layer in [yuki_design::SHADOW.ambient, yuki_design::SHADOW.contact] {
+            let Some(element) =
+                shadow_layer_element(program, output_size, window_rect, layer, scale, focus)
+            else {
+                continue;
+            };
+            elements.push(element.into());
         }
-        let entry = self.shadows.get(&id)?;
-        let (w, h) = entry.size;
-        let size = Size::from((w, h));
-        let location = physical_point(location, scale) - Point::from((entry.margin, entry.margin));
-        MemoryRenderBufferRenderElement::from_buffer(
-            renderer,
-            location.to_f64(),
-            &entry.buffer,
-            None,
-            Some(Rectangle::from_size(size.to_f64())),
-            Some(size),
-            Kind::Unspecified,
-        )
-        .ok()
-        .map(OutputRenderElement::from)
+        elements
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -243,7 +204,7 @@ impl ChromeCache {
         location: Point<i32, Logical>,
         scale: f64,
         theme: &ChromeTheme,
-    ) -> Option<OutputRenderElement<GlesRenderer>> {
+    ) -> Option<OutputRenderElement> {
         let key = Key {
             title: title.to_string(),
             focused,
@@ -291,8 +252,70 @@ impl ChromeCache {
             Kind::Unspecified,
         )
         .ok()
-        .map(OutputRenderElement::from)
+        .map(|e| e.into())
     }
+}
+
+/// Builds one [`PixelShaderElement`] for a single shadow layer.
+fn shadow_layer_element(
+    program: &GlesPixelProgram,
+    output_size: Size<i32, Physical>,
+    window_rect: Rectangle<i32, Logical>,
+    layer: yuki_design::ShadowLayer,
+    scale: f64,
+    focus: f32,
+) -> Option<PixelShaderElement> {
+    let margin = f64::from(layer.blur) + f64::from(layer.y_offset.abs());
+    if margin <= 0.0 {
+        return None;
+    }
+    let area = Rectangle::new(
+        Point::from((
+            (f64::from(window_rect.loc.x) - margin).round() as i32,
+            (f64::from(window_rect.loc.y) - margin).round() as i32,
+        )),
+        Size::from((
+            (f64::from(window_rect.size.w) + margin * 2.0).round() as i32,
+            (f64::from(window_rect.size.h) + margin * 2.0).round() as i32,
+        )),
+    );
+    let physical_loc = physical_point(window_rect.loc, scale);
+    let physical_size: Size<i32, Physical> = Size::from((
+        (f64::from(window_rect.size.w) * scale).round() as i32,
+        (f64::from(window_rect.size.h) * scale).round() as i32,
+    ));
+    let color = grade_graphics::params::SHADOW_COLOR;
+    let uniforms = vec![
+        Uniform::new("output_size", [output_size.w as f32, output_size.h as f32]),
+        Uniform::new(
+            "rect",
+            [
+                physical_loc.x as f32,
+                physical_loc.y as f32,
+                physical_size.w as f32,
+                physical_size.h as f32,
+            ],
+        ),
+        Uniform::new(
+            "radius",
+            (f64::from(yuki_design::WINDOW.corner_radius) * scale) as f32,
+        ),
+        Uniform::new("blur", (f64::from(layer.blur) * scale) as f32),
+        Uniform::new(
+            "offset",
+            [0.0f32, (f64::from(layer.y_offset) * scale) as f32],
+        ),
+        Uniform::new("color", [color[0], color[1], color[2], color[3]]),
+    ];
+    let alpha = layer.opacity * focus;
+    Some(PixelShaderElement::new(
+        program.clone(),
+        area,
+        None,
+        alpha,
+        uniforms,
+        Kind::Unspecified,
+    ))
 }
 
 /// The centre of a titlebar button, in logical coordinates.

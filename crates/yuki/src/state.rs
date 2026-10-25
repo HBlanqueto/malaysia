@@ -31,6 +31,7 @@ use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as
 use yuki_scene::scene::{Edge, WindowId};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::drm::DrmDeviceFd;
+use smithay::backend::renderer::gles::{GlesPixelProgram, GlesTexProgram};
 use smithay::input::pointer::{CursorIcon, CursorImageStatus};
 use smithay::input::{Seat, SeatState};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
@@ -309,6 +310,11 @@ pub struct State {
     /// The Neptunia tint and traffic-light colours, rebuilt when
     /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
+    /// Compiled rounded-clip texture shader for CSD windows, if the renderer
+    /// managed to build it.
+    pub(crate) rounded_clip: Option<GlesTexProgram>,
+    /// Compiled shadow pixel shader, if the renderer managed to build it.
+    pub(crate) shadow: Option<GlesPixelProgram>,
     /// The window whose traffic lights the pointer is interacting with.
     pub(crate) chrome_pointer: Option<(WindowId, yuki_appearance::traffic::TrafficPointer)>,
     /// The last primary press on a titlebar, for double click.
@@ -533,6 +539,8 @@ impl State {
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             chrome_theme,
+            rounded_clip: None,
+            shadow: None,
             chrome_pointer: None,
             titlebar_click: None,
             theme_sources: None,

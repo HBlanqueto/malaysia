@@ -24,6 +24,7 @@ zbus.workspace = true
 smithay.workspace = true
 calloop.workspace = true
 nix.workspace = true
+grade-graphics.workspace = true
 yuki-appearance.workspace = true
 yuki-design.workspace = true
 yuki-scene.workspace = true

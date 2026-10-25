@@ -30,7 +30,9 @@ use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRen
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
-use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
+use smithay::backend::renderer::gles::{
+    GlesError, GlesPixelProgram, GlesRenderer, GlesTexProgram, UniformName, UniformType,
+};
 use smithay::backend::renderer::sync::SyncPoint;
 use smithay::backend::renderer::utils::{Buffer, RendererSurfaceStateUserData};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
@@ -402,6 +404,13 @@ pub fn run() -> Result<(), SessionError> {
         session.last_objects = live_objects(&session.display, &session.state);
         session.last_objects.log();
     }
+
+    // Compile the shared shaders once; failures are non-fatal and leave the
+    // optional fields as None.
+    let renderer = session.backend.renderer();
+    session.state.rounded_clip = compile_rounded_clip(renderer);
+    session.state.shadow = compile_shadow(renderer);
+
     session.backend.window().request_redraw();
 
     watch_for_shutdown(&loop_handle, loop_signal)?;
@@ -679,7 +688,7 @@ fn redraw(session: &mut Session) {
 
 /// Draws the screenshot selection: a dimmed outside, a rectangle border, or a
 /// window highlight while picking one.
-fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderElement<GlesRenderer>>) {
+fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderElement>) {
     let Some(mode) = state.screenshot_mode() else {
         return;
     };
@@ -723,7 +732,7 @@ fn append_dim_outside(
     rect: Rectangle<i32, Logical>,
     output: Size<i32, Logical>,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    elements: &mut Vec<OutputRenderElement>,
 ) {
     let dim = yuki_design::SCREENSHOT_DIM;
     let left = rect.loc.x.clamp(0, output.w);
@@ -764,7 +773,7 @@ fn append_dim_outside(
 fn append_border(
     rect: Rectangle<i32, Logical>,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    elements: &mut Vec<OutputRenderElement>,
 ) {
     const BORDER: i32 = yuki_design::SCREENSHOT_BORDER_WIDTH;
     let color = yuki_design::SCREENSHOT_BORDER;
@@ -809,7 +818,7 @@ fn append_solid(
     size: Size<i32, Logical>,
     color: [f32; 4],
     scale: f64,
-    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    elements: &mut Vec<OutputRenderElement>,
 ) {
     if size.w <= 0 || size.h <= 0 {
         return;
@@ -837,8 +846,8 @@ pub(crate) fn build_output_elements(
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
     include_cursor: bool,
-) -> Vec<OutputRenderElement<GlesRenderer>> {
-    let mut elements: Vec<OutputRenderElement<GlesRenderer>> = Vec::new();
+) -> Vec<OutputRenderElement> {
+    let mut elements: Vec<OutputRenderElement> = Vec::new();
     let scale = state.scale.fractional_scale();
     if state.locked {
         // A locked session shows only the lock surfaces (plus the cursor):
@@ -868,7 +877,7 @@ pub(crate) fn build_output_elements(
                     Kind::Unspecified,
                 )
                 .into_iter()
-                .map(OutputRenderElement::from),
+                .map(|e| e.into()),
             );
         }
     } else {
@@ -896,7 +905,7 @@ pub(crate) fn build_output_elements(
                     WaylandSurfaceRenderElement<GlesRenderer>,
                 >(renderer, surface, location, scale, 1.0, Kind::Unspecified)
                 .into_iter()
-                .map(OutputRenderElement::from),
+                .map(|e| e.into()),
             );
         }
         let focused = state.focused_window();
@@ -972,18 +981,18 @@ pub(crate) fn build_output_elements(
                     }
                 }
             } else {
-                elements.extend(surface_elements.into_iter().map(OutputRenderElement::from));
+                elements.extend(surface_elements.into_iter().map(|e| e.into()));
             }
-            if let Some(shadow) = state.chrome.shadow_element(
-                renderer,
-                id,
-                window.size().w,
-                window.size().h,
-                is_focused,
-                window.location(),
-                scale,
-            ) {
-                elements.push(shadow);
+            if let Some(program) = state.shadow.as_ref() {
+                elements.extend(state.chrome.shadow_element(
+                    program,
+                    state.output_size,
+                    window.size().w,
+                    window.size().h,
+                    is_focused,
+                    window.location(),
+                    scale,
+                ));
             }
         }
         append_layers(state, renderer, &mut elements, LayerSide::Back);
@@ -999,7 +1008,7 @@ pub(crate) fn build_window_elements(
     renderer: &mut GlesRenderer,
     surface: &WlSurface,
     scale: f64,
-) -> Vec<OutputRenderElement<GlesRenderer>> {
+) -> Vec<OutputRenderElement> {
     render_elements_from_surface_tree::<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>(
         renderer,
         surface,
@@ -1009,7 +1018,7 @@ pub(crate) fn build_window_elements(
         Kind::Unspecified,
     )
     .into_iter()
-    .map(OutputRenderElement::from)
+    .map(|e| e.into())
     .collect()
 }
 
@@ -1074,7 +1083,7 @@ fn screenshot_elements(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
-) -> Vec<OutputRenderElement<GlesRenderer>> {
+) -> Vec<OutputRenderElement> {
     let include_cursor = state.config.screenshot.show_pointer;
     build_output_elements(state, renderer, cursor, include_cursor)
 }
@@ -1196,8 +1205,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                     )
                 }
             };
-            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
-            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
+            let without_cursor: Vec<OutputRenderElement>;
+            let drawn: &[OutputRenderElement] = match &pending.target {
                 crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
                     without_cursor =
                         build_output_elements(&mut session.state, renderer, &session.cursor, false);
@@ -1460,7 +1469,7 @@ enum LayerSide {
 fn append_layers(
     state: &State,
     renderer: &mut GlesRenderer,
-    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    elements: &mut Vec<OutputRenderElement>,
     side: LayerSide,
 ) {
     let layers = match side {
@@ -1484,7 +1493,7 @@ fn append_layers(
                     Kind::Unspecified,
                 )
                 .into_iter()
-                .map(OutputRenderElement::from),
+                .map(|e| e.into()),
             );
         }
     }
@@ -1494,7 +1503,7 @@ fn append_layers(
 /// default arrow, at the pointer position minus its hotspot.
 fn append_cursor(
     renderer: &mut GlesRenderer,
-    elements: &mut Vec<OutputRenderElement<GlesRenderer>>,
+    elements: &mut Vec<OutputRenderElement>,
     state: &State,
     cursor: &Cursors,
 ) {
@@ -1531,7 +1540,7 @@ fn append_cursor(
             ) {
                 Ok(element) => {
                     tracing::debug!(boost, "drawing a pointer cursor");
-                    elements.push(OutputRenderElement::from(element));
+                    elements.push(element.into());
                 }
                 Err(error) => tracing::warn!(?error, "could not draw a pointer cursor"),
             }
@@ -1553,7 +1562,7 @@ fn append_cursor(
                     Kind::Cursor,
                 )
                 .into_iter()
-                .map(OutputRenderElement::from),
+                .map(|e| e.into()),
             );
         }
     }
@@ -1759,6 +1768,48 @@ impl crate::blockers::BlockerSink for LoopHandle<'static, Session> {
     }
 }
 
+/// Compiles the rounded-clip texture shader. Returns `None` if the renderer
+/// fails to compile it; the caller can then fall back to `ClippedSurface`.
+fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    let program = renderer.compile_custom_texture_shader(
+        grade_graphics::shaders::ROUNDED_CLIP,
+        &[
+            UniformName::new("texture_size", UniformType::_2f),
+            UniformName::new("geometry", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile rounded-clip shader");
+            None
+        }
+    }
+}
+
+/// Compiles the shadow pixel shader. Returns `None` on failure.
+fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
+    let program = renderer.compile_custom_pixel_shader(
+        grade_graphics::shaders::SHADOW,
+        &[
+            UniformName::new("output_size", UniformType::_2f),
+            UniformName::new("rect", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+            UniformName::new("blur", UniformType::_1f),
+            UniformName::new("offset", UniformType::_2f),
+            UniformName::new("color", UniformType::_4f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile shadow shader");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -1866,7 +1917,7 @@ mod tests {
     fn render_and_read(
         renderer: &mut GlesRenderer,
         size: Size<i32, Physical>,
-        elements: &[OutputRenderElement<GlesRenderer>],
+        elements: &[OutputRenderElement],
     ) -> Vec<u8> {
         let buffer_size: Size<i32, BufferCoord> = Size::from((size.w, size.h));
         let mut target =
@@ -1917,11 +1968,7 @@ mod tests {
     }
 
     /// A solid-color element of `side` by `side` pixels at the origin.
-    fn solid(
-        renderer: &mut GlesRenderer,
-        color: [u8; 4],
-        side: i32,
-    ) -> OutputRenderElement<GlesRenderer> {
+    fn solid(renderer: &mut GlesRenderer, color: [u8; 4], side: i32) -> OutputRenderElement {
         let buffer = MemoryRenderBuffer::from_slice(
             &color.repeat((side * side) as usize),
             Fourcc::Argb8888,
@@ -1940,7 +1987,7 @@ mod tests {
             Kind::Unspecified,
         )
         .expect("the element should build");
-        OutputRenderElement::from(element)
+        element.into()
     }
 
     #[test]
@@ -1992,7 +2039,7 @@ mod tests {
             Kind::Cursor,
         )
         .expect("the enlarged cursor element should build");
-        let pixels = render_and_read(&mut renderer, size, &[OutputRenderElement::from(element)]);
+        let pixels = render_and_read(&mut renderer, size, &[element.into()]);
 
         assert_eq!(
             pixel(&pixels, size, 10, 10),
@@ -2028,7 +2075,7 @@ mod tests {
             Kind::Cursor,
         )
         .expect("the cursor element should build");
-        let pixels = render_and_read(&mut renderer, size, &[OutputRenderElement::from(element)]);
+        let pixels = render_and_read(&mut renderer, size, &[element.into()]);
 
         assert_eq!(
             pixel(&pixels, size, 7, 6),

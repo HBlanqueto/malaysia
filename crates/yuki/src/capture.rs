@@ -81,7 +81,7 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
 /// picture matches the screen. Returns the saved path and logs it.
 pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -108,7 +108,7 @@ pub(crate) fn capture_output(
 /// kept, opaque for an output.
 pub(crate) fn screenshot_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -124,7 +124,7 @@ pub(crate) fn screenshot_png(
 /// to the physical pixels of the rendered buffer.
 pub(crate) fn screenshot_region_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     transform: Transform,
     region: Rectangle<i32, Logical>,
@@ -153,7 +153,7 @@ pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
 /// Renders `elements` and encodes them as PNG.
 fn render_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -246,7 +246,7 @@ fn write_png(path: &Path, png: &[u8]) -> std::io::Result<()> {
 /// is the background the render starts from.
 fn render_and_read(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -301,7 +301,7 @@ fn render_and_read(
 /// output captures unrotated content.
 pub(crate) fn capture_into_buffer(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],
@@ -318,7 +318,7 @@ pub(crate) fn capture_into_buffer(
 
 fn capture_into_dmabuf(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],
@@ -344,7 +344,7 @@ fn capture_into_dmabuf(
 // exposes it as a raw pointer for exactly this reason.
 fn capture_into_shm(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
+    elements: &[OutputRenderElement],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],

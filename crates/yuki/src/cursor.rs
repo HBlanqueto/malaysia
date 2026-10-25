@@ -24,13 +24,12 @@
 use std::io::Read;
 
 use smithay::backend::allocator::Fourcc;
-use smithay::backend::renderer::ImportAll;
-use smithay::backend::renderer::ImportMem;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::input::pointer::CursorIcon;
 use smithay::utils::{Logical, Point, Rectangle, Size, Transform};
 use xcursor::CursorTheme;
@@ -389,13 +388,14 @@ fn fallback_image() -> ImageData {
 }
 
 smithay::render_elements! {
-    /// Any element the output's frame can contain: a window, a client cursor or
-    /// a compositor-drawn cursor.
-    pub(crate) OutputRenderElement<R> where R: ImportAll + ImportMem;
-    Surface = WaylandSurfaceRenderElement<R>,
-    Memory = MemoryRenderBufferRenderElement<R>,
+    /// Any element the output's frame can contain: a window, a client cursor,
+    /// a compositor-drawn cursor or a GPU shader effect.
+    pub(crate) OutputRenderElement<=GlesRenderer>;
+    Surface = WaylandSurfaceRenderElement<GlesRenderer>,
+    Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
     Solid = SolidColorRenderElement,
-    Clipped = crate::effects::ClippedSurface<R>,
+    Clipped = crate::effects::ClippedSurface<GlesRenderer>,
+    PixelShader = smithay::backend::renderer::gles::element::PixelShaderElement,
 }
 
 #[cfg(test)]

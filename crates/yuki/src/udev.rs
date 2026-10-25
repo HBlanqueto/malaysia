@@ -617,8 +617,8 @@ impl Udev {
                     )
                 }
             };
-            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
-            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
+            let without_cursor: Vec<OutputRenderElement>;
+            let drawn: &[OutputRenderElement] = match &pending.target {
                 crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
                     without_cursor = crate::session::build_output_elements(
                         &mut self.state,
