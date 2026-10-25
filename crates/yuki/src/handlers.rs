@@ -1025,14 +1025,12 @@ impl State {
 }
 
 impl XdgDecorationHandler for State {
-    fn new_decoration(&mut self, toplevel: ToplevelSurface) {
-        // The client created the decoration object but has not chosen a mode;
-        // the protocol leaves the choice to the compositor. Yuki prefers
-        // server-side, so the window gets Yuki's chrome unless a policy or a
-        // later request overrides it (ADR 0019, A1).
-        self.windows
-            .clear_requested_decoration(toplevel.wl_surface());
-        self.apply_requested_decoration(toplevel.wl_surface(), Some(Decoration::Server));
+    fn new_decoration(&mut self, _toplevel: ToplevelSurface) {
+        // The decoration object was created. The initial xdg configure already
+        // carries Yuki's preferred mode (server-side unless overridden), and
+        // any explicit `request_mode` will send a fresh configure. Sending one
+        // here too produced a duplicate configure that clients with a pending
+        // mode request could ack as stale, leaving the window unmapped.
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
