@@ -384,10 +384,12 @@ pub fn resize_edges() -> Element {
             .into_element()
     };
     let edge = Size::px(6.0);
+    // Absolute positioned overlays do not resolve Size::fill() in this version
+    // of Freya; root percentage keeps the hit-area matching the window.
     rect()
         .position(Position::new_absolute().top(0.0).left(0.0))
-        .width(Size::fill())
-        .height(Size::fill())
+        .width(Size::window_percent(100.0))
+        .height(Size::window_percent(100.0))
         .background(Color::TRANSPARENT)
         .child(make(
             WindowEdge::Top,
