@@ -1974,6 +1974,7 @@ fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
         &[
             UniformName::new("size", UniformType::_2f),
             UniformName::new("rect", UniformType::_4f),
+            UniformName::new("window_rect", UniformType::_4f),
             UniformName::new("radius", UniformType::_1f),
             UniformName::new("blur", UniformType::_1f),
             UniformName::new("offset", UniformType::_2f),

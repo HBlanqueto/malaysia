@@ -267,21 +267,20 @@ fn shadow_layer_element(
         )),
     );
     let color = layer.color;
+    let rect = [
+        margin as f32,
+        margin as f32,
+        window_rect.size.w as f32,
+        window_rect.size.h as f32,
+    ];
     let uniforms = vec![
         Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
-        Uniform::new(
-            "rect",
-            [
-                margin as f32,
-                margin as f32,
-                window_rect.size.w as f32,
-                window_rect.size.h as f32,
-            ],
-        ),
+        Uniform::new("rect", rect),
+        Uniform::new("window_rect", rect),
         Uniform::new("radius", yuki_design::WINDOW.corner_radius as f32),
         Uniform::new("blur", layer.blur as f32),
         Uniform::new("offset", [0.0f32, layer.y_offset as f32]),
-        Uniform::new("color", [color.r, color.g, color.b, 1.0]),
+        Uniform::new("color", [color.r, color.g, color.b, color.a]),
     ];
     Some(PixelShaderElement::new(
         program.clone(),

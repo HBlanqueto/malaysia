@@ -38,8 +38,10 @@ pub mod shaders {
     /// Additional uniforms:
     /// - `size` (`vec2`): element size in physical pixels; multiply by
     ///   `v_coords` for local fragment coordinates.
-    /// - `rect` (`vec4`): `xy` origin, `zw` size of the window rectangle in
+    /// - `rect` (`vec4`): `xy` origin, `zw` size of the shadow shape in
     ///   physical pixels.
+    /// - `window_rect` (`vec4`): `xy` origin, `zw` size of the unshifted window
+    ///   rectangle; the shadow is cut here so it does not paint over content.
     /// - `radius` (`float`): window corner radius in physical pixels.
     /// - `blur` (`float`): CSS blur radius; the shader uses `sigma = blur / 2`.
     /// - `offset` (`vec2`): shadow offset in physical pixels; positive Y casts
@@ -81,6 +83,7 @@ mod tests {
         let src = shaders::SHADOW;
         assert!(src.contains("uniform vec2 size"));
         assert!(src.contains("uniform vec4 rect"));
+        assert!(src.contains("uniform vec4 window_rect"));
         assert!(src.contains("uniform float radius"));
         assert!(src.contains("uniform float blur"));
         assert!(src.contains("uniform vec2 offset"));
@@ -95,16 +98,71 @@ mod tests {
         let src = shaders::SHADOW;
         assert!(
             src.contains("rect.zw * 0.5 + offset"),
-            "the offset must move the hole with the light, not against it"
+            "the offset must move the shadow with the light, not against it"
         );
         assert!(
             src.contains("blur / 2.0"),
             "CSS blur is two sigma, not three"
         );
         assert!(
-            src.contains("0.5 + dist"),
-            "the shadow must be masked by the window's exterior coverage"
+            src.contains("window_rect"),
+            "the window hole must be a separate uniform so it stays unshifted"
         );
+        assert!(
+            src.contains("erf("),
+            "the shadow must fade with a Gaussian CDF, not a hard slab"
+        );
+        assert!(
+            !src.contains("0.5 + dist"),
+            "the old slab coverage left a visible gap"
+        );
+    }
+
+    /// Abramowitz & Stegun 7.1.26 approximation, matching the shader.
+    fn erf(x: f32) -> f32 {
+        let a = x.abs();
+        let t = 1.0 / (1.0 + 0.47047 * a);
+        let y = 1.0 - t * (0.3480242 + t * (-0.0958798 + t * 0.7478556)) * (-a * a).exp();
+        x.signum() * y
+    }
+
+    fn shadow_alpha(dist: f32, blur: f32) -> f32 {
+        let sigma = (blur / 2.0).max(0.001);
+        0.5 - 0.5 * erf(dist / (2.0f32.sqrt() * sigma))
+    }
+
+    #[test]
+    fn shadow_fades_smoothly_and_has_no_bright_gap() {
+        // Window is a 100x100 rounded rect centered at (50, 50).
+        let center = (50.0f32, 50.0f32);
+        let size = (100.0f32, 100.0f32);
+        let radius = 16.0f32;
+
+        // Well inside the body: the window coverage removes the shadow entirely.
+        let inside = rounded_rect_sdf((50.0, 50.0), center, size, radius);
+        assert!(coverage(inside) > 0.99, "centre should be fully covered");
+        let shadow_inside = shadow_alpha(inside, 24.0) * (1.0 - coverage(inside));
+        assert!(
+            shadow_inside < 0.01,
+            "shadow must not paint over the window body"
+        );
+
+        // At the outermost point of the rounded corner (x = 100) the 1-pixel
+        // AA coverage is ~0.5 and the Gaussian shadow is also ~0.5, so the
+        // visible shadow alpha is ~0.25. A bright gap would mean the shadow is
+        // almost fully visible here instead.
+        let edge = rounded_rect_sdf((100.0, 50.0), center, size, radius);
+        let shadow_edge = shadow_alpha(edge, 24.0) * (1.0 - coverage(edge));
+        assert!(
+            (shadow_edge - 0.25).abs() < 0.05,
+            "edge shadow alpha should be ~0.25"
+        );
+
+        // Far outside the window there is no hole, so the shadow alpha is > 0.
+        let outside = rounded_rect_sdf((120.0, 50.0), center, size, radius);
+        assert!(coverage(outside) < 0.01, "far outside should be uncovered");
+        let shadow_outside = shadow_alpha(outside, 24.0);
+        assert!(shadow_outside > 0.0, "shadow must exist outside the window");
     }
 
     #[test]
