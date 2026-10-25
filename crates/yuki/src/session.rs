@@ -964,6 +964,23 @@ fn ssd_frame_rect(
     Rectangle::new(location, size)
 }
 
+/// The corner radius of a window frame. Only fullscreen drops the frame;
+/// a maximized window keeps its rounded corners, border and shadow.
+fn frame_radius(state: crate::decoration::WindowState, role: crate::decoration::Role) -> u32 {
+    if state == crate::decoration::WindowState::Fullscreen {
+        return 0;
+    }
+    match role {
+        crate::decoration::Role::Dialog => yuki_design::DIALOG.corner_radius,
+        _ => yuki_design::WINDOW.corner_radius,
+    }
+}
+
+/// Whether the frame draws its outer border, inner line and clipped content.
+fn frame_has_border(state: crate::decoration::WindowState) -> bool {
+    state != crate::decoration::WindowState::Fullscreen
+}
+
 /// Appends one window's frame elements in front-to-back order: outer border,
 /// inner line, clipped content, then shadow.
 fn append_window_frame(
@@ -1001,10 +1018,6 @@ fn append_window_frame(
     };
 
     let is_focused = focused == Some(id);
-    let maximized_or_fullscreen = matches!(
-        data.state,
-        crate::decoration::WindowState::Maximized | crate::decoration::WindowState::Fullscreen
-    );
 
     let frame_rect_logical =
         if data.is_client_decorated || matches!(data.role, crate::decoration::Role::Dialog) {
@@ -1026,16 +1039,9 @@ fn append_window_frame(
             )
         };
     let frame_rect_physical = physical_rect(frame_rect_logical, scale);
-    let radius_logical = match data.role {
-        crate::decoration::Role::Dialog => yuki_design::DIALOG.corner_radius,
-        _ => yuki_design::WINDOW.corner_radius,
-    };
+    let radius_logical = frame_radius(data.state, data.role);
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
-    let radius = if maximized_or_fullscreen {
-        0
-    } else {
-        radius_logical
-    };
+    let radius = radius_logical;
 
     // Content, clipped to the rounded frame.
     let rounded_program = state.rounded_clip.clone();
@@ -1084,7 +1090,7 @@ fn append_window_frame(
         Kind::Unspecified,
     );
 
-    if let Some(program) = rounded_program.filter(|_| !maximized_or_fullscreen) {
+    if let Some(program) = rounded_program.filter(|_| frame_has_border(data.state)) {
         for element in surface_elements {
             if let Some(rounded) = crate::effects::RoundedTextureElement::from_surface_element(
                 &element,
@@ -1106,7 +1112,7 @@ fn append_window_frame(
     let mut outer = None;
     let mut inner = None;
     let mut shadow = Vec::new();
-    if !maximized_or_fullscreen {
+    if frame_has_border(data.state) {
         // The compositor draws the outer border over the inner line, both over
         // the content, and the shadow falls behind everything.
         let palette = &state.chrome_theme.palette;
@@ -2061,7 +2067,8 @@ mod tests {
     use smithay::utils::{Buffer as BufferCoord, Physical, Point, Rectangle, Size, Transform};
 
     use super::{
-        cursor_origin, describe_chain, frame_order, import_pending_dmabufs, winit_mode_source,
+        cursor_origin, describe_chain, frame_has_border, frame_order, frame_radius,
+        import_pending_dmabufs, winit_mode_source,
     };
     use crate::cursor::OutputRenderElement;
     use crate::state::State;
@@ -2115,6 +2122,25 @@ mod tests {
     #[test]
     fn a_lone_error_is_its_own_description() {
         assert_eq!(describe_chain(&Leaf), "the inner cause");
+    }
+
+    #[test]
+    fn only_fullscreen_drops_the_frame() {
+        use crate::decoration::{Role, WindowState};
+
+        for state in [WindowState::Normal, WindowState::Maximized] {
+            assert_eq!(
+                frame_radius(state, Role::Toplevel),
+                yuki_design::WINDOW.corner_radius
+            );
+            assert!(frame_has_border(state));
+        }
+        assert_eq!(frame_radius(WindowState::Fullscreen, Role::Toplevel), 0);
+        assert!(!frame_has_border(WindowState::Fullscreen));
+        assert_eq!(
+            frame_radius(WindowState::Maximized, Role::Dialog),
+            yuki_design::DIALOG.corner_radius
+        );
     }
 
     /// Red, in `Argb8888`'s in-memory byte order (B, G, R, A).
