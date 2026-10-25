@@ -12,14 +12,11 @@ use std::sync::Once;
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::Kind;
-use smithay::backend::renderer::element::memory::{
-    MemoryRenderBuffer, MemoryRenderBufferRenderElement,
-};
 use smithay::backend::renderer::gles::Uniform;
 use smithay::backend::renderer::gles::{
-    GlesPixelProgram, GlesRenderer, element::PixelShaderElement,
+    GlesPixelProgram, GlesRenderer, GlesTexture, element::PixelShaderElement,
 };
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use unicode_segmentation::UnicodeSegmentation;
 use yuki_appearance::traffic::{self, TrafficInput};
 use yuki_appearance::{
@@ -41,7 +38,8 @@ use crate::decoration::Insets;
 /// traffic-light colours selected by `appearance.domain`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
-    palette: Palette,
+    /// Resolved Neptunia palette for the current appearance.
+    pub(crate) palette: Palette,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
     signature: u64,
@@ -129,7 +127,7 @@ pub(crate) struct ChromeCache {
 
 struct Cached {
     key: Key,
-    buffer: MemoryRenderBuffer,
+    texture: GlesTexture,
     size: (i32, i32),
 }
 
@@ -162,29 +160,21 @@ impl ChromeCache {
     /// The drop shadow behind a window, drawn with the GPU shadow shader.
     ///
     /// Returns one element per shadow layer (ambient + contact). If the shader
-    /// did not compile, no shadow is drawn.
-    #[allow(clippy::too_many_arguments)]
+    /// did not compile, no shadow is drawn. `window_rect` is in logical pixels.
     pub(crate) fn shadow_element(
         &self,
         program: &GlesPixelProgram,
-        output_size: Size<i32, Physical>,
-        width: i32,
-        height: i32,
+        window_rect: Rectangle<i32, Logical>,
         focused: bool,
-        location: Point<i32, Logical>,
-        scale: f64,
     ) -> Vec<OutputRenderElement> {
         let focus = if focused {
             1.0
         } else {
             grade_graphics::params::SHADOW_UNFOCUSED_SCALE
         };
-        let window_rect = Rectangle::new(location, Size::from((width, height)));
         let mut elements = Vec::with_capacity(2);
         for layer in [yuki_design::SHADOW.ambient, yuki_design::SHADOW.contact] {
-            let Some(element) =
-                shadow_layer_element(program, output_size, window_rect, layer, scale, focus)
-            else {
+            let Some(element) = shadow_layer_element(program, window_rect, layer, focus) else {
                 continue;
             };
             elements.push(element.into());
@@ -204,7 +194,11 @@ impl ChromeCache {
         location: Point<i32, Logical>,
         scale: f64,
         theme: &ChromeTheme,
-    ) -> Option<OutputRenderElement> {
+        program: smithay::backend::renderer::gles::GlesTexProgram,
+        frame_rect: Rectangle<i32, Physical>,
+        radius: i32,
+    ) -> Option<crate::effects::RoundedTextureElement> {
+        use smithay::backend::renderer::ImportMem;
         let key = Key {
             title: title.to_string(),
             focused,
@@ -220,91 +214,64 @@ impl ChromeCache {
             let (pixels, w, h) = self
                 .text
                 .rasterize(title, focused, width, scale, *theme, input);
-            let buffer = MemoryRenderBuffer::from_slice(
-                &pixels,
-                Fourcc::Abgr8888,
-                (w, h),
-                1,
-                Transform::Normal,
-                None,
-            );
+            let texture = renderer
+                .import_memory(&pixels, Fourcc::Abgr8888, (w, h).into(), false)
+                .ok()?;
             self.entries.insert(
                 id,
                 Cached {
                     key,
-                    buffer,
+                    texture,
                     size: (w, h),
                 },
             );
         }
         let entry = self.entries.get(&id)?;
         let (w, h) = entry.size;
-        let source = Rectangle::from_size(Size::from((f64::from(w), f64::from(h))));
-        let size = Size::from((w, h));
-        let location = physical_point(location, scale).to_f64();
-        MemoryRenderBufferRenderElement::from_buffer(
-            renderer,
-            location,
-            &entry.buffer,
-            None,
-            Some(source),
-            Some(size),
+        let src = Rectangle::from_size(Size::from((f64::from(w), f64::from(h))));
+        let dst = Rectangle::new(physical_point(location, scale), Size::from((w, h)));
+        Some(crate::effects::RoundedTextureElement::from_texture(
+            entry.texture.clone(),
+            smithay::backend::renderer::element::Id::new(),
+            src,
+            dst,
+            smithay::utils::Transform::Normal,
+            1.0,
             Kind::Unspecified,
-        )
-        .ok()
-        .map(|e| e.into())
+            frame_rect,
+            radius,
+            program,
+        ))
     }
 }
 
 /// Builds one [`PixelShaderElement`] for a single shadow layer.
 fn shadow_layer_element(
     program: &GlesPixelProgram,
-    output_size: Size<i32, Physical>,
     window_rect: Rectangle<i32, Logical>,
     layer: yuki_design::ShadowLayer,
-    scale: f64,
     focus: f32,
 ) -> Option<PixelShaderElement> {
+    // The shadow must extend ~3 sigma plus the offset on every side.
     let margin = f64::from(layer.blur) + f64::from(layer.y_offset.abs());
     if margin <= 0.0 {
         return None;
     }
+    let margin = margin.round() as i32;
     let area = Rectangle::new(
-        Point::from((
-            (f64::from(window_rect.loc.x) - margin).round() as i32,
-            (f64::from(window_rect.loc.y) - margin).round() as i32,
-        )),
+        Point::from((window_rect.loc.x - margin, window_rect.loc.y - margin)),
         Size::from((
-            (f64::from(window_rect.size.w) + margin * 2.0).round() as i32,
-            (f64::from(window_rect.size.h) + margin * 2.0).round() as i32,
+            window_rect.size.w + margin * 2,
+            window_rect.size.h + margin * 2,
         )),
     );
-    let physical_loc = physical_point(window_rect.loc, scale);
-    let physical_size: Size<i32, Physical> = Size::from((
-        (f64::from(window_rect.size.w) * scale).round() as i32,
-        (f64::from(window_rect.size.h) * scale).round() as i32,
-    ));
     let color = grade_graphics::params::SHADOW_COLOR;
     let uniforms = vec![
-        Uniform::new("output_size", [output_size.w as f32, output_size.h as f32]),
-        Uniform::new(
-            "rect",
-            [
-                physical_loc.x as f32,
-                physical_loc.y as f32,
-                physical_size.w as f32,
-                physical_size.h as f32,
-            ],
-        ),
-        Uniform::new(
-            "radius",
-            (f64::from(yuki_design::WINDOW.corner_radius) * scale) as f32,
-        ),
-        Uniform::new("blur", (f64::from(layer.blur) * scale) as f32),
-        Uniform::new(
-            "offset",
-            [0.0f32, (f64::from(layer.y_offset) * scale) as f32],
-        ),
+        Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
+        Uniform::new("rect", [margin as f32, margin as f32, window_rect.size.w as f32, window_rect.size.h as f32]),
+        Uniform::new("radius", yuki_design::WINDOW.corner_radius as f32),
+        Uniform::new("blur", layer.blur as f32),
+        Uniform::new("offset", [0.0f32, layer.y_offset as f32]),
         Uniform::new("color", [color[0], color[1], color[2], color[3]]),
     ];
     let alpha = layer.opacity * focus;

@@ -410,6 +410,7 @@ pub fn run() -> Result<(), SessionError> {
     let renderer = session.backend.renderer();
     session.state.rounded_clip = compile_rounded_clip(renderer);
     session.state.shadow = compile_shadow(renderer);
+    session.state.border = compile_border(renderer);
 
     session.backend.window().request_redraw();
 
@@ -909,95 +910,249 @@ pub(crate) fn build_output_elements(
             );
         }
         let focused = state.focused_window();
-        for window in state.windows.iter_visible(&state.minimized).rev() {
-            if !window.is_mapped() {
-                continue;
-            }
-            let id = window.id();
-            let is_focused = focused == Some(id);
-            if window.insets().top > 0.0 {
-                let pointer = state
-                    .chrome_pointer
-                    .as_ref()
-                    .filter(|(held, _)| *held == id)
-                    .map(|(_, pointer)| pointer);
-                let input = yuki_appearance::traffic::TrafficInput {
-                    focused: is_focused,
-                    group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
-                    pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
-                    zoom_supported: state.windows.zoom_supported(id),
-                };
-                if let Some(element) = state.chrome.element(
-                    renderer,
-                    id,
-                    &window.title(),
-                    is_focused,
-                    input,
-                    window.size().w,
-                    window.location(),
-                    scale,
-                    &state.chrome_theme,
-                ) {
-                    elements.push(element);
-                }
-            }
-            let location = physical_point(window.location() + window.surface_location(), scale);
-            let surface_elements = render_elements_from_surface_tree::<
-                GlesRenderer,
-                WaylandSurfaceRenderElement<GlesRenderer>,
-            >(
-                renderer,
-                window.surface(),
-                location,
-                scale,
-                1.0,
-                Kind::Unspecified,
-            );
-            if window.is_client_decorated() {
-                let surface_origin = window.location() + window.surface_location();
-                let geometry = window.window_geometry();
-                let visible = Rectangle::new(
-                    physical_point(
-                        Point::from((
-                            surface_origin.x + geometry.loc.x,
-                            surface_origin.y + geometry.loc.y,
-                        )),
-                        scale,
-                    ),
-                    Size::from((
-                        (f64::from(geometry.size.w) * scale).round() as i32,
-                        (f64::from(geometry.size.h) * scale).round() as i32,
-                    )),
-                );
-                let radius = (f64::from(yuki_design::WINDOW.corner_radius) * scale).round() as i32;
-                for element in surface_elements {
-                    if let Some(clipped) = crate::effects::ClippedSurface::new(
-                        element,
-                        visible,
-                        radius,
-                        Scale::from(scale),
-                    ) {
-                        elements.push(clipped.into());
-                    }
-                }
-            } else {
-                elements.extend(surface_elements.into_iter().map(|e| e.into()));
-            }
-            if let Some(program) = state.shadow.as_ref() {
-                elements.extend(state.chrome.shadow_element(
-                    program,
-                    state.output_size,
-                    window.size().w,
-                    window.size().h,
-                    is_focused,
-                    window.location(),
-                    scale,
-                ));
-            }
+        let window_ids: Vec<_> = state
+            .windows
+            .iter_visible(&state.minimized)
+            .rev()
+            .map(|window| window.id())
+            .collect();
+        for id in window_ids {
+            append_window_frame(state, renderer, id, focused, scale, &mut elements);
         }
         append_layers(state, renderer, &mut elements, LayerSide::Back);
     }
     elements
+}
+
+/// Window data needed to build its frame; copied out so the mutable borrow of
+/// `State` for `chrome.element` does not conflict with the window iterator.
+struct WindowFrameData {
+    title: String,
+    location: Point<i32, Logical>,
+    size: Size<i32, Logical>,
+    surface_location: Point<i32, Logical>,
+    surface: WlSurface,
+    insets: crate::decoration::Insets,
+    is_client_decorated: bool,
+    window_geometry: Rectangle<i32, Logical>,
+    state: crate::decoration::WindowState,
+}
+
+/// Appends one window's frame elements in front-to-back order: outer border,
+/// inner line, clipped content, then shadow.
+fn append_window_frame(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    id: yuki_scene::scene::WindowId,
+    focused: Option<yuki_scene::scene::WindowId>,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let data = {
+        let Some(window) = state.windows.iter_visible(&state.minimized).find(|w| w.id() == id)
+        else {
+            return;
+        };
+        if !window.is_mapped() {
+            return;
+        }
+        WindowFrameData {
+            title: window.title(),
+            location: window.location(),
+            size: window.size(),
+            surface_location: window.surface_location(),
+            surface: window.surface().clone(),
+            insets: window.insets(),
+            is_client_decorated: window.is_client_decorated(),
+            window_geometry: window.window_geometry(),
+            state: window.state(),
+        }
+    };
+
+    let is_focused = focused == Some(id);
+    let maximized_or_fullscreen = matches!(
+        data.state,
+        crate::decoration::WindowState::Maximized | crate::decoration::WindowState::Fullscreen
+    );
+
+    let frame_rect_logical = if data.is_client_decorated {
+        let surface_origin = data.location + data.surface_location;
+        Rectangle::new(
+            Point::from((
+                surface_origin.x + data.window_geometry.loc.x,
+                surface_origin.y + data.window_geometry.loc.y,
+            )),
+            data.window_geometry.size,
+        )
+    } else {
+        Rectangle::new(data.location, data.size)
+    };
+    let frame_rect_physical = physical_rect(frame_rect_logical, scale);
+    let radius_logical = yuki_design::WINDOW.corner_radius;
+    let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
+    let radius = if maximized_or_fullscreen { 0 } else { radius_logical };
+
+    let mut frame_elements: Vec<OutputRenderElement> = Vec::with_capacity(8);
+
+    // Content, clipped to the rounded frame.
+    let rounded_program = state.rounded_clip.clone();
+    let mut content: Vec<OutputRenderElement> = Vec::new();
+    if data.insets.top > 0.0 {
+        let pointer = state
+            .chrome_pointer
+            .as_ref()
+            .filter(|(held, _)| *held == id)
+            .map(|(_, pointer)| pointer);
+        let input = yuki_appearance::traffic::TrafficInput {
+            focused: is_focused,
+            group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
+            pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
+            zoom_supported: state.windows.zoom_supported(id),
+        };
+        if let Some(program) = rounded_program.clone() {
+            if let Some(element) = state.chrome.element(
+                renderer,
+                id,
+                &data.title,
+                is_focused,
+                input,
+                data.size.w,
+                data.location,
+                scale,
+                &state.chrome_theme,
+                program,
+                frame_rect_physical,
+                radius_physical,
+            ) {
+                content.push(element.into());
+            }
+        }
+    }
+    let surface_location = physical_point(data.location + data.surface_location, scale);
+    let surface_elements = render_elements_from_surface_tree::<
+        GlesRenderer,
+        WaylandSurfaceRenderElement<GlesRenderer>,
+    >(renderer, &data.surface, surface_location, scale, 1.0, Kind::Unspecified);
+
+    if maximized_or_fullscreen || rounded_program.is_none() {
+        content.extend(surface_elements.into_iter().map(|e| e.into()));
+    } else {
+        let program = rounded_program.expect("checked above");
+        for element in surface_elements {
+            if let Some(rounded) = crate::effects::RoundedTextureElement::from_surface_element(
+                &element,
+                frame_rect_physical,
+                radius_physical,
+                program.clone(),
+            ) {
+                content.push(rounded.into());
+            } else {
+                // Solid-colour surfaces cannot be clipped with the texture
+                // shader; fall back to the normal surface draw.
+                content.push(element.into());
+            }
+        }
+    }
+
+    if !maximized_or_fullscreen {
+        // Inner line and outer border are drawn by the compositor on top of
+        // the content, then the shadow falls behind everything.
+        let palette = &state.chrome_theme.palette;
+        if let Some(program) = state.border.as_ref() {
+            if let Some(inner) = palette.inner_line {
+                if let Some(element) = border_element(
+                    program,
+                    frame_rect_logical,
+                    radius,
+                    scale,
+                    false,
+                    inner,
+                ) {
+                    frame_elements.push(element.into());
+                }
+            }
+            if let Some(element) = border_element(
+                program,
+                frame_rect_logical,
+                radius,
+                scale,
+                true,
+                palette.outer_border,
+            ) {
+                frame_elements.push(element.into());
+            }
+        }
+        if let Some(program) = state.shadow.as_ref() {
+            frame_elements.extend(state.chrome.shadow_element(
+                program,
+                frame_rect_logical,
+                is_focused,
+            ));
+        }
+    }
+
+    // Front-to-back: borders, then content, then shadow.
+    frame_elements.extend(content);
+    elements.extend(frame_elements);
+}
+
+/// Converts a logical rectangle to a physical one at `scale`.
+fn physical_rect(rect: Rectangle<i32, Logical>, scale: f64) -> Rectangle<i32, Physical> {
+    Rectangle::new(
+        Point::from((
+            (f64::from(rect.loc.x) * scale).round() as i32,
+            (f64::from(rect.loc.y) * scale).round() as i32,
+        )),
+        Size::from((
+            (f64::from(rect.size.w) * scale).round() as i32,
+            (f64::from(rect.size.h) * scale).round() as i32,
+        )),
+    )
+}
+
+/// Builds one [`PixelShaderElement`] for an inner line or outer border ring.
+fn border_element(
+    program: &smithay::backend::renderer::gles::GlesPixelProgram,
+    frame_rect: Rectangle<i32, Logical>,
+    radius: u32,
+    scale: f64,
+    outer: bool,
+    color: yuki_design::Rgba,
+) -> Option<smithay::backend::renderer::gles::element::PixelShaderElement> {
+    use smithay::backend::renderer::gles::Uniform;
+    use smithay::backend::renderer::gles::element::PixelShaderElement;
+    // One physical pixel expressed in logical coordinates.
+    let width_logical = (1.0 / scale) as f32;
+    let margin = width_logical.ceil().max(1.0) as i32;
+    let area = Rectangle::new(
+        Point::from((frame_rect.loc.x - margin, frame_rect.loc.y - margin)),
+        Size::from((
+            frame_rect.size.w + margin * 2,
+            frame_rect.size.h + margin * 2,
+        )),
+    );
+    let rect_local = [
+        (frame_rect.loc.x - area.loc.x) as f32,
+        (frame_rect.loc.y - area.loc.y) as f32,
+        frame_rect.size.w as f32,
+        frame_rect.size.h as f32,
+    ];
+    let uniforms = vec![
+        Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
+        Uniform::new("rect", rect_local),
+        Uniform::new("radius", radius as f32),
+        Uniform::new("width", width_logical),
+        Uniform::new("side", if outer { 1.0f32 } else { -1.0f32 }),
+        Uniform::new("color", [color.r, color.g, color.b, color.a]),
+    ];
+    Some(PixelShaderElement::new(
+        program.clone(),
+        area,
+        None,
+        1.0,
+        uniforms,
+        Kind::Unspecified,
+    ))
 }
 
 /// Renders a single window's surface tree at the origin, for window capture.
@@ -1793,7 +1948,7 @@ fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
     let program = renderer.compile_custom_pixel_shader(
         grade_graphics::shaders::SHADOW,
         &[
-            UniformName::new("output_size", UniformType::_2f),
+            UniformName::new("size", UniformType::_2f),
             UniformName::new("rect", UniformType::_4f),
             UniformName::new("radius", UniformType::_1f),
             UniformName::new("blur", UniformType::_1f),
@@ -1805,6 +1960,28 @@ fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
         Ok(program) => Some(program),
         Err(error) => {
             tracing::warn!(?error, "failed to compile shadow shader");
+            None
+        }
+    }
+}
+
+/// Compiles the border pixel shader. Returns `None` on failure.
+fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
+    let program = renderer.compile_custom_pixel_shader(
+        grade_graphics::shaders::BORDER,
+        &[
+            UniformName::new("size", UniformType::_2f),
+            UniformName::new("rect", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+            UniformName::new("width", UniformType::_1f),
+            UniformName::new("side", UniformType::_1f),
+            UniformName::new("color", UniformType::_4f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile border shader");
             None
         }
     }

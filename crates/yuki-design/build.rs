@@ -758,6 +758,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
          \x20   titlebar_bg: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   hairline: {},\n\
          \x20   inner_line: {inner},\n\
+         \x20   outer_border: {},\n\
          \x20   title: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   text: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   accent: {},\n\
@@ -766,6 +767,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
         rgba(theme_color(tokens, theme, "titlebar-bg")),
         rgba(theme_color(tokens, theme, "titlebar-bg-inactive")),
         rgba(theme_color(tokens, theme, "titlebar-line")),
+        rgba(theme_color(tokens, theme, "window-outer")),
         rgba(theme_color(tokens, theme, "titlebar-title")),
         rgba(theme_color(tokens, theme, "titlebar-title-inactive")),
         rgba(theme_color(tokens, theme, "ink")),

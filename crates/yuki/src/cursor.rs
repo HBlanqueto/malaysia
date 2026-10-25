@@ -394,8 +394,8 @@ smithay::render_elements! {
     Surface = WaylandSurfaceRenderElement<GlesRenderer>,
     Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
     Solid = SolidColorRenderElement,
-    Clipped = crate::effects::ClippedSurface<GlesRenderer>,
     PixelShader = smithay::backend::renderer::gles::element::PixelShaderElement,
+    Rounded = crate::effects::RoundedTextureElement,
 }
 
 #[cfg(test)]

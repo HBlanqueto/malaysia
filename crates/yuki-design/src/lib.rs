@@ -266,6 +266,8 @@ pub struct Palette {
     /// [`Option`] rather than a transparent color so the renderer can skip the
     /// pass entirely.
     pub inner_line: Option<Rgba>,
+    /// Outer border drawn around the whole window.
+    pub outer_border: Rgba,
     /// Window title text, focused and unfocused.
     pub title: FocusPair,
     /// Body text, focused and unfocused.

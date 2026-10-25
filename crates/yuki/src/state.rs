@@ -310,11 +310,13 @@ pub struct State {
     /// The Neptunia tint and traffic-light colours, rebuilt when
     /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
-    /// Compiled rounded-clip texture shader for CSD windows, if the renderer
-    /// managed to build it.
+    /// Compiled rounded-clip texture shader for the window frame, if the
+    /// renderer managed to build it.
     pub(crate) rounded_clip: Option<GlesTexProgram>,
     /// Compiled shadow pixel shader, if the renderer managed to build it.
     pub(crate) shadow: Option<GlesPixelProgram>,
+    /// Compiled border pixel shader, if the renderer managed to build it.
+    pub(crate) border: Option<GlesPixelProgram>,
     /// The window whose traffic lights the pointer is interacting with.
     pub(crate) chrome_pointer: Option<(WindowId, yuki_appearance::traffic::TrafficPointer)>,
     /// The last primary press on a titlebar, for double click.
@@ -541,6 +543,7 @@ impl State {
             chrome_theme,
             rounded_clip: None,
             shadow: None,
+            border: None,
             chrome_pointer: None,
             titlebar_click: None,
             theme_sources: None,

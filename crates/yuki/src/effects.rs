@@ -1,105 +1,162 @@
-//! Compositor-side window effects: the rounded shape.
+//! Compositor-side window effects: the rounded frame.
 //!
-//! ADR 0020 applies these to every window, client- or server-decorated. The
-//! shape clips the client surface to its `window_geometry`, not to the buffer:
-//! a CSD client may attach a larger buffer (its own margins), and only the
-//! window rectangle is the window. The shadow moved to the GPU shadow shader in
-//! `grade-graphics` (see `chrome.rs`).
+//! ADR 0020 applies these to every toplevel window, client- or server-decorated.
+//! The shape clips the client surface to the window rectangle; a CSD client may
+//! attach a larger buffer (its own margins), and only the window rectangle is
+//! the window. The clip is done in the fragment stage with the ROUNDED_CLIP
+//! texture shader from `grade-graphics`; subsurfaces share the same clip rect.
 
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
-use smithay::backend::renderer::element::{Element, Kind, RenderElement};
+use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexProgram, GlesTexture, Uniform};
 use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
-use smithay::backend::renderer::{ImportAll, Renderer, Texture};
-use smithay::utils::{
-    Buffer as BufferCoords, Physical, Point, Rectangle, Scale, Size, Transform,
-    user_data::UserDataMap,
-};
+use smithay::backend::renderer::Texture;
+use smithay::utils::{Buffer as BufferCoords, Physical, Rectangle, Scale, Size, Transform};
 
-/// A client surface clipped to a rounded window rectangle.
-///
-/// The clip is applied per horizontal band, so the corners are rounded without
-/// a shader. The source rectangle is cropped with the same ratio, which keeps
-/// the client's pixels aligned to their window geometry.
-pub(crate) struct ClippedSurface<R: Renderer> {
-    inner: WaylandSurfaceRenderElement<R>,
-    visible: Rectangle<i32, Physical>,
-    radius: i32,
-    scale: Scale<f64>,
+/// Map a physical frame rectangle into a source texture's coordinate space.
+fn frame_to_texture_geometry(
+    src: Rectangle<f64, BufferCoords>,
+    dst: Rectangle<i32, Physical>,
+    frame_rect: Rectangle<i32, Physical>,
+) -> [f32; 4] {
+    let scale_x = src.size.w / f64::from(dst.size.w);
+    let scale_y = src.size.h / f64::from(dst.size.h);
+    let x = src.loc.x + f64::from(frame_rect.loc.x - dst.loc.x) * scale_x;
+    let y = src.loc.y + f64::from(frame_rect.loc.y - dst.loc.y) * scale_y;
+    let w = f64::from(frame_rect.size.w) * scale_x;
+    let h = f64::from(frame_rect.size.h) * scale_y;
+    [x as f32, y as f32, w as f32, h as f32]
 }
 
-impl<R: Renderer + ImportAll> ClippedSurface<R> {
-    /// Wraps `inner` so it only paints inside `visible`, with rounded corners.
-    pub(crate) fn new(
-        inner: WaylandSurfaceRenderElement<R>,
-        visible: Rectangle<i32, Physical>,
+/// Map a physical corner radius into a source texture's coordinate space.
+fn texture_radius(
+    src: Rectangle<f64, BufferCoords>,
+    dst: Rectangle<i32, Physical>,
+    radius: i32,
+) -> f32 {
+    let scale = src.size.w / f64::from(dst.size.w);
+    (f64::from(radius) * scale) as f32
+}
+
+/// A surface or memory texture drawn with a rounded-rectangle clip.
+///
+/// This replaces the old CPU-banded `ClippedSurface`. One draw call per
+/// surface, no offscreen buffer. The clip rectangle and radius are in the
+/// coordinate space of the *window frame*; each subsurface gets the same frame
+/// rectangle, so the corners line up across the whole window.
+pub(crate) struct RoundedTextureElement {
+    id: Id,
+    commit_counter: CommitCounter,
+    texture: GlesTexture,
+    texture_size: Size<i32, BufferCoords>,
+    src: Rectangle<f64, BufferCoords>,
+    dst: Rectangle<i32, Physical>,
+    transform: Transform,
+    alpha: f32,
+    kind: Kind,
+    /// The window frame rectangle in physical pixels; used for the clip.
+    frame_rect: Rectangle<i32, Physical>,
+    /// Corner radius in physical pixels.
+    radius: i32,
+    program: GlesTexProgram,
+}
+
+impl RoundedTextureElement {
+    /// Wraps a Wayland surface element so it is clipped to `frame_rect`.
+    pub(crate) fn from_surface_element(
+        element: &WaylandSurfaceRenderElement<GlesRenderer>,
+        frame_rect: Rectangle<i32, Physical>,
         radius: i32,
-        scale: Scale<f64>,
+        program: GlesTexProgram,
     ) -> Option<Self> {
-        let visible = visible.intersection(inner.geometry(scale))?;
-        if visible.size.w <= 0 || visible.size.h <= 0 {
-            return None;
-        }
+        let texture = match element.texture() {
+            WaylandSurfaceRenderElementTexture::Texture(tex) => tex.clone(),
+            WaylandSurfaceRenderElementTexture::SolidColor(_) => return None,
+        };
+        let texture_size = texture.size();
         Some(Self {
-            inner,
-            visible,
+            id: element.id().clone(),
+            commit_counter: element.current_commit(),
+            texture,
+            texture_size,
+            src: element.src(),
+            dst: element.geometry(Scale::from(1.0)),
+            transform: element.transform(),
+            alpha: element.alpha(),
+            kind: element.kind(),
+            frame_rect,
             radius,
-            scale,
+            program,
         })
     }
 
-    /// The horizontal bands that make up the rounded rectangle.
-    fn bands(&self) -> Vec<Rectangle<i32, Physical>> {
-        rounded_bands(self.visible, self.radius)
+    /// Wraps an already-imported texture so it is clipped to `frame_rect`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn from_texture(
+        texture: GlesTexture,
+        id: Id,
+        src: Rectangle<f64, BufferCoords>,
+        dst: Rectangle<i32, Physical>,
+        transform: Transform,
+        alpha: f32,
+        kind: Kind,
+        frame_rect: Rectangle<i32, Physical>,
+        radius: i32,
+        program: GlesTexProgram,
+    ) -> Self {
+        let texture_size = texture.size();
+        Self {
+            id,
+            commit_counter: CommitCounter::default(),
+            texture,
+            texture_size,
+            src,
+            dst,
+            transform,
+            alpha,
+            kind,
+            frame_rect,
+            radius,
+            program,
+        }
     }
 
-    /// Crops the full source to the part shown by `band`.
-    fn crop(
-        &self,
-        src: Rectangle<f64, BufferCoords>,
-        full: Rectangle<i32, Physical>,
-        band: Rectangle<i32, Physical>,
-    ) -> Rectangle<f64, BufferCoords> {
-        let sx = src.size.w / f64::from(full.size.w);
-        let sy = src.size.h / f64::from(full.size.h);
-        Rectangle::new(
-            Point::new(
-                src.loc.x + f64::from(band.loc.x - full.loc.x) * sx,
-                src.loc.y + f64::from(band.loc.y - full.loc.y) * sy,
-            ),
-            Size::new(f64::from(band.size.w) * sx, f64::from(band.size.h) * sy),
-        )
+    fn texture_geometry(&self) -> [f32; 4] {
+        frame_to_texture_geometry(self.src, self.dst, self.frame_rect)
+    }
+
+    fn rounded_radius(&self) -> f32 {
+        texture_radius(self.src, self.dst, self.radius)
     }
 }
 
-impl<R: Renderer + ImportAll> Element for ClippedSurface<R> {
-    fn id(&self) -> &smithay::backend::renderer::element::Id {
-        self.inner.id()
+impl Element for RoundedTextureElement {
+    fn id(&self) -> &Id {
+        &self.id
     }
 
     fn current_commit(&self) -> CommitCounter {
-        self.inner.current_commit()
+        self.commit_counter
     }
 
     fn src(&self) -> Rectangle<f64, BufferCoords> {
-        self.inner.src()
+        self.src
     }
 
     fn transform(&self) -> Transform {
-        self.inner.transform()
+        self.transform
     }
 
-    fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
-        self.visible
-            .intersection(self.inner.geometry(scale))
-            .unwrap_or_else(|| Rectangle::new(Point::from((0, 0)), Size::from((0, 0))))
+    fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
+        self.dst
     }
 
     fn damage_since(
         &self,
-        scale: Scale<f64>,
+        _scale: Scale<f64>,
         _commit: Option<CommitCounter>,
     ) -> DamageSet<i32, Physical> {
-        DamageSet::from_slice(&[Rectangle::from_size(self.geometry(scale).size)])
+        DamageSet::from_slice(&[Rectangle::from_size(self.dst.size)])
     }
 
     fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
@@ -107,110 +164,82 @@ impl<R: Renderer + ImportAll> Element for ClippedSurface<R> {
     }
 
     fn alpha(&self) -> f32 {
-        self.inner.alpha()
+        self.alpha
     }
 
     fn kind(&self) -> Kind {
-        self.inner.kind()
+        self.kind
     }
 }
 
-impl<R> RenderElement<R> for ClippedSurface<R>
-where
-    R: Renderer + ImportAll,
-    R::TextureId: Texture + 'static,
-{
+impl RenderElement<GlesRenderer> for RoundedTextureElement {
     fn draw(
         &self,
-        frame: &mut R::Frame<'_, '_>,
+        frame: &mut smithay::backend::renderer::gles::GlesFrame<'_, '_>,
         src: Rectangle<f64, BufferCoords>,
-        _dst: Rectangle<i32, Physical>,
-        _damage: &[Rectangle<i32, Physical>],
-        _opaque_regions: &[Rectangle<i32, Physical>],
-        _cache: Option<&UserDataMap>,
-    ) -> Result<(), R::Error> {
-        let full = self.inner.geometry(self.scale);
-        if self.inner.transform() != Transform::Normal {
-            let damage = [Rectangle::from_size(full.size)];
-            return self.inner.draw(frame, src, full, &damage, &[], None);
-        }
-        for band in self.bands() {
-            let Some(band) = band.intersection(full) else {
-                continue;
-            };
-            if band.size.w <= 0 || band.size.h <= 0 {
-                continue;
-            }
-            let damage = [Rectangle::from_size(band.size)];
-            self.inner
-                .draw(frame, self.crop(src, full, band), band, &damage, &[], None)?;
-        }
-        Ok(())
+        dst: Rectangle<i32, Physical>,
+        damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
+        _cache: Option<&smithay::utils::user_data::UserDataMap>,
+    ) -> Result<(), smithay::backend::renderer::gles::GlesError> {
+        let uniforms = vec![
+            Uniform::new(
+                "texture_size",
+                [self.texture_size.w as f32, self.texture_size.h as f32],
+            ),
+            Uniform::new("geometry", self.texture_geometry()),
+            Uniform::new("radius", self.rounded_radius()),
+        ];
+        frame.render_texture_from_to(
+            &self.texture,
+            src,
+            dst,
+            damage,
+            opaque_regions,
+            self.transform,
+            self.alpha,
+            Some(&self.program),
+            &uniforms,
+        )
     }
 }
 
-/// Splits a rounded rectangle into one-pixel bands in the corner zones and a
-/// single band in the middle.
-fn rounded_bands(rect: Rectangle<i32, Physical>, radius: i32) -> Vec<Rectangle<i32, Physical>> {
-    let radius = radius.min(rect.size.w / 2).min(rect.size.h / 2).max(0);
-    if radius == 0 {
-        return vec![rect];
-    }
-    let mut bands = Vec::with_capacity((radius * 2 + 1) as usize);
-    for row in 0..radius {
-        let dy = f64::from(radius) - (f64::from(row) + 0.5);
-        let inset = (f64::from(radius) - (f64::from(radius).powi(2) - dy * dy).max(0.0).sqrt())
-            .ceil() as i32;
-        let left = rect.loc.x + inset;
-        let right = rect.loc.x + rect.size.w - inset;
-        if right > left {
-            bands.push(Rectangle::new(
-                Point::new(left, rect.loc.y + row),
-                Size::new(right - left, 1),
-            ));
-        }
-    }
-    if rect.size.h > radius * 2 {
-        bands.push(Rectangle::new(
-            Point::new(rect.loc.x, rect.loc.y + radius),
-            Size::new(rect.size.w, rect.size.h - radius * 2),
-        ));
-    }
-    for row in 0..radius {
-        let dy = f64::from(radius) - (f64::from(row) + 0.5);
-        let inset = (f64::from(radius) - (f64::from(radius).powi(2) - dy * dy).max(0.0).sqrt())
-            .ceil() as i32;
-        let left = rect.loc.x + inset;
-        let right = rect.loc.x + rect.size.w - inset;
-        if right > left {
-            bands.push(Rectangle::new(
-                Point::new(left, rect.loc.y + rect.size.h - 1 - row),
-                Size::new(right - left, 1),
-            ));
-        }
-    }
-    bands
-}
+// Smithay re-exports the texture enum under a renderer-specific name.
+use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as WaylandSurfaceRenderElementTexture;
 
 #[cfg(test)]
 mod tests {
-    use super::rounded_bands;
-    use smithay::utils::{Point, Rectangle, Size};
+    use smithay::utils::{Buffer as BufferCoords, Physical, Point, Rectangle, Size};
+
+    use super::{frame_to_texture_geometry, texture_radius};
 
     #[test]
-    fn a_rounded_rectangle_keeps_the_middle_and_clips_the_corners() {
-        let rect = Rectangle::new(Point::from((10, 20)), Size::from((100, 60)));
-        let bands = rounded_bands(rect, 16);
-        assert!(
-            bands
-                .iter()
-                .any(|band| band.loc == Point::from((10, 36))
-                    && band.size == Size::from((100, 28))),
-            "the middle band keeps the full width"
-        );
-        assert!(
-            bands[0].loc.x > rect.loc.x && bands[0].size.w < rect.size.w,
-            "the first row is inset on both corners"
-        );
+    fn texture_geometry_scales_the_frame_to_source_space() {
+        let src = Rectangle::from_size(Size::from((400.0, 200.0)));
+        let dst = Rectangle::new(Point::from((10, 20)), Size::from((200, 100)));
+        let frame = Rectangle::new(Point::from((10, 20)), Size::from((200, 100)));
+        let geo = frame_to_texture_geometry(src, dst, frame);
+        assert_eq!(geo, [0.0, 0.0, 400.0, 200.0]);
+    }
+
+    #[test]
+    fn texture_geometry_offsets_for_a_subsurface() {
+        let src = Rectangle::from_size(Size::from((400.0, 200.0)));
+        let dst = Rectangle::new(Point::from((40, 50)), Size::from((200, 100)));
+        let frame = Rectangle::new(Point::from((10, 20)), Size::from((300, 200)));
+        let geo = frame_to_texture_geometry(src, dst, frame);
+        // Surface is shifted 30 physical px right/down; scaled by 2x -> -60 texture px.
+        assert!((geo[0] - -60.0).abs() < 0.01);
+        assert!((geo[1] - -60.0).abs() < 0.01);
+        // Frame size 300x200 scaled by 2x -> 600x400.
+        assert!((geo[2] - 600.0).abs() < 0.01);
+        assert!((geo[3] - 400.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn texture_radius_scales_with_the_source_to_dest_ratio() {
+        let src = Rectangle::from_size(Size::from((400.0, 200.0)));
+        let dst = Rectangle::new(Point::from((0, 0)), Size::from((200, 100)));
+        assert!((texture_radius(src, dst, 16) - 32.0).abs() < 0.01);
     }
 }

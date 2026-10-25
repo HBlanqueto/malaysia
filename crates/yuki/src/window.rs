@@ -136,6 +136,11 @@ impl Window<'_> {
         )
     }
 
+    /// The window state that affects decoration.
+    pub fn state(&self) -> WindowState {
+        self.data.state()
+    }
+
     /// Whether the client draws its own chrome (CSD).
     pub fn is_client_decorated(&self) -> bool {
         self.decoration == Decoration::Client
