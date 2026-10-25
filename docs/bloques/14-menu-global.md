@@ -4,9 +4,10 @@ Estado: **14a aceptado** (popups y control de menú en CelestialKit, 2026-10-24,
 ThinkPad, sesión anidada). **14b-1 implementado** (menús de escritorio en
 `yuki-shell menubar`, 2026-10-24): falta el teclado en los menús y la aceptación
 manual. **14c implementado** (2026-10-25, sesión anidada): menús de la app
-enfocada con el respaldo de `.desktop`; la captura y la prueba funcional están
-abajo, con las limitaciones del protocolo anotadas. 14b-2 (diálogos del
-sistema) sigue pendiente.
+enfocada con el respaldo de `.desktop`; el compositor ya emite el `state`
+completo de wlr, `closed` e implementa `set_maximized`/`unset_maximized`, así
+que la barra usa solo `ToplevelInfo`. La captura y la prueba funcional están
+abajo. 14b-2 (diálogos del sistema) sigue pendiente.
 
 ## Qué hay hecho
 
@@ -56,9 +57,10 @@ let items = vec![
         shortcut: Some("Ctrl+N".to_string()),
         enabled: true,
         check: CheckState::None,
+        icon: None,
     },
     MenuItem::Separator,
-    MenuItem::Submenu { label: "Recent".to_string(), enabled: true, items: vec![] },
+    MenuItem::Submenu { label: "Recent".to_string(), enabled: true, items: vec![], icon: None },
 ];
 let palette = theme::menu_palette(&theme::resolved());
 let view = MenuView::new(
@@ -327,88 +329,84 @@ vertical; además hay `info` (círculo con i) y `gear`.
 
 ![Menú de la app en claro](img/14c/10.png)
 
-`10.png`: menú de Foot sobre la barra con el icono de info, el gear, Servicios
-con chevron, Ocultar/Ocultar otros/Salir y los atajos `❖H`, `⌥❖H` y `❖Q`.
+`10.png`: menú de Foot con **Servicios** desplegado; el icono de info y el gear
+quedan separados de su etiqueta por 6 px, y el dock muestra su tile.
 
 ![Menú Ventana en claro](img/14c/11.png)
 
-`11.png`: Ventana con Minimizar/Maximizar habilitados, Rellenar y Centrar
-grises, los dos submenús, Cerrar ventana, la lista de ventanas de Foot y `✓` en
-la activa.
+`11.png`: Ventana con **Trasladar y redimensionar** desplegado, Minimizar y
+Maximizar habilitados, Rellenar y Centrar grises, la lista de ventanas de Foot y
+`✓` en la activa (la segunda, con el mismo título que la primera no importa:
+el estado viene de `ToplevelInfo`).
 
-![Trasladar y redimensionar en claro](img/14c/12.png)
+![Pantalla completa en claro](img/14c/12.png)
 
-`12.png`: el submenú de disposición, con los headers Mitades, Cuartos y
-Disposición, los iconos de mitad/cuarto y los atajos con flechas.
+`12.png`: Ventana con **Ventana a pantalla completa** desplegado, su icono split
+y solo el submenú habilitado.
 
-![Pantalla completa en claro](img/14c/12b.png)
+![Ayuda en claro](img/14c/12b.png)
 
-`12b.png`: el submenú Ventana a pantalla completa con su icono split y todo
-gris salvo el submenú que lo abre.
+`12b.png`: menú Ayuda, con el buscador de 26 px, el anillo de acento y la lupa;
+solo «Informar de un problema…» habilitado.
 
 ![Menú Ventana en oscuro](img/14c/11-dark.png)
 
-`11-dark.png`: el mismo Ventana en oscuro.
-
-![Menú Ayuda en claro](img/14c/ayuda.png)
-
-`ayuda.png` (extra, sin mockup): el buscador de 26 px con el anillo de acento y
-la lupa, y solo «Informar de un problema…» habilitado.
+`11-dark.png`: el mismo Ventana con Trasladar y redimensionar abierto en oscuro.
 
 Los mockups de `docs/bloques/img/14c/mockups/` no están en el repositorio; las
 capturas se generaron con la especificación de este bloque y los nombres 10,
-11, 12, 12b.
+11, 12 y 12b, con los submenús abiertos como en los mockups.
 
 ### Prueba funcional con `YUKI_TEST_INPUT`
 
-Se lanzó `./dev.sh demo --light` con secuencias de puntero/teclado. Extractos
-reales del log del compositor (se omiten las líneas de geometría):
+Sesión anidada en claro (`./dev.sh demo`, `yuki-shell wallpaper/menubar/dock`)
+y **dos `foot -T Yuki`** de distinto tamaño (800×560 y 520×360) para que el
+título no pueda distinguirlas: todo sale de `ToplevelInfo`. Extractos reales del
+log del compositor (se omiten las líneas de geometría):
 
-**Ocultar Foot.** Antes: `parent` enfocado. Después de pulsar «Ocultar»:
-`window minimized window=4` y el foco pasa a `csd`:
-
-```text
-app_id="io.github.hblanqueto.yuki.demo.parent" ... hidden=true minimized=true ... focused=false
-app_id="io.github.hblanqueto.yuki.demo.csd"    ... hidden=false minimized=false ... focused=true focused=Some(WindowId(3))
-```
-
-**Mostrar todo.** `window restored window=4` y la ventana vuelve visible, sin
-robar el foco a `csd`:
+**El ✓ sigue a la ventana enfocada.** Clic en la ventana grande y luego en el
+tile de la pequeña en el dock; el ✓ de Ventana pasa de la primera entrada a la
+segunda, y el focus stack pasa de `focused=Some(WindowId(0))` a
+`focused=Some(WindowId(1))`:
 
 ```text
-app_id="io.github.hblanqueto.yuki.demo.parent" ... hidden=false minimized=false ... focused=false
-app_id="io.github.hblanqueto.yuki.demo.csd"    ... hidden=false minimized=false ... focused=true focused=Some(WindowId(3))
+app_id="foot" ... size 796x582 ... focused=false
+app_id="foot" ... size 516x378 ... focused=true focused=Some(WindowId(1))
 ```
 
-**Minimizar.** `window minimized window=3`; la pila pasa de
-`focused=Some(WindowId(3))` a `focused=Some(WindowId(4))` con la ventana 3
-`hidden=true minimized=true`.
+**Minimizar con el semáforo amarillo** (no desde la barra). La ventana pequeña
+sale y el foco pasa a la grande; «Mostrar todo» queda habilitado (la captura de
+la prueba lo muestra en negro, no gris):
 
-**Maximizar dos veces.** El menú envía `set_maximized`/`unset_maximized`, pero
-el compositor todavía no implementa esas peticiones
-(`crates/yuki/src/foreign.rs`, rama `_ => {}`): no hay
-`window maximized`/`window restored` ni cambio de geometría. Queda pendiente
-en el compositor.
+```text
+window minimized window=1
+app_id="foot" ... hidden=true minimized=true ... focused=false
+app_id="foot" ... hidden=false minimized=false ... focused=true focused=Some(WindowId(0))
+```
 
-**Cerrar ventana.** «Salir de {App}» produce `window removed windows=4
-topmost=Some(WindowId(4))` y el foco pasa a la siguiente ventana. «Cerrar
-ventana» usa el mismo `close()` sobre la activa.
+**«Mostrar todo» las devuelve.** `window restored window=1`; la ventana vuelve
+visible sin robar el foco a la grande.
 
-**Una entrada de la lista.** Al pulsar la primera entrada de Foot el foco pasa
-de `focused=Some(WindowId(1))` a `focused=Some(WindowId(0))` y el popup se
-cierra.
+**Ventana › Maximizar, dos veces.** El primer clic produce
+`window maximized window=0` con `states=[0, 2]` (Maximized + Activated) y la
+segunda `window restored window=0`; la geometría vuelve a
+`x: 242, y: 91, 796×582`.
+
+**Cerrar con el semáforo rojo.** El mismo frame del clic registra
+`window removed windows=1 topmost=Some(WindowId(1))`; la lista de Ventana y el
+dock se quedan con una sola entrada al instante.
+
+**Dock.** Los tiles aparecen sin mover el puntero a la zona inferior: el cambio
+de `Toplevels` despierta el loop (`sync_toplevels` hace `ping`) y el dock
+repinta con el texto inactivo de `text`, no `on-accent`.
 
 ### Limitaciones conocidas
 
-- El compositor **no envía el evento `State` de wlr** ni implementa
-  `set_maximized`/`unset_maximized`, y no emite `closed` en los handles de
-  management. Por eso el menú usa el `active` de `State` cuando llega y, si no,
-  recurre al título de `window.domain` y a la última ventana de la app; las
-  minimizadas que oculta este proceso se recuerdan en memoria
-  (`focused.rs`, comentarios `shortcut:`). Cuando el compositor complete el
-  protocolo, esos respaldos se pueden borrar.
 - En la sesión anidada con `window.domain` vacío la barra vuelve al modo
   escritorio; no hay «Mostrar todo» global en ese modo.
+- El dock sigue eligiendo el tile resaltado por el título de `window.domain`:
+  con dos ventanas del mismo título resalta las dos. La barra ya no usa ese
+  respaldo.
 
 ## Aceptación de 14a
 
@@ -546,10 +544,6 @@ ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 
 - Repetir la prueba de 14a y 14b-1 en DRM real (pendiente de 8b/14b).
 - 14b-2: diálogos del sistema (Suspender, Reiniciar, Apagar, Cerrar sesión).
-- Compositor: emitir `State` (Activated/Maximized/Minimized y `closed`) en
-  `zwlr_foreign_toplevel_management_v1` e implementar
-  `set_maximized`/`unset_maximized`. Sin eso, Maximizar es un no-op y los
-  respaldos de 14c siguen haciendo falta.
 - Aceptación manual de 14c en DRM (con el protocolo completo).
 - Navegación por teclado completa dentro de los popups (flechas, Esc, Enter)
   y atajos subrayados al pulsar `Alt`.
