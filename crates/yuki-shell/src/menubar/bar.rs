@@ -21,7 +21,7 @@ use yuki_appearance::{Resolved, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::menu::{self, MenuState, MenuTitleSpec};
+use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 
 const MAX_TITLES: usize = 8;
@@ -95,6 +95,7 @@ impl App for BarApp {
             glyph: Some(system::SNOWFLAKE_SVG),
             bold: false,
             items: Rc::new(system::system_menu_items),
+            searchable: None,
             on_activate: system::on_system_action,
             anchor: anchors[0].clone(),
             enabled: true,
@@ -128,17 +129,31 @@ impl App for BarApp {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
+            let help_searchable: SearchableItems = {
+                let app_name = app_name.clone();
+                let app_id = app_id.clone();
+                Rc::new(move || {
+                    focused::searchable_menu_items(
+                        &app_name,
+                        &app_id,
+                        &Toplevels::get().list.read().clone(),
+                    )
+                })
+            };
             let focused_titles = [
-                (app_name, app_items, 1usize),
-                ("Ventana".to_string(), window_items, 2),
-                ("Ayuda".to_string(), help_items, 3),
+                (app_name.clone(), app_items, 1usize, None),
+                ("Ventana".to_string(), window_items, 2, None),
+                ("Ayuda".to_string(), help_items, 3, Some(help_searchable)),
             ];
-            for (offset, (label, items, anchor)) in focused_titles.into_iter().enumerate() {
+            for (offset, (label, items, anchor, searchable)) in
+                focused_titles.into_iter().enumerate()
+            {
                 specs.push(MenuTitleSpec {
                     label,
                     glyph: None,
                     bold: offset == 0,
                     items,
+                    searchable,
                     on_activate: focused::on_action,
                     anchor: anchors[anchor].clone(),
                     enabled: true,
@@ -164,6 +179,7 @@ impl App for BarApp {
                     glyph: None,
                     bold: offset == 0,
                     items,
+                    searchable: None,
                     on_activate: appmenu::on_action,
                     anchor: anchors[offset + 1].clone(),
                     enabled: true,

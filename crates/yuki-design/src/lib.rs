@@ -397,6 +397,8 @@ pub struct MenuPalette {
     pub header_font_size: f32,
     /// Group header font weight.
     pub header_weight: i32,
+    /// Group header row height.
+    pub header_height: f32,
     /// Search field height.
     pub search_height: f32,
     /// Vertical margin around the search field.

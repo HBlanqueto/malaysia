@@ -994,6 +994,7 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: b
          \x20   icon_size: {},\n\
          \x20   header_font_size: {},\n\
          \x20   header_weight: {},\n\
+         \x20   header_height: {},\n\
          \x20   search_height: {},\n\
          \x20   search_margin_y: {},\n\
          \x20   search_ring_width: {},\n\
@@ -1123,6 +1124,11 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: b
             "components.shell.menu.header.weight",
             COMPONENTS
         ) as i32,
+        float(number(
+            components,
+            "components.shell.menu.header.height",
+            COMPONENTS
+        )),
         float(number(
             components,
             "components.shell.menu.search.height",

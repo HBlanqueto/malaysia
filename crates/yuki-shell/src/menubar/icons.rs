@@ -29,11 +29,17 @@ pub const QUARTER_BOTTOM_LEFT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\"
 /// Bottom-right quarter filled.
 pub const QUARTER_BOTTOM_RIGHT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"8\" y=\"8\" width=\"6\" height=\"5\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
 
-/// Two halves side by side, both filled.
-pub const HALVES_SIDE_BY_SIDE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"6\" height=\"10\" fill=\"currentColor\"/><rect x=\"8\" y=\"3\" width=\"6\" height=\"10\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+/// Two halves side by side: left opaque, right 45 %.
+pub const HALVES_LEFT_RIGHT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"5.5\" height=\"10\" fill=\"currentColor\"/><rect x=\"8.5\" y=\"3\" width=\"5.5\" height=\"10\" fill=\"currentColor\" fill-opacity=\"0.45\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
 
-/// Two halves stacked, both filled.
-pub const HALVES_STACKED: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"5\" fill=\"currentColor\"/><rect x=\"2\" y=\"8\" width=\"12\" height=\"5\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+/// Two halves side by side: right opaque, left 45 %.
+pub const HALVES_RIGHT_LEFT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"5.5\" height=\"10\" fill=\"currentColor\" fill-opacity=\"0.45\"/><rect x=\"8.5\" y=\"3\" width=\"5.5\" height=\"10\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// Two halves stacked: top opaque, bottom 45 %.
+pub const HALVES_TOP_BOTTOM: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"4.5\" fill=\"currentColor\"/><rect x=\"2\" y=\"8.5\" width=\"12\" height=\"4.5\" fill=\"currentColor\" fill-opacity=\"0.45\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// Two halves stacked: bottom opaque, top 45 %.
+pub const HALVES_BOTTOM_TOP: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"12\" height=\"4.5\" fill=\"currentColor\" fill-opacity=\"0.45\"/><rect x=\"2\" y=\"8.5\" width=\"12\" height=\"4.5\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
 
 /// Layout grid: the frame with a cross.
 pub const GRID: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M8 3v10M2 8h12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
@@ -62,8 +68,10 @@ mod tests {
             QUARTER_TOP_RIGHT,
             QUARTER_BOTTOM_LEFT,
             QUARTER_BOTTOM_RIGHT,
-            HALVES_SIDE_BY_SIDE,
-            HALVES_STACKED,
+            HALVES_LEFT_RIGHT,
+            HALVES_RIGHT_LEFT,
+            HALVES_TOP_BOTTOM,
+            HALVES_BOTTOM_TOP,
             GRID,
             SPLIT,
             INFO,

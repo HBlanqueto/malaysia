@@ -263,6 +263,42 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     ]
 }
 
+/// All entries that the Help search field can reach, paired with their menu
+/// path. Keeps labels in one place so tests and UI never drift apart.
+pub fn searchable_menu_items(
+    app_name: &str,
+    app_id: &str,
+    toplevels: &[ToplevelInfo],
+) -> Vec<(String, MenuItem)> {
+    let mut out = Vec::new();
+    collect_searchable(
+        &app_menu_items(app_name, app_id, toplevels),
+        app_name,
+        &mut out,
+    );
+    collect_searchable(
+        &window_menu_items(app_name, app_id, toplevels),
+        "Ventana",
+        &mut out,
+    );
+    out
+}
+
+fn collect_searchable(items: &[MenuItem], path: &str, out: &mut Vec<(String, MenuItem)>) {
+    for item in items {
+        match item {
+            MenuItem::Action { .. } => out.push((path.to_string(), item.clone())),
+            MenuItem::Submenu {
+                label, items: sub, ..
+            } => {
+                let sub_path = format!("{path} › {label}");
+                collect_searchable(sub, &sub_path, out);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Handles an action from the focused-app menus.
 pub fn on_action(id: String) {
     let toplevels = Toplevels::get();
@@ -367,28 +403,28 @@ fn move_resize_items() -> Vec<MenuItem> {
         header("Cuartos"),
         action(
             "app-quarter-top-left",
-            "Parte superior izquierda",
+            "Superior izquierdo",
             None,
             false,
             Some(icons::QUARTER_TOP_LEFT),
         ),
         action(
             "app-quarter-top-right",
-            "Parte superior derecha",
+            "Superior derecho",
             None,
             false,
             Some(icons::QUARTER_TOP_RIGHT),
         ),
         action(
             "app-quarter-bottom-left",
-            "Parte inferior izquierda",
+            "Inferior izquierdo",
             None,
             false,
             Some(icons::QUARTER_BOTTOM_LEFT),
         ),
         action(
             "app-quarter-bottom-right",
-            "Parte inferior derecha",
+            "Inferior derecho",
             None,
             false,
             Some(icons::QUARTER_BOTTOM_RIGHT),
@@ -400,32 +436,32 @@ fn move_resize_items() -> Vec<MenuItem> {
             "Izquierda y derecha",
             Some("Ctrl+Shift+Super+Left"),
             false,
-            Some(icons::HALVES_SIDE_BY_SIDE),
+            Some(icons::HALVES_LEFT_RIGHT),
         ),
         action(
             "app-layout-reversed-side-by-side",
             "Derecha e izquierda",
             Some("Ctrl+Shift+Super+Right"),
             false,
-            Some(icons::HALVES_SIDE_BY_SIDE),
+            Some(icons::HALVES_RIGHT_LEFT),
         ),
         action(
             "app-layout-stacked",
             "Superior e inferior",
             Some("Ctrl+Shift+Super+Up"),
             false,
-            Some(icons::HALVES_STACKED),
+            Some(icons::HALVES_TOP_BOTTOM),
         ),
         action(
             "app-layout-reversed-stacked",
             "Inferior y superior",
             Some("Ctrl+Shift+Super+Down"),
             false,
-            Some(icons::HALVES_STACKED),
+            Some(icons::HALVES_BOTTOM_TOP),
         ),
         action(
             "app-layout-quarters",
-            "Cuartos",
+            "En cuartos",
             None,
             false,
             Some(icons::GRID),
@@ -433,7 +469,7 @@ fn move_resize_items() -> Vec<MenuItem> {
         MenuItem::Separator,
         action(
             "app-move-restore",
-            "Volver al tamaño anterior",
+            "Regresar al tamaño anterior",
             Some("Ctrl+Super+R"),
             false,
             None,
@@ -651,17 +687,17 @@ mod tests {
                 "Superior",
                 "Inferior",
                 "Cuartos",
-                "Parte superior izquierda",
-                "Parte superior derecha",
-                "Parte inferior izquierda",
-                "Parte inferior derecha",
+                "Superior izquierdo",
+                "Superior derecho",
+                "Inferior izquierdo",
+                "Inferior derecho",
                 "Disposición",
                 "Izquierda y derecha",
                 "Derecha e izquierda",
                 "Superior e inferior",
                 "Inferior y superior",
-                "Cuartos",
-                "Volver al tamaño anterior",
+                "En cuartos",
+                "Regresar al tamaño anterior",
             ]
         );
         assert!(matches!(layout[0], MenuItem::Header { .. }));
@@ -676,5 +712,60 @@ mod tests {
         assert!(!enabled(&items, "Ayuda de Foot"));
         assert!(!enabled(&items, "Atajos de teclado de Yuki"));
         assert!(!enabled(&items, "Documentación de Yuki"));
+    }
+
+    fn search_results(query: &str) -> Vec<(String, String)> {
+        searchable_menu_items("Foot", "foot", &toplevels())
+            .into_iter()
+            .filter(|(_, item)| {
+                item.label()
+                    .is_some_and(|label| normalize_query(label).contains(&normalize_query(query)))
+            })
+            .map(|(path, item)| (path, item.label().unwrap().to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn search_finds_hide_actions_under_app_path() {
+        let results = search_results("ocul");
+        assert_eq!(
+            results,
+            vec![
+                ("Foot".to_string(), "Ocultar Foot".to_string()),
+                ("Foot".to_string(), "Ocultar otros".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn search_finds_left_actions_under_window_layout_path() {
+        let results = search_results("IZQUIER");
+        let labels: Vec<&str> = results.iter().map(|(_, label)| label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                "Izquierda",
+                "Superior izquierdo",
+                "Inferior izquierdo",
+                "Izquierda y derecha",
+                "Derecha e izquierda",
+                "Izquierda de la pantalla",
+            ]
+        );
+        let window_layout = "Ventana › Trasladar y redimensionar";
+        for (path, _) in &results[..5] {
+            assert_eq!(path, window_layout);
+        }
+        assert_eq!(results[5].0, "Ventana › Ventana a pantalla completa");
+    }
+
+    fn normalize_query(text: &str) -> String {
+        text.to_lowercase()
+            .replace('á', "a")
+            .replace('é', "e")
+            .replace('í', "i")
+            .replace('ó', "o")
+            .replace(['ú', 'ü'], "u")
+            .replace('ñ', "n")
     }
 }

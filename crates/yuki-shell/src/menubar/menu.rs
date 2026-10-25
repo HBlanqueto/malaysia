@@ -22,6 +22,9 @@ use yuki_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WID
 
 use crate::menubar::rgba;
 
+/// Function that lazily returns searchable menu entries (path, item).
+pub type SearchableItems = Rc<dyn Fn() -> Vec<(String, MenuItem)>>;
+
 /// One title that can open a root menu popup.
 #[derive(Clone)]
 pub struct MenuTitleSpec {
@@ -31,6 +34,8 @@ pub struct MenuTitleSpec {
     /// Draw the label in the bold app-name weight.
     pub bold: bool,
     pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
+    /// Optional searchable entries for the help search field.
+    pub searchable: Option<SearchableItems>,
     pub on_activate: fn(String),
     /// Position and size of the title highlight, set by `on_sized`.
     pub anchor: Rc<Cell<(f32, f32)>>,
@@ -86,11 +91,14 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
     let on_activate = spec.on_activate;
-    let view = MenuView::new(items, on_activate, on_dismiss_all, palette).with_navigation(
+    let mut view = MenuView::new(items, on_activate, on_dismiss_all, palette).with_navigation(
         move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
         },
     );
+    if let Some(searchable_fn) = &spec.searchable {
+        view = view.with_searchable(searchable_fn());
+    }
 
     let open_label = state.open_label.clone();
     let dismissed_label = label.clone();

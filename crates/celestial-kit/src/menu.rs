@@ -181,6 +181,8 @@ pub enum MenuItem {
     Separator,
     /// A non-selectable search field. Visual only for now.
     SearchField { placeholder: String },
+    /// A filtered search result carrying its menu path.
+    SearchResult { path: String, item: Box<MenuItem> },
 }
 
 impl MenuItem {
@@ -188,19 +190,24 @@ impl MenuItem {
         match self {
             MenuItem::Action { enabled, .. } => *enabled,
             MenuItem::Submenu { enabled, .. } => *enabled,
+            MenuItem::SearchResult { item, .. } => item.enabled(),
             MenuItem::Header { .. } | MenuItem::Separator | MenuItem::SearchField { .. } => false,
         }
     }
 
     fn selectable(&self) -> bool {
-        matches!(self, MenuItem::Action { .. } | MenuItem::Submenu { .. }) && self.enabled()
+        matches!(
+            self,
+            MenuItem::Action { .. } | MenuItem::Submenu { .. } | MenuItem::SearchResult { .. }
+        ) && self.enabled()
     }
 
-    fn label(&self) -> Option<&str> {
+    pub fn label(&self) -> Option<&str> {
         match self {
             MenuItem::Action { label, .. }
             | MenuItem::Submenu { label, .. }
             | MenuItem::Header { label } => Some(label),
+            MenuItem::SearchResult { item, .. } => item.label(),
             MenuItem::Separator | MenuItem::SearchField { .. } => None,
         }
     }
@@ -208,6 +215,7 @@ impl MenuItem {
     fn shortcut(&self) -> Option<String> {
         match self {
             MenuItem::Action { shortcut, .. } => shortcut.as_deref().map(format_shortcut),
+            MenuItem::SearchResult { item, .. } => item.shortcut(),
             MenuItem::Submenu { .. }
             | MenuItem::Header { .. }
             | MenuItem::Separator
@@ -219,6 +227,7 @@ impl MenuItem {
         match self {
             MenuItem::Separator => m.separator_height + m.separator_margin_y * 2.0,
             MenuItem::SearchField { .. } => m.search_height + m.search_margin_y * 2.0,
+            MenuItem::Header { .. } => m.header_height,
             _ => m.item_height,
         }
     }
@@ -232,6 +241,7 @@ pub struct MenuView {
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
     size: (f32, f32),
+    searchable: Option<Rc<Vec<(String, MenuItem)>>>,
 }
 
 impl MenuView {
@@ -251,7 +261,16 @@ impl MenuView {
             on_navigation: None,
             palette,
             size,
+            searchable: None,
         }
+    }
+
+    /// Attaches a list of searchable items. When the menu contains a
+    /// [`MenuItem::SearchField`], typing filters these entries and shows them
+    /// under a "Elementos del menú" header.
+    pub fn with_searchable(mut self, items: Vec<(String, MenuItem)>) -> Self {
+        self.searchable = Some(Rc::new(items));
+        self
     }
 
     /// Attaches a root-navigation callback.
@@ -313,6 +332,7 @@ impl Clone for MenuView {
             on_navigation: self.on_navigation.clone(),
             palette: self.palette,
             size: self.size,
+            searchable: self.searchable.clone(),
         }
     }
 }
@@ -335,26 +355,56 @@ impl App for MenuView {
         let opens_left = popup.as_ref().is_some_and(PopupHandle::opens_left);
         let focused = use_state(|| first_selectable(&items));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
+        let query = use_state(String::new);
+        let result_focused = use_state(|| None::<usize>);
+        let searchable = self.searchable.clone();
+
+        let has_search = searchable.is_some();
+        let query_text = (*query.read()).clone();
+        let visible = visible_items(
+            &items,
+            searchable.as_deref().map(|v| v.as_slice()),
+            &query_text,
+        );
+        let results_start = visible
+            .iter()
+            .position(|item| matches!(item, MenuItem::SearchResult { .. }));
+        let results_count = if let Some(start) = results_start {
+            visible
+                .iter()
+                .skip(start)
+                .take_while(|item| matches!(item, MenuItem::SearchResult { .. }))
+                .count()
+        } else {
+            0
+        };
 
         let focused_index = *focused.read();
+        let result_focused_index = *result_focused.read();
 
-        let rows: Vec<Element> = items
+        let rows: Vec<Element> = visible
             .iter()
             .enumerate()
             .map(|(index, item)| {
+                let is_focused = if !query_text.is_empty() && results_start.is_some() {
+                    result_focused_index == Some(index)
+                } else {
+                    focused_index == Some(index)
+                };
                 render_item(
                     item,
                     index,
-                    focused_index == Some(index),
+                    is_focused,
                     m,
                     popup.clone(),
                     opens_left,
                     on_activate.clone(),
                     on_dismiss_all.clone(),
-                    items.clone(),
+                    Rc::new(visible.clone()),
                     focused,
                     open_child_id.clone(),
                     size,
+                    query,
                 )
             })
             .collect();
@@ -401,27 +451,61 @@ impl App for MenuView {
         for family in SANS_FAMILIES {
             root = root.font_family(family);
         }
+        let visible_for_keys = Rc::new(visible.clone());
         root.on_global_key_down(move |event: Event<KeyboardEventData>| {
             let mut focused = focused;
+            let mut query = query;
+            let mut result_focused = result_focused;
             let open_child_id = open_child_id.clone();
             let current = *focused.read();
+            let query_text = (*query.read()).clone();
+            let result_current = *result_focused.read();
+            let searching = has_search && !query_text.is_empty();
             match event.key {
                 Key::Named(NamedKey::ArrowDown) => {
-                    focused.set(next_selectable(&items, current, 1));
+                    if searching {
+                        if results_count > 0 {
+                            let start = results_start.unwrap();
+                            let next = result_current
+                                .map_or(start, |i| (i + 1).min(start + results_count - 1));
+                            result_focused.set(Some(next));
+                        }
+                    } else {
+                        focused.set(next_selectable(&items, current, 1));
+                    }
                 }
                 Key::Named(NamedKey::ArrowUp) => {
-                    focused.set(next_selectable(&items, current, -1));
+                    if searching {
+                        if results_count > 0 {
+                            let start = results_start.unwrap();
+                            let prev = result_current.map_or(start + results_count - 1, |i| {
+                                i.saturating_sub(1).max(start)
+                            });
+                            result_focused.set(Some(prev));
+                        }
+                    } else {
+                        focused.set(next_selectable(&items, current, -1));
+                    }
                 }
                 Key::Named(NamedKey::Home) => {
-                    focused.set(first_selectable(&items));
+                    if !searching {
+                        focused.set(first_selectable(&items));
+                    }
                 }
                 Key::Named(NamedKey::End) => {
-                    focused.set(last_selectable(&items));
+                    if !searching {
+                        focused.set(last_selectable(&items));
+                    }
                 }
                 Key::Named(NamedKey::Enter) => {
-                    if let Some(index) = *focused.read() {
+                    let (index, source): (Option<usize>, &[MenuItem]) = if searching {
+                        (result_current, visible_for_keys.as_slice())
+                    } else {
+                        (current, items.as_slice())
+                    };
+                    if let Some(index) = index {
                         activate_or_open(
-                            &items,
+                            source,
                             index,
                             popup.clone(),
                             size,
@@ -434,9 +518,14 @@ impl App for MenuView {
                     }
                 }
                 Key::Character(ref ch) if ch == " " => {
-                    if let Some(index) = *focused.read() {
+                    let (index, source): (Option<usize>, &[MenuItem]) = if searching {
+                        (result_current, visible_for_keys.as_slice())
+                    } else {
+                        (current, items.as_slice())
+                    };
+                    if let Some(index) = index {
                         activate_or_open(
-                            &items,
+                            source,
                             index,
                             popup.clone(),
                             size,
@@ -448,8 +537,34 @@ impl App for MenuView {
                         );
                     }
                 }
+                Key::Character(ref ch) if has_search => {
+                    let mut text = query_text;
+                    text.push_str(ch);
+                    query.set(text);
+                    result_focused.set(results_start);
+                }
+                Key::Named(NamedKey::Backspace) if has_search => {
+                    let mut text = query_text;
+                    text.pop();
+                    query.set(text);
+                    result_focused.set(results_start);
+                }
+                Key::Named(NamedKey::Escape) if has_search => {
+                    if query_text.is_empty() {
+                        if let Some(popup) = &popup {
+                            popup.close();
+                        }
+                    } else {
+                        query.set(String::new());
+                        result_focused.set(None);
+                        focused.set(first_selectable(&items));
+                    }
+                }
                 Key::Named(NamedKey::ArrowRight) => {
-                    if let Some(index) = *focused.read() {
+                    if searching {
+                        return;
+                    }
+                    if let Some(index) = current {
                         if let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
                             && let Some(popup) = popup.clone()
                         {
@@ -462,7 +577,7 @@ impl App for MenuView {
                                 on_activate.clone(),
                                 on_dismiss_all.clone(),
                                 open_child_id,
-                                items.clone(),
+                                Rc::new(items.to_vec()),
                                 opens_left,
                             );
                         } else if popup.is_some()
@@ -475,7 +590,7 @@ impl App for MenuView {
                 Key::Named(NamedKey::ArrowLeft) if popup.is_some() && on_navigation.is_some() => {
                     on_navigation.as_ref().unwrap()(MenuNavigation::Prev);
                 }
-                Key::Named(NamedKey::ArrowLeft) => {
+                Key::Named(NamedKey::ArrowLeft) if !searching => {
                     if let Some(popup) = &popup {
                         popup.close();
                     }
@@ -543,12 +658,11 @@ fn next_selectable(items: &[MenuItem], current: Option<usize>, delta: isize) -> 
 }
 
 fn activate_at(items: &[MenuItem], index: usize) -> Option<String> {
-    if let Some(MenuItem::Action { id, enabled, .. }) = items.get(index)
-        && *enabled
-    {
-        return Some(id.clone());
+    match items.get(index)? {
+        MenuItem::Action { id, enabled, .. } if *enabled => Some(id.clone()),
+        MenuItem::SearchResult { item, .. } => activate_at(std::slice::from_ref(item), 0),
+        _ => None,
     }
-    None
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -582,6 +696,85 @@ fn activate_or_open(
             opens_left,
         );
     }
+}
+
+/// Removes accents and lowercases a query so searches are case and accent
+/// insensitive.
+fn normalize_query(text: &str) -> String {
+    text.to_lowercase()
+        .replace('á', "a")
+        .replace('é', "e")
+        .replace('í', "i")
+        .replace('ó', "o")
+        .replace(['ú', 'ü'], "u")
+        .replace('ñ', "n")
+        .replace('Á', "a")
+        .replace('É', "e")
+        .replace('Í', "i")
+        .replace('Ó', "o")
+        .replace(['Ú', 'Ü'], "u")
+        .replace('Ñ', "n")
+}
+
+fn filter_search_results(
+    query: &str,
+    searchable: &[(String, MenuItem)],
+) -> Vec<(String, MenuItem)> {
+    let normalized = normalize_query(query);
+    searchable
+        .iter()
+        .filter(|(_, item)| {
+            item.label()
+                .is_some_and(|label| normalize_query(label).contains(&normalized))
+        })
+        .cloned()
+        .collect()
+}
+
+/// Builds the items actually rendered: the original list when there is no
+/// active query, or the search field + results + the original help items when
+/// there is.
+fn visible_items(
+    items: &[MenuItem],
+    searchable: Option<&[(String, MenuItem)]>,
+    query: &str,
+) -> Vec<MenuItem> {
+    let Some(searchable) = searchable else {
+        return items.to_vec();
+    };
+    if query.is_empty() {
+        return items.to_vec();
+    }
+    let mut out = Vec::new();
+    let mut saw_search = false;
+    for item in items {
+        if matches!(item, MenuItem::SearchField { .. }) {
+            out.push(item.clone());
+            saw_search = true;
+        }
+    }
+    if !saw_search {
+        // Defensive: if the caller forgot the search field, add one.
+        out.push(MenuItem::SearchField {
+            placeholder: "Buscar".to_string(),
+        });
+    }
+    out.push(MenuItem::Header {
+        label: "Elementos del menú".to_string(),
+    });
+    for (path, item) in filter_search_results(query, searchable) {
+        out.push(MenuItem::SearchResult {
+            path,
+            item: Box::new(item),
+        });
+    }
+    out.push(MenuItem::Separator);
+    for item in items {
+        if !matches!(item, MenuItem::SearchField { .. }) {
+            out.push(item.clone());
+        }
+    }
+    out
 }
 
 fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
@@ -699,9 +892,10 @@ fn render_item(
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     items: Rc<Vec<MenuItem>>,
-    focused: UseState<Option<usize>>,
+    mut focused: UseState<Option<usize>>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
     size: (f32, f32),
+    query: UseState<String>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
@@ -925,14 +1119,11 @@ fn render_item(
         }
         MenuItem::Header { label: header } => rect()
             .width(Size::fill())
-            .height(Size::px(m.item_height))
-            .padding(Gaps::new(
-                0.0,
-                m.item_padding_x,
-                0.0,
-                m.item_padding_x + m.mark_width + MARK_TEXT_GAP,
-            ))
-            .cross_align(Alignment::Center)
+            .height(Size::px(m.header_height))
+            .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+            .direction(Direction::Vertical)
+            .main_align(Alignment::End)
+            .cross_align(Alignment::Start)
             .child(
                 label()
                     .text(header.clone())
@@ -942,38 +1133,157 @@ fn render_item(
                     .max_lines(1),
             )
             .into_element(),
-        MenuItem::SearchField { placeholder } => rect()
-            .width(Size::fill())
-            .height(Size::px(m.search_height))
-            .margin(Gaps::new(m.search_margin_y, 0.0, m.search_margin_y, 0.0))
-            .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
-            .background(rgba(m.search_bg))
-            .corner_radius(m.search_radius)
-            .border(
-                Border::new()
-                    .width(m.search_ring_width)
-                    .alignment(BorderAlignment::Inner)
-                    .fill(rgba(m.search_ring)),
-            )
-            .direction(Direction::Horizontal)
-            .cross_align(Alignment::Center)
-            .spacing(m.item_padding_x / 2.0)
-            .child(
-                SvgViewer::new(SEARCH_ICON.as_bytes())
-                    .width(Size::px(m.icon_size))
-                    .height(Size::px(m.icon_size))
-                    .color(rgba(m.shortcut_color))
-                    .show_loader(false)
-                    .into_element(),
-            )
-            .child(
-                label()
-                    .text(placeholder.clone())
-                    .font_size(m.font_size)
-                    .color(rgba(m.shortcut_color))
-                    .max_lines(1),
-            )
-            .into_element(),
+        MenuItem::SearchField { placeholder } => {
+            let query_text = (*query.read()).clone();
+            let has_text = !query_text.is_empty();
+            let display_text = if has_text {
+                query_text.clone()
+            } else {
+                placeholder.clone()
+            };
+            let text_color = if has_text { m.fg } else { m.shortcut_color };
+            let _text_w = measure_text(&display_text, m.font_size);
+            let mut row = rect()
+                .width(Size::fill())
+                .height(Size::px(m.search_height))
+                .margin(Gaps::new(m.search_margin_y, 0.0, m.search_margin_y, 0.0))
+                .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+                .background(rgba(m.search_bg))
+                .corner_radius(m.search_radius)
+                .border(
+                    Border::new()
+                        .width(m.search_ring_width)
+                        .alignment(BorderAlignment::Inner)
+                        .fill(rgba(m.search_ring)),
+                )
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .spacing(8.0)
+                .child(
+                    SvgViewer::new(SEARCH_ICON.as_bytes())
+                        .width(Size::px(m.icon_size))
+                        .height(Size::px(m.icon_size))
+                        .color(rgba(m.shortcut_color))
+                        .show_loader(false)
+                        .into_element(),
+                )
+                .child(
+                    label()
+                        .text(display_text)
+                        .font_size(m.font_size)
+                        .color(rgba(text_color))
+                        .max_lines(1),
+                );
+            if has_text {
+                row = row.child(
+                    rect()
+                        .width(Size::px(1.0))
+                        .height(Size::px(m.font_size))
+                        .background(rgba(m.fg))
+                        .into_element(),
+                );
+            }
+            row.into_element()
+        }
+        MenuItem::SearchResult { path, item } => {
+            let MenuItem::Action {
+                id,
+                label: label_text,
+                shortcut: shortcut_text,
+                enabled,
+                ..
+            } = item.as_ref()
+            else {
+                return rect().into_element();
+            };
+            let id = id.clone();
+            let label_text = label_text.clone();
+            let shortcut_text = shortcut_text.as_ref().map(|s| format_shortcut(s));
+            let enabled = *enabled;
+            let fg = if enabled {
+                if is_focused { m.hover_fg } else { m.fg }
+            } else {
+                m.disabled_fg
+            };
+            let shortcut_color = shortcut_fg(enabled, is_focused, m);
+            let bg = if is_focused && enabled {
+                Some(m.hover_bg)
+            } else {
+                None
+            };
+            let shortcut_w = shortcut_text
+                .as_ref()
+                .map(|s| measure_text(s, m.font_size))
+                .unwrap_or(0.0);
+            let mut row = rect()
+                .width(Size::fill())
+                .height(Size::px(m.item_height))
+                .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+                .corner_radius(m.item_radius)
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::SpaceBetween)
+                .cross_align(Alignment::Center)
+                .on_pointer_enter(move |_| {
+                    if enabled {
+                        focused.set(Some(index));
+                    }
+                })
+                .on_pointer_move(move |_| {
+                    if enabled {
+                        focused.set(Some(index));
+                    }
+                })
+                .on_mouse_down(move |_: Event<MouseEventData>| {
+                    if enabled {
+                        on_activate(id.clone());
+                        on_dismiss_all();
+                    }
+                });
+            if let Some(bg) = bg {
+                row = row.background(rgba(bg));
+            }
+            let left = rect()
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .spacing(MARK_TEXT_GAP)
+                .child(mark_slot(
+                    None,
+                    CheckState::None,
+                    fg,
+                    shortcut_fg(enabled, is_focused, m),
+                    m,
+                ))
+                .child(
+                    rect()
+                        .direction(Direction::Vertical)
+                        .main_align(Alignment::Center)
+                        .cross_align(Alignment::Start)
+                        .child(
+                            label()
+                                .text(label_text)
+                                .font_size(m.font_size)
+                                .color(rgba(fg))
+                                .max_lines(1),
+                        )
+                        .child(
+                            label()
+                                .text(path.clone())
+                                .font_size(m.header_font_size)
+                                .color(rgba(m.shortcut_color))
+                                .max_lines(1),
+                        ),
+                );
+            row.child(left)
+                .child(
+                    label()
+                        .text(shortcut_text.unwrap_or_default())
+                        .font_size(m.font_size)
+                        .color(rgba(shortcut_color))
+                        .width(Size::px(shortcut_w))
+                        .max_lines(1),
+                )
+                .into_element()
+        }
     }
 }
 

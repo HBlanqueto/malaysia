@@ -272,11 +272,17 @@ va en negrita. Sin ventana enfocada no cambia nada del modo escritorio
   El SVG se dibuja a 14 px en la misma columna de 16 px que la marca de
   verificación (`✓`/radio): el icono no ensancha el menú. Color `ink-muted`
   normal, `on-accent` en la fila resaltada y `ink-faint` deshabilitado.
-- `MenuItem::Header { label }`: 11 px, peso 600, `ink-faint`, sangrado a la
-  columna del texto. No es seleccionable y el teclado lo salta.
+- `MenuItem::Header { label }`: 11 px, peso 600, `ink-faint`, altura 22 px,
+  alineado a la columna del texto (no al icono). No es seleccionable y el teclado
+  lo salta.
 - `MenuItem::SearchField { placeholder }`: campo de 26 px con `bg-control`,
-  anillo de acento de 2 px y lupa. Por ahora es solo visual: no se selecciona y
-  no filtra (el foco de teclado lo salta).
+  anillo de acento de 2 px y lupa. Es seleccionable; al recibir texto filtra las
+  entradas buscables del menú (App, Ventana y sus submenús), muestra resultados
+  como `MenuItem::SearchResult { path, item }` con la ruta atenuada y el atajo
+  original, y permite navegar con `↑`/`↓` y activar con `Enter`.
+- `MenuItem::SearchResult { path, item }`: fila de dos líneas con el label del
+  item y su ruta (`App › Ventana › …`) en color atenuado; hereda el atajo y la
+  acción del `MenuItem::Action` original.
 - `format_shortcut` añade `← → ↑ ↓`, `↩` (Return/Enter) y `⇥` (Tab).
 - `ToplevelInfo` añade `maximized` y `minimized`, leídos del evento `State` de
   `zwlr_foreign_toplevel_management_v1`. `Toplevels` expone
@@ -310,9 +316,15 @@ cuatro cuartos. «Maximizar» alterna `set_maximized` sobre la activa.
 
 ### Menú Ayuda
 
-SearchField «Buscar» · Ayuda de {App} (gris) · — · Atajos de teclado de Yuki
-(gris) · Documentación de Yuki (gris) · Informar de un problema… (abre
-`https://github.com/HBlanqueto/yukiwm/issues` con `xdg_open`).
+SearchField «Buscar» · resultados filtrados debajo del campo · Ayuda de {App}
+(gris) · — · Atajos de teclado de Yuki (gris) · Documentación de Yuki (gris) ·
+Informar de un problema… (abre `https://github.com/HBlanqueto/yukiwm/issues` con
+`xdg_open`).
+
+El buscador indexa las entradas de **{App}**, **Ventana** y todos sus submenús.
+Al escribir se reemplazan las entradas fijas del menú por los resultados que
+contengan la subcadena (sin distinguir mayúsculas ni acentos); `Esc` vacía la
+consulta y `Enter` activa el resultado resaltado.
 
 Los atajos solo se muestran; **no** se crean keybindings. Un solo árbol de menús
 abierto a la vez lo sigue garantizando `menubar/menu.rs`. Todos los fondos
