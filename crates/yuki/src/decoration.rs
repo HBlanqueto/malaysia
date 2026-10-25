@@ -128,7 +128,7 @@ pub(crate) fn effective_decoration(
     match policy {
         crate::config::DecorationPolicy::ForceServer => Decoration::Server,
         crate::config::DecorationPolicy::ForceClient => Decoration::Client,
-        crate::config::DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
+        crate::config::DecorationPolicy::Default => requested.unwrap_or(Decoration::Client),
     }
 }
 
@@ -160,7 +160,8 @@ fn titlebar_inset(titlebar: &Titlebar) -> Insets {
 mod tests {
     use yuki_design::{TITLEBAR, Titlebar, TitlebarPosition};
 
-    use super::{Insets, Role, WindowState};
+    use super::{Insets, Role, WindowState, effective_decoration};
+    use crate::config::DecorationPolicy;
     use yuki_scene::scene::Decoration;
 
     /// A titlebar on `position` with `thickness`, reusing the real metrics.
@@ -277,6 +278,44 @@ mod tests {
             &bar,
         );
         assert_eq!(insets, Insets::ZERO);
+    }
+
+    #[test]
+    fn default_policy_prefers_client_side_when_nothing_is_requested() {
+        assert_eq!(
+            effective_decoration(DecorationPolicy::Default, None, false),
+            Decoration::Client
+        );
+    }
+
+    #[test]
+    fn default_policy_honours_an_explicit_server_request() {
+        assert_eq!(
+            effective_decoration(DecorationPolicy::Default, Some(Decoration::Server), false),
+            Decoration::Server
+        );
+    }
+
+    #[test]
+    fn default_policy_honours_an_explicit_client_request() {
+        assert_eq!(
+            effective_decoration(DecorationPolicy::Default, Some(Decoration::Client), false),
+            Decoration::Client
+        );
+    }
+
+    #[test]
+    fn force_policies_override_any_request() {
+        for requested in [None, Some(Decoration::Server), Some(Decoration::Client)] {
+            assert_eq!(
+                effective_decoration(DecorationPolicy::ForceServer, requested, false),
+                Decoration::Server
+            );
+            assert_eq!(
+                effective_decoration(DecorationPolicy::ForceClient, requested, false),
+                Decoration::Client
+            );
+        }
     }
 
     #[test]

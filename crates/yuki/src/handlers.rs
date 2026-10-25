@@ -1027,12 +1027,12 @@ impl State {
 impl XdgDecorationHandler for State {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
         // The client created the decoration object but has not chosen a mode;
-        // the protocol leaves the choice to the compositor, which chooses
-        // server-side. The configure goes out before the client attaches, so it
-        // never draws a titlebar of its own.
+        // the protocol leaves the choice to the compositor. Yuki prefers
+        // server-side, so the window gets Yuki's chrome unless a policy or a
+        // later request overrides it (ADR 0019, A1).
         self.windows
             .clear_requested_decoration(toplevel.wl_surface());
-        self.apply_requested_decoration(toplevel.wl_surface(), None);
+        self.apply_requested_decoration(toplevel.wl_surface(), Some(Decoration::Server));
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
@@ -1046,7 +1046,7 @@ impl XdgDecorationHandler for State {
         // server-side, as for a fresh decoration object.
         self.windows
             .clear_requested_decoration(toplevel.wl_surface());
-        self.apply_requested_decoration(toplevel.wl_surface(), None);
+        self.apply_requested_decoration(toplevel.wl_surface(), Some(Decoration::Server));
     }
 }
 
@@ -1134,7 +1134,7 @@ mod tests {
                 let foreign_expected = match policy {
                     DecorationPolicy::ForceServer => Decoration::Server,
                     DecorationPolicy::ForceClient => Decoration::Client,
-                    DecorationPolicy::Default => requested.unwrap_or(Decoration::Server),
+                    DecorationPolicy::Default => requested.unwrap_or(Decoration::Client),
                 };
                 assert_eq!(
                     effective_decoration(policy, requested, false),
