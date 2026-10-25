@@ -484,7 +484,7 @@ fn stop_shell_session() {
 }
 
 fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::process::Output> {
-    let mut command = crate::spawn::command("systemctl");
+    let mut command = crate::spawn::command("systemctl", &crate::config::Config::default());
     command
         .args(args)
         .stdout(Stdio::null())
@@ -493,7 +493,7 @@ fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::proces
         command.env("WAYLAND_DISPLAY", socket);
         command.env("XDG_CURRENT_DESKTOP", "Yuki");
     }
-    crate::spawn::spawn(command)?.wait_with_output()
+    crate::spawn::spawn(command, &crate::config::Config::default())?.wait_with_output()
 }
 
 fn missing_target_help() -> String {

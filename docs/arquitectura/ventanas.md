@@ -27,6 +27,12 @@ chrome; los diálogos, los popups y el fullscreen no llevan chrome. Wezterm, por
 ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
 `window.decorations = "force_server"`.
 
+Telegram (Qt) dibuja su propia barra de título y, con `window.qt_server_decorations = true`
+(predeterminado), necesita desactivarla desde la propia aplicación:
+**Ajustes › Avanzado › «Usar el marco de ventana del sistema»**. Poner
+`window.qt_server_decorations = false` devuelve el control a Qt, pero entonces
+la app no usará la titlebar de Yuki.
+
 ## Apps propias y CSD (ADR 0035)
 
 Una app de CelestialKit se identifica con un `app_id` que empieza por

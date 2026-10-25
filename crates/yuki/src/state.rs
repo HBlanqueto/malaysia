@@ -422,6 +422,7 @@ impl State {
         idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let config = Config::load();
+        crate::spawn::export_session_env(&config);
         let chrome_theme = crate::chrome::ChromeTheme::from_config(&config);
         let scale = output_scale(config.display.scale);
         // Applying the scale before the global is created means clients learn

@@ -105,6 +105,7 @@ pasará a ser por salida.
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | datos | input |
 | `window.resize_border` | entero (px lógicos) | `10` | **activa** | ancho de la banda exterior de resize en lados |
 | `window.resize_corner` | entero (px lógicos) | `20` | **activa** | longitud de la «L» exterior de resize en esquinas |
+| `window.qt_server_decorations` | bool | `true` | **activa** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` en clientes y sesión |
 
 `window.resize_border` es una banda **exterior** al lado; la «L» de
 `window.resize_corner` es exterior y puede entrar 2 px. El hit-test solo se
@@ -122,6 +123,12 @@ defecto es **`focus`** (modo foco; de momento solo registra
 `focus mode requested` y no cambia la geometría). `zoom` maximiza conservando
 el marco; `fullscreen` y el modo foco se conectarán más adelante; `none` no hace
 nada. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
+
+`qt_server_decorations` exporta `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` para los
+clientes que lanza `yuki::spawn` y en el entorno de la sesión, de modo que Qt
+use el protocolo `xdg-decoration` y reciba el marco de Yuki. Ponerlo a `false`
+permite que Qt dibuje su propia barra (como hace Telegram; véase
+[`../arquitectura/ventanas.md`](../arquitectura/ventanas.md)).
 
 ## `screenshot` — capturas (app Captura; macOS `com.apple.screencapture`)
 
@@ -312,6 +319,7 @@ green_button = "focus"          # focus | zoom | fullscreen | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20
+qt_server_decorations = true    # false para la barra nativa de Qt
 ```
 
 ```toml

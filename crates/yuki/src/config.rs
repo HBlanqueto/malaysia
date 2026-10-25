@@ -327,6 +327,11 @@ pub struct WindowConfig {
     /// The size, in logical pixels, of the square at each corner that starts a
     /// resize. Larger than `resize_border` so corners are easier to hit.
     pub resize_corner: i32,
+    /// Whether Qt applications should use the compositor's server-side
+    /// decorations. When `true` (the default), Yuki exports
+    /// `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` for spawned clients and in the
+    /// session environment, so Qt falls back to xdg-decoration / SSD.
+    pub qt_server_decorations: bool,
 }
 
 impl Default for WindowConfig {
@@ -339,6 +344,7 @@ impl Default for WindowConfig {
             focus: FocusPolicy::default(),
             resize_border: 10,
             resize_corner: 20,
+            qt_server_decorations: true,
         }
     }
 }

@@ -13,6 +13,8 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::process::{Child, Command};
 
+use crate::config::Config;
+
 /// Variables the package wrapper sets for Yuki itself.
 pub const WRAPPER_ENV: &[&str] = &[
     "LD_LIBRARY_PATH",
@@ -24,14 +26,16 @@ pub const WRAPPER_ENV: &[&str] = &[
 /// Prefix the wrapper uses to save the value each variable had before it.
 pub const ORIGINAL_PREFIX: &str = "YUKI_ORIG_";
 
-/// Builds a command with the wrapper environment removed.
+/// Builds a command with the wrapper environment removed and the Qt
+/// decoration variable set according to the configuration.
 ///
 /// The caller may still add arguments and its own environment; [`spawn`]
 /// applies the same cleanup again, so the final child cannot inherit the
 /// wrapper's Mesa paths.
-pub fn command(program: impl AsRef<OsStr>) -> Command {
+pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     let mut command = Command::new(program);
     sanitize(&mut command);
+    apply_qt_decoration(&mut command, config);
     command
 }
 
@@ -51,10 +55,42 @@ pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
     command.spawn()
 }
 
-/// Starts `command` with the wrapper environment removed.
-pub fn spawn(mut command: Command) -> io::Result<Child> {
+/// Starts `command` with the wrapper environment removed and the Qt
+/// decoration variable applied.
+pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     sanitize(&mut command);
+    apply_qt_decoration(&mut command, config);
     command.spawn()
+}
+
+/// Exports `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in the compositor's own
+/// environment, so every client launched in the session inherits it.
+///
+/// This is done once at startup and only when the value is not already set,
+/// letting the user or a wrapper override it.
+#[allow(unsafe_code)]
+pub fn export_session_env(config: &Config) {
+    if !config.window.qt_server_decorations {
+        return;
+    }
+    if std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION").is_none() {
+        // SAFETY: this runs single-threaded during compositor startup, before
+        // any other thread reads this environment variable.
+        unsafe {
+            std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+        }
+    }
+}
+
+/// Adds the Qt decoration variable to a command when the configuration asks
+/// for it and the environment has not already set one.
+fn apply_qt_decoration(command: &mut Command, config: &Config) {
+    if !config.window.qt_server_decorations {
+        return;
+    }
+    if std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION").is_none() {
+        command.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+    }
 }
 
 /// Removes every managed variable from `command` and restores its original
@@ -141,7 +177,7 @@ mod tests {
 
     #[test]
     fn the_public_path_does_not_forward_the_wrapper() {
-        let command = self::command("true");
+        let command = self::command("true", &Config::default());
         let env = child_env(&command);
         for name in WRAPPER_ENV {
             assert!(removed(&env, name), "{name} was forwarded");
@@ -157,7 +193,7 @@ mod tests {
             .env("LD_LIBRARY_PATH", "/wrapper/lib")
             .stdout(Stdio::piped());
 
-        let output = spawn(command)
+        let output = spawn(command, &Config::default())
             .expect("spawn the probe")
             .wait_with_output()
             .expect("wait for the probe");
@@ -167,5 +203,24 @@ mod tests {
             "child inherited the wrapper: {}",
             String::from_utf8_lossy(&output.stdout)
         );
+    }
+
+    #[test]
+    fn qt_server_decorations_are_exported_by_default() {
+        let command = self::command("true", &Config::default());
+        let env = child_env(&command);
+        assert_eq!(
+            value(&env, "QT_WAYLAND_DISABLE_WINDOWDECORATION"),
+            Some(&Some(OsString::from("1")))
+        );
+    }
+
+    #[test]
+    fn qt_server_decorations_can_be_disabled() {
+        let mut config = Config::default();
+        config.window.qt_server_decorations = false;
+        let command = self::command("true", &config);
+        let env = child_env(&command);
+        assert!(removed(&env, "QT_WAYLAND_DISABLE_WINDOWDECORATION"));
     }
 }
