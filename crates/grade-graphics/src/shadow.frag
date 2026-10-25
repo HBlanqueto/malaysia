@@ -22,15 +22,17 @@ void main() {
 
     // The shadow is the glow *outside* the rounded window. The window itself
     // is the clear hole; offset is the direction the shadow is cast, so the
-    // hole moves in the opposite direction.
-    vec2 center = rect.xy + rect.zw * 0.5 - offset;
+    // hole moves in the same direction (positive Y casts it downward).
+    vec2 center = rect.xy + rect.zw * 0.5 + offset;
     float dist = rounded_rect_sdf(px, center, rect.zw, radius);
 
     float d = max(dist, 0.0);
-    // blur is the total radius that contains ~3 sigma; sigma is blur/3.
-    float sigma = max(blur / 3.0, 0.001);
+    // CSS blur radius: sigma = blur / 2.
+    float sigma = max(blur / 2.0, 0.001);
     float shadow = exp(-d * d / (2.0 * sigma * sigma));
+    // Keep the shadow out of the window: only the exterior coverage counts.
+    float exterior = clamp(0.5 + dist, 0.0, 1.0);
 
     // Smithay blends premultiplied; multiply the whole colour, not just alpha.
-    gl_FragColor = color * (shadow * alpha);
+    gl_FragColor = color * (shadow * exterior * alpha);
 }

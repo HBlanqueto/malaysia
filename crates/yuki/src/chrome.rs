@@ -252,12 +252,12 @@ fn shadow_layer_element(
     layer: yuki_design::ShadowLayer,
     focus: f32,
 ) -> Option<PixelShaderElement> {
-    // The shadow must extend ~3 sigma plus the offset on every side.
-    let margin = f64::from(layer.blur) + f64::from(layer.y_offset.abs());
-    if margin <= 0.0 {
+    // The shadow extends 3 sigma plus the offset on every side; with the CSS
+    // equivalence sigma = blur / 2 that is 1.5 * blur + |offset|.
+    let margin = shadow_margin(layer);
+    if margin <= 0 {
         return None;
     }
-    let margin = margin.round() as i32;
     let area = Rectangle::new(
         Point::from((window_rect.loc.x - margin, window_rect.loc.y - margin)),
         Size::from((
@@ -291,6 +291,11 @@ fn shadow_layer_element(
         uniforms,
         Kind::Unspecified,
     ))
+}
+
+/// The space one shadow layer needs around the window, in logical pixels.
+fn shadow_margin(layer: yuki_design::ShadowLayer) -> i32 {
+    (f64::from(layer.blur) * 1.5 + f64::from(layer.y_offset.abs())).round() as i32
 }
 
 /// The centre of a titlebar button, in logical coordinates.

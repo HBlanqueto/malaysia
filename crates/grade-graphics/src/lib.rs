@@ -41,7 +41,7 @@ pub mod shaders {
     /// - `rect` (`vec4`): `xy` origin, `zw` size of the window rectangle in
     ///   physical pixels.
     /// - `radius` (`float`): window corner radius in physical pixels.
-    /// - `blur` (`float`): total blur radius containing ~3 sigma.
+    /// - `blur` (`float`): CSS blur radius; the shader uses `sigma = blur / 2`.
     /// - `offset` (`vec2`): shadow offset in physical pixels; positive Y casts
     ///   the shadow downward.
     /// - `color` (`vec4`): premultiplied RGBA.
@@ -101,6 +101,23 @@ mod tests {
         // No gl_FragCoord flipping: v_coords are already local.
         assert!(!src.contains("gl_FragCoord.y"));
         assert!(!src.contains("gl_FragCoord.x"));
+    }
+
+    #[test]
+    fn shadow_casts_downward_and_keeps_out_of_the_window() {
+        let src = shaders::SHADOW;
+        assert!(
+            src.contains("rect.zw * 0.5 + offset"),
+            "the offset must move the hole with the light, not against it"
+        );
+        assert!(
+            src.contains("blur / 2.0"),
+            "CSS blur is two sigma, not three"
+        );
+        assert!(
+            src.contains("0.5 + dist"),
+            "the shadow must be masked by the window's exterior coverage"
+        );
     }
 
     #[test]
