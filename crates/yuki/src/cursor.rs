@@ -395,6 +395,7 @@ smithay::render_elements! {
     Surface = WaylandSurfaceRenderElement<R>,
     Memory = MemoryRenderBufferRenderElement<R>,
     Solid = SolidColorRenderElement,
+    Clipped = crate::effects::ClippedSurface<R>,
 }
 
 #[cfg(test)]

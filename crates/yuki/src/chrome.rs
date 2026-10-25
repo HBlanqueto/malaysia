@@ -121,6 +121,7 @@ fn signature(
 /// The titlebar texture cache, one entry per decorated window.
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
+    shadows: HashMap<WindowId, CachedShadow>,
     text: TextEngine,
 }
 
@@ -128,6 +129,21 @@ struct Cached {
     key: Key,
     buffer: MemoryRenderBuffer,
     size: (i32, i32),
+}
+
+struct CachedShadow {
+    key: ShadowKey,
+    buffer: MemoryRenderBuffer,
+    margin: i32,
+    size: (i32, i32),
+}
+
+#[derive(PartialEq, Eq)]
+struct ShadowKey {
+    width: i32,
+    height: i32,
+    focused: bool,
+    scale: u64,
 }
 
 #[derive(PartialEq, Eq)]
@@ -147,6 +163,7 @@ impl ChromeCache {
     pub(crate) fn new() -> Self {
         Self {
             entries: HashMap::new(),
+            shadows: HashMap::new(),
             text: TextEngine::new(),
         }
     }
@@ -154,6 +171,64 @@ impl ChromeCache {
     /// Drops the cached texture of a destroyed window.
     pub(crate) fn remove(&mut self, id: WindowId) {
         self.entries.remove(&id);
+        self.shadows.remove(&id);
+    }
+
+    /// The drop shadow behind a window, cached by size, focus and scale.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn shadow_element(
+        &mut self,
+        renderer: &mut GlesRenderer,
+        id: WindowId,
+        width: i32,
+        height: i32,
+        focused: bool,
+        location: Point<i32, Logical>,
+        scale: f64,
+    ) -> Option<OutputRenderElement<GlesRenderer>> {
+        let key = ShadowKey {
+            width,
+            height,
+            focused,
+            scale: scale.to_bits(),
+        };
+        let stale = self.shadows.get(&id).is_none_or(|entry| entry.key != key);
+        if stale {
+            let (pixels, w, h, margin) =
+                crate::effects::rasterize_shadow(width, height, scale, focused);
+            let buffer = MemoryRenderBuffer::from_slice(
+                &pixels,
+                Fourcc::Abgr8888,
+                (w, h),
+                1,
+                Transform::Normal,
+                None,
+            );
+            self.shadows.insert(
+                id,
+                CachedShadow {
+                    key,
+                    buffer,
+                    margin,
+                    size: (w, h),
+                },
+            );
+        }
+        let entry = self.shadows.get(&id)?;
+        let (w, h) = entry.size;
+        let size = Size::from((w, h));
+        let location = physical_point(location, scale) - Point::from((entry.margin, entry.margin));
+        MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            location.to_f64(),
+            &entry.buffer,
+            None,
+            Some(Rectangle::from_size(size.to_f64())),
+            Some(size),
+            Kind::Unspecified,
+        )
+        .ok()
+        .map(OutputRenderElement::from)
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -25,6 +25,7 @@ mod chrome;
 pub mod config;
 mod cursor;
 pub mod decoration;
+mod effects;
 mod foreign;
 mod handlers;
 mod idle;

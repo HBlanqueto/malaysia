@@ -136,6 +136,22 @@ impl Window<'_> {
         )
     }
 
+    /// Whether the client draws its own chrome (CSD).
+    pub fn is_client_decorated(&self) -> bool {
+        self.decoration == Decoration::Client
+    }
+
+    /// The client's window geometry relative to its surface, or the buffer
+    /// size when the client did not set one.
+    pub fn window_geometry(&self) -> Rectangle<i32, Logical> {
+        window_geometry(self.surface()).unwrap_or_else(|| {
+            Rectangle::new(
+                Point::from((0, 0)),
+                buffer_size(self.surface()).unwrap_or_else(|| self.size()),
+            )
+        })
+    }
+
     /// The window's title, as the client last set it.
     pub fn title(&self) -> String {
         with_states(self.surface(), |states| {

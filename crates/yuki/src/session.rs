@@ -905,6 +905,7 @@ pub(crate) fn build_output_elements(
                 continue;
             }
             let id = window.id();
+            let is_focused = focused == Some(id);
             if window.insets().top > 0.0 {
                 let pointer = state
                     .chrome_pointer
@@ -912,7 +913,7 @@ pub(crate) fn build_output_elements(
                     .filter(|(held, _)| *held == id)
                     .map(|(_, pointer)| pointer);
                 let input = yuki_appearance::traffic::TrafficInput {
-                    focused: focused == Some(id),
+                    focused: is_focused,
                     group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
                     pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
                     zoom_supported: state.windows.zoom_supported(id),
@@ -921,7 +922,7 @@ pub(crate) fn build_output_elements(
                     renderer,
                     id,
                     &window.title(),
-                    focused == Some(id),
+                    is_focused,
                     input,
                     window.size().w,
                     window.location(),
@@ -932,21 +933,58 @@ pub(crate) fn build_output_elements(
                 }
             }
             let location = physical_point(window.location() + window.surface_location(), scale);
-            elements.extend(
-                render_elements_from_surface_tree::<
-                    GlesRenderer,
-                    WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
-                    renderer,
-                    window.surface(),
-                    location,
-                    scale,
-                    1.0,
-                    Kind::Unspecified,
-                )
-                .into_iter()
-                .map(OutputRenderElement::from),
+            let surface_elements = render_elements_from_surface_tree::<
+                GlesRenderer,
+                WaylandSurfaceRenderElement<GlesRenderer>,
+            >(
+                renderer,
+                window.surface(),
+                location,
+                scale,
+                1.0,
+                Kind::Unspecified,
             );
+            if window.is_client_decorated() {
+                let surface_origin = window.location() + window.surface_location();
+                let geometry = window.window_geometry();
+                let visible = Rectangle::new(
+                    physical_point(
+                        Point::from((
+                            surface_origin.x + geometry.loc.x,
+                            surface_origin.y + geometry.loc.y,
+                        )),
+                        scale,
+                    ),
+                    Size::from((
+                        (f64::from(geometry.size.w) * scale).round() as i32,
+                        (f64::from(geometry.size.h) * scale).round() as i32,
+                    )),
+                );
+                let radius = (f64::from(yuki_design::WINDOW.corner_radius) * scale).round() as i32;
+                for element in surface_elements {
+                    if let Some(clipped) = crate::effects::ClippedSurface::new(
+                        element,
+                        visible,
+                        radius,
+                        Scale::from(scale),
+                    ) {
+                        elements.push(clipped.into());
+                    }
+                }
+            } else {
+                elements.extend(surface_elements.into_iter().map(OutputRenderElement::from));
+            }
+            if let Some(shadow) = state.chrome.shadow_element(
+                renderer,
+                id,
+                window.size().w,
+                window.size().h,
+                is_focused,
+                window.location(),
+                scale,
+            ) {
+                elements.push(shadow);
+            }
         }
         append_layers(state, renderer, &mut elements, LayerSide::Back);
     }
