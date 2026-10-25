@@ -419,14 +419,16 @@ impl Windows {
             }
         };
         if let Some((id, outer_size)) = should_resize {
-            let origin = center_origin(outer_size, workspace);
+            // Keep the current origin: this path is for client-initiated size
+            // changes (e.g. restoring from maximized), not for interactive
+            // resize, which goes through Windows::resize directly.
+            let origin = self.windows[index].origin;
             let outer = SceneRect::new(
                 ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
                 SceneSize::new(f64::from(outer_size.w), f64::from(outer_size.h)),
             );
             if self.scene.set_outer(id, outer) {
                 self.windows[index].outer_size = outer_size;
-                self.windows[index].origin = origin;
                 self.send_configure(index);
             }
         }
