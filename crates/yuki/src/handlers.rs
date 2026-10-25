@@ -700,11 +700,10 @@ impl XdgShellHandler for State {
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         // Send the initial configure now, before the client attaches a buffer:
         // a toplevel that never receives one waits forever, with no error.
-        // The window is sized and placed within the workspace (below the menu
-        // bar, above the future dock).
-        let (origin, size) = self.workspace();
+        // The configure carries 0×0 (the client chooses its size); the window
+        // is centered in the workspace on its first committed buffer.
         let wl_surface = surface.wl_surface().clone();
-        self.windows.add_toplevel(surface, size, origin);
+        self.windows.add_toplevel(surface);
         self.apply_initial_decoration(&wl_surface);
         self.request_redraw();
     }
@@ -808,6 +807,27 @@ impl XdgShellHandler for State {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.forget_window(surface.wl_surface());
+    }
+
+    fn maximize_request(&mut self, surface: ToplevelSurface) {
+        // A client's own green light (its CSD titlebar) asks here. Reuse the
+        // compositor's maximize so the window grows to the workspace and the
+        // configure carries the maximized state.
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        if !self.maximized.contains_key(&id) {
+            self.toggle_maximize(id);
+        }
+    }
+
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        if self.maximized.contains_key(&id) {
+            self.toggle_maximize(id);
+        }
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

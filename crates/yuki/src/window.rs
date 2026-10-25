@@ -285,18 +285,12 @@ impl Windows {
         self.windows.iter().map(|data| data.toplevel.wl_surface())
     }
 
-    /// Starts tracking `toplevel` at `size` and sends its initial configure.
+    /// Starts tracking `toplevel`; the caller then sends its initial configure.
     ///
-    /// `size` is the outer window size; the configure carries it minus the
-    /// insets, so the client can size its surface for the decorated window from
-    /// the start. `origin` is where the window lands (the workspace origin,
-    /// below the menu bar).
-    pub fn add_toplevel(
-        &mut self,
-        toplevel: ToplevelSurface,
-        size: Size<i32, Logical>,
-        origin: Point<i32, Logical>,
-    ) {
+    /// The initial configure carries 0×0 (the client chooses its own size), so
+    /// there is no size or origin to record yet: both are derived from the
+    /// first committed buffer in [`Windows::commit`].
+    pub fn add_toplevel(&mut self, toplevel: ToplevelSurface) {
         let id = WindowId::new(self.next_id);
         self.next_id += 1;
         // A mode negotiated before the toplevel existed is remembered now; the
@@ -314,8 +308,8 @@ impl Windows {
         self.windows.push(WindowData {
             id,
             toplevel,
-            outer_size: size,
-            origin,
+            outer_size: Size::from((0, 0)),
+            origin: Point::from((0, 0)),
             acked: false,
             pending_configure: None,
             mapped: false,
@@ -332,12 +326,12 @@ impl Windows {
     /// Handles a surface commit.
     ///
     /// Recomputes the insets from current state and sends a fresh configure if
-    /// they changed. The first time the initial configure is acked and a buffer
-    /// is attached, the window is centered with its requested size (or the
-    /// default 640×420) and a new configure is sent; it maps once the client
-    /// commits a buffer that matches that placement. Returns the window's id
-    /// the first time it becomes mapped, so the caller can give it keyboard
-    /// focus.
+    /// they changed. The first time a buffer is committed after the initial
+    /// configure, the window is centered on its committed geometry (window
+    /// geometry or buffer size), clamped to the workspace, and mapped. There is
+    /// no second configure: the client already chose and drew its size. Returns
+    /// the window's id the first time it becomes mapped, so the caller can give
+    /// it keyboard focus.
     pub fn commit(
         &mut self,
         surface: &WlSurface,
@@ -347,15 +341,17 @@ impl Windows {
         let decoration = self.decoration_of(self.windows[index].id);
 
         if !self.windows[index].placed && self.windows[index].acked && surface_has_buffer(surface) {
-            // The first committed buffer usually matches the initial workspace
-            // configure. Replace it with the centered requested size and send a
-            // fresh configure so the next commit already has the right geometry.
+            // The initial configure was 0×0, so this first buffer is the
+            // client's own geometry. Center the window on what it actually
+            // drew; reconfiguring here would only make it flash.
             let insets = self.windows[index].insets(decoration);
             let (outer_size, origin) =
-                initial_placement(self.windows[index].size_bounds(), insets, workspace);
+                initial_placement(committed_size(surface), insets, workspace);
             self.windows[index].outer_size = outer_size;
             self.windows[index].origin = origin;
-            self.send_configure(index);
+            // The client is already at this size: record it so the check below
+            // does not send a redundant configure.
+            self.windows[index].configured = Some(usable(outer_size, insets));
             self.windows[index].placed = true;
         }
 
@@ -388,12 +384,17 @@ impl Windows {
             }
         }
 
-        let usable = usable(
-            self.windows[index].outer_size,
-            self.windows[index].insets(decoration),
-        );
-        if self.windows[index].configured != Some(usable) {
-            self.send_configure(index);
+        // Before placement every configure is 0×0, so there is no usable size
+        // to compare; sending one here would invalidate the ack the client is
+        // about to make and leave the window unmapped.
+        if self.windows[index].placed {
+            let usable = usable(
+                self.windows[index].outer_size,
+                self.windows[index].insets(decoration),
+            );
+            if self.windows[index].configured != Some(usable) {
+                self.send_configure(index);
+            }
         }
 
         if !self.windows[index].mapped && self.windows[index].acked && surface_has_buffer(surface) {
@@ -885,15 +886,23 @@ impl Windows {
         self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
-    /// Sends a configure carrying the usable size for the current state.
+    /// Sends a configure for the current state.
+    ///
+    /// Before the window is placed (its first buffer committed) every configure
+    /// carries 0×0, so the client chooses its own size. After that the configure
+    /// carries the usable size for the current outer size and state.
     fn send_configure(&mut self, index: usize) {
         let id = self.windows[index].id;
         let decoration = self.decoration_of(id);
         let data = &mut self.windows[index];
-        let usable = usable(data.outer_size, data.insets(decoration));
+        let configured = if data.placed {
+            usable(data.outer_size, data.insets(decoration))
+        } else {
+            Size::from((0, 0))
+        };
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
-            state.size = Some(usable);
+            state.size = Some(configured);
             // The configure carries the mode the client negotiated; a client
             // with no decoration object ignores the field, and one with an
             // object learns the choice before its first attach (ADR 0019).
@@ -913,7 +922,7 @@ impl Windows {
             }
         });
         data.pending_configure = Some(data.toplevel.send_configure());
-        data.configured = Some(usable);
+        data.configured = Some(configured);
     }
 
     /// The outer size bounds from the client's usable minimum and maximum.
@@ -1005,26 +1014,51 @@ fn center_origin(
     ))
 }
 
-/// The initial placement for a new window: centered in the workspace, honoring
-/// a fixed client size (min == max) or defaulting to 640×420 if the client did
-/// not request one.
+/// The initial placement for a new window: centered in the workspace, from the
+/// client's committed geometry, clamped so it fits.
+///
+/// A client that committed nothing usable (0×0 and no content) still gets the
+/// default 640×420 window; that is rare, but without it the window would be a
+/// single pixel.
 fn initial_placement(
-    bounds: (Size<i32, Logical>, Size<i32, Logical>),
+    committed: Option<Size<i32, Logical>>,
     insets: Insets,
     workspace: Rectangle<i32, Logical>,
 ) -> (Size<i32, Logical>, Point<i32, Logical>) {
-    let (min, max) = bounds;
-    let requested = if min.w > 0 && min.h > 0 && min == max {
-        min
-    } else {
-        Size::from((640, 420))
-    };
-    let outer = outer_size(requested, insets);
-    let mut outer = Size::from((round(outer.width), round(outer.height)));
+    let mut outer = committed_outer(committed, insets);
     outer.w = outer.w.min(workspace.size.w);
     outer.h = outer.h.min(workspace.size.h);
     let origin = center_origin(outer, workspace);
     (outer, origin)
+}
+
+/// The decorated outer size a window occupies: the committed client geometry
+/// (window geometry or buffer) plus the insets.
+///
+/// Hit-testing, rendering and placement all derive the window from this, never
+/// from a configured size the client has not drawn. A client that committed no
+/// usable geometry falls back to 640×420 (see [`initial_placement`]).
+fn committed_outer(committed: Option<Size<i32, Logical>>, insets: Insets) -> Size<i32, Logical> {
+    let client = match committed {
+        Some(size) if size.w > 0 && size.h > 0 => size,
+        _ => Size::from((640, 420)),
+    };
+    let outer = outer_size(client, insets);
+    Size::from((round(outer.width), round(outer.height)))
+}
+
+/// The client's committed geometry: the xdg window geometry when it set one,
+/// otherwise the committed buffer's logical size.
+fn committed_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
+    with_states(surface, |states| {
+        states
+            .cached_state
+            .get::<SurfaceCachedState>()
+            .current()
+            .geometry
+            .map(|rect| rect.size)
+    })
+    .or_else(|| with_renderer_surface_state(surface, |state| state.surface_size()).flatten())
 }
 
 /// The configured size: the outer size minus the insets, never below one pixel.
@@ -1071,9 +1105,11 @@ fn client_point(
 
 #[cfg(test)]
 mod tests {
-    use smithay::utils::{Logical, Point, Size};
+    use smithay::utils::{Logical, Point, Rectangle, Size};
 
-    use super::{at_least_one_pixel, client_point, outer_size, usable};
+    use super::{
+        at_least_one_pixel, client_point, committed_outer, initial_placement, outer_size, usable,
+    };
     use crate::decoration::Insets;
     use yuki_scene::geometry::Size as SceneSize;
 
@@ -1161,5 +1197,31 @@ mod tests {
             client_point(outer, insets, Point::new(110.0, 100.0)),
             Some(Point::new(10.0, 6.0))
         );
+    }
+
+    #[test]
+    fn placement_centers_the_committed_geometry_not_the_configured_size() {
+        // 640×420 committed inside a 1280×708 workspace: the size is the
+        // client's and only the position comes from the workspace.
+        let workspace = Rectangle::new(Point::from((0, 0)), size(1280, 708));
+        let (outer, origin) = initial_placement(Some(size(640, 420)), Insets::ZERO, workspace);
+        assert_eq!(outer, size(640, 420));
+        assert_eq!(origin, Point::from((320, 144)));
+    }
+
+    #[test]
+    fn a_client_that_committed_nothing_still_gets_the_default_window() {
+        assert_eq!(committed_outer(None, Insets::ZERO), size(640, 420));
+        assert_eq!(
+            committed_outer(Some(size(0, 0)), Insets::ZERO),
+            size(640, 420)
+        );
+    }
+
+    #[test]
+    fn committed_geometry_is_never_wider_than_the_workspace() {
+        let workspace = Rectangle::new(Point::from((0, 0)), size(1280, 708));
+        let (outer, _) = initial_placement(Some(size(4000, 3000)), Insets::ZERO, workspace);
+        assert_eq!(outer, size(1280, 708));
     }
 }
