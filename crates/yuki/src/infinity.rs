@@ -79,17 +79,20 @@ impl InfinityGlobalData {
 /// Resolves the set of executable paths that are trusted as `yuki-shell`.
 fn trusted_shell_exes() -> Vec<PathBuf> {
     let mut exes = Vec::new();
-    if let Some(path) = std::env::var_os("YUKI_SHELL_EXE") {
-        if let Ok(path) = std::fs::canonicalize(path) {
-            exes.push(path);
-        }
+    if let Some(path) = std::env::var_os("YUKI_SHELL_EXE")
+        && let Ok(path) = std::fs::canonicalize(path)
+    {
+        exes.push(path);
     }
-    if let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)) {
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(PathBuf::from))
+    {
         for name in ["yuki-shell", ".yuki-shell-wrapped"] {
-            if let Ok(path) = std::fs::canonicalize(dir.join(name)) {
-                if !exes.contains(&path) {
-                    exes.push(path);
-                }
+            if let Ok(path) = std::fs::canonicalize(dir.join(name))
+                && !exes.contains(&path)
+            {
+                exes.push(path);
             }
         }
     }
@@ -480,8 +483,10 @@ mod tests {
     use std::collections::HashMap;
     use std::path::PathBuf;
 
-    use super::{Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, pair_rects,
-        quarter_rects, trusted_shell_exes};
+    use super::{
+        Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, pair_rects,
+        quarter_rects, trusted_shell_exes,
+    };
     use yuki_scene::scene::WindowId;
 
     fn workspace() -> Rectangle<i32, Logical> {
@@ -625,10 +630,14 @@ mod tests {
         let exes = trusted_shell_exes();
         if let Some(previous) = previous {
             // SAFETY: only used during this single-threaded test.
-            unsafe { std::env::set_var("YUKI_SHELL_EXE", previous); }
+            unsafe {
+                std::env::set_var("YUKI_SHELL_EXE", previous);
+            }
         } else {
             // SAFETY: only used during this single-threaded test.
-            unsafe { std::env::remove_var("YUKI_SHELL_EXE"); }
+            unsafe {
+                std::env::remove_var("YUKI_SHELL_EXE");
+            }
         }
         assert!(
             is_trusted_shell_exe(&std::fs::canonicalize(&fake).unwrap(), &exes),
@@ -641,9 +650,15 @@ mod tests {
     fn trusted_shell_comparison_accepts_wrapped_and_unwrapped_names() {
         let target = PathBuf::from("/nix/store/abc/bin/yuki-shell");
         let wrapped = PathBuf::from("/nix/store/abc/bin/.yuki-shell-wrapped");
-        assert!(is_trusted_shell_exe(&target, &[target.clone()]));
-        assert!(is_trusted_shell_exe(&wrapped, &[wrapped.clone()]));
-        assert!(!is_trusted_shell_exe(&target, &[wrapped.clone()]));
+        assert!(is_trusted_shell_exe(&target, std::slice::from_ref(&target)));
+        assert!(is_trusted_shell_exe(
+            &wrapped,
+            std::slice::from_ref(&wrapped)
+        ));
+        assert!(!is_trusted_shell_exe(
+            &target,
+            std::slice::from_ref(&wrapped)
+        ));
     }
 
     #[test]

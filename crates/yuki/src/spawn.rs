@@ -218,7 +218,9 @@ mod tests {
         let env = child_env(&command);
 
         match previous {
-            Some(value) => unsafe { std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", value) },
+            Some(value) => unsafe {
+                std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", value)
+            },
             None => unsafe { std::env::remove_var("QT_WAYLAND_DISABLE_WINDOWDECORATION") },
         }
 

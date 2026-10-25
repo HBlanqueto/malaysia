@@ -742,12 +742,7 @@ impl Windows {
     }
 
     /// Sets whether the window is being resized and re-configures it.
-    pub fn set_resizing(
-        &mut self,
-        id: WindowId,
-        resizing: bool,
-        edge: Option<Edge>,
-    ) -> bool {
+    pub fn set_resizing(&mut self, id: WindowId, resizing: bool, edge: Option<Edge>) -> bool {
         let Some(index) = self.index(id) else {
             return false;
         };

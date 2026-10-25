@@ -1055,11 +1055,7 @@ impl KdeDecorationHandler for State {
         &self.kde_decoration_state
     }
 
-    fn new_decoration(
-        &mut self,
-        surface: &WlSurface,
-        decoration: &OrgKdeKwinServerDecoration,
-    ) {
+    fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
         // GTK creates this object before its xdg_toplevel may exist. Announce
         // Yuki's preference (server-side) and remember the decision so the
         // initial configure already carries it when the toplevel arrives.
