@@ -1005,8 +1005,6 @@ fn append_window_frame(
         radius_logical
     };
 
-    let mut frame_elements: Vec<OutputRenderElement> = Vec::with_capacity(8);
-
     // Content, clipped to the rounded frame.
     let rounded_program = state.rounded_clip.clone();
     let mut content: Vec<OutputRenderElement> = Vec::new();
@@ -1073,16 +1071,19 @@ fn append_window_frame(
         content.extend(surface_elements.into_iter().map(|e| e.into()));
     }
 
+    let mut outer = None;
+    let mut inner = None;
+    let mut shadow = Vec::new();
     if !maximized_or_fullscreen {
-        // Inner line and outer border are drawn by the compositor on top of
-        // the content, then the shadow falls behind everything.
+        // The compositor draws the outer border over the inner line, both over
+        // the content, and the shadow falls behind everything.
         let palette = &state.chrome_theme.palette;
         if let Some(program) = state.border.as_ref() {
-            if let Some(inner) = palette.inner_line
+            if let Some(color) = palette.inner_line
                 && let Some(element) =
-                    border_element(program, frame_rect_logical, radius, scale, false, inner)
+                    border_element(program, frame_rect_logical, radius, scale, false, color)
             {
-                frame_elements.push(element.into());
+                inner = Some(element.into());
             }
             if let Some(element) = border_element(
                 program,
@@ -1092,21 +1093,28 @@ fn append_window_frame(
                 true,
                 palette.outer_border,
             ) {
-                frame_elements.push(element.into());
+                outer = Some(element.into());
             }
         }
         if let Some(program) = state.shadow.as_ref() {
-            frame_elements.extend(state.chrome.shadow_element(
-                program,
-                frame_rect_logical,
-                is_focused,
-            ));
+            shadow = state
+                .chrome
+                .shadow_element(program, frame_rect_logical, is_focused);
         }
     }
 
-    // Front-to-back: borders, then content, then shadow.
-    frame_elements.extend(content);
-    elements.extend(frame_elements);
+    elements.extend(frame_order(outer, inner, content, shadow));
+}
+
+/// Assembles a window frame in Smithay's front-to-back order: outer border,
+/// inner line, content (SSD bar + surface), then the shadow behind it all.
+fn frame_order<T>(outer: Option<T>, inner: Option<T>, content: Vec<T>, shadow: Vec<T>) -> Vec<T> {
+    let mut frame = Vec::with_capacity(content.len() + shadow.len() + 2);
+    frame.extend(outer);
+    frame.extend(inner);
+    frame.extend(content);
+    frame.extend(shadow);
+    frame
 }
 
 /// Converts a logical rectangle to a physical one at `scale`.
@@ -2016,7 +2024,9 @@ mod tests {
     use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
     use smithay::utils::{Buffer as BufferCoord, Physical, Point, Rectangle, Size, Transform};
 
-    use super::{cursor_origin, describe_chain, import_pending_dmabufs, winit_mode_source};
+    use super::{
+        cursor_origin, describe_chain, frame_order, import_pending_dmabufs, winit_mode_source,
+    };
     use crate::cursor::OutputRenderElement;
     use crate::state::State;
 
@@ -2178,6 +2188,17 @@ mod tests {
         )
         .expect("the element should build");
         element.into()
+    }
+
+    #[test]
+    fn the_frame_is_outer_border_inner_line_content_then_shadow() {
+        let frame = frame_order(
+            Some("outer"),
+            Some("inner"),
+            vec!["content"],
+            vec!["shadow"],
+        );
+        assert_eq!(frame, ["outer", "inner", "content", "shadow"]);
     }
 
     #[test]
