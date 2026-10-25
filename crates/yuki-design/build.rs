@@ -991,6 +991,15 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: b
          \x20   bar_title_open_bg: {},\n\
          \x20   bar_title_open_radius: {},\n\
          \x20   bar_title_open_height: {},\n\
+         \x20   icon_size: {},\n\
+         \x20   header_font_size: {},\n\
+         \x20   header_weight: {},\n\
+         \x20   search_height: {},\n\
+         \x20   search_margin_y: {},\n\
+         \x20   search_ring_width: {},\n\
+         \x20   search_radius: {},\n\
+         \x20   search_bg: {},\n\
+         \x20   search_ring: {},\n\
          }}",
         rgba(panel_bg),
         float(radius),
@@ -1099,6 +1108,44 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: b
             "components.shell.menubar.title-open.height",
             COMPONENTS
         )),
+        float(number(
+            components,
+            "components.shell.menu.icon.size",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.header.font-size",
+            COMPONENTS
+        )),
+        number(
+            components,
+            "components.shell.menu.header.weight",
+            COMPONENTS
+        ) as i32,
+        float(number(
+            components,
+            "components.shell.menu.search.height",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.search.margin-y",
+            COMPONENTS
+        )),
+        float(number(
+            components,
+            "components.shell.menu.search.ring-width",
+            COMPONENTS
+        )),
+        float(metric(
+            tokens,
+            components,
+            "components.shell.menu.search.radius",
+            COMPONENTS
+        )),
+        rgba(color_at("components.shell.menu.search.bg")),
+        rgba(color_at("components.shell.menu.search.ring")),
     )
 }
 

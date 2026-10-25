@@ -24,6 +24,7 @@ fn accent_items() -> Vec<MenuItem> {
             shortcut: Some("Ctrl+Shift+G".to_string()),
             enabled: true,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Action {
             id: "videos".to_string(),
@@ -31,6 +32,7 @@ fn accent_items() -> Vec<MenuItem> {
             shortcut: Some("Ctrl+Shift+Z".to_string()),
             enabled: false,
             check: CheckState::None,
+            icon: None,
         },
     ]
 }
@@ -45,6 +47,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Separator,
         // Normal action with a shortcut.
@@ -54,6 +57,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: Some("Ctrl+W".to_string()),
             enabled: true,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Separator,
         // Checkbox and radio marks.
@@ -63,6 +67,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Checkbox(true),
+            icon: None,
         },
         MenuItem::Action {
             id: "preview".to_string(),
@@ -70,6 +75,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Checkbox(false),
+            icon: None,
         },
         MenuItem::Action {
             id: "list".to_string(),
@@ -77,6 +83,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Radio(true),
+            icon: None,
         },
         MenuItem::Action {
             id: "icons".to_string(),
@@ -84,6 +91,7 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Radio(false),
+            icon: None,
         },
         MenuItem::Separator,
         // Disabled item.
@@ -93,20 +101,24 @@ fn menu_items() -> Vec<MenuItem> {
             shortcut: None,
             enabled: false,
             check: CheckState::None,
+            icon: None,
         },
         // Submenu with chevron.
         MenuItem::Submenu {
             label: "More".to_string(),
             enabled: true,
+            icon: None,
             items: vec![MenuItem::Submenu {
                 label: "Level 2".to_string(),
                 enabled: true,
+                icon: None,
                 items: vec![MenuItem::Action {
                     id: "deep".to_string(),
                     label: "Deep item".to_string(),
                     shortcut: None,
                     enabled: true,
                     check: CheckState::None,
+                    icon: None,
                 }],
             }],
         },
@@ -393,6 +405,7 @@ fn long_label_items() -> Vec<MenuItem> {
         shortcut: Some("Ctrl+Shift+VeryLongShortcut".to_string()),
         enabled: true,
         check: CheckState::None,
+        icon: None,
     }]
 }
 

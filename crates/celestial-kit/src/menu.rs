@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::cell::Cell;
 use std::rc::Rc;
 
+use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::{AppComponent, default_fonts};
 use freya_core::prelude::*;
 use freya_engine::prelude::{ParagraphBuilder, ParagraphStyle, TextStyle};
@@ -41,9 +42,6 @@ fn font_families() -> Vec<Cow<'static, str>> {
 /// There is no `+` between them and the Command glyph is never emitted.
 pub fn format_shortcut(text: &str) -> String {
     let text = text.trim();
-    if !text.contains('+') {
-        return text.to_string();
-    }
     let (mut ctrl, mut alt, mut shift, mut sup) = (false, false, false, false);
     let mut key = String::new();
     for token in text.split('+').map(str::trim).filter(|t| !t.is_empty()) {
@@ -53,6 +51,12 @@ pub fn format_shortcut(text: &str) -> String {
             "shift" => shift = true,
             "super" | "meta" | "cmd" | "command" => sup = true,
             "escape" | "esc" => key.push('⎋'),
+            "left" => key.push('←'),
+            "right" => key.push('→'),
+            "up" => key.push('↑'),
+            "down" => key.push('↓'),
+            "return" | "enter" => key.push('↩'),
+            "tab" => key.push('⇥'),
             _ => key.push_str(token),
         }
     }
@@ -122,6 +126,9 @@ fn truncate_middle(text: &str, max_width: f32, font_size: f32) -> String {
     ellipsis.to_string()
 }
 
+/// The magnifier drawn at the start of a search field.
+const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M10 10l3.2 3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
+
 /// State of a check/radio mark in a menu item.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CheckState {
@@ -153,15 +160,23 @@ pub enum MenuItem {
         shortcut: Option<String>,
         enabled: bool,
         check: CheckState,
+        /// Leading SVG icon, drawn in the mark column.
+        icon: Option<&'static str>,
     },
     /// A nested submenu.
     Submenu {
         label: String,
         enabled: bool,
         items: Vec<MenuItem>,
+        /// Leading SVG icon, drawn in the mark column.
+        icon: Option<&'static str>,
     },
+    /// A non-selectable group header.
+    Header { label: String },
     /// A visual separator.
     Separator,
+    /// A non-selectable search field. Visual only for now.
+    SearchField { placeholder: String },
 }
 
 impl MenuItem {
@@ -169,7 +184,7 @@ impl MenuItem {
         match self {
             MenuItem::Action { enabled, .. } => *enabled,
             MenuItem::Submenu { enabled, .. } => *enabled,
-            MenuItem::Separator => false,
+            MenuItem::Header { .. } | MenuItem::Separator | MenuItem::SearchField { .. } => false,
         }
     }
 
@@ -179,15 +194,28 @@ impl MenuItem {
 
     fn label(&self) -> Option<&str> {
         match self {
-            MenuItem::Action { label, .. } | MenuItem::Submenu { label, .. } => Some(label),
-            MenuItem::Separator => None,
+            MenuItem::Action { label, .. }
+            | MenuItem::Submenu { label, .. }
+            | MenuItem::Header { label } => Some(label),
+            MenuItem::Separator | MenuItem::SearchField { .. } => None,
         }
     }
 
     fn shortcut(&self) -> Option<String> {
         match self {
             MenuItem::Action { shortcut, .. } => shortcut.as_deref().map(format_shortcut),
-            MenuItem::Submenu { .. } | MenuItem::Separator => None,
+            MenuItem::Submenu { .. }
+            | MenuItem::Header { .. }
+            | MenuItem::Separator
+            | MenuItem::SearchField { .. } => None,
+        }
+    }
+
+    fn height(&self, m: MenuPalette) -> f32 {
+        match self {
+            MenuItem::Separator => m.separator_height + m.separator_margin_y * 2.0,
+            MenuItem::SearchField { .. } => m.search_height + m.search_margin_y * 2.0,
+            _ => m.item_height,
         }
     }
 }
@@ -239,13 +267,7 @@ impl MenuView {
     /// visible and are never wrapped.
     pub fn preferred_size(items: &[MenuItem], m: MenuPalette) -> (f32, f32) {
         let inset = 2.0 * m.border_width + m.padding;
-        let content_height: f32 = items
-            .iter()
-            .map(|item| match item {
-                MenuItem::Separator => m.separator_height + m.separator_margin_y * 2.0,
-                _ => m.item_height,
-            })
-            .sum();
+        let content_height: f32 = items.iter().map(|item| item.height(m)).sum();
         let max_content_width = (m.max_width - inset * 2.0).max(m.min_width);
         let mut content_width = m.min_width;
 
@@ -564,10 +586,7 @@ fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
         if i == index {
             return y;
         }
-        match item {
-            MenuItem::Separator => y += m.separator_height + m.separator_margin_y * 2.0,
-            _ => y += m.item_height,
-        }
+        y += item.height(m);
     }
     0.0
 }
@@ -698,12 +717,14 @@ fn render_item(
             shortcut: shortcut_text,
             enabled,
             check,
+            icon,
         } => {
             let id = id.clone();
             let label_text = label_text.clone();
             let shortcut_text = shortcut_text.as_ref().map(|s| format_shortcut(s));
             let enabled = *enabled;
             let check = *check;
+            let icon = *icon;
             let mut focused = focused;
             let open_child_id_enter = open_child_id.clone();
             let shortcut_w = shortcut_text
@@ -727,7 +748,7 @@ fn render_item(
             } else {
                 m.disabled_fg
             };
-            let shortcut_fg = shortcut_fg(enabled, is_focused, m);
+            let shortcut_color = shortcut_fg(enabled, is_focused, m);
             let bg = if is_focused && enabled {
                 Some(m.hover_bg)
             } else {
@@ -771,7 +792,13 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .child(mark_element(check, fg, m))
+                .child(mark_slot(
+                    icon,
+                    check,
+                    fg,
+                    shortcut_fg(enabled, is_focused, m),
+                    m,
+                ))
                 .child(
                     label()
                         .text(label_text)
@@ -784,7 +811,7 @@ fn render_item(
                     label()
                         .text(shortcut_text.unwrap_or_default())
                         .font_size(m.font_size)
-                        .color(rgba(shortcut_fg))
+                        .color(rgba(shortcut_color))
                         .width(Size::px(shortcut_w))
                         .max_lines(1),
                 )
@@ -794,9 +821,11 @@ fn render_item(
             label: label_text,
             enabled,
             items: sub_items,
+            icon,
         } => {
             let label_text = label_text.clone();
             let enabled = *enabled;
+            let icon = *icon;
             let mut focused = focused;
             let sub_items_enter = sub_items.clone();
             let sub_items_click = sub_items.clone();
@@ -869,7 +898,13 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .child(mark_element(CheckState::None, fg, m))
+                .child(mark_slot(
+                    icon,
+                    CheckState::None,
+                    fg,
+                    shortcut_fg(enabled, is_focused, m),
+                    m,
+                ))
                 .child(
                     label()
                         .text(label_text)
@@ -881,7 +916,83 @@ fn render_item(
                 .child(chevron_element(chevron_fg(enabled, is_focused, m), m))
                 .into_element()
         }
+        MenuItem::Header { label: header } => rect()
+            .width(Size::fill())
+            .height(Size::px(m.item_height))
+            .padding(Gaps::new(
+                0.0,
+                m.item_padding_x,
+                0.0,
+                m.item_padding_x + m.mark_width,
+            ))
+            .cross_align(Alignment::Center)
+            .child(
+                label()
+                    .text(header.clone())
+                    .font_size(m.header_font_size)
+                    .font_weight(m.header_weight)
+                    .color(rgba(m.disabled_fg))
+                    .max_lines(1),
+            )
+            .into_element(),
+        MenuItem::SearchField { placeholder } => rect()
+            .width(Size::fill())
+            .height(Size::px(m.search_height))
+            .margin(Gaps::new(m.search_margin_y, 0.0, m.search_margin_y, 0.0))
+            .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+            .background(rgba(m.search_bg))
+            .corner_radius(m.search_radius)
+            .border(
+                Border::new()
+                    .width(m.search_ring_width)
+                    .alignment(BorderAlignment::Inner)
+                    .fill(rgba(m.search_ring)),
+            )
+            .direction(Direction::Horizontal)
+            .cross_align(Alignment::Center)
+            .spacing(m.item_padding_x / 2.0)
+            .child(
+                SvgViewer::new(SEARCH_ICON.as_bytes())
+                    .width(Size::px(m.icon_size))
+                    .height(Size::px(m.icon_size))
+                    .color(rgba(m.shortcut_color))
+                    .show_loader(false)
+                    .into_element(),
+            )
+            .child(
+                label()
+                    .text(placeholder.clone())
+                    .font_size(m.font_size)
+                    .color(rgba(m.shortcut_color))
+                    .max_lines(1),
+            )
+            .into_element(),
     }
+}
+
+fn mark_slot(
+    icon: Option<&'static str>,
+    check: CheckState,
+    fg: Rgba,
+    icon_fg: Rgba,
+    m: MenuPalette,
+) -> Element {
+    let Some(icon) = icon else {
+        return mark_element(check, fg, m);
+    };
+    rect()
+        .width(Size::px(m.mark_width))
+        .direction(Direction::Horizontal)
+        .main_align(Alignment::Center)
+        .child(
+            SvgViewer::new(icon.as_bytes())
+                .width(Size::px(m.icon_size))
+                .height(Size::px(m.icon_size))
+                .color(rgba(icon_fg))
+                .show_loader(false)
+                .into_element(),
+        )
+        .into_element()
 }
 
 fn mark_element(check: CheckState, color: Rgba, m: MenuPalette) -> Element {
@@ -935,6 +1046,7 @@ mod tests {
                 shortcut: Some("Ctrl+N".to_string()),
                 enabled: true,
                 check: CheckState::None,
+                icon: None,
             },
             MenuItem::Separator,
             MenuItem::Action {
@@ -943,16 +1055,19 @@ mod tests {
                 shortcut: None,
                 enabled: false,
                 check: CheckState::Checkbox(true),
+                icon: None,
             },
             MenuItem::Submenu {
                 label: "Recent".to_string(),
                 enabled: true,
+                icon: None,
                 items: vec![MenuItem::Action {
                     id: "r1".to_string(),
                     label: "a.txt".to_string(),
                     shortcut: None,
                     enabled: true,
                     check: CheckState::None,
+                    icon: None,
                 }],
             },
         ]
@@ -997,6 +1112,67 @@ mod tests {
     }
 
     #[test]
+    fn navigation_skips_headers_and_search_fields() {
+        let items = vec![
+            MenuItem::SearchField {
+                placeholder: "Buscar".to_string(),
+            },
+            MenuItem::Header {
+                label: "Mitades".to_string(),
+            },
+            MenuItem::Action {
+                id: "a".to_string(),
+                label: "A".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            },
+            MenuItem::Header {
+                label: "Cuartos".to_string(),
+            },
+            MenuItem::SearchField {
+                placeholder: "Filtrar".to_string(),
+            },
+            MenuItem::Submenu {
+                label: "B".to_string(),
+                enabled: true,
+                items: Vec::new(),
+                icon: None,
+            },
+        ];
+        assert_eq!(first_selectable(&items), Some(2));
+        assert_eq!(next_selectable(&items, Some(2), 1), Some(5));
+        assert_eq!(next_selectable(&items, Some(5), 1), Some(2));
+        assert_eq!(last_selectable(&items), Some(5));
+    }
+
+    #[test]
+    fn icons_do_not_widen_the_menu() {
+        let built = |icon| {
+            vec![
+                MenuItem::Action {
+                    id: "a".to_string(),
+                    label: "Configuración…".to_string(),
+                    shortcut: Some("Super+,".to_string()),
+                    enabled: true,
+                    check: CheckState::None,
+                    icon,
+                },
+                MenuItem::Submenu {
+                    label: "Disposición".to_string(),
+                    enabled: true,
+                    items: Vec::new(),
+                    icon,
+                },
+            ]
+        };
+        let plain = MenuView::preferred_size(&built(None), MENU_LIGHT);
+        let with_icons = MenuView::preferred_size(&built(Some("x")), MENU_LIGHT);
+        assert_eq!(plain, with_icons);
+    }
+
+    #[test]
     fn left_handed_submenus_keep_their_descendants_on_the_left() {
         let (anchor, gravity, dx) = submenu_positioner(true);
         assert_eq!(anchor, PopupAnchor::TopLeft);
@@ -1030,6 +1206,7 @@ mod tests {
                 shortcut: None,
                 enabled: true,
                 check: CheckState::None,
+                icon: None,
             },
             MenuItem::Separator,
             MenuItem::Action {
@@ -1038,17 +1215,20 @@ mod tests {
                 shortcut: None,
                 enabled: true,
                 check: CheckState::None,
+                icon: None,
             },
             MenuItem::Separator,
             MenuItem::Submenu {
                 label: "More".to_string(),
                 enabled: true,
+                icon: None,
                 items: vec![MenuItem::Action {
                     id: "deep".to_string(),
                     label: "Deep".to_string(),
                     shortcut: None,
                     enabled: true,
                     check: CheckState::None,
+                    icon: None,
                 }],
             },
         ];
@@ -1099,6 +1279,13 @@ mod tests {
         assert_eq!(format_shortcut("Alt+Super+Escape"), "⌥❖⎋");
         assert!(!format_shortcut("Command+D").contains('\u{2318}'));
         assert_eq!(format_shortcut("F5"), "F5");
+        assert_eq!(format_shortcut("Ctrl+Super+Left"), "⌃❖←");
+        assert_eq!(format_shortcut("Ctrl+Shift+Super+Right"), "⌃⇧❖→");
+        assert_eq!(format_shortcut("Up"), "↑");
+        assert_eq!(format_shortcut("Down"), "↓");
+        assert_eq!(format_shortcut("Return"), "↩");
+        assert_eq!(format_shortcut("Enter"), "↩");
+        assert_eq!(format_shortcut("Ctrl+Tab"), "⌃⇥");
     }
 
     #[test]
@@ -1146,6 +1333,7 @@ mod tests {
                 shortcut: Some("Ctrl+Shift+G".to_string()),
                 enabled: true,
                 check: CheckState::None,
+                icon: None,
             },
             MenuItem::Action {
                 id: "videos".to_string(),
@@ -1153,6 +1341,7 @@ mod tests {
                 shortcut: Some("Ctrl+Shift+Z".to_string()),
                 enabled: true,
                 check: CheckState::None,
+                icon: None,
             },
         ];
         let m = MENU_LIGHT;

@@ -391,6 +391,24 @@ pub struct MenuPalette {
     pub chevron_size: f32,
     /// Submenu chevron colour (`ink-muted`).
     pub chevron_color: Rgba,
+    /// Leading icon size in the mark column.
+    pub icon_size: f32,
+    /// Group header font size.
+    pub header_font_size: f32,
+    /// Group header font weight.
+    pub header_weight: i32,
+    /// Search field height.
+    pub search_height: f32,
+    /// Vertical margin around the search field.
+    pub search_margin_y: f32,
+    /// Search field accent ring width.
+    pub search_ring_width: f32,
+    /// Search field corner radius.
+    pub search_radius: f32,
+    /// Search field background (`bg-control`).
+    pub search_bg: Rgba,
+    /// Search field accent ring.
+    pub search_ring: Rgba,
 }
 
 /// The lock screen colours: Neptunia `bg-surface`, `ink`, `ink-muted`,

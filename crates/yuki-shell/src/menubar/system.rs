@@ -36,6 +36,7 @@ fn action(id: &str, label: &str, shortcut: Option<&str>, enabled: bool) -> MenuI
         shortcut: shortcut.map(ToOwned::to_owned),
         enabled,
         check: CheckState::None,
+        icon: None,
     }
 }
 

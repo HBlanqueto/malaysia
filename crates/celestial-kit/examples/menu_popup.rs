@@ -566,6 +566,7 @@ fn go_menu() -> Vec<MenuItem> {
         shortcut: shortcut.map(|s| s.to_string()),
         enabled: true,
         check: CheckState::None,
+        icon: None,
     };
     vec![
         MenuItem::Action {
@@ -574,6 +575,7 @@ fn go_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: false,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Action {
             id: "forward".to_string(),
@@ -581,6 +583,7 @@ fn go_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: false,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Separator,
         folder("home", "Inicio", Some("Alt+Inicio")),
@@ -599,6 +602,7 @@ fn go_menu() -> Vec<MenuItem> {
             shortcut: Some("Shift+Super+G".to_string()),
             enabled: true,
             check: CheckState::None,
+            icon: None,
         },
     ]
 }
@@ -613,6 +617,7 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: Some("Ctrl+Z".to_string()),
             enabled: true,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Action {
             id: "redo".to_string(),
@@ -620,6 +625,7 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: Some("Ctrl+Shift+Z".to_string()),
             enabled: false,
             check: CheckState::None,
+            icon: None,
         },
         MenuItem::Separator,
         MenuItem::Action {
@@ -628,6 +634,7 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Checkbox(true),
+            icon: None,
         },
         MenuItem::Action {
             id: "preview".to_string(),
@@ -635,6 +642,7 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Checkbox(false),
+            icon: None,
         },
         MenuItem::Separator,
         MenuItem::Action {
@@ -643,6 +651,7 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Radio(true),
+            icon: None,
         },
         MenuItem::Action {
             id: "view-icons".to_string(),
@@ -650,11 +659,13 @@ fn edit_menu() -> Vec<MenuItem> {
             shortcut: None,
             enabled: true,
             check: CheckState::Radio(false),
+            icon: None,
         },
         MenuItem::Separator,
         MenuItem::Submenu {
             label: "Ordenar por".to_string(),
             enabled: true,
+            icon: None,
             items: vec![
                 MenuItem::Action {
                     id: "sort-name".to_string(),
@@ -662,6 +673,7 @@ fn edit_menu() -> Vec<MenuItem> {
                     shortcut: None,
                     enabled: true,
                     check: CheckState::Radio(true),
+                    icon: None,
                 },
                 MenuItem::Action {
                     id: "sort-date".to_string(),
@@ -669,10 +681,12 @@ fn edit_menu() -> Vec<MenuItem> {
                     shortcut: None,
                     enabled: true,
                     check: CheckState::Radio(false),
+                    icon: None,
                 },
                 MenuItem::Submenu {
                     label: "Orden".to_string(),
                     enabled: true,
+                    icon: None,
                     items: vec![
                         MenuItem::Action {
                             id: "ascending".to_string(),
@@ -680,6 +694,7 @@ fn edit_menu() -> Vec<MenuItem> {
                             shortcut: None,
                             enabled: true,
                             check: CheckState::None,
+                            icon: None,
                         },
                         MenuItem::Action {
                             id: "descending".to_string(),
@@ -687,6 +702,7 @@ fn edit_menu() -> Vec<MenuItem> {
                             shortcut: None,
                             enabled: true,
                             check: CheckState::None,
+                            icon: None,
                         },
                     ],
                 },
@@ -700,11 +716,13 @@ fn yuki_menu(_palette: yuki_design::MenuPalette) -> Vec<MenuItem> {
         MenuItem::Submenu {
             label: "Ir".to_string(),
             enabled: true,
+            icon: None,
             items: go_menu(),
         },
         MenuItem::Submenu {
             label: "Editar".to_string(),
             enabled: true,
+            icon: None,
             items: edit_menu(),
         },
     ]
@@ -744,6 +762,7 @@ impl App for MenuWithAutoChild {
                         shortcut: Some("Ctrl+Shift+Z".to_string()),
                         enabled: true,
                         check: CheckState::None,
+                        icon: None,
                     }];
                     let child_size = MenuView::preferred_size(&child_items, palette);
                     let child_id = handle.open_child(

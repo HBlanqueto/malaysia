@@ -120,6 +120,7 @@ fn action(id: impl Into<String>, label: impl Into<String>, enabled: bool) -> Men
         shortcut: None,
         enabled,
         check: CheckState::None,
+        icon: None,
     }
 }
 
