@@ -564,6 +564,8 @@ struct GraphicsShared {
     gr: RefCell<DirectContext>,
     font_collection: FontCollection,
     font_manager: FontMgr,
+    /// Counter of `wl_egl_window` creations, for resize tests.
+    egl_window_creations: Cell<usize>,
 }
 
 // Safety: EGL display/context handles are used only on the thread that created
@@ -639,6 +641,7 @@ impl GraphicsShared {
             gr: RefCell::new(gr),
             font_collection: crate::fonts::collection(),
             font_manager: crate::fonts::manager(),
+            egl_window_creations: Cell::new(0),
         })
     }
 }
@@ -660,6 +663,7 @@ struct Graphics {
     surface: Option<egl::Surface>,
     skia: Option<SkiaSurface>,
     size: (u32, u32),
+    scale: f64,
 }
 
 // Safety: the EGLSurface is only used on the calloop thread.
@@ -673,39 +677,43 @@ impl Graphics {
             surface: None,
             skia: None,
             size: (0, 0),
+            scale: 1.0,
         }
     }
 
     /// Builds the `wl_egl_window` and EGL surface on a real configure, then
     /// recreates the Skia surface at the new size.
-    fn configure(&mut self, surface: &WlSurface, size: (u32, u32)) -> Result<(), RunError> {
+    ///
+    /// Reuses the existing `wl_egl_window` via `resize` when only the size
+    /// changed; only recreates it when the scale changed or the resize failed.
+    fn configure(
+        &mut self,
+        surface: &WlSurface,
+        size: (u32, u32),
+        scale: f64,
+    ) -> Result<(), RunError> {
         if size.0 == 0 || size.1 == 0 {
             return Ok(());
         }
         let shared = self.shared.clone();
-        if self.window.is_none() || self.size != size {
-            self.window = Some(
-                WlEglSurface::new(surface.id(), size.0 as i32, size.1 as i32)
-                    .map_err(|_| RunError::Egl("wl_egl_window_create failed"))?,
-            );
-            if let Some(old) = self.surface.take() {
-                let _ = shared.egl.destroy_surface(shared.display, old);
+        let size_changed = self.size != size;
+        let scale_changed = self.scale != scale;
+        let needs_window = self.window.is_none() || size_changed || scale_changed;
+        if needs_window {
+            if let Some(window) = self.window.as_ref() {
+                // Try to resize the existing wl_egl_window without destroying
+                // the EGL surface. dx/dy are zero because the Wayland surface
+                // origin does not move.
+                window.resize(size.0 as i32, size.1 as i32, 0, 0);
+                let (w, h) = window.get_size();
+                if w == size.0 as i32 && h == size.1 as i32 && !scale_changed {
+                    self.size = size;
+                } else {
+                    self.recreate_window(surface, size)?;
+                }
+            } else {
+                self.recreate_window(surface, size)?;
             }
-            let window_ptr = self
-                .window
-                .as_ref()
-                .map(|w| w.ptr() as *mut c_void)
-                .expect("window created above");
-            // Safety: the wl_egl_window is owned here and lives as long as the
-            // EGL surface.
-            let egl_surface = unsafe {
-                shared
-                    .egl
-                    .create_window_surface(shared.display, shared.config, window_ptr, None)
-            }
-            .map_err(|_| RunError::Egl("eglCreateWindowSurface failed"))?;
-            self.surface = Some(egl_surface);
-            self.size = size;
         }
 
         let egl_surface = *self.surface.as_ref().expect("surface created above");
@@ -734,6 +742,36 @@ impl Graphics {
             None,
             None,
         );
+        self.scale = scale;
+        Ok(())
+    }
+
+    /// Recreates the `wl_egl_window` and its EGL surface.
+    fn recreate_window(&mut self, surface: &WlSurface, size: (u32, u32)) -> Result<(), RunError> {
+        let shared = self.shared.clone();
+        self.window = Some(
+            WlEglSurface::new(surface.id(), size.0 as i32, size.1 as i32)
+                .map_err(|_| RunError::Egl("wl_egl_window_create failed"))?,
+        );
+        shared.egl_window_creations.set(shared.egl_window_creations.get() + 1);
+        if let Some(old) = self.surface.take() {
+            let _ = shared.egl.destroy_surface(shared.display, old);
+        }
+        let window_ptr = self
+            .window
+            .as_ref()
+            .map(|w| w.ptr() as *mut c_void)
+            .expect("window created above");
+        // Safety: the wl_egl_window is owned here and lives as long as the
+        // EGL surface.
+        let egl_surface = unsafe {
+            shared
+                .egl
+                .create_window_surface(shared.display, shared.config, window_ptr, None)
+        }
+        .map_err(|_| RunError::Egl("eglCreateWindowSurface failed"))?;
+        self.surface = Some(egl_surface);
+        self.size = size;
         Ok(())
     }
 
@@ -1243,6 +1281,7 @@ struct SurfaceWindow {
     needs_redraw: bool,
     frame_pending: bool,
     draw_count: u64,
+    configure_count: u64,
 }
 
 #[allow(dead_code)]
@@ -1274,13 +1313,10 @@ impl SurfaceWindow {
         if size.0 == 0 || size.1 == 0 {
             return;
         }
-        self.logical_size = size;
-        self.scale = scale;
-        self.buffer_size = (
+        let buffer_size = (
             (size.0 as f64 * scale).round().max(1.0) as u32,
             (size.1 as f64 * scale).round().max(1.0) as u32,
         );
-        self.surface.set_buffer_scale(scale.round().max(1.0) as i32);
 
         if self.graphics.is_none() {
             self.graphics = Some(Graphics::new(self.shared.clone()));
@@ -1288,10 +1324,18 @@ impl SurfaceWindow {
         let Some(graphics) = self.graphics.as_mut() else {
             return;
         };
-        if let Err(error) = graphics.configure(&self.surface, self.buffer_size) {
+        if let Err(error) = graphics.configure(&self.surface, buffer_size, scale) {
             tracing::error!("CelestialKit: {error}");
+            // Keep the previous size coherent: app.resize and hit-test use the
+            // same size as the buffer that is actually committed.
+            self.app.resize(self.buffer_size, self.scale);
+            self.needs_redraw = true;
             return;
         }
+        self.logical_size = size;
+        self.scale = scale;
+        self.buffer_size = buffer_size;
+        self.surface.set_buffer_scale(scale.round().max(1.0) as i32);
         self.app.resize(self.buffer_size, scale);
         self.needs_redraw = true;
     }
@@ -1602,6 +1646,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         needs_redraw: true,
         frame_pending: false,
         draw_count: 0,
+        configure_count: 0,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -2042,6 +2087,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
             draw_count: 0,
+            configure_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
         Some(controls)
@@ -2103,6 +2149,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
             draw_count: 0,
+            configure_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
@@ -2333,6 +2380,7 @@ impl Shell {
             needs_redraw: true,
             frame_pending: false,
             draw_count: 0,
+            configure_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
     }
@@ -2628,6 +2676,16 @@ impl WindowHandler for Shell {
         // new size; committing the old buffer here makes the compositor see a
         // transient size mismatch and loop (B2).
         let size_changed = size != self.surfaces[index].logical_size;
+        self.surfaces[index].configure_count += 1;
+        let count = self.surfaces[index].configure_count;
+        if count % 30 == 0 {
+            tracing::info!(
+                surface = ?window.wl_surface().id(),
+                configures = count,
+                egl_windows = self.surfaces[index].shared.egl_window_creations.get(),
+                "CelestialKit: resize configuration count"
+            );
+        }
         self.surfaces[index].configure(size, scale);
         let surface_id = window.wl_surface().id();
         let requested_server = self
