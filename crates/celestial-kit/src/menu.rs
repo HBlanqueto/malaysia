@@ -296,6 +296,11 @@ pub struct MenuView {
     help_search_icon: Option<&'static str>,
     popup_spec: Option<PopupSpec>,
     reveal_roots: Option<Rc<Vec<Vec<MenuItem>>>>,
+    /// Initial focused row, used when revealing a search result.
+    focused_index: Option<usize>,
+    /// Path of submenu indices to open after mounting, used when revealing a
+    /// nested search result.
+    open_path: Option<Rc<Vec<usize>>>,
 }
 
 impl MenuView {
@@ -320,6 +325,8 @@ impl MenuView {
             help_search_icon: None,
             popup_spec: None,
             reveal_roots: None,
+            focused_index: None,
+            open_path: None,
         }
     }
 
@@ -358,6 +365,19 @@ impl MenuView {
     /// highlighted. The vector index matches [`SearchLocation::title_index`].
     pub fn with_reveal_roots(mut self, roots: Vec<Vec<MenuItem>>) -> Self {
         self.reveal_roots = Some(Rc::new(roots));
+        self
+    }
+
+    /// Sets the initial focused row, used when revealing a search result.
+    pub fn with_focused_index(mut self, index: Option<usize>) -> Self {
+        self.focused_index = index;
+        self
+    }
+
+    /// Sets a path of submenu indices to open after mounting, used when
+    /// revealing a nested search result.
+    pub fn with_open_path(mut self, path: Vec<usize>) -> Self {
+        self.open_path = Some(Rc::new(path));
         self
     }
 
@@ -442,6 +462,8 @@ impl Clone for MenuView {
             help_search_icon: self.help_search_icon,
             popup_spec: self.popup_spec.clone(),
             reveal_roots: self.reveal_roots.clone(),
+            focused_index: self.focused_index,
+            open_path: self.open_path.clone(),
         }
     }
 }
@@ -473,7 +495,10 @@ impl App for MenuView {
         let menu_search_icon = self.menu_search_icon;
         let help_search_icon = self.help_search_icon;
         let popup_spec = self.popup_spec.clone();
-        let focused = use_state(|| first_selectable(&items));
+        let initial_focused = self.focused_index;
+        let items_for_focus = items.clone();
+        let focused =
+            use_state(move || initial_focused.or_else(|| first_selectable(&items_for_focus)));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
         let query_state = self.query_state.clone();
         let initial = query_state
@@ -560,34 +585,42 @@ impl App for MenuView {
         let focused_index = *focused.read();
         let result_focused_index = *result_focused.read();
         let reveal_child_id = use_hook(|| Rc::new(Cell::new(None::<PopupId>)));
-        let prev_revealed = use_hook(|| Rc::new(Cell::new(None::<usize>)));
+        let prev_revealed = use_hook(|| Rc::new(RefCell::new(None::<SearchLocation>)));
         let reveal_roots = self.reveal_roots.clone();
 
-        let revealed_title = result_focused_index.and_then(|i| {
+        let revealed_location = result_focused_index.and_then(|i| {
             visible.get(i).and_then(|item| match item {
                 MenuItem::SearchResult {
                     source: SearchSource::Menu,
                     location: Some(loc),
                     ..
-                } => Some(loc.title_index),
+                } => Some(loc.clone()),
                 _ => None,
             })
         });
-        if revealed_title != prev_revealed.get() {
-            prev_revealed.set(revealed_title);
+        if revealed_location != *prev_revealed.borrow() {
+            *prev_revealed.borrow_mut() = revealed_location.clone();
             close_child(reveal_child_id.clone());
-            if let (Some(title_index), Some(roots), Some(popup)) =
-                (revealed_title, reveal_roots.as_ref(), popup.clone())
-                && let Some(items) = roots.get(title_index)
+            if let (Some(loc), Some(roots), Some(popup)) =
+                (revealed_location, reveal_roots.as_ref(), popup.clone())
+                && let Some(items) = roots.get(loc.title_index)
             {
+                let (anchor_x, anchor_width) = popup_spec
+                    .as_ref()
+                    .map(|spec| (spec.anchor_rect.0 as f32, spec.anchor_rect.2 as f32))
+                    .unwrap_or((0.0, 1.0));
                 open_reveal_popup(
                     items,
+                    &loc,
                     popup,
                     size,
                     m,
                     on_activate.clone(),
                     on_dismiss_all.clone(),
                     reveal_child_id.clone(),
+                    opens_left,
+                    anchor_x,
+                    anchor_width,
                 );
             }
         }
@@ -618,6 +651,7 @@ impl App for MenuView {
                     selected,
                     menu_search_icon,
                     help_search_icon,
+                    result_focused,
                 )
             })
             .collect();
@@ -807,7 +841,8 @@ impl App for MenuView {
                     }
                     text.push_str(ch);
                     query.set(text);
-                    result_focused.set(results_start);
+                    // Typing filters the list but does not reveal a menu;
+                    // the user must move with the arrow keys or hover.
                 }
                 Key::Named(NamedKey::Backspace) if has_search => {
                     if is_selected {
@@ -818,7 +853,8 @@ impl App for MenuView {
                         text.pop();
                         query.set(text);
                     }
-                    result_focused.set(results_start);
+                    // Keep the previous focus so a deletion does not pop up
+                    // the menu of a result the user has not chosen.
                 }
                 Key::Named(NamedKey::Escape) if has_search => {
                     if query_text.is_empty() {
@@ -1293,18 +1329,38 @@ fn open_child_popup(
     Some(id)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn open_reveal_popup(
     items: &[MenuItem],
+    location: &SearchLocation,
     popup: PopupHandle,
     parent_size: (f32, f32),
     m: MenuPalette,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     reveal_child_id: Rc<Cell<Option<PopupId>>>,
+    opens_left: bool,
+    anchor_x: f32,
+    anchor_width: f32,
 ) -> Option<PopupId> {
     close_child(reveal_child_id.clone());
     let child_size = MenuView::preferred_size(items, m);
+    let parent_width = parent_size.0;
+    // The parent popup's left edge depends on which side of the title it
+    // opened on; place the reveal popup to the left of it, with an 8 px gap.
+    let parent_left = if opens_left {
+        anchor_x + anchor_width - parent_width
+    } else {
+        anchor_x
+    };
+    let reveal_x = parent_left - child_size.0 - 8.0;
+    if reveal_x < 0.0 {
+        // Not enough room on the left: do not reveal so the Help popup stays
+        // on top and unobstructed.
+        return None;
+    }
     let on_dismiss_for_action = on_dismiss_all.clone();
+    let focused_index = location.indices.first().copied();
     let child_view = MenuView::new(
         items.to_vec(),
         move |id| {
@@ -1313,23 +1369,19 @@ fn open_reveal_popup(
         },
         move || on_dismiss_all(),
         m,
-    );
+    )
+    .with_focused_index(focused_index);
     let reveal_child_id_set = reveal_child_id.clone();
     let on_dismissed = move || {
         reveal_child_id_set.set(None);
     };
-    let inset = m.padding + m.border_width;
     let spec = PopupSpec {
-        anchor_rect: ((parent_size.0 - inset) as i32, inset as i32, 1, 1),
-        anchor: PopupAnchor::TopRight,
-        gravity: PopupGravity::TopLeft,
+        anchor_rect: (0, 0, 1, 1),
+        anchor: PopupAnchor::TopLeft,
+        gravity: PopupGravity::TopRight,
         offset: (0, 0),
         size: (child_size.0 as u32, child_size.1 as u32),
-        constraint_adjustment: PopupConstraintAdjustment {
-            flip_x: true,
-            slide_y: true,
-            ..PopupConstraintAdjustment::default()
-        },
+        constraint_adjustment: PopupConstraintAdjustment::default(),
         // The preview must not take keyboard focus: the search field keeps
         // receiving the rest of the query while the subtree is shown.
         grab: false,
@@ -1351,13 +1403,14 @@ fn render_item(
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     items: Rc<Vec<MenuItem>>,
-    mut focused: UseState<Option<usize>>,
+    focused: UseState<Option<usize>>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
     size: (f32, f32),
     query: UseState<String>,
     selected: UseState<bool>,
     menu_search_icon: Option<&'static str>,
     help_search_icon: Option<&'static str>,
+    result_focused: UseState<Option<usize>>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
@@ -1732,6 +1785,7 @@ fn render_item(
             else {
                 return rect().into_element();
             };
+            let mut result_focused = result_focused;
             let id = id.clone();
             let label_text = label_text.clone();
             let shortcut_text = shortcut_text.as_ref().map(|s| format_shortcut(s));
@@ -1761,12 +1815,12 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .on_pointer_enter(move |_| {
                     if enabled {
-                        focused.set(Some(index));
+                        result_focused.set(Some(index));
                     }
                 })
                 .on_pointer_move(move |_| {
                     if enabled {
-                        focused.set(Some(index));
+                        result_focused.set(Some(index));
                     }
                 })
                 .on_mouse_down(move |_: Event<MouseEventData>| {
