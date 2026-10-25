@@ -141,6 +141,11 @@ impl Window<'_> {
         self.data.state()
     }
 
+    /// Whether the window is in an interactive resize right now.
+    pub fn is_resizing(&self) -> bool {
+        self.data.resizing
+    }
+
     /// Whether this toplevel is a dialog, a normal window or a popup.
     pub fn role(&self) -> Role {
         self.data.role()

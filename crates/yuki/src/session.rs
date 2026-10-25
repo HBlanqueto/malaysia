@@ -937,6 +937,31 @@ struct WindowFrameData {
     window_geometry: Rectangle<i32, Logical>,
     state: crate::decoration::WindowState,
     role: crate::decoration::Role,
+    resizing: bool,
+}
+
+/// Computes the logical rectangle for the SSD frame.
+///
+/// For server-decorated windows the frame hugs the committed client geometry
+/// (window geometry or buffer) expanded by the insets. During an interactive
+/// resize the scene outer already follows the pointer and anchors the opposite
+/// edge, so the configured outer size is used until the client commits.
+fn ssd_frame_rect(
+    location: Point<i32, Logical>,
+    configured_size: Size<i32, Logical>,
+    geometry: Rectangle<i32, Logical>,
+    insets: crate::decoration::Insets,
+    resizing: bool,
+) -> Rectangle<i32, Logical> {
+    let size = if resizing {
+        configured_size
+    } else {
+        Size::from((
+            (f64::from(geometry.size.w) + insets.horizontal()).round() as i32,
+            (f64::from(geometry.size.h) + insets.vertical()).round() as i32,
+        ))
+    };
+    Rectangle::new(location, size)
 }
 
 /// Appends one window's frame elements in front-to-back order: outer border,
@@ -971,6 +996,7 @@ fn append_window_frame(
             window_geometry: window.window_geometry(),
             state: window.state(),
             role: window.role(),
+            resizing: window.is_resizing(),
         }
     };
 
@@ -991,7 +1017,13 @@ fn append_window_frame(
                 data.window_geometry.size,
             )
         } else {
-            Rectangle::new(data.location, data.size)
+            ssd_frame_rect(
+                data.location,
+                data.size,
+                data.window_geometry,
+                data.insets,
+                data.resizing,
+            )
         };
     let frame_rect_physical = physical_rect(frame_rect_logical, scale);
     let radius_logical = match data.role {
@@ -1027,8 +1059,8 @@ fn append_window_frame(
                 &data.title,
                 is_focused,
                 input,
-                data.size.w,
-                data.location,
+                frame_rect_logical.size.w,
+                frame_rect_logical.loc,
                 scale,
                 &state.chrome_theme,
                 program,
@@ -2881,5 +2913,46 @@ mod tests {
             crate::window::surface_has_buffer(&surface),
             "a surface with an attached buffer has a current buffer"
         );
+    }
+
+    #[test]
+    fn ssd_frame_rect_uses_committed_geometry_plus_insets() {
+        use smithay::utils::{Point, Rectangle, Size};
+
+        let insets = crate::decoration::Insets {
+            top: 32.0,
+            left: 0.0,
+            right: 0.0,
+            bottom: 0.0,
+        };
+        // Configured 1280x708, but the client only committed 640x420.
+        let configured = Size::from((1280, 708));
+        let geometry = Rectangle::from_size(Size::from((640, 420)));
+        let rect = super::ssd_frame_rect(
+            Point::from((0, 0)),
+            configured,
+            geometry,
+            insets,
+            false,
+        );
+        assert_eq!(rect.size, Size::from((640, 452)), "frame size is committed geometry + insets");
+    }
+
+    #[test]
+    fn ssd_frame_rect_keeps_configured_size_while_resizing() {
+        use smithay::utils::{Point, Rectangle, Size};
+
+        let insets = crate::decoration::Insets::ZERO;
+        let configured = Size::from((800, 600));
+        let geometry = Rectangle::from_size(Size::from((640, 420)));
+        let rect = super::ssd_frame_rect(
+            Point::from((100, 50)),
+            configured,
+            geometry,
+            insets,
+            true,
+        );
+        assert_eq!(rect.size, configured, "during resize the frame follows the configured/pointer size");
+        assert_eq!(rect.loc, Point::from((100, 50)), "location anchors the dragged edge");
     }
 }
