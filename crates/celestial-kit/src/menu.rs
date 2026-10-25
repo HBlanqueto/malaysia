@@ -1176,7 +1176,9 @@ fn open_reveal_popup(
             slide_y: true,
             ..PopupConstraintAdjustment::default()
         },
-        grab: true,
+        // The preview must not take keyboard focus: the search field keeps
+        // receiving the rest of the query while the subtree is shown.
+        grab: false,
         on_dismissed: Some(Rc::new(on_dismissed)),
     };
     let id = popup.open_child(spec, AppComponent::new(child_view));
@@ -1451,17 +1453,24 @@ fn render_item(
                 placeholder.clone()
             };
             let text_color = if has_text { m.fg } else { m.shortcut_color };
-            let text_w = measure_text(&display_text, m.font_size);
             let clear_size = 16.0f32;
-            let clear_gap = if has_text { clear_size + 4.0 } else { 0.0 };
+            let clear_margin = 8.0f32;
+            let clear_gap = if has_text { clear_size + 8.0 } else { 0.0 };
             let row_padding = m.item_padding_x;
-            let available_w = m.max_width - row_padding * 2.0 - m.icon_size - 8.0 - clear_gap - 8.0;
-            let show_text_w = text_w.min(available_w.max(0.0));
+            let available_w = (size.0
+                - 2.0 * m.padding
+                - row_padding
+                - clear_margin
+                - m.icon_size
+                - 8.0
+                - clear_gap)
+                .max(0.0);
 
             let mut text_box = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .width(Size::px(show_text_w))
+                .width(Size::px(available_w))
+                .overflow(Overflow::Clip)
                 .child(
                     label()
                         .text(display_text)
@@ -1484,7 +1493,7 @@ fn render_item(
             let mut content = rect()
                 .width(Size::fill())
                 .height(Size::px(m.search_height))
-                .padding(Gaps::new(0.0, row_padding, 0.0, row_padding))
+                .padding(Gaps::new(0.0, clear_margin, 0.0, row_padding))
                 .background(rgba(m.search_bg))
                 .corner_radius(m.search_radius)
                 .border(
@@ -1494,17 +1503,23 @@ fn render_item(
                         .fill(rgba(m.search_ring)),
                 )
                 .direction(Direction::Horizontal)
+                .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
-                .spacing(8.0)
                 .child(
-                    SvgViewer::new(SEARCH_ICON.as_bytes())
-                        .width(Size::px(m.icon_size))
-                        .height(Size::px(m.icon_size))
-                        .color(rgba(m.shortcut_color))
-                        .show_loader(false)
-                        .into_element(),
-                )
-                .child(text_box);
+                    rect()
+                        .direction(Direction::Horizontal)
+                        .cross_align(Alignment::Center)
+                        .spacing(8.0)
+                        .child(
+                            SvgViewer::new(SEARCH_ICON.as_bytes())
+                                .width(Size::px(m.icon_size))
+                                .height(Size::px(m.icon_size))
+                                .color(rgba(m.shortcut_color))
+                                .show_loader(false)
+                                .into_element(),
+                        )
+                        .child(text_box),
+                );
 
             if has_text {
                 let clear = rect()

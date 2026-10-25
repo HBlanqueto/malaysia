@@ -46,7 +46,10 @@ const TEST_POINTER_STEP: Duration = Duration::from_millis(100);
 /// serial before the release.
 const TEST_CLICK_HOLD: Duration = Duration::from_millis(150);
 /// How long a scripted key stays pressed before the matching release.
-const TEST_KEY_HOLD: Duration = Duration::from_millis(80);
+///
+/// Keep it well under the 200 ms key-repeat delay: a slow frame between the
+/// press and the release would otherwise insert a repeated character.
+const TEST_KEY_HOLD: Duration = Duration::from_millis(20);
 
 /// A titlebar press remembered for double-click detection.
 pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
@@ -75,10 +78,17 @@ enum TestKey {
     Escape,
     Home,
     End,
+    Char(char),
 }
 
 impl TestKey {
     fn from_name(name: &str) -> Option<Self> {
+        let mut chars = name.chars();
+        if let (Some(ch), None) = (chars.next(), chars.next())
+            && ch.is_ascii_alphanumeric()
+        {
+            return Some(Self::Char(ch.to_ascii_lowercase()));
+        }
         match name {
             "Up" => Some(Self::Up),
             "Down" => Some(Self::Down),
@@ -103,8 +113,53 @@ impl TestKey {
             Self::Escape => 9,
             Self::Home => 110,
             Self::End => 115,
+            Self::Char(ch) => ascii_keycode(ch),
         })
     }
+}
+
+/// xkb keycode for an unshifted ASCII letter or digit (evdev code + 8).
+fn ascii_keycode(ch: char) -> u32 {
+    let evdev = match ch {
+        'q' => 16,
+        'w' => 17,
+        'e' => 18,
+        'r' => 19,
+        't' => 20,
+        'y' => 21,
+        'u' => 22,
+        'i' => 23,
+        'o' => 24,
+        'p' => 25,
+        'a' => 30,
+        's' => 31,
+        'd' => 32,
+        'f' => 33,
+        'g' => 34,
+        'h' => 35,
+        'j' => 36,
+        'k' => 37,
+        'l' => 38,
+        'z' => 44,
+        'x' => 45,
+        'c' => 46,
+        'v' => 47,
+        'b' => 48,
+        'n' => 49,
+        'm' => 50,
+        '1' => 2,
+        '2' => 3,
+        '3' => 4,
+        '4' => 5,
+        '5' => 6,
+        '6' => 7,
+        '7' => 8,
+        '8' => 9,
+        '9' => 10,
+        '0' => 11,
+        _ => unreachable!("ascii_keycode only accepts ASCII alphanumerics"),
+    };
+    evdev + 8
 }
 
 #[derive(Debug)]
@@ -1564,6 +1619,9 @@ impl State {
         tracing::info!(?action, "test input action");
         let delay = match &action {
             TestPointerAction::Wait(delay) => *delay,
+            // Keys must be released before the compositor's repeat delay,
+            // even when a slow frame follows the press.
+            TestPointerAction::KeyDown(_) | TestPointerAction::KeyUp(_) => Duration::ZERO,
             _ => TEST_POINTER_STEP,
         };
         let time = InputTime::from_millis(0);
@@ -2311,12 +2369,12 @@ mod tests {
     use smithay::reexports::calloop::EventLoop;
     use smithay::reexports::wayland_server::Display;
     use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
-    use xkbcommon::xkb::{self, keysyms};
+    use xkbcommon::xkb::{self, Keycode, keysyms};
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, activation_updates,
-        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor,
-        pointer_focus_blocked,
+        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TestKey,
+        activation_updates, clamp_pointer, compositor_shortcut, desktop_click, double_click,
+        edge_cursor, pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
@@ -2984,5 +3042,12 @@ mod tests {
             yuki_appearance::traffic::hit((x + size / 2.0, y + size / 2.0)),
             Some(yuki_design::ButtonKind::Close)
         );
+    }
+
+    #[test]
+    fn scripted_text_keys_map_to_ascii_keycodes() {
+        assert_eq!(TestKey::from_name("w").unwrap().code(), Keycode::new(25));
+        assert_eq!(TestKey::from_name("7").unwrap().code(), Keycode::new(16));
+        assert!(TestKey::from_name("ocul").is_none());
     }
 }
