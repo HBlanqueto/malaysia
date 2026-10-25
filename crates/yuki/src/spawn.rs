@@ -206,9 +206,22 @@ mod tests {
     }
 
     #[test]
+    #[allow(unsafe_code)]
     fn qt_server_decorations_are_exported_by_default() {
+        // The result must not depend on a value inherited from a previous test
+        // or from the cargo environment.
+        let previous = std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION");
+        // SAFETY: environment mutation is isolated to this single-threaded test.
+        unsafe { std::env::remove_var("QT_WAYLAND_DISABLE_WINDOWDECORATION") };
+
         let command = self::command("true", &Config::default());
         let env = child_env(&command);
+
+        match previous {
+            Some(value) => unsafe { std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", value) },
+            None => unsafe { std::env::remove_var("QT_WAYLAND_DISABLE_WINDOWDECORATION") },
+        }
+
         assert_eq!(
             value(&env, "QT_WAYLAND_DISABLE_WINDOWDECORATION"),
             Some(&Some(OsString::from("1")))
