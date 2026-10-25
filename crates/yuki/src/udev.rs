@@ -369,10 +369,11 @@ pub fn run(options: DrmOptions) -> Result<()> {
             let queue = disconnect_queue.clone();
             let ping = disconnect_ping.clone();
             move |stream, _, data: &mut Udev| {
+                let trusted_shell = crate::infinity::is_trusted_client(&stream);
                 let mut handle = data.display.handle();
                 match handle.insert_client(
                     stream,
-                    Arc::new(ClientState::new(queue.clone(), ping.clone())),
+                    Arc::new(ClientState::new(queue.clone(), ping.clone(), trusted_shell)),
                 ) {
                     Ok(_) => info!("client connected"),
                     Err(error) => warn!(%error, "rejected a client"),

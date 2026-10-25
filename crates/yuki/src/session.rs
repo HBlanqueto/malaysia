@@ -481,7 +481,8 @@ pub fn run() -> Result<(), SessionError> {
             let queue = disconnect_queue.clone();
             let ping = disconnect_ping.clone();
             move |stream, _, session: &mut Session| {
-                let data = Arc::new(ClientState::new(queue.clone(), ping.clone()));
+                let trusted_shell = crate::infinity::is_trusted_client(&stream);
+                let data = Arc::new(ClientState::new(queue.clone(), ping.clone(), trusted_shell));
                 let mut handle = session.display.handle();
                 match handle.insert_client(stream, data) {
                     Ok(_) => tracing::info!("client connected"),
@@ -2579,6 +2580,135 @@ mod tests {
 
     sctk::delegate_dmabuf!(TestClient);
 
+    /// The global visibility filter must not stall dispatching: it used to
+    /// re-lock the backend state to read the peer credentials. A second client
+    /// that has to receive its globals turns a stall into a missed deadline.
+    #[test]
+    fn the_global_filter_does_not_stall_the_next_client() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        use sctk::reexports::client::Connection;
+        use sctk::reexports::client::globals::registry_queue_init;
+        use smithay::reexports::wayland_server::Display;
+
+        let event_loop =
+            smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
+                .expect("the test needs an event loop");
+        let mut display = Display::<State>::new().expect("the test needs a display");
+        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+        let (disconnect_ping, _disconnect_source) =
+            smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
+        let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
+        let mut state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+            None,
+            Box::new(event_loop.handle()),
+            Box::new(()),
+        )
+        .expect("the state should build");
+
+        fn registry_globals(stream: std::os::unix::net::UnixStream) -> Vec<String> {
+            let conn = Connection::from_socket(stream).expect("the client should connect");
+            let (globals, _queue) =
+                registry_queue_init::<TestClient>(&conn).expect("the registry should init");
+            globals
+                .contents()
+                .clone_list()
+                .into_iter()
+                .map(|global| global.interface)
+                .collect()
+        }
+
+        let mut handle = display.handle();
+
+        let (first_side, first_server) =
+            std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (first_tx, first_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            first_tx
+                .send(registry_globals(first_side))
+                .expect("the main thread should read the globals");
+        });
+        handle
+            .insert_client(
+                first_server,
+                std::sync::Arc::new(crate::state::ClientState::new(
+                    disconnect_queue.clone(),
+                    disconnect_ping.clone(),
+                    false,
+                )),
+            )
+            .expect("the server should accept the first client");
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if let Ok(globals) = first_rx.try_recv() {
+                assert!(globals.iter().any(|name| name == "wl_compositor"));
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the first client never received its globals"
+            );
+        }
+
+        let (second_side, second_server) =
+            std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (second_tx, second_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            second_tx
+                .send(registry_globals(second_side))
+                .expect("the main thread should read the globals");
+        });
+        handle
+            .insert_client(
+                second_server,
+                std::sync::Arc::new(crate::state::ClientState::new(
+                    disconnect_queue.clone(),
+                    disconnect_ping.clone(),
+                    false,
+                )),
+            )
+            .expect("the server should accept the second client");
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if let Ok(globals) = second_rx.try_recv() {
+                assert!(
+                    globals.iter().any(|name| name == "wl_compositor"),
+                    "the second client must receive the globals"
+                );
+                assert!(
+                    !globals
+                        .iter()
+                        .any(|name| name == "infinity_window_manager_v1"),
+                    "an untrusted client must not see the Infinity global"
+                );
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "a client connected and the compositor stopped dispatching"
+            );
+        }
+    }
+
     /// A real client commits `create_immed` + `attach` + `commit` in one batch
     /// with an fd that is not a dma-buf, while the compositor imports and
     /// renders nothing. The import must be queued during the same dispatch and
@@ -2690,6 +2820,7 @@ mod tests {
                 std::sync::Arc::new(crate::state::ClientState::new(
                     disconnect_queue.clone(),
                     disconnect_ping.clone(),
+                    false,
                 )),
             )
             .expect("the server should accept the client");
@@ -2886,6 +3017,7 @@ mod tests {
                 std::sync::Arc::new(crate::state::ClientState::new(
                     disconnect_queue.clone(),
                     disconnect_ping.clone(),
+                    false,
                 )),
             )
             .expect("the server should accept the client");

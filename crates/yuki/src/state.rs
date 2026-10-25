@@ -422,6 +422,9 @@ impl State {
         idle_sink: Box<dyn crate::idle::TimerSink>,
     ) -> Result<Self, StateError> {
         let config = Config::load();
+        // Tests create many States in parallel; mutating the process
+        // environment here would race the spawn tests.
+        #[cfg(not(test))]
         crate::spawn::export_session_env(&config);
         let chrome_theme = crate::chrome::ChromeTheme::from_config(&config);
         let scale = output_scale(config.display.scale);
@@ -1092,15 +1095,25 @@ pub struct ClientState {
     /// Queue and ping used to clean up this client's surfaces when it dies.
     disconnect_queue: ClientDisconnectQueue,
     disconnect_ping: Ping,
+    /// Whether this client is the trusted `yuki-shell` binary.
+    ///
+    /// Resolved from the socket's peer credentials when the client is accepted;
+    /// the global filter cannot read them (it runs under the backend lock).
+    pub trusted_shell: bool,
 }
 
 impl ClientState {
-    pub(crate) fn new(disconnect_queue: ClientDisconnectQueue, disconnect_ping: Ping) -> Self {
+    pub(crate) fn new(
+        disconnect_queue: ClientDisconnectQueue,
+        disconnect_ping: Ping,
+        trusted_shell: bool,
+    ) -> Self {
         Self {
             compositor_state: CompositorClientState::default(),
             last_input_serial: AtomicU32::new(0),
             disconnect_queue,
             disconnect_ping,
+            trusted_shell,
         }
     }
 

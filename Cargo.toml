@@ -57,8 +57,9 @@ zeroize = "1"
 calloop = { version = "0.14", features = ["signals"] }  # SIGUSR1 capture + SIGTERM/SIGINT (Bloque 7.1).
 # Blocking the shutdown signals before any thread starts, so every thread
 # inherits the mask and they all reach calloop's signalfd (not just the main
-# thread's). A safe wrapper over pthread_sigmask.
-nix = { version = "0.31", features = ["signal"] }
+# thread's). A safe wrapper over pthread_sigmask. `socket` reads SO_PEERCRED
+# when a client is accepted (Infinity trust).
+nix = { version = "0.31", features = ["signal", "socket"] }
 
 # Pointer cursor. The default arrow is read from the user's Xcursor theme; a
 # built-in arrow is drawn when no theme can be read.

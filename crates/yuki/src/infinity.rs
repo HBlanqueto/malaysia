@@ -5,8 +5,10 @@
 //! pairs, fill, center, restore and fullscreen. The global is only visible to
 //! the yuki-shell binary or when `YUKI_DEV=1`.
 
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
+use nix::sys::socket::{getsockopt, sockopt};
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource, WEnum};
@@ -15,7 +17,7 @@ use tracing::info;
 use yuki_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use yuki_scene::scene::WindowId;
 
-use crate::state::State;
+use crate::state::{ClientState, State};
 
 /// Generated server-side bindings for the Infinity protocol.
 pub(crate) mod protocol {
@@ -47,33 +49,27 @@ const TILE_GAP: i32 = 8;
 
 /// Data attached to the `infinity_window_manager_v1` global.
 ///
-/// It carries a clone of the display handle so the visibility filter can read
-/// the client's credentials (`/proc/<pid>/exe`).
+/// The trust decision is made when the client is accepted (see
+/// [`is_trusted_client`]) and stored on its [`ClientState`], never here: the
+/// visibility filter runs with the backend's state lock held.
 #[derive(Debug, Clone)]
-pub struct InfinityGlobalData {
-    display_handle: DisplayHandle,
-    dev_mode: bool,
-    /// Paths that are accepted as the trusted `yuki-shell` binary.
-    shell_exes: Vec<PathBuf>,
-}
+pub struct InfinityGlobalData;
 
-impl InfinityGlobalData {
-    /// Builds the global data, resolving the trusted yuki-shell binary from the
-    /// compositor's own executable path.
-    ///
-    /// The Nix wrapper renames the real binary to `.yuki-shell-wrapped`, so
-    /// both `yuki-shell` and `.yuki-shell-wrapped` in the compositor's directory
-    /// are accepted. A wrapper may also set `YUKI_SHELL_EXE` to the exact real
-    /// path when the heuristic is not enough.
-    pub fn new(display_handle: DisplayHandle) -> Self {
-        let dev_mode = std::env::var("YUKI_DEV").is_ok_and(|v| v == "1");
-        let shell_exes = trusted_shell_exes();
-        Self {
-            display_handle,
-            dev_mode,
-            shell_exes,
-        }
+/// Whether the client connecting on `stream` is the trusted `yuki-shell`.
+///
+/// Must be called before `insert_client`: reading the peer credentials needs
+/// the socket, and the global filter later runs with the backend lock held.
+pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
+    if std::env::var("YUKI_DEV").is_ok_and(|v| v == "1") {
+        return true;
     }
+    let Ok(credentials) = getsockopt(stream, sockopt::PeerCredentials) else {
+        return false;
+    };
+    let Ok(exe) = std::fs::canonicalize(format!("/proc/{}/exe", credentials.pid())) else {
+        return false;
+    };
+    is_trusted_shell_exe(&exe, &trusted_shell_exes())
 }
 
 /// Resolves the set of executable paths that are trusted as `yuki-shell`.
@@ -113,17 +109,11 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
     }
 
     fn can_view(&self, client: &Client) -> bool {
-        if self.dev_mode {
-            return true;
-        }
-        let Ok(credentials) = client.get_credentials(&self.display_handle) else {
-            return false;
-        };
-        let pid = credentials.pid;
-        let Ok(exe) = std::fs::canonicalize(format!("/proc/{pid}/exe")) else {
-            return false;
-        };
-        is_trusted_shell_exe(&exe, &self.shell_exes)
+        // Called with the backend's state lock held: do not call the
+        // DisplayHandle here (get_credentials would deadlock).
+        client
+            .get_data::<ClientState>()
+            .is_some_and(|state| state.trusted_shell)
     }
 }
 
@@ -215,7 +205,7 @@ fn pair_layout_from_wenum(layout: WEnum<PairLayout>) -> PairLayout {
 impl InfinityGlobalData {
     /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        let data = InfinityGlobalData::new(display_handle.clone());
+        let data = InfinityGlobalData;
         display_handle.create_global::<State, InfinityWindowManagerV1, _>(1, data)
     }
 }
@@ -285,10 +275,10 @@ impl State {
 
     /// Restores a window to the rectangle saved before the first arrange.
     pub(crate) fn infinity_restore(&mut self, id: WindowId) {
-        info!(window = id.get(), "infinity restore");
         let Some(saved) = self.arranged.remove(&id) else {
             return;
         };
+        info!(window = id.get(), outer = ?saved, "infinity restore");
         self.apply_infinity_geometry(id, saved);
         self.send_restorable(id);
     }
@@ -313,6 +303,7 @@ impl State {
 
     /// Applies a target outer rectangle to a window, converting scene types.
     fn apply_infinity_geometry(&mut self, id: WindowId, target: SceneRect<f64, SceneLogical>) {
+        info!(window = id.get(), outer = ?target, "infinity geometry");
         self.windows.set_infinity_geometry(id, target);
         self.foreign_state_changed(id);
         self.request_redraw();
@@ -337,17 +328,15 @@ impl State {
     fn send_restorable(&mut self, id: WindowId) {
         let restorable = self.arranged.contains_key(&id);
         self.infinity_managers.retain(|manager| manager.is_alive());
-        let Some(handle) = self.foreign_handle_for(id) else {
-            return;
-        };
         for manager in &self.infinity_managers {
+            let Some(client) = manager.client() else {
+                continue;
+            };
+            let Some(handle) = self.foreign.management.handle_for_client(id, client.id()) else {
+                continue;
+            };
             manager.restorable(handle, restorable as u32);
         }
-    }
-
-    /// Finds the foreign-toplevel handle for a window.
-    fn foreign_handle_for(&self, id: WindowId) -> Option<&ZwlrForeignToplevelHandleV1> {
-        self.foreign.management.handle_for(id)
     }
 }
 

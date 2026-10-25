@@ -13,7 +13,7 @@ use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::{
     zwlr_foreign_toplevel_handle_v1::{self, State as ToplevelState, ZwlrForeignToplevelHandleV1},
     zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
 };
-use smithay::reexports::wayland_server::backend::GlobalId;
+use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::utils::{Point, Rectangle, Size};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelHandle, ForeignToplevelListState};
@@ -62,11 +62,20 @@ impl ForeignManagement {
         self.handles.retain(|(_, handle)| handle.is_alive());
     }
 
-    /// Returns the live management handle for `id`, if any.
-    pub(crate) fn handle_for(&self, id: WindowId) -> Option<&ZwlrForeignToplevelHandleV1> {
+    /// Returns the live management handle for `id` owned by `client`.
+    ///
+    /// Handles are per client: sending one to another client's manager is a
+    /// protocol error, so callers that broadcast must pick their own.
+    pub(crate) fn handle_for_client(
+        &self,
+        id: WindowId,
+        client: ClientId,
+    ) -> Option<&ZwlrForeignToplevelHandleV1> {
         self.handles
             .iter()
-            .find(|(wid, _)| *wid == id)
+            .find(|(wid, handle)| {
+                *wid == id && handle.client().is_some_and(|owner| owner.id() == client)
+            })
             .map(|(_, handle)| handle)
             .filter(|handle| handle.is_alive())
     }
