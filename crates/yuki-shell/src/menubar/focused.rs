@@ -4,6 +4,9 @@
 //! Ventana and Ayuda. The constructors are pure so the tests can drive them
 //! with fake [`ToplevelInfo`]s; [`on_action`] reads the live list again.
 
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+
 use celestial_kit::menu::{CheckState, MenuItem};
 use celestial_kit::platform::{ToplevelInfo, Toplevels};
 
@@ -11,13 +14,63 @@ use crate::menubar::{icons, xdg_open};
 
 const ISSUES_URL: &str = "https://github.com/HBlanqueto/yukiwm/issues";
 
+/// shortcut: the compositor does not emit the wlr `state` event yet, so the
+/// minimized windows this process hid are tracked here; drop it when the
+/// event arrives. Minimizing from another client stays invisible until then.
+fn minimized_tracking() -> &'static Mutex<HashSet<(String, String)>> {
+    static TRACKING: OnceLock<Mutex<HashSet<(String, String)>>> = OnceLock::new();
+    TRACKING.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn window_key(window: &ToplevelInfo) -> (String, String) {
+    (window.app_id.clone(), window.title.clone())
+}
+
+fn tracked_minimized(toplevels: &[ToplevelInfo]) -> HashSet<(String, String)> {
+    let mut tracking = minimized_tracking().lock().unwrap();
+    tracking.retain(|key| toplevels.iter().any(|window| &window_key(window) == key));
+    tracking.clone()
+}
+
+fn is_minimized(window: &ToplevelInfo, tracked: &HashSet<(String, String)>) -> bool {
+    window.minimized || tracked.contains(&window_key(window))
+}
+
+fn mark_minimized(window: &ToplevelInfo) {
+    minimized_tracking()
+        .lock()
+        .unwrap()
+        .insert(window_key(window));
+}
+
+fn unmark_minimized(window: &ToplevelInfo) {
+    minimized_tracking()
+        .lock()
+        .unwrap()
+        .remove(&window_key(window));
+}
+
+/// shortcut: same missing wlr `state` event as above; remember the window this
+/// process activated so the check and the active controls follow it.
+fn active_hint() -> &'static Mutex<Option<(String, String)>> {
+    static HINT: OnceLock<Mutex<Option<(String, String)>>> = OnceLock::new();
+    HINT.get_or_init(|| Mutex::new(None))
+}
+
+fn remember_active(window: &ToplevelInfo) {
+    *active_hint().lock().unwrap() = Some(window_key(window));
+}
+
 /// The app menu (`{App}`): about, settings, services, hide/show and quit.
 pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
+    let tracked = tracked_minimized(toplevels);
     let other_unminimized = toplevels
         .iter()
-        .any(|window| window.app_id != app_id && !window.minimized);
-    let any_minimized = toplevels.iter().any(|window| window.minimized);
+        .any(|window| window.app_id != app_id && !is_minimized(window, &tracked));
+    let any_minimized = toplevels
+        .iter()
+        .any(|window| is_minimized(window, &tracked));
     vec![
         action(
             "app-about",
@@ -89,12 +142,11 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
 pub fn window_menu_items(
     app_name: &str,
     app_id: &str,
+    active_title: &str,
     toplevels: &[ToplevelInfo],
 ) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
-    let active = toplevels
-        .iter()
-        .position(|window| window.app_id == app_id && window.active);
+    let active = active_index(toplevels, app_id, active_title);
     let mut items = vec![
         action(
             active_id("app-window-minimize", active),
@@ -226,7 +278,7 @@ pub fn window_menu_items(
             label,
             shortcut: None,
             enabled: true,
-            check: CheckState::Checkbox(window.active),
+            check: CheckState::Checkbox(Some(*index) == active),
             icon: None,
         });
     }
@@ -273,30 +325,39 @@ pub fn on_action(id: String) {
     match verb {
         "app-hide" => {
             for index in app_indices(&list, argument) {
+                mark_minimized(&list[index]);
                 toplevels.minimize(index);
             }
         }
         "app-hide-others" => {
+            let tracked = tracked_minimized(&list);
             for (index, window) in list.iter().enumerate() {
-                if window.app_id != argument && !window.minimized {
+                if window.app_id != argument && !is_minimized(window, &tracked) {
+                    mark_minimized(window);
                     toplevels.minimize(index);
                 }
             }
         }
         "app-show-all" => {
             for (index, window) in list.iter().enumerate() {
-                if window.minimized {
-                    toplevels.unset_minimized(index);
-                }
+                unmark_minimized(window);
+                toplevels.unset_minimized(index);
             }
+            minimized_tracking().lock().unwrap().clear();
         }
         "app-quit" => {
             for index in app_indices(&list, argument).into_iter().rev() {
+                if let Some(window) = list.get(index) {
+                    unmark_minimized(window);
+                }
                 toplevels.close(index);
             }
         }
         "app-window-minimize" => {
             if let Ok(index) = argument.parse::<usize>() {
+                if let Some(window) = list.get(index) {
+                    mark_minimized(window);
+                }
                 toplevels.minimize(index);
             }
         }
@@ -308,24 +369,38 @@ pub fn on_action(id: String) {
         }
         "app-window-close" => {
             if let Ok(index) = argument.parse::<usize>() {
+                if let Some(window) = list.get(index) {
+                    unmark_minimized(window);
+                }
                 toplevels.close(index);
             }
         }
         "app-window-front" => {
             let mut windows = app_indices(&list, argument);
-            if let Some(position) = windows
-                .iter()
-                .position(|index| list.get(*index).is_some_and(|window| window.active))
-            {
+            let hint = active_hint().lock().unwrap().clone();
+            if let Some(position) = windows.iter().position(|index| {
+                list.get(*index).is_some_and(|window| window.active)
+                    || hint
+                        .as_ref()
+                        .is_some_and(|hint| &window_key(&list[*index]) == hint)
+            }) {
                 let active = windows.remove(position);
                 windows.push(active);
             }
             for index in windows {
+                if let Some(window) = list.get(index) {
+                    unmark_minimized(window);
+                    remember_active(window);
+                }
                 toplevels.activate(index);
             }
         }
         "app-window-activate" => {
             if let Ok(index) = argument.parse::<usize>() {
+                if let Some(window) = list.get(index) {
+                    unmark_minimized(window);
+                    remember_active(window);
+                }
                 toplevels.activate(index);
             }
         }
@@ -443,6 +518,26 @@ fn move_resize_items() -> Vec<MenuItem> {
     ]
 }
 
+fn active_index(toplevels: &[ToplevelInfo], app_id: &str, active_title: &str) -> Option<usize> {
+    let app = app_indices(toplevels, app_id);
+    let hint = active_hint().lock().unwrap().clone();
+    app.iter()
+        .copied()
+        .find(|index| toplevels[*index].active)
+        .or_else(|| {
+            let hint = hint.as_ref()?;
+            app.iter()
+                .copied()
+                .find(|index| &window_key(&toplevels[*index]) == hint)
+        })
+        .or_else(|| {
+            app.iter()
+                .copied()
+                .find(|index| !active_title.is_empty() && toplevels[*index].title == active_title)
+        })
+        .or_else(|| app.last().copied())
+}
+
 fn app_indices(toplevels: &[ToplevelInfo], app_id: &str) -> Vec<usize> {
     toplevels
         .iter()
@@ -535,6 +630,19 @@ mod tests {
     }
 
     #[test]
+    fn active_index_prefers_the_flag_then_the_title_then_the_last_window() {
+        let mut list = vec![
+            window("foot", "Yuki", false, false),
+            window("foot", "Segunda ventana", false, false),
+        ];
+        assert_eq!(active_index(&list, "foot", "Yuki"), Some(0));
+        assert_eq!(active_index(&list, "foot", "Segunda ventana"), Some(1));
+        assert_eq!(active_index(&list, "foot", "otra"), Some(1));
+        list[0].active = true;
+        assert_eq!(active_index(&list, "foot", "Segunda ventana"), Some(0));
+    }
+
+    #[test]
     fn app_menu_labels_and_enabled_states() {
         let items = app_menu_items("Foot", "foot", &toplevels());
         assert_eq!(
@@ -574,7 +682,7 @@ mod tests {
 
     #[test]
     fn window_menu_lists_only_the_app_windows_with_the_active_checked() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", "Yuki", &toplevels());
         let listed: Vec<&MenuItem> = items
             .iter()
             .filter(|item| matches!(item, MenuItem::Action { id, .. } if id.starts_with("app-window-activate:")))
@@ -600,7 +708,7 @@ mod tests {
 
     #[test]
     fn window_menu_controls_are_enabled_and_the_rest_is_gray() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", "Yuki", &toplevels());
         assert!(enabled(&items, "Minimizar"));
         assert!(enabled(&items, "Maximizar"));
         assert!(!enabled(&items, "Rellenar"));
@@ -618,7 +726,7 @@ mod tests {
 
     #[test]
     fn move_and_resize_submenu_has_headers_and_gray_items() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", "Yuki", &toplevels());
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
             .find(|item| label(item) == Some("Trasladar y redimensionar"))

@@ -47,7 +47,8 @@ impl App for BarApp {
         let timers = Timers::get();
         let active_app = self.active_app;
         let window_store = self.window_store.clone();
-        use_hook(move || schedule_active_poll(timers, window_store, active_app));
+        let poll_store = window_store.clone();
+        use_hook(move || schedule_active_poll(timers, poll_store, active_app));
 
         let timers = Timers::get();
         let appearance = self.appearance;
@@ -115,10 +116,15 @@ impl App for BarApp {
             let window_items: MenuItems = {
                 let app_id = app_id.clone();
                 let app_name = app_name.clone();
+                let window_store = window_store.clone();
                 Rc::new(move || {
+                    let active_title = load_active_window(&window_store)
+                        .map(|window| window.title)
+                        .unwrap_or_default();
                     focused::window_menu_items(
                         &app_name,
                         &app_id,
+                        &active_title,
                         &Toplevels::get().list.read().clone(),
                     )
                 })
