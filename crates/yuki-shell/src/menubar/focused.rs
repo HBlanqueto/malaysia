@@ -5,7 +5,7 @@
 //! with fake [`ToplevelInfo`]s; [`on_action`] reads the live list again.
 
 use celestial_kit::menu::{CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry};
-use celestial_kit::platform::{ToplevelInfo, Toplevels};
+use celestial_kit::platform::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::menubar::{help_topics, icons, xdg_open};
 
@@ -93,6 +93,8 @@ pub fn window_menu_items(
 ) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
     let active = active_index(toplevels, app_id);
+    let active_window = active.map(|index| &toplevels[index]);
+    let has_active = active_window.is_some();
     let mut items = vec![
         action(
             active_id("app-window-minimize", active),
@@ -109,17 +111,17 @@ pub fn window_menu_items(
             None,
         ),
         action(
-            "app-window-fill",
+            active_id("app-window-fill", active),
             "Rellenar",
             Some("Ctrl+Super+Return"),
-            false,
+            has_active,
             None,
         ),
         action(
-            "app-window-center",
+            active_id("app-window-center", active),
             "Centrar",
             Some("Ctrl+Super+C"),
-            false,
+            has_active,
             None,
         ),
         MenuItem::Separator,
@@ -127,7 +129,7 @@ pub fn window_menu_items(
             label: "Trasladar y redimensionar".to_string(),
             enabled: true,
             icon: Some(icons::GRID),
-            items: move_resize_items(),
+            items: move_resize_items(active_window),
         },
         MenuItem::Submenu {
             label: "Ventana a pantalla completa".to_string(),
@@ -150,10 +152,10 @@ pub fn window_menu_items(
                 ),
                 MenuItem::Separator,
                 action(
-                    "app-window-fullscreen",
+                    active_id("app-window-fullscreen", active),
                     "Activar pantalla completa",
                     Some("Ctrl+Super+F"),
-                    false,
+                    has_active,
                     None,
                 ),
             ],
@@ -424,39 +426,116 @@ pub fn on_action(id: String) {
         "app-help-report" => xdg_open(ISSUES_URL),
         "app-help-topics-index" => xdg_open(help_topics::DOCS_INDEX),
         "app-help-topic" => xdg_open(argument),
+        "app-window-fill" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Fill);
+            }
+        }
+        "app-window-center" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Center);
+            }
+        }
+        "app-move-left" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Left);
+            }
+        }
+        "app-move-right" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Right);
+            }
+        }
+        "app-move-up" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Top);
+            }
+        }
+        "app-move-down" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::Bottom);
+            }
+        }
+        "app-quarter-top-left" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::TopLeft);
+            }
+        }
+        "app-quarter-top-right" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::TopRight);
+            }
+        }
+        "app-quarter-bottom-left" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::BottomLeft);
+            }
+        }
+        "app-quarter-bottom-right" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.arrange(index, InfinityLayout::BottomRight);
+            }
+        }
+        "app-layout-side-by-side" => {
+            toplevels.arrange_pair(InfinityPairLayout::SideBySide);
+        }
+        "app-layout-reversed-side-by-side" => {
+            toplevels.arrange_pair(InfinityPairLayout::SideBySideReversed);
+        }
+        "app-layout-stacked" => {
+            toplevels.arrange_pair(InfinityPairLayout::Stacked);
+        }
+        "app-layout-reversed-stacked" => {
+            toplevels.arrange_pair(InfinityPairLayout::StackedReversed);
+        }
+        "app-layout-quarters" => {
+            toplevels.arrange_quarters();
+        }
+        "app-move-restore" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.restore(index);
+            }
+        }
+        "app-window-fullscreen" => {
+            if let Ok(index) = argument.parse::<usize>() {
+                toplevels.set_fullscreen(index, true);
+            }
+        }
         _ => {}
     }
 }
 
-fn move_resize_items() -> Vec<MenuItem> {
+fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
+    let has_active = active.is_some();
+    let can_restore = active.is_some_and(|window| window.restorable);
     vec![
         header("Mitades"),
         action(
             "app-move-left",
             "Izquierda",
             Some("Ctrl+Super+Left"),
-            false,
+            has_active,
             Some(icons::HALF_LEFT),
         ),
         action(
             "app-move-right",
             "Derecha",
             Some("Ctrl+Super+Right"),
-            false,
+            has_active,
             Some(icons::HALF_RIGHT),
         ),
         action(
             "app-move-up",
             "Superior",
             Some("Ctrl+Super+Up"),
-            false,
+            has_active,
             Some(icons::HALF_TOP),
         ),
         action(
             "app-move-down",
             "Inferior",
             Some("Ctrl+Super+Down"),
-            false,
+            has_active,
             Some(icons::HALF_BOTTOM),
         ),
         MenuItem::Separator,
@@ -465,28 +544,28 @@ fn move_resize_items() -> Vec<MenuItem> {
             "app-quarter-top-left",
             "Superior izquierdo",
             None,
-            false,
+            has_active,
             Some(icons::QUARTER_TOP_LEFT),
         ),
         action(
             "app-quarter-top-right",
             "Superior derecho",
             None,
-            false,
+            has_active,
             Some(icons::QUARTER_TOP_RIGHT),
         ),
         action(
             "app-quarter-bottom-left",
             "Inferior izquierdo",
             None,
-            false,
+            has_active,
             Some(icons::QUARTER_BOTTOM_LEFT),
         ),
         action(
             "app-quarter-bottom-right",
             "Inferior derecho",
             None,
-            false,
+            has_active,
             Some(icons::QUARTER_BOTTOM_RIGHT),
         ),
         MenuItem::Separator,
@@ -495,35 +574,35 @@ fn move_resize_items() -> Vec<MenuItem> {
             "app-layout-side-by-side",
             "Izquierda y derecha",
             Some("Ctrl+Shift+Super+Left"),
-            false,
+            has_active,
             Some(icons::HALVES_LEFT_RIGHT),
         ),
         action(
             "app-layout-reversed-side-by-side",
             "Derecha e izquierda",
             Some("Ctrl+Shift+Super+Right"),
-            false,
+            has_active,
             Some(icons::HALVES_RIGHT_LEFT),
         ),
         action(
             "app-layout-stacked",
             "Superior e inferior",
             Some("Ctrl+Shift+Super+Up"),
-            false,
+            has_active,
             Some(icons::HALVES_TOP_BOTTOM),
         ),
         action(
             "app-layout-reversed-stacked",
             "Inferior y superior",
             Some("Ctrl+Shift+Super+Down"),
-            false,
+            has_active,
             Some(icons::HALVES_BOTTOM_TOP),
         ),
         action(
             "app-layout-quarters",
             "En cuartos",
             None,
-            false,
+            has_active,
             Some(icons::GRID),
         ),
         MenuItem::Separator,
@@ -531,7 +610,7 @@ fn move_resize_items() -> Vec<MenuItem> {
             "app-move-restore",
             "Regresar al tamaño anterior",
             Some("Ctrl+Super+R"),
-            false,
+            can_restore,
             None,
         ),
     ]
@@ -584,13 +663,20 @@ fn action(
 mod tests {
     use super::*;
 
-    fn window(app_id: &str, title: &str, active: bool, minimized: bool) -> ToplevelInfo {
+    fn window(
+        app_id: &str,
+        title: &str,
+        active: bool,
+        minimized: bool,
+        restorable: bool,
+    ) -> ToplevelInfo {
         ToplevelInfo {
             title: title.to_string(),
             app_id: app_id.to_string(),
             active,
             maximized: false,
             minimized,
+            restorable,
         }
     }
 
@@ -630,17 +716,23 @@ mod tests {
 
     fn toplevels() -> Vec<ToplevelInfo> {
         vec![
-            window("foot", "Yuki", true, false),
-            window("foot", "Segunda ventana", false, true),
-            window("org.mozilla.firefox", "Mozilla Firefox", false, false),
+            window("foot", "Yuki", true, false, false),
+            window("foot", "Segunda ventana", false, true, false),
+            window(
+                "org.mozilla.firefox",
+                "Mozilla Firefox",
+                false,
+                false,
+                false,
+            ),
         ]
     }
 
     #[test]
     fn active_index_prefers_the_flag_then_the_last_window() {
         let mut list = vec![
-            window("foot", "Yuki", false, false),
-            window("foot", "Segunda ventana", false, false),
+            window("foot", "Yuki", false, false, false),
+            window("foot", "Segunda ventana", false, false, false),
         ];
         assert_eq!(active_index(&list, "foot"), Some(1));
         list[0].active = true;
@@ -677,8 +769,8 @@ mod tests {
             "Foot",
             "foot",
             &[
-                window("foot", "Yuki", true, false),
-                window("foot", "Otra", false, false),
+                window("foot", "Yuki", true, false, false),
+                window("foot", "Otra", false, false, false),
             ],
         );
         assert!(!enabled(&items, "Mostrar todo"));
@@ -716,8 +808,8 @@ mod tests {
         let items = window_menu_items("Foot", "foot", &toplevels());
         assert!(enabled(&items, "Minimizar"));
         assert!(enabled(&items, "Maximizar"));
-        assert!(!enabled(&items, "Rellenar"));
-        assert!(!enabled(&items, "Centrar"));
+        assert!(enabled(&items, "Rellenar"));
+        assert!(enabled(&items, "Centrar"));
         assert!(enabled(&items, "Trasladar y redimensionar"));
         assert!(enabled(&items, "Ventana a pantalla completa"));
         assert!(enabled(&items, "Cerrar ventana"));
@@ -730,7 +822,7 @@ mod tests {
     }
 
     #[test]
-    fn move_and_resize_submenu_has_headers_and_gray_items() {
+    fn move_and_resize_submenu_has_headers_and_enabled_geometry_items() {
         let items = window_menu_items("Foot", "foot", &toplevels());
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
@@ -761,7 +853,29 @@ mod tests {
             ]
         );
         assert!(matches!(layout[0], MenuItem::Header { .. }));
-        assert!(layout[1..].iter().all(|item| !is_enabled(item)));
+        // All geometry actions are enabled because there is an active window.
+        assert!(
+            layout[1..18]
+                .iter()
+                .filter(|item| matches!(item, MenuItem::Action { .. } | MenuItem::Submenu { .. }))
+                .all(is_enabled)
+        );
+        // Restore is disabled because the active window has no saved rectangle.
+        assert!(!is_enabled(&layout[19]));
+    }
+
+    #[test]
+    fn restore_is_enabled_when_the_active_window_is_restorable() {
+        let mut toplevels = toplevels();
+        toplevels[0].restorable = true;
+        let items = window_menu_items("Foot", "foot", &toplevels);
+        let Some(MenuItem::Submenu { items: layout, .. }) = items
+            .iter()
+            .find(|item| label(item) == Some("Trasladar y redimensionar"))
+        else {
+            panic!("missing the layout submenu");
+        };
+        assert!(is_enabled(&layout[19]));
     }
 
     #[test]
