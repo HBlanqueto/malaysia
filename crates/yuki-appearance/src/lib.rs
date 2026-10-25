@@ -96,6 +96,10 @@ pub struct AppearanceConfig {
     pub contrast: bool,
     /// "Reduce motion" (macOS Accessibility).
     pub reduced_motion: bool,
+    /// "Reduce transparency" (macOS Accessibility). Solid shell surfaces when
+    /// true; the default. The value is kept so blur can be enabled later.
+    #[serde(default = "default_reduce_transparency")]
+    pub reduce_transparency: bool,
     /// What tints the window chrome: nothing, the accent or the wallpaper.
     pub window_color: WindowColorMode,
     /// In wallpaper mode, whether only windows or the panels and dock too are
@@ -103,6 +107,10 @@ pub struct AppearanceConfig {
     pub window_tint_scope: WindowTintScope,
     /// The traffic-light palette.
     pub traffic_lights: TrafficLightStyle,
+}
+
+fn default_reduce_transparency() -> bool {
+    true
 }
 
 /// The colours and tints resolved from one appearance + wallpaper state.
@@ -121,6 +129,8 @@ pub struct Resolved {
     pub lights: [Rgba; 3],
     /// The resolved traffic-light style (`Auto` already expanded).
     pub traffic_style: TrafficLightStyle,
+    /// Whether the shell and kit must use opaque surfaces.
+    pub reduce_transparency: bool,
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -194,6 +204,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         panel_tint,
         lights,
         traffic_style: style,
+        reduce_transparency: appearance.reduce_transparency,
     }
 }
 
@@ -340,6 +351,7 @@ mod tests {
             accent_color: accent,
             contrast: false,
             reduced_motion: false,
+            reduce_transparency: true,
             window_color: mode,
             window_tint_scope: scope,
             traffic_lights: lights,
@@ -594,6 +606,27 @@ mod tests {
         assert_eq!(config.traffic_lights, TrafficLightStyle::Standard);
         let config: AppearanceConfig = toml::from_str("traffic_lights = \"standard\"\n").unwrap();
         assert_eq!(config.traffic_lights, TrafficLightStyle::Standard);
+    }
+
+    #[test]
+    fn reduce_transparency_defaults_to_true() {
+        let without_key: AppearanceConfig = toml::from_str(
+            r#"
+color_scheme = "dark"
+accent_color = [0.2, 0.5, 0.8]
+contrast = false
+reduced_motion = false
+window_color = "neutral"
+window_tint_scope = "windows"
+traffic_lights = "auto"
+"#,
+        )
+        .unwrap();
+        assert!(without_key.reduce_transparency);
+
+        let with_false: AppearanceConfig =
+            toml::from_str("reduce_transparency = false\n").unwrap();
+        assert!(!with_false.reduce_transparency);
     }
 
     #[test]
