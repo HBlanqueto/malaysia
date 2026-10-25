@@ -5,7 +5,7 @@
 //! Every menu title shares a single popup state so only one menu tree is open
 //! at a time.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -23,6 +23,7 @@ use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILI
 use crate::desktop::DesktopEntry;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
+use celestial_kit::menu::SearchQuery;
 
 const MAX_TITLES: usize = 8;
 
@@ -83,6 +84,12 @@ impl App for BarApp {
         }
 
         let menu_state = MenuState::new();
+        let help_query = use_hook(|| {
+            Rc::new(RefCell::new(SearchQuery {
+                text: String::new(),
+                selected: false,
+            }))
+        });
         let anchors: TitleAnchors = use_hook(|| {
             Rc::new(
                 (0..MAX_TITLES)
@@ -99,6 +106,8 @@ impl App for BarApp {
             on_activate: system::on_system_action,
             anchor: anchors[0].clone(),
             enabled: true,
+            query_state: None,
+            reveal_roots: None,
         }];
         if focused {
             let app_id = app_id.clone().unwrap_or_default();
@@ -132,20 +141,36 @@ impl App for BarApp {
             let help_searchable: SearchableItems = {
                 let app_name = app_name.clone();
                 let app_id = app_id.clone();
-                Rc::new(move || {
-                    focused::searchable_menu_items(
+                Rc::new(move || menu::SearchableLists {
+                    menu: focused::searchable_menu_items(
                         &app_name,
                         &app_id,
                         &Toplevels::get().list.read().clone(),
-                    )
+                    ),
+                    help: focused::help_search_topics(),
                 })
             };
+            let reveal_roots = Rc::new(vec![(app_items)(), (window_items)()]);
             let focused_titles = [
-                (app_name.clone(), app_items, 1usize, None),
-                ("Ventana".to_string(), window_items, 2, None),
-                ("Ayuda".to_string(), help_items, 3, Some(help_searchable)),
+                (
+                    app_name.clone(),
+                    app_items,
+                    1usize,
+                    None,
+                    None::<Rc<RefCell<SearchQuery>>>,
+                    None::<Rc<Vec<Vec<MenuItem>>>>,
+                ),
+                ("Ventana".to_string(), window_items, 2, None, None, None),
+                (
+                    "Ayuda".to_string(),
+                    help_items,
+                    3,
+                    Some(help_searchable),
+                    Some(help_query.clone()),
+                    Some(reveal_roots),
+                ),
             ];
-            for (offset, (label, items, anchor, searchable)) in
+            for (offset, (label, items, anchor, searchable, query_state, reveal_roots)) in
                 focused_titles.into_iter().enumerate()
             {
                 specs.push(MenuTitleSpec {
@@ -157,6 +182,8 @@ impl App for BarApp {
                     on_activate: focused::on_action,
                     anchor: anchors[anchor].clone(),
                     enabled: true,
+                    query_state,
+                    reveal_roots,
                 });
             }
         } else {
@@ -183,6 +210,8 @@ impl App for BarApp {
                     on_activate: appmenu::on_action,
                     anchor: anchors[offset + 1].clone(),
                     enabled: true,
+                    query_state: None,
+                    reveal_roots: None,
                 });
             }
         }

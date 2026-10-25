@@ -4,10 +4,10 @@
 //! Ventana and Ayuda. The constructors are pure so the tests can drive them
 //! with fake [`ToplevelInfo`]s; [`on_action`] reads the live list again.
 
-use celestial_kit::menu::{CheckState, MenuItem};
+use celestial_kit::menu::{CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry};
 use celestial_kit::platform::{ToplevelInfo, Toplevels};
 
-use crate::menubar::{icons, xdg_open};
+use crate::menubar::{help_topics, icons, xdg_open};
 
 const ISSUES_URL: &str = "https://github.com/HBlanqueto/yukiwm/issues";
 
@@ -263,36 +263,94 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     ]
 }
 
-/// All entries that the Help search field can reach, paired with their menu
-/// path. Keeps labels in one place so tests and UI never drift apart.
+/// All menu entries that the Help search field can reach, paired with their
+/// menu path and menubar location. Keeps labels in one place so tests and UI
+/// never drift apart.
 pub fn searchable_menu_items(
     app_name: &str,
     app_id: &str,
     toplevels: &[ToplevelInfo],
-) -> Vec<(String, MenuItem)> {
+) -> Vec<SearchableEntry> {
     let mut out = Vec::new();
     collect_searchable(
         &app_menu_items(app_name, app_id, toplevels),
         app_name,
+        SearchLocation {
+            title_index: 0,
+            indices: Vec::new(),
+        },
         &mut out,
     );
     collect_searchable(
         &window_menu_items(app_name, app_id, toplevels),
         "Ventana",
+        SearchLocation {
+            title_index: 1,
+            indices: Vec::new(),
+        },
         &mut out,
     );
     out
 }
 
-fn collect_searchable(items: &[MenuItem], path: &str, out: &mut Vec<(String, MenuItem)>) {
-    for item in items {
+/// Help topics surfaced by the Help search field.
+pub fn help_search_topics() -> Vec<SearchableEntry> {
+    help_topics::topics()
+        .iter()
+        .map(|topic| SearchableEntry {
+            path: "Temas de ayuda".to_string(),
+            item: MenuItem::Action {
+                id: format!("app-help-topic:{}", topic.url),
+                label: topic.title.to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            },
+            location: None,
+            source: SearchSource::Help,
+        })
+        .chain(std::iter::once(SearchableEntry {
+            path: "Temas de ayuda".to_string(),
+            item: MenuItem::Action {
+                id: "app-help-topics-index".to_string(),
+                label: "Mostrar todos los temas de ayuda".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            },
+            location: None,
+            source: SearchSource::Help,
+        }))
+        .collect()
+}
+
+fn collect_searchable(
+    items: &[MenuItem],
+    path: &str,
+    location: SearchLocation,
+    out: &mut Vec<SearchableEntry>,
+) {
+    for (index, item) in items.iter().enumerate() {
         match item {
-            MenuItem::Action { .. } => out.push((path.to_string(), item.clone())),
+            MenuItem::Action { .. } => {
+                let mut loc = location.clone();
+                loc.indices.push(index);
+                out.push(SearchableEntry {
+                    path: path.to_string(),
+                    item: item.clone(),
+                    location: Some(loc),
+                    source: SearchSource::Menu,
+                });
+            }
             MenuItem::Submenu {
                 label, items: sub, ..
             } => {
                 let sub_path = format!("{path} › {label}");
-                collect_searchable(sub, &sub_path, out);
+                let mut loc = location.clone();
+                loc.indices.push(index);
+                collect_searchable(sub, &sub_path, loc, out);
             }
             _ => {}
         }
@@ -364,6 +422,8 @@ pub fn on_action(id: String) {
             }
         }
         "app-help-report" => xdg_open(ISSUES_URL),
+        "app-help-topics-index" => xdg_open(help_topics::DOCS_INDEX),
+        "app-help-topic" => xdg_open(argument),
         _ => {}
     }
 }
@@ -717,11 +777,13 @@ mod tests {
     fn search_results(query: &str) -> Vec<(String, String)> {
         searchable_menu_items("Foot", "foot", &toplevels())
             .into_iter()
-            .filter(|(_, item)| {
-                item.label()
+            .filter(|entry| {
+                entry
+                    .item
+                    .label()
                     .is_some_and(|label| normalize_query(label).contains(&normalize_query(query)))
             })
-            .map(|(path, item)| (path, item.label().unwrap().to_string()))
+            .map(|entry| (entry.path, entry.item.label().unwrap().to_string()))
             .collect()
     }
 
@@ -757,6 +819,25 @@ mod tests {
             assert_eq!(path, window_layout);
         }
         assert_eq!(results[5].0, "Ventana › Ventana a pantalla completa");
+    }
+
+    #[test]
+    fn search_locations_trace_title_and_submenu_indices() {
+        let entries = searchable_menu_items("Foot", "foot", &toplevels());
+        let left = entries
+            .iter()
+            .find(|e| e.item.label() == Some("Izquierda"))
+            .expect("Izquierda should be searchable");
+        let location = left.location.as_ref().expect("menu entry has a location");
+        assert_eq!(
+            location.title_index, 1,
+            "Izquierda lives in the Ventana menu"
+        );
+        assert_eq!(
+            location.indices,
+            vec![5, 1],
+            "Ventana[5] is the layout submenu, then Izquierda[1] inside it"
+        );
     }
 
     fn normalize_query(text: &str) -> String {

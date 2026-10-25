@@ -96,6 +96,18 @@ Es contenido propio de la shell: no depende de D-Bus ni de una app.
   con sus dos preferencias. Si Firefox en Wayland necesita además
   `appmenu-gtk-module`, se anota como requisito de la sesión, no del repo.
 
+## Medidas de los menús
+
+El ancho de un menú sigue el comportamiento de macOS, no un máximo fijo de
+480 px:
+
+- El ancho = contenido (icono + label + atajo + márgenes) entre un mínimo de
+  220 px y un máximo de `min(640, ancho lógico de la salida − 32)`.
+- Solo por encima del máximo se recorta el label por el medio con «…».
+- Los atajos y los iconos nunca se recortan.
+- El token `components.shell.menu.panel.max-width` en Neptunia es 640 px;
+  la salida lógica se aplica en runtime.
+
 ## Referencias
 
 - [`0020`](0020-politica-de-diseno-y-unificacion.md) — chrome y efectos.

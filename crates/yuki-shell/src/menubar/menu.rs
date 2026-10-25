@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
-use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView};
+use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView, SearchableEntry};
 use celestial_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
@@ -20,10 +20,18 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Gaps, Size};
 use yuki_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH};
 
-use crate::menubar::rgba;
+use crate::menubar::{icons, rgba};
 
-/// Function that lazily returns searchable menu entries (path, item).
-pub type SearchableItems = Rc<dyn Fn() -> Vec<(String, MenuItem)>>;
+/// Searchable entries split by source: menu actions and help topics.
+pub struct SearchableLists {
+    /// Menu actions paired with their parent menu path and menubar location.
+    pub menu: Vec<SearchableEntry>,
+    /// Help topics paired with the "Temas de ayuda" path.
+    pub help: Vec<SearchableEntry>,
+}
+
+/// Function that lazily returns searchable menu entries.
+pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
 
 /// One title that can open a root menu popup.
 #[derive(Clone)]
@@ -40,6 +48,12 @@ pub struct MenuTitleSpec {
     /// Position and size of the title highlight, set by `on_sized`.
     pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
+    /// Optional external search-query store, used by the Help menu so the
+    /// query survives closing and reopening.
+    pub query_state: Option<Rc<RefCell<celestial_kit::menu::SearchQuery>>>,
+    /// Root menus that can be revealed when a Help search result is
+    /// highlighted. The index matches [`SearchLocation::title_index`].
+    pub reveal_roots: Option<Rc<Vec<Vec<MenuItem>>>>,
 }
 
 /// State shared by all menu titles on the bar.
@@ -97,36 +111,53 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         },
     );
     if let Some(searchable_fn) = &spec.searchable {
-        view = view.with_searchable(searchable_fn());
+        let lists = searchable_fn();
+        view = view
+            .with_searchable(lists.menu)
+            .with_help_topics(lists.help)
+            .with_search_icons(icons::MENU_ITEM, icons::HELP);
     }
+    if let Some(query_state) = &spec.query_state {
+        view = view.with_query_state(query_state.clone());
+    }
+    if let Some(roots) = &spec.reveal_roots {
+        view = view.with_reveal_roots((**roots).clone());
+    }
+
+    let popup_spec = PopupSpec {
+        anchor_rect: (
+            anchor_x as i32,
+            0,
+            anchor_width.max(1.0) as u32,
+            MENUBAR_HEIGHT as u32,
+        ),
+        anchor: PopupAnchor::BottomLeft,
+        gravity: PopupGravity::BottomRight,
+        offset: (0, 0),
+        size: (size.0 as u32, size.1 as u32),
+        constraint_adjustment: PopupConstraintAdjustment {
+            flip_x: true,
+            flip_y: true,
+            slide_x: true,
+            slide_y: true,
+        },
+        grab: true,
+        on_dismissed: None,
+    };
+    view = view.with_popup_spec(popup_spec.clone());
 
     let open_label = state.open_label.clone();
     let dismissed_label = label.clone();
+    let on_dismissed: Option<Rc<dyn Fn()>> = Some(Rc::new(move || {
+        let still_open = open_label.borrow().read().as_deref() == Some(&dismissed_label);
+        if still_open {
+            open_label.borrow_mut().set(None);
+        }
+    }));
     let id = Popups::get().open(
         PopupSpec {
-            anchor_rect: (
-                anchor_x as i32,
-                0,
-                anchor_width.max(1.0) as u32,
-                MENUBAR_HEIGHT as u32,
-            ),
-            anchor: PopupAnchor::BottomLeft,
-            gravity: PopupGravity::BottomRight,
-            offset: (0, 0),
-            size: (size.0 as u32, size.1 as u32),
-            constraint_adjustment: PopupConstraintAdjustment {
-                flip_x: true,
-                flip_y: true,
-                slide_x: true,
-                slide_y: true,
-            },
-            grab: true,
-            on_dismissed: Some(Rc::new(move || {
-                let still_open = open_label.borrow().read().as_deref() == Some(&dismissed_label);
-                if still_open {
-                    open_label.borrow_mut().set(None);
-                }
-            })),
+            on_dismissed,
+            ..popup_spec
         },
         AppComponent::new(view),
     );

@@ -5,7 +5,7 @@
 //! supports keyboard navigation and reports actions through `on_activate`.
 
 use std::borrow::Cow;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use freya_components::svg_viewer::SvgViewer;
@@ -22,6 +22,48 @@ use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
 };
 use yuki_design::{MenuPalette, Rgba, SANS_FAMILIES};
+
+/// Which pool a search result comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchSource {
+    /// A real menu entry (App, Ventana or a nested submenu).
+    Menu,
+    /// A local help topic.
+    Help,
+}
+
+/// Where a searchable menu entry lives in the menubar, so the Help popup can
+/// reveal its real menu when the result is highlighted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchLocation {
+    /// Index of the top-level menu title in the menubar.
+    pub title_index: usize,
+    /// Indices inside the menu tree down to the entry itself.
+    pub indices: Vec<usize>,
+}
+
+/// One entry that the Help search field can match.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SearchableEntry {
+    /// Human-readable path (e.g. "Ventana › Trasladar y redimensionar").
+    pub path: String,
+    /// The menu item to activate when selected.
+    pub item: MenuItem,
+    /// Where the entry lives in the menubar, if it belongs to a real menu.
+    pub location: Option<SearchLocation>,
+    /// Whether it is a menu action or a help topic.
+    pub source: SearchSource,
+}
+
+/// Persistent state for a search field so it survives closing and reopening
+/// the popup.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SearchQuery {
+    /// Current query text.
+    pub text: String,
+    /// Whether the text is selected and the next keystroke replaces it.
+    pub selected: bool,
+}
 
 /// The process-wide text stack for measurement. Mirrors the renderer's
 /// `FontCollection` (system manager plus the shell's fallback families).
@@ -181,8 +223,14 @@ pub enum MenuItem {
     Separator,
     /// A non-selectable search field. Visual only for now.
     SearchField { placeholder: String },
-    /// A filtered search result carrying its menu path.
-    SearchResult { path: String, item: Box<MenuItem> },
+    /// A filtered search result carrying its menu path, source pool and, for
+    /// menu entries, its location in the menubar so it can be revealed.
+    SearchResult {
+        path: String,
+        item: Box<MenuItem>,
+        source: SearchSource,
+        location: Option<SearchLocation>,
+    },
 }
 
 impl MenuItem {
@@ -241,7 +289,13 @@ pub struct MenuView {
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
     size: (f32, f32),
-    searchable: Option<Rc<Vec<(String, MenuItem)>>>,
+    searchable: Option<Rc<Vec<SearchableEntry>>>,
+    help_search: Option<Rc<Vec<SearchableEntry>>>,
+    query_state: Option<Rc<RefCell<SearchQuery>>>,
+    menu_search_icon: Option<&'static str>,
+    help_search_icon: Option<&'static str>,
+    popup_spec: Option<PopupSpec>,
+    reveal_roots: Option<Rc<Vec<Vec<MenuItem>>>>,
 }
 
 impl MenuView {
@@ -262,14 +316,57 @@ impl MenuView {
             palette,
             size,
             searchable: None,
+            help_search: None,
+            query_state: None,
+            menu_search_icon: None,
+            help_search_icon: None,
+            popup_spec: None,
+            reveal_roots: None,
         }
     }
 
-    /// Attaches a list of searchable items. When the menu contains a
+    /// Stores the original popup geometry so the view can resize itself while
+    /// it is open.
+    pub fn with_popup_spec(mut self, spec: PopupSpec) -> Self {
+        self.popup_spec = Some(spec);
+        self
+    }
+
+    /// Attaches a list of searchable menu entries. When the menu contains a
     /// [`MenuItem::SearchField`], typing filters these entries and shows them
-    /// under a "Elementos del menú" header.
-    pub fn with_searchable(mut self, items: Vec<(String, MenuItem)>) -> Self {
+    /// under an "Ítems del menú" header.
+    pub fn with_searchable(mut self, items: Vec<SearchableEntry>) -> Self {
         self.searchable = Some(Rc::new(items));
+        self
+    }
+
+    /// Attaches a list of searchable help topics shown under "Temas de ayuda".
+    pub fn with_help_topics(mut self, items: Vec<SearchableEntry>) -> Self {
+        self.help_search = Some(Rc::new(items));
+        self
+    }
+
+    /// Sets the icons used for menu and help search results.
+    ///
+    /// `menu` may contain `{{text}}` and `{{accent}}` placeholders for a
+    /// two-colour icon; `help` must use `currentColor`.
+    pub fn with_search_icons(mut self, menu: &'static str, help: &'static str) -> Self {
+        self.menu_search_icon = Some(menu);
+        self.help_search_icon = Some(help);
+        self
+    }
+
+    /// Sets the root menus that can be revealed when a menu search result is
+    /// highlighted. The vector index matches [`SearchLocation::title_index`].
+    pub fn with_reveal_roots(mut self, roots: Vec<Vec<MenuItem>>) -> Self {
+        self.reveal_roots = Some(Rc::new(roots));
+        self
+    }
+
+    /// Attaches an external query store so the search text survives closing and
+    /// reopening the popup.
+    pub fn with_query_state(mut self, state: Rc<RefCell<SearchQuery>>) -> Self {
+        self.query_state = Some(state);
         self
     }
 
@@ -333,6 +430,12 @@ impl Clone for MenuView {
             palette: self.palette,
             size: self.size,
             searchable: self.searchable.clone(),
+            help_search: self.help_search.clone(),
+            query_state: self.query_state.clone(),
+            menu_search_icon: self.menu_search_icon,
+            help_search_icon: self.help_search_icon,
+            popup_spec: self.popup_spec.clone(),
+            reveal_roots: self.reveal_roots.clone(),
         }
     }
 }
@@ -353,19 +456,56 @@ impl App for MenuView {
         let size = self.size;
         let popup: Option<PopupHandle> = try_consume_root_context();
         let opens_left = popup.as_ref().is_some_and(PopupHandle::opens_left);
+        let menu_search_icon = self.menu_search_icon;
+        let help_search_icon = self.help_search_icon;
+        let popup_spec = self.popup_spec.clone();
         let focused = use_state(|| first_selectable(&items));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
-        let query = use_state(String::new);
+        let query_state = self.query_state.clone();
+        let initial = query_state
+            .as_ref()
+            .map(|q| q.borrow().clone())
+            .unwrap_or_default();
+        let query = use_state(|| initial.text);
+        let selected = use_state(|| initial.selected);
         let result_focused = use_state(|| None::<usize>);
+        let prev_query = use_hook(|| Rc::new(RefCell::new(String::new())));
         let searchable = self.searchable.clone();
+        let help_search = self.help_search.clone();
 
-        let has_search = searchable.is_some();
+        let has_search = searchable.is_some() || help_search.is_some();
         let query_text = (*query.read()).clone();
+        let is_selected = *selected.read();
+
+        // Sync the external query store so reopening keeps the text.
+        if let Some(state) = &query_state {
+            let current = SearchQuery {
+                text: query_text.clone(),
+                selected: is_selected,
+            };
+            if state.borrow().text != current.text || state.borrow().selected != current.selected {
+                *state.borrow_mut() = current;
+            }
+        }
         let visible = visible_items(
             &items,
             searchable.as_deref().map(|v| v.as_slice()),
+            help_search.as_deref().map(|v| v.as_slice()),
             &query_text,
         );
+
+        // Resize the popup when the query changes so the results stay visible.
+        if prev_query.borrow().as_str() != query_text {
+            *prev_query.borrow_mut() = query_text.clone();
+            if let (Some(popup), Some(spec)) = (&popup, &popup_spec) {
+                let new_size = MenuView::preferred_size(&visible, m);
+                popup.reposition(PopupSpec {
+                    size: (new_size.0 as u32, new_size.1 as u32),
+                    ..spec.clone()
+                });
+            }
+        }
+
         let results_start = visible
             .iter()
             .position(|item| matches!(item, MenuItem::SearchResult { .. }));
@@ -381,6 +521,38 @@ impl App for MenuView {
 
         let focused_index = *focused.read();
         let result_focused_index = *result_focused.read();
+        let reveal_child_id = use_hook(|| Rc::new(Cell::new(None::<PopupId>)));
+        let prev_revealed = use_hook(|| Rc::new(Cell::new(None::<usize>)));
+        let reveal_roots = self.reveal_roots.clone();
+
+        let revealed_title = result_focused_index.and_then(|i| {
+            visible.get(i).and_then(|item| match item {
+                MenuItem::SearchResult {
+                    source: SearchSource::Menu,
+                    location: Some(loc),
+                    ..
+                } => Some(loc.title_index),
+                _ => None,
+            })
+        });
+        if revealed_title != prev_revealed.get() {
+            prev_revealed.set(revealed_title);
+            close_child(reveal_child_id.clone());
+            if let (Some(title_index), Some(roots), Some(popup)) =
+                (revealed_title, reveal_roots.as_ref(), popup.clone())
+                && let Some(items) = roots.get(title_index)
+            {
+                open_reveal_popup(
+                    items,
+                    popup,
+                    size,
+                    m,
+                    on_activate.clone(),
+                    on_dismiss_all.clone(),
+                    reveal_child_id.clone(),
+                );
+            }
+        }
 
         let rows: Vec<Element> = visible
             .iter()
@@ -405,6 +577,9 @@ impl App for MenuView {
                     open_child_id.clone(),
                     size,
                     query,
+                    selected,
+                    menu_search_icon,
+                    help_search_icon,
                 )
             })
             .collect();
@@ -456,13 +631,16 @@ impl App for MenuView {
             let mut focused = focused;
             let mut query = query;
             let mut result_focused = result_focused;
+            let mut selected = selected;
             let open_child_id = open_child_id.clone();
             let current = *focused.read();
             let query_text = (*query.read()).clone();
             let result_current = *result_focused.read();
             let searching = has_search && !query_text.is_empty();
+            let is_selected = *selected.read();
             match event.key {
                 Key::Named(NamedKey::ArrowDown) => {
+                    selected.set(false);
                     if searching {
                         if results_count > 0 {
                             let start = results_start.unwrap();
@@ -475,6 +653,7 @@ impl App for MenuView {
                     }
                 }
                 Key::Named(NamedKey::ArrowUp) => {
+                    selected.set(false);
                     if searching {
                         if results_count > 0 {
                             let start = results_start.unwrap();
@@ -498,6 +677,7 @@ impl App for MenuView {
                     }
                 }
                 Key::Named(NamedKey::Enter) => {
+                    selected.set(false);
                     let (index, source): (Option<usize>, &[MenuItem]) = if searching {
                         (result_current, visible_for_keys.as_slice())
                     } else {
@@ -518,6 +698,7 @@ impl App for MenuView {
                     }
                 }
                 Key::Character(ref ch) if ch == " " => {
+                    selected.set(false);
                     let (index, source): (Option<usize>, &[MenuItem]) = if searching {
                         (result_current, visible_for_keys.as_slice())
                     } else {
@@ -539,14 +720,23 @@ impl App for MenuView {
                 }
                 Key::Character(ref ch) if has_search => {
                     let mut text = query_text;
+                    if is_selected {
+                        text.clear();
+                        selected.set(false);
+                    }
                     text.push_str(ch);
                     query.set(text);
                     result_focused.set(results_start);
                 }
                 Key::Named(NamedKey::Backspace) if has_search => {
-                    let mut text = query_text;
-                    text.pop();
-                    query.set(text);
+                    if is_selected {
+                        query.set(String::new());
+                        selected.set(false);
+                    } else {
+                        let mut text = query_text;
+                        text.pop();
+                        query.set(text);
+                    }
                     result_focused.set(results_start);
                 }
                 Key::Named(NamedKey::Escape) if has_search => {
@@ -556,6 +746,7 @@ impl App for MenuView {
                         }
                     } else {
                         query.set(String::new());
+                        selected.set(false);
                         result_focused.set(None);
                         focused.set(first_selectable(&items));
                     }
@@ -607,6 +798,11 @@ impl App for MenuView {
 fn rgba(color: Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+fn rgba_to_hex(color: Rgba) -> String {
+    let [r, g, b, a] = color.to_rgba8();
+    format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
 }
 
 fn shortcut_fg(enabled: bool, focused: bool, m: MenuPalette) -> Rgba {
@@ -716,15 +912,14 @@ fn normalize_query(text: &str) -> String {
         .replace('Ñ', "n")
 }
 
-fn filter_search_results(
-    query: &str,
-    searchable: &[(String, MenuItem)],
-) -> Vec<(String, MenuItem)> {
+fn filter_search_results(query: &str, searchable: &[SearchableEntry]) -> Vec<SearchableEntry> {
     let normalized = normalize_query(query);
     searchable
         .iter()
-        .filter(|(_, item)| {
-            item.label()
+        .filter(|entry| {
+            entry
+                .item
+                .label()
                 .is_some_and(|label| normalize_query(label).contains(&normalized))
         })
         .cloned()
@@ -736,7 +931,8 @@ fn filter_search_results(
 /// there is.
 fn visible_items(
     items: &[MenuItem],
-    searchable: Option<&[(String, MenuItem)]>,
+    searchable: Option<&[SearchableEntry]>,
+    help_search: Option<&[SearchableEntry]>,
     query: &str,
 ) -> Vec<MenuItem> {
     let Some(searchable) = searchable else {
@@ -759,15 +955,58 @@ fn visible_items(
             placeholder: "Buscar".to_string(),
         });
     }
-    out.push(MenuItem::Header {
-        label: "Elementos del menú".to_string(),
-    });
-    for (path, item) in filter_search_results(query, searchable) {
+
+    let menu_results = filter_search_results(query, searchable);
+    let help_results = help_search
+        .map(|list| filter_search_results(query, list))
+        .unwrap_or_default();
+
+    if !menu_results.is_empty() {
+        out.push(MenuItem::Header {
+            label: "Ítems del menú".to_string(),
+        });
+        for entry in menu_results {
+            out.push(MenuItem::SearchResult {
+                path: entry.path,
+                item: Box::new(entry.item),
+                source: SearchSource::Menu,
+                location: entry.location,
+            });
+        }
+    }
+
+    if !help_results.is_empty() {
+        out.push(MenuItem::Header {
+            label: "Temas de ayuda".to_string(),
+        });
+        for entry in help_results {
+            out.push(MenuItem::SearchResult {
+                path: entry.path,
+                item: Box::new(entry.item),
+                source: SearchSource::Help,
+                location: None,
+            });
+        }
+    }
+
+    // The "Show all help topics" footer is always present when searching.
+    if help_search.is_some() {
+        out.push(MenuItem::Separator);
         out.push(MenuItem::SearchResult {
-            path,
-            item: Box::new(item),
+            path: "Temas de ayuda".to_string(),
+            item: Box::new(MenuItem::Action {
+                id: "app-help-topics-index".to_string(),
+                label: "Mostrar todos los temas de ayuda".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            }),
+            source: SearchSource::Help,
+            location: None,
         });
     }
+
     out.push(MenuItem::Separator);
     for item in items {
         if !matches!(item, MenuItem::SearchField { .. }) {
@@ -881,6 +1120,51 @@ fn open_child_popup(
     Some(id)
 }
 
+fn open_reveal_popup(
+    items: &[MenuItem],
+    popup: PopupHandle,
+    parent_size: (f32, f32),
+    m: MenuPalette,
+    on_activate: Rc<dyn Fn(String)>,
+    on_dismiss_all: Rc<dyn Fn()>,
+    reveal_child_id: Rc<Cell<Option<PopupId>>>,
+) -> Option<PopupId> {
+    close_child(reveal_child_id.clone());
+    let child_size = MenuView::preferred_size(items, m);
+    let on_dismiss_for_action = on_dismiss_all.clone();
+    let child_view = MenuView::new(
+        items.to_vec(),
+        move |id| {
+            on_activate(id);
+            on_dismiss_for_action();
+        },
+        move || on_dismiss_all(),
+        m,
+    );
+    let reveal_child_id_set = reveal_child_id.clone();
+    let on_dismissed = move || {
+        reveal_child_id_set.set(None);
+    };
+    let inset = m.padding + m.border_width;
+    let spec = PopupSpec {
+        anchor_rect: ((parent_size.0 - inset) as i32, inset as i32, 1, 1),
+        anchor: PopupAnchor::TopRight,
+        gravity: PopupGravity::TopLeft,
+        offset: (0, 0),
+        size: (child_size.0 as u32, child_size.1 as u32),
+        constraint_adjustment: PopupConstraintAdjustment {
+            flip_x: true,
+            slide_y: true,
+            ..PopupConstraintAdjustment::default()
+        },
+        grab: true,
+        on_dismissed: Some(Rc::new(on_dismissed)),
+    };
+    let id = popup.open_child(spec, AppComponent::new(child_view));
+    reveal_child_id.set(Some(id));
+    Some(id)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_item(
     item: &MenuItem,
@@ -896,6 +1180,9 @@ fn render_item(
     open_child_id: Rc<Cell<Option<PopupId>>>,
     size: (f32, f32),
     query: UseState<String>,
+    selected: UseState<bool>,
+    menu_search_icon: Option<&'static str>,
+    help_search_icon: Option<&'static str>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
@@ -1134,7 +1421,10 @@ fn render_item(
             )
             .into_element(),
         MenuItem::SearchField { placeholder } => {
+            let mut query = query;
+            let mut selected = selected;
             let query_text = (*query.read()).clone();
+            let is_selected = *selected.read();
             let has_text = !query_text.is_empty();
             let display_text = if has_text {
                 query_text.clone()
@@ -1142,12 +1432,40 @@ fn render_item(
                 placeholder.clone()
             };
             let text_color = if has_text { m.fg } else { m.shortcut_color };
-            let _text_w = measure_text(&display_text, m.font_size);
-            let mut row = rect()
+            let text_w = measure_text(&display_text, m.font_size);
+            let clear_size = 16.0f32;
+            let clear_gap = if has_text { clear_size + 4.0 } else { 0.0 };
+            let row_padding = m.item_padding_x;
+            let available_w = m.max_width - row_padding * 2.0 - m.icon_size - 8.0 - clear_gap - 8.0;
+            let show_text_w = text_w.min(available_w.max(0.0));
+
+            let mut text_box = rect()
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .width(Size::px(show_text_w))
+                .child(
+                    label()
+                        .text(display_text)
+                        .font_size(m.font_size)
+                        .color(rgba(text_color))
+                        .max_lines(1),
+                );
+
+            if has_text && !is_selected {
+                text_box = text_box.child(
+                    rect()
+                        .width(Size::px(1.0))
+                        .height(Size::px(m.font_size))
+                        .margin(Gaps::new(0.0, 1.0, 0.0, 0.0))
+                        .background(rgba(m.fg))
+                        .into_element(),
+                );
+            }
+
+            let mut content = rect()
                 .width(Size::fill())
                 .height(Size::px(m.search_height))
-                .margin(Gaps::new(m.search_margin_y, 0.0, m.search_margin_y, 0.0))
-                .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+                .padding(Gaps::new(0.0, row_padding, 0.0, row_padding))
                 .background(rgba(m.search_bg))
                 .corner_radius(m.search_radius)
                 .border(
@@ -1167,25 +1485,40 @@ fn render_item(
                         .show_loader(false)
                         .into_element(),
                 )
-                .child(
-                    label()
-                        .text(display_text)
-                        .font_size(m.font_size)
-                        .color(rgba(text_color))
-                        .max_lines(1),
-                );
+                .child(text_box);
+
             if has_text {
-                row = row.child(
-                    rect()
-                        .width(Size::px(1.0))
-                        .height(Size::px(m.font_size))
-                        .background(rgba(m.fg))
-                        .into_element(),
-                );
+                let clear = rect()
+                    .width(Size::px(clear_size))
+                    .height(Size::px(clear_size))
+                    .corner_radius(clear_size / 2.0)
+                    .main_align(Alignment::Center)
+                    .cross_align(Alignment::Center)
+                    .background(rgba(m.shortcut_color.mix(m.bg, 0.7)))
+                    .child(
+                        label()
+                            .text("×")
+                            .font_size(12.0)
+                            .color(rgba(m.fg))
+                            .max_lines(1),
+                    )
+                    .on_mouse_down(move |_: Event<MouseEventData>| {
+                        query.set(String::new());
+                        selected.set(false);
+                    });
+                content = content.child(clear);
             }
-            row.into_element()
+
+            content
+                .margin(Gaps::new(m.search_margin_y, 0.0, m.search_margin_y, 0.0))
+                .into_element()
         }
-        MenuItem::SearchResult { path, item } => {
+        MenuItem::SearchResult {
+            path: _,
+            item,
+            source,
+            location: _,
+        } => {
             let MenuItem::Action {
                 id,
                 label: label_text,
@@ -1242,36 +1575,26 @@ fn render_item(
             if let Some(bg) = bg {
                 row = row.background(rgba(bg));
             }
+            let icon_element = search_icon_element(
+                *source,
+                is_focused,
+                fg,
+                m.hover_bg,
+                menu_search_icon,
+                help_search_icon,
+                m,
+            );
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
                 .spacing(MARK_TEXT_GAP)
-                .child(mark_slot(
-                    None,
-                    CheckState::None,
-                    fg,
-                    shortcut_fg(enabled, is_focused, m),
-                    m,
-                ))
+                .child(icon_element)
                 .child(
-                    rect()
-                        .direction(Direction::Vertical)
-                        .main_align(Alignment::Center)
-                        .cross_align(Alignment::Start)
-                        .child(
-                            label()
-                                .text(label_text)
-                                .font_size(m.font_size)
-                                .color(rgba(fg))
-                                .max_lines(1),
-                        )
-                        .child(
-                            label()
-                                .text(path.clone())
-                                .font_size(m.header_font_size)
-                                .color(rgba(m.shortcut_color))
-                                .max_lines(1),
-                        ),
+                    label()
+                        .text(label_text)
+                        .font_size(m.font_size)
+                        .color(rgba(fg))
+                        .max_lines(1),
                 );
             row.child(left)
                 .child(
@@ -1281,6 +1604,64 @@ fn render_item(
                         .color(rgba(shortcut_color))
                         .width(Size::px(shortcut_w))
                         .max_lines(1),
+                )
+                .into_element()
+        }
+    }
+}
+
+fn search_icon_element(
+    source: SearchSource,
+    focused: bool,
+    fg: Rgba,
+    accent: Rgba,
+    menu_icon: Option<&'static str>,
+    help_icon: Option<&'static str>,
+    m: MenuPalette,
+) -> Element {
+    match source {
+        SearchSource::Menu => {
+            let svg = menu_icon.unwrap_or("").to_string();
+            let text_color = if focused {
+                rgba_to_hex(m.hover_fg)
+            } else {
+                rgba_to_hex(fg)
+            };
+            let accent_color = if focused {
+                rgba_to_hex(m.hover_fg)
+            } else {
+                rgba_to_hex(accent)
+            };
+            let svg = svg
+                .replace("{{text}}", &text_color)
+                .replace("{{accent}}", &accent_color);
+            rect()
+                .width(Size::px(16.0))
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::Center)
+                .child(
+                    SvgViewer::new(freya_core::prelude::Bytes::from(svg.into_bytes()))
+                        .width(Size::px(16.0))
+                        .height(Size::px(14.0))
+                        .show_loader(false)
+                        .into_element(),
+                )
+                .into_element()
+        }
+        SearchSource::Help => {
+            let svg = help_icon.unwrap_or("").to_string();
+            let color = if focused { m.hover_fg } else { fg };
+            rect()
+                .width(Size::px(16.0))
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::Center)
+                .child(
+                    SvgViewer::new(freya_core::prelude::Bytes::from(svg.into_bytes()))
+                        .width(Size::px(16.0))
+                        .height(Size::px(16.0))
+                        .color(rgba(color))
+                        .show_loader(false)
+                        .into_element(),
                 )
                 .into_element()
         }

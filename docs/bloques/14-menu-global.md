@@ -276,13 +276,14 @@ va en negrita. Sin ventana enfocada no cambia nada del modo escritorio
   alineado a la columna del texto (no al icono). No es seleccionable y el teclado
   lo salta.
 - `MenuItem::SearchField { placeholder }`: campo de 26 px con `bg-control`,
-  anillo de acento de 2 px y lupa. Es seleccionable; al recibir texto filtra las
-  entradas buscables del menú (App, Ventana y sus submenús), muestra resultados
-  como `MenuItem::SearchResult { path, item }` con la ruta atenuada y el atajo
-  original, y permite navegar con `↑`/`↓` y activar con `Enter`.
-- `MenuItem::SearchResult { path, item }`: fila de dos líneas con el label del
-  item y su ruta (`App › Ventana › …`) en color atenuado; hereda el atajo y la
-  acción del `MenuItem::Action` original.
+  anillo de acento de 2 px, lupa y un botón ✕ para borrar. Al recibir texto
+  filtra las entradas buscables del menú (App, Ventana y sus submenús) y los
+  temas de ayuda; muestra resultados en dos secciones con icono, heredan el
+  atajo y permiten navegar con `↑`/`↓` y activar con `Enter`.
+- `MenuItem::SearchResult { path, item, source, location }`: fila de una sola
+  línea de 24 px con icono (ítem de menú o "?"), label y atajo. La ruta ya no
+  se muestra en la fila; para los ítems de menú `location` permite revelar el
+  menú real al resaltar el resultado.
 - `format_shortcut` añade `← → ↑ ↓`, `↩` (Return/Enter) y `⇥` (Tab).
 - `ToplevelInfo` añade `maximized` y `minimized`, leídos del evento `State` de
   `zwlr_foreign_toplevel_management_v1`. `Toplevels` expone

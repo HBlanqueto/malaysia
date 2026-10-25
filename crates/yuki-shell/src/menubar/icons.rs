@@ -50,6 +50,15 @@ pub const SPLIT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" 
 /// Information: a circle with an i.
 pub const INFO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.25\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"8\" cy=\"5\" r=\"0.9\" fill=\"currentColor\"/><path d=\"M8 7.4v4.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>";
 
+/// Help topic: a circle with a question mark (trazo 1.4, currentColor).
+pub const HELP: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M8 11.2V10.5q0-.75.45-1.2l.6-.6q.45-.45.45-1.05 0-.75-.525-1.125T8 6.15q-.9 0-1.425.525T6.05 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"12.8\" r=\"0.85\" fill=\"currentColor\"/></svg>";
+
+/// Menu item search result.
+///
+/// Template: replace `{{text}}` with the text colour and `{{accent}}` with the
+/// accent colour. All other geometry is fixed so the icon matches macOS.
+pub const MENU_ITEM: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"14\" viewBox=\"0 0 16 14\"><rect x=\"0.75\" y=\"1.25\" width=\"14.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"{{text}}\" stroke-width=\"1.3\"/><rect x=\"3\" y=\"4\" width=\"10\" height=\"3.2\" rx=\"1\" fill=\"{{accent}}\"/><line x1=\"3.5\" y1=\"9.6\" x2=\"8.5\" y2=\"9.6\" stroke=\"{{text}}\" stroke-width=\"1.1\" stroke-linecap=\"round\" opacity=\"0.6\"/></svg>";
+
 /// Settings gear.
 pub const GEAR: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"4.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"8\" cy=\"8\" r=\"1.9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"><path d=\"M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3\"/></g></svg>";
 
@@ -76,6 +85,7 @@ mod tests {
             SPLIT,
             INFO,
             GEAR,
+            HELP,
         ] {
             assert!(icon.starts_with("<svg"), "icon does not start with <svg>");
             assert!(icon.ends_with("</svg>"), "icon does not end with </svg>");

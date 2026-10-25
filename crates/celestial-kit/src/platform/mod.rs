@@ -298,6 +298,14 @@ impl Popups {
         self.ping.ping();
     }
 
+    /// Repositions an already open popup with a new geometry.
+    fn reposition(&self, id: PopupId, spec: PopupSpec) {
+        self.queue
+            .borrow_mut()
+            .push(PopupCommand::Reposition { id, spec });
+        self.ping.ping();
+    }
+
     /// The number of popup surfaces currently tracked by the runner. Useful for
     /// leak checks in tests and self-tests.
     pub fn surface_count(&self) -> usize {
@@ -330,6 +338,14 @@ impl PopupHandle {
 
     pub fn close(&self) {
         self.popups.close(self.id);
+    }
+
+    /// Repositions this popup with a new size and anchor rectangle.
+    ///
+    /// The caller is responsible for requesting a redraw so the surface is
+    /// resized before the compositor commits it.
+    pub fn reposition(&self, spec: PopupSpec) {
+        self.popups.reposition(self.id, spec);
     }
 
     /// Opens a submenu attached to this popup.
@@ -1153,6 +1169,10 @@ enum PopupCommand {
         spec: PopupSpec,
         content: AppComponent,
         serial: u32,
+    },
+    Reposition {
+        id: PopupId,
+        spec: PopupSpec,
     },
     Close {
         id: PopupId,
@@ -2064,6 +2084,9 @@ impl Shell {
                 } => {
                     self.open_popup(owner, parent, id, spec, content, serial);
                 }
+                PopupCommand::Reposition { id, spec } => {
+                    self.reposition_popup(id, spec);
+                }
                 PopupCommand::Close { id } => {
                     self.close_popup(id);
                 }
@@ -2214,6 +2237,42 @@ impl Shell {
             draw_count: 0,
         });
         self.surface_count.set(self.surfaces.len());
+    }
+
+    fn reposition_popup(&mut self, id: PopupId, spec: PopupSpec) {
+        let Some(index) = self
+            .surfaces
+            .iter()
+            .position(|s| s.popup.as_ref().is_some_and(|info| info.id == id))
+        else {
+            return;
+        };
+        let Some(xdg_shell) = self.xdg_shell.as_ref() else {
+            return;
+        };
+        let popup = match &self.surfaces[index].role {
+            SurfaceRole::Popup(popup) => popup,
+            _ => return,
+        };
+
+        let positioner = match XdgPositioner::new(xdg_shell) {
+            Ok(positioner) => positioner,
+            Err(error) => {
+                tracing::error!(%error, "CelestialKit: could not create xdg_positioner");
+                return;
+            }
+        };
+        let (ax, ay, aw, ah) = spec.anchor_rect;
+        positioner.set_anchor_rect(ax, ay, aw as i32, ah as i32);
+        positioner.set_anchor(anchor_to_sctk(spec.anchor));
+        positioner.set_gravity(gravity_to_sctk(spec.gravity));
+        let (ox, oy) = spec.offset;
+        positioner.set_offset(ox, oy);
+        positioner.set_size(spec.size.0 as i32, spec.size.1 as i32);
+        positioner.set_constraint_adjustment(constraint_to_sctk(spec.constraint_adjustment));
+
+        popup.reposition(&positioner, 0);
+        self.surfaces[index].surface.commit();
     }
 
     fn close_popup(&mut self, id: PopupId) {
