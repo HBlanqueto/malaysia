@@ -223,6 +223,8 @@ struct WindowData {
     /// Whether the user is currently resizing, so the configure carries the
     /// xdg `resizing` state.
     resizing: bool,
+    /// Which edge or corner is being dragged during an interactive resize.
+    resize_edge: Option<Edge>,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
     /// Whether the window is in fullscreen state, as the next configure says.
@@ -374,6 +376,7 @@ impl Windows {
             hidden: false,
             configured: None,
             resizing: false,
+            resize_edge: None,
             maximized: false,
             fullscreen: false,
             activated: false,
@@ -436,7 +439,7 @@ impl Windows {
         // hit-testing all stay on what the client actually drew.
         let should_resize = {
             let data = &self.windows[index];
-            if !data.mapped || data.resizing || data.state() != WindowState::Normal {
+            if !data.mapped || data.state() != WindowState::Normal {
                 None
             } else {
                 let insets = data.insets(self.decoration_of(data.id));
@@ -447,10 +450,15 @@ impl Windows {
             }
         };
         if let Some((id, outer_size)) = should_resize {
-            // Keep the current origin: this path is for client-initiated size
-            // changes (e.g. restoring from maximized), not for interactive
-            // resize, which goes through Windows::resize directly.
-            let origin = self.windows[index].origin;
+            // During an interactive resize the opposite edge must stay fixed,
+            // so the origin is recomputed from the committed size. Outside a
+            // resize the origin stays where it is (client-initiated changes).
+            let origin = anchor_resize_origin(
+                self.windows[index].origin,
+                self.windows[index].outer_size,
+                outer_size,
+                self.windows[index].resize_edge,
+            );
             let outer = SceneRect::new(
                 ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
                 SceneSize::new(f64::from(outer_size.w), f64::from(outer_size.h)),
@@ -734,11 +742,17 @@ impl Windows {
     }
 
     /// Sets whether the window is being resized and re-configures it.
-    pub fn set_resizing(&mut self, id: WindowId, resizing: bool) -> bool {
+    pub fn set_resizing(
+        &mut self,
+        id: WindowId,
+        resizing: bool,
+        edge: Option<Edge>,
+    ) -> bool {
         let Some(index) = self.index(id) else {
             return false;
         };
         self.windows[index].resizing = resizing;
+        self.windows[index].resize_edge = edge;
         self.send_configure(index);
         true
     }
@@ -1303,6 +1317,34 @@ fn buffer_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
     with_renderer_surface_state(surface, |state| state.buffer_size()).flatten()
 }
 
+/// Recomputes the origin for a committed size during an interactive resize,
+/// keeping the opposite edge fixed.
+///
+/// `old_size` is the configured outer size that anchored the opposite edge;
+/// `new_size` is what the client actually committed. For a left/top drag the
+/// origin moves so the right/bottom edge stays in place; for other edges the
+/// origin is unchanged.
+fn anchor_resize_origin(
+    origin: Point<i32, Logical>,
+    old_size: Size<i32, Logical>,
+    new_size: Size<i32, Logical>,
+    edge: Option<Edge>,
+) -> Point<i32, Logical> {
+    let Some(edge) = edge else {
+        return origin;
+    };
+    let mut origin = origin;
+    let fixed_right = origin.x + old_size.w;
+    let fixed_bottom = origin.y + old_size.h;
+    if matches!(edge, Edge::Left | Edge::TopLeft | Edge::BottomLeft) {
+        origin.x = fixed_right - new_size.w;
+    }
+    if matches!(edge, Edge::Top | Edge::TopLeft | Edge::TopRight) {
+        origin.y = fixed_bottom - new_size.h;
+    }
+    origin
+}
+
 /// Whether a window geometry lies inside its buffer.
 ///
 /// A surface with no explicit geometry, or without a buffer yet, is not
@@ -1378,11 +1420,12 @@ mod tests {
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        at_least_one_pixel, client_point, committed_outer, geometry_fits, initial_placement,
-        outer_size, usable,
+        anchor_resize_origin, at_least_one_pixel, client_point, committed_outer, geometry_fits,
+        initial_placement, outer_size, usable,
     };
     use crate::decoration::Insets;
     use yuki_scene::geometry::Size as SceneSize;
+    use yuki_scene::scene::Edge;
 
     fn size(width: i32, height: i32) -> Size<i32, Logical> {
         Size::from((width, height))
@@ -1521,6 +1564,42 @@ mod tests {
         let workspace = Rectangle::new(Point::from((0, 0)), size(1280, 708));
         let (outer, _) = initial_placement(Some(size(4000, 3000)), Insets::ZERO, workspace);
         assert_eq!(outer, size(1280, 708));
+    }
+
+    #[test]
+    fn a_left_resize_keeps_the_right_edge_fixed_when_the_client_commits_less() {
+        let origin = Point::from((100, 100));
+        let old_size = size(200, 150);
+        let new_size = size(197, 150);
+        let anchored = anchor_resize_origin(origin, old_size, new_size, Some(Edge::Left));
+        assert_eq!(anchored, Point::from((103, 100)));
+    }
+
+    #[test]
+    fn a_top_left_resize_keeps_both_opposite_edges_fixed() {
+        let origin = Point::from((100, 100));
+        let old_size = size(200, 150);
+        let new_size = size(197, 147);
+        let anchored = anchor_resize_origin(origin, old_size, new_size, Some(Edge::TopLeft));
+        assert_eq!(anchored, Point::from((103, 103)));
+    }
+
+    #[test]
+    fn a_right_resize_keeps_the_left_edge_fixed() {
+        let origin = Point::from((100, 100));
+        let old_size = size(200, 150);
+        let new_size = size(197, 150);
+        let anchored = anchor_resize_origin(origin, old_size, new_size, Some(Edge::Right));
+        assert_eq!(anchored, Point::from((100, 100)));
+    }
+
+    #[test]
+    fn no_edge_leaves_the_origin_unchanged() {
+        let origin = Point::from((100, 100));
+        let old_size = size(200, 150);
+        let new_size = size(197, 150);
+        let anchored = anchor_resize_origin(origin, old_size, new_size, None);
+        assert_eq!(anchored, Point::from((100, 100)));
     }
 
     #[test]

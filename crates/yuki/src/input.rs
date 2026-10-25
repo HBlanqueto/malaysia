@@ -1876,7 +1876,7 @@ impl State {
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
-        self.windows.set_resizing(id, true);
+        self.windows.set_resizing(id, true, Some(edge));
         self.grab = Some(Grab::Resize {
             window: id,
             edge,
@@ -1888,7 +1888,7 @@ impl State {
     /// Ends an interactive move or resize.
     fn end_grab(&mut self) {
         if let Some(Grab::Resize { window, .. }) = self.grab {
-            self.windows.set_resizing(window, false);
+            self.windows.set_resizing(window, false, None);
         }
         self.grab = None;
     }
