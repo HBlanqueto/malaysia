@@ -53,24 +53,47 @@ const TILE_GAP: i32 = 8;
 pub struct InfinityGlobalData {
     display_handle: DisplayHandle,
     dev_mode: bool,
-    shell_exe: Option<PathBuf>,
+    /// Paths that are accepted as the trusted `yuki-shell` binary.
+    shell_exes: Vec<PathBuf>,
 }
 
 impl InfinityGlobalData {
     /// Builds the global data, resolving the trusted yuki-shell binary from the
     /// compositor's own executable path.
+    ///
+    /// The Nix wrapper renames the real binary to `.yuki-shell-wrapped`, so
+    /// both `yuki-shell` and `.yuki-shell-wrapped` in the compositor's directory
+    /// are accepted. A wrapper may also set `YUKI_SHELL_EXE` to the exact real
+    /// path when the heuristic is not enough.
     pub fn new(display_handle: DisplayHandle) -> Self {
         let dev_mode = std::env::var("YUKI_DEV").is_ok_and(|v| v == "1");
-        let shell_exe = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("yuki-shell")))
-            .and_then(|path| path.canonicalize().ok());
+        let shell_exes = trusted_shell_exes();
         Self {
             display_handle,
             dev_mode,
-            shell_exe,
+            shell_exes,
         }
     }
+}
+
+/// Resolves the set of executable paths that are trusted as `yuki-shell`.
+fn trusted_shell_exes() -> Vec<PathBuf> {
+    let mut exes = Vec::new();
+    if let Some(path) = std::env::var_os("YUKI_SHELL_EXE") {
+        if let Ok(path) = std::fs::canonicalize(path) {
+            exes.push(path);
+        }
+    }
+    if let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)) {
+        for name in ["yuki-shell", ".yuki-shell-wrapped"] {
+            if let Ok(path) = std::fs::canonicalize(dir.join(name)) {
+                if !exes.contains(&path) {
+                    exes.push(path);
+                }
+            }
+        }
+    }
+    exes
 }
 
 impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for InfinityGlobalData {
@@ -97,8 +120,13 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
         let Ok(exe) = std::fs::canonicalize(format!("/proc/{pid}/exe")) else {
             return false;
         };
-        self.shell_exe.as_ref() == Some(&exe)
+        is_trusted_shell_exe(&exe, &self.shell_exes)
     }
+}
+
+/// Whether `exe` matches any of the trusted `yuki-shell` paths.
+fn is_trusted_shell_exe(exe: &std::path::Path, shell_exes: &[PathBuf]) -> bool {
+    shell_exes.iter().any(|trusted| trusted == exe)
 }
 
 impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlobalData {
@@ -450,8 +478,10 @@ mod tests {
     };
 
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
-    use super::{Layout, PairLayout, arranged_rect, available, pair_rects, quarter_rects};
+    use super::{Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, pair_rects,
+        quarter_rects, trusted_shell_exes};
     use yuki_scene::scene::WindowId;
 
     fn workspace() -> Rectangle<i32, Logical> {
@@ -577,5 +607,49 @@ mod tests {
         arranged.remove(&WindowId::new(1));
         assert!(!arranged.contains_key(&WindowId::new(1)));
         assert_eq!(second, second); // target used by caller
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn trusted_shell_list_accepts_a_yuki_shell_exe_override() {
+        let dir = std::env::temp_dir().join(format!("yuki-shell-exe-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join("fake-shell");
+        std::fs::write(&fake, "").unwrap();
+
+        let previous = std::env::var_os("YUKI_SHELL_EXE");
+        // SAFETY: only used during this single-threaded test.
+        unsafe {
+            std::env::set_var("YUKI_SHELL_EXE", &fake);
+        }
+        let exes = trusted_shell_exes();
+        if let Some(previous) = previous {
+            // SAFETY: only used during this single-threaded test.
+            unsafe { std::env::set_var("YUKI_SHELL_EXE", previous); }
+        } else {
+            // SAFETY: only used during this single-threaded test.
+            unsafe { std::env::remove_var("YUKI_SHELL_EXE"); }
+        }
+        assert!(
+            is_trusted_shell_exe(&std::fs::canonicalize(&fake).unwrap(), &exes),
+            "YUKI_SHELL_EXE must be trusted"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn trusted_shell_comparison_accepts_wrapped_and_unwrapped_names() {
+        let target = PathBuf::from("/nix/store/abc/bin/yuki-shell");
+        let wrapped = PathBuf::from("/nix/store/abc/bin/.yuki-shell-wrapped");
+        assert!(is_trusted_shell_exe(&target, &[target.clone()]));
+        assert!(is_trusted_shell_exe(&wrapped, &[wrapped.clone()]));
+        assert!(!is_trusted_shell_exe(&target, &[wrapped.clone()]));
+    }
+
+    #[test]
+    fn untrusted_binaries_are_rejected() {
+        let trusted = PathBuf::from("/run/current-system/sw/bin/yuki-shell");
+        let attacker = PathBuf::from("/tmp/evil-shell");
+        assert!(!is_trusted_shell_exe(&attacker, &[trusted]));
     }
 }
