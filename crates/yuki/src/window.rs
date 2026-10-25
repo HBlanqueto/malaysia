@@ -208,8 +208,12 @@ struct WindowData {
     toplevel: ToplevelSurface,
     /// The decorated outer size, in logical coordinates.
     outer_size: Size<i32, Logical>,
-    /// Where the window was placed (the workspace origin), in logical coords.
-    origin: Point<i32, Logical>,
+    /// Where the window was placed before its first map, in logical coords.
+    /// After mapping the position lives in the scene; this field is only used
+    /// for the initial placement and map.
+    placement_origin: Point<i32, Logical>,
+    /// Rectangle saved before hiding, so restoring puts the window back exactly.
+    hidden_rect: Option<SceneRect<f64, SceneLogical>>,
     /// Whether the client has acknowledged a configure.
     acked: bool,
     /// The serial of the configure most recently sent, awaiting an ack.
@@ -369,7 +373,8 @@ impl Windows {
             id,
             toplevel,
             outer_size: Size::from((0, 0)),
-            origin: Point::from((0, 0)),
+            placement_origin: Point::from((0, 0)),
+            hidden_rect: None,
             acked: false,
             pending_configure: None,
             mapped: false,
@@ -426,7 +431,7 @@ impl Windows {
                 initial_placement(committed_size(surface), insets, workspace)
             };
             self.windows[index].outer_size = outer_size;
-            self.windows[index].origin = origin;
+            self.windows[index].placement_origin = origin;
             // The client is already at this size: record it so the check below
             // does not send a redundant configure.
             self.windows[index].configured = Some(usable(outer_size, insets));
@@ -450,11 +455,18 @@ impl Windows {
             }
         };
         if let Some((id, outer_size)) = should_resize {
+            // The current position is the scene's outer rectangle; after a move
+            // or an arrange it no longer matches the placement origin.
+            let current_origin = self
+                .scene
+                .outer(id)
+                .map(|outer| Point::from((round(outer.x()), round(outer.y()))))
+                .unwrap_or(self.windows[index].placement_origin);
             // During an interactive resize the opposite edge must stay fixed,
             // so the origin is recomputed from the committed size. Outside a
             // resize the origin stays where it is (client-initiated changes).
             let origin = anchor_resize_origin(
-                self.windows[index].origin,
+                current_origin,
                 self.windows[index].outer_size,
                 outer_size,
                 self.windows[index].resize_edge,
@@ -510,7 +522,7 @@ impl Windows {
             self.windows[index].mapped = true;
             let data = &self.windows[index];
             let size = data.outer_size;
-            let origin = data.origin;
+            let origin = data.placement_origin;
             let outer = SceneRect::new(
                 ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
                 SceneSize::new(f64::from(size.w), f64::from(size.h)),
@@ -577,16 +589,25 @@ impl Windows {
         if self.windows[index].hidden == hidden {
             return false;
         }
-        self.windows[index].hidden = hidden;
-        let data = &self.windows[index];
+        let data = &mut self.windows[index];
+        data.hidden = hidden;
         let rect = if hidden {
+            data.hidden_rect = self.scene.outer(id);
             SceneRect::new(ScenePoint::new(0.0, 0.0), SceneSize::new(0.0, 0.0))
         } else {
-            SceneRect::new(
-                ScenePoint::new(f64::from(data.origin.x), f64::from(data.origin.y)),
-                SceneSize::new(f64::from(data.outer_size.w), f64::from(data.outer_size.h)),
-            )
+            data.hidden_rect.unwrap_or_else(|| {
+                SceneRect::new(
+                    ScenePoint::new(
+                        f64::from(data.placement_origin.x),
+                        f64::from(data.placement_origin.y),
+                    ),
+                    SceneSize::new(f64::from(data.outer_size.w), f64::from(data.outer_size.h)),
+                )
+            })
         };
+        if !hidden {
+            self.windows[index].hidden_rect = None;
+        }
         self.scene.set_outer(id, rect)
     }
 
@@ -1610,5 +1631,27 @@ mod tests {
         assert!(!geometry_fits(shifted, buffer));
         assert!(!geometry_fits(negative, buffer));
         assert!(!geometry_fits(empty, buffer));
+    }
+
+    #[test]
+    fn a_left_resize_keeps_the_right_edge_fixed_after_a_move() {
+        // After a move/arrange the origin is no longer the placement origin;
+        // the resize must anchor against the current origin.
+        let origin = Point::from((250, 180));
+        let old_size = size(640, 420);
+        let new_size = size(637, 420);
+        let anchored = anchor_resize_origin(origin, old_size, new_size, Some(Edge::Left));
+        assert_eq!(anchored, Point::from((253, 180)));
+    }
+
+    #[test]
+    fn restoring_hidden_uses_the_saved_rect_not_the_placement_origin() {
+        use yuki_scene::geometry::{Logical, Point as ScenePoint, Rect as SceneRect};
+
+        let saved = SceneRect::new(ScenePoint::new(123.0, 456.0), SceneSize::new(640.0, 420.0));
+        let mut hidden_rect: Option<SceneRect<f64, Logical>> = Some(saved);
+        let restored = hidden_rect.take().unwrap();
+        assert_eq!(restored.x(), 123.0);
+        assert_eq!(restored.y(), 456.0);
     }
 }
