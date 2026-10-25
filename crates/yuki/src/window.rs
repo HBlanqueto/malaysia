@@ -225,6 +225,8 @@ struct WindowData {
     resizing: bool,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
+    /// Whether the window is in fullscreen state, as the next configure says.
+    fullscreen: bool,
     /// Whether the window holds keyboard focus, as the next configure says.
     activated: bool,
     /// The decoration mode the client last asked for, before policy. `None`
@@ -373,6 +375,7 @@ impl Windows {
             configured: None,
             resizing: false,
             maximized: false,
+            fullscreen: false,
             activated: false,
             requested,
             native_warned: false,
@@ -815,6 +818,34 @@ impl Windows {
         state_changed
     }
 
+    /// Sets the fullscreen state and outer rectangle, sending a single configure.
+    pub fn set_fullscreen_with_outer(
+        &mut self,
+        id: WindowId,
+        fullscreen: bool,
+        outer: SceneRect<f64, SceneLogical>,
+    ) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        let state_changed = self.windows[index].fullscreen != fullscreen;
+        self.windows[index].fullscreen = fullscreen;
+        self.scene.set_outer(id, outer);
+        self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
+        self.send_configure(index);
+        state_changed
+    }
+
+    /// Applies an outer rectangle from Infinity without changing any state bit.
+    pub fn set_infinity_geometry(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) {
+        let Some(index) = self.index(id) else {
+            return;
+        };
+        self.scene.set_outer(id, outer);
+        self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
+        self.send_configure(index);
+    }
+
     /// Sets the maximized state the next configure carries and reconfigures.
     pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
         let Some(index) = self.index(id) else {
@@ -1072,6 +1103,11 @@ impl Windows {
                 state.states.set(xdg_toplevel::State::Maximized);
             } else {
                 state.states.unset(xdg_toplevel::State::Maximized);
+            }
+            if data.fullscreen {
+                state.states.set(xdg_toplevel::State::Fullscreen);
+            } else {
+                state.states.unset(xdg_toplevel::State::Fullscreen);
             }
             if data.activated {
                 state.states.set(xdg_toplevel::State::Activated);

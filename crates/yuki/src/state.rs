@@ -39,7 +39,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::calloop::ping::Ping;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::Resource;
-use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
+use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason, GlobalId};
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Serial, Size, Transform};
@@ -70,6 +70,7 @@ use smithay::wayland::shm::ShmState;
 
 use crate::config::{Config, config_dir, data_dir};
 use crate::foreign::{ForeignState, ListHandles};
+use crate::infinity::protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
 use crate::input::ShakeDetector;
 use crate::layers::Layers;
 use crate::popup::Popups;
@@ -289,6 +290,15 @@ pub struct State {
     pub minimized: std::collections::HashSet<WindowId>,
     /// Windows maximized by Yuki's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
+    /// Windows placed by Infinity, with the rectangle to restore.
+    pub(crate) arranged: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
+    /// Windows in fullscreen, with the rectangle to restore.
+    pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
+    /// Active `infinity_window_manager_v1` instances, for broadcasting events.
+    pub(crate) infinity_managers: Vec<InfinityWindowManagerV1>,
+    /// The `infinity_window_manager_v1` global id (kept alive for the session).
+    #[allow(dead_code)]
+    pub(crate) infinity_global: GlobalId,
     /// The last dock icon rectangle (`set_rectangle`), for the minimize anim.
     pub dock_rectangle: Option<(WindowId, Rectangle<i32, Logical>)>,
     /// The runtime configuration, loaded from the per-domain files in
@@ -531,8 +541,12 @@ impl State {
             popups: Popups::new(),
             foreign: ForeignState::new(display_handle),
             list_handles: Vec::new(),
+            infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
             minimized: std::collections::HashSet::new(),
             maximized: HashMap::new(),
+            arranged: HashMap::new(),
+            fullscreen: HashMap::new(),
+            infinity_managers: Vec::new(),
             dock_rectangle: None,
             config,
             grab: None,

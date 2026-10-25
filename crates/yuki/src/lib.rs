@@ -29,6 +29,7 @@ mod effects;
 mod foreign;
 mod handlers;
 mod idle;
+mod infinity;
 mod input;
 mod keymap;
 mod layers;

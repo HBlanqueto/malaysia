@@ -114,6 +114,11 @@ accesskit = "0.24"
 # raw `wl_display*`/`wl_surface*` to libwayland-egl (see celestial-kit).
 wayland-client = { version = "0.31", features = ["system"] }
 wayland-egl = "0.32"
+# Protocol generation for the private Infinity protocol (ADR 0039).
+wayland-scanner = "0.31"
+# WLR protocols; the compositor uses server-side foreign-toplevel handles in
+# Infinity and the shell uses the client side.
+wayland-protocols-wlr = { version = "0.3.12", default-features = false }
 
 # CelestialKit's Wayland runner presents with EGL and hands the GL context to
 # Skia; there is no glutin and no `gl` crate (ADR 0034). `glow` is only for the

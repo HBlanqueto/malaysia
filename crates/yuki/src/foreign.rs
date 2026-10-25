@@ -61,6 +61,15 @@ impl ForeignManagement {
         self.instances.retain(|instance| instance.is_alive());
         self.handles.retain(|(_, handle)| handle.is_alive());
     }
+
+    /// Returns the live management handle for `id`, if any.
+    pub(crate) fn handle_for(&self, id: WindowId) -> Option<&ZwlrForeignToplevelHandleV1> {
+        self.handles
+            .iter()
+            .find(|(wid, _)| *wid == id)
+            .map(|(_, handle)| handle)
+            .filter(|handle| handle.is_alive())
+    }
 }
 
 /// The array of `state` values for one window. The wlr event carries the full
@@ -293,16 +302,11 @@ impl State {
     }
 
     fn foreign_states_for(&self, id: WindowId) -> Vec<u8> {
-        let fullscreen = self
-            .windows
-            .iter()
-            .find(|window| window.id() == id)
-            .is_some_and(|window| window.state() == crate::decoration::WindowState::Fullscreen);
         toplevel_states(
             self.focused_window() == Some(id),
             self.minimized.contains(&id),
             self.maximized.contains_key(&id),
-            fullscreen,
+            self.fullscreen.contains_key(&id),
         )
     }
 
