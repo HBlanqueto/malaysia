@@ -368,6 +368,22 @@ fn desktop_click(menu_open: bool) -> DesktopClick {
     }
 }
 
+/// The `Activated` updates for moving focus from `previous` to `next`.
+///
+/// The old window loses the state and the new one gains it; when both are the
+/// same window only one update is needed, and when focus leaves every window
+/// only the old one changes.
+fn activation_updates(previous: Option<WindowId>, next: Option<WindowId>) -> Vec<(WindowId, bool)> {
+    let mut updates = Vec::new();
+    if let Some(previous) = previous.filter(|previous| Some(*previous) != next) {
+        updates.push((previous, false));
+    }
+    if let Some(next) = next {
+        updates.push((next, true));
+    }
+    updates
+}
+
 /// Keeps a relative pointer inside the logical output.
 ///
 /// The right and bottom edges subtract a small epsilon so a pointer at the
@@ -864,6 +880,7 @@ impl State {
             return;
         };
         self.windows.raise(id);
+        let previous = self.focused_window();
         let serial = SERIAL_COUNTER.next_serial();
         match self.seat.get_keyboard() {
             Some(keyboard) => {
@@ -877,6 +894,9 @@ impl State {
                 set_primary_focus(&self.display_handle, &self.seat, client);
             }
             None => tracing::warn!("a window was focused but the seat has no keyboard"),
+        }
+        for (window, activated) in activation_updates(previous, Some(id)) {
+            self.windows.set_activated(window, activated);
         }
         // Publish the active window for the menu bar (the store the shell
         // watches, same as the wallpaper).
@@ -1207,11 +1227,15 @@ impl State {
 
     /// Drops keyboard focus entirely.
     pub(crate) fn clear_keyboard_focus(&mut self) {
+        let previous = self.focused_window();
         let serial = SERIAL_COUNTER.next_serial();
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, None, serial);
             set_data_device_focus(&self.display_handle, &self.seat, None);
             set_primary_focus(&self.display_handle, &self.seat, None);
+        }
+        for (window, activated) in activation_updates(previous, None) {
+            self.windows.set_activated(window, activated);
         }
         self.publish_active(None);
         self.log_focus_stack(None);
@@ -2061,8 +2085,9 @@ mod tests {
     use xkbcommon::xkb::{self, keysyms};
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, clamp_pointer,
-        compositor_shortcut, desktop_click, double_click, edge_cursor, pointer_focus_blocked,
+        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, activation_updates,
+        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor,
+        pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
@@ -2630,6 +2655,30 @@ mod tests {
         assert_eq!(desktop_click(false), DesktopClick::ClearFocus);
         // An open bar menu takes the same press as "close me" and keeps focus.
         assert_eq!(desktop_click(true), DesktopClick::CloseMenu);
+    }
+
+    #[test]
+    fn focus_moves_activated_to_the_new_window_only() {
+        use std::collections::HashSet;
+
+        let a = WindowId::new(1);
+        let b = WindowId::new(2);
+        let mut activated = HashSet::new();
+        let apply = |activated: &mut HashSet<WindowId>, updates: Vec<(WindowId, bool)>| {
+            for (window, on) in updates {
+                if on {
+                    activated.insert(window);
+                } else {
+                    activated.remove(&window);
+                }
+            }
+        };
+        apply(&mut activated, activation_updates(None, Some(a)));
+        assert_eq!(activated, HashSet::from([a]));
+        apply(&mut activated, activation_updates(Some(a), Some(b)));
+        assert_eq!(activated, HashSet::from([b]), "only B keeps Activated");
+        apply(&mut activated, activation_updates(Some(b), None));
+        assert!(activated.is_empty(), "an unfocused window never keeps it");
     }
 
     #[test]

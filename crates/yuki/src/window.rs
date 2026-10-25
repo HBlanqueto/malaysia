@@ -194,6 +194,8 @@ struct WindowData {
     resizing: bool,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
+    /// Whether the window holds keyboard focus, as the next configure says.
+    activated: bool,
     /// The decoration mode the client last asked for, before policy. `None`
     /// until `request_mode`; creating or unsetting the object does not count.
     requested: Option<Decoration>,
@@ -340,6 +342,7 @@ impl Windows {
             configured: None,
             resizing: false,
             maximized: false,
+            activated: false,
             requested,
             native_warned: false,
             placed: false,
@@ -735,6 +738,19 @@ impl Windows {
         Some(self.windows[index].insets(self.decoration_of(id)))
     }
 
+    /// Sets the activated state the next configure carries and reconfigures.
+    pub fn set_activated(&mut self, id: WindowId, activated: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if self.windows[index].activated == activated {
+            return false;
+        }
+        self.windows[index].activated = activated;
+        self.send_configure(index);
+        true
+    }
+
     /// Sets the maximized state the next configure carries and reconfigures.
     pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
         let Some(index) = self.index(id) else {
@@ -977,6 +993,11 @@ impl Windows {
                 state.states.set(xdg_toplevel::State::Maximized);
             } else {
                 state.states.unset(xdg_toplevel::State::Maximized);
+            }
+            if data.activated {
+                state.states.set(xdg_toplevel::State::Activated);
+            } else {
+                state.states.unset(xdg_toplevel::State::Activated);
             }
         });
         data.pending_configure = Some(data.toplevel.send_configure());
