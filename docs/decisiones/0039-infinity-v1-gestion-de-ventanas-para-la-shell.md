@@ -21,11 +21,17 @@ ventanas para los componentes de la shell, empezando por la menubar.
    server-side generada con `wayland-scanner` en el compositor y con la
    generación cliente en `celestial-kit`.
 2. **Solo los componentes de `yuki-shell` pueden ver el global.** El filtro de
-   visibilidad de Smithay (`GlobalDispatch::can_view`) lo permite solo cuando:
-   - el ejecutable del cliente (`/proc/<pid>/exe`) es el binario `yuki-shell`
-     del mismo paquete que el compositor, resuelto desde
-     `std::env::current_exe()`, o
-   - `YUKI_DEV=1` está en el entorno del compositor.
+   visibilidad de Smithay (`GlobalDispatch::can_view`) lo permite solo cuando
+   el ejecutable del cliente (`/proc/<pid>/exe`) coincide con uno de los
+   binarios de confianza:
+   - `yuki-shell` en el mismo directorio que el compositor, resuelto desde
+     `std::env::current_exe()`.
+   - `.yuki-shell-wrapped` en ese mismo directorio, para los envoltorios de
+     Nix que renombran el binario real.
+   - El path exacto indicado por la variable de entorno `YUKI_SHELL_EXE`, que
+     un wrapper puede exportar cuando la heurística anterior no es suficiente.
+   - `YUKI_DEV=1` en el entorno del compositor desactiva el filtro para
+     desarrollo.
 
    No es seguridad fuerte: cualquier proceso que pueda hacerse pasar por
    `yuki-shell` o ejecutarse con `YUKI_DEV=1` podría usar el protocolo. La
