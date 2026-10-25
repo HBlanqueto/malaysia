@@ -2462,6 +2462,11 @@ impl WindowHandler for Shell {
         } else {
             self.surfaces[index].logical_size
         };
+        // Only commit immediately when the size did not change. A size-changing
+        // configure will be followed by a redraw that commits a buffer at the
+        // new size; committing the old buffer here makes the compositor see a
+        // transient size mismatch and loop (B2).
+        let size_changed = size != self.surfaces[index].logical_size;
         self.surfaces[index].configure(size, scale);
         let surface_id = window.wl_surface().id();
         let requested_server = self
@@ -2505,8 +2510,11 @@ impl WindowHandler for Shell {
             });
         }
         // Acknowledge the configure and let SCTK apply the decoration mode
-        // before drawing the first frame.
-        window.commit();
+        // before drawing the first frame. A size change is committed by the
+        // redraw below, not here, to avoid sending the old buffer size.
+        if !size_changed {
+            window.commit();
+        }
         // A toplevel must attach its first buffer before it can map; unlike a
         // layer surface there is no frame callback to wait for yet.
         if self.surfaces[index].draw() && self.surfaces[index].needs_redraw {

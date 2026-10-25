@@ -3,6 +3,8 @@
 //! 44 px, traffic lights on the left, a centred title and a toolbar gap on the
 //! right. It draws only when the compositor's configure answered `ClientSide`.
 
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -75,7 +77,8 @@ impl Component for Titlebar {
             let status = *controls.status.read();
             (status, controls.title.clone(), controls.fixed)
         };
-        let last_click = use_state(|| None::<(Instant, (f64, f64))>);
+        let last_click = use_hook(|| Rc::new(Cell::new(None::<(Instant, (f64, f64))>)));
+        let double_done = use_hook(|| Rc::new(Cell::new(false)));
         if status.decoration == DecorationResponse::Server {
             return rect()
                 .width(Size::fill())
@@ -129,60 +132,72 @@ impl Component for Titlebar {
                 }
             });
 
-        let press = move |event: Event<MouseEventData>| {
-            if event.button != Some(MouseButton::Left) {
-                return;
-            }
-            let Some(controls) = &drag else {
-                return;
-            };
-            let now = Instant::now();
-            let point = (event.element_location.x, event.element_location.y);
-            let double = last_click.read().is_some_and(|(then, before)| {
-                now.duration_since(then)
-                    <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
-                    && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-                    && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-            });
-            if double {
-                let mut last = last_click;
-                last.set(None);
-                run_action(
-                    controls,
-                    double_click_action(behavior.double_click_titlebar, fixed),
-                );
-            } else {
-                let mut last = last_click;
-                last.set(Some((now, point)));
-                controls.move_window();
+        let press = {
+            let last_click = last_click.clone();
+            let double_done = double_done.clone();
+            move |event: Event<MouseEventData>| {
+                if event.button != Some(MouseButton::Left) {
+                    return;
+                }
+                let Some(controls) = &drag else {
+                    return;
+                };
+                let now = Instant::now();
+                let point = (event.element_location.x, event.element_location.y);
+                let double = last_click.get().is_some_and(|(then, before)| {
+                    now.duration_since(then)
+                        <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
+                        && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                        && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                });
+                if double {
+                    last_click.set(None);
+                    if !double_done.get() {
+                        double_done.set(true);
+                        run_action(
+                            controls,
+                            double_click_action(behavior.double_click_titlebar, fixed),
+                        );
+                    }
+                } else {
+                    last_click.set(Some((now, point)));
+                    double_done.set(false);
+                    controls.move_window();
+                }
             }
         };
-        let press_second = move |event: Event<MouseEventData>| {
-            if event.button != Some(MouseButton::Left) {
-                return;
-            }
-            let Some(controls) = &click else {
-                return;
-            };
-            let now = Instant::now();
-            let point = (event.element_location.x, event.element_location.y);
-            let double = last_click.read().is_some_and(|(then, before)| {
-                now.duration_since(then)
-                    <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
-                    && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-                    && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-            });
-            if double {
-                let mut last = last_click;
-                last.set(None);
-                run_action(
-                    controls,
-                    double_click_action(behavior.double_click_titlebar, fixed),
-                );
-            } else {
-                let mut last = last_click;
-                last.set(Some((now, point)));
-                controls.move_window();
+        let press_second = {
+            let last_click = last_click.clone();
+            let double_done = double_done.clone();
+            move |event: Event<MouseEventData>| {
+                if event.button != Some(MouseButton::Left) {
+                    return;
+                }
+                let Some(controls) = &click else {
+                    return;
+                };
+                let now = Instant::now();
+                let point = (event.element_location.x, event.element_location.y);
+                let double = last_click.get().is_some_and(|(then, before)| {
+                    now.duration_since(then)
+                        <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
+                        && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                        && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                });
+                if double {
+                    last_click.set(None);
+                    if !double_done.get() {
+                        double_done.set(true);
+                        run_action(
+                            controls,
+                            double_click_action(behavior.double_click_titlebar, fixed),
+                        );
+                    }
+                } else {
+                    last_click.set(Some((now, point)));
+                    double_done.set(false);
+                    controls.move_window();
+                }
             }
         };
 

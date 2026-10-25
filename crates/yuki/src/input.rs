@@ -891,8 +891,7 @@ impl State {
                 yuki_scene::geometry::Size::new(f64::from(size.w), f64::from(size.h)),
             );
             self.maximized.insert(id, outer);
-            self.windows.set_maximized(id, true);
-            self.windows.resize(id, target);
+            self.windows.set_maximized_with_outer(id, true, target);
         } else {
             let Some(saved) = self.maximized.remove(&id) else {
                 return;
@@ -902,8 +901,7 @@ impl State {
                 origin = format!("{}:{}", location.file(), location.line()),
                 "window restored"
             );
-            self.windows.set_maximized(id, false);
-            self.windows.resize(id, saved);
+            self.windows.set_maximized_with_outer(id, false, saved);
         }
         // Keep the window focused and Activated through the state change.
         self.focus_window(id);

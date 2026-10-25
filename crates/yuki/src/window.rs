@@ -794,6 +794,27 @@ impl Windows {
         true
     }
 
+    /// Sets the maximized state and outer rectangle, sending a single configure.
+    ///
+    /// Used for maximize/restore so the client receives one configure carrying
+    /// both the new state and the new size, instead of two intermediate ones.
+    pub fn set_maximized_with_outer(
+        &mut self,
+        id: WindowId,
+        maximized: bool,
+        outer: SceneRect<f64, SceneLogical>,
+    ) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        let state_changed = self.windows[index].maximized != maximized;
+        self.windows[index].maximized = maximized;
+        self.scene.set_outer(id, outer);
+        self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
+        self.send_configure(index);
+        state_changed
+    }
+
     /// Sets the maximized state the next configure carries and reconfigures.
     pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
         let Some(index) = self.index(id) else {
