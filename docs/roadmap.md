@@ -232,12 +232,16 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
   `Super+Space`, foco exclusivo de capa, búsqueda y ranking `.desktop`,
   lanzamiento con token de activación e iconos. Latencia release 121 ms hasta
   la superficie configurada. Ver `bloques/13-chrome-y-launcher.md`.
-- **Pendiente de chrome:** esquinas redondeadas (16 px), sombra y titlebar en la
-  captura de ventana.
-- **Después:** el orden es **cerrar el chrome pendiente → Bloque 14 (menú
-  global) → 12a** (`Settings` con una app real, `Screenshot`/`ScreenCast`) **→
-  12b → 8b → 8c**. La aceptación manual del launcher con teclado real queda
-  pendiente del ThinkPad.
+- **Marco unificado de ventana — hecho (2026-10-24).** Esquinas redondeadas
+  (16 px) en el shader `rounded_clip`, sombra compositor-side con `border.frag`
+  + `shadow.frag`, inner border/hairline y titlebar SSD integrados en un solo
+  elemento; las ventanas CSD reciben esquinas, sombra y borde pero no titlebar.
+  Los diálogos usan el mismo marco y se centran sobre la ventana padre. Ver
+  [`arquitectura/ventanas.md`](arquitectura/ventanas.md) y el ADR 0037.
+- **Pendiente:** captura de ventana con marco (Bloque 11).
+- **Después:** el orden es **Bloque 14 (menú global) → 12a** (`Settings` con una
+  app real, `Screenshot`/`ScreenCast`) **→ 12b → 8b → 8c**. La aceptación manual
+  del launcher con teclado real queda pendiente del ThinkPad.
 
 ## Bloque 14 — Menú global
 
