@@ -966,6 +966,8 @@ pub struct ToplevelInfo {
     pub title: String,
     pub app_id: String,
     pub active: bool,
+    pub maximized: bool,
+    pub minimized: bool,
 }
 
 /// A change that only touches one toplevel's metadata. Kept pure so the
@@ -974,7 +976,11 @@ pub struct ToplevelInfo {
 enum InfoEvent {
     Title(String),
     AppId(String),
-    Active(bool),
+    State {
+        active: bool,
+        maximized: bool,
+        minimized: bool,
+    },
     Closed,
 }
 
@@ -985,7 +991,15 @@ fn apply_info_event(infos: &mut Vec<ToplevelInfo>, index: usize, event: InfoEven
     match event {
         InfoEvent::Title(title) => info.title = title,
         InfoEvent::AppId(app_id) => info.app_id = app_id,
-        InfoEvent::Active(active) => info.active = active,
+        InfoEvent::State {
+            active,
+            maximized,
+            minimized,
+        } => {
+            info.active = active;
+            info.maximized = maximized;
+            info.minimized = minimized;
+        }
         InfoEvent::Closed => {
             infos.remove(index);
         }
@@ -1002,6 +1016,7 @@ struct ToplevelEntry {
 /// The running toplevels, provided as a root context. The dock reads
 /// [`Toplevels::list`] and calls [`Toplevels::activate`] on a click.
 type Activate = Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>;
+type Maximize = Rc<RefCell<Option<Rc<dyn Fn(usize, bool)>>>>;
 
 #[derive(Clone)]
 pub struct Toplevels {
@@ -1009,6 +1024,8 @@ pub struct Toplevels {
     activate: Activate,
     close: Activate,
     minimize: Activate,
+    maximize: Maximize,
+    unminimize: Activate,
 }
 
 impl Toplevels {
@@ -1031,6 +1048,18 @@ impl Toplevels {
     pub fn minimize(&self, index: usize) {
         if let Some(f) = self.minimize.borrow().as_ref() {
             f(index);
+        }
+    }
+
+    pub fn unset_minimized(&self, index: usize) {
+        if let Some(f) = self.unminimize.borrow().as_ref() {
+            f(index);
+        }
+    }
+
+    pub fn set_maximized(&self, index: usize, maximized: bool) {
+        if let Some(f) = self.maximize.borrow().as_ref() {
+            f(index, maximized);
         }
     }
 
@@ -1654,6 +1683,8 @@ impl Shell {
         let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
         let close_entries = toplevel_entries.clone();
         let minimize_entries = toplevel_entries.clone();
+        let maximize_entries = toplevel_entries.clone();
+        let unminimize_entries = toplevel_entries.clone();
         let activate_entries = toplevel_entries.clone();
         let toplevels = Toplevels {
             list: State::create_global(Vec::new()),
@@ -1670,6 +1701,24 @@ impl Shell {
                     && let Some(mgmt) = &entry.mgmt
                 {
                     mgmt.set_minimized();
+                }
+            })))),
+            maximize: Rc::new(RefCell::new(Some(Rc::new(move |index, maximized| {
+                if let Some(entry) = maximize_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                {
+                    if maximized {
+                        mgmt.set_maximized();
+                    } else {
+                        mgmt.unset_maximized();
+                    }
+                }
+            })))),
+            unminimize: Rc::new(RefCell::new(Some(Rc::new(move |index| {
+                if let Some(entry) = unminimize_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                {
+                    mgmt.unset_minimized();
                 }
             })))),
         };
@@ -3112,9 +3161,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, (), Shell> for Shell {
         let info_event = match event {
             ZwlrForeignToplevelHandleV1Event::Title { title } => Some(InfoEvent::Title(title)),
             ZwlrForeignToplevelHandleV1Event::AppId { app_id } => Some(InfoEvent::AppId(app_id)),
-            ZwlrForeignToplevelHandleV1Event::State { state } => Some(InfoEvent::Active(
-                state.contains(&(ZwlrForeignToplevelHandleV1State::Activated as u8)),
-            )),
+            ZwlrForeignToplevelHandleV1Event::State { state } => Some(InfoEvent::State {
+                active: state.contains(&(ZwlrForeignToplevelHandleV1State::Activated as u8)),
+                maximized: state.contains(&(ZwlrForeignToplevelHandleV1State::Maximized as u8)),
+                minimized: state.contains(&(ZwlrForeignToplevelHandleV1State::Minimized as u8)),
+            }),
             _ => None,
         };
         if let Some(info_event) = info_event {
@@ -3221,14 +3272,34 @@ mod tests {
         apply_info_event(&mut infos, 0, InfoEvent::Title("Editor".into()));
         apply_info_event(&mut infos, 1, InfoEvent::Title("Navegador".into()));
         apply_info_event(&mut infos, 0, InfoEvent::AppId("editor".into()));
-        apply_info_event(&mut infos, 1, InfoEvent::Active(true));
-        apply_info_event(&mut infos, 0, InfoEvent::Active(false));
+        apply_info_event(
+            &mut infos,
+            1,
+            InfoEvent::State {
+                active: true,
+                maximized: true,
+                minimized: false,
+            },
+        );
+        apply_info_event(
+            &mut infos,
+            0,
+            InfoEvent::State {
+                active: false,
+                maximized: false,
+                minimized: true,
+            },
+        );
 
         assert_eq!(infos[0].title, "Editor");
         assert_eq!(infos[0].app_id, "editor");
         assert!(!infos[0].active);
+        assert!(!infos[0].maximized);
+        assert!(infos[0].minimized);
         assert_eq!(infos[1].title, "Navegador");
         assert!(infos[1].active);
+        assert!(infos[1].maximized);
+        assert!(!infos[1].minimized);
 
         apply_info_event(&mut infos, 0, InfoEvent::Closed);
         assert_eq!(infos.len(), 1);
