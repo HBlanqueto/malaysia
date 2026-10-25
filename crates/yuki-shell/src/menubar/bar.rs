@@ -11,7 +11,8 @@ use std::rc::Rc;
 
 use celestial_kit::menu::MenuItem;
 use celestial_kit::platform::{
-    Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, Timers, run_layer,
+    Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, Timers, Toplevels,
+    run_layer,
 };
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -21,7 +22,7 @@ use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILI
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec};
-use crate::menubar::{appmenu, clock, load_active_window, resolve_app_name, rgba, system};
+use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 
 const MAX_TITLES: usize = 8;
 
@@ -98,15 +99,50 @@ impl App for BarApp {
             enabled: true,
         }];
         if focused {
-            specs.push(MenuTitleSpec {
-                label: app,
-                glyph: None,
-                bold: true,
-                items: Rc::new(no_items),
-                on_activate: ignore_action,
-                anchor: anchors[1].clone(),
-                enabled: false,
-            });
+            let app_id = app_id.clone().unwrap_or_default();
+            let app_name = app.clone();
+            let app_items: MenuItems = {
+                let app_id = app_id.clone();
+                let app_name = app_name.clone();
+                Rc::new(move || {
+                    focused::app_menu_items(
+                        &app_name,
+                        &app_id,
+                        &Toplevels::get().list.read().clone(),
+                    )
+                })
+            };
+            let window_items: MenuItems = {
+                let app_id = app_id.clone();
+                let app_name = app_name.clone();
+                Rc::new(move || {
+                    focused::window_menu_items(
+                        &app_name,
+                        &app_id,
+                        &Toplevels::get().list.read().clone(),
+                    )
+                })
+            };
+            let help_items: MenuItems = {
+                let app_name = app_name.clone();
+                Rc::new(move || focused::help_menu_items(&app_name))
+            };
+            let focused_titles = [
+                (app_name, app_items, 1usize),
+                ("Ventana".to_string(), window_items, 2),
+                ("Ayuda".to_string(), help_items, 3),
+            ];
+            for (offset, (label, items, anchor)) in focused_titles.into_iter().enumerate() {
+                specs.push(MenuTitleSpec {
+                    label,
+                    glyph: None,
+                    bold: offset == 0,
+                    items,
+                    on_activate: focused::on_action,
+                    anchor: anchors[anchor].clone(),
+                    enabled: true,
+                });
+            }
         } else {
             let entries_for_window = self.entries.clone();
             let menus: [(&str, MenuItems); 7] = [
@@ -144,12 +180,6 @@ impl App for BarApp {
         root.child(left).child(clock::clock_label(now, text))
     }
 }
-
-fn no_items() -> Vec<MenuItem> {
-    Vec::new()
-}
-
-fn ignore_action(_id: String) {}
 
 fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State<Option<String>>) {
     let retry = timers.clone();

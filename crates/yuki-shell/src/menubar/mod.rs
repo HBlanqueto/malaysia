@@ -13,6 +13,8 @@
 pub mod appmenu;
 pub mod bar;
 pub mod clock;
+pub mod focused;
+pub mod icons;
 pub mod menu;
 pub mod system;
 
