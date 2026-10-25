@@ -1716,6 +1716,32 @@ impl State {
         }
 
         if let Some(grab) = self.grab {
+            // Update the pointer location and send the motion to the client
+            // before driving the grab, so the cursor does not appear frozen
+            // during move/resize.
+            if let Some(pointer) = self.seat.get_pointer() {
+                let delta = location - pointer.current_location();
+                let serial = SERIAL_COUNTER.next_serial();
+                pointer.relative_motion(
+                    self,
+                    None,
+                    &RelativeMotionEvent {
+                        delta,
+                        delta_unaccel: delta,
+                        time,
+                    },
+                );
+                pointer.motion(
+                    self,
+                    None,
+                    &MotionEvent {
+                        location,
+                        serial,
+                        time,
+                    },
+                );
+                pointer.frame(self);
+            }
             self.drag(grab, location);
             self.request_redraw();
             return;
