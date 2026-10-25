@@ -37,12 +37,19 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 const NAUTILUS_TIMEOUT: Duration = Duration::from_secs(12);
 /// The pointer delta the scripted drag applies, matching `YUKI_TEST_DRAG`.
 const DRAG: (f64, f64) = (60.0, 40.0);
-/// The global points the scripted hover visits, matching `YUKI_TEST_HOVER`.
+/// The hover points, relative to the dragged window's top-left.
 ///
 /// The first is outside the window (the client gets a leave, so the next point
 /// enters); the other two are inside it, so the client sees an enter and then a
-/// motion. The window maps at (0, 0) and the drag moves it by `DRAG`.
-const HOVER: [(f64, f64); 3] = [(10.0, 10.0), (92.0, 72.0), (100.0, 80.0)];
+/// motion. The probe reads the workspace centre from a real window and places
+/// the hovered window there instead of assuming (0, 0).
+const HOVER: [(f64, f64); 3] = [(-10.0, -10.0), (32.0, 32.0), (40.0, 40.0)];
+/// The hover client's surface side, matching `hover_client`'s `SIDE`.
+///
+/// Its window is client-decorated, so the outer rectangle is exactly this; the
+/// move client is server-decorated and its outer is taller, which is why the
+/// probe cannot reuse its origin directly.
+const HOVER_SIDE: f64 = 64.0;
 
 fn main() -> ExitCode {
     match run() {
@@ -79,9 +86,9 @@ fn run() -> Result<(), String> {
         ));
     }
 
-    run_move_case(&binary, &client)?;
+    let centre = run_move_case(&binary, &client)?;
     println!("move_probe: the GTK-shaped sequence was accepted, the window moved by the delta");
-    run_hover_case(&binary, repo)?;
+    run_hover_case(&binary, repo, centre)?;
     run_nautilus_case(&binary)?;
     Ok(())
 }
@@ -100,7 +107,11 @@ fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
 }
 
 /// The GTK-shaped sequence through `move_client`.
-fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
+///
+/// Returns the centre of the workspace, read from the window's real outer
+/// rectangle before the drag. The hover case centres its own (client-decorated)
+/// window there instead of guessing (0, 0).
+fn run_move_case(binary: &Path, client: &Path) -> Result<(f64, f64), String> {
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
     let mut compositor = ChildGuard::spawn(
@@ -198,6 +209,12 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
         .ok_or_else(|| "the compositor never applied the scripted drag".to_string())?;
     assert_delta(drag, "from_x", "to_x", DRAG.0)?;
     assert_delta(drag, "from_y", "to_y", DRAG.1)?;
+    let field_or_err =
+        |name: &str| field(drag, name).ok_or_else(|| format!("`{name}` is missing from `{drag}`"));
+    let centre = (
+        field_or_err("from_x")? + field_or_err("from_width")? / 2.0,
+        field_or_err("from_y")? + field_or_err("from_height")? / 2.0,
+    );
 
     for line in client_lines
         .iter()
@@ -206,11 +223,15 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(), String> {
         println!("{line}");
     }
     println!("move_probe: compositor accepted move and resize after a focus change, rejected the released and fabricated serials, and moved the window by the pointer delta");
-    Ok(())
+    Ok(centre)
 }
 
 /// The buttonless hover through `hover_client`, asserting where it arrived.
-fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
+///
+/// `centre` is the workspace centre read from the move case. The hover window
+/// is `HOVER_SIDE` square and centred there, and the scripted drag moves it by
+/// `DRAG`, so the hover points are that final origin plus [`HOVER`]'s offsets.
+fn run_hover_case(binary: &Path, repo: &Path, centre: (f64, f64)) -> Result<(), String> {
     let client = probe_binary(repo, "YUKI_HOVER_BIN", "hover_client");
     if !client.is_file() {
         return Err(format!(
@@ -220,7 +241,11 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
     }
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
-    let hover = points(HOVER);
+    let dragged = (
+        centre.0 - HOVER_SIDE / 2.0 + DRAG.0,
+        centre.1 - HOVER_SIDE / 2.0 + DRAG.1,
+    );
+    let hover = points(HOVER.map(|(dx, dy)| (dragged.0 + dx, dragged.1 + dy)));
     let mut compositor = ChildGuard::spawn(
         Command::new(binary)
             .arg("--log-level=info")
@@ -233,9 +258,9 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
     let compositor_log = compositor.capture()?;
     let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
 
-    // The window maps at (0, 0), the scripted drag moves it by DRAG, and the
-    // client is client-decorated, so its surface origin is exactly DRAG.
-    let expect = points([HOVER[1], HOVER[2]].map(|(x, y)| (x - DRAG.0, y - DRAG.1)));
+    // The client is client-decorated, so a surface-local position is the global
+    // point minus the window origin: exactly the relative offsets.
+    let expect = points([HOVER[1], HOVER[2]]);
     let mut hover_client = ChildGuard::spawn(
         Command::new(&client)
             .env("XDG_RUNTIME_DIR", runtime.path())
@@ -258,7 +283,7 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
                 client_lines.join("\n")
             )
         })?;
-    assert_position(enter, HOVER[1].0 - DRAG.0, HOVER[1].1 - DRAG.1)?;
+    assert_position(enter, HOVER[1].0, HOVER[1].1)?;
     let motion = client_lines
         .iter()
         .find(|line| line.contains("hover_client: motion"))
@@ -268,7 +293,7 @@ fn run_hover_case(binary: &Path, repo: &Path) -> Result<(), String> {
                 client_lines.join("\n")
             )
         })?;
-    assert_position(motion, HOVER[2].0 - DRAG.0, HOVER[2].1 - DRAG.1)?;
+    assert_position(motion, HOVER[2].0, HOVER[2].1)?;
 
     for line in client_lines
         .iter()
