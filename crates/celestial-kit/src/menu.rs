@@ -288,7 +288,6 @@ pub struct MenuView {
     on_dismiss_all: Rc<dyn Fn()>,
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
-    size: (f32, f32),
     searchable: Option<Rc<Vec<SearchableEntry>>>,
     help_search: Option<Rc<Vec<SearchableEntry>>>,
     query_state: Option<Rc<RefCell<SearchQuery>>>,
@@ -307,14 +306,12 @@ impl MenuView {
         on_dismiss_all: impl Fn() + 'static,
         palette: MenuPalette,
     ) -> Self {
-        let size = Self::preferred_size(&items, palette);
         Self {
             items: Rc::new(items),
             on_activate: Rc::new(on_activate),
             on_dismiss_all: Rc::new(on_dismiss_all),
             on_navigation: None,
             palette,
-            size,
             searchable: None,
             help_search: None,
             query_state: None,
@@ -388,8 +385,11 @@ impl MenuView {
     pub fn preferred_size(items: &[MenuItem], m: MenuPalette) -> (f32, f32) {
         let inset = 2.0 * m.border_width + m.padding;
         let content_height: f32 = items.iter().map(|item| item.height(m)).sum();
-        let max_content_width = (m.max_width - inset * 2.0).max(m.min_width);
-        let mut content_width = m.min_width;
+        let min_width = m.min_width.max(1.0);
+        let max_width = m.max_width.max(min_width);
+        let max_content_width = (max_width - inset * 2.0).max(0.0);
+        let min_content_width = (min_width - inset * 2.0).clamp(0.0, max_content_width);
+        let mut content_width = min_content_width;
 
         for item in items {
             let Some(label) = item.label() else {
@@ -414,7 +414,8 @@ impl MenuView {
             content_width = content_width.max(content_w);
         }
 
-        let width = content_width.min(max_content_width) + inset * 2.0;
+        let width =
+            (content_width.min(max_content_width) + inset * 2.0).clamp(min_width, max_width);
         let height = content_height + inset * 2.0;
         (width.ceil(), height.ceil())
     }
@@ -428,7 +429,6 @@ impl Clone for MenuView {
             on_dismiss_all: self.on_dismiss_all.clone(),
             on_navigation: self.on_navigation.clone(),
             palette: self.palette,
-            size: self.size,
             searchable: self.searchable.clone(),
             help_search: self.help_search.clone(),
             query_state: self.query_state.clone(),
@@ -453,7 +453,15 @@ impl App for MenuView {
         let on_dismiss_all = self.on_dismiss_all.clone();
         let on_navigation = self.on_navigation.clone();
         let m = self.palette;
-        let size = self.size;
+        // The popup may have grown or shrunk after a reposition, so the tree
+        // follows the configured surface instead of the size at creation.
+        let platform = Platform::get();
+        let scale = (*platform.scale_factor.peek()).max(f64::EPSILON);
+        let root_size = *platform.root_size.peek();
+        let size = (
+            (root_size.width / scale as f32).max(1.0),
+            (root_size.height / scale as f32).max(1.0),
+        );
         let popup: Option<PopupHandle> = try_consume_root_context();
         let opens_left = popup.as_ref().is_some_and(PopupHandle::opens_left);
         let menu_search_icon = self.menu_search_icon;
@@ -606,10 +614,11 @@ impl App for MenuView {
             .children(rows);
 
         let mut root = rect()
-            .width(Size::px(size.0))
-            .height(Size::px(size.1))
+            .width(Size::fill())
+            .height(Size::fill())
             .background(rgba(m.bg))
             .corner_radius(m.radius)
+            .overflow(Overflow::Clip)
             .border(
                 Border::new()
                     .width(m.border_width)
@@ -1776,6 +1785,43 @@ mod tests {
         let (w, h) = MenuView::preferred_size(&sample(), MENU_LIGHT);
         assert!(w > 0.0);
         assert!(h > 0.0);
+    }
+
+    #[test]
+    fn root_box_follows_the_configured_popup_size() {
+        use freya_testing::TestingRunner;
+        use torin::prelude::Size2D;
+
+        let items: Vec<MenuItem> = std::iter::once(MenuItem::SearchField {
+            placeholder: "Buscar".to_string(),
+        })
+        .chain((0..3).map(|i| MenuItem::Action {
+            id: format!("item-{i}"),
+            label: format!("Item {i}"),
+            shortcut: None,
+            enabled: true,
+            check: CheckState::None,
+            icon: None,
+        }))
+        .collect();
+        assert_eq!(MenuView::preferred_size(&items, MENU_LIGHT), (220.0, 120.0));
+
+        // The popup was created at its natural 220 x 120 and the configure
+        // after a reposition gave it 340 x 300.
+        let view = MenuView::new(items, |_| {}, || {}, MENU_LIGHT);
+        let app = AppComponent::new(view);
+        let (mut test, _) = TestingRunner::new(app, Size2D::new(340.0, 300.0), |_| {}, 1.0);
+        test.sync_and_update();
+
+        let area = test
+            .find(|node, element| {
+                let style = element.style();
+                (style.background == Fill::Color(rgba(MENU_LIGHT.bg))
+                    && (style.corner_radius.top_left - MENU_LIGHT.radius).abs() < 0.01)
+                    .then(|| node.layout().area)
+            })
+            .expect("menu root box");
+        assert_eq!((area.size.width, area.size.height), (340.0, 300.0));
     }
 
     #[test]
