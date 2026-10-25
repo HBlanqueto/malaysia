@@ -17,6 +17,7 @@
 //!   be wrong from then on (ADR 0014).
 
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
@@ -37,6 +38,11 @@ use yuki_scene::geometry::{
 use yuki_scene::scene::{Decoration, Edge, PopupId, PopupParent, Scene, WindowId};
 
 use crate::decoration::{Insets, Role, WindowState};
+
+/// How long the compositor waits for an app to ack a resize configure before
+/// sending the next pending size. This protects apps that never ack from
+/// freezing the resize forever.
+const RESIZE_CONFIGURE_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// A read-only view of one tracked window.
 ///
@@ -229,6 +235,12 @@ struct WindowData {
     resizing: bool,
     /// Which edge or corner is being dragged during an interactive resize.
     resize_edge: Option<Edge>,
+    /// Outer size most recently requested by the pointer while the app has not
+    /// acked+committed the previous configure.
+    resize_pending_outer: Option<Size<i32, Logical>>,
+    /// When the last configure during an interactive resize was sent, so a
+    /// slow app is eventually reconfigured even if it never acks.
+    resize_configure_sent: Option<Instant>,
     /// Whether Yuki's titlebar requested the maximized state.
     maximized: bool,
     /// Whether the window is in fullscreen state, as the next configure says.
@@ -382,6 +394,8 @@ impl Windows {
             configured: None,
             resizing: false,
             resize_edge: None,
+            resize_pending_outer: None,
+            resize_configure_sent: None,
             maximized: false,
             fullscreen: false,
             activated: false,
@@ -477,7 +491,17 @@ impl Windows {
             );
             if self.scene.set_outer(id, outer) {
                 self.windows[index].outer_size = outer_size;
-                self.send_configure(index);
+                if self.windows[index].resizing {
+                    // The client has caught up: the frame now follows the
+                    // committed size, and any newer pointer request is sent.
+                    self.windows[index].resize_configure_sent = None;
+                    if let Some(pending) = self.windows[index].resize_pending_outer.take() {
+                        self.send_configure_with_outer(index, pending);
+                        self.windows[index].resize_configure_sent = Some(Instant::now());
+                    }
+                } else {
+                    self.send_configure(index);
+                }
             }
         }
 
@@ -749,16 +773,25 @@ impl Windows {
     /// Applies a new decorated outer rectangle and configures the client.
     ///
     /// Used by an in-progress resize; the configure carries the `resizing`
-    /// state until the grab ends.
+    /// state until the grab ends.  To keep the frame anchored to the committed
+    /// size while the app catches up, the scene outer is only updated when the
+    /// client commits a buffer.
     pub fn resize(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) -> bool {
         let Some(index) = self.index(id) else {
             return false;
         };
-        if !self.scene.set_outer(id, outer) {
-            return false;
+        let requested = Size::from((round(outer.width()), round(outer.height())));
+        let data = &mut self.windows[index];
+        let can_send = data
+            .resize_configure_sent
+            .is_none_or(|t| t.elapsed() >= RESIZE_CONFIGURE_TIMEOUT);
+        if can_send {
+            data.resize_configure_sent = Some(Instant::now());
+            data.resize_pending_outer = None;
+            self.send_configure_with_outer(index, requested);
+        } else {
+            data.resize_pending_outer = Some(requested);
         }
-        self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
-        self.send_configure(index);
         true
     }
 
@@ -769,6 +802,15 @@ impl Windows {
         };
         self.windows[index].resizing = resizing;
         self.windows[index].resize_edge = edge;
+        if !resizing {
+            // Ending the resize: send the most recent pending request so the
+            // final size matches where the pointer released.
+            self.windows[index].resize_configure_sent = None;
+            if let Some(pending) = self.windows[index].resize_pending_outer.take() {
+                self.send_configure_with_outer(index, pending);
+                return true;
+            }
+        }
         self.send_configure(index);
         true
     }
@@ -1150,6 +1192,16 @@ impl Windows {
         }
         data.pending_configure = Some(data.toplevel.send_configure());
         data.configured = Some(configured);
+    }
+
+    /// Sends a configure using `outer_size` as the window size without changing
+    /// the scene rectangle. Used during an interactive resize so the requested
+    /// size reaches the client while the frame stays at the committed size.
+    fn send_configure_with_outer(&mut self, index: usize, outer_size: Size<i32, Logical>) {
+        let previous = self.windows[index].outer_size;
+        self.windows[index].outer_size = outer_size;
+        self.send_configure(index);
+        self.windows[index].outer_size = previous;
     }
 
     /// The outer size bounds from the client's usable minimum and maximum.
