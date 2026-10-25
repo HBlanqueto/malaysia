@@ -478,3 +478,186 @@ fn action(
         icon,
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(app_id: &str, title: &str, active: bool, minimized: bool) -> ToplevelInfo {
+        ToplevelInfo {
+            title: title.to_string(),
+            app_id: app_id.to_string(),
+            active,
+            maximized: false,
+            minimized,
+        }
+    }
+
+    fn label(item: &MenuItem) -> Option<&str> {
+        match item {
+            MenuItem::Action { label, .. }
+            | MenuItem::Submenu { label, .. }
+            | MenuItem::Header { label } => Some(label),
+            _ => None,
+        }
+    }
+
+    fn is_enabled(item: &MenuItem) -> bool {
+        match item {
+            MenuItem::Action { enabled, .. } | MenuItem::Submenu { enabled, .. } => *enabled,
+            _ => false,
+        }
+    }
+
+    fn labels(items: &[MenuItem]) -> Vec<String> {
+        items
+            .iter()
+            .filter_map(|item| label(item).map(ToOwned::to_owned))
+            .collect()
+    }
+
+    fn find<'a>(items: &'a [MenuItem], wanted: &str) -> &'a MenuItem {
+        items
+            .iter()
+            .find(|item| label(item) == Some(wanted))
+            .unwrap_or_else(|| panic!("missing «{wanted}» in {:?}", labels(items)))
+    }
+
+    fn enabled(items: &[MenuItem], wanted: &str) -> bool {
+        is_enabled(find(items, wanted))
+    }
+
+    fn toplevels() -> Vec<ToplevelInfo> {
+        vec![
+            window("foot", "Yuki", true, false),
+            window("foot", "Segunda ventana", false, true),
+            window("org.mozilla.firefox", "Mozilla Firefox", false, false),
+        ]
+    }
+
+    #[test]
+    fn app_menu_labels_and_enabled_states() {
+        let items = app_menu_items("Foot", "foot", &toplevels());
+        assert_eq!(
+            labels(&items),
+            vec![
+                "Acerca de Foot",
+                "Configuración…",
+                "Servicios",
+                "Ocultar Foot",
+                "Ocultar otros",
+                "Mostrar todo",
+                "Salir de Foot",
+            ]
+        );
+        assert!(!enabled(&items, "Acerca de Foot"));
+        assert!(!enabled(&items, "Configuración…"));
+        assert!(enabled(&items, "Servicios"));
+        assert!(enabled(&items, "Ocultar Foot"));
+        assert!(enabled(&items, "Ocultar otros"));
+        assert!(enabled(&items, "Mostrar todo"));
+        assert!(enabled(&items, "Salir de Foot"));
+    }
+
+    #[test]
+    fn show_all_is_off_without_minimized_windows() {
+        let items = app_menu_items(
+            "Foot",
+            "foot",
+            &[
+                window("foot", "Yuki", true, false),
+                window("foot", "Otra", false, false),
+            ],
+        );
+        assert!(!enabled(&items, "Mostrar todo"));
+        assert!(!enabled(&items, "Ocultar otros"));
+    }
+
+    #[test]
+    fn window_menu_lists_only_the_app_windows_with_the_active_checked() {
+        let items = window_menu_items("Foot", "foot", &toplevels());
+        let listed: Vec<&MenuItem> = items
+            .iter()
+            .filter(|item| matches!(item, MenuItem::Action { id, .. } if id.starts_with("app-window-activate:")))
+            .collect();
+        assert_eq!(listed.len(), 2);
+        let names: Vec<&str> = listed.iter().filter_map(|item| label(item)).collect();
+        assert_eq!(names, vec!["Foot — Yuki", "Foot — Segunda ventana"]);
+        assert!(matches!(
+            listed[0],
+            MenuItem::Action {
+                check: CheckState::Checkbox(true),
+                ..
+            }
+        ));
+        assert!(matches!(
+            listed[1],
+            MenuItem::Action {
+                check: CheckState::Checkbox(false),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn window_menu_controls_are_enabled_and_the_rest_is_gray() {
+        let items = window_menu_items("Foot", "foot", &toplevels());
+        assert!(enabled(&items, "Minimizar"));
+        assert!(enabled(&items, "Maximizar"));
+        assert!(!enabled(&items, "Rellenar"));
+        assert!(!enabled(&items, "Centrar"));
+        assert!(enabled(&items, "Trasladar y redimensionar"));
+        assert!(enabled(&items, "Ventana a pantalla completa"));
+        assert!(enabled(&items, "Cerrar ventana"));
+        assert!(enabled(&items, "Traer todo al frente"));
+        assert!(!enabled(&items, "Quitar ventana del conjunto"));
+        assert!(!enabled(&items, "Mostrar pestaña anterior"));
+        assert!(!enabled(&items, "Mostrar pestaña siguiente"));
+        assert!(!enabled(&items, "Mover pestaña a una ventana nueva"));
+        assert!(!enabled(&items, "Unir todas las ventanas"));
+    }
+
+    #[test]
+    fn move_and_resize_submenu_has_headers_and_gray_items() {
+        let items = window_menu_items("Foot", "foot", &toplevels());
+        let Some(MenuItem::Submenu { items: layout, .. }) = items
+            .iter()
+            .find(|item| label(item) == Some("Trasladar y redimensionar"))
+        else {
+            panic!("missing the layout submenu");
+        };
+        assert_eq!(
+            labels(layout),
+            vec![
+                "Mitades",
+                "Izquierda",
+                "Derecha",
+                "Superior",
+                "Inferior",
+                "Cuartos",
+                "Parte superior izquierda",
+                "Parte superior derecha",
+                "Parte inferior izquierda",
+                "Parte inferior derecha",
+                "Disposición",
+                "Izquierda y derecha",
+                "Derecha e izquierda",
+                "Superior e inferior",
+                "Inferior y superior",
+                "Cuartos",
+                "Volver al tamaño anterior",
+            ]
+        );
+        assert!(matches!(layout[0], MenuItem::Header { .. }));
+        assert!(layout[1..].iter().all(|item| !is_enabled(item)));
+    }
+
+    #[test]
+    fn help_menu_has_the_search_field_and_only_the_report_enabled() {
+        let items = help_menu_items("Foot");
+        assert!(matches!(items[0], MenuItem::SearchField { .. }));
+        assert!(enabled(&items, "Informar de un problema…"));
+        assert!(!enabled(&items, "Ayuda de Foot"));
+        assert!(!enabled(&items, "Atajos de teclado de Yuki"));
+        assert!(!enabled(&items, "Documentación de Yuki"));
+    }
+}
