@@ -129,6 +129,10 @@ fn truncate_middle(text: &str, max_width: f32, font_size: f32) -> String {
 /// The magnifier drawn at the start of a search field.
 const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M10 10l3.2 3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
 
+/// Gap between the mark/icon column and the label, so an icon never touches
+/// the text and plain entries line up with the ones that carry one.
+const MARK_TEXT_GAP: f32 = 6.0;
+
 /// State of a check/radio mark in a menu item.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum CheckState {
@@ -286,7 +290,7 @@ impl MenuView {
             } else {
                 0.0
             };
-            let fixed = m.item_padding_x * 2.0 + m.mark_width + trailing;
+            let fixed = m.item_padding_x * 2.0 + m.mark_width + MARK_TEXT_GAP + trailing;
             let max_label_w = (max_content_width - fixed).max(0.0);
             let label = truncate_middle(label, max_label_w, m.font_size);
             let label_w = measure_text(&label, m.font_size);
@@ -736,6 +740,7 @@ fn render_item(
                 - inset * 2.0
                 - m.item_padding_x * 2.0
                 - m.mark_width
+                - MARK_TEXT_GAP
                 - if shortcut_w > 0.0 {
                     m.shortcut_gap + shortcut_w
                 } else {
@@ -792,6 +797,7 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
+                .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
                     icon,
                     check,
@@ -898,6 +904,7 @@ fn render_item(
             let left = rect()
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
+                .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
                     icon,
                     CheckState::None,
@@ -923,7 +930,7 @@ fn render_item(
                 0.0,
                 m.item_padding_x,
                 0.0,
-                m.item_padding_x + m.mark_width,
+                m.item_padding_x + m.mark_width + MARK_TEXT_GAP,
             ))
             .cross_align(Alignment::Center)
             .child(
@@ -1351,6 +1358,7 @@ mod tests {
         let shortcut_w = measure_text(&format_shortcut("Ctrl+Shift+G"), m.font_size);
         let expected_min = m.item_padding_x * 2.0
             + m.mark_width
+            + MARK_TEXT_GAP
             + label_w
             + m.shortcut_gap
             + shortcut_w
