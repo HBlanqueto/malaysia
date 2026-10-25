@@ -403,6 +403,8 @@ check() {
         printf 'dev.sh: slint-compiler not found; skipping demo.slint\n' >&2
     fi
     cargo clippy --workspace --all-targets -- -D warnings
+    cargo build -p yuki
+    "$script_dir/scripts/check-client-dispatch.sh"
     cargo test --workspace
 }
 
