@@ -66,13 +66,21 @@ pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
     let Ok(credentials) = getsockopt(stream, sockopt::PeerCredentials) else {
         return false;
     };
-    let Ok(exe) = std::fs::canonicalize(format!("/proc/{}/exe", credentials.pid())) else {
+    let pid = credentials.pid();
+    let Ok(exe) = std::fs::canonicalize(format!("/proc/{pid}/exe")) else {
         return false;
     };
-    is_trusted_shell_exe(&exe, &trusted_shell_exes())
+    let trusted = trusted_shell_exes();
+    let trusted_shell = is_trusted_shell_exe(&exe, &trusted);
+    tracing::debug!(pid, exe = ?exe, trusted = ?trusted, trusted_shell, "infinity trust check");
+    trusted_shell
 }
 
 /// Resolves the set of executable paths that are trusted as `yuki-shell`.
+///
+/// Covers the binary next to the compositor, the dev-shell debug/release
+/// builds, the Nix package wrapper directory, and an explicit override so the
+/// demo, the packaged session and manual launches all agree.
 fn trusted_shell_exes() -> Vec<PathBuf> {
     let mut exes = Vec::new();
     if let Some(path) = std::env::var_os("YUKI_SHELL_EXE")
@@ -80,10 +88,22 @@ fn trusted_shell_exes() -> Vec<PathBuf> {
     {
         exes.push(path);
     }
+
+    let mut candidate_dirs: Vec<PathBuf> = Vec::new();
     if let Some(dir) = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(PathBuf::from))
     {
+        candidate_dirs.push(dir);
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        for profile in ["debug", "release"] {
+            candidate_dirs.push(cwd.join("target").join(profile));
+        }
+        candidate_dirs.push(cwd.join("result").join("bin"));
+    }
+
+    for dir in candidate_dirs {
         for name in ["yuki-shell", ".yuki-shell-wrapped"] {
             if let Ok(path) = std::fs::canonicalize(dir.join(name))
                 && !exes.contains(&path)
@@ -99,11 +119,17 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
     fn bind(
         &self,
         state: &mut State,
-        _handle: &DisplayHandle,
-        _client: &Client,
+        handle: &DisplayHandle,
+        client: &Client,
         resource: New<InfinityWindowManagerV1>,
         data_init: &mut DataInit<'_, State>,
     ) {
+        let pid = client
+            .get_credentials(handle)
+            .ok()
+            .map(|creds| creds.pid)
+            .unwrap_or(0);
+        info!(pid, "infinity bound by trusted shell");
         let manager = data_init.init(resource, self.clone());
         state.infinity_managers.push(manager);
     }
@@ -483,6 +509,11 @@ mod tests {
         Rectangle::new(Point::from((0, 32)), Size::from((1280, 690)))
     }
 
+    fn workspace_1280_800() -> Rectangle<i32, Logical> {
+        // Output 1280×800, menu bar 28 px and dock 50 px (mockup 23).
+        Rectangle::new(Point::from((0, 28)), Size::from((1280, 722)))
+    }
+
     #[test]
     fn available_has_margin() {
         let rect = available(workspace());
@@ -582,6 +613,68 @@ mod tests {
         assert_eq!(rects[3].x(), 644.0);
         assert_eq!(rects[0].width(), 628.0);
         assert_eq!(rects[0].height(), 333.0);
+    }
+
+    #[test]
+    fn mockup_23_available_area() {
+        let rect = available(workspace_1280_800());
+        assert_eq!(rect.loc, Point::from((8, 36)));
+        assert_eq!(rect.size, Size::from((1264, 706)));
+    }
+
+    #[test]
+    fn mockup_23_left_half() {
+        let rect = arranged_rect(workspace_1280_800(), Layout::Left, window_size());
+        assert_eq!(rect.x(), 8.0);
+        assert_eq!(rect.y(), 36.0);
+        assert_eq!(rect.width(), 628.0);
+        assert_eq!(rect.height(), 706.0);
+    }
+
+    #[test]
+    fn mockup_23_right_half() {
+        let rect = arranged_rect(workspace_1280_800(), Layout::Right, window_size());
+        assert_eq!(rect.x(), 644.0);
+        assert_eq!(rect.y(), 36.0);
+        assert_eq!(rect.width(), 628.0);
+        assert_eq!(rect.height(), 706.0);
+    }
+
+    #[test]
+    fn mockup_23_top_and_bottom_halves() {
+        let top = arranged_rect(workspace_1280_800(), Layout::Top, window_size());
+        let bottom = arranged_rect(workspace_1280_800(), Layout::Bottom, window_size());
+        assert_eq!(top.y(), 36.0);
+        assert_eq!(top.height(), 349.0);
+        assert_eq!(bottom.y(), 393.0);
+        assert_eq!(bottom.height(), 349.0);
+    }
+
+    #[test]
+    fn mockup_23_quarters() {
+        let top_left = arranged_rect(workspace_1280_800(), Layout::TopLeft, window_size());
+        let bottom_right = arranged_rect(workspace_1280_800(), Layout::BottomRight, window_size());
+        assert_eq!(top_left.x(), 8.0);
+        assert_eq!(top_left.y(), 36.0);
+        assert_eq!(top_left.width(), 628.0);
+        assert_eq!(top_left.height(), 349.0);
+        assert_eq!(bottom_right.x(), 644.0);
+        assert_eq!(bottom_right.y(), 393.0);
+        assert_eq!(bottom_right.width(), 628.0);
+        assert_eq!(bottom_right.height(), 349.0);
+    }
+
+    #[test]
+    fn mockup_23_pair_side_by_side() {
+        let [left, right] = pair_rects(workspace_1280_800(), PairLayout::SideBySide);
+        assert_eq!(left.x(), 8.0);
+        assert_eq!(left.y(), 36.0);
+        assert_eq!(left.width(), 628.0);
+        assert_eq!(left.height(), 706.0);
+        assert_eq!(right.x(), 644.0);
+        assert_eq!(right.y(), 36.0);
+        assert_eq!(right.width(), 628.0);
+        assert_eq!(right.height(), 706.0);
     }
 
     #[test]

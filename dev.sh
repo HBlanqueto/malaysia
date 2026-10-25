@@ -820,6 +820,7 @@ demo() {
         _name=$1
         shift
         env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+            YUKI_SHELL_EXE="$_shell_bin" \
             "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
         _pids="$_pids $!"
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
