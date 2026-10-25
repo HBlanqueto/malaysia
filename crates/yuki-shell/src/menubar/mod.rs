@@ -32,9 +32,11 @@ use crate::desktop::DesktopEntry;
 ///
 /// 1. If a `.desktop` entry matches by id or `StartupWMClass`, use its
 ///    localized `Name`.
-/// 2. Otherwise, use the last non-empty segment of the app id with an
+/// 2. Otherwise, if an entry's `Exec` matches the app id (by its last
+///    non-trivial segment), use that entry's `Name`.
+/// 3. Otherwise, use the last non-empty segment of the app id with an
 ///    initial capital.
-/// 3. With no app id, the desktop is «Yuki».
+/// 4. With no app id, the desktop is «Yuki».
 pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> String {
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
         return "Yuki".to_string();
@@ -45,11 +47,22 @@ pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> Strin
     {
         return entry.name.clone();
     }
-    let segment = app_id
-        .rsplit('.')
-        .find(|segment| !segment.is_empty())
-        .unwrap_or(app_id);
-    capitalize(segment)
+    let stem = app_id_stem(app_id);
+    if let Some(entry) = entries.iter().find(|entry| exec_matches(entry, stem)) {
+        return entry.name.clone();
+    }
+    capitalize(stem)
+}
+
+/// Returns the last meaningful segment of an app id, skipping a trailing
+/// `.desktop` or generic suffixes like `desktop`.
+fn app_id_stem(app_id: &str) -> &str {
+    for segment in app_id.rsplit('.') {
+        if !segment.is_empty() && segment != "desktop" {
+            return segment;
+        }
+    }
+    app_id
 }
 
 fn capitalize(value: &str) -> String {
@@ -58,6 +71,15 @@ fn capitalize(value: &str) -> String {
         Some(first) => first.to_uppercase().chain(chars).collect(),
         None => String::new(),
     }
+}
+
+/// Whether the desktop entry's first `Exec` token contains the app id stem.
+fn exec_matches(entry: &DesktopEntry, stem: &str) -> bool {
+    let needle = stem.to_lowercase();
+    entry.exec.iter().any(|token| {
+        let token = token.to_lowercase();
+        token.contains(&needle) || needle.contains(&token)
+    })
 }
 
 /// The active window published by the compositor in `window.domain`.
@@ -209,6 +231,20 @@ mod tests {
         }
     }
 
+    fn entry_with_exec(id: &str, name: &str, exec: &[&str]) -> DesktopEntry {
+        DesktopEntry {
+            id: id.to_string(),
+            name: name.to_string(),
+            generic_name: None,
+            keywords: Vec::new(),
+            icon: None,
+            exec: exec.iter().map(|s| s.to_string()).collect(),
+            path: None,
+            terminal: false,
+            startup_wm_class: None,
+        }
+    }
+
     #[test]
     fn foot_resolves_through_its_desktop_entry() {
         let entries = vec![entry("foot", "Foot", None)];
@@ -234,6 +270,19 @@ mod tests {
     }
 
     #[test]
+    fn telegram_resolves_through_a_matching_exec_entry() {
+        let entries = vec![entry_with_exec(
+            "telegramdesktop",
+            "Telegram",
+            &["/usr/bin/telegram-desktop"],
+        )];
+        assert_eq!(
+            resolve_app_name(Some("org.telegram.desktop"), &entries),
+            "Telegram"
+        );
+    }
+
+    #[test]
     fn an_app_without_a_desktop_entry_uses_the_last_segment() {
         let entries = Vec::new();
         assert_eq!(
@@ -243,6 +292,15 @@ mod tests {
         assert_eq!(
             resolve_app_name(Some("com.example.my-app"), &entries),
             "My-app"
+        );
+    }
+
+    #[test]
+    fn trailing_desktop_segment_is_skipped_for_the_stem() {
+        let entries = Vec::new();
+        assert_eq!(
+            resolve_app_name(Some("org.telegram.desktop"), &entries),
+            "Telegram"
         );
     }
 
