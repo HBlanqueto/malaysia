@@ -237,6 +237,28 @@ mod tests {
     }
 
     #[test]
+    fn an_ssd_surface_is_clipped_at_the_frame_bottom() {
+        // A server-decorated window: the surface starts below the 32 px bar and
+        // still ends exactly at the frame's bottom edge, so the bottom corners
+        // are rounded by the shared clip rectangle.
+        let src = Rectangle::from_size(Size::from((400.0, 268.0)));
+        let dst = Rectangle::new(Point::from((10, 52)), Size::from((400, 268)));
+        let frame = Rectangle::new(Point::from((10, 20)), Size::from((400, 300)));
+        let geo = frame_to_texture_geometry(src, dst, frame);
+        assert!((geo[1] + geo[3] - src.size.h as f32).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_subsurface_at_the_bottom_shares_the_frame_corner() {
+        let src = Rectangle::from_size(Size::from((200.0, 100.0)));
+        let dst = Rectangle::new(Point::from((10, 220)), Size::from((200, 100)));
+        let frame = Rectangle::new(Point::from((10, 20)), Size::from((200, 300)));
+        let geo = frame_to_texture_geometry(src, dst, frame);
+        // The subsurface buffer's bottom edge is the frame's bottom edge.
+        assert!((geo[1] + geo[3] - src.size.h as f32).abs() < 0.01);
+    }
+
+    #[test]
     fn texture_radius_scales_with_the_source_to_dest_ratio() {
         let src = Rectangle::from_size(Size::from((400.0, 200.0)));
         let dst = Rectangle::new(Point::from((0, 0)), Size::from((200, 100)));
