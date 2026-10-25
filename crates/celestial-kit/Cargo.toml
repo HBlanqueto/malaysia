@@ -28,6 +28,8 @@ sctk.workspace = true
 calloop.workspace = true
 wayland-client.workspace = true
 wayland-egl.workspace = true
+wayland-scanner.workspace = true
+wayland-backend = "0.3"
 khronos-egl = { workspace = true, features = ["dynamic"] }
 futures-util.workspace = true
 futures-channel.workspace = true

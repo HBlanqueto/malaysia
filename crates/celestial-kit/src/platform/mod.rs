@@ -10,6 +10,7 @@
 //! The event loop is calloop (the same one the shell already uses); Freya's
 //! futures are polled from its ping source, never from a runtime thread.
 
+mod infinity;
 mod input;
 
 use std::{
@@ -117,6 +118,9 @@ use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
 use wayland_egl::WlEglSurface;
 
+pub use infinity::{
+    InfinityWindowManagerV1, Layout as InfinityLayout, PairLayout as InfinityPairLayout,
+};
 pub use sctk::reexports::client::backend::ObjectId;
 
 /// The Wayland EGL platform (`EGL_PLATFORM_WAYLAND_KHR`/`EXT`).
@@ -984,6 +988,7 @@ pub struct ToplevelInfo {
     pub active: bool,
     pub maximized: bool,
     pub minimized: bool,
+    pub restorable: bool,
 }
 
 /// A change that only touches one toplevel's metadata. Kept pure so the
@@ -1026,6 +1031,7 @@ fn apply_info_event(infos: &mut Vec<ToplevelInfo>, index: usize, event: InfoEven
 struct ToplevelEntry {
     list: Option<ExtForeignToplevelHandleV1>,
     mgmt: Option<ZwlrForeignToplevelHandleV1>,
+    restorable: bool,
     info: ToplevelInfo,
 }
 
@@ -1033,6 +1039,9 @@ struct ToplevelEntry {
 /// [`Toplevels::list`] and calls [`Toplevels::activate`] on a click.
 type Activate = Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>;
 type Maximize = Rc<RefCell<Option<Rc<dyn Fn(usize, bool)>>>>;
+type Arrange = Rc<RefCell<Option<Rc<dyn Fn(usize, InfinityLayout)>>>>;
+type ArrangePair = Rc<RefCell<Option<Rc<dyn Fn(InfinityPairLayout)>>>>;
+type ArrangeQuarters = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
 
 #[derive(Clone)]
 pub struct Toplevels {
@@ -1042,6 +1051,11 @@ pub struct Toplevels {
     minimize: Activate,
     maximize: Maximize,
     unminimize: Activate,
+    arrange: Arrange,
+    arrange_pair: ArrangePair,
+    arrange_quarters: ArrangeQuarters,
+    restore: Activate,
+    set_fullscreen: Maximize,
 }
 
 impl Toplevels {
@@ -1084,6 +1098,41 @@ impl Toplevels {
         let len = self.list.read().len();
         for index in 0..len {
             self.minimize(index);
+        }
+    }
+
+    /// Arranges the toplevel at `index` in the requested Infinity layout.
+    pub fn arrange(&self, index: usize, layout: InfinityLayout) {
+        if let Some(f) = self.arrange.borrow().as_ref() {
+            f(index, layout);
+        }
+    }
+
+    /// Tiles the active and previous toplevels as a pair.
+    pub fn arrange_pair(&self, layout: InfinityPairLayout) {
+        if let Some(f) = self.arrange_pair.borrow().as_ref() {
+            f(layout);
+        }
+    }
+
+    /// Tiles the four most recent toplevels in quarters.
+    pub fn arrange_quarters(&self) {
+        if let Some(f) = self.arrange_quarters.borrow().as_ref() {
+            f();
+        }
+    }
+
+    /// Restores the toplevel at `index` to its pre-arrange rectangle.
+    pub fn restore(&self, index: usize) {
+        if let Some(f) = self.restore.borrow().as_ref() {
+            f(index);
+        }
+    }
+
+    /// Sets or unsets fullscreen on the toplevel at `index`.
+    pub fn set_fullscreen(&self, index: usize, fullscreen: bool) {
+        if let Some(f) = self.set_fullscreen.borrow().as_ref() {
+            f(index, fullscreen);
         }
     }
 }
@@ -1343,6 +1392,7 @@ struct Shell {
     qh: QueueHandle<Shell>,
     _foreign_list: Option<ExtForeignToplevelListV1>,
     _foreign_mgmt: Option<ZwlrForeignToplevelManagerV1>,
+    _infinity_manager: Rc<RefCell<Option<InfinityWindowManagerV1>>>,
     toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>>,
     toplevels: Toplevels,
     session_unlock: Option<SessionUnlock>,
@@ -1706,6 +1756,15 @@ impl Shell {
         let maximize_entries = toplevel_entries.clone();
         let unminimize_entries = toplevel_entries.clone();
         let activate_entries = toplevel_entries.clone();
+        let arrange_entries = toplevel_entries.clone();
+        let restore_entries = toplevel_entries.clone();
+        let fullscreen_entries = toplevel_entries.clone();
+        let infinity_manager = Rc::new(RefCell::new(None::<InfinityWindowManagerV1>));
+        let infinity_manager_arrange = infinity_manager.clone();
+        let infinity_manager_pair = infinity_manager.clone();
+        let infinity_manager_quarters = infinity_manager.clone();
+        let infinity_manager_restore = infinity_manager.clone();
+        let infinity_manager_fullscreen = infinity_manager.clone();
         let toplevels = Toplevels {
             list: State::create_global(Vec::new()),
             activate: Rc::new(RefCell::new(None)),
@@ -1741,6 +1800,40 @@ impl Shell {
                     mgmt.unset_minimized();
                 }
             })))),
+            arrange: Rc::new(RefCell::new(Some(Rc::new(move |index, layout| {
+                if let Some(entry) = arrange_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                    && let Some(manager) = infinity_manager_arrange.borrow().as_ref()
+                {
+                    manager.arrange(mgmt, layout);
+                }
+            })))),
+            arrange_pair: Rc::new(RefCell::new(Some(Rc::new(move |layout| {
+                if let Some(manager) = infinity_manager_pair.borrow().as_ref() {
+                    manager.arrange_pair(layout);
+                }
+            })))),
+            arrange_quarters: Rc::new(RefCell::new(Some(Rc::new(move || {
+                if let Some(manager) = infinity_manager_quarters.borrow().as_ref() {
+                    manager.arrange_quarters();
+                }
+            })))),
+            restore: Rc::new(RefCell::new(Some(Rc::new(move |index| {
+                if let Some(entry) = restore_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                    && let Some(manager) = infinity_manager_restore.borrow().as_ref()
+                {
+                    manager.restore(mgmt);
+                }
+            })))),
+            set_fullscreen: Rc::new(RefCell::new(Some(Rc::new(move |index, fullscreen| {
+                if let Some(entry) = fullscreen_entries.borrow().get(index)
+                    && let Some(mgmt) = &entry.mgmt
+                    && let Some(manager) = infinity_manager_fullscreen.borrow().as_ref()
+                {
+                    manager.set_fullscreen(mgmt, fullscreen as u32);
+                }
+            })))),
         };
         let foreign_list = globals
             .bind::<ExtForeignToplevelListV1, _, _>(&qh, 1..=1, ())
@@ -1748,6 +1841,10 @@ impl Shell {
         let foreign_mgmt = globals
             .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 3..=3, ())
             .ok();
+        let infinity_manager_bound = globals
+            .bind::<InfinityWindowManagerV1, _, _>(&qh, 1..=1, ())
+            .ok();
+        *infinity_manager.borrow_mut() = infinity_manager_bound;
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
         // `SeatState::new` binds the seats that already exist without calling
         // `SeatHandler::new_seat`, so remember one here for activation and
@@ -1801,6 +1898,7 @@ impl Shell {
             qh: qh.clone(),
             _foreign_list: foreign_list,
             _foreign_mgmt: foreign_mgmt,
+            _infinity_manager: infinity_manager,
             toplevel_entries,
             toplevels,
             session_unlock: None,
@@ -2341,7 +2439,11 @@ impl Shell {
             .toplevel_entries
             .borrow()
             .iter()
-            .map(|entry| entry.info.clone())
+            .map(|entry| {
+                let mut info = entry.info.clone();
+                info.restorable = entry.restorable;
+                info
+            })
             .collect();
         let mut list = self.toplevels.list;
         if *list.peek() != infos {
@@ -3124,6 +3226,7 @@ impl Dispatch<ExtForeignToplevelListV1, (), Shell> for Shell {
             state.toplevel_entries.borrow_mut().push(ToplevelEntry {
                 list: Some(toplevel),
                 mgmt: None,
+                restorable: false,
                 info: ToplevelInfo::default(),
             });
             state.sync_toplevels();
@@ -3191,6 +3294,7 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, (), Shell> for Shell {
             state.toplevel_entries.borrow_mut().push(ToplevelEntry {
                 list: None,
                 mgmt: Some(toplevel),
+                restorable: false,
                 info: ToplevelInfo::default(),
             });
             state.sync_toplevels();
@@ -3278,6 +3382,31 @@ impl Dispatch<XdgActivationTokenV1, usize> for Shell {
                 .and_then(Option::take)
         {
             callback(Some(token));
+        }
+    }
+}
+
+impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
+    fn event(
+        state: &mut Self,
+        _: &InfinityWindowManagerV1,
+        event: <InfinityWindowManagerV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        use infinity::protocol::infinity_window_manager_v1::Event;
+        let Event::Restorable { handle, restorable } = event;
+        let restorable = restorable != 0;
+        for entry in state.toplevel_entries.borrow_mut().iter_mut() {
+            if entry
+                .mgmt
+                .as_ref()
+                .is_some_and(|mgmt| mgmt.id() == handle.id())
+            {
+                entry.restorable = restorable;
+                break;
+            }
         }
     }
 }
