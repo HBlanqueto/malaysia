@@ -355,30 +355,30 @@ impl Windows {
             self.windows[index].placed = true;
         }
 
-        // If a normal window commits a buffer whose size differs from what we
-        // had configured, the client is answering a configure with its own
-        // constraints (e.g. a terminal's cell grid). Follow it, keeping the
-        // window centered.
+        // A normal window may commit a buffer at a size other than the one it
+        // was configured (a terminal's cell grid, a client that ignored a
+        // resize). Follow the committed geometry so placement, rendering and
+        // hit-testing all stay on what the client actually drew.
         let should_resize = {
             let data = &self.windows[index];
             if !data.mapped || data.resizing || data.state() != WindowState::Normal {
                 None
-            } else if let Some(buffer_size) =
-                with_renderer_surface_state(surface, |state| state.surface_size()).flatten()
-            {
-                (buffer_size != data.outer_size).then_some((data.id, buffer_size))
             } else {
-                None
+                let insets = data.insets(self.decoration_of(data.id));
+                committed_size(surface).and_then(|client| {
+                    let outer = committed_outer(Some(client), insets);
+                    (outer != data.outer_size).then_some((data.id, outer))
+                })
             }
         };
-        if let Some((id, buffer_size)) = should_resize {
-            let origin = center_origin(buffer_size, workspace);
+        if let Some((id, outer_size)) = should_resize {
+            let origin = center_origin(outer_size, workspace);
             let outer = SceneRect::new(
                 ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
-                SceneSize::new(f64::from(buffer_size.w), f64::from(buffer_size.h)),
+                SceneSize::new(f64::from(outer_size.w), f64::from(outer_size.h)),
             );
             if self.scene.set_outer(id, outer) {
-                self.windows[index].outer_size = buffer_size;
+                self.windows[index].outer_size = outer_size;
                 self.windows[index].origin = origin;
                 self.send_configure(index);
             }
@@ -1197,6 +1197,33 @@ mod tests {
             client_point(outer, insets, Point::new(110.0, 100.0)),
             Some(Point::new(10.0, 6.0))
         );
+    }
+
+    #[test]
+    fn a_configured_1280x708_window_that_committed_640x420_only_hits_inside_it() {
+        use yuki_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
+        use yuki_scene::scene::{Scene, WindowId};
+
+        // The compositor may have configured 1280×708, but the client drew a
+        // 640×420 buffer. Hit-testing walks the scene's committed geometry, so
+        // the empty strip outside the buffer is not part of the window.
+        let outer = committed_outer(Some(size(640, 420)), Insets::ZERO);
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        scene.insert(
+            window,
+            SceneRect::new(
+                ScenePoint::new(0.0, 0.0),
+                SceneSize::new(f64::from(outer.w), f64::from(outer.h)),
+            ),
+        );
+
+        assert_eq!(
+            scene.topmost_at(ScenePoint::new(639.0, 419.0)),
+            Some(window)
+        );
+        assert_eq!(scene.topmost_at(ScenePoint::new(640.0, 420.0)), None);
+        assert_eq!(scene.topmost_at(ScenePoint::new(1000.0, 354.0)), None);
     }
 
     #[test]
