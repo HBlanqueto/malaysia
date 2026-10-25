@@ -55,8 +55,9 @@ pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 /// The actions go through the same paths as a host pointer and keyboard;
 /// they do not call a client directly. `move:x,y` moves, `click:x,y` presses
 /// and releases after [`TEST_CLICK_HOLD`] (so an xdg popup can grab with the
-/// press serial), `key:<name>` presses and releases a named key after
-/// [`TEST_KEY_HOLD`], and `wait:ms` pauses. Actions are separated by `;`.
+/// press serial), `doubleclick:x,y` sends two such clicks with no step between
+/// them, `key:<name>` presses and releases a named key after [`TEST_KEY_HOLD`],
+/// and `wait:ms` pauses. Actions are separated by `;`.
 #[derive(Debug, Default)]
 pub(crate) struct TestPointer {
     actions: VecDeque<TestPointerAction>,
@@ -137,6 +138,19 @@ impl TestPointer {
                 if let Some((x, y)) = parse_pair_value(rest) {
                     let point = Point::new(x, y);
                     actions.push_back(TestPointerAction::Move(point));
+                    actions.push_back(TestPointerAction::Press(point));
+                    actions.push_back(TestPointerAction::Wait(TEST_CLICK_HOLD));
+                    actions.push_back(TestPointerAction::Release);
+                }
+            } else if let Some(rest) = part.strip_prefix("doubleclick:") {
+                if let Some((x, y)) = parse_pair_value(rest) {
+                    let point = Point::new(x, y);
+                    // Two presses close enough in time for the titlebar's
+                    // double-click rule, without the step between clicks.
+                    actions.push_back(TestPointerAction::Move(point));
+                    actions.push_back(TestPointerAction::Press(point));
+                    actions.push_back(TestPointerAction::Wait(TEST_CLICK_HOLD));
+                    actions.push_back(TestPointerAction::Release);
                     actions.push_back(TestPointerAction::Press(point));
                     actions.push_back(TestPointerAction::Wait(TEST_CLICK_HOLD));
                     actions.push_back(TestPointerAction::Release);
@@ -628,14 +642,11 @@ impl State {
             tracing::info!(?location, "press ignored: the session is locked");
             return;
         }
-        // If the pointer never moved over this surface (common for the first
-        // click on a freshly-mapped window), it has no focus yet. Send a motion
-        // event first so the following button reaches the right surface.
-        if let Some(pointer) = self.seat.get_pointer()
-            && pointer.current_focus().is_none()
-        {
-            self.pointer_motion(location, time);
-        }
+        // The pointer focus may be stale: a window can map or be raised under
+        // a stationary pointer, and the press must reach the surface the
+        // compositor just hit-tested, not whatever held the focus before.
+        // Recompute it through the real motion path before the button goes out.
+        self.pointer_motion(location, time);
         // Top/Overlay layers are rendered above popups, so a press on the
         // menubar (or any other front layer) must dismiss open popups first
         // and then reach the layer itself.
