@@ -217,8 +217,9 @@ pub enum MenuItem {
         /// Leading SVG icon, drawn in the mark column.
         icon: Option<&'static str>,
     },
-    /// A non-selectable group header.
-    Header { label: String },
+    /// A non-selectable group header. `count` is shown on the right when the
+    /// header introduces a scrollable search-result section.
+    Header { label: String, count: Option<usize> },
     /// A visual separator.
     Separator,
     /// A non-selectable search field. Visual only for now.
@@ -254,7 +255,7 @@ impl MenuItem {
         match self {
             MenuItem::Action { label, .. }
             | MenuItem::Submenu { label, .. }
-            | MenuItem::Header { label } => Some(label),
+            | MenuItem::Header { label, .. } => Some(label),
             MenuItem::SearchResult { item, .. } => item.label(),
             MenuItem::Separator | MenuItem::SearchField { .. } => None,
         }
@@ -377,6 +378,11 @@ impl MenuView {
         self
     }
 
+    /// Maximum number of visible menu search-result rows.
+    pub const MAX_MENU_ROWS: usize = 9;
+    /// Maximum number of visible help search-result rows.
+    pub const MAX_HELP_ROWS: usize = 5;
+
     /// Returns the logical size needed to render `items` with `palette`.
     ///
     /// Labels are measured with Skia and truncated in the middle with "…" when
@@ -495,24 +501,46 @@ impl App for MenuView {
                 *state.borrow_mut() = current;
             }
         }
-        let visible = visible_items(
-            &items,
+
+        let (menu_results, help_results) = search_result_lists(
             searchable.as_deref().map(|v| v.as_slice()),
             help_search.as_deref().map(|v| v.as_slice()),
             &query_text,
-        );
+        )
+        .unwrap_or_default();
+        let mut menu_scroll = use_state(|| 0usize);
+        let mut help_scroll = use_state(|| 0usize);
 
-        // Resize the popup when the query changes so the results stay visible.
+        // Reset scroll when the query changes so the user starts at the top.
         if prev_query.borrow().as_str() != query_text {
             *prev_query.borrow_mut() = query_text.clone();
+            menu_scroll.set(0);
+            help_scroll.set(0);
             if let (Some(popup), Some(spec)) = (&popup, &popup_spec) {
-                let new_size = MenuView::preferred_size(&visible, m);
+                let preview = if query_text.is_empty() {
+                    (*items).clone()
+                } else {
+                    visible_items(&items, &menu_results, &help_results, 0, 0)
+                };
+                let new_size = MenuView::preferred_size(&preview, m);
                 popup.reposition(PopupSpec {
                     size: (new_size.0 as u32, new_size.1 as u32),
                     ..spec.clone()
                 });
             }
         }
+
+        let visible = if query_text.is_empty() {
+            (*items).clone()
+        } else {
+            visible_items(
+                &items,
+                &menu_results,
+                &help_results,
+                *menu_scroll.read(),
+                *help_scroll.read(),
+            )
+        };
 
         let results_start = visible
             .iter()
@@ -526,6 +554,8 @@ impl App for MenuView {
         } else {
             0
         };
+        let menu_section = find_result_section(&visible, SearchSource::Menu);
+        let help_section = find_result_section(&visible, SearchSource::Help);
 
         let focused_index = *focused.read();
         let result_focused_index = *result_focused.read();
@@ -641,21 +671,47 @@ impl App for MenuView {
             let mut query = query;
             let mut result_focused = result_focused;
             let mut selected = selected;
+            let mut menu_scroll = menu_scroll;
+            let mut help_scroll = help_scroll;
             let open_child_id = open_child_id.clone();
             let current = *focused.read();
             let query_text = (*query.read()).clone();
             let result_current = *result_focused.read();
             let searching = has_search && !query_text.is_empty();
             let is_selected = *selected.read();
+            let menu_results_len = menu_results.len();
+            let help_results_len = help_results.len();
             match event.key {
                 Key::Named(NamedKey::ArrowDown) => {
                     selected.set(false);
                     if searching {
                         if results_count > 0 {
                             let start = results_start.unwrap();
-                            let next = result_current
-                                .map_or(start, |i| (i + 1).min(start + results_count - 1));
-                            result_focused.set(Some(next));
+                            let end = start + results_count - 1;
+                            if let Some(i) = result_current {
+                                if i < end {
+                                    result_focused.set(Some(i + 1));
+                                } else {
+                                    if let Some((m_start, m_count)) = menu_section {
+                                        let m_end = m_start + m_count - 1;
+                                        if i == m_end
+                                            && *menu_scroll.read() + m_count < menu_results_len
+                                        {
+                                            menu_scroll.set(*menu_scroll.read() + 1);
+                                        }
+                                    }
+                                    if let Some((h_start, h_count)) = help_section {
+                                        let h_end = h_start + h_count - 1;
+                                        if i == h_end
+                                            && *help_scroll.read() + h_count < help_results_len
+                                        {
+                                            help_scroll.set(*help_scroll.read() + 1);
+                                        }
+                                    }
+                                }
+                            } else {
+                                result_focused.set(Some(start));
+                            }
                         }
                     } else {
                         focused.set(next_selectable(&items, current, 1));
@@ -666,10 +722,26 @@ impl App for MenuView {
                     if searching {
                         if results_count > 0 {
                             let start = results_start.unwrap();
-                            let prev = result_current.map_or(start + results_count - 1, |i| {
-                                i.saturating_sub(1).max(start)
-                            });
-                            result_focused.set(Some(prev));
+                            if let Some(i) = result_current {
+                                if i > start {
+                                    result_focused.set(Some(i - 1));
+                                } else {
+                                    if let Some((m_start, _m_count)) = menu_section
+                                        && i == m_start
+                                        && *menu_scroll.read() > 0
+                                    {
+                                        menu_scroll.set(*menu_scroll.read() - 1);
+                                    }
+                                    if let Some((h_start, _h_count)) = help_section
+                                        && i == h_start
+                                        && *help_scroll.read() > 0
+                                    {
+                                        help_scroll.set(*help_scroll.read() - 1);
+                                    }
+                                }
+                            } else {
+                                result_focused.set(Some(start + results_count - 1));
+                            }
                         }
                     } else {
                         focused.set(next_selectable(&items, current, -1));
@@ -931,35 +1003,94 @@ fn normalize_query(text: &str) -> String {
         .replace('Ñ', "n")
 }
 
+/// Score for search-result ordering: lower is better.
+///
+/// Enabled entries come before disabled ones. Within each group, a prefix
+/// match beats a word-start match, which beats a substring match.
+fn word_start(name: &str, query: &str) -> bool {
+    name.char_indices().any(|(index, _)| {
+        if index == 0 {
+            return false;
+        }
+        let before = name[..index].chars().next_back();
+        let boundary = before.is_none_or(|ch| !ch.is_alphanumeric());
+        boundary && name[index..].starts_with(query)
+    })
+}
+
+fn search_score(label: &str, query: &str, enabled: bool) -> u8 {
+    let normalized = normalize_query(label);
+    let base = if normalized.starts_with(query) {
+        0
+    } else if word_start(&normalized, query) {
+        1
+    } else {
+        2
+    };
+    if enabled { base } else { base + 3 }
+}
+
 fn filter_search_results(query: &str, searchable: &[SearchableEntry]) -> Vec<SearchableEntry> {
     let normalized = normalize_query(query);
-    searchable
+    let mut matches: Vec<(u8, &SearchableEntry)> = searchable
         .iter()
-        .filter(|entry| {
-            entry
-                .item
-                .label()
-                .is_some_and(|label| normalize_query(label).contains(&normalized))
+        .filter_map(|entry| {
+            let label = entry.item.label()?;
+            if !normalize_query(label).contains(&normalized) {
+                return None;
+            }
+            let score = search_score(label, &normalized, entry.item.enabled());
+            Some((score, entry))
         })
-        .cloned()
+        .collect();
+    matches.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.item.label().cmp(&b.1.item.label()))
+    });
+    matches
+        .into_iter()
+        .map(|(_, entry)| entry.clone())
         .collect()
 }
 
 /// Builds the items actually rendered: the original list when there is no
 /// active query, or the search field + results + the original help items when
 /// there is.
-fn visible_items(
-    items: &[MenuItem],
+///
+/// `menu_scroll` and `help_scroll` are the indices of the first result shown
+/// in each scrollable section. The caller updates them when the highlighted
+/// row moves outside the viewport.
+fn search_result_lists(
     searchable: Option<&[SearchableEntry]>,
     help_search: Option<&[SearchableEntry]>,
     query: &str,
-) -> Vec<MenuItem> {
-    let Some(searchable) = searchable else {
-        return items.to_vec();
-    };
+) -> Option<(Vec<SearchableEntry>, Vec<SearchableEntry>)> {
+    let searchable = searchable?;
     if query.is_empty() {
-        return items.to_vec();
+        return None;
     }
+    Some((
+        filter_search_results(query, searchable),
+        help_search
+            .map(|list| filter_search_results(query, list))
+            .unwrap_or_default(),
+    ))
+}
+
+/// Builds the items actually rendered: the original list when there is no
+/// active query, or the search field + results + the original help items when
+/// there is.
+///
+/// `menu_scroll` and `help_scroll` are the indices of the first result shown
+/// in each scrollable section. The caller updates them when the highlighted
+/// row moves outside the viewport.
+fn visible_items(
+    items: &[MenuItem],
+    menu_results: &[SearchableEntry],
+    help_results: &[SearchableEntry],
+    menu_scroll: usize,
+    help_scroll: usize,
+) -> Vec<MenuItem> {
     let mut out = Vec::new();
     let mut saw_search = false;
     for item in items {
@@ -975,21 +1106,21 @@ fn visible_items(
         });
     }
 
-    let menu_results = filter_search_results(query, searchable);
-    let help_results = help_search
-        .map(|list| filter_search_results(query, list))
-        .unwrap_or_default();
-
     if !menu_results.is_empty() {
         out.push(MenuItem::Header {
             label: "Ítems del menú".to_string(),
+            count: Some(menu_results.len()),
         });
-        for entry in menu_results {
+        for entry in menu_results
+            .iter()
+            .skip(menu_scroll)
+            .take(MenuView::MAX_MENU_ROWS)
+        {
             out.push(MenuItem::SearchResult {
-                path: entry.path,
-                item: Box::new(entry.item),
+                path: entry.path.clone(),
+                item: Box::new(entry.item.clone()),
                 source: SearchSource::Menu,
-                location: entry.location,
+                location: entry.location.clone(),
             });
         }
     }
@@ -997,11 +1128,16 @@ fn visible_items(
     if !help_results.is_empty() {
         out.push(MenuItem::Header {
             label: "Temas de ayuda".to_string(),
+            count: Some(help_results.len()),
         });
-        for entry in help_results {
+        for entry in help_results
+            .iter()
+            .skip(help_scroll)
+            .take(MenuView::MAX_HELP_ROWS)
+        {
             out.push(MenuItem::SearchResult {
-                path: entry.path,
-                item: Box::new(entry.item),
+                path: entry.path.clone(),
+                item: Box::new(entry.item.clone()),
                 source: SearchSource::Help,
                 location: None,
             });
@@ -1009,7 +1145,7 @@ fn visible_items(
     }
 
     // The "Show all help topics" footer is always present when searching.
-    if help_search.is_some() {
+    if !help_results.is_empty() || !menu_results.is_empty() {
         out.push(MenuItem::Separator);
         out.push(MenuItem::SearchResult {
             path: "Temas de ayuda".to_string(),
@@ -1033,6 +1169,24 @@ fn visible_items(
         }
     }
     out
+}
+
+fn find_result_section(items: &[MenuItem], source: SearchSource) -> Option<(usize, usize)> {
+    let start = items.iter().position(|item| {
+        matches!(item,
+            MenuItem::SearchResult { source: s, .. } if *s == source
+        )
+    })?;
+    let count = items
+        .iter()
+        .skip(start)
+        .take_while(|item| {
+            matches!(item,
+                MenuItem::SearchResult { source: s, .. } if *s == source
+            )
+        })
+        .count();
+    Some((start, count))
 }
 
 fn item_top(index: usize, items: &[MenuItem], m: MenuPalette) -> f32 {
@@ -1425,22 +1579,37 @@ fn render_item(
                 .child(chevron_element(chevron_fg(enabled, is_focused, m), m))
                 .into_element()
         }
-        MenuItem::Header { label: header } => rect()
-            .width(Size::fill())
-            .height(Size::px(m.header_height))
-            .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
-            .direction(Direction::Vertical)
-            .main_align(Alignment::End)
-            .cross_align(Alignment::Start)
-            .child(
-                label()
-                    .text(header.clone())
-                    .font_size(m.header_font_size)
-                    .font_weight(m.header_weight)
-                    .color(rgba(m.disabled_fg))
-                    .max_lines(1),
-            )
-            .into_element(),
+        MenuItem::Header {
+            label: header,
+            count,
+        } => {
+            let mut row = rect()
+                .width(Size::fill())
+                .height(Size::px(m.header_height))
+                .padding(Gaps::new(0.0, m.item_padding_x, 0.0, m.item_padding_x))
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::SpaceBetween)
+                .cross_align(Alignment::End)
+                .child(
+                    label()
+                        .text(header.clone())
+                        .font_size(m.header_font_size)
+                        .font_weight(m.header_weight)
+                        .color(rgba(m.disabled_fg))
+                        .max_lines(1),
+                );
+            if let Some(count) = count {
+                row = row.child(
+                    label()
+                        .text(format!("{count}"))
+                        .font_size(m.header_font_size)
+                        .font_weight(m.header_weight)
+                        .color(rgba(m.disabled_fg))
+                        .max_lines(1),
+                );
+            }
+            row.into_element()
+        }
         MenuItem::SearchField { placeholder } => {
             let mut query = query;
             let mut selected = selected;
@@ -1886,6 +2055,7 @@ mod tests {
             },
             MenuItem::Header {
                 label: "Mitades".to_string(),
+                count: None,
             },
             MenuItem::Action {
                 id: "a".to_string(),
@@ -1897,6 +2067,7 @@ mod tests {
             },
             MenuItem::Header {
                 label: "Cuartos".to_string(),
+                count: None,
             },
             MenuItem::SearchField {
                 placeholder: "Filtrar".to_string(),
@@ -2134,5 +2305,112 @@ mod tests {
             h >= expected_height,
             "menu height {h} should fit two rows ({expected_height})"
         );
+    }
+
+    fn searchable(label: &str, enabled: bool) -> SearchableEntry {
+        SearchableEntry {
+            path: "Ventana".to_string(),
+            item: MenuItem::Action {
+                id: format!("id-{label}"),
+                label: label.to_string(),
+                shortcut: None,
+                enabled,
+                check: CheckState::None,
+                icon: None,
+            },
+            location: None,
+            source: SearchSource::Menu,
+        }
+    }
+
+    #[test]
+    fn search_orders_enabled_before_disabled_and_word_start_before_substring() {
+        let entries = vec![
+            searchable("zzz foo", false),
+            searchable("foo bar", true),
+            searchable("bar foo", true),
+            searchable("afoo", true),
+        ];
+        let results = filter_search_results("foo", &entries);
+        let labels: Vec<&str> = results.iter().map(|e| e.item.label().unwrap()).collect();
+        // Enabled first; within enabled, word-start (foo bar) before substring (bar foo, afoo).
+        assert_eq!(labels, vec!["foo bar", "bar foo", "afoo", "zzz foo"]);
+    }
+
+    #[test]
+    fn visible_items_limits_menu_results_to_nine_rows() {
+        let items = vec![
+            MenuItem::SearchField {
+                placeholder: "Buscar".to_string(),
+            },
+            MenuItem::Action {
+                id: "report".to_string(),
+                label: "Informar".to_string(),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            },
+        ];
+        let searchable: Vec<SearchableEntry> = (0..24)
+            .map(|i| searchable(&format!("result {i}"), true))
+            .collect();
+        let visible = visible_items(&items, &searchable, &[], 0, 0);
+        let menu_header = visible.iter().find(
+            |item| matches!(item, MenuItem::Header { label, .. } if label == "Ítems del menú"),
+        );
+        assert!(menu_header.is_some());
+        let count = match menu_header {
+            Some(MenuItem::Header { count, .. }) => *count,
+            _ => None,
+        };
+        assert_eq!(count, Some(24));
+        let menu_result_count = visible
+            .iter()
+            .filter(|item| {
+                matches!(
+                    item,
+                    MenuItem::SearchResult {
+                        source: SearchSource::Menu,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(menu_result_count, MenuView::MAX_MENU_ROWS);
+    }
+
+    #[test]
+    fn visible_items_scrolls_to_keep_twelfth_result_visible() {
+        let items = vec![MenuItem::SearchField {
+            placeholder: "Buscar".to_string(),
+        }];
+        let searchable: Vec<SearchableEntry> = (0..24)
+            .map(|i| searchable(&format!("result {i}"), true))
+            .collect();
+        // Scroll so the 12th result (index 11) is at the top of the viewport.
+        let scroll = 11;
+        let visible = visible_items(&items, &searchable, &[], scroll, 0);
+        let first_label = visible
+            .iter()
+            .find_map(|item| match item {
+                MenuItem::SearchResult { item, .. } => item.label(),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(first_label, "result 11");
+        let menu_result_count = visible
+            .iter()
+            .filter(|item| {
+                matches!(
+                    item,
+                    MenuItem::SearchResult {
+                        source: SearchSource::Menu,
+                        ..
+                    }
+                )
+            })
+            .count();
+        assert_eq!(menu_result_count, MenuView::MAX_MENU_ROWS);
     }
 }

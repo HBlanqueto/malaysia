@@ -640,6 +640,7 @@ fn active_id(prefix: &str, active: Option<usize>) -> String {
 fn header(label: &str) -> MenuItem {
     MenuItem::Header {
         label: label.to_string(),
+        count: None,
     }
 }
 
@@ -684,7 +685,7 @@ mod tests {
         match item {
             MenuItem::Action { label, .. }
             | MenuItem::Submenu { label, .. }
-            | MenuItem::Header { label } => Some(label),
+            | MenuItem::Header { label, .. } => Some(label),
             _ => None,
         }
     }
