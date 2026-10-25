@@ -188,6 +188,12 @@ impl CompositorHandler for State {
             self.inject_test_press(mapped);
             self.inject_test_screenshot();
         }
+        if let Some(id) = self.windows.id_of(surface)
+            && self.focused_window() == Some(id)
+            && !self.windows.is_visible(id, &self.minimized)
+        {
+            self.clear_keyboard_focus();
+        }
         self.popup_commit(surface);
         // A mapped surface that commits damage or asks for a frame callback
         // must reach the next output repaint. Without this, a popup that

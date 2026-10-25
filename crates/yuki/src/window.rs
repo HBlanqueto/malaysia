@@ -26,7 +26,7 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::backend::ObjectId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Serial, Size};
-use smithay::wayland::compositor::with_states;
+use smithay::wayland::compositor::{SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{
     Configure, SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData,
 };
@@ -78,13 +78,26 @@ impl Window<'_> {
         surface_has_buffer(self.surface())
     }
 
-    /// Whether the window is visible: mapped, not hidden, not minimized and
-    /// has a current buffer.
+    /// Whether the buffer has ever received damage.
+    pub fn has_damage(&self) -> bool {
+        self.data.damaged
+    }
+
+    /// Whether the window geometry fits inside the current buffer.
+    pub fn geometry_fits_buffer(&self) -> bool {
+        self.data.geometry_fits_buffer()
+    }
+
+    /// Whether the window is visible: mapped, not hidden, not minimized, with
+    /// a current buffer that has received damage and a window geometry inside
+    /// it.
     pub fn is_visible(&self, minimized: &HashSet<WindowId>) -> bool {
         self.is_mapped()
             && !self.is_hidden()
             && !minimized.contains(&self.id())
             && self.has_buffer()
+            && self.has_damage()
+            && self.geometry_fits_buffer()
     }
 
     /// The window's app id, as the client last set it.
@@ -188,6 +201,10 @@ struct WindowData {
     native_warned: bool,
     /// Whether the initial centered placement has already been applied.
     placed: bool,
+    /// Whether any commit has ever carried damage for this window's buffer.
+    damaged: bool,
+    /// Whether the invisible-window warning was already emitted.
+    invisible_warned: bool,
 }
 
 impl WindowData {
@@ -217,6 +234,12 @@ impl WindowData {
     /// The insets for the window's current role, state and decoration.
     fn insets(&self, decoration: Decoration) -> Insets {
         Insets::for_window(self.role(), self.state(), decoration, &TITLEBAR)
+    }
+
+    /// Whether the window geometry fits inside the current buffer.
+    fn geometry_fits_buffer(&self) -> bool {
+        let surface = self.toplevel.wl_surface();
+        geometry_fits(window_geometry(surface), buffer_size(surface))
     }
 
     /// The client's minimum and maximum usable size, in logical coordinates.
@@ -320,6 +343,8 @@ impl Windows {
             requested,
             native_warned: false,
             placed: false,
+            damaged: false,
+            invisible_warned: false,
         });
     }
 
@@ -339,6 +364,9 @@ impl Windows {
     ) -> Option<WindowId> {
         let index = self.index_of(surface)?;
         let decoration = self.decoration_of(self.windows[index].id);
+        if surface_has_damage(surface) {
+            self.windows[index].damaged = true;
+        }
 
         if !self.windows[index].placed && self.windows[index].acked && surface_has_buffer(surface) {
             // The initial configure was 0×0, so this first buffer is the
@@ -395,6 +423,30 @@ impl Windows {
             if self.windows[index].configured != Some(usable) {
                 self.send_configure(index);
             }
+        }
+
+        let (damaged, geometry_fits, warned, mapped, acked) = {
+            let data = &self.windows[index];
+            (
+                data.damaged,
+                data.geometry_fits_buffer(),
+                data.invisible_warned,
+                data.mapped,
+                data.acked,
+            )
+        };
+        let mapping = !mapped && acked && surface_has_buffer(surface);
+        if (mapping || mapped) && (!damaged || !geometry_fits) && !warned {
+            self.windows[index].invisible_warned = true;
+            let id = self.windows[index].id;
+            let app_id = self.app_id(surface);
+            tracing::warn!(
+                window = id.get(),
+                %app_id,
+                damaged,
+                geometry_fits,
+                "window not visible: its buffer has no damage or its window geometry is outside the buffer"
+            );
         }
 
         if !self.windows[index].mapped && self.windows[index].acked && surface_has_buffer(surface) {
@@ -518,12 +570,18 @@ impl Windows {
 
     /// Whether the window is currently visible.
     ///
-    /// A window is visible when it is mapped, not hidden and not in the
-    /// minimized set kept by the compositor.
+    /// A window is visible when it is mapped, not hidden, not in the minimized
+    /// set kept by the compositor, and has a damaged buffer whose window
+    /// geometry fits inside it.
     pub fn is_visible(&self, id: WindowId, minimized: &HashSet<WindowId>) -> bool {
         self.index(id).is_some_and(|index| {
             let data = &self.windows[index];
-            data.mapped && !data.hidden && !minimized.contains(&id)
+            data.mapped
+                && !data.hidden
+                && !minimized.contains(&id)
+                && surface_has_buffer(data.toplevel.wl_surface())
+                && data.damaged
+                && data.geometry_fits_buffer()
         })
     }
 
@@ -1073,6 +1131,62 @@ fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
+/// The client's explicit window geometry, if it set one.
+fn window_geometry(surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
+    with_states(surface, |states| {
+        states
+            .cached_state
+            .get::<SurfaceCachedState>()
+            .current()
+            .geometry
+    })
+}
+
+/// The logical size of the surface's current buffer.
+fn buffer_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
+    with_renderer_surface_state(surface, |state| state.buffer_size()).flatten()
+}
+
+/// Whether a window geometry lies inside its buffer.
+///
+/// A surface with no explicit geometry, or without a buffer yet, is not
+/// rejected here: the buffer check belongs to [`surface_has_buffer`].
+fn geometry_fits(
+    geometry: Option<Rectangle<i32, Logical>>,
+    buffer: Option<Size<i32, Logical>>,
+) -> bool {
+    let (Some(geometry), Some(buffer)) = (geometry, buffer) else {
+        return true;
+    };
+    geometry.loc.x >= 0
+        && geometry.loc.y >= 0
+        && geometry.size.w > 0
+        && geometry.size.h > 0
+        && geometry.loc.x + geometry.size.w <= buffer.w
+        && geometry.loc.y + geometry.size.h <= buffer.h
+}
+
+/// Whether any commit has ever carried damage for the surface's buffer.
+///
+/// A new buffer's damage is moved into the renderer state by
+/// `on_commit_buffer_handler`; damage from a commit without a new buffer stays
+/// in `SurfaceAttributes`.
+fn surface_has_damage(surface: &WlSurface) -> bool {
+    let pending = with_states(surface, |states| {
+        !states
+            .cached_state
+            .get::<SurfaceAttributes>()
+            .current()
+            .damage
+            .is_empty()
+    });
+    pending
+        || with_renderer_surface_state(surface, |state| {
+            state.damage().raw().any(|mut rects| rects.next().is_some())
+        })
+        .unwrap_or(false)
+}
+
 /// Whether the surface currently has a buffer attached.
 ///
 /// This reads the renderer's surface state, which `on_commit_buffer_handler`
@@ -1108,7 +1222,8 @@ mod tests {
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        at_least_one_pixel, client_point, committed_outer, initial_placement, outer_size, usable,
+        at_least_one_pixel, client_point, committed_outer, geometry_fits, initial_placement,
+        outer_size, usable,
     };
     use crate::decoration::Insets;
     use yuki_scene::geometry::Size as SceneSize;
@@ -1250,5 +1365,20 @@ mod tests {
         let workspace = Rectangle::new(Point::from((0, 0)), size(1280, 708));
         let (outer, _) = initial_placement(Some(size(4000, 3000)), Insets::ZERO, workspace);
         assert_eq!(outer, size(1280, 708));
+    }
+
+    #[test]
+    fn window_geometry_must_fit_inside_the_buffer() {
+        let buffer = Some(size(640, 420));
+        let inside = Some(Rectangle::new(Point::from((0, 0)), size(640, 420)));
+        let shifted = Some(Rectangle::new(Point::from((0, 32)), size(640, 420)));
+        let negative = Some(Rectangle::new(Point::from((-1, 0)), size(640, 420)));
+        let empty = Some(Rectangle::new(Point::from((0, 0)), size(0, 420)));
+
+        assert!(geometry_fits(inside, buffer));
+        assert!(geometry_fits(None, buffer));
+        assert!(!geometry_fits(shifted, buffer));
+        assert!(!geometry_fits(negative, buffer));
+        assert!(!geometry_fits(empty, buffer));
     }
 }
