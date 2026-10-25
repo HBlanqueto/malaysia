@@ -822,9 +822,8 @@ impl XdgShellHandler for State {
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
-        if !self.maximized.contains_key(&id) {
-            self.toggle_maximize(id);
-        }
+        tracing::info!(window = id.get(), "maximize_request");
+        self.set_maximized(id, true);
     }
 
     fn minimize_request(&mut self, surface: ToplevelSurface) {
@@ -840,9 +839,8 @@ impl XdgShellHandler for State {
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
-        if self.maximized.contains_key(&id) {
-            self.toggle_maximize(id);
-        }
+        tracing::info!(window = id.get(), "unmaximize_request");
+        self.set_maximized(id, false);
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

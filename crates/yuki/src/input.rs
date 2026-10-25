@@ -823,16 +823,44 @@ impl State {
     }
 
     /// Maximizes or restores a window from Yuki's titlebar.
+    #[track_caller]
     pub(crate) fn toggle_maximize(&mut self, id: WindowId) {
-        let Some(outer) = self.windows.outer(id) else {
+        let location = std::panic::Location::caller();
+        let requested = !self.maximized.contains_key(&id);
+        tracing::info!(
+            window = id.get(),
+            maximize = requested,
+            origin = format!("{}:{}", location.file(), location.line()),
+            "toggle_maximize"
+        );
+        self.set_maximized(id, requested);
+    }
+
+    /// Sets the maximized state of a window, restoring or saving its previous
+    /// rectangle. Idempotent: asking for the current state is a no-op, so a
+    /// duplicate client request cannot flip the window back.
+    #[track_caller]
+    pub(crate) fn set_maximized(&mut self, id: WindowId, maximized: bool) {
+        let location = std::panic::Location::caller();
+        let currently_maximized = self.maximized.contains_key(&id);
+        if maximized == currently_maximized {
+            tracing::debug!(
+                window = id.get(),
+                maximized,
+                origin = format!("{}:{}", location.file(), location.line()),
+                "set_maximized: already in requested state"
+            );
             return;
-        };
-        if let Some(saved) = self.maximized.remove(&id) {
-            tracing::info!(window = id.get(), "window restored");
-            self.windows.set_maximized(id, false);
-            self.windows.resize(id, saved);
-        } else {
-            tracing::info!(window = id.get(), "window maximized");
+        }
+        if maximized {
+            let Some(outer) = self.windows.outer(id) else {
+                return;
+            };
+            tracing::info!(
+                window = id.get(),
+                origin = format!("{}:{}", location.file(), location.line()),
+                "window maximized"
+            );
             let (origin, size) = self.workspace();
             let target = yuki_scene::geometry::Rect::new(
                 yuki_scene::geometry::Point::new(f64::from(origin.x), f64::from(origin.y)),
@@ -841,6 +869,17 @@ impl State {
             self.maximized.insert(id, outer);
             self.windows.set_maximized(id, true);
             self.windows.resize(id, target);
+        } else {
+            let Some(saved) = self.maximized.remove(&id) else {
+                return;
+            };
+            tracing::info!(
+                window = id.get(),
+                origin = format!("{}:{}", location.file(), location.line()),
+                "window restored"
+            );
+            self.windows.set_maximized(id, false);
+            self.windows.resize(id, saved);
         }
         self.request_redraw();
     }

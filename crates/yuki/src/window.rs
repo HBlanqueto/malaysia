@@ -1018,6 +1018,9 @@ impl Windows {
                 state.states.unset(xdg_toplevel::State::Activated);
             }
         });
+        if data.maximized {
+            tracing::info!(window = id.get(), ?configured, "configure with Maximized");
+        }
         data.pending_configure = Some(data.toplevel.send_configure());
         data.configured = Some(configured);
     }
