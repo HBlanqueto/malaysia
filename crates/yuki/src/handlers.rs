@@ -827,6 +827,15 @@ impl XdgShellHandler for State {
         }
     }
 
+    fn minimize_request(&mut self, surface: ToplevelSurface) {
+        // A client's own yellow light asks here: reuse the compositor's
+        // minimize so focus moves on and the dock sees a minimized window.
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        self.set_minimized(id, true);
+    }
+
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
