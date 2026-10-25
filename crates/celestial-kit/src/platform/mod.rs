@@ -1282,6 +1282,9 @@ struct SurfaceWindow {
     frame_pending: bool,
     draw_count: u64,
     configure_count: u64,
+    /// The most recent window configure not yet applied; older configures are
+    /// dropped so only the last one is drawn.
+    pending_configure: Option<(WindowConfigure, u32)>,
 }
 
 #[allow(dead_code)]
@@ -1647,6 +1650,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         frame_pending: false,
         draw_count: 0,
         configure_count: 0,
+        pending_configure: None,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -2088,6 +2092,7 @@ impl Shell {
             frame_pending: false,
             draw_count: 0,
             configure_count: 0,
+            pending_configure: None,
         });
         self.surface_count.set(self.surfaces.len());
         Some(controls)
@@ -2150,6 +2155,7 @@ impl Shell {
             frame_pending: false,
             draw_count: 0,
             configure_count: 0,
+            pending_configure: None,
         });
         self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
@@ -2381,6 +2387,7 @@ impl Shell {
             frame_pending: false,
             draw_count: 0,
             configure_count: 0,
+            pending_configure: None,
         });
         self.surface_count.set(self.surfaces.len());
     }
@@ -2581,6 +2588,8 @@ impl CompositorHandler for Shell {
             return;
         };
         self.surfaces[index].frame_pending = false;
+        // Collapse any window configures that arrived since the last frame.
+        self.apply_pending_window_configures(qh);
         if self.surfaces[index].needs_redraw {
             let _ = self.surfaces[index].draw();
         }
@@ -2653,91 +2662,112 @@ impl WindowHandler for Shell {
         qh: &QueueHandle<Self>,
         window: &Window,
         configure: WindowConfigure,
-        _: u32,
+        serial: u32,
     ) {
         let Some(index) = self.surface_for(window.wl_surface()) else {
             return;
         };
-        let scale = self.surfaces[index].scale;
-        let size = (
-            configure.new_size.0.map_or(0, |value| value.get()),
-            configure.new_size.1.map_or(0, |value| value.get()),
-        );
-        // A 0×0 configure leaves the size to the client: keep the size the app
-        // asked for. Dropping the configure would leave the surface without a
-        // buffer, so the window would never map.
-        let size = if size.0 > 0 && size.1 > 0 {
-            size
-        } else {
-            self.surfaces[index].logical_size
-        };
-        // Only commit immediately when the size did not change. A size-changing
-        // configure will be followed by a redraw that commits a buffer at the
-        // new size; committing the old buffer here makes the compositor see a
-        // transient size mismatch and loop (B2).
-        let size_changed = size != self.surfaces[index].logical_size;
-        self.surfaces[index].configure_count += 1;
-        let count = self.surfaces[index].configure_count;
-        if count % 30 == 0 {
-            tracing::info!(
-                surface = ?window.wl_surface().id(),
-                configures = count,
-                egl_windows = self.surfaces[index].shared.egl_window_creations.get(),
-                "CelestialKit: resize configuration count"
+        // Drop any older pending configure: only the last one is drawn.  The
+        // request_redraw ensures a frame callback will process it.
+        self.surfaces[index].pending_configure = Some((configure, serial));
+        self.surfaces[index].needs_redraw = true;
+        self.surfaces[index].request_frame_callback(qh);
+    }
+}
+
+impl Shell {
+    /// Applies the most recent pending window configure for each surface.
+    ///
+    /// Called from the frame callback so several configures that arrive between
+    /// frames collapse into a single resize/draw.
+    fn apply_pending_window_configures(&mut self, qh: &QueueHandle<Self>) {
+        for index in 0..self.surfaces.len() {
+            let Some((configure, _serial)) = self.surfaces[index].pending_configure.take() else {
+                continue;
+            };
+            let scale = self.surfaces[index].scale;
+            let size = (
+                configure.new_size.0.map_or(0, |value| value.get()),
+                configure.new_size.1.map_or(0, |value| value.get()),
             );
-        }
-        self.surfaces[index].configure(size, scale);
-        let surface_id = window.wl_surface().id();
-        let requested_server = self
-            .window_contexts
-            .iter()
-            .find(|ctx| ctx.controls.surface_id == surface_id)
-            .map(|ctx| ctx.controls.status.read().decoration == DecorationResponse::Server)
-            .unwrap_or(false);
-        // Yuki always grants an explicit Server request. Some compositors do
-        // not send the decoration configure at all, so keep the requested mode
-        // when they advertise the protocol; without it, fall back to the
-        // client-side bar.
-        let decoration = if requested_server && self.decoration_manager {
-            DecorationResponse::Server
-        } else {
-            match configure.decoration_mode {
-                DecorationMode::Server => DecorationResponse::Server,
-                DecorationMode::Client => DecorationResponse::Client,
-            }
-        };
-        if let Some(context) = self
-            .window_contexts
-            .iter()
-            .find(|ctx| ctx.controls.surface_id == surface_id)
-        {
-            if requested_server
-                && decoration == DecorationResponse::Client
-                && !self.decoration_warned
-            {
-                self.decoration_warned = true;
+            // A 0×0 configure leaves the size to the client: keep the size the app
+            // asked for. Dropping the configure would leave the surface without a
+            // buffer, so the window would never map.
+            let size = if size.0 > 0 && size.1 > 0 {
+                size
+            } else {
+                self.surfaces[index].logical_size
+            };
+            // Only commit immediately when the size did not change. A size-changing
+            // configure will be followed by a redraw that commits a buffer at the
+            // new size; committing the old buffer here makes the compositor see a
+            // transient size mismatch and loop (B2).
+            let size_changed = size != self.surfaces[index].logical_size;
+            self.surfaces[index].configure_count += 1;
+            let count = self.surfaces[index].configure_count;
+            if count % 30 == 0 {
                 tracing::info!(
-                    "the compositor did not grant server-side decorations; drawing the kit titlebar"
+                    surface = ?self.surfaces[index].surface.id(),
+                    configures = count,
+                    egl_windows = self.surfaces[index].shared.egl_window_creations.get(),
+                    "CelestialKit: resize configuration count"
                 );
             }
-            let mut status = context.controls.status;
-            status.set(WindowStatus {
-                activated: configure.is_activated(),
-                maximized: configure.is_maximized(),
-                decoration,
-                fixed: context.controls.fixed,
-            });
-        }
-        // Acknowledge the configure and let SCTK apply the decoration mode
-        // before drawing the first frame. A size change is committed by the
-        // redraw below, not here, to avoid sending the old buffer size.
-        if !size_changed {
-            window.commit();
-        }
-        // A toplevel must attach its first buffer before it can map; unlike a
-        // layer surface there is no frame callback to wait for yet.
-        if self.surfaces[index].draw() && self.surfaces[index].needs_redraw {
-            self.surfaces[index].request_redraw(qh);
+            self.surfaces[index].configure(size, scale);
+            let surface_id = self.surfaces[index].surface.id();
+            let requested_server = self
+                .window_contexts
+                .iter()
+                .find(|ctx| ctx.controls.surface_id == surface_id)
+                .map(|ctx| ctx.controls.status.read().decoration == DecorationResponse::Server)
+                .unwrap_or(false);
+            // Yuki always grants an explicit Server request. Some compositors do
+            // not send the decoration configure at all, so keep the requested mode
+            // when they advertise the protocol; without it, fall back to the
+            // client-side bar.
+            let decoration = if requested_server && self.decoration_manager {
+                DecorationResponse::Server
+            } else {
+                match configure.decoration_mode {
+                    DecorationMode::Server => DecorationResponse::Server,
+                    DecorationMode::Client => DecorationResponse::Client,
+                }
+            };
+            if let Some(context) = self
+                .window_contexts
+                .iter()
+                .find(|ctx| ctx.controls.surface_id == surface_id)
+            {
+                if requested_server
+                    && decoration == DecorationResponse::Client
+                    && !self.decoration_warned
+                {
+                    self.decoration_warned = true;
+                    tracing::info!(
+                        "the compositor did not grant server-side decorations; drawing the kit titlebar"
+                    );
+                }
+                let mut status = context.controls.status;
+                status.set(WindowStatus {
+                    activated: configure.is_activated(),
+                    maximized: configure.is_maximized(),
+                    decoration,
+                    fixed: context.controls.fixed,
+                });
+            }
+            // Acknowledge the configure and let SCTK apply the decoration mode
+            // before drawing the first frame. A size change is committed by the
+            // redraw below, not here, to avoid sending the old buffer size.
+            if !size_changed {
+                if let SurfaceRole::Window(window) = &self.surfaces[index].role {
+                    window.commit();
+                }
+            }
+            // A toplevel must attach its first buffer before it can map; unlike a
+            // layer surface there is no frame callback to wait for yet.
+            if self.surfaces[index].draw() && self.surfaces[index].needs_redraw {
+                self.surfaces[index].request_redraw(qh);
+            }
         }
     }
 }
