@@ -101,6 +101,7 @@ pasará a ser por salida.
 | `window.decorations` | `"default"` \| `"force_server"` \| `"force_client"` | `"default"` | **activa** | handlers de decoración (ADR 0019/0020) |
 | `window.titlebar` | bool | `true` | datos | renderer de decoración |
 | `window.double_click_titlebar` | `"fill"` \| `"minimize"` \| `"zoom"` \| `"none"` | `"zoom"` | **activa** | input |
+| `window.green_button` | `"focus"` \| `"zoom"` \| `"fullscreen"` \| `"none"` | `"focus"` | **activa** | titlebar SSD y CSD |
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | datos | input |
 | `window.resize_border` | entero (px lógicos) | `10` | **activa** | ancho de la banda exterior de resize en lados |
 | `window.resize_corner` | entero (px lógicos) | `20` | **activa** | longitud de la «L» exterior de resize en esquinas |
@@ -115,6 +116,12 @@ las ventanas; `"force_client"` no dibuja ninguno.
 
 `double_click_titlebar` usa las palabras de macOS: "**Fill / Minimize / Zoom / No
 Action**".
+
+`green_button` decide qué hace el semáforo verde. Como en macOS, el valor por
+defecto es **`focus`** (modo foco; de momento solo registra
+`focus mode requested` y no cambia la geometría). `zoom` maximiza conservando
+el marco; `fullscreen` y el modo foco se conectarán más adelante; `none` no hace
+nada. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
 
 ## `screenshot` — capturas (app Captura; macOS `com.apple.screencapture`)
 
@@ -301,6 +308,7 @@ scale = 1.5                     # 1.0 .. 4.0
 decorations = "default"         # default | force_server | force_client
 titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
+green_button = "focus"          # focus | zoom | fullscreen | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20

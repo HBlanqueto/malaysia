@@ -1,6 +1,6 @@
 # Por hacer — plan de trabajo
 
-Última actualización: 2026-10-22.
+Última actualización: 2026-10-25.
 
 Este documento es la lista corta de lo que toca ahora. El plan de bloques de
 largo plazo vive en [`roadmap.md`](roadmap.md); aquí solo se ordena la
@@ -60,6 +60,9 @@ semáforos de 12, tema claro por defecto.
 - [x] `appearance.window_color` (`neutral`/`accent`/`wallpaper`) y
       `traffic_lights` en la titlebar; el color dominante del wallpaper lo
       calcula la shell y `window_tint_scope = "desktop"` tiñe menubar y dock.
+- [ ] **Modo foco (`window.green_button = "focus"`)**: el verde ya ejecuta la
+      acción configurable y registra `focus mode requested`; falta el modo foco
+      real (atenuar el resto y mantener la ventana al frente).
 - [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
       en layer surfaces).
 - [ ] Esquinas redondeadas, sombra, glifos de hover y doble clic para zoom.
@@ -74,9 +77,9 @@ semáforos de 12, tema claro por defecto.
 
 ## Shell sobre Freya — pendientes
 
-- [ ] **Doble clic de la titlebar CSD**: leer `window.double_click_titlebar`
-      de `~/.config/yuki/window.domain`; hoy el kit usa
-      `TITLEBAR_DOUBLE_CLICK` como `TODO(ADR 0035)`.
+- [x] **Doble clic de la titlebar CSD**: lee `window.double_click_titlebar`
+      de `~/.config/yuki/window.domain` (y `window.green_button`), con los
+      mismos defaults que el compositor.
 - [ ] **Portapapeles propio por `wl_data_device`** (y selección primaria
       `zwp_primary_selection`). Hoy `freya-clipboard` aporta `copypasta`, que
       arrastra `x11rb` y una segunda copia de SCTK 0.20/calloop 0.14; el kit

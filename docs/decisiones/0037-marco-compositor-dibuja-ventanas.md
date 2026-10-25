@@ -27,7 +27,10 @@ borde pero no titlebar.
 2. **Las esquinas redondeadas y el borde se aplican a todas las ventanas**,
    incluidas las CSD. GTK y Qt siguen sin recibir la titlebar de Yuki (ADR 0019),
    pero sí reciben el radio 16, la sombra y el inner border del compositor. Esto
-   respeta la regla "efectos para todos" del ADR 0020.
+   respeta la regla "efectos para todos" del ADR 0020. **Una ventana maximizada
+   conserva el marco completo** (radio, borde exterior, línea interior y
+   sombra): solo la pantalla completa lo elimina. Así el zoom de macOS llena el
+   área de trabajo sin convertirse en una ventana sin decoración.
 3. **La titlebar solo aparece en ventanas SSD.** La caché de chrome
    (`ChromeCache`) genera una `GlesTexture` con el título y los semáforos y la
    empaqueta como `RoundedTextureElement`; las ventanas CSD usan la textura del
@@ -47,6 +50,9 @@ borde pero no titlebar.
 
 - Las ventanas SSD y CSD comparten la misma estética de marco (esquinas,
   sombra, borde), pero solo las SSD llevan titlebar del compositor.
+- El marco es una función del estado: `frame_radius` devuelve el radio de
+  Neptunia (o el de diálogo) salvo en fullscreen, y `frame_has_border` solo es
+  falso en fullscreen. Maximizar no toca ninguna de las dos.
 - Se elimina el render CPU de la titlebar anterior y se unifica el camino
   GLES para chrome, contenido y cursores.
 - Los diálogos emergen centrados sobre su padre, como en macOS, y no en la
