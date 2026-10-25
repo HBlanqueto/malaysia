@@ -83,7 +83,7 @@ impl Component for TrafficLights {
         let action = self.on_action.clone();
         let zoom_supported = self.zoom_supported;
         let (_, _, diameter) = traffic::button_rect(0);
-        let gap = traffic::button_rect(1).2 - traffic::button_rect(0).2;
+        let gap = light_gap();
 
         let lights = visuals.iter().enumerate().map(|(index, visual)| {
             let kind = TITLEBAR.buttons.order[index].kind;
@@ -169,7 +169,7 @@ pub fn traffic_lights_view(
 ) -> Element {
     let visuals = traffic::visual(lights, style, inactive, input);
     let (_, _, diameter) = traffic::button_rect(0);
-    let gap = traffic::button_rect(1).2 - traffic::button_rect(0).2;
+    let gap = light_gap();
     rect()
         .width(Size::px(traffic::group_rect().2 as f32))
         .height(Size::px(diameter as f32))
@@ -196,6 +196,12 @@ pub fn traffic_lights_view(
                 .into_element()
         }))
         .into_element()
+}
+
+/// The gap between two lights, from the Neptunia token
+/// (`window-traffic-lights-gap`), shared with the compositor's chrome.
+fn light_gap() -> f64 {
+    f64::from(TITLEBAR.buttons.spacing)
 }
 
 fn glyph_svg(index: usize, color: Rgba) -> String {
@@ -252,4 +258,17 @@ fn polygon(triangle: &Triangle) -> String {
 fn rgba(color: Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_traffic_lights_sit_at_their_token_positions() {
+        let xs = [0, 1, 2].map(|index| traffic::button_rect(index).0);
+        assert_eq!(xs, [16.0, 36.0, 56.0], "12 px lights, 8 px apart");
+        assert_eq!(light_gap(), 8.0);
+        assert_eq!(traffic::button_rect(0).2, 12.0);
+    }
 }
