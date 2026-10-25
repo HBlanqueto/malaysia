@@ -30,7 +30,8 @@ impl App for DockApp {
         let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
         let tile = rgba(palette.tile);
         let active_tile = rgba(palette.tile_active);
-        let text = rgba(palette.tile_text_active);
+        let text = rgba(palette.text);
+        let active_text = rgba(palette.tile_text_active);
 
         let tiles = entries.iter().enumerate().map(|(index, entry)| {
             let toplevels = toplevels.clone();
@@ -48,7 +49,12 @@ impl App for DockApp {
                 .background(if is_active { active_tile } else { tile })
                 .center()
                 .on_press(move |_| toplevels.activate(index))
-                .child(label().text(initial).font_size(DOCK_FONT_SIZE).color(text))
+                .child(
+                    label()
+                        .text(initial)
+                        .font_size(DOCK_FONT_SIZE)
+                        .color(if is_active { active_text } else { text }),
+                )
                 .into_element()
         });
 

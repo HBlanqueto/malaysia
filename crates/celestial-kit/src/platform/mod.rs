@@ -2288,6 +2288,7 @@ impl Shell {
         if *list.peek() != infos {
             list.set(infos);
             self.request_redraw_all = true;
+            self.ping.ping();
         }
     }
 
