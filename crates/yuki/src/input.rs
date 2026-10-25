@@ -881,6 +881,8 @@ impl State {
             self.windows.set_maximized(id, false);
             self.windows.resize(id, saved);
         }
+        // Keep the window focused and Activated through the state change.
+        self.focus_window(id);
         self.request_redraw();
     }
 
