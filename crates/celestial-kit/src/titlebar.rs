@@ -366,7 +366,8 @@ fn _traffic_input(status: WindowStatus, fixed: bool) -> TrafficInput {
     }
 }
 
-/// Four 6 px CSD resize edges. Put it as the last child of the window root.
+/// CSD resize edges and corners. Put it as the last child of the window root
+/// so it receives pointer events before the content.
 pub fn resize_edges() -> Element {
     let controls = WindowControls::get();
     let make = |edge: WindowEdge, position: Position, width: Size, height: Size| {
@@ -384,6 +385,7 @@ pub fn resize_edges() -> Element {
             .into_element()
     };
     let edge = Size::px(6.0);
+    let corner = Size::px(12.0);
     // Absolute positioned overlays do not resolve Size::fill() in this version
     // of Freya; root percentage keeps the hit-area matching the window.
     rect()
@@ -412,8 +414,32 @@ pub fn resize_edges() -> Element {
         .child(make(
             WindowEdge::Right,
             Position::new_absolute().top(0.0).right(0.0),
-            edge,
+            edge.clone(),
             Size::fill(),
+        ))
+        .child(make(
+            WindowEdge::TopLeft,
+            Position::new_absolute().top(0.0).left(0.0),
+            corner.clone(),
+            corner.clone(),
+        ))
+        .child(make(
+            WindowEdge::TopRight,
+            Position::new_absolute().top(0.0).right(0.0),
+            corner.clone(),
+            corner.clone(),
+        ))
+        .child(make(
+            WindowEdge::BottomLeft,
+            Position::new_absolute().bottom(0.0).left(0.0),
+            corner.clone(),
+            corner.clone(),
+        ))
+        .child(make(
+            WindowEdge::BottomRight,
+            Position::new_absolute().bottom(0.0).right(0.0),
+            corner.clone(),
+            corner,
         ))
         .into_element()
 }
