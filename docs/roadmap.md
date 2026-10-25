@@ -256,9 +256,12 @@ Documentado en el [ADR 0036](decisiones/0036-menu-global.md) y en
   títulos **Sistema** y **Yuki/nombre de app**, submenús Ir, Archivo, Edición,
   Ventana y Sistema; el menú Ventana usa `zwlr_foreign_toplevel_management_v1`.
 - **14b-2 — Diálogos del sistema.** Suspender, Reiniciar, Apagar, Cerrar sesión.
-- **14c — Menú por aplicación (respaldo).** Reutiliza
-  `yuki-shell/src/desktop.rs`: nombre y acciones del `.desktop`, controles
-  reales de la ventana y Salir.
+- **14c — Menú por aplicación (respaldo).** Implementado (2026-10-25, sesión
+  anidada): reutiliza `yuki-shell/src/desktop.rs` para el nombre y las ventanas
+  de la app; la barra muestra ❄ · {App} · Ventana · Ayuda con Ocultar/Mostrar
+  todo/Salir, Minimizar/Maximizar/Cerrar, los submenús de disposición con
+  iconos y el Ayuda con buscador. Maximizar queda pendiente del `State` de wlr
+  y de `set_maximized` en el compositor. Ver `bloques/14-menu-global.md`.
 - **14d — Compositor `org_kde_kwin_appmenu` + cliente dbusmenu.** Aceptación:
   menú real de Kate y de Firefox con sus dos preferencias.
 - **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
@@ -383,12 +386,13 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a y 14b-1 aceptados en anidado; 14b-2 y 14c–14e
+- **Bloque 14 — 14a, 14b-1 y 14c en anidado; 14b-2 y 14d–14e
   pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
   `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
   CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
   (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el
-  2026-10-24.
+  2026-10-24. 14c (menús de la app enfocada) implementado el 2026-10-25; el
+  compositor aún no envía `State` ni implementa `set_maximized`.
 
 ## Numeración de bloques
 
