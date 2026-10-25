@@ -1535,19 +1535,14 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         options.app_name
     ));
     window.set_title(options.title.clone());
-    // When the caller did not set explicit min/max bounds, treat the requested
-    // size as a fixed initial size so the compositor can center the window
-    // instead of maximizing it to the workspace.
-    if options.min_size.is_none() && options.max_size.is_none() {
-        window.set_min_size(Some(options.size));
-        window.set_max_size(Some(options.size));
-    } else {
-        if let Some(min) = options.min_size {
-            window.set_min_size(Some(min));
-        }
-        if let Some(max) = options.max_size {
-            window.set_max_size(Some(max));
-        }
+    // Only forward bounds the caller actually asked for: `min == max` means a
+    // fixed-size window, so defaulting them to `size` would make every kit
+    // window impossible to resize or maximize.
+    if let Some(min) = options.min_size {
+        window.set_min_size(Some(min));
+    }
+    if let Some(max) = options.max_size {
+        window.set_max_size(Some(max));
     }
     window.commit();
 
@@ -2335,9 +2330,15 @@ impl WindowHandler for Shell {
             configure.new_size.0.map_or(0, |value| value.get()),
             configure.new_size.1.map_or(0, |value| value.get()),
         );
-        if size.0 > 0 && size.1 > 0 {
-            self.surfaces[index].configure(size, scale);
-        }
+        // A 0×0 configure leaves the size to the client: keep the size the app
+        // asked for. Dropping the configure would leave the surface without a
+        // buffer, so the window would never map.
+        let size = if size.0 > 0 && size.1 > 0 {
+            size
+        } else {
+            self.surfaces[index].logical_size
+        };
+        self.surfaces[index].configure(size, scale);
         let requested_server = matches!(
             self.spec,
             SurfaceSpec::Window(WindowOptions {
