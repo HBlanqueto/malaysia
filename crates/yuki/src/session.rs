@@ -1167,7 +1167,7 @@ fn border_element(
         Uniform::new("radius", radius as f32),
         Uniform::new("width", width_logical),
         Uniform::new("side", if outer { 1.0f32 } else { -1.0f32 }),
-        Uniform::new("color", [color.r, color.g, color.b, color.a]),
+        Uniform::new("color", color.premultiplied()),
     ];
     Some(PixelShaderElement::new(
         program.clone(),

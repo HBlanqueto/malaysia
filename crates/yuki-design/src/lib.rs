@@ -84,6 +84,11 @@ impl Rgba {
             (self.a * 255.0).round().clamp(0.0, 255.0) as u8,
         ]
     }
+
+    /// Returns premultiplied RGBA for OpenGL/Smithay blending.
+    pub fn premultiplied(self) -> [f32; 4] {
+        [self.r * self.a, self.g * self.a, self.b * self.a, self.a]
+    }
 }
 
 /// One color in its focused and unfocused variants.
@@ -513,5 +518,25 @@ mod tests {
             (super::SHADOW.contact.y_offset as f32 * super::SHADOW.unfocused_offset_scale).round()
                 as i32
         );
+    }
+
+    #[test]
+    fn premultiplied_opaque_is_unchanged() {
+        let c = super::Rgba::rgb8(128, 64, 255);
+        let [r, g, b, a] = c.premultiplied();
+        assert!((r - c.r).abs() < 0.004);
+        assert!((g - c.g).abs() < 0.004);
+        assert!((b - c.b).abs() < 0.004);
+        assert!((a - c.a).abs() < 0.001);
+    }
+
+    #[test]
+    fn premultiplied_honours_alpha() {
+        let c = super::Rgba::rgba8(255, 128, 0, 0.5);
+        let [r, g, b, a] = c.premultiplied();
+        assert!((r - 0.5).abs() < 0.004, "red should be halved");
+        assert!((g - 0.25).abs() < 0.004, "green should be halved");
+        assert!(b < 0.004);
+        assert!((a - 0.5).abs() < 0.001);
     }
 }
