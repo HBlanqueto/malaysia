@@ -56,8 +56,9 @@ pub const HELP: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" h
 /// Menu item search result.
 ///
 /// Template: replace `{{text}}` with the text colour and `{{accent}}` with the
-/// accent colour. All other geometry is fixed so the icon matches macOS.
-pub const MENU_ITEM: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"14\" viewBox=\"0 0 16 14\"><rect x=\"0.75\" y=\"1.25\" width=\"14.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"{{text}}\" stroke-width=\"1.3\"/><rect x=\"3\" y=\"4\" width=\"10\" height=\"3.2\" rx=\"1\" fill=\"{{accent}}\"/><line x1=\"3.5\" y1=\"9.6\" x2=\"8.5\" y2=\"9.6\" stroke=\"{{text}}\" stroke-width=\"1.1\" stroke-linecap=\"round\" opacity=\"0.6\"/></svg>";
+/// accent colour. Both become `rgb(r,g,b)`; opacity travels in its own
+/// attribute because SVG readers reject eight-digit hex colours.
+pub const MENU_ITEM: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"14\" viewBox=\"0 0 16 14\"><rect x=\"0.75\" y=\"1.25\" width=\"14.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"{{text}}\" stroke-width=\"1.3\"/><rect x=\"3\" y=\"4\" width=\"10\" height=\"3.2\" rx=\"1\" fill=\"{{accent}}\"/><line x1=\"3.5\" y1=\"9.6\" x2=\"8.5\" y2=\"9.6\" stroke=\"{{text}}\" stroke-width=\"1.1\" stroke-linecap=\"round\" stroke-opacity=\"0.6\"/></svg>";
 
 /// Settings gear.
 pub const GEAR: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"4.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"8\" cy=\"8\" r=\"1.9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"><path d=\"M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3\"/></g></svg>";
@@ -65,6 +66,57 @@ pub const GEAR: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" h
 #[cfg(test)]
 mod tests {
     use super::*;
+    use celestial_kit::menu::search_icon_svg;
+    use freya_engine::prelude::{AlphaType, ColorType, FontMgr, ImageInfo, raster_n32_premul, svg};
+    use yuki_design::{MENU_DARK, MENU_LIGHT, MenuPalette};
+
+    fn raster(source: &str, width: i32, height: i32) -> Vec<u8> {
+        let mut dom = svg::Dom::from_bytes(source.as_bytes(), FontMgr::empty())
+            .expect("the icon SVG must parse");
+        dom.set_container_size((width, height));
+        let mut root = dom.root();
+        root.set_width(svg::Length::new(width as f32, svg::LengthUnit::PX));
+        root.set_height(svg::Length::new(height as f32, svg::LengthUnit::PX));
+
+        let mut surface = raster_n32_premul((width, height)).expect("raster surface");
+        dom.render(surface.canvas());
+
+        let mut pixels = vec![0; (width * height * 4) as usize];
+        let info = ImageInfo::new(
+            (width, height),
+            ColorType::RGBA8888,
+            AlphaType::Unpremul,
+            None,
+        );
+        assert!(
+            surface.read_pixels(&info, &mut pixels, (width * 4) as usize, (0, 0)),
+            "could not read the rasterized icon"
+        );
+        pixels
+    }
+
+    fn pixel(pixels: &[u8], width: i32, x: i32, y: i32) -> [u8; 4] {
+        let offset = ((y * width + x) * 4) as usize;
+        pixels[offset..offset + 4].try_into().unwrap()
+    }
+
+    fn assert_close(actual: [u8; 4], expected: [u8; 4], label: &str, theme: &str) {
+        const TOLERANCE: u8 = 12;
+        assert!(
+            actual[3] > 200,
+            "{theme}: {label} is transparent: {actual:?}"
+        );
+        for (a, e) in actual[..3].iter().zip(&expected[..3]) {
+            assert!(
+                a.abs_diff(*e) <= TOLERANCE,
+                "{theme}: {label} is {actual:?}, expected ≈{expected:?}"
+            );
+        }
+    }
+
+    fn themes() -> [(&'static str, MenuPalette); 2] {
+        [("claro", MENU_LIGHT), ("oscuro", MENU_DARK)]
+    }
 
     #[test]
     fn every_icon_is_a_16px_svg() {
@@ -91,6 +143,81 @@ mod tests {
             assert!(icon.ends_with("</svg>"), "icon does not end with </svg>");
             assert!(icon.contains("viewBox=\"0 0 16 16\""));
             assert!(icon.contains("currentColor"));
+        }
+    }
+
+    #[test]
+    fn menu_item_icon_paints_frame_text_and_accent_bar() {
+        for (theme, m) in themes() {
+            let svg = search_icon_svg(MENU_ITEM, m.fg, m.hover_bg);
+            assert!(svg.contains("rgb("), "{theme}: no rgb() colour in {svg}");
+            assert!(
+                !svg.contains("#00000000"),
+                "{theme}: eight-digit hex leaked into the icon"
+            );
+            let pixels = raster(&svg, 16, 14);
+
+            assert_close(pixel(&pixels, 16, 0, 7), m.fg.to_rgba8(), "frame", theme);
+            assert_close(
+                pixel(&pixels, 16, 8, 5),
+                m.hover_bg.to_rgba8(),
+                "accent bar",
+                theme,
+            );
+            assert_eq!(
+                pixel(&pixels, 16, 8, 3)[3],
+                0,
+                "{theme}: the icon background is not transparent"
+            );
+        }
+    }
+
+    #[test]
+    fn menu_item_icon_uses_white_when_focused_and_faint_when_disabled() {
+        for (theme, m) in themes() {
+            let focused = search_icon_svg(MENU_ITEM, m.hover_fg, m.hover_fg);
+            let pixels = raster(&focused, 16, 14);
+            assert_close(
+                pixel(&pixels, 16, 0, 7),
+                m.hover_fg.to_rgba8(),
+                "focused frame",
+                theme,
+            );
+            assert_close(
+                pixel(&pixels, 16, 8, 5),
+                m.hover_fg.to_rgba8(),
+                "focused bar",
+                theme,
+            );
+
+            let disabled = search_icon_svg(MENU_ITEM, m.disabled_fg, m.disabled_fg);
+            let pixels = raster(&disabled, 16, 14);
+            assert_close(
+                pixel(&pixels, 16, 8, 5),
+                m.disabled_fg.to_rgba8(),
+                "disabled bar",
+                theme,
+            );
+        }
+    }
+
+    #[test]
+    fn help_icon_paints_the_text_colour() {
+        for (theme, m) in themes() {
+            let [r, g, b, _]: [u8; 4] = m.fg.to_rgba8();
+            let svg = HELP.replace("currentColor", &format!("rgb({r},{g},{b})"));
+            let pixels = raster(&svg, 16, 16);
+            assert_close(
+                pixel(&pixels, 16, 1, 8),
+                m.fg.to_rgba8(),
+                "help ring",
+                theme,
+            );
+            assert_eq!(
+                pixel(&pixels, 16, 8, 3)[3],
+                0,
+                "{theme}: the help background is not transparent"
+            );
         }
     }
 }

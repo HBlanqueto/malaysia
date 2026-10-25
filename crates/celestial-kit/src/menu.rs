@@ -809,9 +809,19 @@ fn rgba(color: Rgba) -> Color {
     Color::from_argb(a, r, g, b)
 }
 
-fn rgba_to_hex(color: Rgba) -> String {
-    let [r, g, b, a] = color.to_rgba8();
-    format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+fn svg_rgb(color: Rgba) -> String {
+    let [r, g, b, _] = color.to_rgba8();
+    format!("rgb({r},{g},{b})")
+}
+
+/// Fills a two-colour SVG template with the menu text and accent colours.
+///
+/// The placeholders become `rgb(r,g,b)` (never eight-digit hex) and opacity is
+/// left to the template's `fill-opacity` / `stroke-opacity` attributes.
+pub fn search_icon_svg(template: &str, text: Rgba, accent: Rgba) -> String {
+    template
+        .replace("{{text}}", &svg_rgb(text))
+        .replace("{{accent}}", &svg_rgb(accent))
 }
 
 fn shortcut_fg(enabled: bool, focused: bool, m: MenuPalette) -> Rgba {
@@ -1586,6 +1596,7 @@ fn render_item(
             }
             let icon_element = search_icon_element(
                 *source,
+                enabled,
                 is_focused,
                 fg,
                 m.hover_bg,
@@ -1619,8 +1630,10 @@ fn render_item(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn search_icon_element(
     source: SearchSource,
+    enabled: bool,
     focused: bool,
     fg: Rgba,
     accent: Rgba,
@@ -1630,20 +1643,15 @@ fn search_icon_element(
 ) -> Element {
     match source {
         SearchSource::Menu => {
-            let svg = menu_icon.unwrap_or("").to_string();
-            let text_color = if focused {
-                rgba_to_hex(m.hover_fg)
-            } else {
-                rgba_to_hex(fg)
-            };
+            let text_color = if focused { m.hover_fg } else { fg };
             let accent_color = if focused {
-                rgba_to_hex(m.hover_fg)
+                m.hover_fg
+            } else if enabled {
+                accent
             } else {
-                rgba_to_hex(accent)
+                fg
             };
-            let svg = svg
-                .replace("{{text}}", &text_color)
-                .replace("{{accent}}", &accent_color);
+            let svg = search_icon_svg(menu_icon.unwrap_or(""), text_color, accent_color);
             rect()
                 .width(Size::px(16.0))
                 .direction(Direction::Horizontal)
