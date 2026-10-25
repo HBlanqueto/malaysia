@@ -1055,6 +1055,18 @@ impl KdeDecorationHandler for State {
         &self.kde_decoration_state
     }
 
+    fn new_decoration(
+        &mut self,
+        surface: &WlSurface,
+        decoration: &OrgKdeKwinServerDecoration,
+    ) {
+        // GTK creates this object before its xdg_toplevel may exist. Announce
+        // Yuki's preference (server-side) and remember the decision so the
+        // initial configure already carries it when the toplevel arrives.
+        decoration.mode(KdeMode::Server);
+        self.apply_requested_decoration(surface, Some(Decoration::Server));
+    }
+
     fn request_mode(
         &mut self,
         surface: &WlSurface,
@@ -1064,11 +1076,16 @@ impl KdeDecorationHandler for State {
         let WEnum::Value(mode) = mode else {
             return;
         };
-        // GTK3 and GTK4 ask through this protocol; an explicit client-side
-        // request means the window has its own headerbar and must keep it. The
-        // reply repeats the client's mode, because that is the mode chosen.
+        // Acknowledge the request before acting on it: the client waits for the
+        // mode event to decide whether to draw its own titlebar (Otto).
         decoration.mode(mode);
         self.apply_requested_decoration(surface, Some(decoration_for_kde_mode(mode)));
+    }
+
+    fn release(&mut self, _decoration: &OrgKdeKwinServerDecoration, surface: &WlSurface) {
+        // The client dropped the object: fall back to Otto's own preference,
+        // the same one the manager advertises as its default mode.
+        self.apply_requested_decoration(surface, Some(Decoration::Server));
     }
 }
 
