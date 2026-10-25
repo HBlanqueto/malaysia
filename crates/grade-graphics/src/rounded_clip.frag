@@ -1,9 +1,10 @@
-precision mediump float;
 //_DEFINES_
 
 #if defined(EXTERNAL)
 #extension GL_OES_EGL_image_external : require
 #endif
+
+precision mediump float;
 
 #if defined(EXTERNAL)
 uniform samplerExternalOES tex;

@@ -1,5 +1,7 @@
 precision mediump float;
 
+varying vec2 v_coords;
+
 uniform vec2 size;
 uniform vec4 rect;
 uniform float radius;

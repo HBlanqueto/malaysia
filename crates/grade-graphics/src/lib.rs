@@ -115,12 +115,7 @@ mod tests {
     }
 
     /// Signed distance to a rounded rectangle, matching the shader formula.
-    fn rounded_rect_sdf(
-        px: (f32, f32),
-        center: (f32, f32),
-        size: (f32, f32),
-        radius: f32,
-    ) -> f32 {
+    fn rounded_rect_sdf(px: (f32, f32), center: (f32, f32), size: (f32, f32), radius: f32) -> f32 {
         let dx = (px.0 - center.0).abs() - size.0 / 2.0 + radius;
         let dy = (px.1 - center.1).abs() - size.1 / 2.0 + radius;
         (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius
@@ -147,7 +142,10 @@ mod tests {
     fn rounded_coverage_is_half_at_the_edge() {
         // Just on the straight edge of an oversized radius is the 0.5 point.
         let dist = rounded_rect_sdf((90.0, 50.0), (50.0, 50.0), (80.0, 80.0), 16.0);
-        assert!((coverage(dist) - 0.5).abs() < 0.01, "edge coverage should be ~0.5");
+        assert!(
+            (coverage(dist) - 0.5).abs() < 0.01,
+            "edge coverage should be ~0.5"
+        );
     }
 
     #[test]
@@ -157,7 +155,10 @@ mod tests {
         let dist = 0.0;
         let width = 1.0;
         let c = coverage(dist - width) - coverage(dist);
-        assert!((c - 0.5).abs() < 0.01, "outer border at edge should be ~0.5");
+        assert!(
+            (c - 0.5).abs() < 0.01,
+            "outer border at edge should be ~0.5"
+        );
     }
 
     #[test]
