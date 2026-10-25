@@ -23,6 +23,8 @@ impl App for Demo {
         let colors = yuki_appearance::palette(palette.scheme);
         let [r, g, b, a] = colors.titlebar_bg.focused.to_rgba8();
         let background = Color::from_argb(a, r, g, b);
+        let [tr, tg, tb, ta] = colors.text.focused.to_rgba8();
+        let text = Color::from_argb(ta, tr, tg, tb);
         rect()
             .width(Size::fill())
             .height(Size::fill())
@@ -40,8 +42,17 @@ impl App for Demo {
                     .spacing(12.0)
                     .padding(Gaps::new(24.0, 24.0, 24.0, 24.0))
                     .main_align(Alignment::Center)
-                    .child(label().text("Ventana CSD de CelestialKit").font_size(16.0))
-                    .child(Button::new().on_press(|_| {}).child("Un botón")),
+                    .child(
+                        label()
+                            .text("Ventana CSD de CelestialKit")
+                            .font_size(16.0)
+                            .color(text),
+                    )
+                    .child(
+                        Button::new()
+                            .on_press(|_| {})
+                            .child(label().text("Un botón").color(text)),
+                    ),
             )
             .child(resize_edges())
     }

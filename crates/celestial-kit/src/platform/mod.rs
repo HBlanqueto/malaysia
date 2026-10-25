@@ -56,9 +56,7 @@ use sctk::{
         },
         calloop_wayland_source::WaylandSource,
         client::{
-            Connection, Dispatch, Proxy, QueueHandle,
-            backend::ObjectId,
-            delegate_dispatch,
+            Connection, Dispatch, Proxy, QueueHandle, delegate_dispatch,
             globals::registry_queue_init,
             protocol::{
                 wl_callback::WlCallback, wl_keyboard, wl_output, wl_pointer, wl_seat,
@@ -118,6 +116,8 @@ use sctk::{
 use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
 use wayland_egl::WlEglSurface;
+
+pub use sctk::reexports::client::backend::ObjectId;
 
 /// The Wayland EGL platform (`EGL_PLATFORM_WAYLAND_KHR`/`EXT`).
 const EGL_PLATFORM_WAYLAND: egl::Enum = 0x31D8;
@@ -377,6 +377,7 @@ pub struct WindowOptions {
     pub size: (u32, u32),
     pub min_size: Option<(u32, u32)>,
     pub max_size: Option<(u32, u32)>,
+    pub parent: Option<ObjectId>,
 }
 
 impl WindowOptions {
@@ -389,6 +390,7 @@ impl WindowOptions {
             size: (640, 420),
             min_size: None,
             max_size: None,
+            parent: None,
         }
     }
 
@@ -411,6 +413,11 @@ impl WindowOptions {
         self.max_size = size;
         self
     }
+
+    pub fn parent(mut self, parent: Option<ObjectId>) -> Self {
+        self.parent = parent;
+        self
+    }
 }
 
 /// The state a CelestialKit window's titlebar reads.
@@ -431,6 +438,7 @@ pub struct WindowControls {
     pub status: State<WindowStatus>,
     pub title: String,
     pub fixed: bool,
+    surface_id: ObjectId,
 }
 
 impl WindowControls {
@@ -465,14 +473,28 @@ impl WindowControls {
             .push(WindowCommand::Resize(self.pointer_serial.get(), edge));
         self.ping.ping();
     }
+
+    /// The Wayland object id of the toplevel surface these controls belong to.
+    pub fn surface_id(&self) -> ObjectId {
+        self.surface_id.clone()
+    }
+
+    /// Opens another toplevel in the same process, attached to this window as
+    /// its parent when `options.parent` is `Some(surface_id())`.
+    pub fn open_window(&self, app: AppComponent, options: WindowOptions) {
+        self.queue
+            .borrow_mut()
+            .push(WindowCommand::Open(app, options));
+        self.ping.ping();
+    }
 }
 
-#[derive(Debug)]
 enum WindowCommand {
     Minimize,
     ToggleMaximize,
     Move(u32),
     Resize(u32, WindowEdge),
+    Open(AppComponent, WindowOptions),
 }
 
 /// What kind of surface the runner owns.
@@ -1286,7 +1308,7 @@ struct Shell {
     popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
     popup_next_id: Rc<Cell<u64>>,
     surface_count: Rc<Cell<usize>>,
-    window_context: Option<WindowContext>,
+    window_contexts: Vec<WindowContext>,
     decoration_manager: bool,
     decoration_warned: bool,
 }
@@ -1517,107 +1539,11 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
 /// Runs a normal CelestialKit window (`xdg_toplevel`, ADR 0035).
 pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunError> {
     let (conn, event_queue, qh, mut shell) =
-        Shell::connect(app, SurfaceSpec::Window(options.clone()))?;
+        Shell::connect(app.clone(), SurfaceSpec::Window(options.clone()))?;
     shell.qh = qh.clone();
-    let xdg_shell = shell
-        .xdg_shell
-        .as_ref()
+    shell
+        .create_window(app, options, None)
         .ok_or(RunError::MissingGlobal("xdg_wm_base"))?;
-    let surface = shell.compositor.create_surface(&qh);
-    let decorations = match options.decorations {
-        Decorations::Client => WindowDecorations::RequestClient,
-        Decorations::Server => WindowDecorations::RequestServer,
-    };
-    let window = xdg_shell.create_window(surface.clone(), decorations, &qh);
-    window.set_app_id(format!(
-        "{}{}",
-        yuki_design::NATIVE_APP_ID_PREFIX,
-        options.app_name
-    ));
-    window.set_title(options.title.clone());
-    // Only forward bounds the caller actually asked for: `min == max` means a
-    // fixed-size window, so defaulting them to `size` would make every kit
-    // window impossible to resize or maximize.
-    if let Some(min) = options.min_size {
-        window.set_min_size(Some(min));
-    }
-    if let Some(max) = options.max_size {
-        window.set_max_size(Some(max));
-    }
-    window.commit();
-
-    let queue: Rc<RefCell<Vec<WindowCommand>>> = Rc::new(RefCell::new(Vec::new()));
-    let pointer_serial = Rc::new(std::cell::Cell::new(0));
-    let fixed = options.min_size.is_some() && options.min_size == options.max_size;
-    let status = State::create_global(WindowStatus {
-        activated: true,
-        maximized: false,
-        decoration: match options.decorations {
-            Decorations::Client => DecorationResponse::Client,
-            Decorations::Server => DecorationResponse::Server,
-        },
-        fixed,
-    });
-    let controls = WindowControls {
-        queue: queue.clone(),
-        ping: shell.ping.clone(),
-        pointer_serial,
-        status,
-        title: options.title.clone(),
-        fixed,
-    };
-    shell.window_context = Some(WindowContext {
-        controls: controls.clone(),
-        queue,
-    });
-
-    let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
-    let sender = make_sender(shell.queue.clone(), shell.ping.clone());
-    let popups = Popups {
-        queue: shell.popup_commands.clone(),
-        ping: shell.ping.clone(),
-        next_id: shell.popup_next_id.clone(),
-        last_serial: shell.last_input_serial.clone(),
-        owner: surface.id(),
-        current: None,
-        surface_count: shell.surface_count.clone(),
-        opens_left: Rc::new(Cell::new(false)),
-    };
-    let app_instance = AppInstance::new(
-        shell.app.clone(),
-        1.0,
-        options.size,
-        sender,
-        waker,
-        Some(shell.toplevels.clone()),
-        None,
-        shell.activation.clone(),
-        Some(controls),
-        Timers {
-            queue: shell.timers.clone(),
-            ping: shell.ping.clone(),
-        },
-        popups,
-        None,
-        shell.graphics.font_collection.clone(),
-        shell.graphics.font_manager.clone(),
-    );
-    shell.surfaces.push(SurfaceWindow {
-        surface,
-        role: SurfaceRole::Window(window),
-        popup: None,
-        shared: shell.graphics.clone(),
-        graphics: None,
-        app: app_instance,
-        logical_size: options.size,
-        buffer_size: (0, 0),
-        scale: 1.0,
-        output: None,
-        needs_redraw: true,
-        frame_pending: false,
-        draw_count: 0,
-    });
-    shell.surface_count.set(shell.surfaces.len());
 
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
@@ -1823,7 +1749,7 @@ impl Shell {
             popup_commands: Rc::new(RefCell::new(Vec::new())),
             popup_next_id: Rc::new(Cell::new(1)),
             surface_count: Rc::new(Cell::new(0)),
-            window_context: None,
+            window_contexts: Vec::new(),
             decoration_manager: globals.contents().with_list(|list| {
                 list.iter()
                     .any(|global| global.interface == "zxdg_decoration_manager_v1")
@@ -1835,6 +1761,123 @@ impl Shell {
 
     fn surface_for(&self, surface: &WlSurface) -> Option<usize> {
         self.surfaces.iter().position(|s| s.surface == *surface)
+    }
+
+    fn create_window(
+        &mut self,
+        app: AppComponent,
+        options: WindowOptions,
+        parent: Option<ObjectId>,
+    ) -> Option<WindowControls> {
+        let xdg_shell = self.xdg_shell.as_ref()?;
+        let qh = &self.qh;
+        let surface = self.compositor.create_surface(qh);
+        let decorations = match options.decorations {
+            Decorations::Client => WindowDecorations::RequestClient,
+            Decorations::Server => WindowDecorations::RequestServer,
+        };
+        let window = xdg_shell.create_window(surface.clone(), decorations, qh);
+        window.set_app_id(format!(
+            "{}{}",
+            yuki_design::NATIVE_APP_ID_PREFIX,
+            options.app_name
+        ));
+        window.set_title(options.title.clone());
+        if let Some(min) = options.min_size {
+            window.set_min_size(Some(min));
+        }
+        if let Some(max) = options.max_size {
+            window.set_max_size(Some(max));
+        }
+        if let Some(parent_id) = parent
+            && let Some(parent_window) = self.surfaces.iter().find_map(|s| {
+                if s.surface.id() == parent_id
+                    && let SurfaceRole::Window(parent) = &s.role
+                {
+                    return Some(parent);
+                }
+                None
+            })
+        {
+            window.set_parent(Some(parent_window));
+        }
+        window.commit();
+
+        let queue: Rc<RefCell<Vec<WindowCommand>>> = Rc::new(RefCell::new(Vec::new()));
+        let pointer_serial = Rc::new(std::cell::Cell::new(0));
+        let fixed = options.min_size.is_some() && options.min_size == options.max_size;
+        let status = State::create_global(WindowStatus {
+            activated: true,
+            maximized: false,
+            decoration: match options.decorations {
+                Decorations::Client => DecorationResponse::Client,
+                Decorations::Server => DecorationResponse::Server,
+            },
+            fixed,
+        });
+        let surface_id = surface.id();
+        let controls = WindowControls {
+            queue: queue.clone(),
+            ping: self.ping.clone(),
+            pointer_serial,
+            status,
+            title: options.title.clone(),
+            fixed,
+            surface_id,
+        };
+        self.window_contexts.push(WindowContext {
+            controls: controls.clone(),
+            queue,
+        });
+
+        let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
+        let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let popups = Popups {
+            queue: self.popup_commands.clone(),
+            ping: self.ping.clone(),
+            next_id: self.popup_next_id.clone(),
+            last_serial: self.last_input_serial.clone(),
+            owner: surface.id(),
+            current: None,
+            surface_count: self.surface_count.clone(),
+            opens_left: Rc::new(Cell::new(false)),
+        };
+        let app_instance = AppInstance::new(
+            app,
+            1.0,
+            options.size,
+            sender,
+            waker,
+            Some(self.toplevels.clone()),
+            None,
+            self.activation.clone(),
+            Some(controls.clone()),
+            Timers {
+                queue: self.timers.clone(),
+                ping: self.ping.clone(),
+            },
+            popups,
+            None,
+            self.graphics.font_collection.clone(),
+            self.graphics.font_manager.clone(),
+        );
+        self.surfaces.push(SurfaceWindow {
+            surface,
+            role: SurfaceRole::Window(window),
+            popup: None,
+            shared: self.graphics.clone(),
+            graphics: None,
+            app: app_instance,
+            logical_size: options.size,
+            buffer_size: (0, 0),
+            scale: 1.0,
+            output: None,
+            needs_redraw: true,
+            frame_pending: false,
+            draw_count: 0,
+        });
+        self.surface_count.set(self.surfaces.len());
+        Some(controls)
     }
 
     fn create_lock_surface(
@@ -1915,42 +1958,46 @@ impl Shell {
     }
 
     fn process_window_commands(&mut self) {
-        let Some(context) = self.window_context.clone() else {
-            return;
-        };
-        let commands = std::mem::take(&mut *context.queue.borrow_mut());
-        for command in commands {
-            let Some(index) = self
-                .surfaces
-                .iter()
-                .position(|surface| matches!(surface.role, SurfaceRole::Window(_)))
-            else {
-                continue;
-            };
-            let SurfaceRole::Window(window) = &self.surfaces[index].role else {
-                continue;
-            };
-            match command {
-                WindowCommand::Minimize => window.set_minimized(),
-                WindowCommand::ToggleMaximize => {
-                    if context.controls.status.read().maximized {
-                        window.unset_maximized();
-                    } else {
-                        window.set_maximized();
-                    }
+        let contexts = self.window_contexts.clone();
+        for context in contexts {
+            let commands = std::mem::take(&mut *context.queue.borrow_mut());
+            for command in commands {
+                if let WindowCommand::Open(app, options) = command {
+                    self.create_window(app, options, None);
+                    continue;
                 }
-                WindowCommand::Move(serial) => {
-                    if let Some(seat) = &self.activation_seat {
-                        window.move_(seat, serial);
+                let Some(index) = self.surfaces.iter().position(|surface| {
+                    matches!(surface.role, SurfaceRole::Window(_))
+                        && surface.surface.id() == context.controls.surface_id
+                }) else {
+                    continue;
+                };
+                let SurfaceRole::Window(window) = &self.surfaces[index].role else {
+                    continue;
+                };
+                match command {
+                    WindowCommand::Minimize => window.set_minimized(),
+                    WindowCommand::ToggleMaximize => {
+                        if context.controls.status.read().maximized {
+                            window.unset_maximized();
+                        } else {
+                            window.set_maximized();
+                        }
                     }
-                }
-                WindowCommand::Resize(serial, edge) => {
-                    if let Some(seat) = &self.activation_seat {
-                        window.resize(seat, serial, resize_edge(edge));
+                    WindowCommand::Move(serial) => {
+                        if let Some(seat) = &self.activation_seat {
+                            window.move_(seat, serial);
+                        }
                     }
+                    WindowCommand::Resize(serial, edge) => {
+                        if let Some(seat) = &self.activation_seat {
+                            window.resize(seat, serial, resize_edge(edge));
+                        }
+                    }
+                    WindowCommand::Open(..) => unreachable!(),
                 }
+                self.surfaces[index].needs_redraw = true;
             }
-            self.surfaces[index].needs_redraw = true;
         }
     }
 
@@ -2303,14 +2350,41 @@ impl CompositorHandler for Shell {
 }
 
 impl WindowHandler for Shell {
-    fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
-        self.needs_exit = true;
-        if let Some(context) = &self.window_context {
+    fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
+        let surface_id = window.wl_surface().id();
+        let window_count = self
+            .surfaces
+            .iter()
+            .filter(|s| matches!(s.role, SurfaceRole::Window(_)))
+            .count();
+        if window_count <= 1 {
+            self.needs_exit = true;
+        }
+        if let Some(context) = self
+            .window_contexts
+            .iter()
+            .find(|ctx| ctx.controls.surface_id == surface_id)
+        {
             let mut status = context.controls.status;
             status.set(WindowStatus {
                 activated: false,
                 ..*status.read()
             });
+        }
+        if !self.needs_exit {
+            // Drop the closed surface and its controls so later commands are
+            // ignored. The window_contexts entry is removed as well.
+            if let Some(index) = self.surfaces.iter().position(|s| {
+                matches!(s.role, SurfaceRole::Window(_)) && s.surface.id() == surface_id
+            }) {
+                let mut role = SurfaceRole::None;
+                std::mem::swap(&mut self.surfaces[index].role, &mut role);
+                drop(role);
+                self.surfaces.remove(index);
+                self.window_contexts
+                    .retain(|ctx| ctx.controls.surface_id != surface_id);
+                self.surface_count.set(self.surfaces.len());
+            }
         }
     }
 
@@ -2339,13 +2413,13 @@ impl WindowHandler for Shell {
             self.surfaces[index].logical_size
         };
         self.surfaces[index].configure(size, scale);
-        let requested_server = matches!(
-            self.spec,
-            SurfaceSpec::Window(WindowOptions {
-                decorations: Decorations::Server,
-                ..
-            })
-        );
+        let surface_id = window.wl_surface().id();
+        let requested_server = self
+            .window_contexts
+            .iter()
+            .find(|ctx| ctx.controls.surface_id == surface_id)
+            .map(|ctx| ctx.controls.status.read().decoration == DecorationResponse::Server)
+            .unwrap_or(false);
         // Yuki always grants an explicit Server request. Some compositors do
         // not send the decoration configure at all, so keep the requested mode
         // when they advertise the protocol; without it, fall back to the
@@ -2358,7 +2432,11 @@ impl WindowHandler for Shell {
                 DecorationMode::Client => DecorationResponse::Client,
             }
         };
-        if let Some(context) = &self.window_context {
+        if let Some(context) = self
+            .window_contexts
+            .iter()
+            .find(|ctx| ctx.controls.surface_id == surface_id)
+        {
             if requested_server
                 && decoration == DecorationResponse::Client
                 && !self.decoration_warned
@@ -2603,7 +2681,12 @@ impl PointerHandler for Shell {
                 },
                 PointerEventKind::Press { button, serial, .. } => {
                     self.last_input_serial.set(serial);
-                    if let Some(context) = &self.window_context {
+                    let surface_id = self.surfaces[index].surface.id();
+                    if let Some(context) = self
+                        .window_contexts
+                        .iter()
+                        .find(|ctx| ctx.controls.surface_id == surface_id)
+                    {
                         context.controls.pointer_serial.set(serial);
                     }
                     PlatformEvent::Mouse {

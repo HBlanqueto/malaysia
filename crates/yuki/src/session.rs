@@ -2928,14 +2928,12 @@ mod tests {
         // Configured 1280x708, but the client only committed 640x420.
         let configured = Size::from((1280, 708));
         let geometry = Rectangle::from_size(Size::from((640, 420)));
-        let rect = super::ssd_frame_rect(
-            Point::from((0, 0)),
-            configured,
-            geometry,
-            insets,
-            false,
+        let rect = super::ssd_frame_rect(Point::from((0, 0)), configured, geometry, insets, false);
+        assert_eq!(
+            rect.size,
+            Size::from((640, 452)),
+            "frame size is committed geometry + insets"
         );
-        assert_eq!(rect.size, Size::from((640, 452)), "frame size is committed geometry + insets");
     }
 
     #[test]
@@ -2945,14 +2943,16 @@ mod tests {
         let insets = crate::decoration::Insets::ZERO;
         let configured = Size::from((800, 600));
         let geometry = Rectangle::from_size(Size::from((640, 420)));
-        let rect = super::ssd_frame_rect(
-            Point::from((100, 50)),
-            configured,
-            geometry,
-            insets,
-            true,
+        let rect =
+            super::ssd_frame_rect(Point::from((100, 50)), configured, geometry, insets, true);
+        assert_eq!(
+            rect.size, configured,
+            "during resize the frame follows the configured/pointer size"
         );
-        assert_eq!(rect.size, configured, "during resize the frame follows the configured/pointer size");
-        assert_eq!(rect.loc, Point::from((100, 50)), "location anchors the dragged edge");
+        assert_eq!(
+            rect.loc,
+            Point::from((100, 50)),
+            "location anchors the dragged edge"
+        );
     }
 }

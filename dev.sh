@@ -779,12 +779,14 @@ demo() {
             "$script_dir/dev.sh" build
         fi
         if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/window_ssd" ]; then
+            [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
+            [ ! -x "$script_dir/target/debug/examples/dialog" ]; then
             cargo build -p celestial-kit --examples ||
                 fail "$EXIT_RUN_FAILED" "could not build the window examples"
         fi
         _window_csd="$script_dir/target/debug/examples/window_csd"
         _window_ssd="$script_dir/target/debug/examples/window_ssd"
+        _dialog="$script_dir/target/debug/examples/dialog"
     else
         _shell_bin="$script_dir/result/bin/yuki-shell"
         if [ ! -x "$script_dir/result/bin/yuki" ] || [ ! -x "$_shell_bin" ]; then
@@ -792,6 +794,7 @@ demo() {
         fi
         _window_csd="$script_dir/result/bin/window_csd"
         _window_ssd="$script_dir/result/bin/window_ssd"
+        _dialog="$script_dir/result/bin/dialog"
     fi
 
     start
@@ -833,9 +836,10 @@ demo() {
     else
         printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
     fi
-    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ]; then
+    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
         demo_client window-csd "$_window_csd"
         demo_client window-ssd "$_window_ssd"
+        demo_client dialog "$_dialog"
     else
         printf 'demo: window examples not found; skipping them\n' >&2
     fi
