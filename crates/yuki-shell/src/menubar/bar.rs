@@ -21,7 +21,7 @@ use yuki_appearance::{Resolved, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
+use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems, open_root_menu};
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 use celestial_kit::menu::SearchQuery;
 
@@ -90,6 +90,10 @@ impl App for BarApp {
                 selected: false,
             }))
         });
+        let demo_query = std::env::var("YUKI_DEMO_QUERY").ok();
+        if let Some(query) = &demo_query {
+            help_query.borrow_mut().text = query.clone();
+        }
         let anchors: TitleAnchors = use_hook(|| {
             Rc::new(
                 (0..MAX_TITLES)
@@ -216,6 +220,14 @@ impl App for BarApp {
             }
         }
         let titles = Rc::new(specs);
+        let demo_open = use_hook(|| Rc::new(Cell::new(true)));
+        if demo_query.is_some()
+            && demo_open.get()
+            && let Some(index) = titles.iter().position(|s| s.label == "Ayuda")
+        {
+            demo_open.set(false);
+            open_root_menu(&titles, index, &menu_state);
+        }
         let mut left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start);

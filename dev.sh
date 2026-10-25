@@ -819,9 +819,16 @@ demo() {
     demo_client() {
         _name=$1
         shift
-        env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
-            YUKI_SHELL_EXE="$_shell_bin" \
-            "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+        if [ -n "${YUKI_DEMO_QUERY:-}" ]; then
+            env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+                YUKI_SHELL_EXE="$_shell_bin" \
+                YUKI_DEMO_QUERY="$YUKI_DEMO_QUERY" \
+                "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+        else
+            env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+                YUKI_SHELL_EXE="$_shell_bin" \
+                "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+        fi
         _pids="$_pids $!"
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
