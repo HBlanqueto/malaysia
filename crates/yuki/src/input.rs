@@ -35,6 +35,7 @@ use yuki_design::TITLEBAR;
 use yuki_scene::geometry::Point as ScenePoint;
 use yuki_scene::scene::{Edge, WindowId};
 
+use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
 use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 
 /// The Linux button code for the primary pointer button.
@@ -308,6 +309,30 @@ enum CompositorShortcut {
     ScreenshotRegion,
     /// Super+Space: open or close the launcher.
     Launcher,
+    /// Ctrl+Super+Left: place the focused window on the left half.
+    ArrangeLeft,
+    /// Ctrl+Super+Right: place the focused window on the right half.
+    ArrangeRight,
+    /// Ctrl+Super+Up: place the focused window on the top half.
+    ArrangeUp,
+    /// Ctrl+Super+Down: place the focused window on the bottom half.
+    ArrangeDown,
+    /// Ctrl+Shift+Super+Left: tile active and previous windows side by side.
+    ArrangePairLeft,
+    /// Ctrl+Shift+Super+Right: tile active and previous windows side by side (reversed).
+    ArrangePairRight,
+    /// Ctrl+Shift+Super+Up: tile active and previous windows stacked.
+    ArrangePairUp,
+    /// Ctrl+Shift+Super+Down: tile active and previous windows stacked (reversed).
+    ArrangePairDown,
+    /// Ctrl+Super+Return: fill the workspace margin.
+    ArrangeFill,
+    /// Ctrl+Super+C: center the focused window at its current size.
+    ArrangeCenter,
+    /// Ctrl+Super+R: restore the focused window to its pre-arrange rectangle.
+    ArrangeRestore,
+    /// Ctrl+Super+F: toggle fullscreen on the focused window.
+    ToggleFullscreen,
     /// Not a compositor shortcut.
     None,
 }
@@ -341,6 +366,47 @@ fn compositor_shortcut(
         } else {
             CompositorShortcut::Launcher
         };
+    }
+    // Ctrl+Super window geometry shortcuts (Infinity).
+    if ctrl && logo && !alt {
+        for sym in syms {
+            let sym = u32::from(*sym);
+            match sym {
+                keysyms::KEY_Left => {
+                    return if shift {
+                        CompositorShortcut::ArrangePairLeft
+                    } else {
+                        CompositorShortcut::ArrangeLeft
+                    };
+                }
+                keysyms::KEY_Right => {
+                    return if shift {
+                        CompositorShortcut::ArrangePairRight
+                    } else {
+                        CompositorShortcut::ArrangeRight
+                    };
+                }
+                keysyms::KEY_Up => {
+                    return if shift {
+                        CompositorShortcut::ArrangePairUp
+                    } else {
+                        CompositorShortcut::ArrangeUp
+                    };
+                }
+                keysyms::KEY_Down => {
+                    return if shift {
+                        CompositorShortcut::ArrangePairDown
+                    } else {
+                        CompositorShortcut::ArrangeDown
+                    };
+                }
+                keysyms::KEY_Return => return CompositorShortcut::ArrangeFill,
+                keysyms::KEY_c => return CompositorShortcut::ArrangeCenter,
+                keysyms::KEY_r => return CompositorShortcut::ArrangeRestore,
+                keysyms::KEY_f => return CompositorShortcut::ToggleFullscreen,
+                _ => {}
+            }
+        }
     }
     if !(ctrl && alt) {
         return CompositorShortcut::None;
@@ -600,6 +666,59 @@ impl State {
                                     }
                                     CompositorShortcut::Launcher => {
                                         state.toggle_launcher();
+                                    }
+                                    CompositorShortcut::ArrangeLeft => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Left);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangeRight => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Right);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangeUp => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Top);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangeDown => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Bottom);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangePairLeft => {
+                                        state.infinity_arrange_pair(PairLayout::SideBySide);
+                                    }
+                                    CompositorShortcut::ArrangePairRight => {
+                                        state.infinity_arrange_pair(PairLayout::SideBySideReversed);
+                                    }
+                                    CompositorShortcut::ArrangePairUp => {
+                                        state.infinity_arrange_pair(PairLayout::Stacked);
+                                    }
+                                    CompositorShortcut::ArrangePairDown => {
+                                        state.infinity_arrange_pair(PairLayout::StackedReversed);
+                                    }
+                                    CompositorShortcut::ArrangeFill => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Fill);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangeCenter => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_arrange(id, Layout::Center);
+                                        }
+                                    }
+                                    CompositorShortcut::ArrangeRestore => {
+                                        if let Some(id) = state.focused_window() {
+                                            state.infinity_restore(id);
+                                        }
+                                    }
+                                    CompositorShortcut::ToggleFullscreen => {
+                                        if let Some(id) = state.focused_window() {
+                                            let fullscreen = !state.fullscreen.contains_key(&id);
+                                            state.infinity_set_fullscreen(id, fullscreen);
+                                        }
                                     }
                                     CompositorShortcut::None => {}
                                 }
@@ -2346,6 +2465,73 @@ mod tests {
         // Without Super (Command) it is not a compositor shortcut.
         assert!(matches!(
             compositor_shortcut(false, false, true, false, &[three], false),
+            CompositorShortcut::None
+        ));
+    }
+
+    #[test]
+    fn ctrl_super_keys_map_to_infinity_arrange_shortcuts() {
+        let left = xkb::Keysym::new(keysyms::KEY_Left);
+        let right = xkb::Keysym::new(keysyms::KEY_Right);
+        let up = xkb::Keysym::new(keysyms::KEY_Up);
+        let down = xkb::Keysym::new(keysyms::KEY_Down);
+        let ret = xkb::Keysym::new(keysyms::KEY_Return);
+        let c = xkb::Keysym::new(keysyms::KEY_c);
+        let r = xkb::Keysym::new(keysyms::KEY_r);
+        let f = xkb::Keysym::new(keysyms::KEY_f);
+
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[left], false),
+            CompositorShortcut::ArrangeLeft
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[right], false),
+            CompositorShortcut::ArrangeRight
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[up], false),
+            CompositorShortcut::ArrangeUp
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[down], false),
+            CompositorShortcut::ArrangeDown
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, true, true, &[left], false),
+            CompositorShortcut::ArrangePairLeft
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, true, true, &[right], false),
+            CompositorShortcut::ArrangePairRight
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, true, true, &[up], false),
+            CompositorShortcut::ArrangePairUp
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, true, true, &[down], false),
+            CompositorShortcut::ArrangePairDown
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[ret], false),
+            CompositorShortcut::ArrangeFill
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[c], false),
+            CompositorShortcut::ArrangeCenter
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[r], false),
+            CompositorShortcut::ArrangeRestore
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, false, false, true, &[f], false),
+            CompositorShortcut::ToggleFullscreen
+        ));
+
+        // Alt breaks the Infinity chord so it does not shadow Ctrl+Alt+F.
+        assert!(matches!(
+            compositor_shortcut(true, true, false, true, &[left], false),
             CompositorShortcut::None
         ));
     }
