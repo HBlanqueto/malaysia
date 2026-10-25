@@ -3408,6 +3408,7 @@ impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
                 break;
             }
         }
+        state.sync_toplevels();
     }
 }
 

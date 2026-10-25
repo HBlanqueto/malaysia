@@ -129,7 +129,7 @@ pub fn window_menu_items(
             label: "Trasladar y redimensionar".to_string(),
             enabled: true,
             icon: Some(icons::GRID),
-            items: move_resize_items(active_window),
+            items: move_resize_items(active, active_window),
         },
         MenuItem::Submenu {
             label: "Ventana a pantalla completa".to_string(),
@@ -505,34 +505,34 @@ pub fn on_action(id: String) {
     }
 }
 
-fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
-    let has_active = active.is_some();
-    let can_restore = active.is_some_and(|window| window.restorable);
+fn move_resize_items(active: Option<usize>, active_window: Option<&ToplevelInfo>) -> Vec<MenuItem> {
+    let has_active = active_window.is_some();
+    let can_restore = active_window.is_some_and(|window| window.restorable);
     vec![
         header("Mitades"),
         action(
-            "app-move-left",
+            active_id("app-move-left", active),
             "Izquierda",
             Some("Ctrl+Super+Left"),
             has_active,
             Some(icons::HALF_LEFT),
         ),
         action(
-            "app-move-right",
+            active_id("app-move-right", active),
             "Derecha",
             Some("Ctrl+Super+Right"),
             has_active,
             Some(icons::HALF_RIGHT),
         ),
         action(
-            "app-move-up",
+            active_id("app-move-up", active),
             "Superior",
             Some("Ctrl+Super+Up"),
             has_active,
             Some(icons::HALF_TOP),
         ),
         action(
-            "app-move-down",
+            active_id("app-move-down", active),
             "Inferior",
             Some("Ctrl+Super+Down"),
             has_active,
@@ -541,28 +541,28 @@ fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
         MenuItem::Separator,
         header("Cuartos"),
         action(
-            "app-quarter-top-left",
+            active_id("app-quarter-top-left", active),
             "Superior izquierdo",
             None,
             has_active,
             Some(icons::QUARTER_TOP_LEFT),
         ),
         action(
-            "app-quarter-top-right",
+            active_id("app-quarter-top-right", active),
             "Superior derecho",
             None,
             has_active,
             Some(icons::QUARTER_TOP_RIGHT),
         ),
         action(
-            "app-quarter-bottom-left",
+            active_id("app-quarter-bottom-left", active),
             "Inferior izquierdo",
             None,
             has_active,
             Some(icons::QUARTER_BOTTOM_LEFT),
         ),
         action(
-            "app-quarter-bottom-right",
+            active_id("app-quarter-bottom-right", active),
             "Inferior derecho",
             None,
             has_active,
@@ -571,35 +571,35 @@ fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
         MenuItem::Separator,
         header("Disposición"),
         action(
-            "app-layout-side-by-side",
+            active_id("app-layout-side-by-side", active),
             "Izquierda y derecha",
             Some("Ctrl+Shift+Super+Left"),
             has_active,
             Some(icons::HALVES_LEFT_RIGHT),
         ),
         action(
-            "app-layout-reversed-side-by-side",
+            active_id("app-layout-reversed-side-by-side", active),
             "Derecha e izquierda",
             Some("Ctrl+Shift+Super+Right"),
             has_active,
             Some(icons::HALVES_RIGHT_LEFT),
         ),
         action(
-            "app-layout-stacked",
+            active_id("app-layout-stacked", active),
             "Superior e inferior",
             Some("Ctrl+Shift+Super+Up"),
             has_active,
             Some(icons::HALVES_TOP_BOTTOM),
         ),
         action(
-            "app-layout-reversed-stacked",
+            active_id("app-layout-reversed-stacked", active),
             "Inferior y superior",
             Some("Ctrl+Shift+Super+Down"),
             has_active,
             Some(icons::HALVES_BOTTOM_TOP),
         ),
         action(
-            "app-layout-quarters",
+            active_id("app-layout-quarters", active),
             "En cuartos",
             None,
             has_active,
@@ -607,7 +607,7 @@ fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
         ),
         MenuItem::Separator,
         action(
-            "app-move-restore",
+            active_id("app-move-restore", active),
             "Regresar al tamaño anterior",
             Some("Ctrl+Super+R"),
             can_restore,
@@ -862,6 +862,16 @@ mod tests {
         );
         // Restore is disabled because the active window has no saved rectangle.
         assert!(!is_enabled(&layout[19]));
+        // The submenu actions carry the active window index, or `on_action`
+        // parses an empty argument and silently does nothing.
+        assert!(matches!(
+            &layout[1],
+            MenuItem::Action { id, .. } if id == "app-move-left:0"
+        ));
+        assert!(matches!(
+            &layout[19],
+            MenuItem::Action { id, .. } if id == "app-move-restore:0"
+        ));
     }
 
     #[test]
