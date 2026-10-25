@@ -350,6 +350,24 @@ fn compositor_shortcut(
     CompositorShortcut::None
 }
 
+/// What a press that hit no window, popup or Top/Overlay layer does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesktopClick {
+    /// An open bar menu is the only target: close it and keep the focus.
+    CloseMenu,
+    /// Nothing is focused by the press: leave no window focused (macOS).
+    ClearFocus,
+}
+
+/// Resolves the desktop press. The compositor decides; the caller carries it out.
+fn desktop_click(menu_open: bool) -> DesktopClick {
+    if menu_open {
+        DesktopClick::CloseMenu
+    } else {
+        DesktopClick::ClearFocus
+    }
+}
+
 /// Keeps a relative pointer inside the logical output.
 ///
 /// The right and bottom edges subtract a small epsilon so a pointer at the
@@ -664,7 +682,21 @@ impl State {
         }
 
         let Some(id) = under else {
-            tracing::info!(?location, "press landed outside every window");
+            match desktop_click(self.windows.topmost_popup().is_some()) {
+                // The press only dismisses the open bar menu; the window behind
+                // keeps its focus.
+                DesktopClick::CloseMenu => {
+                    tracing::info!(?location, "press outside the popups dismissed them");
+                    self.dismiss_all_popups();
+                }
+                // macOS: a click on the wallpaper or the empty area leaves no
+                // window focused. The stack is untouched.
+                DesktopClick::ClearFocus => {
+                    tracing::info!(?location, "press landed on the desktop; focus cleared");
+                    self.clear_keyboard_focus();
+                    self.request_redraw();
+                }
+            }
             return;
         };
         self.raise_and_focus(id);
@@ -2029,8 +2061,8 @@ mod tests {
     use xkbcommon::xkb::{self, keysyms};
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, Edge, ShakeDetector, clamp_pointer, compositor_shortcut,
-        double_click, edge_cursor, pointer_focus_blocked,
+        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, clamp_pointer,
+        compositor_shortcut, desktop_click, double_click, edge_cursor, pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
@@ -2589,6 +2621,15 @@ mod tests {
             pointer.on_release(Some(yuki_design::ButtonKind::Close), true),
             Some(yuki_design::ButtonKind::Close)
         );
+    }
+
+    #[test]
+    fn a_click_on_the_desktop_clears_the_keyboard_focus() {
+        // No menu open: the press asks for no focused window (the compositor
+        // then drops the keyboard focus and publishes an empty active window).
+        assert_eq!(desktop_click(false), DesktopClick::ClearFocus);
+        // An open bar menu takes the same press as "close me" and keeps focus.
+        assert_eq!(desktop_click(true), DesktopClick::CloseMenu);
     }
 
     #[test]
