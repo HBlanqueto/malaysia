@@ -740,7 +740,7 @@ impl State {
                 .and_then(|(outer, insets)| crate::chrome::button_at(outer, insets, location));
             if let Some(kind) = button_kind {
                 self.clear_chrome_pointer();
-                if kind == yuki_design::ButtonKind::Maximize && !self.windows.zoom_supported(id) {
+                if kind == yuki_design::ButtonKind::Maximize && !self.green_button_admitted(id) {
                     return;
                 }
                 let entry = self
@@ -807,19 +807,43 @@ impl State {
 
     /// Applies a titlebar button.
     fn window_button(&mut self, id: WindowId, kind: yuki_design::ButtonKind) {
-        if kind == yuki_design::ButtonKind::Maximize && !self.windows.zoom_supported(id) {
-            tracing::info!(
-                window = id.get(),
-                "maximize ignored: the window is fixed-size"
-            );
-            return;
-        }
         match kind {
             yuki_design::ButtonKind::Close => self.windows.send_close(id),
             yuki_design::ButtonKind::Minimize => self.set_minimized(id, true),
-            yuki_design::ButtonKind::Maximize => self.toggle_maximize(id),
+            yuki_design::ButtonKind::Maximize => self.green_button(id),
         }
         self.request_redraw();
+    }
+
+    /// Runs the configured action for the green traffic light.
+    fn green_button(&mut self, id: WindowId) {
+        use crate::config::GreenButtonAction;
+        match self.config.window.green_button {
+            GreenButtonAction::Focus => {
+                tracing::info!(window = id.get(), "focus mode requested");
+            }
+            GreenButtonAction::Zoom => {
+                if self.windows.zoom_supported(id) {
+                    self.toggle_maximize(id);
+                } else {
+                    tracing::info!(
+                        window = id.get(),
+                        "maximize ignored: the window is fixed-size"
+                    );
+                }
+            }
+            GreenButtonAction::Fullscreen => {
+                tracing::info!(window = id.get(), "fullscreen requested");
+            }
+            GreenButtonAction::None => {}
+        }
+    }
+
+    /// Whether the green light can be pressed: zoom needs a resizable window;
+    /// focus, fullscreen and none are always available.
+    pub(crate) fn green_button_admitted(&self, id: WindowId) -> bool {
+        self.config.window.green_button != crate::config::GreenButtonAction::Zoom
+            || self.windows.zoom_supported(id)
     }
 
     /// Maximizes or restores a window from Yuki's titlebar.

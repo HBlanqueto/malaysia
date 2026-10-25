@@ -1056,7 +1056,7 @@ fn append_window_frame(
             focused: is_focused,
             group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
-            zoom_supported: state.windows.zoom_supported(id),
+            zoom_supported: state.green_button_admitted(id),
         };
         if let Some(program) = rounded_program.clone()
             && let Some(element) = state.chrome.element(

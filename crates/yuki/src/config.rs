@@ -95,6 +95,21 @@ pub enum DoubleClickAction {
     None,
 }
 
+/// What the green traffic light does on a server-decorated window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GreenButtonAction {
+    /// Enter focus mode (pending; for now only logs the request).
+    #[default]
+    Focus,
+    /// Zoom the window to the workspace, keeping the frame.
+    Zoom,
+    /// Enter fullscreen (pending; for now only logs the request).
+    Fullscreen,
+    /// Do nothing.
+    None,
+}
+
 /// The full runtime configuration, read from one **`.domain` file per domain**
 /// (ADR 0021) — like macOS and its per-domain plists.
 ///
@@ -303,6 +318,8 @@ pub struct WindowConfig {
     pub titlebar: bool,
     /// What a double click on the title bar does (see [`DoubleClickAction`]).
     pub double_click_titlebar: DoubleClickAction,
+    /// What the green traffic light does (see [`GreenButtonAction`]).
+    pub green_button: GreenButtonAction,
     /// When the pointer focus changes the focused window (see [`FocusPolicy`]).
     pub focus: FocusPolicy,
     /// The thickness, in logical pixels, of the resize side band.
@@ -318,6 +335,7 @@ impl Default for WindowConfig {
             decorations: DecorationPolicy::default(),
             titlebar: true,
             double_click_titlebar: DoubleClickAction::default(),
+            green_button: GreenButtonAction::default(),
             focus: FocusPolicy::default(),
             resize_border: 10,
             resize_corner: 20,
@@ -639,6 +657,24 @@ mod tests {
     }
 
     #[test]
+    fn the_green_button_defaults_to_focus_and_parses_lowercase() {
+        assert_eq!(
+            WindowConfig::default().green_button,
+            GreenButtonAction::Focus
+        );
+        for (text, expected) in [
+            ("focus", GreenButtonAction::Focus),
+            ("zoom", GreenButtonAction::Zoom),
+            ("fullscreen", GreenButtonAction::Fullscreen),
+            ("none", GreenButtonAction::None),
+        ] {
+            let parsed: Config = toml::from_str(&format!("[window]\ngreen_button = \"{text}\"\n"))
+                .expect("green_button parses");
+            assert_eq!(parsed.window.green_button, expected);
+        }
+    }
+
+    #[test]
     fn the_resize_band_defaults_are_10_and_20() {
         let window = WindowConfig::default();
         assert_eq!(window.resize_border, 10);
@@ -678,6 +714,7 @@ mod tests {
             decorations = "force_server"
             titlebar = false
             double_click_titlebar = "minimize"
+            green_button = "fullscreen"
             focus = "sloppy"
             resize_border = 8
             resize_corner = 20
@@ -732,6 +769,7 @@ mod tests {
             parsed.window.double_click_titlebar,
             DoubleClickAction::Minimize
         );
+        assert_eq!(parsed.window.green_button, GreenButtonAction::Fullscreen);
         assert_eq!(parsed.window.focus, FocusPolicy::Sloppy);
         assert_eq!(parsed.window.resize_border, 8);
         assert_eq!(parsed.window.resize_corner, 20);
