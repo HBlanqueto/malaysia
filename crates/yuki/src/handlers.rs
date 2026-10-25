@@ -717,6 +717,16 @@ impl XdgShellHandler for State {
     fn app_id_changed(&mut self, surface: ToplevelSurface) {
         let requested = self.windows.requested_decoration(surface.wl_surface());
         self.apply_requested_decoration(surface.wl_surface(), requested);
+        let id = self.windows.id_of(surface.wl_surface());
+        if let Some(id) = id {
+            self.foreign_identity_changed(id);
+        }
+    }
+
+    fn title_changed(&mut self, surface: ToplevelSurface) {
+        if let Some(id) = self.windows.id_of(surface.wl_surface()) {
+            self.foreign_identity_changed(id);
+        }
     }
 
     fn ack_configure(&mut self, surface: WlSurface, configure: Configure) {

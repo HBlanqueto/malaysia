@@ -883,6 +883,7 @@ impl State {
         }
         // Keep the window focused and Activated through the state change.
         self.focus_window(id);
+        self.foreign_state_changed(id);
         self.request_redraw();
     }
 
@@ -953,6 +954,12 @@ impl State {
         // Publish the active window for the menu bar (the store the shell
         // watches, same as the wallpaper).
         self.publish_active(Some(id));
+        if let Some(previous) = previous
+            && previous != id
+        {
+            self.foreign_state_changed(previous);
+        }
+        self.foreign_state_changed(id);
         self.log_focus_stack(Some(id));
     }
 
@@ -1290,6 +1297,9 @@ impl State {
             self.windows.set_activated(window, activated);
         }
         self.publish_active(None);
+        if let Some(previous) = previous {
+            self.foreign_state_changed(previous);
+        }
         self.log_focus_stack(None);
     }
 

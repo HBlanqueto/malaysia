@@ -10,7 +10,7 @@
 //! protocols are part of the shell model (ADR 0023).
 
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::{
-    zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
+    zwlr_foreign_toplevel_handle_v1::{self, State as ToplevelState, ZwlrForeignToplevelHandleV1},
     zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
 };
 use smithay::reexports::wayland_server::backend::GlobalId;
@@ -43,6 +43,7 @@ impl ForeignState {
 pub struct ForeignManagement {
     _global: GlobalId,
     instances: Vec<ZwlrForeignToplevelManagerV1>,
+    handles: Vec<(WindowId, ZwlrForeignToplevelHandleV1)>,
 }
 
 impl ForeignManagement {
@@ -51,16 +52,43 @@ impl ForeignManagement {
         Self {
             _global: global,
             instances: Vec::new(),
+            handles: Vec::new(),
         }
     }
 
-    /// Removes dead manager instances.
+    /// Removes dead manager instances and handles.
     fn prune(&mut self) {
         self.instances.retain(|instance| instance.is_alive());
+        self.handles.retain(|(_, handle)| handle.is_alive());
     }
 }
 
-/// Creates a management handle for `id` on `manager` and sends its identity.
+/// The array of `state` values for one window. The wlr event carries the full
+/// state, not a delta, so the client can rebuild `active`/`minimized`/etc.
+pub(crate) fn toplevel_states(
+    activated: bool,
+    minimized: bool,
+    maximized: bool,
+    fullscreen: bool,
+) -> Vec<u8> {
+    let mut states = Vec::with_capacity(4);
+    if maximized {
+        states.push(ToplevelState::Maximized as u8);
+    }
+    if minimized {
+        states.push(ToplevelState::Minimized as u8);
+    }
+    if activated {
+        states.push(ToplevelState::Activated as u8);
+    }
+    if fullscreen {
+        states.push(ToplevelState::Fullscreen as u8);
+    }
+    states
+}
+
+/// Creates a management handle for `id` on `manager` and sends its identity
+/// and state.
 fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignToplevelManagerV1) {
     let Some((title, app_id)) = state.windows.active_info(id) else {
         return;
@@ -78,7 +106,9 @@ fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignTo
     manager.toplevel(&handle);
     handle.title(title);
     handle.app_id(app_id);
+    handle.state(state.foreign_states_for(id));
     handle.done();
+    state.foreign.management.handles.push((id, handle));
 }
 
 impl smithay::reexports::wayland_server::GlobalDispatch<ZwlrForeignToplevelManagerV1, (), State>
@@ -163,9 +193,15 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             zwlr_foreign_toplevel_handle_v1::Request::UnsetMinimized => {
                 state.set_minimized(id, false);
             }
+            zwlr_foreign_toplevel_handle_v1::Request::SetMaximized => {
+                state.set_maximized(id, true);
+            }
+            zwlr_foreign_toplevel_handle_v1::Request::UnsetMaximized => {
+                state.set_maximized(id, false);
+            }
             _ => {
-                // set_maximized/unset_maximized/set_fullscreen/unset_fullscreen
-                // and destroy are acknowledged but not implemented yet.
+                // set_fullscreen/unset_fullscreen and destroy are acknowledged
+                // but not implemented yet.
             }
         }
     }
@@ -206,7 +242,68 @@ impl State {
     /// handle drop; management handles close when the resource is gone).
     pub(crate) fn foreign_window_destroyed(&mut self, id: WindowId) {
         self.list_handles.retain(|(wid, _)| *wid != id);
+        self.foreign.management.handles.retain(|(wid, handle)| {
+            if *wid == id {
+                if handle.is_alive() {
+                    handle.closed();
+                }
+                false
+            } else {
+                handle.is_alive()
+            }
+        });
+        self.foreign
+            .management
+            .instances
+            .retain(|instance| instance.is_alive());
+    }
+
+    /// Sends the window's full wlr `state` (and `done`) to every management
+    /// handle of that window.
+    pub(crate) fn foreign_state_changed(&mut self, id: WindowId) {
+        let states = self.foreign_states_for(id);
         self.foreign.management.prune();
+        for (wid, handle) in &self.foreign.management.handles {
+            if *wid == id {
+                handle.state(states.clone());
+                handle.done();
+            }
+        }
+    }
+
+    /// Sends the window's current title and app id (and `done`) to both its
+    /// list handle and every management handle.
+    pub(crate) fn foreign_identity_changed(&mut self, id: WindowId) {
+        let Some((title, app_id)) = self.windows.active_info(id) else {
+            return;
+        };
+        if let Some((_, handle)) = self.list_handles.iter().find(|(wid, _)| *wid == id) {
+            handle.send_title(&title);
+            handle.send_app_id(&app_id);
+            handle.send_done();
+        }
+        self.foreign.management.prune();
+        for (wid, handle) in &self.foreign.management.handles {
+            if *wid == id {
+                handle.title(title.clone());
+                handle.app_id(app_id.clone());
+                handle.done();
+            }
+        }
+    }
+
+    fn foreign_states_for(&self, id: WindowId) -> Vec<u8> {
+        let fullscreen = self
+            .windows
+            .iter()
+            .find(|window| window.id() == id)
+            .is_some_and(|window| window.state() == crate::decoration::WindowState::Fullscreen);
+        toplevel_states(
+            self.focused_window() == Some(id),
+            self.minimized.contains(&id),
+            self.maximized.contains_key(&id),
+            fullscreen,
+        )
     }
 
     /// Activates a window: restore it if minimized, then raise and focus.
@@ -253,6 +350,7 @@ impl State {
             self.windows.set_hidden(id, false);
             tracing::info!(window = id.get(), "window restored");
         }
+        self.foreign_state_changed(id);
         self.request_redraw();
     }
 }
@@ -274,4 +372,35 @@ macro_rules! delegate_foreign_management {
             smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1: yuki_scene::scene::WindowId
         ] => $crate::foreign::ForeignManagement);
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state(value: ToplevelState) -> u8 {
+        value as u8
+    }
+
+    #[test]
+    fn toplevel_states_carries_the_full_state() {
+        assert!(toplevel_states(false, false, false, false).is_empty());
+        assert_eq!(
+            toplevel_states(true, false, false, false),
+            vec![state(ToplevelState::Activated)]
+        );
+        assert_eq!(
+            toplevel_states(false, true, false, false),
+            vec![state(ToplevelState::Minimized)]
+        );
+        assert_eq!(
+            toplevel_states(true, true, true, true),
+            vec![
+                state(ToplevelState::Maximized),
+                state(ToplevelState::Minimized),
+                state(ToplevelState::Activated),
+                state(ToplevelState::Fullscreen),
+            ]
+        );
+    }
 }
