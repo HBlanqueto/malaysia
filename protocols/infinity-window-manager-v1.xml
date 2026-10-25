@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="infinity_window_manager_v1">
+  <copyright>
+    Copyright © 2026 Yuki contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+  </copyright>
+
+  <interface name="infinity_window_manager_v1" version="1">
+    <description summary="private window geometry channel for yuki-shell">
+      This protocol is private to yuki-shell. It lets the shell ask the
+      compositor to place windows in halves, quarters, pairs and fullscreen
+      arrangements.
+
+      The shell identifies windows with the same zwlr_foreign_toplevel_handle_v1
+      objects it already uses for the dock. Requests are silently ignored when
+      the handle no longer names a tracked window.
+    </description>
+
+    <enum name="layout">
+      <entry name="fill" value="0" summary="fill the workspace margin"/>
+      <entry name="center" value="1" summary="center at current size"/>
+      <entry name="left" value="2" summary="left half"/>
+      <entry name="right" value="3" summary="right half"/>
+      <entry name="top" value="4" summary="top half"/>
+      <entry name="bottom" value="5" summary="bottom half"/>
+      <entry name="top_left" value="6" summary="top-left quarter"/>
+      <entry name="top_right" value="7" summary="top-right quarter"/>
+      <entry name="bottom_left" value="8" summary="bottom-left quarter"/>
+      <entry name="bottom_right" value="9" summary="bottom-right quarter"/>
+    </enum>
+
+    <enum name="pair_layout">
+      <entry name="side_by_side" value="0" summary="active left, previous right"/>
+      <entry name="side_by_side_reversed" value="1" summary="previous left, active right"/>
+      <entry name="stacked" value="2" summary="active top, previous bottom"/>
+      <entry name="stacked_reversed" value="3" summary="previous top, active bottom"/>
+    </enum>
+
+    <request name="arrange">
+      <description summary="place one window in a layout">
+        Place the window identified by the given zwlr_foreign_toplevel_handle_v1
+        in the requested layout. The first arrange saves the previous rectangle;
+        later arranges do not overwrite it.
+      </description>
+      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="layout" type="uint" enum="layout"/>
+    </request>
+
+    <request name="arrange_pair">
+      <description summary="tile the active and previous windows as a pair">
+        The active window takes the first half and the previous visible window
+        in focus order takes the second half.
+      </description>
+      <arg name="layout" type="uint" enum="pair_layout"/>
+    </request>
+
+    <request name="arrange_quarters">
+      <description summary="tile the four most recent visible windows in quarters">
+      </description>
+    </request>
+
+    <request name="restore">
+      <description summary="restore the window to its pre-arrange rectangle">
+        Applies the rectangle saved by the first arrange and clears it.
+      </description>
+      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+    </request>
+
+    <request name="set_fullscreen">
+      <description summary="set or unset fullscreen">
+        A non-zero value enters fullscreen covering the whole output; zero
+        leaves it and restores the previous rectangle.
+      </description>
+      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="fullscreen" type="uint"/>
+    </request>
+
+    <event name="restorable">
+      <description summary="whether the window has a stored restore rectangle">
+        Sent whenever the stored rectangle changes so the shell can enable or
+        disable the restore action.
+      </description>
+      <arg name="handle" type="object" interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="restorable" type="uint"/>
+    </event>
+
+    <request name="destroy" type="destructor">
+      <description summary="destroy the manager object">
+      </description>
+    </request>
+  </interface>
+</protocol>
