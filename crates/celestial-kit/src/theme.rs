@@ -8,10 +8,7 @@ use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::Color;
 use yuki_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
-use yuki_design::{
-    LockPalette, MENU_DARK, MENU_DARK_TINT, MENU_LIGHT, MenuPalette, Rgba, SHELL_DARK,
-    SHELL_DARK_TINT, SHELL_LIGHT, ShellPalette,
-};
+use yuki_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
 
 fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
@@ -63,19 +60,14 @@ pub fn resolved() -> Resolved {
 }
 
 /// The shell palette for the current appearance (respects the desktop tint).
+///
+/// `Resolved` already picked the opaque or translucent surfaces from
+/// `reduce_transparency`.
+// TODO(ADR 0024): with reduce_transparency = false the compositor should blur
+// the wallpaper behind these surfaces; until then the translucent token simply
+// blends with whatever is behind it.
 pub fn shell_palette(resolved: &Resolved) -> ShellPalette {
-    let base = match resolved.scheme {
-        ColorScheme::Dark => SHELL_DARK,
-        ColorScheme::DarkTint => SHELL_DARK_TINT,
-        ColorScheme::Auto | ColorScheme::Light => SHELL_LIGHT,
-    };
-    let mut palette = base;
-    if let Some((tint, factor)) = resolved.panel_tint {
-        palette.bar = base.bar.mix(tint, factor);
-        palette.tile = base.tile.mix(tint, factor);
-    }
-    palette.tile_active = resolved.accent;
-    palette
+    resolved.shell
 }
 
 /// The shell theme for an explicit scheme (tests and previews).
@@ -105,11 +97,7 @@ pub fn for_scheme(dark: bool) -> Theme {
 
 /// The menu palette for the current appearance.
 pub fn menu_palette(resolved: &Resolved) -> MenuPalette {
-    match resolved.scheme {
-        ColorScheme::Dark => MENU_DARK,
-        ColorScheme::DarkTint => MENU_DARK_TINT,
-        ColorScheme::Auto | ColorScheme::Light => MENU_LIGHT,
-    }
+    resolved.menu
 }
 
 /// The theme for menubar/dock-style surfaces.

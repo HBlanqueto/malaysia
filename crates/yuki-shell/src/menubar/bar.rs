@@ -51,14 +51,16 @@ impl App for BarApp {
         let timers = Timers::get();
         let appearance = self.appearance;
         use_hook(move || schedule_appearance_poll(timers, appearance));
-        let _appearance = *self.appearance.read();
+        let resolved = (*self.appearance.read()).unwrap_or_else(celestial_kit::theme::resolved);
 
         let now = self.clock.read().clone();
         let app_id = self.active_app.read().clone();
         let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let focused = app_id.is_some();
-        let palette = celestial_kit::theme::shell_palette(&celestial_kit::theme::resolved());
+        let palette = celestial_kit::theme::shell_palette(&resolved);
         let text = rgba(palette.text);
+        // Opaque by default; the blur for reduce_transparency = false will
+        // arrive with the compositor's surface effects (ADR 0024).
         let bar = rgba(palette.bar);
 
         let mut root = rect()
