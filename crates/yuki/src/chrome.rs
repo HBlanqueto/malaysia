@@ -40,6 +40,7 @@ use crate::decoration::Insets;
 pub(crate) struct ChromeTheme {
     /// Resolved Neptunia palette for the current appearance.
     pub(crate) palette: Palette,
+    scheme: ColorScheme,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
     signature: u64,
@@ -82,6 +83,7 @@ impl ChromeTheme {
         );
         Self {
             palette,
+            scheme: resolved.scheme,
             lights: resolved.lights,
             traffic_style,
             signature,
@@ -165,16 +167,16 @@ impl ChromeCache {
         &self,
         program: &GlesPixelProgram,
         window_rect: Rectangle<i32, Logical>,
+        theme: &ChromeTheme,
         focused: bool,
     ) -> Vec<OutputRenderElement> {
-        let focus = if focused {
-            1.0
-        } else {
-            grade_graphics::params::SHADOW_UNFOCUSED_SCALE
+        let style = match theme.scheme {
+            ColorScheme::Light => yuki_design::SHADOW,
+            _ => yuki_design::SHADOW_DARK,
         };
         let mut elements = Vec::with_capacity(2);
-        for layer in [yuki_design::SHADOW.ambient, yuki_design::SHADOW.contact] {
-            let Some(element) = shadow_layer_element(program, window_rect, layer, focus) else {
+        for layer in style.layers(focused) {
+            let Some(element) = shadow_layer_element(program, window_rect, layer) else {
                 continue;
             };
             elements.push(element.into());
@@ -250,7 +252,6 @@ fn shadow_layer_element(
     program: &GlesPixelProgram,
     window_rect: Rectangle<i32, Logical>,
     layer: yuki_design::ShadowLayer,
-    focus: f32,
 ) -> Option<PixelShaderElement> {
     // The shadow extends 3 sigma plus the offset on every side; with the CSS
     // equivalence sigma = blur / 2 that is 1.5 * blur + |offset|.
@@ -265,7 +266,7 @@ fn shadow_layer_element(
             window_rect.size.h + margin * 2,
         )),
     );
-    let color = grade_graphics::params::SHADOW_COLOR;
+    let color = layer.color;
     let uniforms = vec![
         Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
         Uniform::new(
@@ -280,14 +281,13 @@ fn shadow_layer_element(
         Uniform::new("radius", yuki_design::WINDOW.corner_radius as f32),
         Uniform::new("blur", layer.blur as f32),
         Uniform::new("offset", [0.0f32, layer.y_offset as f32]),
-        Uniform::new("color", [color[0], color[1], color[2], color[3]]),
+        Uniform::new("color", [color.r, color.g, color.b, 1.0]),
     ];
-    let alpha = layer.opacity * focus;
     Some(PixelShaderElement::new(
         program.clone(),
         area,
         None,
-        alpha,
+        layer.opacity,
         uniforms,
         Kind::Unspecified,
     ))
@@ -921,6 +921,17 @@ mod tests {
             top: f64::from(TITLEBAR.thickness),
             ..Insets::ZERO
         }
+    }
+
+    #[test]
+    fn shadow_margin_is_three_sigma_plus_the_offset() {
+        let layer = yuki_design::ShadowLayer {
+            blur: 48,
+            y_offset: 18,
+            opacity: 0.18,
+            color: LIGHT.outer_border,
+        };
+        assert_eq!(shadow_margin(layer), 90);
     }
 
     #[test]

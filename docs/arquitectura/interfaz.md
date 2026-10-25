@@ -78,8 +78,10 @@ solo se dibujan sus superficies (y el cursor).
   las apps propias de Neptunia, no el chrome de terceros.
 - **Tipografía**: Geist; el título usa la escala `headline` (13/600) y el
   cuerpo de la shell es `body` (13 px, 400), 11–13 px según el componente.
-- **Sombras**: los valores de Neptunia están en `SHADOW`; el render de sombra y
-  esquinas redondeadas aún no está conectado.
+- **Sombras**: los valores de Neptunia están en `SHADOW` (claro) y
+  `SHADOW_DARK` (oscuro); el compositor las dibuja con shader detrás de cada
+  ventana y recorta todas las superficies (SSD, CSD y subsuperficies) con el
+  radio 16.
 - **Modos de color de ventana** (`appearance.window_color`):
   - `neutral`: paleta base, semáforos estándar fijos.
   - `accent`: tinte del acento (6 % claro / 8 % oscuro), semáforos derivados.

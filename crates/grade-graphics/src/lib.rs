@@ -63,19 +63,6 @@ pub mod shaders {
     pub const BORDER: &str = include_str!("border.frag");
 }
 
-/// Uniform/parameter values for the shared shaders.
-///
-/// The values live with the GLSL so a parameter change (a radius, a shadow
-/// offset) is a single edit that both consumers pick up.
-pub mod params {
-    /// Premultiplied shadow colour used for both the ambient and contact
-    /// layers. Matches the previous CPU rasterizer's `13, 18, 25`.
-    pub const SHADOW_COLOR: [f32; 4] = [13.0 / 255.0, 18.0 / 255.0, 25.0 / 255.0, 1.0];
-
-    /// Opacity multiplier applied to the shadow when the window is not focused.
-    pub const SHADOW_UNFOCUSED_SCALE: f32 = 0.5;
-}
-
 #[cfg(test)]
 mod tests {
     use super::shaders;

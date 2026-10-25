@@ -236,12 +236,14 @@ pub struct WindowStyle {
 /// One layer of a window shadow.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowLayer {
-    /// Blur radius, in logical pixels.
+    /// CSS blur radius, in logical pixels (`sigma = blur / 2`).
     pub blur: u32,
     /// Vertical offset, in logical pixels; positive is downward.
     pub y_offset: i32,
-    /// Opacity, unitless `0.0..=1.0`.
+    /// Opacity when the window is focused, unitless `0.0..=1.0`.
     pub opacity: f32,
+    /// The shadow tint; its alpha is not used.
+    pub color: Rgba,
 }
 
 /// The two-layer window shadow.
@@ -251,8 +253,28 @@ pub struct ShadowStyle {
     pub ambient: ShadowLayer,
     /// The tight, dark layer that anchors the window to its surface.
     pub contact: ShadowLayer,
-    /// Scale applied to the shadow when the window is unfocused, unitless.
-    pub unfocused_scale: f32,
+    /// Blur multiplier for an unfocused window, unitless.
+    pub unfocused_blur_scale: f32,
+    /// Offset multiplier for an unfocused window, unitless.
+    pub unfocused_offset_scale: f32,
+    /// Opacity multiplier for an unfocused window, unitless.
+    pub unfocused_opacity_scale: f32,
+}
+
+impl ShadowStyle {
+    /// The two layers, scaled like macOS when the window is not focused.
+    pub fn layers(self, focused: bool) -> [ShadowLayer; 2] {
+        if focused {
+            return [self.ambient, self.contact];
+        }
+        let unfocused = |layer: ShadowLayer| ShadowLayer {
+            blur: (layer.blur as f32 * self.unfocused_blur_scale).round() as u32,
+            y_offset: (layer.y_offset as f32 * self.unfocused_offset_scale).round() as i32,
+            opacity: layer.opacity * self.unfocused_opacity_scale,
+            ..layer
+        };
+        [unfocused(self.ambient), unfocused(self.contact)]
+    }
 }
 
 /// The colors of one mode.
@@ -433,5 +455,63 @@ mod tests {
         assert_eq!(super::TRAFFIC_GLYPHS.close.len(), 2);
         assert_eq!(super::TRAFFIC_GLYPHS.minimize.len(), 1);
         assert_eq!(super::TRAFFIC_GLYPHS.zoom.len(), 2);
+    }
+
+    #[test]
+    fn generated_shadows_match_the_tokens() {
+        let tokens: serde_json::Value =
+            serde_json::from_str(include_str!("../neptunia/tokens.json"))
+                .expect("tokens.json should parse");
+
+        for (style, theme) in [(super::SHADOW, "light"), (super::SHADOW_DARK, "dark")] {
+            for (layer, name) in [(style.ambient, "ambient"), (style.contact, "contact")] {
+                let json = &tokens["shadow"]["layers"][theme][name];
+                assert_eq!(u64::from(layer.blur), json["blur"].as_u64().unwrap());
+                assert_eq!(
+                    i64::from(layer.y_offset),
+                    json["y-offset"].as_i64().unwrap()
+                );
+                assert!(
+                    (f64::from(layer.opacity) - json["opacity"].as_f64().unwrap()).abs() < 1e-6
+                );
+                let hex = json["color"].as_str().unwrap().trim_start_matches('#');
+                let expected = [
+                    u8::from_str_radix(&hex[0..2], 16).unwrap(),
+                    u8::from_str_radix(&hex[2..4], 16).unwrap(),
+                    u8::from_str_radix(&hex[4..6], 16).unwrap(),
+                ];
+                assert_eq!(layer.color.to_rgba8()[..3], expected);
+            }
+        }
+
+        let unfocused = &tokens["shadow"]["unfocused"];
+        let scales = [
+            (
+                f64::from(super::SHADOW.unfocused_blur_scale),
+                unfocused["blur"].as_f64().unwrap(),
+            ),
+            (
+                f64::from(super::SHADOW.unfocused_offset_scale),
+                unfocused["offset"].as_f64().unwrap(),
+            ),
+            (
+                f64::from(super::SHADOW.unfocused_opacity_scale),
+                unfocused["opacity"].as_f64().unwrap(),
+            ),
+        ];
+        for (generated, json) in scales {
+            assert!((generated - json).abs() < 1e-6);
+        }
+
+        let [ambient, contact] = super::SHADOW.layers(false);
+        assert_eq!(
+            ambient.blur,
+            (super::SHADOW.ambient.blur as f32 * super::SHADOW.unfocused_blur_scale).round() as u32
+        );
+        assert_eq!(
+            contact.y_offset,
+            (super::SHADOW.contact.y_offset as f32 * super::SHADOW.unfocused_offset_scale).round()
+                as i32
+        );
     }
 }

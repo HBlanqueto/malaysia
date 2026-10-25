@@ -1097,9 +1097,12 @@ fn append_window_frame(
             }
         }
         if let Some(program) = state.shadow.as_ref() {
-            shadow = state
-                .chrome
-                .shadow_element(program, frame_rect_logical, is_focused);
+            shadow = state.chrome.shadow_element(
+                program,
+                frame_rect_logical,
+                &state.chrome_theme,
+                is_focused,
+            );
         }
     }
 

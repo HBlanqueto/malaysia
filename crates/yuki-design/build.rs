@@ -711,19 +711,30 @@ fn emit_typography(out: &mut String, tokens: &Value) {
 
 fn shadow(tokens: &Value, theme: &str) -> String {
     let path = format!("shadow.layers.{theme}");
-    let ambient_blur = integer(tokens, &format!("{path}.ambient.blur"), TOKENS);
-    let ambient_y = integer(tokens, &format!("{path}.ambient.y-offset"), TOKENS);
-    let ambient_opacity = number(tokens, &format!("{path}.ambient.opacity"), TOKENS);
-    let contact_blur = integer(tokens, &format!("{path}.contact.blur"), TOKENS);
-    let contact_y = integer(tokens, &format!("{path}.contact.y-offset"), TOKENS);
-    let contact_opacity = number(tokens, &format!("{path}.contact.opacity"), TOKENS);
-    let unfocused = number(tokens, "shadow.unfocused-scale", TOKENS);
+    let layer = |name: &str| {
+        let path = format!("{path}.{name}");
+        format!(
+            "ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}",
+            integer(tokens, &format!("{path}.blur"), TOKENS),
+            integer(tokens, &format!("{path}.y-offset"), TOKENS),
+            number(tokens, &format!("{path}.opacity"), TOKENS),
+            rgba(color(tokens, &format!("{path}.color"), TOKENS)),
+        )
+    };
+    let scale = |key: &str| number(tokens, &format!("shadow.unfocused.{key}"), TOKENS);
     format!(
         "ShadowStyle {{\n\
-         \x20   ambient: ShadowLayer {{ blur: {ambient_blur}, y_offset: {ambient_y}, opacity: {ambient_opacity} }},\n\
-         \x20   contact: ShadowLayer {{ blur: {contact_blur}, y_offset: {contact_y}, opacity: {contact_opacity} }},\n\
-         \x20   unfocused_scale: {unfocused},\n\
-         }}"
+         \x20   ambient: {},\n\
+         \x20   contact: {},\n\
+         \x20   unfocused_blur_scale: {},\n\
+         \x20   unfocused_offset_scale: {},\n\
+         \x20   unfocused_opacity_scale: {},\n\
+         }}",
+        layer("ambient"),
+        layer("contact"),
+        scale("blur"),
+        scale("offset"),
+        scale("opacity"),
     )
 }
 

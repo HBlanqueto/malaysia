@@ -67,9 +67,10 @@ literales que antes estaban copiados a mano ya no viven en `src/`.
   reserva simétrica, recorte con `…`, una sola línea y esquinas `radius.lg`.
 - **Tipografía**: `font.families.sans` empieza por Geist; `titlebar-title` es
   13/17/600; los pesos usados son 400, 500, 600, 650 y 700.
-- **Sombras**: `shadow.layers.window` y `shadow.layers.float` guardan las capas
-  ambient/contact por tema y `window.unfocused-scale = 0.5`. Los textos CSS
-  siguen existiendo para quien los consuma.
+- **Sombras**: `shadow.layers.{light,dark,dark-tint}` guardan las dos capas
+  ambient/contact de cada tema, con su color y opacidad; `shadow.unfocused`
+  fija los factores de ventana inactiva (blur ×0.45, offset ×0.4, opacidad
+  ×0.55). Los textos CSS siguen existiendo para quien los consuma.
 - **Shell**: `components.shell` define menubar, dock y lock; `shell-bar` es el
   fondo translúcido (`#rrggbbaa` en JSON/Slint/CSS, `#aarrggbb` en QML).
 
