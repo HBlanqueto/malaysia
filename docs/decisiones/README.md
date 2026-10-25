@@ -44,6 +44,7 @@ continua.
 | 0035 | Identificación de apps propias y CSD | aceptado |
 | 0036 | Menú global (`org_kde_kwin_appmenu` + dbusmenu) | aceptado (Bloque 14 documentado, sin implementar) |
 | 0037 | Marco de ventanas dibujado por el compositor | aceptado |
+| 0038 | Reducir transparencia por defecto | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

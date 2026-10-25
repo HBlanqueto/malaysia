@@ -161,9 +161,8 @@ fn opaque_over(color: Color, bg: Color) -> Color {
         return color;
     }
     let alpha = f32::from(color.a) / 255.0;
-    let blend = |fg: u8, back: u8| {
-        (f32::from(fg) * alpha + f32::from(back) * (1.0 - alpha)).round() as u8
-    };
+    let blend =
+        |fg: u8, back: u8| (f32::from(fg) * alpha + f32::from(back) * (1.0 - alpha)).round() as u8;
     Color {
         r: blend(color.r, bg.r),
         g: blend(color.g, bg.g),

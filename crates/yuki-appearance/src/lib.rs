@@ -157,11 +157,7 @@ pub fn palette(scheme: ColorScheme) -> Palette {
 fn surfaces(scheme: ColorScheme, opaque: bool) -> (ShellPalette, MenuPalette, Rgba) {
     match (scheme, opaque) {
         (ColorScheme::Dark, false) => (SHELL_DARK, MENU_DARK, SIDEBAR_DARK),
-        (ColorScheme::Dark, true) => (
-            SHELL_DARK_OPAQUE,
-            MENU_DARK_OPAQUE,
-            SIDEBAR_DARK_OPAQUE,
-        ),
+        (ColorScheme::Dark, true) => (SHELL_DARK_OPAQUE, MENU_DARK_OPAQUE, SIDEBAR_DARK_OPAQUE),
         (ColorScheme::DarkTint, false) => (SHELL_DARK_TINT, MENU_DARK_TINT, SIDEBAR_DARK_TINT),
         (ColorScheme::DarkTint, true) => (
             SHELL_DARK_TINT_OPAQUE,
@@ -169,11 +165,7 @@ fn surfaces(scheme: ColorScheme, opaque: bool) -> (ShellPalette, MenuPalette, Rg
             SIDEBAR_DARK_TINT_OPAQUE,
         ),
         (_, false) => (SHELL_LIGHT, MENU_LIGHT, SIDEBAR_LIGHT),
-        (_, true) => (
-            SHELL_LIGHT_OPAQUE,
-            MENU_LIGHT_OPAQUE,
-            SIDEBAR_LIGHT_OPAQUE,
-        ),
+        (_, true) => (SHELL_LIGHT_OPAQUE, MENU_LIGHT_OPAQUE, SIDEBAR_LIGHT_OPAQUE),
     }
 }
 
@@ -669,18 +661,13 @@ traffic_lights = "auto"
         .unwrap();
         assert!(without_key.reduce_transparency);
 
-        let with_false: AppearanceConfig =
-            toml::from_str("reduce_transparency = false\n").unwrap();
+        let with_false: AppearanceConfig = toml::from_str("reduce_transparency = false\n").unwrap();
         assert!(!with_false.reduce_transparency);
     }
 
     #[test]
     fn reduced_transparency_makes_shell_menu_and_sidebar_opaque() {
-        for scheme in [
-            ColorScheme::Light,
-            ColorScheme::Dark,
-            ColorScheme::DarkTint,
-        ] {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark, ColorScheme::DarkTint] {
             let resolved = resolve(
                 &appearance(
                     scheme,
