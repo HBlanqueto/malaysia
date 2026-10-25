@@ -639,6 +639,24 @@ mod tests {
     }
 
     #[test]
+    fn an_exterior_band_outside_the_visible_rect_still_belongs_to_its_window() {
+        let mut scene = Scene::new();
+        let below = WindowId::new(1);
+        let above = WindowId::new(2);
+        // The above window sits completely inside the below one, but its left
+        // exterior band reaches outside the below window's visible rectangle.
+        scene.insert(below, rect(100.0, 100.0, 300.0, 200.0));
+        scene.insert(above, rect(200.0, 150.0, 100.0, 80.0));
+
+        // The point is outside the above window's rectangle, in its left band,
+        // and also outside the below window. It belongs to the above window.
+        assert_eq!(
+            scene.edge_at(point(194.0, 190.0), 10.0, 20.0, |_| true),
+            Some((above, Edge::Left))
+        );
+    }
+
+    #[test]
     fn an_ineligible_band_does_not_count_but_its_content_still_blocks() {
         let mut scene = Scene::new();
         let lower = WindowId::new(1);
