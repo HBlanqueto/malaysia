@@ -28,6 +28,7 @@ fn main() {
 
     emit_titlebar(&mut out, &tokens, &components);
     emit_window(&mut out, &tokens, &components);
+    emit_dialog(&mut out, &tokens, &components);
     emit_tints(&mut out, &tokens, &components);
     emit_traffic(&mut out, &tokens, &components);
     emit_font_families(&mut out, &tokens);
@@ -333,6 +334,18 @@ fn emit_window(out: &mut String, tokens: &Value, components: &Value) {
     out.push_str(&format!(
         ": WindowStyle = WindowStyle {{\n    corner_radius: {radius},\n    superellipse_exponent: {},\n}};\n\n",
         float(exponent)
+    ));
+}
+
+fn emit_dialog(out: &mut String, tokens: &Value, components: &Value) {
+    let radius = metric(tokens, components, "components.dialog.radius", COMPONENTS) as u32;
+    const_doc(
+        out,
+        "DIALOG",
+        "The dialog shape: same language, smaller radius.",
+    );
+    out.push_str(&format!(
+        ": WindowStyle = WindowStyle {{\n    corner_radius: {radius},\n    superellipse_exponent: 2.0,\n}};\n\n"
     ));
 }
 

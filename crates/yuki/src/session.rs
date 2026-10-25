@@ -936,6 +936,7 @@ struct WindowFrameData {
     is_client_decorated: bool,
     window_geometry: Rectangle<i32, Logical>,
     state: crate::decoration::WindowState,
+    role: crate::decoration::Role,
 }
 
 /// Appends one window's frame elements in front-to-back order: outer border,
@@ -969,6 +970,7 @@ fn append_window_frame(
             is_client_decorated: window.is_client_decorated(),
             window_geometry: window.window_geometry(),
             state: window.state(),
+            role: window.role(),
         }
     };
 
@@ -978,22 +980,30 @@ fn append_window_frame(
         crate::decoration::WindowState::Maximized | crate::decoration::WindowState::Fullscreen
     );
 
-    let frame_rect_logical = if data.is_client_decorated {
-        let surface_origin = data.location + data.surface_location;
-        Rectangle::new(
-            Point::from((
-                surface_origin.x + data.window_geometry.loc.x,
-                surface_origin.y + data.window_geometry.loc.y,
-            )),
-            data.window_geometry.size,
-        )
-    } else {
-        Rectangle::new(data.location, data.size)
-    };
+    let frame_rect_logical =
+        if data.is_client_decorated || matches!(data.role, crate::decoration::Role::Dialog) {
+            let surface_origin = data.location + data.surface_location;
+            Rectangle::new(
+                Point::from((
+                    surface_origin.x + data.window_geometry.loc.x,
+                    surface_origin.y + data.window_geometry.loc.y,
+                )),
+                data.window_geometry.size,
+            )
+        } else {
+            Rectangle::new(data.location, data.size)
+        };
     let frame_rect_physical = physical_rect(frame_rect_logical, scale);
-    let radius_logical = yuki_design::WINDOW.corner_radius;
+    let radius_logical = match data.role {
+        crate::decoration::Role::Dialog => yuki_design::DIALOG.corner_radius,
+        _ => yuki_design::WINDOW.corner_radius,
+    };
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
-    let radius = if maximized_or_fullscreen { 0 } else { radius_logical };
+    let radius = if maximized_or_fullscreen {
+        0
+    } else {
+        radius_logical
+    };
 
     let mut frame_elements: Vec<OutputRenderElement> = Vec::with_capacity(8);
 

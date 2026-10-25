@@ -141,6 +141,11 @@ impl Window<'_> {
         self.data.state()
     }
 
+    /// Whether this toplevel is a dialog, a normal window or a popup.
+    pub fn role(&self) -> Role {
+        self.data.role()
+    }
+
     /// Whether the client draws its own chrome (CSD).
     pub fn is_client_decorated(&self) -> bool {
         self.decoration == Decoration::Client
@@ -397,8 +402,18 @@ impl Windows {
             // client's own geometry. Center the window on what it actually
             // drew; reconfiguring here would only make it flash.
             let insets = self.windows[index].insets(decoration);
-            let (outer_size, origin) =
-                initial_placement(committed_size(surface), insets, workspace);
+            let is_dialog = self.windows[index].role() == Role::Dialog;
+            let (outer_size, origin) = if is_dialog {
+                self.dialog_parent(self.windows[index].id)
+                    .and_then(|parent_id| {
+                        dialog_placement(committed_size(surface), insets, self.outer(parent_id))
+                    })
+                    .unwrap_or_else(|| {
+                        initial_placement(committed_size(surface), insets, workspace)
+                    })
+            } else {
+                initial_placement(committed_size(surface), insets, workspace)
+            };
             self.windows[index].outer_size = outer_size;
             self.windows[index].origin = origin;
             // The client is already at this size: record it so the check below
@@ -983,6 +998,21 @@ impl Windows {
         self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
+    /// The tracked window id of a surface, if any.
+    fn id_of_surface(&self, surface: &WlSurface) -> Option<WindowId> {
+        self.windows
+            .iter()
+            .find(|data| data.toplevel.wl_surface() == surface)
+            .map(|data| data.id)
+    }
+
+    /// The parent window of a dialog, if it is tracked.
+    fn dialog_parent(&self, id: WindowId) -> Option<WindowId> {
+        let index = self.index(id)?;
+        let parent = self.windows[index].toplevel.parent()?;
+        self.id_of_surface(&parent)
+    }
+
     /// Sends a configure for the current state.
     ///
     /// Before the window is placed (its first buffer committed) every configure
@@ -1117,6 +1147,23 @@ fn center_origin(
         workspace.loc.x + (workspace.size.w - size.w) / 2,
         workspace.loc.y + (workspace.size.h - size.h) / 2,
     ))
+}
+
+/// Centers a dialog over its parent window.
+fn dialog_placement(
+    committed: Option<Size<i32, Logical>>,
+    insets: Insets,
+    parent_outer: Option<SceneRect<f64, SceneLogical>>,
+) -> Option<(Size<i32, Logical>, Point<i32, Logical>)> {
+    let parent = parent_outer?;
+    let outer = committed_outer(committed, insets);
+    let center_x = parent.x() + parent.width() / 2.0;
+    let center_y = parent.y() + parent.height() / 2.0;
+    let origin = Point::from((
+        (center_x - f64::from(outer.w) / 2.0).round() as i32,
+        (center_y - f64::from(outer.h) / 2.0).round() as i32,
+    ));
+    Some((outer, origin))
 }
 
 /// The initial placement for a new window: centered in the workspace, from the
