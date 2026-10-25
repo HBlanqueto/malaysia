@@ -152,6 +152,26 @@ fn theme_color(tokens: &Value, theme: &str, key: &str) -> Color {
     color(tokens, &format!("themes.{theme}.{key}"), TOKENS)
 }
 
+/// Composites `color` over an opaque `bg`, returning an opaque colour.
+///
+/// A token that is already opaque is returned unchanged. Used for the solid
+/// variants that "Reduce transparency" selects.
+fn opaque_over(color: Color, bg: Color) -> Color {
+    if color.a == 255 {
+        return color;
+    }
+    let alpha = f32::from(color.a) / 255.0;
+    let blend = |fg: u8, back: u8| {
+        (f32::from(fg) * alpha + f32::from(back) * (1.0 - alpha)).round() as u8
+    };
+    Color {
+        r: blend(color.r, bg.r),
+        g: blend(color.g, bg.g),
+        b: blend(color.b, bg.b),
+        a: 255,
+    }
+}
+
 fn default_theme(tokens: &Value) -> &str {
     string(tokens, "default-theme", TOKENS)
 }
@@ -815,15 +835,21 @@ fn emit_palettes(out: &mut String, tokens: &Value, components: &Value) {
     }
 }
 
-fn shell(tokens: &Value, components: &Value, theme: &str) -> String {
+fn shell(tokens: &Value, components: &Value, theme: &str, opaque: bool) -> String {
+    let bg_window = theme_color(tokens, theme, "bg-window");
     let color_at = |path: &str| {
-        color_ref(
+        let color = color_ref(
             tokens,
             theme,
             string(components, path, COMPONENTS),
             path,
             COMPONENTS,
-        )
+        );
+        if opaque {
+            opaque_over(color, bg_window)
+        } else {
+            color
+        }
     };
     format!(
         "ShellPalette {{\n\
@@ -850,7 +876,36 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
         const_doc(out, name, &format!("The {theme} shell palette."));
         out.push_str(&format!(
             ": ShellPalette = {};\n\n",
-            shell(tokens, components, theme)
+            shell(tokens, components, theme, false)
+        ));
+        const_doc(
+            out,
+            &format!("{name}_OPAQUE"),
+            &format!("The {theme} shell palette with opaque surfaces."),
+        );
+        out.push_str(&format!(
+            ": ShellPalette = {};\n\n",
+            shell(tokens, components, theme, true)
+        ));
+    }
+
+    for (name, theme) in [
+        ("SIDEBAR_LIGHT", "light"),
+        ("SIDEBAR_DARK", "dark"),
+        ("SIDEBAR_DARK_TINT", "dark-tint"),
+    ] {
+        let bg_window = theme_color(tokens, theme, "bg-window");
+        let sunken = theme_color(tokens, theme, "bg-sunken");
+        const_doc(out, name, &format!("The {theme} sidebar background."));
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(sunken)));
+        const_doc(
+            out,
+            &format!("{name}_OPAQUE"),
+            &format!("The {theme} sidebar background with opacity."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(opaque_over(sunken, bg_window))
         ));
     }
 
@@ -872,7 +927,7 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
     out.push_str(&format!(": LockPalette = {lock};\n\n"));
 }
 
-fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String {
+fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: bool) -> String {
     let color_at = |path: &str| {
         color_ref(
             tokens,
@@ -881,6 +936,13 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
             path,
             COMPONENTS,
         )
+    };
+    let bg_window = theme_color(tokens, theme, "bg-window");
+    let panel_bg = color_at("components.shell.menu.panel.bg");
+    let panel_bg = if opaque {
+        opaque_over(panel_bg, bg_window)
+    } else {
+        panel_bg
     };
     let radius = metric(
         tokens,
@@ -931,7 +993,7 @@ fn menu_palette_value(tokens: &Value, components: &Value, theme: &str) -> String
          \x20   bar_title_open_radius: {},\n\
          \x20   bar_title_open_height: {},\n\
          }}",
-        rgba(color_at("components.shell.menu.panel.bg")),
+        rgba(panel_bg),
         float(radius),
         float(number(
             components,
@@ -1054,7 +1116,16 @@ fn emit_menu(out: &mut String, tokens: &Value, components: &Value) {
         );
         out.push_str(&format!(
             ": MenuPalette = {};\n\n",
-            menu_palette_value(tokens, components, theme)
+            menu_palette_value(tokens, components, theme, false)
+        ));
+        const_doc(
+            out,
+            &format!("{name}_OPAQUE"),
+            &format!("The {theme} menu popup palette with an opaque panel."),
+        );
+        out.push_str(&format!(
+            ": MenuPalette = {};\n\n",
+            menu_palette_value(tokens, components, theme, true)
         ));
     }
 }

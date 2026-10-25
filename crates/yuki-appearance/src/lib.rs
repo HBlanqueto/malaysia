@@ -11,8 +11,12 @@ use serde::Deserialize;
 pub mod traffic;
 
 use yuki_design::{
-    DARK, DARK_TINT, LIGHT, PANEL_TINT_WALLPAPER, Palette, Rgba, TITLEBAR,
-    TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    DARK, DARK_TINT, LIGHT, MENU_DARK, MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE,
+    MENU_LIGHT, MENU_LIGHT_OPAQUE, MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SHELL_DARK,
+    SHELL_DARK_OPAQUE, SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE,
+    SIDEBAR_DARK, SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE, SIDEBAR_LIGHT,
+    SIDEBAR_LIGHT_OPAQUE, ShellPalette, TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
+    TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 
 /// The preferred appearance, published as `org.freedesktop.appearance`.
@@ -131,6 +135,12 @@ pub struct Resolved {
     pub traffic_style: TrafficLightStyle,
     /// Whether the shell and kit must use opaque surfaces.
     pub reduce_transparency: bool,
+    /// The menubar/dock palette for this appearance.
+    pub shell: ShellPalette,
+    /// The menu popup palette for this appearance.
+    pub menu: MenuPalette,
+    /// The kit sidebar background for this appearance.
+    pub sidebar: Rgba,
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -139,6 +149,31 @@ pub fn palette(scheme: ColorScheme) -> Palette {
         ColorScheme::DarkTint => DARK_TINT,
         ColorScheme::Dark => DARK,
         _ => LIGHT,
+    }
+}
+
+/// The shell, menu and sidebar surfaces for a concrete theme, choosing the
+/// opaque variants when transparency is reduced.
+fn surfaces(scheme: ColorScheme, opaque: bool) -> (ShellPalette, MenuPalette, Rgba) {
+    match (scheme, opaque) {
+        (ColorScheme::Dark, false) => (SHELL_DARK, MENU_DARK, SIDEBAR_DARK),
+        (ColorScheme::Dark, true) => (
+            SHELL_DARK_OPAQUE,
+            MENU_DARK_OPAQUE,
+            SIDEBAR_DARK_OPAQUE,
+        ),
+        (ColorScheme::DarkTint, false) => (SHELL_DARK_TINT, MENU_DARK_TINT, SIDEBAR_DARK_TINT),
+        (ColorScheme::DarkTint, true) => (
+            SHELL_DARK_TINT_OPAQUE,
+            MENU_DARK_TINT_OPAQUE,
+            SIDEBAR_DARK_TINT_OPAQUE,
+        ),
+        (_, false) => (SHELL_LIGHT, MENU_LIGHT, SIDEBAR_LIGHT),
+        (_, true) => (
+            SHELL_LIGHT_OPAQUE,
+            MENU_LIGHT_OPAQUE,
+            SIDEBAR_LIGHT_OPAQUE,
+        ),
     }
 }
 
@@ -197,6 +232,13 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(normal_accent)),
     };
 
+    let (mut shell, menu, sidebar) = surfaces(scheme, appearance.reduce_transparency);
+    if let Some((tint, factor)) = panel_tint {
+        shell.bar = shell.bar.mix(tint, factor);
+        shell.tile = shell.tile.mix(tint, factor);
+    }
+    shell.tile_active = accent;
+
     Resolved {
         scheme,
         accent,
@@ -205,6 +247,9 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         lights,
         traffic_style: style,
         reduce_transparency: appearance.reduce_transparency,
+        shell,
+        menu,
+        sidebar,
     }
 }
 
@@ -627,6 +672,49 @@ traffic_lights = "auto"
         let with_false: AppearanceConfig =
             toml::from_str("reduce_transparency = false\n").unwrap();
         assert!(!with_false.reduce_transparency);
+    }
+
+    #[test]
+    fn reduced_transparency_makes_shell_menu_and_sidebar_opaque() {
+        for scheme in [
+            ColorScheme::Light,
+            ColorScheme::Dark,
+            ColorScheme::DarkTint,
+        ] {
+            let resolved = resolve(
+                &appearance(
+                    scheme,
+                    WindowColorMode::Neutral,
+                    WindowTintScope::Windows,
+                    TrafficLightStyle::Auto,
+                    None,
+                ),
+                Some(dominant()),
+            );
+            assert!(resolved.reduce_transparency);
+            for (name, color) in [
+                ("shell bar", resolved.shell.bar),
+                ("menu panel", resolved.menu.bg),
+                ("sidebar", resolved.sidebar),
+            ] {
+                assert_eq!(color.a, 1.0, "{scheme:?} {name} is still translucent");
+            }
+        }
+    }
+
+    #[test]
+    fn transparency_keeps_the_translucent_bar_when_disabled() {
+        let mut config = appearance(
+            ColorScheme::Light,
+            WindowColorMode::Neutral,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Auto,
+            None,
+        );
+        config.reduce_transparency = false;
+        let resolved = resolve(&config, None);
+        assert!(!resolved.reduce_transparency);
+        assert!(resolved.shell.bar.a < 1.0);
     }
 
     #[test]
