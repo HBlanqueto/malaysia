@@ -3,7 +3,10 @@
 //! 44 px, traffic lights on the left, a centred title and a toolbar gap on the
 //! right. It draws only when the compositor's configure answered `ClientSide`.
 
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
+
+use serde::Deserialize;
 
 use crate::traffic::TrafficLights;
 use freya_core::prelude::*;
@@ -65,7 +68,7 @@ impl Titlebar {
 
 impl Component for Titlebar {
     fn render(&self) -> impl IntoElement {
-        let (status, title, _fixed) = if let Some(preview) = &self.preview {
+        let (status, title, fixed) = if let Some(preview) = &self.preview {
             (preview.status, preview.title.clone(), preview.fixed)
         } else {
             let controls = WindowControls::get();
@@ -97,15 +100,17 @@ impl Component for Titlebar {
         } else {
             theme.title.unfocused
         };
+        let behavior = *window_behavior();
         let close = self.on_close.clone();
         let minimize = controls.clone();
         let maximize = controls.clone();
         let drag = controls.clone();
         let click = controls.clone();
+        let green = green_action(behavior.green_button, fixed);
 
         let traffic = TrafficLights::new()
             .focused(status.activated)
-            .zoom_supported(!status.fixed)
+            .zoom_supported(green_admitted(behavior.green_button, fixed))
             .on_action(move |kind| match kind {
                 ButtonKind::Close => {
                     if let Some(close) = &close {
@@ -119,7 +124,7 @@ impl Component for Titlebar {
                 }
                 ButtonKind::Maximize => {
                     if let Some(controls) = &maximize {
-                        controls.toggle_maximize();
+                        run_action(controls, green);
                     }
                 }
             });
@@ -140,11 +145,12 @@ impl Component for Titlebar {
                     && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
             });
             if double {
-                // TODO(ADR 0035): read window.double_click_titlebar from the
-                // user's window.domain instead of the fixed zoom action.
                 let mut last = last_click;
                 last.set(None);
-                controls.toggle_maximize();
+                run_action(
+                    controls,
+                    double_click_action(behavior.double_click_titlebar, fixed),
+                );
             } else {
                 let mut last = last_click;
                 last.set(Some((now, point)));
@@ -169,7 +175,10 @@ impl Component for Titlebar {
             if double {
                 let mut last = last_click;
                 last.set(None);
-                controls.toggle_maximize();
+                run_action(
+                    controls,
+                    double_click_action(behavior.double_click_titlebar, fixed),
+                );
             } else {
                 let mut last = last_click;
                 last.set(Some((now, point)));
@@ -212,6 +221,104 @@ impl Component for Titlebar {
                     .on_mouse_down(press_second),
             )
             .into_element()
+    }
+}
+
+/// What the green traffic light does (same values as the compositor).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum GreenButtonAction {
+    /// Enter focus mode (pending).
+    #[default]
+    Focus,
+    /// Zoom the window to the workspace.
+    Zoom,
+    /// Enter fullscreen (pending).
+    Fullscreen,
+    /// Do nothing.
+    None,
+}
+
+/// What a double click on the title bar does (same values as the compositor).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum DoubleClickAction {
+    /// Expand to the workspace (treated as zoom today).
+    Fill,
+    /// Minimize the window.
+    Minimize,
+    /// Zoom the window.
+    #[default]
+    Zoom,
+    /// Do nothing.
+    None,
+}
+
+/// The `window.domain` keys this titlebar consumes.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(default)]
+struct WindowBehavior {
+    double_click_titlebar: DoubleClickAction,
+    green_button: GreenButtonAction,
+}
+
+/// The user's window behaviour, read once from `window.domain` like the
+/// compositor does. A missing or unparsable file keeps the defaults.
+fn window_behavior() -> &'static WindowBehavior {
+    static BEHAVIOR: OnceLock<WindowBehavior> = OnceLock::new();
+    BEHAVIOR.get_or_init(|| {
+        let path = yuki_appearance::config_dir().join("window.domain");
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| toml::from_str(&text).ok())
+            .unwrap_or_default()
+    })
+}
+
+/// The action a titlebar control requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TitlebarAction {
+    Focus,
+    Maximize,
+    Minimize,
+    Fullscreen,
+    None,
+}
+
+fn green_action(action: GreenButtonAction, fixed: bool) -> TitlebarAction {
+    match action {
+        GreenButtonAction::Focus => TitlebarAction::Focus,
+        GreenButtonAction::Zoom if fixed => TitlebarAction::None,
+        GreenButtonAction::Zoom => TitlebarAction::Maximize,
+        GreenButtonAction::Fullscreen => TitlebarAction::Fullscreen,
+        GreenButtonAction::None => TitlebarAction::None,
+    }
+}
+
+fn green_admitted(action: GreenButtonAction, fixed: bool) -> bool {
+    action != GreenButtonAction::Zoom || !fixed
+}
+
+fn double_click_action(action: DoubleClickAction, fixed: bool) -> TitlebarAction {
+    match action {
+        DoubleClickAction::Fill | DoubleClickAction::Zoom if fixed => TitlebarAction::None,
+        DoubleClickAction::Fill | DoubleClickAction::Zoom => TitlebarAction::Maximize,
+        DoubleClickAction::Minimize => TitlebarAction::Minimize,
+        DoubleClickAction::None => TitlebarAction::None,
+    }
+}
+
+fn run_action(controls: &WindowControls, action: TitlebarAction) {
+    match action {
+        TitlebarAction::Maximize => controls.toggle_maximize(),
+        TitlebarAction::Minimize => controls.minimize(),
+        TitlebarAction::Focus => {
+            eprintln!("focus mode requested window={:?}", controls.surface_id());
+        }
+        TitlebarAction::Fullscreen => {
+            eprintln!("fullscreen requested window={:?}", controls.surface_id());
+        }
+        TitlebarAction::None => {}
     }
 }
 
@@ -292,4 +399,72 @@ pub fn resize_edges() -> Element {
             Size::fill(),
         ))
         .into_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_green_light_uses_the_configured_action() {
+        assert_eq!(
+            green_action(GreenButtonAction::Focus, false),
+            TitlebarAction::Focus
+        );
+        assert_eq!(
+            green_action(GreenButtonAction::Zoom, false),
+            TitlebarAction::Maximize
+        );
+        assert_eq!(
+            green_action(GreenButtonAction::Zoom, true),
+            TitlebarAction::None
+        );
+        assert_eq!(
+            green_action(GreenButtonAction::Fullscreen, false),
+            TitlebarAction::Fullscreen
+        );
+        assert_eq!(
+            green_action(GreenButtonAction::None, false),
+            TitlebarAction::None
+        );
+        assert!(green_admitted(GreenButtonAction::Focus, true));
+        assert!(!green_admitted(GreenButtonAction::Zoom, true));
+    }
+
+    #[test]
+    fn the_double_click_uses_the_configured_action() {
+        assert_eq!(
+            double_click_action(DoubleClickAction::Zoom, false),
+            TitlebarAction::Maximize
+        );
+        assert_eq!(
+            double_click_action(DoubleClickAction::Fill, false),
+            TitlebarAction::Maximize
+        );
+        assert_eq!(
+            double_click_action(DoubleClickAction::Minimize, false),
+            TitlebarAction::Minimize
+        );
+        assert_eq!(
+            double_click_action(DoubleClickAction::None, false),
+            TitlebarAction::None
+        );
+        assert_eq!(
+            double_click_action(DoubleClickAction::Zoom, true),
+            TitlebarAction::None
+        );
+    }
+
+    #[test]
+    fn window_domain_defaults_match_the_compositor() {
+        let behavior: WindowBehavior = toml::from_str("").expect("empty domain");
+        assert_eq!(behavior.green_button, GreenButtonAction::Focus);
+        assert_eq!(behavior.double_click_titlebar, DoubleClickAction::Zoom);
+
+        let behavior: WindowBehavior =
+            toml::from_str("green_button = \"zoom\"\ndouble_click_titlebar = \"minimize\"\n")
+                .expect("window.domain");
+        assert_eq!(behavior.green_button, GreenButtonAction::Zoom);
+        assert_eq!(behavior.double_click_titlebar, DoubleClickAction::Minimize);
+    }
 }
