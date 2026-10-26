@@ -346,6 +346,7 @@ fn appearance_group(
             rect()
                 .width(Size::fill())
                 .direction(Direction::Horizontal)
+                .a11y_alt("appearance-theme-row")
                 .spacing(SETTINGS.card_gap as f32)
                 .padding(Gaps::new(
                     SETTINGS.group_content_padding_x as f32,
@@ -605,7 +606,7 @@ fn color_group(
                 }),
         );
 
-    let accent_row = row_card(&resolved, "Color de acento", swatches.into_element());
+    let accent_row = row_card(&resolved, "Color de acento", swatches.into_element(), false);
 
     let selected_window_mode = config.window_color;
     let window_mode_row = row_card(
@@ -640,6 +641,7 @@ fn color_group(
                 error,
             ))
             .into_element(),
+        true,
     );
 
     let scope_disabled = !wallpaper_mode;
@@ -687,6 +689,7 @@ fn color_group(
                 },
             ))
             .into_element(),
+        false,
     );
 
     let note: Element = if wallpaper_mode {
@@ -912,7 +915,7 @@ fn windows_group(
 
     card_container(
         &resolved,
-        vec![row_card(&resolved, "Semáforos", traffic_button.into_element()).into_element()],
+        vec![row_card(&resolved, "Semáforos", traffic_button.into_element(), false).into_element()],
     )
     .child(error_label(&error, &scheme_palette))
     .into_element()
@@ -1007,13 +1010,18 @@ fn traffic_menu_item(id: &'static str, label_text: &str, checked: bool) -> MenuI
     }
 }
 
-fn row_card(resolved: &Resolved, label_text: &str, control: Element) -> Rect {
+fn row_card(resolved: &Resolved, label_text: &str, control: Element, label_top: bool) -> Rect {
     let scheme_palette = palette(resolved.scheme);
     rect()
         .width(Size::fill())
-        .height(Size::px(SETTINGS.group_row_min_height as f32))
+        .height(Size::auto())
+        .min_height(Size::px(SETTINGS.group_row_min_height as f32))
         .direction(Direction::Horizontal)
-        .cross_align(Alignment::Center)
+        .cross_align(if label_top {
+            Alignment::Start
+        } else {
+            Alignment::Center
+        })
         .padding(Gaps::new(
             SETTINGS.group_row_padding_y as f32,
             SETTINGS.group_row_padding_x as f32,
@@ -1345,6 +1353,18 @@ mod tests {
         .next()
     }
 
+    fn find_by_alt(test: &TestingRunner, alt: &str) -> Option<freya_testing::TestingNode> {
+        test.find_many(|node, el| {
+            if el.accessibility().builder.label() == Some(alt) {
+                Some(node)
+            } else {
+                None
+            }
+        })
+        .into_iter()
+        .next()
+    }
+
     fn click_node(test: &mut TestingRunner, node: freya_testing::TestingNode) {
         let layout = node.layout();
         let area = layout.area;
@@ -1615,6 +1635,33 @@ mod tests {
         assert!(
             find_label(&test, "Apariencia").is_some(),
             "the sidebar titlebar must show the section title 'Apariencia'"
+        );
+    }
+
+    #[test]
+    fn theme_card_row_grows_to_fit_its_content() {
+        let test = run_content("", AppearanceConfig::default(), None);
+        let row = find_by_alt(&test, "appearance-theme-row").expect("theme row exists");
+        let row_h = row.layout().area.size.height;
+
+        let min_h = SETTINGS.card_height as f32
+            + SETTINGS.card_caption_gap as f32
+            + CALLOUT.size as f32
+            + 2.0 * SETTINGS.group_row_padding_y as f32;
+        assert!(
+            row_h >= min_h,
+            "theme card row must be at least {min_h} px tall, got {row_h}"
+        );
+
+        let cards = row.children();
+        assert!(
+            cards.iter().all(|card| {
+                let h = card.layout().area.size.height;
+                h >= SETTINGS.card_height as f32
+                    + SETTINGS.card_caption_gap as f32
+                    + CALLOUT.size as f32
+            }),
+            "no theme card must be clipped"
         );
     }
 }
