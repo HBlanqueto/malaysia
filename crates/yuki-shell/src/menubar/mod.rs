@@ -25,9 +25,11 @@ pub mod system;
 pub use bar::run;
 
 use std::env;
+use std::fs::OpenOptions;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::desktop::DesktopEntry;
 
@@ -114,22 +116,28 @@ pub fn rgba(c: yuki_design::Rgba) -> freya_core::prelude::Color {
     freya_core::prelude::Color::from_argb(a, r, g, b)
 }
 
-/// Spawns a `yuki-shell` component detached, keeping the Wayland socket but
-/// stripping the compositor's private Mesa wrapper environment.
+/// Spawns a `yuki-shell` component detached, keeping the Wayland socket and the
+/// full kit environment (kit binaries need the same Mesa/runtime paths that the
+/// running `yuki-shell` received; ADR 0007 only strips those for third-party
+/// apps).
 pub fn spawn_component(component: &str) {
     let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
         eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
         return;
     };
     let program = env::current_exe().unwrap_or_else(|_| PathBuf::from("yuki-shell"));
-    let mut command = Command::new(program);
+    let mut command = Command::new(&program);
     command
         .arg(component)
         .env("WAYLAND_DISPLAY", display)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    sanitize_client_env(&mut command);
+        .stdin(Stdio::null());
+    let log_name = format!("yuki-shell-{component}");
+    if let Some(path) = kit_log_path(&log_name) {
+        command.stdout(open_log(&path)).stderr(open_log(&path));
+    } else {
+        command.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    prepare_kit_env(&mut command);
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() < 0 {
@@ -138,14 +146,15 @@ pub fn spawn_component(component: &str) {
             Ok(())
         });
     }
-    match command.spawn() {
-        Ok(_) => eprintln!("menubar: spawn {component}"),
-        Err(error) => eprintln!("menubar: could not spawn {component}: {error}"),
-    }
+    spawn_logged(&log_name, &program, command);
 }
 
-/// Spawns a standalone Yuki app detached, keeping the Wayland socket but
-/// stripping the compositor's private Mesa wrapper environment.
+/// Spawns a standalone Yuki app detached, keeping the Wayland socket.
+///
+/// Kit binaries (`yuki-settings`, `yuki-shell`) keep the same runtime
+/// environment as the shell so a dev build from `target/debug` still finds its
+/// libraries and Mesa configuration. Third-party apps continue to receive the
+/// sanitized environment from ADR 0007.
 pub fn spawn_app(binary: &str, args: &[&str]) {
     let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
         eprintln!("menubar: cannot spawn {binary}: WAYLAND_DISPLAY not set");
@@ -169,14 +178,21 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
         PathBuf::from(binary)
     };
 
-    let mut command = Command::new(program);
+    let mut command = Command::new(&program);
     command
         .args(args)
         .env("WAYLAND_DISPLAY", display)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    sanitize_client_env(&mut command);
+        .stdin(Stdio::null());
+    if let Some(path) = kit_log_path(binary) {
+        command.stdout(open_log(&path)).stderr(open_log(&path));
+    } else {
+        command.stdout(Stdio::null()).stderr(Stdio::null());
+    }
+    if is_kit_binary(binary) {
+        prepare_kit_env(&mut command);
+    } else {
+        sanitize_client_env(&mut command);
+    }
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() < 0 {
@@ -185,10 +201,7 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
             Ok(())
         });
     }
-    match command.spawn() {
-        Ok(_) => eprintln!("menubar: spawn {binary}"),
-        Err(error) => eprintln!("menubar: could not spawn {binary}: {error}"),
-    }
+    spawn_logged(binary, &program, command);
 }
 
 /// Resolves the `yuki-settings` binary: first next to the running
@@ -273,6 +286,87 @@ fn sanitize_client_env(command: &mut Command) {
             command.env(name, value);
         }
         command.env_remove(saved);
+    }
+}
+
+/// Whether the binary is one of Yuki's own kit binaries. These keep the shell's
+/// runtime environment instead of receiving the sanitized client environment.
+fn is_kit_binary(binary: &str) -> bool {
+    matches!(binary, "yuki-shell" | "yuki-settings")
+}
+
+/// Restores the original Mesa/runtime paths saved by the Nix wrapper, if they
+/// exist. In a dev shell there are no `YUKI_ORIG_*` variables, so the current
+/// environment (LD_LIBRARY_PATH, ...) is left untouched.
+fn prepare_kit_env(command: &mut Command) {
+    for name in [
+        "LD_LIBRARY_PATH",
+        "__EGL_VENDOR_LIBRARY_DIRS",
+        "LIBGL_DRIVERS_PATH",
+        "GBM_BACKENDS_PATH",
+    ] {
+        let saved = format!("YUKI_ORIG_{name}");
+        if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
+            command.env(name, value);
+        }
+        command.env_remove(saved);
+    }
+}
+
+/// Log path for a spawned kit binary: `$XDG_RUNTIME_DIR/yuki/<name>.log`.
+fn kit_log_path(name: &str) -> Option<PathBuf> {
+    let runtime = env::var_os("XDG_RUNTIME_DIR")?;
+    let dir = PathBuf::from(runtime).join("yuki");
+    if let Err(error) = std::fs::create_dir_all(&dir) {
+        eprintln!("menubar: could not create log dir {}: {error}", dir.display());
+        return None;
+    }
+    Some(dir.join(format!("{name}.log")))
+}
+
+fn open_log(path: &Path) -> Stdio {
+    match OpenOptions::new().create(true).append(true).open(path) {
+        Ok(file) => Stdio::from(file),
+        Err(_) => Stdio::null(),
+    }
+}
+
+/// Spawns the command and logs its exit status if it dies within two seconds.
+fn spawn_logged(name: &str, program: &Path, mut command: Command) {
+    tracing::info!(name, program = %program.display(), "spawning kit binary");
+    match command.spawn() {
+        Ok(mut child) => {
+            let name = name.to_string();
+            std::thread::spawn(move || {
+                let start = Instant::now();
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            if start.elapsed() < Duration::from_secs(2) {
+                                tracing::warn!(name, ?status, "kit child exited quickly");
+                            }
+                            break;
+                        }
+                        Ok(None) => {
+                            if start.elapsed() >= Duration::from_secs(2) {
+                                // It survived the grace window; we no longer
+                                // need to reap it here.
+                                break;
+                            }
+                            std::thread::sleep(Duration::from_millis(50));
+                        }
+                        Err(error) => {
+                            tracing::warn!(name, %error, "could not wait on kit child");
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+        Err(error) => {
+            tracing::warn!(name, %error, "could not spawn kit binary");
+            eprintln!("menubar: could not spawn {name}: {error}");
+        }
     }
 }
 
@@ -373,5 +467,104 @@ mod tests {
         let entries = Vec::new();
         assert_eq!(resolve_app_name(None, &entries), "Yuki");
         assert_eq!(resolve_app_name(Some("   "), &entries), "Yuki");
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn with_env<F: FnOnce()>(f: F) {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        f();
+    }
+
+    struct EnvGuard<'a> {
+        name: &'a str,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl Drop for EnvGuard<'_> {
+        fn drop(&mut self) {
+            // SAFETY: we only mutate the test process's environment while the
+            // test lock is held.
+            unsafe {
+                match &self.old {
+                    Some(value) => env::set_var(self.name, value),
+                    None => env::remove_var(self.name),
+                }
+            }
+        }
+    }
+
+    fn guard(name: &str) -> EnvGuard<'_> {
+        EnvGuard {
+            name,
+            old: env::var_os(name),
+        }
+    }
+
+    #[test]
+    fn client_env_strips_wrapper_and_restores_original() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
+                env::set_var("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+            }
+
+            let mut command = Command::new("env");
+            sanitize_client_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/orig/lib"),
+                "sanitized env should restore the original path: {text}"
+            );
+            assert!(
+                !text.contains("/wrapper/lib"),
+                "sanitized env should drop the wrapper path: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn kit_env_keeps_dev_library_path_when_no_original_saved() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/dev/lib");
+                env::remove_var("YUKI_ORIG_LD_LIBRARY_PATH");
+            }
+
+            let mut command = Command::new("env");
+            prepare_kit_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/dev/lib"),
+                "kit env should keep the dev shell path: {text}"
+            );
+        });
+    }
+
+    #[test]
+    fn kit_env_restores_original_when_it_was_saved() {
+        with_env(|| {
+            let _ld = guard("LD_LIBRARY_PATH");
+            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            unsafe {
+                env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
+                env::set_var("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+            }
+
+            let mut command = Command::new("env");
+            prepare_kit_env(&mut command);
+            let output = command.output().expect("env should run");
+            let text = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                text.contains("LD_LIBRARY_PATH=/orig/lib"),
+                "kit env should restore the original path when it was saved: {text}"
+            );
+        });
     }
 }
