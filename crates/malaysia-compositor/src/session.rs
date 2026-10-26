@@ -488,6 +488,7 @@ pub fn run() -> Result<(), SessionError> {
                             output_size,
                             scale,
                             winit_render_transform(),
+                            Transform::Normal,
                             now,
                         );
                         session.state.theme_fade = fade;

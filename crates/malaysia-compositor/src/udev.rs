@@ -54,6 +54,10 @@ use vow_appearance::watch::AppearanceWatch;
 /// snapshot. OpenGL's framebuffer origin is bottom-left; Smithay's y-down space
 /// arrives inverted unless the render transform flips it (see
 /// `session::winit_render_transform` for the winit equivalent).
+///
+/// The offscreen snapshot is rendered with this flip, so the resulting texture
+/// is bottom-up. The fade's TextureBuffer uses `Transform::Flipped180` so the
+/// overlay is composited upright on the DRM primary plane.
 pub(crate) const fn render_transform() -> Transform {
     Transform::Flipped180
 }
@@ -314,6 +318,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                         output_size,
                         scale,
                         render_transform(),
+                        Transform::Flipped180,
                         now,
                     );
                     data.state.theme_fade = fade;

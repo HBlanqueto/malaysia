@@ -30,6 +30,19 @@ pub(crate) const WAIT_MAX: Duration = Duration::from_millis(vow_design::THEME_FA
 /// Fade duration from fully opaque snapshot to fully transparent.
 pub(crate) const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
 
+/// Debug hold before the snapshot starts fading.
+///
+/// shortcut: MALAYSIA_THEME_FADE_HOLD_MS is only for looking at the screen /
+/// taking a photo of the snapshot before it fades. Remove once the fade is
+/// verified on real hardware.
+fn hold_duration() -> Duration {
+    std::env::var("MALAYSIA_THEME_FADE_HOLD_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or(Duration::ZERO)
+}
+
 /// What happened to the fade on a frame tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FadeTick {
@@ -58,7 +71,10 @@ enum Phase {
         initial_pending: usize,
     },
     /// Fading the snapshot out.
-    Fading { started_at: Instant },
+    Fading {
+        /// Debug hold end; until this instant the snapshot stays opaque.
+        hold_until: Instant,
+    },
 }
 
 impl FadeState {
@@ -72,13 +88,16 @@ impl FadeState {
         }
     }
 
-    /// Current opacity of the snapshot: `1.0` during the wait and while fading
-    /// starts, decreasing to `0.0` at the end of the fade.
+    /// Current opacity of the snapshot: `1.0` during the wait and the optional
+    /// debug hold, decreasing to `0.0` at the end of the fade.
     pub(crate) fn alpha(&self, now: Instant) -> f32 {
         match &self.phase {
             Phase::Waiting { .. } => 1.0,
-            Phase::Fading { started_at } => {
-                let t = progress(*started_at, now, DURATION);
+            Phase::Fading { hold_until, .. } => {
+                if now < *hold_until {
+                    return 1.0;
+                }
+                let t = progress(*hold_until, now, DURATION);
                 1.0 - ease(t)
             }
         }
@@ -105,16 +124,25 @@ impl FadeState {
                         initial_pending = *initial_pending,
                         "theme fade started"
                     );
-                    self.phase = Phase::Fading { started_at: now };
+                    let hold = hold_duration();
+                    if hold > Duration::ZERO {
+                        tracing::info!(?hold, "theme fade hold");
+                    }
+                    self.phase = Phase::Fading {
+                        hold_until: now + hold,
+                    };
                     FadeTick::Started
                 } else {
                     FadeTick::Active
                 }
             }
-            Phase::Fading { started_at } => {
-                let t = progress(*started_at, now, DURATION);
+            Phase::Fading { hold_until, .. } => {
+                if now < *hold_until {
+                    return FadeTick::Active;
+                }
+                let t = progress(*hold_until, now, DURATION);
                 if t >= 1.0 {
-                    let elapsed = now.duration_since(*started_at);
+                    let elapsed = now.duration_since(*hold_until);
                     tracing::info!(?elapsed, "theme fade finished");
                     FadeTick::Done
                 } else {
@@ -145,14 +173,18 @@ pub(crate) struct ThemeFade {
 
 impl ThemeFade {
     /// Creates a new fade from an already-rendered snapshot texture.
+    ///
+    /// `texture_transform` compensates the backend's offscreen render flip so
+    /// the overlay is upright when composited. See `start_if_allowed`.
     pub(crate) fn new(
         renderer: &GlesRenderer,
         texture: GlesTexture,
+        texture_transform: Transform,
         pending_surfaces: HashSet<ObjectId>,
         now: Instant,
     ) -> Self {
         let texture_buffer =
-            TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
+            TextureBuffer::from_texture(renderer, texture, 1, texture_transform, None);
         Self {
             state: FadeState::new(pending_surfaces, now),
             texture_buffer,
@@ -274,6 +306,7 @@ pub(crate) fn take_snapshot(
 ///
 /// On failure to create the snapshot, logs once and returns `None` so the theme
 /// still changes immediately.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_if_allowed(
     state: &mut State,
     renderer: &mut GlesRenderer,
@@ -281,6 +314,7 @@ pub(crate) fn start_if_allowed(
     output_size: Size<i32, Physical>,
     scale: f64,
     transform: Transform,
+    texture_transform: Transform,
     now: Instant,
 ) -> Option<ThemeFade> {
     if state.config.appearance.reduced_motion || state.locked {
@@ -288,7 +322,13 @@ pub(crate) fn start_if_allowed(
     }
     let pending = pending_surfaces(state);
     let texture = take_snapshot(state, renderer, cursor, output_size, scale, transform)?;
-    Some(ThemeFade::new(renderer, texture, pending, now))
+    Some(ThemeFade::new(
+        renderer,
+        texture,
+        texture_transform,
+        pending,
+        now,
+    ))
 }
 
 /// Logs a snapshot failure once and tells the caller to fall back to an
@@ -464,7 +504,13 @@ mod tests {
         }
 
         let start = Instant::now();
-        let fade = ThemeFade::new(&renderer, snapshot_texture, HashSet::new(), start);
+        let fade = ThemeFade::new(
+            &renderer,
+            snapshot_texture,
+            Transform::Normal,
+            HashSet::new(),
+            start,
+        );
 
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
