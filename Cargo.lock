@@ -4356,6 +4356,7 @@ dependencies = [
  "freya-testing",
  "keyboard-types",
  "libc",
+ "png",
  "torin",
  "yuki-appearance",
  "yuki-design",

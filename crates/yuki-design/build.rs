@@ -2050,11 +2050,8 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.popup.light-gap",
         COMPONENTS,
     ) as u32;
-    let popup_text_gap = integer(
-        components,
-        "components.settings.popup.text-gap",
-        COMPONENTS,
-    ) as u32;
+    let popup_text_gap =
+        integer(components, "components.settings.popup.text-gap", COMPONENTS) as u32;
 
     let selected_dark_mix = number(
         components,
@@ -2102,11 +2099,8 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.group.title-indent",
         COMPONENTS,
     ) as u32;
-    let group_desc_gap = integer(
-        components,
-        "components.settings.group.desc-gap",
-        COMPONENTS,
-    ) as u32;
+    let group_desc_gap =
+        integer(components, "components.settings.group.desc-gap", COMPONENTS) as u32;
 
     let swatch_column = integer(components, "components.settings.swatch.column", COMPONENTS) as u32;
     let swatch_name_gap = integer(
