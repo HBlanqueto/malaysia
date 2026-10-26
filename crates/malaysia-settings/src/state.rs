@@ -2,7 +2,7 @@
 
 pub use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightStyle, WindowColorMode, WindowTintScope,
-    load_appearance, palette, read_dominant, resolve, write_appearance,
+    load_appearance, palette, resolve, write_appearance,
 };
 pub use vow_design::Rgba;
 use vow_design::{
@@ -41,14 +41,6 @@ pub fn bg_surface(scheme: ColorScheme) -> Rgba {
         ColorScheme::Dark => BG_SURFACE_DARK,
         _ => BG_SURFACE_LIGHT,
     }
-}
-
-/// Carga la apariencia y el color dominante actuales.
-pub fn load_resolved() -> (AppearanceConfig, Option<Rgba>, Resolved) {
-    let config = load_appearance();
-    let dominant = read_dominant();
-    let resolved = resolve(&config, dominant);
-    (config, dominant, resolved)
 }
 
 /// Escribe la config y devuelve el error como string si falla.

@@ -4,31 +4,11 @@
 //! resolved Neptunia palette, so the compositor, the shell and the apps keep
 //! sharing one source.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
-
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
-use freya_core::prelude::Color;
-use vow_appearance::{
-    ColorScheme, Resolved, config_dir, data_dir, load_appearance, load_dominant, resolve,
-};
+use freya_core::prelude::{Color, State, try_consume_root_context};
+use vow_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
 use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
-
-static RESOLVED: OnceLock<Mutex<HashMap<(PathBuf, PathBuf), Resolved>>> = OnceLock::new();
-
-fn load_resolved() -> Resolved {
-    resolve(&load_appearance(), load_dominant())
-}
-
-fn cache_key() -> (PathBuf, PathBuf) {
-    (config_dir(), data_dir())
-}
-
-fn cache() -> &'static Mutex<HashMap<(PathBuf, PathBuf), Resolved>> {
-    RESOLVED.get_or_init(|| Mutex::new(HashMap::new()))
-}
 
 fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
@@ -76,29 +56,18 @@ fn sheet(background: Rgba, surface: Rgba, text: Rgba, accent: Rgba, border: Rgba
 
 /// Resolves the current appearance and its shell palette.
 ///
-/// The first call for a given config/data directory pair loads and caches the
-/// value; later calls return the cached value until [`refresh`] updates it.
+/// Inside a Freya tree this reads the process-wide reactive state provided by
+/// the runner, so components that call it re-execute when the theme changes.
+/// Outside a runner (tests without context, previews) it loads from disk.
 pub fn resolved() -> Resolved {
-    let key = cache_key();
-    let mut cache = cache().lock().expect("theme cache is not poisoned");
-    cache.get(&key).copied().unwrap_or_else(|| {
-        let resolved = load_resolved();
-        cache.insert(key, resolved);
-        resolved
-    })
-}
-
-/// Reloads the appearance from disk and updates the cache. Returns `true` when
-/// the resolved values changed.
-pub fn refresh() -> bool {
-    let key = cache_key();
-    let resolved = load_resolved();
-    let mut cache = cache().lock().expect("theme cache is not poisoned");
-    let changed = cache.get(&key) != Some(&resolved);
-    if changed {
-        cache.insert(key, resolved);
+    if let Some(state) = try_consume_root_context::<State<Resolved>>() {
+        *state.read()
+    } else {
+        // shortcut: previews and tests that do not provide the runner state
+        // resolve from disk each time. Replace with a root context if reactive
+        // updates become needed.
+        resolve(&load_appearance(), load_dominant())
     }
-    changed
 }
 
 /// The shell palette for the current appearance (respects the desktop tint).
@@ -177,4 +146,166 @@ pub fn lock_palette(resolved: &Resolved) -> LockPalette {
     let mut palette = vow_design::LOCK;
     palette.accent = resolved.accent;
     palette
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use freya_core::prelude::*;
+    use freya_testing::TestingRunner;
+    use std::sync::Mutex;
+    use torin::prelude::{Size, Size2D};
+    use vow_appearance::{AppearanceConfig, ColorScheme, resolve};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_temp_dirs<F: FnOnce() -> R, R>(f: F) -> R {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = std::env::temp_dir().join(format!(
+            "barrier-kit-theme-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let old_config = std::env::var_os("MALAYSIA_CONFIG_DIR");
+        let old_data = std::env::var_os("MALAYSIA_DATA_DIR");
+        unsafe {
+            std::env::set_var("MALAYSIA_CONFIG_DIR", &dir);
+            std::env::set_var("MALAYSIA_DATA_DIR", &dir);
+        }
+        let result = f();
+        match old_config {
+            Some(v) => unsafe { std::env::set_var("MALAYSIA_CONFIG_DIR", v) },
+            None => unsafe { std::env::remove_var("MALAYSIA_CONFIG_DIR") },
+        }
+        match old_data {
+            Some(v) => unsafe { std::env::set_var("MALAYSIA_DATA_DIR", v) },
+            None => unsafe { std::env::remove_var("MALAYSIA_DATA_DIR") },
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        result
+    }
+
+    fn decode_png(data: &[u8]) -> (u32, u32, Vec<u8>) {
+        let decoder = png::Decoder::new(data);
+        let mut reader = decoder.read_info().expect("png info");
+        let mut buf = vec![0u8; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut buf).expect("png frame");
+        buf.truncate(info.buffer_size());
+        (info.width, info.height, buf)
+    }
+
+    fn pixel_at(data: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
+        let idx = ((y * width + x) * 4) as usize;
+        [data[idx], data[idx + 1], data[idx + 2], data[idx + 3]]
+    }
+
+    /// The testing runner renders on a white background, so a translucent fill
+    /// is alpha-composited over white.
+    fn over_white([r, g, b, a]: [u8; 4]) -> [u8; 4] {
+        if a == 255 {
+            return [r, g, b, a];
+        }
+        let alpha = a as f32 / 255.0;
+        let blend = |c| (c as f32 * alpha + 255.0 * (1.0 - alpha)).round() as u8;
+        [blend(r), blend(g), blend(b), 255]
+    }
+
+    fn light_and_dark() -> (Resolved, Resolved) {
+        let light = resolve(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Light,
+                ..Default::default()
+            },
+            None,
+        );
+        let dark = resolve(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Dark,
+                ..Default::default()
+            },
+            None,
+        );
+        (light, dark)
+    }
+
+    fn appearance_app() -> impl IntoElement {
+        let resolved = resolved();
+        let palette = shell_palette(&resolved);
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(color(palette.bar))
+    }
+
+    #[test]
+    fn appearance_state_recolors_component() {
+        with_temp_dirs(|| {
+            let (light, dark) = light_and_dark();
+            let (mut test, mut state) = TestingRunner::new(
+                appearance_app,
+                Size2D::new(64.0, 64.0),
+                |runner| runner.provide_root_context(|| State::create(light)),
+                1.0,
+            );
+            test.sync_and_update();
+            let (w, h, data) = decode_png(&test.render());
+            assert_eq!((w, h), (64, 64));
+            let actual = pixel_at(&data, w, 32, 32);
+            let expected = over_white(shell_palette(&light).bar.to_rgba8());
+            assert_eq!(actual, expected);
+
+            state.set(dark);
+            test.sync_and_update();
+            let (w, h, data) = decode_png(&test.render());
+            assert_eq!((w, h), (64, 64));
+            let actual = pixel_at(&data, w, 32, 32);
+            let expected = over_white(shell_palette(&dark).bar.to_rgba8());
+            assert_eq!(actual, expected);
+        })
+    }
+
+    #[test]
+    fn accent_state_recolors_sidebar_selection() {
+        with_temp_dirs(|| {
+            let mut light_blue = AppearanceConfig {
+                color_scheme: ColorScheme::Light,
+                ..Default::default()
+            };
+            // The default accent is the first swatch (blue).
+            let blue = resolve(&light_blue, None);
+            light_blue.accent_color = Some([0.5, 0.0, 1.0]);
+            let purple = resolve(&light_blue, None);
+
+            fn sidebar_selection_app() -> impl IntoElement {
+                let resolved = resolved();
+                let palette = resolved.sidebar.palette;
+                rect()
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .background(color(palette.selected_bg))
+            }
+
+            let (mut test, mut state) = TestingRunner::new(
+                sidebar_selection_app,
+                Size2D::new(64.0, 64.0),
+                |runner| runner.provide_root_context(|| State::create(blue)),
+                1.0,
+            );
+            test.sync_and_update();
+            let (w, h, data) = decode_png(&test.render());
+            assert_eq!((w, h), (64, 64));
+            let actual = pixel_at(&data, w, 32, 32);
+            let expected = over_white(blue.sidebar.palette.selected_bg.to_rgba8());
+            assert_eq!(actual, expected);
+
+            state.set(purple);
+            test.sync_and_update();
+            let (w, h, data) = decode_png(&test.render());
+            assert_eq!((w, h), (64, 64));
+            let actual = pixel_at(&data, w, 32, 32);
+            let expected = over_white(purple.sidebar.palette.selected_bg.to_rgba8());
+            assert_eq!(actual, expected);
+        })
+    }
 }

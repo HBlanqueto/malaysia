@@ -18,12 +18,12 @@ use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
-use vow_appearance::{AppearanceConfig, Resolved};
+use vow_appearance::{AppearanceConfig, Resolved, load_appearance, load_dominant};
 use vow_design::{Rgba, SETTINGS};
 
 use crate::groups::content_scroll;
 use crate::sidebar::sidebar;
-use crate::state::{bg_window, load_resolved, rgba};
+use crate::state::{bg_window, rgba};
 use crate::toolbar::toolbar;
 
 fn main() {
@@ -51,7 +51,8 @@ impl App for SettingsApp {
 }
 
 /// Vista completa de Ajustes. Si se pasa un estado explícito se usa para
-/// tests; si no, se carga desde `appearance.domain`.
+/// tests; si no, se lee el `Resolved` reactivo del runner para que la vista
+/// se actualice cuando cambie la apariencia.
 pub fn app_view(
     state: Option<(AppearanceConfig, Option<Rgba>, Resolved)>,
     titlebar: Titlebar,
@@ -61,7 +62,13 @@ pub fn app_view(
     let color_error = use_state(|| None::<String>);
     let windows_error = use_state(|| None::<String>);
 
-    let (config, dominant, resolved) = state.unwrap_or_else(load_resolved);
+    let (config, dominant, resolved) = match state {
+        Some((config, dominant, resolved)) => (config, dominant, resolved),
+        None => {
+            let resolved = barrier_kit::theme::resolved();
+            (load_appearance(), load_dominant(), resolved)
+        }
+    };
     let query = search.read().to_lowercase();
 
     rect()

@@ -118,7 +118,10 @@ use sctk::{
 };
 use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
-use vow_appearance::watch::AppearanceWatch;
+use vow_appearance::{
+    Resolved, load_appearance, load_dominant, resolve,
+    watch::AppearanceWatch,
+};
 use wayland_egl::WlEglSurface;
 use wayland_protocols_plasma::appmenu::client::{
     org_kde_kwin_appmenu::{self, OrgKdeKwinAppmenu},
@@ -931,11 +934,13 @@ impl AppInstance {
         font_manager: FontMgr,
         menu: Option<crate::app_menu::AppMenu>,
         on_menu_action: Option<MenuActionHandler>,
+        resolved: State<Resolved>,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
         let mut runner = Runner::new(move || integration(app.clone()).into_element());
 
         runner.provide_root_context(ScreenReader::new);
+        runner.provide_root_context(move || resolved);
         runner.provide_root_context(move || popups.clone());
         let (ticker_sender, ticker) = RenderingTicker::new();
         runner.provide_root_context(|| ticker);
@@ -1586,6 +1591,7 @@ struct Shell {
     decoration_manager: bool,
     decoration_warned: bool,
     appearance_watch: Option<AppearanceWatch>,
+    resolved: State<Resolved>,
 }
 
 #[derive(Clone)]
@@ -1766,6 +1772,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         shell.graphics.font_manager.clone(),
         None,
         None,
+        shell.resolved,
     );
     shell.surfaces.push(SurfaceWindow {
         surface: surface.clone(),
@@ -1937,8 +1944,9 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
         })
         .map_err(|_| RunError::Egl("inserting the wake ping source"))?;
 
-    // Watch appearance.domain and wallpaper.state; when they change, refresh
-    // the cached theme and request a redraw so every surface picks it up.
+    // Watch appearance.domain and wallpaper.state; when they change, resolve
+    // the theme again and update the process-wide reactive state so every
+    // surface that reads theme::resolved() re-executes.
     let watch = AppearanceWatch::new().map_err(|error| {
         RunError::Io(std::io::Error::other(format!(
             "creating the appearance watcher: {error}"
@@ -1954,10 +1962,12 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
                 if let Some(watch) = shell.appearance_watch.as_ref()
                     && let Ok(events) = watch.drain()
                     && !events.is_empty()
-                    && crate::theme::refresh()
                 {
-                    shell.request_redraw_all = true;
-                    shell.ping.ping();
+                    let resolved = resolve(&load_appearance(), load_dominant());
+                    if *shell.resolved.peek() != resolved {
+                        shell.resolved.set(resolved);
+                        shell.ping.ping();
+                    }
                 }
                 Ok(PostAction::Continue)
             },
@@ -1987,6 +1997,7 @@ impl Shell {
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop ping failed"))?;
         let (wake_ping, wake_source) =
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop wake ping failed"))?;
+        let resolved = State::create_global(resolve(&load_appearance(), load_dominant()));
         let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
         let close_entries = toplevel_entries.clone();
         let minimize_entries = toplevel_entries.clone();
@@ -2169,6 +2180,7 @@ impl Shell {
             }),
             decoration_warned: false,
             appearance_watch: None,
+            resolved,
         };
         Ok((conn, event_queue, qh, shell))
     }
@@ -2309,6 +2321,7 @@ impl Shell {
             self.graphics.font_manager.clone(),
             options.menu.clone(),
             options.on_menu_action.clone(),
+            self.resolved,
         );
         self.surfaces.push(SurfaceWindow {
             surface,
@@ -2378,6 +2391,7 @@ impl Shell {
             self.graphics.font_manager.clone(),
             None,
             None,
+            self.resolved,
         );
         self.surfaces.push(SurfaceWindow {
             surface,
@@ -2610,6 +2624,7 @@ impl Shell {
             self.graphics.font_manager.clone(),
             None,
             None,
+            self.resolved,
         );
 
         self.surfaces.push(SurfaceWindow {
