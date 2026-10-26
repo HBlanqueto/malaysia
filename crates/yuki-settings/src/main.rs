@@ -26,8 +26,9 @@ use yuki_appearance::{
     appearance_path, load_appearance, palette, read_dominant, resolve, write_appearance,
 };
 use yuki_design::{
-    ACCENT_SWATCHES, BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, CALLOUT, HEADLINE,
-    LAYER_FACTOR_BG_SUNKEN, Rgba, SETTINGS, SIDEBAR, TEXT, TITLE_2, TITLEBAR,
+    ACCENT_SWATCHES, BG_CONTROL_DARK, BG_CONTROL_DARK_TINT, BG_CONTROL_LIGHT, BG_SURFACE_DARK,
+    BG_SURFACE_DARK_TINT, BG_SURFACE_LIGHT, BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT,
+    CALLOUT, HEADLINE, LAYER_FACTOR_BG_SUNKEN, Rgba, SETTINGS, SIDEBAR, TEXT, TITLE_2, TITLEBAR,
 };
 
 fn rgba(color: Rgba) -> Color {
@@ -86,7 +87,7 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
         .width(Size::fill())
         .height(Size::px(SETTINGS.search_height as f32))
         .corner_radius(999.0)
-        .background(rgba(resolved.toolgroup.bg))
+        .background(rgba(bg_control(resolved.scheme)))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .padding(Gaps::new(
@@ -196,7 +197,6 @@ fn content(
     windows_error: State<Option<String>>,
 ) -> impl IntoElement {
     let resolved = *resolved;
-    let scheme_palette = palette(resolved.scheme);
     let bg = bg_window(resolved.scheme);
 
     rect()
@@ -205,20 +205,11 @@ fn content(
         .background(rgba(bg))
         .direction(Direction::Vertical)
         .child(
-            Titlebar::new()
-                .with_sidebar(true)
-                .left(
-                    ToolGroup::new()
-                        .child(ToolButton::new("Atrás", BACK_ICON).disabled(true))
-                        .child(ToolButton::new("Adelante", FORWARD_ICON).disabled(true)),
-                )
-                .right(
-                    label()
-                        .text("Apariencia")
-                        .font_size(TITLE_2.size as f32)
-                        .font_weight(FontWeight::from(TITLE_2.weight as i32))
-                        .color(rgba(scheme_palette.text.focused)),
-                ),
+            Titlebar::new().with_sidebar(true).title("Apariencia").left(
+                ToolGroup::new()
+                    .child(ToolButton::new("Atrás", BACK_ICON).disabled(true))
+                    .child(ToolButton::new("Adelante", FORWARD_ICON).disabled(true)),
+            ),
         )
         .child(
             rect()
@@ -349,8 +340,9 @@ fn appearance_group(
     test_config.color_scheme = ColorScheme::Auto;
     let auto_resolved = resolve(&test_config, dominant);
 
-    card_container(&resolved)
-        .child(
+    card_container(
+        &resolved,
+        vec![
             rect()
                 .width(Size::fill())
                 .direction(Direction::Horizontal)
@@ -384,10 +376,12 @@ fn appearance_group(
                     card_bg,
                     auto_resolved,
                     error,
-                )),
-        )
-        .child(error_label(&error, &scheme_palette))
-        .into_element()
+                ))
+                .into_element(),
+        ],
+    )
+    .child(error_label(&error, &scheme_palette))
+    .into_element()
 }
 
 fn card_background(dominant: Option<Rgba>, accent: Rgba) -> Rgba {
@@ -564,7 +558,7 @@ fn selectable_card(
     let caption_color = if is_selected {
         scheme_palette.ink_strong
     } else {
-        scheme_palette.text.focused
+        scheme_palette.text.unfocused
     };
 
     rect()
@@ -600,10 +594,16 @@ fn color_group(
         .width(Size::fill())
         .direction(Direction::Horizontal)
         .spacing(SETTINGS.swatch_gap as f32)
-        .children(ACCENT_SWATCHES.iter().map(|(name, color)| {
-            let selected = config.accent_color == Some([color.r, color.g, color.b]);
-            accent_swatch(name, *color, selected, wallpaper_mode, error).into_element()
-        }));
+        .children(
+            ACCENT_SWATCHES
+                .iter()
+                .enumerate()
+                .map(|(index, (name, color))| {
+                    let selected = config.accent_color == Some([color.r, color.g, color.b])
+                        || (config.accent_color.is_none() && index == 0);
+                    accent_swatch(name, *color, selected, wallpaper_mode, error).into_element()
+                }),
+        );
 
     let accent_row = row_card(&resolved, "Color de acento", swatches.into_element());
 
@@ -701,13 +701,17 @@ fn color_group(
         rect().into_element()
     };
 
-    card_container(&resolved)
-        .child(accent_row)
-        .child(window_mode_row)
-        .child(scope_row)
-        .child(note)
-        .child(error_label(&error, &scheme_palette))
-        .into_element()
+    card_container(
+        &resolved,
+        vec![
+            accent_row.into_element(),
+            window_mode_row.into_element(),
+            scope_row.into_element(),
+            note,
+        ],
+    )
+    .child(error_label(&error, &scheme_palette))
+    .into_element()
 }
 
 fn accent_swatch(
@@ -835,7 +839,7 @@ fn window_color_preview(preview_resolved: &Resolved) -> Rect {
         )
         .child(
             rect()
-                .position(Position::new_absolute().bottom(inset).left(inset))
+                .position(Position::new_absolute().top(inset).left(inset))
                 .width(Size::auto())
                 .height(Size::px(light))
                 .direction(Direction::Horizontal)
@@ -881,14 +885,6 @@ fn windows_group(
     let palette = resolved.sidebar.palette;
     let current = config.traffic_lights;
 
-    let mut test_config = config.clone();
-    test_config.window_color = WindowColorMode::Neutral;
-    let neutral_lights = resolve(&test_config, read_dominant()).lights;
-    test_config.window_color = WindowColorMode::Accent;
-    let accent_lights = resolve(&test_config, read_dominant()).lights;
-    test_config.window_color = WindowColorMode::Wallpaper;
-    let wallpaper_lights = resolve(&test_config, read_dominant()).lights;
-
     let traffic_button = rect()
         .width(Size::auto())
         .height(Size::px(SETTINGS.popup_height as f32))
@@ -904,16 +900,7 @@ fn windows_group(
                 .font_size(TEXT.size as f32)
                 .color(rgba(palette.item_ink)),
         )
-        .child(
-            rect()
-                .width(Size::auto())
-                .height(Size::auto())
-                .direction(Direction::Horizontal)
-                .spacing(4.0)
-                .child(traffic_squares(neutral_lights))
-                .child(traffic_squares(accent_lights))
-                .child(traffic_squares(wallpaper_lights)),
-        )
+        .child(traffic_squares(resolved.lights))
         .child(svg_viewer(
             CHEVRON_UP_DOWN_ICON,
             palette.item_ink,
@@ -923,14 +910,12 @@ fn windows_group(
             open_traffic_menu(current, resolved, error);
         });
 
-    card_container(&resolved)
-        .child(row_card(
-            &resolved,
-            "Semáforos",
-            traffic_button.into_element(),
-        ))
-        .child(error_label(&error, &scheme_palette))
-        .into_element()
+    card_container(
+        &resolved,
+        vec![row_card(&resolved, "Semáforos", traffic_button.into_element()).into_element()],
+    )
+    .child(error_label(&error, &scheme_palette))
+    .into_element()
 }
 
 fn traffic_squares(lights: [Rgba; 3]) -> Rect {
@@ -1026,35 +1011,63 @@ fn row_card(resolved: &Resolved, label_text: &str, control: Element) -> Rect {
     let scheme_palette = palette(resolved.scheme);
     rect()
         .width(Size::fill())
-        .height(Size::auto())
+        .height(Size::px(SETTINGS.group_row_min_height as f32))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
-        .main_align(Alignment::SpaceBetween)
         .padding(Gaps::new(
-            SIDEBAR.item_padding_x as f32,
-            SIDEBAR.item_padding_x as f32,
-            SIDEBAR.item_padding_x as f32,
-            SIDEBAR.item_padding_x as f32,
+            SETTINGS.group_row_padding_y as f32,
+            SETTINGS.group_row_padding_x as f32,
+            SETTINGS.group_row_padding_y as f32,
+            SETTINGS.group_row_padding_x as f32,
         ))
+        .spacing(SETTINGS.group_row_padding_x as f32)
         .child(
             label()
                 .text(label_text.to_string())
                 .font_size(TEXT.size as f32)
                 .color(rgba(scheme_palette.text.focused))
-                .max_lines(1),
+                .max_lines(1)
+                .width(Size::flex(1.0)),
         )
         .child(control)
 }
 
-fn card_container(resolved: &Resolved) -> Rect {
+fn card_container(resolved: &Resolved, rows: Vec<Element>) -> Rect {
     let scheme_palette = palette(resolved.scheme);
+    let mut children: Vec<Element> = Vec::with_capacity(rows.len() * 2);
+    let last = rows.len().saturating_sub(1);
+    for (i, row) in rows.into_iter().enumerate() {
+        children.push(row);
+        if i != last {
+            children.push(
+                rect()
+                    .width(Size::fill())
+                    .height(Size::px(1.0))
+                    .margin(Gaps::new(
+                        0.0,
+                        SETTINGS.group_row_padding_x as f32,
+                        0.0,
+                        SETTINGS.group_row_padding_x as f32,
+                    ))
+                    .background(rgba(scheme_palette.line))
+                    .into_element(),
+            );
+        }
+    }
     rect()
         .width(Size::fill())
         .height(Size::auto())
         .corner_radius(SETTINGS.group_radius as f32)
-        .background(rgba(scheme_palette.titlebar_bg.focused))
+        .background(rgba(bg_surface(resolved.scheme)))
+        .border(
+            Border::new()
+                .width(1.0)
+                .alignment(BorderAlignment::Inner)
+                .fill(rgba(scheme_palette.line)),
+        )
         .direction(Direction::Vertical)
-        .spacing(1.0)
+        .overflow(Overflow::Clip)
+        .children(children)
 }
 
 fn radio(
@@ -1077,7 +1090,7 @@ fn radio(
         .width(Size::px(radio_size))
         .height(Size::px(radio_size))
         .corner_radius((radio_size / 2.0).max(0.0))
-        .background(rgba(resolved.toolgroup.bg))
+        .background(rgba(bg_control(resolved.scheme)))
         .center();
 
     if selected {
@@ -1086,7 +1099,7 @@ fn radio(
                 .width(Size::px(dot_size))
                 .height(Size::px(dot_size))
                 .corner_radius((dot_size / 2.0).max(0.0))
-                .background(rgba(yuki_design::LIGHT.text.focused)),
+                .background(rgba(Rgba::rgb8(255, 255, 255))),
         );
     }
 
@@ -1105,7 +1118,9 @@ fn radio(
                 .max_lines(1),
         );
 
-    if !disabled {
+    if disabled {
+        row = row.opacity(0.5);
+    } else {
         row = row.on_press(on_press);
     }
 
@@ -1143,6 +1158,22 @@ fn bg_window(scheme: ColorScheme) -> Rgba {
         ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
         ColorScheme::Dark => BG_WINDOW_DARK,
         _ => BG_WINDOW_LIGHT,
+    }
+}
+
+fn bg_control(scheme: ColorScheme) -> Rgba {
+    match scheme {
+        ColorScheme::DarkTint => BG_CONTROL_DARK_TINT,
+        ColorScheme::Dark => BG_CONTROL_DARK,
+        _ => BG_CONTROL_LIGHT,
+    }
+}
+
+fn bg_surface(scheme: ColorScheme) -> Rgba {
+    match scheme {
+        ColorScheme::DarkTint => BG_SURFACE_DARK_TINT,
+        ColorScheme::Dark => BG_SURFACE_DARK,
+        _ => BG_SURFACE_LIGHT,
     }
 }
 
@@ -1221,7 +1252,7 @@ const CLEAR_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\"
 const BACK_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M10 3L5 8l5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 const FORWARD_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M6 3l5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 const APPEARANCE_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><circle cx=\"11\" cy=\"11\" r=\"9\" fill=\"currentColor\"/><path d=\"M11 2v18\" stroke=\"white\" stroke-width=\"2\"/><path d=\"M2 11h18\" stroke=\"white\" stroke-width=\"2\"/></svg>";
-const CHEVRON_UP_DOWN_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 12 12\"><path d=\"M2 4l4 4 4-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+const CHEVRON_UP_DOWN_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 12 12\"><path d=\"M2 8l4-4 4 4M2 4l4 4 4-4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 
 #[cfg(test)]
 mod tests {
@@ -1229,6 +1260,9 @@ mod tests {
     use std::fs;
     use std::sync::Mutex;
 
+    use celestial_kit::controls::{ToolButton, ToolGroup};
+    use celestial_kit::platform::{DecorationResponse, WindowStatus};
+    use celestial_kit::titlebar::Titlebar;
     use freya_core::prelude::Label;
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
@@ -1507,5 +1541,80 @@ mod tests {
                 "the write error message must be rendered"
             );
         });
+    }
+
+    #[test]
+    fn default_accent_selects_blue_swatch() {
+        let config = AppearanceConfig::default();
+        assert!(
+            config.accent_color.is_none(),
+            "default config has no accent"
+        );
+
+        let test = run_content("color", config, None);
+        let names: Vec<&str> = ACCENT_SWATCHES.iter().map(|(name, _)| *name).collect();
+        let visible: Vec<&str> = names
+            .iter()
+            .filter(|name| find_label(&test, name).is_some())
+            .copied()
+            .collect();
+        assert_eq!(
+            visible,
+            vec!["Azul"],
+            "without an accent_color the first swatch (Azul) must be selected: {visible:?}"
+        );
+    }
+
+    #[test]
+    fn traffic_button_shows_exactly_three_lights() {
+        let test = run_content("ventanas", AppearanceConfig::default(), None);
+        let squares = test.find_many(|node, _el| {
+            let size = node.layout().area.size;
+            if (size.width - 12.0).abs() < 0.5 && (size.height - 12.0).abs() < 0.5 {
+                Some(())
+            } else {
+                None
+            }
+        });
+        assert_eq!(
+            squares.len(),
+            3,
+            "the traffic-light button must show exactly three 12x12 squares: {squares:?}"
+        );
+    }
+
+    struct TitlebarCase;
+
+    impl App for TitlebarCase {
+        fn render(&self) -> impl IntoElement {
+            use_init_theme(|| theme::for_scheme(false));
+            Titlebar::preview(
+                WindowStatus {
+                    activated: true,
+                    maximized: false,
+                    decoration: DecorationResponse::Client,
+                    fixed: false,
+                },
+                "Ajustes del sistema",
+                false,
+            )
+            .with_sidebar(true)
+            .title("Apariencia")
+            .left(
+                ToolGroup::new()
+                    .child(ToolButton::new("Atrás", BACK_ICON).disabled(true))
+                    .child(ToolButton::new("Adelante", FORWARD_ICON).disabled(true)),
+            )
+        }
+    }
+
+    #[test]
+    fn sidebar_titlebar_shows_appearance_title() {
+        let app = AppComponent::new(TitlebarCase);
+        let (test, _) = TestingRunner::new(app, Size2D::new(400.0, 100.0), |_| {}, 1.0);
+        assert!(
+            find_label(&test, "Apariencia").is_some(),
+            "the sidebar titlebar must show the section title 'Apariencia'"
+        );
     }
 }
