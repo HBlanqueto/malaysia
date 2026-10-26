@@ -30,9 +30,13 @@ wayland-client.workspace = true
 wayland-egl.workspace = true
 wayland-scanner.workspace = true
 wayland-backend = "0.3"
+wayland-protocols-plasma = { workspace = true, features = ["client"] }
+zbus.workspace = true
 khronos-egl = { workspace = true, features = ["dynamic"] }
 futures-util.workspace = true
 futures-channel.workspace = true
+async-channel.workspace = true
+async-io.workspace = true
 rustc-hash.workspace = true
 keyboard-types.workspace = true
 xkbcommon.workspace = true

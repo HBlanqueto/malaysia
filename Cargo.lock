@@ -424,6 +424,8 @@ name = "celestial-kit"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "async-channel",
+ "async-io",
  "calloop 0.14.5",
  "freya-animation",
  "freya-clipboard",
@@ -449,10 +451,12 @@ dependencies = [
  "wayland-backend",
  "wayland-client",
  "wayland-egl",
+ "wayland-protocols-plasma",
  "wayland-scanner",
  "xkbcommon 0.9.0",
  "yuki-appearance",
  "yuki-design",
+ "zbus",
  "zeroize",
 ]
 
