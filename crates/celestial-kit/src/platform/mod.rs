@@ -117,6 +117,10 @@ use sctk::{
 use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
 use wayland_egl::WlEglSurface;
+use wayland_protocols_plasma::appmenu::client::{
+    org_kde_kwin_appmenu::{self, OrgKdeKwinAppmenu},
+    org_kde_kwin_appmenu_manager::{self, OrgKdeKwinAppmenuManager},
+};
 
 pub use infinity::{
     InfinityWindowManagerV1, Layout as InfinityLayout, PairLayout as InfinityPairLayout,
@@ -388,16 +392,41 @@ pub enum DecorationResponse {
     Server,
 }
 
+/// Handler called when a global menu or in-app shortcut fires an action.
+pub type MenuActionHandler = Arc<dyn Fn(&str) + Send + Sync>;
+
 /// Public options for a normal CelestialKit window, without SCTK types.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct WindowOptions {
     pub title: String,
     pub app_name: String,
+    /// Optional override for the Wayland `app_id`; defaults to
+    /// `NATIVE_APP_ID_PREFIX + app_name`.
+    pub app_id: Option<String>,
     pub decorations: Decorations,
     pub size: (u32, u32),
     pub min_size: Option<(u32, u32)>,
     pub max_size: Option<(u32, u32)>,
     pub parent: Option<ObjectId>,
+    pub menu: Option<crate::app_menu::AppMenu>,
+    pub on_menu_action: Option<MenuActionHandler>,
+}
+
+impl std::fmt::Debug for WindowOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WindowOptions")
+            .field("title", &self.title)
+            .field("app_name", &self.app_name)
+            .field("app_id", &self.app_id)
+            .field("decorations", &self.decorations)
+            .field("size", &self.size)
+            .field("min_size", &self.min_size)
+            .field("max_size", &self.max_size)
+            .field("parent", &self.parent)
+            .field("menu", &self.menu)
+            .field("on_menu_action", &self.on_menu_action.is_some())
+            .finish()
+    }
 }
 
 impl WindowOptions {
@@ -406,12 +435,20 @@ impl WindowOptions {
         Self {
             title: title.into(),
             app_name: app_name.into(),
+            app_id: None,
             decorations: Decorations::Client,
             size: (640, 420),
             min_size: None,
             max_size: None,
             parent: None,
+            menu: None,
+            on_menu_action: None,
         }
+    }
+
+    pub fn app_id(mut self, app_id: impl Into<String>) -> Self {
+        self.app_id = Some(app_id.into());
+        self
     }
 
     pub fn decorations(mut self, decorations: Decorations) -> Self {
@@ -438,6 +475,16 @@ impl WindowOptions {
         self.parent = parent;
         self
     }
+
+    pub fn menu(mut self, menu: crate::app_menu::AppMenu) -> Self {
+        self.menu = Some(menu);
+        self
+    }
+
+    pub fn on_menu_action(mut self, callback: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        self.on_menu_action = Some(Arc::new(callback));
+        self
+    }
 }
 
 /// The state a CelestialKit window's titlebar reads.
@@ -459,6 +506,7 @@ pub struct WindowControls {
     pub title: String,
     pub fixed: bool,
     surface_id: ObjectId,
+    menu_handle: Option<crate::app_menu::MenuHandle>,
 }
 
 impl WindowControls {
@@ -509,6 +557,11 @@ impl WindowControls {
     /// The Wayland object id of the toplevel surface these controls belong to.
     pub fn surface_id(&self) -> ObjectId {
         self.surface_id.clone()
+    }
+
+    /// The global menu handle for this window, if it was configured with one.
+    pub fn menu_handle(&self) -> Option<crate::app_menu::MenuHandle> {
+        self.menu_handle.clone()
     }
 
     /// Opens another toplevel in the same process, attached to this window as
@@ -852,6 +905,8 @@ struct AppInstance {
     size: Size2D,
     needs_layout: bool,
     waker: Waker,
+    menu: Option<crate::app_menu::AppMenu>,
+    on_menu_action: Option<MenuActionHandler>,
 }
 
 impl AppInstance {
@@ -871,6 +926,8 @@ impl AppInstance {
         popup_handle: Option<PopupHandle>,
         font_collection: FontCollection,
         font_manager: FontMgr,
+        menu: Option<crate::app_menu::AppMenu>,
+        on_menu_action: Option<MenuActionHandler>,
     ) -> Self {
         let (events_sender, events_receiver) = futures_channel::mpsc::unbounded();
         let mut runner = Runner::new(move || integration(app.clone()).into_element());
@@ -938,6 +995,8 @@ impl AppInstance {
             size: Size2D::new(size.0 as f32, size.1 as f32),
             needs_layout: true,
             waker,
+            menu,
+            on_menu_action,
         }
     }
 
@@ -1222,7 +1281,7 @@ type WakeQueue = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
 
 /// Wakes the render loop from another thread. `wake` only pings the loop; the
 /// callback registered by [`Timers::wakeup`] runs on the render thread.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WakeHandle {
     ping: Ping,
 }
@@ -1230,6 +1289,10 @@ pub struct WakeHandle {
 impl WakeHandle {
     pub fn wake(&self) {
         self.ping.ping();
+    }
+
+    pub(crate) fn from_ping(ping: Ping) -> Self {
+        Self { ping }
     }
 }
 
@@ -1341,6 +1404,8 @@ struct SurfaceWindow {
     /// The most recent window configure not yet applied; older configures are
     /// dropped so only the last one is drawn.
     pending_configure: Option<(WindowConfigure, u32)>,
+    appmenu: Option<OrgKdeKwinAppmenu>,
+    appmenu_address: Option<AppMenuAddress>,
 }
 
 #[allow(dead_code)]
@@ -1498,6 +1563,7 @@ struct Shell {
     _foreign_list: Option<ExtForeignToplevelListV1>,
     _foreign_mgmt: Option<ZwlrForeignToplevelManagerV1>,
     _infinity_manager: Rc<RefCell<Option<InfinityWindowManagerV1>>>,
+    appmenu_manager: Option<OrgKdeKwinAppmenuManager>,
     toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>>,
     toplevels: Toplevels,
     session_unlock: Option<SessionUnlock>,
@@ -1693,6 +1759,8 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         None,
         shell.graphics.font_collection.clone(),
         shell.graphics.font_manager.clone(),
+        None,
+        None,
     );
     shell.surfaces.push(SurfaceWindow {
         surface: surface.clone(),
@@ -1710,6 +1778,8 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         draw_count: 0,
         configure_count: 0,
         pending_configure: None,
+        appmenu: None,
+        appmenu_address: None,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -1980,6 +2050,9 @@ impl Shell {
             .ok();
         *infinity_manager.borrow_mut() = infinity_manager_bound;
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
+        let appmenu_manager = globals
+            .bind::<OrgKdeKwinAppmenuManager, _, _>(&qh, 1..=1, ())
+            .ok();
         // `SeatState::new` binds the seats that already exist without calling
         // `SeatHandler::new_seat`, so remember one here for activation and
         // popup grabs. Hotplugged seats still arrive through `new_seat`.
@@ -2038,6 +2111,7 @@ impl Shell {
             _foreign_list: foreign_list,
             _foreign_mgmt: foreign_mgmt,
             _infinity_manager: infinity_manager,
+            appmenu_manager,
             toplevel_entries,
             toplevels,
             session_unlock: None,
@@ -2083,11 +2157,10 @@ impl Shell {
             Decorations::Server => WindowDecorations::RequestServer,
         };
         let window = xdg_shell.create_window(surface.clone(), decorations, qh);
-        window.set_app_id(format!(
-            "{}{}",
-            yuki_design::NATIVE_APP_ID_PREFIX,
-            options.app_name
-        ));
+        let app_id = options.app_id.clone().unwrap_or_else(|| {
+            format!("{}{}", yuki_design::NATIVE_APP_ID_PREFIX, options.app_name)
+        });
+        window.set_app_id(app_id);
         window.set_title(options.title.clone());
         if let Some(min) = options.min_size {
             window.set_min_size(Some((
@@ -2115,6 +2188,31 @@ impl Shell {
         }
         window.commit();
 
+        let menu = options.menu.clone();
+        let on_menu_action = options.on_menu_action.clone();
+        let mut menu_handle: Option<crate::app_menu::MenuHandle> = None;
+        let mut appmenu_address: Option<AppMenuAddress> = None;
+        if let Some(menu) = menu {
+            let handle = crate::app_menu::MenuHandle::new(
+                menu.clone(),
+                Some(WakeHandle::from_ping(self.wake.ping.clone())),
+            );
+            let on_action = on_menu_action.clone().unwrap_or_else(|| Arc::new(|_| {}));
+            if let Some(address) =
+                crate::app_menu::server::register(menu, handle.clone(), on_action)
+            {
+                appmenu_address = Some(address);
+            }
+            menu_handle = Some(handle);
+        }
+
+        let mut appmenu_object: Option<OrgKdeKwinAppmenu> = None;
+        if let (Some(manager), Some(address)) = (&self.appmenu_manager, &appmenu_address) {
+            let appmenu = manager.create(&surface, qh, surface.id());
+            appmenu.set_address(address.service.clone(), address.path.clone());
+            appmenu_object = Some(appmenu);
+        }
+
         let queue: Rc<RefCell<Vec<WindowCommand>>> = Rc::new(RefCell::new(Vec::new()));
         let pointer_serial = Rc::new(std::cell::Cell::new(0));
         let fixed = options.min_size.is_some() && options.min_size == options.max_size;
@@ -2136,6 +2234,7 @@ impl Shell {
             title: options.title.clone(),
             fixed,
             surface_id,
+            menu_handle,
         };
         self.window_contexts.push(WindowContext {
             controls: controls.clone(),
@@ -2173,6 +2272,8 @@ impl Shell {
             None,
             self.graphics.font_collection.clone(),
             self.graphics.font_manager.clone(),
+            options.menu.clone(),
+            options.on_menu_action.clone(),
         );
         self.surfaces.push(SurfaceWindow {
             surface,
@@ -2190,6 +2291,8 @@ impl Shell {
             draw_count: 0,
             configure_count: 0,
             pending_configure: None,
+            appmenu: appmenu_object,
+            appmenu_address: appmenu_address.clone(),
         });
         self.surface_count.set(self.surfaces.len());
         Some(controls)
@@ -2237,6 +2340,8 @@ impl Shell {
             None,
             self.graphics.font_collection.clone(),
             self.graphics.font_manager.clone(),
+            None,
+            None,
         );
         self.surfaces.push(SurfaceWindow {
             surface,
@@ -2254,6 +2359,8 @@ impl Shell {
             draw_count: 0,
             configure_count: 0,
             pending_configure: None,
+            appmenu: None,
+            appmenu_address: None,
         });
         self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
@@ -2464,6 +2571,8 @@ impl Shell {
             Some(handle),
             self.graphics.font_collection.clone(),
             self.graphics.font_manager.clone(),
+            None,
+            None,
         );
 
         self.surfaces.push(SurfaceWindow {
@@ -2487,6 +2596,8 @@ impl Shell {
             draw_count: 0,
             configure_count: 0,
             pending_configure: None,
+            appmenu: None,
+            appmenu_address: None,
         });
         self.surface_count.set(self.surfaces.len());
     }
@@ -2744,6 +2855,12 @@ impl WindowHandler for Shell {
             if let Some(index) = self.surfaces.iter().position(|s| {
                 matches!(s.role, SurfaceRole::Window(_)) && s.surface.id() == surface_id
             }) {
+                if let Some(address) = self.surfaces[index].appmenu_address.take() {
+                    crate::app_menu::server::unregister(&address.path);
+                }
+                if let Some(appmenu) = self.surfaces[index].appmenu.take() {
+                    appmenu.release();
+                }
                 let mut role = SurfaceRole::None;
                 std::mem::swap(&mut self.surfaces[index].role, &mut role);
                 drop(role);
@@ -3620,6 +3737,30 @@ impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
             }
         }
         state.sync_toplevels();
+    }
+}
+
+impl Dispatch<OrgKdeKwinAppmenuManager, (), Shell> for Shell {
+    fn event(
+        _: &mut Shell,
+        _: &OrgKdeKwinAppmenuManager,
+        _: org_kde_kwin_appmenu_manager::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Shell>,
+    ) {
+    }
+}
+
+impl Dispatch<OrgKdeKwinAppmenu, ObjectId, Shell> for Shell {
+    fn event(
+        _: &mut Shell,
+        _: &OrgKdeKwinAppmenu,
+        _: org_kde_kwin_appmenu::Event,
+        _: &ObjectId,
+        _: &Connection,
+        _: &QueueHandle<Shell>,
+    ) {
     }
 }
 
