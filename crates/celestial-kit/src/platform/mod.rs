@@ -482,9 +482,9 @@ impl WindowControls {
 
     /// Toggle vertical maximise for fixed-width windows.
     ///
-    /// The compositor does not expose a direct "fill height" request, so this
-    /// uses the standard maximise/restore path as the closest available
-    /// mechanism. The stored restore rectangle is the window's current size.
+    /// The kit still sends the standard maximise/restore request; the compositor
+    /// recognizes fixed-width windows and performs the vertical fill itself.
+    /// The stored restore rectangle is the window's current size.
     pub fn toggle_vertical_maximize(&self) {
         self.queue
             .borrow_mut()

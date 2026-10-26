@@ -847,6 +847,15 @@ impl Windows {
         self.outer_size_bounds(id, |_, max| max)
     }
 
+    /// The client's minimum and maximum usable size, if the window is tracked.
+    pub fn client_size_bounds(
+        &self,
+        id: WindowId,
+    ) -> Option<(Size<i32, Logical>, Size<i32, Logical>)> {
+        let index = self.index(id)?;
+        Some(self.windows[index].size_bounds())
+    }
+
     /// Raises a window to the top of the stack.
     pub fn raise(&mut self, id: WindowId) -> bool {
         self.scene.raise(id)

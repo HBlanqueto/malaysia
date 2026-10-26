@@ -32,7 +32,7 @@ use smithay::wayland::selection::primary_selection::set_primary_focus;
 use smithay::wayland::shell::wlr_layer::LayerSurface;
 use xkbcommon::xkb::{self, Keycode, keysyms};
 use yuki_design::TITLEBAR;
-use yuki_scene::geometry::Point as ScenePoint;
+use yuki_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use yuki_scene::scene::{Edge, WindowId};
 
 use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
@@ -1045,6 +1045,11 @@ impl State {
     /// Sets the maximized state of a window, restoring or saving its previous
     /// rectangle. Idempotent: asking for the current state is a no-op, so a
     /// duplicate client request cannot flip the window back.
+    ///
+    /// A window whose client width is fixed (`min_size.w == max_size.w > 0`)
+    /// only fills the available workspace height, keeping its current width and
+    /// horizontal position; the restore rectangle is the one saved before the
+    /// vertical expansion.
     #[track_caller]
     pub(crate) fn set_maximized(&mut self, id: WindowId, maximized: bool) {
         let location = std::panic::Location::caller();
@@ -1067,11 +1072,7 @@ impl State {
                 origin = format!("{}:{}", location.file(), location.line()),
                 "window maximized"
             );
-            let (origin, size) = self.workspace();
-            let target = yuki_scene::geometry::Rect::new(
-                yuki_scene::geometry::Point::new(f64::from(origin.x), f64::from(origin.y)),
-                yuki_scene::geometry::Size::new(f64::from(size.w), f64::from(size.h)),
-            );
+            let target = self.maximize_target(id, outer);
             self.maximized.insert(id, outer);
             self.windows.set_maximized_with_outer(id, true, target);
         } else {
@@ -1089,6 +1090,19 @@ impl State {
         self.focus_window(id);
         self.foreign_state_changed(id);
         self.request_redraw();
+    }
+
+    /// Computes the target rectangle for maximizing `id`.
+    fn maximize_target(
+        &self,
+        id: WindowId,
+        outer: SceneRect<f64, yuki_scene::geometry::Logical>,
+    ) -> SceneRect<f64, yuki_scene::geometry::Logical> {
+        let fixed_width = self
+            .windows
+            .client_size_bounds(id)
+            .is_some_and(|(min, max)| min.w > 0 && max.w > 0 && min.w == max.w);
+        maximize_target_rect(fixed_width, self.workspace(), outer)
     }
 
     /// Logs the current window stack for debugging focus decisions.
@@ -2259,6 +2273,29 @@ impl State {
     }
 }
 
+/// Computes the target rectangle for maximizing a window.
+///
+/// Fixed-width windows keep their width and horizontal origin and fill only
+/// the workspace height; every other window fills the whole workspace.
+fn maximize_target_rect(
+    fixed_width: bool,
+    workspace: (Point<i32, Logical>, Size<i32, Logical>),
+    outer: SceneRect<f64, yuki_scene::geometry::Logical>,
+) -> SceneRect<f64, yuki_scene::geometry::Logical> {
+    let (origin, size) = workspace;
+    if fixed_width {
+        SceneRect::new(
+            ScenePoint::new(outer.x(), f64::from(origin.y)),
+            SceneSize::new(outer.width(), f64::from(size.h)),
+        )
+    } else {
+        SceneRect::new(
+            ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
+            SceneSize::new(f64::from(size.w), f64::from(size.h)),
+        )
+    }
+}
+
 /// Whether a resize band above a different window must leave the pointer focus
 /// empty. A Top/Overlay layer over the band wins instead.
 fn pointer_focus_blocked(
@@ -3057,5 +3094,31 @@ mod tests {
         assert_eq!(TestKey::from_name("w").unwrap().code(), Keycode::new(25));
         assert_eq!(TestKey::from_name("7").unwrap().code(), Keycode::new(16));
         assert!(TestKey::from_name("ocul").is_none());
+    }
+
+    #[test]
+    fn fixed_width_window_maximizes_vertically() {
+        use yuki_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
+
+        let outer = SceneRect::new(ScenePoint::new(300.0, 100.0), SceneSize::new(760.0, 620.0));
+        let workspace = (Point::from((0, 0)), Size::from((1920, 1052)));
+        let target = super::maximize_target_rect(true, workspace, outer);
+        assert_eq!(target.x(), 300.0);
+        assert_eq!(target.y(), 0.0);
+        assert_eq!(target.width(), 760.0);
+        assert_eq!(target.height(), 1052.0);
+    }
+
+    #[test]
+    fn regular_window_maximizes_to_the_full_workspace() {
+        use yuki_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
+
+        let outer = SceneRect::new(ScenePoint::new(300.0, 100.0), SceneSize::new(760.0, 620.0));
+        let workspace = (Point::from((0, 0)), Size::from((1920, 1052)));
+        let target = super::maximize_target_rect(false, workspace, outer);
+        assert_eq!(target.x(), 0.0);
+        assert_eq!(target.y(), 0.0);
+        assert_eq!(target.width(), 1920.0);
+        assert_eq!(target.height(), 1052.0);
     }
 }
