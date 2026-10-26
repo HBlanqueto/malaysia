@@ -13,6 +13,7 @@ mod menubar;
 mod pam;
 mod wallpaper;
 
+use std::io::IsTerminal;
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -27,6 +28,7 @@ components:
 ";
 
 fn main() -> ExitCode {
+    init_logging();
     let component = std::env::args().nth(1);
     let result = match component.as_deref() {
         Some("wallpaper") => wallpaper::run(),
@@ -47,8 +49,21 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("yuki-shell: {error:#}");
+            tracing::error!("{error:#}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Installs the shell's tracing subscriber: `RUST_LOG` when set, `info`
+/// otherwise, always on stderr.
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_ansi(std::io::stderr().is_terminal())
+        .with_writer(std::io::stderr)
+        .try_init();
 }

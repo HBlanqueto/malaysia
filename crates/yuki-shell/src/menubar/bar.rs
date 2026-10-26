@@ -76,11 +76,13 @@ impl App for BarApp {
             let key = (info.app_id.clone(), info.app_menu.clone());
             if last.as_ref() != Some(&key) {
                 match &info.app_menu {
-                    Some(menu) => eprintln!(
-                        "menubar: app_menu app_id={} service={} path={}",
-                        info.app_id, menu.service, menu.path
+                    Some(menu) => tracing::info!(
+                        app_id = %info.app_id,
+                        service = %menu.service,
+                        path = %menu.path,
+                        "menubar: app_menu"
                     ),
-                    None => eprintln!("menubar: app_menu app_id={} none", info.app_id),
+                    None => tracing::info!(app_id = %info.app_id, "menubar: app_menu none"),
                 }
                 *last = Some(key);
             }
