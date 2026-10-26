@@ -28,3 +28,6 @@ nix eval --raw -f . qml   > generated/Neptunia.qml
 `./dev.sh check` comprueba que esos tres archivos coinciden con `default.nix`.
 El script `tools/sync-neptunia.sh <ruta>` trae cambios desde una copia externa
 a propósito y actualiza este archivo; no se ejecuta en el build.
+
+26 oct 2026: tokens de la barra lateral en isla añadidos aquí, siguiendo el
+sistema de diseño Neptunia.

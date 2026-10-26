@@ -251,6 +251,62 @@ pub struct ShadowLayer {
     pub color: Rgba,
 }
 
+/// Compile-time metrics for the Neptunia sidebar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SidebarMetrics {
+    /// `true` for the island default, `false` for the flat source list.
+    pub default_island: bool,
+    /// Sidebar width, in logical pixels.
+    pub width: u32,
+    /// Island inset from top/left/bottom, in logical pixels.
+    pub inset: u32,
+    /// Corner radius of the island, in logical pixels.
+    pub radius: u32,
+    /// Outer rim width, in logical pixels.
+    pub rim_width: f32,
+    /// Inner line width, in logical pixels.
+    pub inner_width: f32,
+    /// Backdrop blur radius for the island, in logical pixels.
+    pub blur: u32,
+    /// Traffic-light inset from the island/edge left, in logical pixels.
+    pub traffic_x: u32,
+    /// Traffic-light inset from the island/edge top, in logical pixels.
+    pub traffic_y: u32,
+    /// Item row height, in logical pixels.
+    pub item_height: u32,
+    /// Item row corner radius, in logical pixels.
+    pub item_radius: u32,
+    /// Size of a regular stroke icon, in logical pixels.
+    pub item_icon: u32,
+    /// Size of an app icon, in logical pixels.
+    pub app_icon: u32,
+    /// Section header height, in logical pixels.
+    pub section_height: u32,
+    /// Margin before a section header, in logical pixels.
+    pub section_margin_top: u32,
+    /// Section header text size, in points.
+    pub section_size: u32,
+    /// Section header text weight.
+    pub section_weight: u16,
+    /// Disclosable arrow size, in logical pixels.
+    pub chevron: u32,
+}
+
+/// Compile-time metrics for a toolbar capsule group.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ToolgroupMetrics {
+    /// Capsule height, in logical pixels.
+    pub height: u32,
+    /// Button width inside the capsule, in logical pixels.
+    pub button_w: u32,
+    /// Button height inside the capsule, in logical pixels.
+    pub button_h: u32,
+    /// Separator line width, in logical pixels.
+    pub separator_w: u32,
+    /// Separator line height, in logical pixels.
+    pub separator_h: u32,
+}
+
 /// The two-layer window shadow.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowStyle {
@@ -558,5 +614,24 @@ mod tests {
         assert!((g - 0.25).abs() < 0.004, "green should be halved");
         assert!(b < 0.004);
         assert!((a - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn sidebar_metrics_come_from_tokens() {
+        assert_eq!(super::SIDEBAR.inset, 8);
+        assert_eq!(super::SIDEBAR.radius, 12);
+        assert_eq!(super::SIDEBAR.width, 220);
+        assert_eq!(super::TOOLGROUP.height, 34);
+    }
+
+    #[test]
+    fn sidebar_island_opaque_is_solid_and_lighter_than_window() {
+        let opaque = super::SIDEBAR_ISLAND_LIGHT_OPAQUE;
+        let window = super::LIGHT.titlebar_bg.focused;
+        assert_eq!(opaque.a, 1.0);
+        assert!(
+            opaque.r + opaque.g + opaque.b > window.r + window.g + window.b,
+            "island opaque should be lighter than bg-window"
+        );
     }
 }

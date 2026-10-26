@@ -42,6 +42,10 @@ QtObject {
   readonly property color light_shadow_float: #00000066;
   readonly property color light_shadow_soft: #0d12192e;
   readonly property color light_shell_bar: #f2f4f7e6;
+  readonly property color light_sidebar_flat_bg: #e7ebf1;
+  readonly property color light_sidebar_island_bg: #ffffffc7;
+  readonly property color light_sidebar_island_inner: #ffffff00;
+  readonly property color light_sidebar_island_rim: #0d12191f;
   readonly property color light_success: #1a7f37;
   readonly property color light_sys_blue: #2f6fe4;
   readonly property color light_sys_cyan: #0f86b8;
@@ -55,6 +59,7 @@ QtObject {
   readonly property color light_titlebar_line: #d6dce5;
   readonly property color light_titlebar_title: #0d1219;
   readonly property color light_titlebar_title_inactive: #55657e;
+  readonly property color light_toolbar_glass_bg: #ffffffdb;
   readonly property color light_traffic_close: #ff5f57;
   readonly property color light_traffic_inactive: #d3d3d5;
   readonly property color light_traffic_min: #febc2e;
@@ -110,6 +115,10 @@ QtObject {
   readonly property color dark_shadow_float: #00000066;
   readonly property color dark_shadow_soft: #0d12192e;
   readonly property color dark_shell_bar: #1e1e1ee6;
+  readonly property color dark_sidebar_flat_bg: #161616;
+  readonly property color dark_sidebar_island_bg: #2c2c2ed1;
+  readonly property color dark_sidebar_island_inner: #ffffff1a;
+  readonly property color dark_sidebar_island_rim: #000000d9;
   readonly property color dark_success: #5fcf7c;
   readonly property color dark_sys_blue: #2f6fe4;
   readonly property color dark_sys_cyan: #0f86b8;
@@ -123,6 +132,7 @@ QtObject {
   readonly property color dark_titlebar_line: #333333;
   readonly property color dark_titlebar_title: #f5f5f5;
   readonly property color dark_titlebar_title_inactive: #9b9b9b;
+  readonly property color dark_toolbar_glass_bg: #3a3a3cd6;
   readonly property color dark_traffic_close: #ff5f57;
   readonly property color dark_traffic_inactive: #4e4e50;
   readonly property color dark_traffic_min: #febc2e;
@@ -178,6 +188,10 @@ QtObject {
   readonly property color dark_tint_shadow_float: #00000066;
   readonly property color dark_tint_shadow_soft: #0d12192e;
   readonly property color dark_tint_shell_bar: #1d1e20e6;
+  readonly property color dark_tint_sidebar_flat_bg: #151617;
+  readonly property color dark_tint_sidebar_island_bg: #2b2c2fd1;
+  readonly property color dark_tint_sidebar_island_inner: #ffffff1a;
+  readonly property color dark_tint_sidebar_island_rim: #000000d9;
   readonly property color dark_tint_success: #5fcf7c;
   readonly property color dark_tint_sys_blue: #2f6fe4;
   readonly property color dark_tint_sys_cyan: #0f86b8;
@@ -191,6 +205,7 @@ QtObject {
   readonly property color dark_tint_titlebar_line: #323336;
   readonly property color dark_tint_titlebar_title: #f4f5f6;
   readonly property color dark_tint_titlebar_title_inactive: #999ca3;
+  readonly property color dark_tint_toolbar_glass_bg: #393a3ed6;
   readonly property color dark_tint_traffic_close: #ff5f57;
   readonly property color dark_tint_traffic_inactive: #4e4e50;
   readonly property color dark_tint_traffic_min: #febc2e;
@@ -225,9 +240,12 @@ QtObject {
   readonly property real size_control_lg: 38;
   readonly property real size_control_md: 30;
   readonly property real size_control_sm: 24;
+  readonly property real size_sidebar_inset: 8;
+  readonly property real size_sidebar_radius: 12;
   readonly property real size_sidebar_w: 220;
   readonly property real size_titlebar_h: 44;
   readonly property real size_titlebar_ssd_h: 32;
+  readonly property real size_toolgroup_h: 34;
   readonly property real duration_base: 220;
   readonly property real duration_fast: 120;
   readonly property real duration_slow: 420;

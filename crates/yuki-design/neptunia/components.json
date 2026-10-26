@@ -317,6 +317,59 @@
           "interval-ms": 400,
           "slop": 4
         }
+      },
+      "sidebar": {
+        "default-style": "island",
+        "island": {
+          "inset": "size.sidebar-inset",
+          "radius": "size.sidebar-radius",
+          "bg": "sidebar-island-bg",
+          "rim": "sidebar-island-rim",
+          "rim-width": 0.5,
+          "inner": "sidebar-island-inner",
+          "inner-width": 1,
+          "shadow": "shadow.island",
+          "blur": 30,
+          "traffic-x": 18,
+          "traffic-y": 16
+        },
+        "flat": {
+          "bg": "sidebar-flat-bg",
+          "line": "line",
+          "line-width": 1,
+          "traffic-x": 18,
+          "traffic-y": 16
+        },
+        "item": {
+          "height": 30,
+          "radius": "radius.sm",
+          "icon": 16,
+          "app-icon": 22,
+          "selected-bg": "accent-soft",
+          "selected-ink": "accent-strong",
+          "hover-bg": "bg-hover"
+        },
+        "section": {
+          "height": 28,
+          "margin-top": 10,
+          "size": 11,
+          "weight": 600,
+          "ink": "ink-muted",
+          "chevron": 12
+        }
+      },
+      "toolgroup": {
+        "height": "size.toolgroup-h",
+        "button-w": 34,
+        "button-h": 30,
+        "separator-w": 1,
+        "separator-h": 16,
+        "separator": "line",
+        "bg": "toolbar-glass-bg",
+        "shadow": "shadow.glass",
+        "flat-button-w": 30,
+        "flat-button-h": 28,
+        "flat-radius": "radius.sm"
       }
     },
     "dialog": {

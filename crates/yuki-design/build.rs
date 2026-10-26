@@ -36,6 +36,7 @@ fn main() {
     emit_shadows(&mut out, &tokens);
     emit_palettes(&mut out, &tokens, &components);
     emit_shell(&mut out, &tokens, &components);
+    emit_sidebar(&mut out, &tokens, &components);
     emit_menu(&mut out, &tokens, &components);
     emit_metrics(&mut out, &components);
 
@@ -736,7 +737,7 @@ fn shadow(tokens: &Value, theme: &str) -> String {
             "ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}",
             integer(tokens, &format!("{path}.blur"), TOKENS),
             integer(tokens, &format!("{path}.y-offset"), TOKENS),
-            number(tokens, &format!("{path}.opacity"), TOKENS),
+            float(number(tokens, &format!("{path}.opacity"), TOKENS)),
             rgba(color(tokens, &format!("{path}.color"), TOKENS)),
         )
     };
@@ -754,6 +755,22 @@ fn shadow(tokens: &Value, theme: &str) -> String {
         scale("blur"),
         scale("offset"),
         scale("opacity"),
+    )
+}
+
+fn surface_shadow(tokens: &Value, layer_path: &str, theme: &str) -> String {
+    let ambient = format!("{layer_path}.{theme}.ambient");
+    let contact = format!("{layer_path}.{theme}.contact");
+    format!(
+        "[ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}, ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}]",
+        integer(tokens, &format!("{ambient}.blur"), TOKENS),
+        integer(tokens, &format!("{ambient}.y-offset"), TOKENS),
+        float(number(tokens, &format!("{ambient}.opacity"), TOKENS)),
+        rgba(color(tokens, &format!("{ambient}.color"), TOKENS)),
+        integer(tokens, &format!("{contact}.blur"), TOKENS),
+        integer(tokens, &format!("{contact}.y-offset"), TOKENS),
+        float(number(tokens, &format!("{contact}.opacity"), TOKENS)),
+        rgba(color(tokens, &format!("{contact}.color"), TOKENS)),
     )
 }
 
@@ -895,12 +912,16 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
     ] {
         let bg_window = theme_color(tokens, theme, "bg-window");
         let sunken = theme_color(tokens, theme, "bg-sunken");
-        const_doc(out, name, &format!("The {theme} sidebar background."));
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} flat sidebar background (bg-sunken)."),
+        );
         out.push_str(&format!(": Rgba = {};\n\n", rgba(sunken)));
         const_doc(
             out,
             &format!("{name}_OPAQUE"),
-            &format!("The {theme} sidebar background with opacity."),
+            &format!("The {theme} flat sidebar background over bg-window."),
         );
         out.push_str(&format!(
             ": Rgba = {};\n\n",
@@ -924,6 +945,287 @@ fn emit_shell(out: &mut String, tokens: &Value, components: &Value) {
     );
     const_doc(out, "LOCK", "The lock screen palette.");
     out.push_str(&format!(": LockPalette = {lock};\n\n"));
+}
+
+fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
+    for (name, theme) in [
+        ("SIDEBAR_ISLAND_LIGHT", "light"),
+        ("SIDEBAR_ISLAND_DARK", "dark"),
+        ("SIDEBAR_ISLAND_DARK_TINT", "dark-tint"),
+    ] {
+        let bg_window = theme_color(tokens, theme, "bg-window");
+        let island = theme_color(tokens, theme, "sidebar-island-bg");
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} island sidebar background."),
+        );
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(island)));
+        const_doc(
+            out,
+            &format!("{name}_OPAQUE"),
+            &format!("The {theme} island sidebar background over bg-window."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(opaque_over(island, bg_window))
+        ));
+    }
+
+    for (name, theme) in [
+        ("SIDEBAR_ISLAND_RIM_LIGHT", "light"),
+        ("SIDEBAR_ISLAND_RIM_DARK", "dark"),
+        ("SIDEBAR_ISLAND_RIM_DARK_TINT", "dark-tint"),
+    ] {
+        let rim = color_ref(
+            tokens,
+            theme,
+            string(
+                components,
+                "components.window.sidebar.island.rim",
+                COMPONENTS,
+            ),
+            "components.window.sidebar.island.rim",
+            COMPONENTS,
+        );
+        const_doc(out, name, &format!("The {theme} island sidebar rim."));
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(rim)));
+    }
+
+    for (name, theme) in [
+        ("SIDEBAR_ISLAND_INNER_LIGHT", "light"),
+        ("SIDEBAR_ISLAND_INNER_DARK", "dark"),
+        ("SIDEBAR_ISLAND_INNER_DARK_TINT", "dark-tint"),
+    ] {
+        let inner = color_ref(
+            tokens,
+            theme,
+            string(
+                components,
+                "components.window.sidebar.island.inner",
+                COMPONENTS,
+            ),
+            "components.window.sidebar.island.inner",
+            COMPONENTS,
+        );
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} island sidebar inner line."),
+        );
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(inner)));
+    }
+
+    const_doc(
+        out,
+        "SIDEBAR_ISLAND_SHADOW",
+        "The island sidebar shadow in light mode.",
+    );
+    out.push_str(&format!(
+        ": [ShadowLayer; 2] = {};\n\n",
+        surface_shadow(tokens, "shadow.island", "light")
+    ));
+    const_doc(
+        out,
+        "SIDEBAR_ISLAND_SHADOW_DARK",
+        "The island sidebar shadow in dark and dark-tint modes.",
+    );
+    out.push_str(&format!(
+        ": [ShadowLayer; 2] = {};\n\n",
+        surface_shadow(tokens, "shadow.island", "dark")
+    ));
+
+    for (name, theme) in [
+        ("TOOLGROUP_BG_LIGHT", "light"),
+        ("TOOLGROUP_BG_DARK", "dark"),
+        ("TOOLGROUP_BG_DARK_TINT", "dark-tint"),
+    ] {
+        let bg_window = theme_color(tokens, theme, "bg-window");
+        let glass = theme_color(tokens, theme, "toolbar-glass-bg");
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} toolbar glass capsule background."),
+        );
+        out.push_str(&format!(": Rgba = {};\n\n", rgba(glass)));
+        const_doc(
+            out,
+            &format!("{name}_OPAQUE"),
+            &format!("The {theme} toolbar glass capsule background over bg-window."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(opaque_over(glass, bg_window))
+        ));
+    }
+
+    const_doc(
+        out,
+        "TOOLGROUP_SHADOW",
+        "The toolbar glass capsule shadow in light mode.",
+    );
+    out.push_str(&format!(
+        ": [ShadowLayer; 2] = {};\n\n",
+        surface_shadow(tokens, "shadow.glass", "light")
+    ));
+    const_doc(
+        out,
+        "TOOLGROUP_SHADOW_DARK",
+        "The toolbar glass capsule shadow in dark and dark-tint modes.",
+    );
+    out.push_str(&format!(
+        ": [ShadowLayer; 2] = {};\n\n",
+        surface_shadow(tokens, "shadow.glass", "dark")
+    ));
+
+    let width = integer(tokens, "size.sidebar-w", TOKENS) as u32;
+    let inset = metric(
+        tokens,
+        components,
+        "components.window.sidebar.island.inset",
+        COMPONENTS,
+    ) as u32;
+    let radius = metric(
+        tokens,
+        components,
+        "components.window.sidebar.island.radius",
+        COMPONENTS,
+    ) as u32;
+    let rim_width = number(
+        components,
+        "components.window.sidebar.island.rim-width",
+        COMPONENTS,
+    );
+    let inner_width = number(
+        components,
+        "components.window.sidebar.island.inner-width",
+        COMPONENTS,
+    );
+    let blur = integer(
+        components,
+        "components.window.sidebar.island.blur",
+        COMPONENTS,
+    ) as u32;
+    let traffic_x = integer(
+        components,
+        "components.window.sidebar.island.traffic-x",
+        COMPONENTS,
+    ) as u32;
+    let traffic_y = integer(
+        components,
+        "components.window.sidebar.island.traffic-y",
+        COMPONENTS,
+    ) as u32;
+    let item_height = integer(
+        components,
+        "components.window.sidebar.item.height",
+        COMPONENTS,
+    ) as u32;
+    let item_radius = metric(
+        tokens,
+        components,
+        "components.window.sidebar.item.radius",
+        COMPONENTS,
+    ) as u32;
+    let item_icon = integer(
+        components,
+        "components.window.sidebar.item.icon",
+        COMPONENTS,
+    ) as u32;
+    let app_icon = integer(
+        components,
+        "components.window.sidebar.item.app-icon",
+        COMPONENTS,
+    ) as u32;
+    let section_height = integer(
+        components,
+        "components.window.sidebar.section.height",
+        COMPONENTS,
+    ) as u32;
+    let section_margin_top = integer(
+        components,
+        "components.window.sidebar.section.margin-top",
+        COMPONENTS,
+    ) as u32;
+    let section_size = integer(
+        components,
+        "components.window.sidebar.section.size",
+        COMPONENTS,
+    ) as u32;
+    let section_weight = integer(
+        components,
+        "components.window.sidebar.section.weight",
+        COMPONENTS,
+    ) as u16;
+    let chevron = integer(
+        components,
+        "components.window.sidebar.section.chevron",
+        COMPONENTS,
+    ) as u32;
+
+    const_doc(out, "SIDEBAR", "The Neptunia sidebar metrics.");
+    out.push_str(&format!(
+        ": SidebarMetrics = SidebarMetrics {{\n\
+         \x20   default_island: true,\n\
+         \x20   width: {width},\n\
+         \x20   inset: {inset},\n\
+         \x20   radius: {radius},\n\
+         \x20   rim_width: {},\n\
+         \x20   inner_width: {},\n\
+         \x20   blur: {blur},\n\
+         \x20   traffic_x: {traffic_x},\n\
+         \x20   traffic_y: {traffic_y},\n\
+         \x20   item_height: {item_height},\n\
+         \x20   item_radius: {item_radius},\n\
+         \x20   item_icon: {item_icon},\n\
+         \x20   app_icon: {app_icon},\n\
+         \x20   section_height: {section_height},\n\
+         \x20   section_margin_top: {section_margin_top},\n\
+         \x20   section_size: {section_size},\n\
+         \x20   section_weight: {section_weight},\n\
+         \x20   chevron: {chevron},\n\
+         }};\n\n",
+        float(rim_width),
+        float(inner_width)
+    ));
+
+    let toolgroup_height = metric(
+        tokens,
+        components,
+        "components.window.toolgroup.height",
+        COMPONENTS,
+    ) as u32;
+    let button_w = integer(
+        components,
+        "components.window.toolgroup.button-w",
+        COMPONENTS,
+    ) as u32;
+    let button_h = integer(
+        components,
+        "components.window.toolgroup.button-h",
+        COMPONENTS,
+    ) as u32;
+    let separator_w = integer(
+        components,
+        "components.window.toolgroup.separator-w",
+        COMPONENTS,
+    ) as u32;
+    let separator_h = integer(
+        components,
+        "components.window.toolgroup.separator-h",
+        COMPONENTS,
+    ) as u32;
+
+    const_doc(out, "TOOLGROUP", "The Neptunia toolbar capsule metrics.");
+    out.push_str(&format!(
+        ": ToolgroupMetrics = ToolgroupMetrics {{\n\
+         \x20   height: {toolgroup_height},\n\
+         \x20   button_w: {button_w},\n\
+         \x20   button_h: {button_h},\n\
+         \x20   separator_w: {separator_w},\n\
+         \x20   separator_h: {separator_h},\n\
+         }};\n\n"
+    ));
 }
 
 fn menu_palette_value(tokens: &Value, components: &Value, theme: &str, opaque: bool) -> String {
