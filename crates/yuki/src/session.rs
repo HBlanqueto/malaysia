@@ -443,9 +443,15 @@ pub fn run() -> Result<(), SessionError> {
         loop_handle
             .insert_source(
                 Timer::from_duration(crate::input::test_pointer_delay()),
-                |_, _, session: &mut Session| match session.state.test_pointer_step() {
-                    Some(delay) => TimeoutAction::ToDuration(delay),
-                    None => TimeoutAction::Drop,
+                |_, _, session: &mut Session| {
+                    let action = session.state.test_pointer_step();
+                    if let Err(error) = session.display.flush_clients() {
+                        tracing::warn!(%error, "flushing clients after scripted input");
+                    }
+                    match action {
+                        Some(delay) => TimeoutAction::ToDuration(delay),
+                        None => TimeoutAction::Drop,
+                    }
                 },
             )
             .map_err(|error| SessionError::EventLoop(error.into()))?;
@@ -671,6 +677,13 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
                 return;
             }
             session.state.process_input_event(event);
+            // Input sends keyboard and pointer events to clients; flush them
+            // now instead of waiting for the next client request, which may
+            // never come (an idle popup cannot answer a frame callback it has
+            // not received yet).
+            if let Err(error) = session.display.flush_clients() {
+                tracing::warn!(%error, "flushing clients after input");
+            }
             // Motion moves the cursor and any dragged window; a button changes
             // focus and stacking. Both are visible, so a frame is needed.
             session.state.request_redraw();
