@@ -1205,6 +1205,26 @@ impl SessionUnlock {
 }
 
 type TimerQueue = Rc<RefCell<Vec<(Duration, Rc<dyn Fn()>)>>>;
+type WakeQueue = Rc<RefCell<Vec<Rc<dyn Fn()>>>>;
+
+/// Wakes the render loop from another thread. `wake` only pings the loop; the
+/// callback registered by [`Timers::wakeup`] runs on the render thread.
+#[derive(Clone)]
+pub struct WakeHandle {
+    ping: Ping,
+}
+
+impl WakeHandle {
+    pub fn wake(&self) {
+        self.ping.ping();
+    }
+}
+
+#[derive(Clone)]
+struct Wake {
+    ping: Ping,
+    callbacks: WakeQueue,
+}
 
 /// Schedules one-shot callbacks on the runner's calloop loop. The app uses it
 /// for the menubar clock; there is no periodic polling.
@@ -1212,6 +1232,7 @@ type TimerQueue = Rc<RefCell<Vec<(Duration, Rc<dyn Fn()>)>>>;
 pub struct Timers {
     queue: TimerQueue,
     ping: Ping,
+    wake: Wake,
 }
 
 impl Timers {
@@ -1222,6 +1243,15 @@ impl Timers {
     pub fn after(&self, delay: Duration, callback: impl Fn() + 'static) {
         self.queue.borrow_mut().push((delay, Rc::new(callback)));
         self.ping.ping();
+    }
+
+    /// Registers a callback that runs on the render thread whenever the
+    /// returned handle is woken from any thread.
+    pub fn wakeup(&self, callback: impl Fn() + 'static) -> WakeHandle {
+        self.wake.callbacks.borrow_mut().push(Rc::new(callback));
+        WakeHandle {
+            ping: self.wake.ping.clone(),
+        }
     }
 }
 
@@ -1449,6 +1479,8 @@ struct Shell {
     queue: Rc<RefCell<Vec<UserEvent>>>,
     ping: Ping,
     ping_source: Option<PingSource>,
+    wake: Wake,
+    wake_source: Option<PingSource>,
     qh: QueueHandle<Shell>,
     _foreign_list: Option<ExtForeignToplevelListV1>,
     _foreign_mgmt: Option<ZwlrForeignToplevelManagerV1>,
@@ -1642,6 +1674,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         Timers {
             queue: shell.timers.clone(),
             ping: shell.ping.clone(),
+            wake: shell.wake.clone(),
         },
         popups,
         None,
@@ -1790,6 +1823,23 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
             shell.redraw_all();
         })
         .map_err(|_| RunError::Egl("inserting the Freya ping source"))?;
+
+    let wake_source = shell
+        .wake_source
+        .take()
+        .ok_or(RunError::Egl("the wake ping source is already installed"))?;
+    let callbacks = shell.wake.callbacks.clone();
+    event_loop
+        .handle()
+        .insert_source(wake_source, move |_, _, shell: &mut Shell| {
+            let callbacks: Vec<Rc<dyn Fn()>> = callbacks.borrow().clone();
+            for callback in callbacks {
+                callback();
+            }
+            shell.poll_all();
+            shell.redraw_all();
+        })
+        .map_err(|_| RunError::Egl("inserting the wake ping source"))?;
     Ok(())
 }
 
@@ -1812,6 +1862,8 @@ impl Shell {
         let queue: Rc<RefCell<Vec<UserEvent>>> = Rc::new(RefCell::new(Vec::new()));
         let (ping, ping_source) =
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop ping failed"))?;
+        let (wake_ping, wake_source) =
+            calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop wake ping failed"))?;
         let toplevel_entries: Rc<RefCell<Vec<ToplevelEntry>>> = Rc::new(RefCell::new(Vec::new()));
         let close_entries = toplevel_entries.clone();
         let minimize_entries = toplevel_entries.clone();
@@ -1957,6 +2009,11 @@ impl Shell {
             queue,
             ping: ping.clone(),
             ping_source: Some(ping_source),
+            wake: Wake {
+                ping: wake_ping,
+                callbacks: Rc::new(RefCell::new(Vec::new())),
+            },
+            wake_source: Some(wake_source),
             qh: qh.clone(),
             _foreign_list: foreign_list,
             _foreign_mgmt: foreign_mgmt,
@@ -2084,6 +2141,7 @@ impl Shell {
             Timers {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
+                wake: self.wake.clone(),
             },
             popups,
             None,
@@ -2147,6 +2205,7 @@ impl Shell {
             Timers {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
+                wake: self.wake.clone(),
             },
             popups,
             None,
@@ -2373,6 +2432,7 @@ impl Shell {
             Timers {
                 queue: self.timers.clone(),
                 ping: self.ping.clone(),
+                wake: self.wake.clone(),
             },
             popups,
             Some(handle),
@@ -3554,6 +3614,43 @@ delegate_dispatch!(Shell: [zwlr_layer_surface_v1::ZwlrLayerSurfaceV1: LayerSurfa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn wakeup_runs_its_callback_on_the_loop_thread() {
+        let (ping, source) = calloop::ping::make_ping().unwrap();
+        let callbacks: WakeQueue = Rc::new(RefCell::new(Vec::new()));
+        let mut event_loop = EventLoop::<()>::try_new().unwrap();
+        let queue = callbacks.clone();
+        event_loop
+            .handle()
+            .insert_source(source, move |_, _, ()| {
+                for callback in queue.borrow().clone() {
+                    callback();
+                }
+            })
+            .unwrap();
+        let timers = Timers {
+            queue: Rc::new(RefCell::new(Vec::new())),
+            ping: ping.clone(),
+            wake: Wake { ping, callbacks },
+        };
+        let seen = Arc::new(AtomicUsize::new(0));
+        let counter = seen.clone();
+        let handle = timers.wakeup(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        let thread_handle = handle.clone();
+        let writer = std::thread::spawn(move || thread_handle.wake());
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while seen.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
+            event_loop
+                .dispatch(Duration::from_millis(10), &mut ())
+                .unwrap();
+        }
+        writer.join().unwrap();
+        assert_eq!(seen.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn pointer_and_touch_coordinates_become_physical() {

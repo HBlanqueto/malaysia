@@ -419,49 +419,53 @@ fn schedule_snapshot_drain(
     snapshot: State<Option<Arc<RemoteMenu>>>,
     generation: Rc<Cell<u64>>,
 ) {
-    let retry = timers.clone();
-    timers.after(std::time::Duration::from_millis(16), move || {
-        let mut snapshot = snapshot;
-        while let Some(next) = dbus.try_recv() {
-            if next.generation != generation.get() {
-                continue;
-            }
-            let mapped = next
-                .items
-                .as_ref()
-                .map(|items| dbusmenu_map::menu_items(items));
-            match next.parent {
-                None => {
-                    let menu = mapped.map(|items| {
-                        Arc::new(RemoteMenu {
-                            generation: next.generation,
-                            address: next.address.clone(),
-                            items,
-                        })
-                    });
-                    snapshot.set(menu);
+    let drain = {
+        let dbus = dbus.clone();
+        let generation = generation.clone();
+        move || {
+            let mut snapshot = snapshot;
+            while let Some(next) = dbus.try_recv() {
+                if next.generation != generation.get() {
+                    continue;
                 }
-                Some(id) => {
-                    let Some(current) = snapshot.peek().as_ref().cloned() else {
-                        continue;
-                    };
-                    if current.generation != next.generation || current.address != next.address {
-                        continue;
+                let mapped = next
+                    .items
+                    .as_ref()
+                    .map(|items| dbusmenu_map::menu_items(items));
+                match next.parent {
+                    None => {
+                        let menu = mapped.map(|items| {
+                            Arc::new(RemoteMenu {
+                                generation: next.generation,
+                                address: next.address.clone(),
+                                items,
+                            })
+                        });
+                        snapshot.set(menu);
                     }
-                    let children = mapped.unwrap_or_else(|| vec![remote::unavailable()]);
-                    let mut items = current.items.clone();
-                    if remote::merge_subtree(&mut items, id, &children) {
-                        snapshot.set(Some(Arc::new(RemoteMenu {
-                            generation: current.generation,
-                            address: current.address.clone(),
-                            items,
-                        })));
+                    Some(id) => {
+                        let Some(current) = snapshot.peek().as_ref().cloned() else {
+                            continue;
+                        };
+                        if current.generation != next.generation || current.address != next.address
+                        {
+                            continue;
+                        }
+                        let children = mapped.unwrap_or_else(|| vec![remote::unavailable()]);
+                        let mut items = current.items.clone();
+                        if remote::merge_subtree(&mut items, id, &children) {
+                            snapshot.set(Some(Arc::new(RemoteMenu {
+                                generation: current.generation,
+                                address: current.address.clone(),
+                                items,
+                            })));
+                        }
                     }
                 }
             }
         }
-        schedule_snapshot_drain(retry.clone(), dbus.clone(), snapshot, generation.clone());
-    });
+    };
+    dbus.set_wake(timers.wakeup(drain));
 }
 
 fn now_ms() -> u32 {

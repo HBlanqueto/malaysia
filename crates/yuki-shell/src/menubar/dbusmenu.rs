@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use celestial_kit::platform::AppMenuAddress;
+use celestial_kit::platform::{AppMenuAddress, WakeHandle};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
@@ -58,6 +58,7 @@ pub struct MenuSnapshot {
 pub struct MenuClient {
     commands: mpsc::Sender<Command>,
     snapshots: Arc<Mutex<mpsc::Receiver<MenuSnapshot>>>,
+    wake: Arc<Mutex<Option<WakeHandle>>>,
 }
 
 impl MenuClient {
@@ -82,6 +83,13 @@ impl MenuClient {
             id,
             timestamp,
         });
+    }
+
+    /// Installs the render-loop wake used after every snapshot.
+    pub fn set_wake(&self, wake: WakeHandle) {
+        if let Ok(mut slot) = self.wake.lock() {
+            *slot = Some(wake);
+        }
     }
 
     /// Returns the next ready snapshot without blocking.
@@ -145,19 +153,26 @@ pub fn start() -> MenuClient {
     let (commands, command_rx) = mpsc::channel();
     let (snapshot_tx, snapshot_rx) = mpsc::channel();
     let snapshots = Arc::new(Mutex::new(snapshot_rx));
+    let wake = Arc::new(Mutex::new(None));
+    let thread_wake = wake.clone();
     std::thread::Builder::new()
         .name("yuki-dbusmenu".to_string())
         .spawn(move || {
-            async_io::block_on(run(command_rx, snapshot_tx));
+            async_io::block_on(run(command_rx, snapshot_tx, thread_wake));
         })
         .expect("yuki-dbusmenu thread");
     MenuClient {
         commands,
         snapshots,
+        wake,
     }
 }
 
-async fn run(commands: mpsc::Receiver<Command>, snapshots: mpsc::Sender<MenuSnapshot>) {
+async fn run(
+    commands: mpsc::Receiver<Command>,
+    snapshots: mpsc::Sender<MenuSnapshot>,
+    wake: Arc<Mutex<Option<WakeHandle>>>,
+) {
     let builder = match zbus::connection::Builder::session() {
         Ok(builder) => builder.method_timeout(CALL_TIMEOUT),
         Err(error) => {
@@ -197,13 +212,14 @@ async fn run(commands: mpsc::Receiver<Command>, snapshots: mpsc::Sender<MenuSnap
     }
 
     while let Ok(command) = commands.recv() {
-        async_io::block_on(handle(&connection, &snapshots, command));
+        async_io::block_on(handle(&connection, &snapshots, &wake, command));
     }
 }
 
 async fn handle(
     connection: &zbus::Connection,
     snapshots: &mpsc::Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
     command: Command,
 ) {
     match command {
@@ -227,6 +243,7 @@ async fn handle(
                 parent: None,
                 items,
             });
+            notify(wake);
         }
         Command::Open {
             address,
@@ -250,6 +267,7 @@ async fn handle(
                 parent: Some(id),
                 items,
             });
+            notify(wake);
         }
         Command::Activate {
             address,
@@ -262,6 +280,12 @@ async fn handle(
                 tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
             }
         }
+    }
+}
+
+fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
+    if let Some(wake) = wake.lock().ok().and_then(|slot| slot.clone()) {
+        wake.wake();
     }
 }
 
