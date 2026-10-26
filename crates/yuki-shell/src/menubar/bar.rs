@@ -67,12 +67,20 @@ impl App for BarApp {
         use_hook(move || schedule_appearance_poll(timers, appearance));
 
         let generation = use_hook(|| Rc::new(Cell::new(0u64)));
+        let open_started = use_hook(|| Rc::new(Cell::new(None::<std::time::Instant>)));
         let timers = Timers::get();
         let dbus = self.dbus.clone();
         let menu_snapshot = self.menu_snapshot;
         let generation_for_drain = generation.clone();
+        let open_started_for_drain = open_started.clone();
         use_hook(move || {
-            schedule_snapshot_drain(timers, dbus, menu_snapshot, generation_for_drain)
+            schedule_snapshot_drain(
+                timers,
+                dbus,
+                menu_snapshot,
+                generation_for_drain,
+                open_started_for_drain,
+            )
         });
         let resolved = (*self.appearance.read()).unwrap_or_else(celestial_kit::theme::resolved);
 
@@ -240,8 +248,10 @@ impl App for BarApp {
                 let on_open_submenu: Rc<dyn Fn(String)> = {
                     let dbus = self.dbus.clone();
                     let address = address.clone();
+                    let open_started = open_started.clone();
                     Rc::new(move |id| {
                         if let Ok(id) = id.parse::<i32>() {
+                            open_started.set(Some(std::time::Instant::now()));
                             dbus.open(address.clone(), id, generation_now);
                         }
                     })
@@ -267,7 +277,7 @@ impl App for BarApp {
                                 .unwrap_or_default()
                         })
                     };
-                    let on_open: Option<Rc<dyn Fn()>> = title.remote_id.map(|id| {
+                    let request_open: Option<Rc<dyn Fn()>> = title.remote_id.map(|id| {
                         let dbus = self.dbus.clone();
                         let address = address.clone();
                         let callback: Rc<dyn Fn()> = Rc::new(move || {
@@ -275,8 +285,17 @@ impl App for BarApp {
                         });
                         callback
                     });
+                    let on_open: Option<Rc<dyn Fn()>> = request_open.as_ref().map(|request| {
+                        let request = request.clone();
+                        let open_started = open_started.clone();
+                        let callback: Rc<dyn Fn()> = Rc::new(move || {
+                            open_started.set(Some(std::time::Instant::now()));
+                            request();
+                        });
+                        callback
+                    });
                     let live_items = Some(items.clone());
-                    let on_hover_title = on_open.clone();
+                    let on_hover_title = request_open;
                     let is_help = index + 1 == titles.len();
                     let searchable: Option<SearchableItems> = if is_help {
                         let composition = composition.clone();
@@ -423,6 +442,7 @@ fn schedule_snapshot_drain(
     dbus: MenuClient,
     snapshot: State<Option<Arc<RemoteMenu>>>,
     generation: Rc<Cell<u64>>,
+    open_started: Rc<Cell<Option<std::time::Instant>>>,
 ) {
     let drain = {
         let dbus = dbus.clone();
@@ -464,6 +484,15 @@ fn schedule_snapshot_drain(
                                 address: current.address.clone(),
                                 items,
                             })));
+                            if let Some(started) = open_started.take() {
+                                tracing::info!(
+                                    id,
+                                    cached = next.cached,
+                                    available = next.items.is_some(),
+                                    ms = started.elapsed().as_millis(),
+                                    "menubar: title painted"
+                                );
+                            }
                         }
                     }
                 }
@@ -537,17 +566,22 @@ pub fn run() -> anyhow::Result<()> {
     let active_app = State::create_global(load_active_app(&window_store));
     let appearance = State::create_global(Some(celestial_kit::theme::resolved()));
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
+    let dbus = dbusmenu::start();
     let app = AppComponent::new(BarApp {
         clock,
         active_app,
         appearance,
         window_store,
         entries,
-        dbus: dbusmenu::start(),
+        dbus,
         menu_snapshot,
     });
 
-    run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"))
+    let result = run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"));
+    let calls = dbusmenu::render_calls();
+    debug_assert_eq!(calls, 0, "D-Bus calls on the render thread");
+    tracing::info!(render_dbus_calls = calls, "menubar: closed");
+    result
 }
 
 #[cfg(test)]

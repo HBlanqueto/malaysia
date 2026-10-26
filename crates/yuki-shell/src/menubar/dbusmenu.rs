@@ -5,7 +5,9 @@
 //! it never waits for D-Bus. Registrar calls only need the shared map.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread::ThreadId;
 use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
@@ -19,6 +21,21 @@ pub const REGISTRAR_PATH: &str = "/com/canonical/AppMenu/Registrar";
 const DBUSMENU_INTERFACE: &str = "com.canonical.dbusmenu";
 const CALL_TIMEOUT: Duration = Duration::from_millis(500);
 const DEBOUNCE: Duration = Duration::from_millis(50);
+
+static RENDER_THREAD: OnceLock<ThreadId> = OnceLock::new();
+static RENDER_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+/// Number of D-Bus calls made from the render thread during this session.
+pub fn render_calls() -> usize {
+    RENDER_CALLS.load(Ordering::Relaxed)
+}
+
+fn note_call() {
+    if RENDER_THREAD.get() == Some(&std::thread::current().id()) {
+        RENDER_CALLS.fetch_add(1, Ordering::Relaxed);
+        debug_assert!(false, "D-Bus call on the render thread");
+    }
+}
 
 /// One command for the D-Bus thread.
 #[derive(Clone, Debug)]
@@ -155,6 +172,7 @@ impl Registrar {
 /// Starts the D-Bus thread. On connection failure the client keeps accepting
 /// commands and simply never answers; the bar stays on the 14c fallback.
 pub fn start() -> MenuClient {
+    RENDER_THREAD.get_or_init(|| std::thread::current().id());
     let (commands, command_rx) = async_channel::unbounded();
     let (snapshot_tx, snapshot_rx) = async_channel::unbounded();
     let wake = Arc::new(Mutex::new(None));
@@ -329,6 +347,7 @@ async fn run(
         }
     }
 
+    note_call();
     let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
         Ok(dbus) => dbus,
         Err(error) => {
@@ -599,6 +618,7 @@ fn handle_signal(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn flush(
     connection: &zbus::Connection,
     dbus: &zbus::fdo::DBusProxy<'_>,
@@ -695,6 +715,7 @@ async fn flush(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_root(
     connection: &zbus::Connection,
     dbus: &zbus::fdo::DBusProxy<'_>,
@@ -708,9 +729,7 @@ async fn fetch_root(
     let started = Instant::now();
     let items = match layout(connection, dbus, proxies, address, 0, 1).await {
         Ok((revision, items)) => {
-            caches
-                .entry(address)
-                .put(0, revision, items.iter().cloned().collect());
+            caches.entry(address).put(0, revision, items.to_vec());
             Some(items)
         }
         Err(error) => {
@@ -787,9 +806,7 @@ async fn fetch_subtree(
 ) -> Option<Vec<RawItem>> {
     match layout(connection, dbus, proxies, address, id, 1).await {
         Ok((revision, items)) => {
-            caches
-                .entry(address)
-                .put(id, revision, items.iter().cloned().collect());
+            caches.entry(address).put(id, revision, items.to_vec());
             Some(items)
         }
         Err(error) => {
@@ -838,6 +855,7 @@ async fn proxy(
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
+    note_call();
     let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
         Ok(name) => dbus
             .get_name_owner(name)
@@ -877,6 +895,7 @@ async fn layout(
     depth: i32,
 ) -> zbus::Result<(u32, Vec<RawItem>)> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
+    note_call();
     let (revision, root) = proxy
         .call::<_, _, (u32, RawNode)>("GetLayout", &(parent, depth, &[] as &[&str]))
         .await?;
@@ -893,6 +912,7 @@ async fn about_to_show(
     let Ok(proxy) = proxy(connection, dbus, proxies, address).await else {
         return false;
     };
+    note_call();
     match proxy.call::<_, _, bool>("AboutToShow", &(id,)).await {
         Ok(shown) => {
             tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow");
@@ -914,6 +934,7 @@ async fn event(
     timestamp: u32,
 ) -> zbus::Result<()> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
+    note_call();
     proxy
         .call::<_, _, ()>(
             "Event",
