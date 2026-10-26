@@ -1,0 +1,15 @@
+[package]
+name = "vow-appearance"
+description = "Appearance resolution shared by the compositor, the shell and the portal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+tracing.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+vow-design.workspace = true

@@ -23,7 +23,7 @@
 //! Run from the dev shell, after building the compositor:
 //!
 //! ```sh
-//! cargo build -p yuki
+//! cargo build -p malaysia-compositor
 //! cargo run -p sctk-probe --bin smoke
 //! ```
 //!
@@ -73,10 +73,10 @@ fn run() -> Result<(), String> {
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
     let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/yuki"));
+        .unwrap_or_else(|| repo.join("target/debug/malaysia-compositor"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p yuki` first",
+            "compositor binary not found at {}; run `cargo build -p malaysia-compositor` first",
             binary.display()
         ));
     }
@@ -744,7 +744,8 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("yuki-smoke-{}-{unique}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("malaysia-smoke-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         #[cfg(unix)]

@@ -1,0 +1,47 @@
+[package]
+name = "barrier-kit"
+description = "BarrierKit (≈ AppKit): the toolkit for the shell and Malaysia's own apps (glossary, ADR 0034)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+freya-core.workspace = true
+freya-components.workspace = true
+freya-animation.workspace = true
+freya-engine.workspace = true
+freya-skia-safe.workspace = true
+freya-clipboard.workspace = true
+torin.workspace = true
+ragnarok.workspace = true
+accesskit.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+toml.workspace = true
+tracing.workspace = true
+vow-design.workspace = true
+vow-appearance.workspace = true
+zeroize.workspace = true
+sctk.workspace = true
+calloop.workspace = true
+wayland-client.workspace = true
+wayland-egl.workspace = true
+wayland-scanner.workspace = true
+wayland-backend = "0.3"
+wayland-protocols-plasma = { workspace = true, features = ["client"] }
+zbus.workspace = true
+khronos-egl = { workspace = true, features = ["dynamic"] }
+futures-util.workspace = true
+futures-channel.workspace = true
+async-channel.workspace = true
+async-io.workspace = true
+rustc-hash.workspace = true
+keyboard-types.workspace = true
+xkbcommon.workspace = true
+
+[dev-dependencies]
+freya-testing.workspace = true
+png.workspace = true
+tracing-subscriber.workspace = true

@@ -1,19 +1,19 @@
-# Yuki is a Wayland compositor built on Smithay.
+# Malaysia is a Wayland compositor built on Smithay.
 #
 # This file is the workspace root: it holds no crate of its own, only the
 # shared settings and build profiles for the crates under `crates/`.
 [workspace]
 resolver = "3"
 members = [
-    "crates/yuki",
-    "crates/yuki-appearance",
-    "crates/yuki-design",
-    "crates/yuki-scene",
+    "crates/malaysia-compositor",
+    "crates/vow-appearance",
+    "crates/vow-design",
+    "crates/malaysia-scene",
     "crates/grade-graphics",
-    "crates/celestial-kit",
-    "crates/yuki-shell",
-    "crates/yuki-settings",
-    "crates/xdg-desktop-portal-yuki",
+    "crates/barrier-kit",
+    "crates/malaysia-shell",
+    "crates/malaysia-settings",
+    "crates/xdg-desktop-portal-malaysia",
     "tools/sctk-probe",
 ]
 
@@ -23,15 +23,15 @@ members = [
 # test --workspace` still covers them, which keeps them clippy- and
 # rustfmt-clean alongside the crates.
 default-members = [
-    "crates/yuki",
-    "crates/yuki-appearance",
-    "crates/yuki-design",
-    "crates/yuki-scene",
+    "crates/malaysia-compositor",
+    "crates/vow-appearance",
+    "crates/vow-design",
+    "crates/malaysia-scene",
     "crates/grade-graphics",
-    "crates/celestial-kit",
-    "crates/yuki-shell",
-    "crates/yuki-settings",
-    "crates/xdg-desktop-portal-yuki",
+    "crates/barrier-kit",
+    "crates/malaysia-shell",
+    "crates/malaysia-settings",
+    "crates/xdg-desktop-portal-malaysia",
 ]
 
 [workspace.package]
@@ -39,7 +39,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
-repository = "https://github.com/HBlanqueto/yuki"
+repository = "https://github.com/HBlanqueto/malaysia"
 
 [workspace.dependencies]
 # Error handling.
@@ -81,18 +81,18 @@ xkbcommon = "0.9"
 # System keymap: org.freedesktop.locale1 over the system bus (ADR 0021).
 zbus = { version = "5", features = ["p2p"] }
 
-# Shell clock (yuki-shell menubar): local time formatting.
+# Shell clock (malaysia-shell menubar): local time formatting.
 chrono = "0.4"
 
-# Yuki's own crates.
+# Malaysia's own crates.
 grade-graphics = { path = "crates/grade-graphics" } # Shared GLSL shaders (compositor + shell).
-yuki = { path = "crates/yuki" }                 # The compositor library (config, xdg helpers).
-yuki-appearance = { path = "crates/yuki-appearance" } # Appearance rules shared by compositor, shell and portal.
-yuki-design = { path = "crates/yuki-design" }   # The one place every visual value lives.
-yuki-scene = { path = "crates/yuki-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
-celestial-kit = { path = "crates/celestial-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
+malaysia-compositor = { path = "crates/malaysia-compositor" }                 # The compositor library (config, xdg helpers).
+vow-appearance = { path = "crates/vow-appearance" } # Appearance rules shared by compositor, shell and portal.
+vow-design = { path = "crates/vow-design" }   # The one place every visual value lives.
+malaysia-scene = { path = "crates/malaysia-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
+barrier-kit = { path = "crates/barrier-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
 
-# Freya's core crates for CelestialKit (ADR 0034), pinned exact: the Nix Skia
+# Freya's core crates for BarrierKit (ADR 0034), pinned exact: the Nix Skia
 # derivation and the client-only guard are written against these versions.
 # `freya-components` runs with default features off and no window backend.
 # Never add `freya` (defaults to winit) or `freya-winit`.
@@ -115,9 +115,9 @@ rustc-hash = "2"
 keyboard-types = "0.8"
 accesskit = "0.24"
 
-# Wayland client stack for `yuki-shell` and the probe clients.
+# Wayland client stack for `malaysia-shell` and the probe clients.
 # `system` enables `ObjectId::as_ptr`, which is how the EGL setup hands the
-# raw `wl_display*`/`wl_surface*` to libwayland-egl (see celestial-kit).
+# raw `wl_display*`/`wl_surface*` to libwayland-egl (see barrier-kit).
 wayland-client = { version = "0.31", features = ["system"] }
 wayland-egl = "0.32"
 # Protocol generation for the private Infinity protocol (ADR 0039).
@@ -129,7 +129,7 @@ wayland-protocols-wlr = { version = "0.3.12", default-features = false }
 # address per surface; the shell reads the menu.
 wayland-protocols-plasma = { version = "0.3.12", default-features = false }
 
-# CelestialKit's Wayland runner presents with EGL and hands the GL context to
+# BarrierKit's Wayland runner presents with EGL and hands the GL context to
 # Skia; there is no glutin and no `gl` crate (ADR 0034). `glow` is only for the
 # lock's GLES fallback while recovery is debugged.
 khronos-egl = "6"
@@ -141,13 +141,13 @@ cosmic-text = "0.19"
 # Grapheme-aware truncation of the titlebar title.
 unicode-segmentation = "1"
 
-# Wallpaper decoding (yuki-shell): PNG via `png`, JPEG via `zune-jpeg` (light,
+# Wallpaper decoding (malaysia-shell): PNG via `png`, JPEG via `zune-jpeg` (light,
 # decode-only; no encoder or full image pipeline).
 png = "0.17"
 zune-jpeg = "0.5"
 
 # Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
-# Yuki while developing. Only the probe package uses this, and the package
+# Malaysia while developing. Only the probe package uses this, and the package
 # is excluded from the default build; winit already pulls it into the graph.
 smithay-client-toolkit = "0.19.2"
 # Same package, under the shorter name the shell uses (`sctk::...`).
@@ -174,7 +174,7 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca51
 ] }
 
 # Fast-compiling development build. Dependencies get light optimisation while
-# Yuki's own crates stay unoptimised, so incremental rebuilds of our code
+# Malaysia's own crates stay unoptimised, so incremental rebuilds of our code
 # are cheap but the third-party code we lean on is not painfully slow.
 [profile.dev]
 opt-level = 0

@@ -1,11 +1,11 @@
-//! Phase 6 acceptance harness: real applications under Yuki.
+//! Phase 6 acceptance harness: real applications under Malaysia.
 //!
 //! For each application in the table below it launches the application inside a
 //! fresh Yuki, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
 //! and asserts what the client negotiated:
 //!
 //! - which decoration protocol it bound (xdg-decoration, the KDE one, or none);
-//! - the mode Yuki configured (server-side or client-side);
+//! - the mode Malaysia configured (server-side or client-side);
 //! - whether the client surface was inset by the titlebar: the xdg configure
 //!   width drops by the titlebar thickness exactly when Yuki reserves chrome.
 //!
@@ -35,7 +35,7 @@ const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long each application gets to start, negotiate and be killed.
 const APP_TIMEOUT: Duration = Duration::from_secs(6);
 /// The titlebar thickness Yuki reserves, in logical pixels
-/// (`yuki_design::TITLEBAR.thickness`).
+/// (`vow_design::TITLEBAR.thickness`).
 const TITLEBAR: i32 = 32;
 
 fn main() -> ExitCode {
@@ -285,10 +285,10 @@ fn run() -> Result<(), String> {
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
     let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/yuki"));
+        .unwrap_or_else(|| repo.join("target/debug/malaysia-compositor"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p yuki` first",
+            "compositor binary not found at {}; run `cargo build -p malaysia-compositor` first",
             binary.display()
         ));
     }
@@ -461,7 +461,7 @@ fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> 
     }
 }
 
-/// Runs the ADR 0035 client against a fresh Yuki configured with
+/// Runs the ADR 0035 client against a fresh Malaysia configured with
 /// `force_server`, so the only reason a native app can lack a titlebar is the
 /// app-id prefix.
 fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, String> {
@@ -479,10 +479,10 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
         })?;
     let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("yuki"));
+        .unwrap_or_else(|| PathBuf::from("malaysia-compositor"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p yuki` first",
+            "compositor binary not found at {}; run `cargo build -p malaysia-compositor` first",
             binary.display()
         ));
     }
@@ -920,8 +920,10 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("yuki-decoration-{}-{unique}", std::process::id()));
+        let path = std::env::temp_dir().join(format!(
+            "malaysia-decoration-{}-{unique}",
+            std::process::id()
+        ));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         Ok(Self(path))

@@ -1,7 +1,7 @@
-//! Shared setup for Yuki's dev-only probe clients.
+//! Shared setup for Malaysia's dev-only probe clients.
 //!
 //! `tools/sctk-probe` is **not** part of the compositor. It is a workspace
-//! member excluded from the default build, used to drive Yuki as a Wayland
+//! member excluded from the default build, used to drive Malaysia as a Wayland
 //! client while developing. Its binaries are:
 //!
 //! - `parent_probe` — maps two toplevels and toggles a parent on the child to
@@ -31,7 +31,7 @@ use wayland_client::{
 ///
 /// Neither the display nor the registry is chosen here: the probe connects to
 /// whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point at, so the caller can run
-/// it against Yuki or against the host session without this crate knowing.
+/// it against Malaysia or against the host session without this crate knowing.
 pub fn init_connection<APP>() -> (EventLoop<'static, APP>, GlobalList, QueueHandle<APP>)
 where
     APP: Dispatch<WlRegistry, GlobalListContents> + 'static,

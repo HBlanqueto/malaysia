@@ -41,8 +41,8 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
 };
 
-/// The native app-id prefix from `yuki_design`.
-const NATIVE_PREFIX: &str = "io.github.hblanqueto.yuki.";
+/// The native app-id prefix from `vow_design`.
+const NATIVE_PREFIX: &str = "io.github.hblanqueto.malaysia.";
 /// The titlebar inset Yuki reserves for foreign SSD windows.
 const TITLEBAR: i32 = 32;
 const TIMEOUT: Duration = Duration::from_secs(5);

@@ -42,7 +42,7 @@ impl DmaBuffer {
         let len = stride * height as usize;
         let page = 4096;
         let aligned = (len + page - 1) & !(page - 1);
-        let name = b"yuki-capture\0";
+        let name = b"malaysia-capture\0";
         let memfd = unsafe {
             libc::memfd_create(
                 name.as_ptr().cast(),

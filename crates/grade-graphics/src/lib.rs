@@ -2,7 +2,7 @@
 //!
 //! This is the Core Graphics + Core Text equivalent of the project: the crate
 //! that holds the **GLSL shaders and their parameters** shared by the compositor
-//! and the shell's toolkit (`celestial-kit`). What is shared here is the *GLSL*
+//! and the shell's toolkit (`barrier-kit`). What is shared here is the *GLSL*
 //! (the shader source and its uniforms), never the GL code of Rust — each
 //! consumer owns its own EGL/GLES context and bindings (ADR 0024).
 //!

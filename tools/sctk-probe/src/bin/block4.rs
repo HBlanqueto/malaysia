@@ -20,8 +20,8 @@
 //! Run from the dev shell, after building the compositor and probes:
 //!
 //! ```sh
-//! cargo build -p yuki -p sctk-probe
-//! YUKI_BIN=target/debug/yuki YUKI_STRESS_BIN=target/debug/window_stress \
+//! cargo build -p malaysia-compositor -p sctk-probe
+//! YUKI_BIN=target/debug/malaysia-compositor YUKI_STRESS_BIN=target/debug/window_stress \
 //!   YUKI_RESIZE_BIN=target/debug/resize_client target/debug/block4
 //! ```
 //!
@@ -142,10 +142,10 @@ fn run() -> Result<(), String> {
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
     let binary = std::env::var_os("YUKI_BIN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("target/debug/yuki"));
+        .unwrap_or_else(|| repo.join("target/debug/malaysia-compositor"));
     if !binary.is_file() {
         return Err(format!(
-            "compositor binary not found at {}; run `cargo build -p yuki` first",
+            "compositor binary not found at {}; run `cargo build -p malaysia-compositor` first",
             binary.display()
         ));
     }
@@ -588,7 +588,7 @@ impl TempDir {
             .map_err(|error| format!("clock is before the epoch: {error}"))?
             .as_nanos();
         let path =
-            std::env::temp_dir().join(format!("yuki-block4-{}-{unique}", std::process::id()));
+            std::env::temp_dir().join(format!("malaysia-block4-{}-{unique}", std::process::id()));
         fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         #[cfg(unix)]

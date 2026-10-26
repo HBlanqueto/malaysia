@@ -240,6 +240,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "barrier-kit"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "async-channel",
+ "async-io",
+ "calloop 0.14.5",
+ "freya-animation",
+ "freya-clipboard",
+ "freya-components",
+ "freya-core",
+ "freya-engine",
+ "freya-skia-safe",
+ "freya-testing",
+ "futures-channel",
+ "futures-util",
+ "keyboard-types",
+ "khronos-egl",
+ "png",
+ "ragnarok",
+ "rustc-hash",
+ "serde",
+ "smithay-client-toolkit 0.19.2",
+ "thiserror 2.0.20",
+ "toml 0.8.23",
+ "torin",
+ "tracing",
+ "tracing-subscriber",
+ "vow-appearance",
+ "vow-design",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-egl",
+ "wayland-protocols-plasma",
+ "wayland-scanner",
+ "xkbcommon 0.9.0",
+ "zbus",
+ "zeroize",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -417,47 +458,6 @@ dependencies = [
  "jobserver",
  "libc",
  "shlex 2.0.1",
-]
-
-[[package]]
-name = "celestial-kit"
-version = "0.1.0"
-dependencies = [
- "accesskit",
- "async-channel",
- "async-io",
- "calloop 0.14.5",
- "freya-animation",
- "freya-clipboard",
- "freya-components",
- "freya-core",
- "freya-engine",
- "freya-skia-safe",
- "freya-testing",
- "futures-channel",
- "futures-util",
- "keyboard-types",
- "khronos-egl",
- "png",
- "ragnarok",
- "rustc-hash",
- "serde",
- "smithay-client-toolkit 0.19.2",
- "thiserror 2.0.20",
- "toml 0.8.23",
- "torin",
- "tracing",
- "tracing-subscriber",
- "wayland-backend",
- "wayland-client",
- "wayland-egl",
- "wayland-protocols-plasma",
- "wayland-scanner",
- "xkbcommon 0.9.0",
- "yuki-appearance",
- "yuki-design",
- "zbus",
- "zeroize",
 ]
 
 [[package]]
@@ -1686,6 +1686,93 @@ name = "log"
 version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+
+[[package]]
+name = "malaysia-compositor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "calloop 0.14.5",
+ "chrono",
+ "cosmic-text",
+ "grade-graphics",
+ "malaysia-scene",
+ "nix",
+ "png",
+ "serde",
+ "smithay",
+ "smithay-client-toolkit 0.19.2",
+ "thiserror 2.0.20",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-segmentation",
+ "vow-appearance",
+ "vow-design",
+ "wayland-backend",
+ "wayland-protocols-plasma",
+ "wayland-protocols-wlr",
+ "wayland-scanner",
+ "wayland-server",
+ "xcursor",
+ "xkbcommon 0.9.0",
+ "zbus",
+]
+
+[[package]]
+name = "malaysia-scene"
+version = "0.1.0"
+
+[[package]]
+name = "malaysia-settings"
+version = "0.1.0"
+dependencies = [
+ "barrier-kit",
+ "freya-components",
+ "freya-core",
+ "freya-engine",
+ "freya-testing",
+ "keyboard-types",
+ "libc",
+ "png",
+ "torin",
+ "vow-appearance",
+ "vow-design",
+]
+
+[[package]]
+name = "malaysia-shell"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "async-io",
+ "barrier-kit",
+ "bytes",
+ "chrono",
+ "freya-components",
+ "freya-core",
+ "freya-engine",
+ "freya-testing",
+ "futures-lite",
+ "keyboard-types",
+ "libc",
+ "png",
+ "serde",
+ "smithay-client-toolkit 0.19.2",
+ "thiserror 2.0.20",
+ "toml 0.8.23",
+ "torin",
+ "tracing",
+ "tracing-subscriber",
+ "vow-appearance",
+ "vow-design",
+ "wayland-client",
+ "wayland-egl",
+ "zbus",
+ "zeroize",
+ "zune-jpeg",
+]
 
 [[package]]
 name = "matchers"
@@ -3348,6 +3435,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "vow-appearance"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml 0.8.23",
+ "toml_edit 0.22.27",
+ "tracing",
+ "vow-design",
+]
+
+[[package]]
+name = "vow-design"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "walkdir"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4199,7 +4304,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "163b33ed8786455e2fa5d72f554057ce3f3182425434f756cd39c99839d88e23"
 
 [[package]]
-name = "xdg-desktop-portal-yuki"
+name = "xdg-desktop-portal-malaysia"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4207,8 +4312,8 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
- "yuki-appearance",
- "yuki-design",
+ "vow-appearance",
+ "vow-design",
  "zbus",
 ]
 
@@ -4289,111 +4394,6 @@ dependencies = [
  "quote",
  "syn 3.0.6",
  "synstructure",
-]
-
-[[package]]
-name = "yuki"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "calloop 0.14.5",
- "chrono",
- "cosmic-text",
- "grade-graphics",
- "nix",
- "png",
- "serde",
- "smithay",
- "smithay-client-toolkit 0.19.2",
- "thiserror 2.0.20",
- "toml 0.8.23",
- "tracing",
- "tracing-subscriber",
- "unicode-segmentation",
- "wayland-backend",
- "wayland-protocols-plasma",
- "wayland-protocols-wlr",
- "wayland-scanner",
- "wayland-server",
- "xcursor",
- "xkbcommon 0.9.0",
- "yuki-appearance",
- "yuki-design",
- "yuki-scene",
- "zbus",
-]
-
-[[package]]
-name = "yuki-appearance"
-version = "0.1.0"
-dependencies = [
- "serde",
- "toml 0.8.23",
- "toml_edit 0.22.27",
- "tracing",
- "yuki-design",
-]
-
-[[package]]
-name = "yuki-design"
-version = "0.1.0"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "yuki-scene"
-version = "0.1.0"
-
-[[package]]
-name = "yuki-settings"
-version = "0.1.0"
-dependencies = [
- "celestial-kit",
- "freya-components",
- "freya-core",
- "freya-engine",
- "freya-testing",
- "keyboard-types",
- "libc",
- "png",
- "torin",
- "yuki-appearance",
- "yuki-design",
-]
-
-[[package]]
-name = "yuki-shell"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-channel",
- "async-io",
- "bytes",
- "celestial-kit",
- "chrono",
- "freya-components",
- "freya-core",
- "freya-engine",
- "freya-testing",
- "futures-lite",
- "keyboard-types",
- "libc",
- "png",
- "serde",
- "smithay-client-toolkit 0.19.2",
- "thiserror 2.0.20",
- "toml 0.8.23",
- "torin",
- "tracing",
- "tracing-subscriber",
- "wayland-client",
- "wayland-egl",
- "yuki-appearance",
- "yuki-design",
- "zbus",
- "zeroize",
- "zune-jpeg",
 ]
 
 [[package]]

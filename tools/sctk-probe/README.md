@@ -1,14 +1,14 @@
 # sctk-probe
 
-Dev-only Wayland clients for driving Yuki while developing. This package is
+Dev-only Wayland clients for driving Malaysia while developing. This package is
 **not** part of the compositor: it is a workspace member excluded from the
 default build (`default-members` in the root `Cargo.toml`). A plain
 `cargo build`/`cargo test` at the repository root will not build it; name the
 package to build it on purpose.
 
 The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
-at, so they can be run against Yuki or the host session without any change.
-`smoke` and `block4` are different: they launch Yuki itself and drive clients
+at, so they can be run against Malaysia or the host session without any change.
+`smoke` and `block4` are different: they launch Malaysia itself and drive clients
 against it.
 
 Everything here runs inside the dev shell (`nix develop`). The simplest way to
@@ -35,7 +35,7 @@ parent on the child while both are tracked:
 The probe checks the three configure sizes and exits non-zero if the cycle is
 not reproduced, so it is a pass/fail check rather than output to read by eye.
 
-Run it against a running compositor. While Yuki runs under `./dev.sh run`,
+Run it against a running compositor. While Malaysia runs under `./dev.sh run`,
 the compositor inherits the caller's `XDG_RUNTIME_DIR` and auto-names its socket
 there (Smithay picks the first free `wayland-N`, `wayland-1` when the host
 already holds `wayland-0`); `yuki-dev` holds the pid and the log, not the
@@ -132,10 +132,10 @@ never configured or if no resize settles.
 ## `decoration_probe`
 
 The Phase 6 acceptance harness for the decoration policy (ADR 0019). It launches
-one Yuki and, for each real application, runs it inside that compositor with
+one Malaysia and, for each real application, runs it inside that compositor with
 `WAYLAND_DEBUG=1`, captures the client's trace and asserts what it negotiated:
 the decoration protocol it bound (xdg-decoration, the KDE one, or none), the
-mode Yuki configured, and whether the surface was inset by the titlebar. The
+mode Malaysia configured, and whether the surface was inset by the titlebar. The
 inset is read from the configure width against the output width, so it holds
 even when the first configure already carries it (GTK4 asks before its toplevel
 exists). Configures after a client-initiated resize or state change are ignored,
