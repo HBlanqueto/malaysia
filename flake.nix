@@ -40,6 +40,7 @@
           fileset = lib.fileset.unions [
             ./crates
             ./tools/sctk-probe
+            ./protocols
             ./Cargo.toml
             ./Cargo.lock
             ./share
