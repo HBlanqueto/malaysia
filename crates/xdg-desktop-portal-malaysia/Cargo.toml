@@ -18,5 +18,6 @@ tracing-subscriber.workspace = true
 zbus.workspace = true
 serde.workspace = true
 toml.workspace = true
+nix.workspace = true
 vow-appearance.workspace = true
 vow-design.workspace = true

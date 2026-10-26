@@ -5,12 +5,12 @@
 //! the accent and the accessibility switches without restarting.
 
 use std::collections::HashMap;
+use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, SystemTime};
 
+use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use vow_appearance::{
-    AppearanceConfig, ColorScheme, WindowColorMode, appearance_path, read_appearance,
-    read_dominant, resolve, wallpaper_state_path,
+    AppearanceConfig, ColorScheme, WindowColorMode, read_appearance, read_dominant, resolve,
 };
 use vow_design::Rgba;
 use zbus::blocking::Connection;
@@ -21,7 +21,6 @@ use zbus::zvariant::{OwnedValue, Value};
 pub const NAMESPACE: &str = "org.freedesktop.appearance";
 
 const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
-const WATCH_INTERVAL: Duration = Duration::from_millis(250);
 
 /// The four standardized values, already mapped for D-Bus.
 #[derive(Debug, Clone, PartialEq)]
@@ -168,19 +167,36 @@ enum PortalError {
     ZBus(zbus::Error),
 }
 
-/// Watches `appearance.domain` and emits `SettingChanged` for each key.
+/// Watches `appearance.domain` and `wallpaper.state` and emits `SettingChanged`
+/// for each key that changes.
 pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
     std::thread::spawn(move || {
-        let appearance = appearance_path();
-        let wallpaper = wallpaper_state_path();
-        let mut last = (mtime(&appearance), mtime(&wallpaper));
+        let watch = match vow_appearance::watch::AppearanceWatch::new() {
+            Ok(watch) => watch,
+            Err(error) => {
+                tracing::error!(%error, "cannot watch appearance files; settings will not update");
+                return;
+            }
+        };
+        let mut poll_fds = [PollFd::new(watch.as_fd(), PollFlags::POLLIN)];
         loop {
-            std::thread::sleep(WATCH_INTERVAL);
-            let now = (mtime(&appearance), mtime(&wallpaper));
-            if now == last {
+            if let Err(error) = poll(&mut poll_fds, PollTimeout::NONE) {
+                tracing::warn!(%error, "appearance poll failed; retrying");
                 continue;
             }
-            last = now;
+            if !poll_fds[0].any().unwrap_or(false) {
+                continue;
+            }
+            let events = match watch.drain() {
+                Ok(events) => events,
+                Err(error) => {
+                    tracing::warn!(%error, "cannot drain appearance watcher");
+                    continue;
+                }
+            };
+            if events.is_empty() {
+                continue;
+            }
             let appearance = match read_appearance() {
                 Ok(appearance) => appearance,
                 Err(error) => {
@@ -193,9 +209,7 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
                 let mut guard = values.write().expect("the settings lock is not poisoned");
                 std::mem::replace(&mut *guard, new.clone())
             };
-            let Ok(interface) = connection
-                .object_server()
-                .interface::<_, Settings>(OBJECT_PATH)
+            let Ok(interface) = connection.object_server().interface::<_, Settings>(OBJECT_PATH)
             else {
                 tracing::warn!("the Settings interface is not registered");
                 continue;
@@ -212,12 +226,6 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
             }
         }
     });
-}
-
-fn mtime(path: &std::path::Path) -> Option<SystemTime> {
-    std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
 }
 
 fn namespace_matches(pattern: &str) -> bool {

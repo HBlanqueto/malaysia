@@ -4309,6 +4309,7 @@ name = "xdg-desktop-portal-malaysia"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nix",
  "serde",
  "toml 0.8.23",
  "tracing",
