@@ -1162,16 +1162,11 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.section.chevron",
         COMPONENTS,
     ) as u32;
-    let default_island = string(
-        components,
-        "components.window.sidebar.default-style",
-        COMPONENTS,
-    ) == "island";
 
     const_doc(out, "SIDEBAR", "The Neptunia sidebar metrics.");
     out.push_str(&format!(
         ": SidebarMetrics = SidebarMetrics {{\n\
-         \x20   default_island: {default_island},\n\
+         \x20   default_island: true,\n\
          \x20   width: {width},\n\
          \x20   inset: {inset},\n\
          \x20   radius: {radius},\n\
@@ -1220,22 +1215,6 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.toolgroup.separator-h",
         COMPONENTS,
     ) as u32;
-    let flat_button_w = integer(
-        components,
-        "components.window.toolgroup.flat-button-w",
-        COMPONENTS,
-    ) as u32;
-    let flat_button_h = integer(
-        components,
-        "components.window.toolgroup.flat-button-h",
-        COMPONENTS,
-    ) as u32;
-    let flat_radius = metric(
-        tokens,
-        components,
-        "components.window.toolgroup.flat-radius",
-        COMPONENTS,
-    ) as u32;
 
     const_doc(out, "TOOLGROUP", "The Neptunia toolbar capsule metrics.");
     out.push_str(&format!(
@@ -1245,9 +1224,6 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
          \x20   button_h: {button_h},\n\
          \x20   separator_w: {separator_w},\n\
          \x20   separator_h: {separator_h},\n\
-         \x20   flat_button_w: {flat_button_w},\n\
-         \x20   flat_button_h: {flat_button_h},\n\
-         \x20   flat_radius: {flat_radius},\n\
          }};\n\n"
     ));
 }

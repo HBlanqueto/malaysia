@@ -77,6 +77,8 @@ impl Component for Titlebar {
             let status = *controls.status.read();
             (status, controls.title.clone(), controls.fixed)
         };
+        let last_click = use_hook(|| Rc::new(Cell::new(None::<(Instant, (f64, f64))>)));
+        let double_done = use_hook(|| Rc::new(Cell::new(false)));
         if status.decoration == DecorationResponse::Server {
             return rect()
                 .width(Size::fill())
@@ -84,6 +86,11 @@ impl Component for Titlebar {
                 .into_element();
         }
 
+        let controls = if self.preview.is_none() {
+            Some(WindowControls::get())
+        } else {
+            None
+        };
         let resolved = crate::theme::resolved();
         let theme = palette(resolved.scheme);
         let background = if status.activated {
@@ -96,7 +103,103 @@ impl Component for Titlebar {
         } else {
             theme.title.unfocused
         };
-        let traffic = window_traffic_lights(self.on_close.clone(), status.activated, fixed);
+        let behavior = *window_behavior();
+        let close = self.on_close.clone();
+        let minimize = controls.clone();
+        let maximize = controls.clone();
+        let drag = controls.clone();
+        let click = controls.clone();
+        let green = green_action(behavior.green_button, fixed);
+
+        let traffic = TrafficLights::new()
+            .focused(status.activated)
+            .zoom_supported(green_admitted(behavior.green_button, fixed))
+            .on_action(move |kind| match kind {
+                ButtonKind::Close => {
+                    if let Some(close) = &close {
+                        close.call(());
+                    }
+                }
+                ButtonKind::Minimize => {
+                    if let Some(controls) = &minimize {
+                        controls.minimize();
+                    }
+                }
+                ButtonKind::Maximize => {
+                    if let Some(controls) = &maximize {
+                        run_action(controls, green);
+                    }
+                }
+            });
+
+        let press = {
+            let last_click = last_click.clone();
+            let double_done = double_done.clone();
+            move |event: Event<MouseEventData>| {
+                if event.button != Some(MouseButton::Left) {
+                    return;
+                }
+                let Some(controls) = &drag else {
+                    return;
+                };
+                let now = Instant::now();
+                let point = (event.element_location.x, event.element_location.y);
+                let double = last_click.get().is_some_and(|(then, before)| {
+                    now.duration_since(then)
+                        <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
+                        && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                        && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                });
+                if double {
+                    last_click.set(None);
+                    if !double_done.get() {
+                        double_done.set(true);
+                        run_action(
+                            controls,
+                            double_click_action(behavior.double_click_titlebar, fixed),
+                        );
+                    }
+                } else {
+                    last_click.set(Some((now, point)));
+                    double_done.set(false);
+                    controls.move_window();
+                }
+            }
+        };
+        let press_second = {
+            let last_click = last_click.clone();
+            let double_done = double_done.clone();
+            move |event: Event<MouseEventData>| {
+                if event.button != Some(MouseButton::Left) {
+                    return;
+                }
+                let Some(controls) = &click else {
+                    return;
+                };
+                let now = Instant::now();
+                let point = (event.element_location.x, event.element_location.y);
+                let double = last_click.get().is_some_and(|(then, before)| {
+                    now.duration_since(then)
+                        <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
+                        && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                        && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
+                });
+                if double {
+                    last_click.set(None);
+                    if !double_done.get() {
+                        double_done.set(true);
+                        run_action(
+                            controls,
+                            double_click_action(behavior.double_click_titlebar, fixed),
+                        );
+                    }
+                } else {
+                    last_click.set(Some((now, point)));
+                    double_done.set(false);
+                    controls.move_window();
+                }
+            }
+        };
 
         rect()
             .width(Size::fill())
@@ -117,7 +220,7 @@ impl Component for Titlebar {
                     .width(Size::flex(1.0))
                     .height(Size::fill())
                     .center()
-                    .on_mouse_down(window_drag_handler(fixed))
+                    .on_mouse_down(press)
                     .child(
                         label()
                             .text(truncate(&title))
@@ -130,71 +233,9 @@ impl Component for Titlebar {
                 rect()
                     .width(Size::px(80.0))
                     .height(Size::fill())
-                    .on_mouse_down(window_drag_handler(fixed)),
+                    .on_mouse_down(press_second),
             )
             .into_element()
-    }
-}
-
-/// Builds the window's traffic lights with the standard close/minimize/zoom
-/// actions, reading `window.domain` like the compositor does.
-pub fn window_traffic_lights(
-    on_close: Option<Callback<(), ()>>,
-    focused: bool,
-    fixed: bool,
-) -> TrafficLights {
-    let behavior = *window_behavior();
-    let green = green_action(behavior.green_button, fixed);
-    TrafficLights::new()
-        .focused(focused)
-        .zoom_supported(green_admitted(behavior.green_button, fixed))
-        .on_action(move |kind| {
-            let controls = WindowControls::get();
-            match kind {
-                ButtonKind::Close => {
-                    if let Some(on_close) = &on_close {
-                        on_close.call(());
-                    }
-                }
-                ButtonKind::Minimize => controls.minimize(),
-                ButtonKind::Maximize => run_action(&controls, green),
-            }
-        })
-}
-
-/// Returns a mouse-down handler that drags the window and honours the double-click
-/// action configured in `window.domain`.
-pub fn window_drag_handler(fixed: bool) -> impl Fn(Event<MouseEventData>) {
-    let last_click = use_hook(|| Rc::new(Cell::new(None::<(Instant, (f64, f64))>)));
-    let double_done = use_hook(|| Rc::new(Cell::new(false)));
-    move |event: Event<MouseEventData>| {
-        if event.button != Some(MouseButton::Left) {
-            return;
-        }
-        let controls = WindowControls::get();
-        let behavior = *window_behavior();
-        let now = Instant::now();
-        let point = (event.element_location.x, event.element_location.y);
-        let double = last_click.get().is_some_and(|(then, before)| {
-            now.duration_since(then)
-                <= Duration::from_millis(u64::from(TITLEBAR_DOUBLE_CLICK.interval_ms))
-                && (before.0 - point.0).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-                && (before.1 - point.1).abs() <= TITLEBAR_DOUBLE_CLICK.slop
-        });
-        if double {
-            last_click.set(None);
-            if !double_done.get() {
-                double_done.set(true);
-                run_action(
-                    &controls,
-                    double_click_action(behavior.double_click_titlebar, fixed),
-                );
-            }
-        } else {
-            last_click.set(Some((now, point)));
-            double_done.set(false);
-            controls.move_window();
-        }
     }
 }
 
