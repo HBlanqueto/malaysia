@@ -1021,7 +1021,7 @@ impl AppInstance {
 }
 
 /// Where a window's global menu lives on D-Bus (ADR 0040).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct AppMenuAddress {
     pub service: String,
     pub path: String,

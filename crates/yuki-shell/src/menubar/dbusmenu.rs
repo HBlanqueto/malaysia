@@ -5,10 +5,13 @@
 //! it never waits for D-Bus. Registrar calls only need the shared map.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use async_channel::{Receiver, Sender};
 use celestial_kit::platform::{AppMenuAddress, WakeHandle};
+use futures_lite::{StreamExt, future};
+use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
@@ -56,21 +59,21 @@ pub struct MenuSnapshot {
 /// Render-side handle: commands go in, snapshots come out.
 #[derive(Clone)]
 pub struct MenuClient {
-    commands: mpsc::Sender<Command>,
-    snapshots: Arc<Mutex<mpsc::Receiver<MenuSnapshot>>>,
+    commands: Sender<Command>,
+    snapshots: Receiver<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
 }
 
 impl MenuClient {
     pub fn focus(&self, address: AppMenuAddress, generation: u64) {
-        let _ = self.commands.send(Command::Focus {
+        let _ = self.commands.send_blocking(Command::Focus {
             address,
             generation,
         });
     }
 
     pub fn open(&self, address: AppMenuAddress, id: i32, generation: u64) {
-        let _ = self.commands.send(Command::Open {
+        let _ = self.commands.send_blocking(Command::Open {
             address,
             id,
             generation,
@@ -78,7 +81,7 @@ impl MenuClient {
     }
 
     pub fn activate(&self, address: AppMenuAddress, id: i32, timestamp: u32) {
-        let _ = self.commands.send(Command::Activate {
+        let _ = self.commands.send_blocking(Command::Activate {
             address,
             id,
             timestamp,
@@ -94,7 +97,7 @@ impl MenuClient {
 
     /// Returns the next ready snapshot without blocking.
     pub fn try_recv(&self) -> Option<MenuSnapshot> {
-        self.snapshots.lock().ok()?.try_recv().ok()
+        self.snapshots.try_recv().ok()
     }
 }
 
@@ -150,9 +153,8 @@ impl Registrar {
 /// Starts the D-Bus thread. On connection failure the client keeps accepting
 /// commands and simply never answers; the bar stays on the 14c fallback.
 pub fn start() -> MenuClient {
-    let (commands, command_rx) = mpsc::channel();
-    let (snapshot_tx, snapshot_rx) = mpsc::channel();
-    let snapshots = Arc::new(Mutex::new(snapshot_rx));
+    let (commands, command_rx) = async_channel::unbounded();
+    let (snapshot_tx, snapshot_rx) = async_channel::unbounded();
     let wake = Arc::new(Mutex::new(None));
     let thread_wake = wake.clone();
     std::thread::Builder::new()
@@ -163,14 +165,21 @@ pub fn start() -> MenuClient {
         .expect("yuki-dbusmenu thread");
     MenuClient {
         commands,
-        snapshots,
+        snapshots: snapshot_rx,
         wake,
     }
 }
 
+type ProxyCache = HashMap<AppMenuAddress, zbus::Proxy<'static>>;
+
+enum Event {
+    Command(Result<Command, async_channel::RecvError>),
+    Owner(Option<zbus::fdo::NameOwnerChanged>),
+}
+
 async fn run(
-    commands: mpsc::Receiver<Command>,
-    snapshots: mpsc::Sender<MenuSnapshot>,
+    commands: Receiver<Command>,
+    snapshots: Sender<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
 ) {
     let builder = match zbus::connection::Builder::session() {
@@ -211,76 +220,137 @@ async fn run(
         }
     }
 
-    while let Ok(command) = commands.recv() {
-        async_io::block_on(handle(&connection, &snapshots, &wake, command));
+    let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
+        Ok(dbus) => dbus,
+        Err(error) => {
+            tracing::error!(%error, "menubar: could not create the bus proxy");
+            return;
+        }
+    };
+    let mut owner_changes = match dbus.receive_name_owner_changed().await {
+        Ok(stream) => stream,
+        Err(error) => {
+            tracing::error!(%error, "menubar: could not listen for name changes");
+            return;
+        }
+    };
+
+    let mut proxies: ProxyCache = HashMap::new();
+    let mut focused: Option<(AppMenuAddress, u64)> = None;
+    loop {
+        let selected = future::or(
+            async { Event::Command(commands.recv().await) },
+            async { Event::Owner(owner_changes.next().await) },
+        )
+        .await;
+        match selected {
+            Event::Command(Ok(Command::Focus {
+                address,
+                generation,
+            })) => {
+                focused = Some((address.clone(), generation));
+                let started = std::time::Instant::now();
+                let items = children(&connection, &mut proxies, &address, 0, 1).await;
+                let count = items.as_ref().map_or(0, Vec::len);
+                tracing::info!(
+                    generation,
+                    service = %address.service,
+                    titles = count,
+                    ms = started.elapsed().as_millis(),
+                    "menubar: dbusmenu root snapshot"
+                );
+                send(
+                    &snapshots,
+                    &wake,
+                    MenuSnapshot {
+                        generation,
+                        address,
+                        parent: None,
+                        items,
+                    },
+                )
+                .await;
+            }
+            Event::Command(Ok(Command::Open {
+                address,
+                id,
+                generation,
+            })) => {
+                let started = std::time::Instant::now();
+                let items = open_submenu(&connection, &mut proxies, &address, id).await;
+                let count = items.as_ref().map_or(0, Vec::len);
+                tracing::info!(
+                    generation,
+                    id,
+                    service = %address.service,
+                    items = count,
+                    ms = started.elapsed().as_millis(),
+                    "menubar: dbusmenu submenu snapshot"
+                );
+                send(
+                    &snapshots,
+                    &wake,
+                    MenuSnapshot {
+                        generation,
+                        address,
+                        parent: Some(id),
+                        items,
+                    },
+                )
+                .await;
+            }
+            Event::Command(Ok(Command::Activate {
+                address,
+                id,
+                timestamp,
+            })) => {
+                if let Err(error) =
+                    event(&connection, &mut proxies, &address, id, timestamp).await
+                {
+                    tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
+                } else {
+                    tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
+                }
+            }
+            Event::Command(Err(_)) => break,
+            Event::Owner(Some(signal)) => {
+                let Ok(args) = signal.args() else {
+                    continue;
+                };
+                if args.new_owner().is_some() {
+                    continue;
+                }
+                let service = args.name().to_string();
+                proxies.retain(|address, _| address.service != service);
+                if let Some((address, generation)) = &focused
+                    && address.service == service
+                {
+                    tracing::info!(%service, generation, "menubar: menu service vanished");
+                    send(
+                        &snapshots,
+                        &wake,
+                        MenuSnapshot {
+                            generation: *generation,
+                            address: address.clone(),
+                            parent: None,
+                            items: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+            Event::Owner(None) => break,
+        }
     }
 }
 
-async fn handle(
-    connection: &zbus::Connection,
-    snapshots: &mpsc::Sender<MenuSnapshot>,
+async fn send(
+    snapshots: &Sender<MenuSnapshot>,
     wake: &Arc<Mutex<Option<WakeHandle>>>,
-    command: Command,
+    snapshot: MenuSnapshot,
 ) {
-    match command {
-        Command::Focus {
-            address,
-            generation,
-        } => {
-            let started = std::time::Instant::now();
-            let items = children(connection, &address, 0, 1).await;
-            let count = items.as_ref().map_or(0, Vec::len);
-            tracing::info!(
-                generation,
-                service = %address.service,
-                titles = count,
-                ms = started.elapsed().as_millis(),
-                "menubar: dbusmenu root snapshot"
-            );
-            let _ = snapshots.send(MenuSnapshot {
-                generation,
-                address,
-                parent: None,
-                items,
-            });
-            notify(wake);
-        }
-        Command::Open {
-            address,
-            id,
-            generation,
-        } => {
-            let started = std::time::Instant::now();
-            let items = open_submenu(connection, &address, id).await;
-            let count = items.as_ref().map_or(0, Vec::len);
-            tracing::info!(
-                generation,
-                id,
-                service = %address.service,
-                items = count,
-                ms = started.elapsed().as_millis(),
-                "menubar: dbusmenu submenu snapshot"
-            );
-            let _ = snapshots.send(MenuSnapshot {
-                generation,
-                address,
-                parent: Some(id),
-                items,
-            });
-            notify(wake);
-        }
-        Command::Activate {
-            address,
-            id,
-            timestamp,
-        } => {
-            if let Err(error) = event(connection, &address, id, timestamp).await {
-                tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
-            } else {
-                tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
-            }
-        }
-    }
+    let _ = snapshots.send(snapshot).await;
+    notify(wake);
 }
 
 fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
@@ -289,17 +359,23 @@ fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
     }
 }
 
-async fn proxy<'a>(
-    connection: &'a zbus::Connection,
-    address: &'a AppMenuAddress,
-) -> zbus::Result<zbus::Proxy<'a>> {
-    zbus::Proxy::new(
-        connection,
-        address.service.as_str(),
-        address.path.as_str(),
-        DBUSMENU_INTERFACE,
-    )
-    .await
+async fn proxy(
+    connection: &zbus::Connection,
+    proxies: &mut ProxyCache,
+    address: &AppMenuAddress,
+) -> zbus::Result<zbus::Proxy<'static>> {
+    if let Some(proxy) = proxies.get(address) {
+        return Ok(proxy.clone());
+    }
+    let proxy: zbus::Proxy<'static> = zbus::proxy::Builder::new(connection)
+        .destination(address.service.clone())?
+        .path(address.path.clone())?
+        .interface(DBUSMENU_INTERFACE)?
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await?;
+    proxies.insert(address.clone(), proxy.clone());
+    Ok(proxy)
 }
 
 type RawNode = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
@@ -316,11 +392,12 @@ fn raw_item(value: OwnedValue) -> Option<RawItem> {
 
 async fn layout(
     connection: &zbus::Connection,
+    proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     parent: i32,
     depth: i32,
 ) -> zbus::Result<Vec<RawItem>> {
-    let proxy = proxy(connection, address).await?;
+    let proxy = proxy(connection, proxies, address).await?;
     let (_, root) = proxy
         .call::<_, _, (u32, RawNode)>("GetLayout", &(parent, depth, &[] as &[&str]))
         .await?;
@@ -329,11 +406,12 @@ async fn layout(
 
 async fn children(
     connection: &zbus::Connection,
+    proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     parent: i32,
     depth: i32,
 ) -> Option<Vec<RawItem>> {
-    match layout(connection, address, parent, depth).await {
+    match layout(connection, proxies, address, parent, depth).await {
         Ok(items) => Some(items),
         Err(error) => {
             tracing::warn!(
@@ -349,25 +427,27 @@ async fn children(
 
 async fn open_submenu(
     connection: &zbus::Connection,
+    proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     id: i32,
 ) -> Option<Vec<RawItem>> {
-    if let Ok(proxy) = proxy(connection, address).await {
+    if let Ok(proxy) = proxy(connection, proxies, address).await {
         match proxy.call::<_, _, bool>("AboutToShow", &(id,)).await {
             Ok(shown) => tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow"),
             Err(error) => tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed"),
         }
     }
-    children(connection, address, id, 1).await
+    children(connection, proxies, address, id, 1).await
 }
 
 async fn event(
     connection: &zbus::Connection,
+    proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     id: i32,
     timestamp: u32,
 ) -> zbus::Result<()> {
-    let proxy = proxy(connection, address).await?;
+    let proxy = proxy(connection, proxies, address).await?;
     proxy
         .call::<_, _, ()>(
             "Event",

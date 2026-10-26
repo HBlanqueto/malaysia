@@ -4345,6 +4345,7 @@ name = "yuki-shell"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "async-io",
  "bytes",
  "celestial-kit",
@@ -4353,6 +4354,7 @@ dependencies = [
  "freya-core",
  "freya-engine",
  "freya-testing",
+ "futures-lite",
  "keyboard-types",
  "libc",
  "png",
