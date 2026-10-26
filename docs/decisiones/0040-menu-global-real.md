@@ -141,7 +141,7 @@ El `id` numérico de cada item se conserva en `Action.id` (decimal) y en el
 | `toggle-type` + `toggle-state` | `check` | `checkmark` → `Checkbox`, `radio` → `Radio`; activo si `toggle-state == 1`. |
 | `shortcut` (`aas`) | `shortcut` | Solo la primera combinación, con `⌃⌥⇧❖` y **nunca `⌘`**; el formateo lo hace el kit. |
 | `icon-name` | `icon` | Solo si el nombre está en el conjunto estático de iconos de la barra; si no, `debug!`. |
-| `icon-data` | `icon` | ARGB32. Requiere que 14d-2 amplíe el icono del kit a mapa de bits; hasta entonces, `debug!`. |
+| `icon-data` | `icon` | PNG (no ARGB32). Se decodifica una vez, se escala al tamaño del icono y se cachea por hash; > 64 KiB o error de decodificación → sin icono y `debug!`. |
 | resto | — | Se ignora con un `debug!` (una vez por propiedad), incluidos `disposition`, `child-display` y las combinaciones de atajo adicionales. |
 
 Las propiedades no soportadas no rompen el menú: el item se dibuja con lo que

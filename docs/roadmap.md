@@ -267,8 +267,10 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
   [ADR 0040](decisiones/0040-menu-global-real.md); 14d no usa AT-SPI.
   - **14d-1:** compositor, `org_kde_kwin_appmenu` + Infinity v2 (`app_menu`);
     la barra solo loguea el evento.
-  - **14d-2:** cliente dbusmenu y barra: hilo D-Bus con zbus, caché, carga
-    perezosa, fusión de títulos y buscador de Ayuda.
+  - **14d-2:** **implementado (anidado, 2026-10-26)**: cliente dbusmenu y
+    barra: hilo D-Bus con zbus, caché, carga perezosa, fusión de títulos,
+    buscador de Ayuda sobre el árbol real, iconos de mapa de bits y
+    `menubar.app_menus`.
   - **14d-3:** `com.canonical.AppMenu.Registrar` y aceptación con Kate y
     Firefox (sus dos preferencias en `~/nixdots`, nunca en el repo).
 - **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
@@ -393,8 +395,8 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a, 14b-1 y 14c en anidado; 14b-2 y 14d–14e
-  pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
+- **Bloque 14 — 14a, 14b-1, 14c y 14d-2 en anidado; 14b-2,
+  14d-3 y 14e pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
   `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
   CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
   (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el

@@ -474,6 +474,81 @@ La hipótesis de 14d-1 se confirmó: Qt
 (`DBusMenuBar::OnNameOwnerChanged` exige `g_dbus_proxy_get_name_owner`) solo
 exportan con el nombre ocupado.
 
+### 14d-2 — Cliente, buscador e iconos (implementado)
+
+Implementado el **2026-10-26** en sesión anidada con Kate 26.08.2. Cierra el
+14d-2 del ADR 0040: hilo D-Bus, caché, fusión de títulos, buscador de Ayuda
+sobre el árbol real, iconos de mapa de bits y `menubar.app_menus`.
+
+**2a — hilo, caché y carga perezosa.** Un solo hilo posee la conexión de
+sesión; la barra solo manda direcciones y recibe `Arc` inmutables, así que el
+hilo de render nunca espera a D-Bus. El primer nivel se cachea por ventana y
+los submenús se piden al abrirlos. Medidas del lab:
+
+| Medida | Valor |
+|---|---|
+| Primer nivel en frío (`root snapshot … cached=false`) | 1 ms |
+| Primer nivel al recuperar el foco (`cached=true`) | 0 llamadas |
+| Llamadas D-Bus desde el hilo de render | 0 (la aserción de depuración nunca saltó) |
+
+**2b — revisión y señales.** La caché guarda la revisión de dbusmenu;
+`LayoutUpdated` invalida solo el subárbol afectado (y el árbol completo del
+buscador si la revisión es mayor) y `ItemsPropertiesUpdated` actualiza los
+ítems en sitio. Los tests cubren la invalidación por revisión, el árbol
+completo y las propiedades anidadas. El cierre por `SIGTERM` del lab no llega
+a ejecutar el log de `render_dbus_calls`: la comprobación es la
+`debug_assert_eq!(calls, 0)` de `run()`.
+
+**2c — Ayuda real, iconos y apagado.**
+
+- **Buscador.** Abrir **Ayuda** envía `FullTree` (`GetLayout(0, -1, [])`) al
+  hilo D-Bus con el timeout de 500 ms. El árbol se cachea por revisión y
+  cualquier `LayoutUpdated` de esa dirección lo invalida. `remote::searchable`
+  recorre los títulos ya compuestos, indexa solo acciones (hojas) con su ruta
+  y su `SearchLocation`, y mantiene las deshabilitadas en gris sin activarlas.
+  Las fuentes de resultados y de raíces a revelar se releen en cada render, así
+  que los resultados que llegan mientras se escribe no pierden texto,
+  selección ni scroll.
+- **Medida de apertura.** `full tree snapshot … ms=354` en frío (354–478 ms en
+  dos sesiones, por debajo del límite de 500) y `ms=0` con el árbol cacheado.
+  Con «nuev» salen 8 filas; «Archivo › Nueva ventana» y «Archivo › Nuevo»
+  están entre ellas. `Enter` sobre «Archivo › Nuevo» abrió **Sin título —
+  Kate**.
+- **Revelar.** `↓` sobre un resultado abre el menú real de su título con los
+  hijos del árbol completo (nunca «Cargando…»). El popup se coloca a la
+  izquierda del de Ayuda, alineado arriba con 8 px de separación; sin ese
+  ajuste el compositor lo mandaba fuera de pantalla por arriba.
+- **Iconos.** Kate manda `icon-name` en 89 entradas y ninguna `icon-data`
+  (219 labels, 34 submenús). Solo 3 nombres caen en el conjunto estático de la
+  barra (`view-split-left-right` → icono de división); el resto se ignora con
+  `debug!`. `icon-data` se admite como PNG: se decodifica una vez, se escala
+  al tamaño del icono y se cachea por hash; por encima de 64 KiB o si falla la
+  decodificación no se dibuja y se registra en `debug!`.
+- **`menubar.app_menus`.** Con `false` en `menubar.domain` la barra no pide
+  layouts y el hilo suelta `com.canonical.AppMenu.Registrar` (`busctl` no
+  muestra el nombre); la barra queda en el respaldo de 14c
+  ({App} · Ventana · Ayuda) y Kate pinta su propia barra de menús. Al poner
+  `true` el nombre vuelve en el siguiente tick de 500 ms, pero Kate no cambia
+  al menú global sin reiniciarse: su barra propia y el respaldo siguen ahí.
+  Es un límite conocido, no se fuerza el re-registro de la app.
+
+Capturas del lab (Kate enfocado, árbol completo cacheado):
+
+![Buscador de Ayuda de Kate en claro](img/14d/buscar-kate-claro.png)
+
+`buscar-kate-claro.png`: Ayuda con «nuev», 8 resultados del árbol real y el
+menú de la app compuesto; el campo conserva el texto y la lista su scroll.
+
+![Buscador de Ayuda de Kate en oscuro](img/14d/buscar-kate-oscuro.png)
+
+`buscar-kate-oscuro.png`: el mismo estado en tema oscuro.
+
+![Kate sin menú global](img/14d/kate-sin-menu-global.png)
+
+`kate-sin-menu-global.png`: `menubar.app_menus = false`; la barra muestra solo
+Kate · Ventana · Ayuda y Kate pinta su propia barra de menús.
+
+
 ## Aceptación de 14a
 
 Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual:
