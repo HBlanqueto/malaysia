@@ -28,6 +28,7 @@ use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStat
 #[derive(PartialEq)]
 pub struct Titlebar {
     preview: Option<Preview>,
+    title: Option<String>,
     on_close: Option<Callback<(), ()>>,
     sidebar: bool,
     left: Option<Element>,
@@ -52,6 +53,7 @@ impl Titlebar {
     pub fn new() -> Self {
         Self {
             preview: None,
+            title: None,
             on_close: None,
             sidebar: false,
             left: None,
@@ -67,11 +69,19 @@ impl Titlebar {
                 title: title.into(),
                 fixed,
             }),
+            title: None,
             on_close: None,
             sidebar: false,
             left: None,
             right: None,
         }
+    }
+
+    /// Override the title shown in the titlebar; when absent the window's
+    /// configured title is used.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = Some(title.into());
+        self
     }
 
     /// Called when the close light is released.
@@ -103,11 +113,13 @@ impl Titlebar {
 impl Component for Titlebar {
     fn render(&self) -> impl IntoElement {
         let (status, title, fixed) = if let Some(preview) = &self.preview {
-            (preview.status, preview.title.clone(), preview.fixed)
+            let title = self.title.clone().unwrap_or_else(|| preview.title.clone());
+            (preview.status, title, preview.fixed)
         } else {
             let controls = WindowControls::get();
             let status = *controls.status.read();
-            (status, controls.title.clone(), controls.fixed)
+            let title = self.title.clone().unwrap_or_else(|| controls.title.clone());
+            (status, title, controls.fixed)
         };
         if status.decoration == DecorationResponse::Server {
             return rect()
@@ -140,40 +152,6 @@ impl Component for Titlebar {
             ))
         };
 
-        let slot_width = if self.sidebar {
-            Size::auto()
-        } else {
-            Size::px(80.0)
-        };
-
-        let left_slot = rect()
-            .width(slot_width.clone())
-            .height(Size::fill())
-            .cross_align(Alignment::Center)
-            .a11y_alt("titlebar-left-slot")
-            .maybe(self.left.is_some(), |el| {
-                el.child(self.left.clone().unwrap())
-            });
-        let left_slot = if let Some(traffic) = traffic {
-            left_slot.center().child(traffic)
-        } else {
-            left_slot
-        };
-
-        let right_slot = rect()
-            .width(slot_width)
-            .height(Size::fill())
-            .cross_align(Alignment::Center)
-            .a11y_alt("titlebar-right-slot")
-            .maybe(self.right.is_some(), |el| {
-                el.child(self.right.clone().unwrap())
-            });
-        let right_slot = if self.sidebar {
-            right_slot
-        } else {
-            right_slot.on_mouse_down(window_drag_handler(fixed))
-        };
-
         let mut title_label = label()
             .text(truncate(&title))
             .font_size(if self.sidebar {
@@ -187,18 +165,82 @@ impl Component for Titlebar {
             title_label = title_label.font_weight(FontWeight::from(TITLE_2.weight as i32));
         }
 
-        let mut title = rect()
+        if self.sidebar {
+            // Sidebar titlebars keep the toolbar on the left and place the
+            // title immediately after it; the right slot is intentionally empty.
+            let left_slot = rect()
+                .width(Size::auto())
+                .height(Size::fill())
+                .cross_align(Alignment::Center)
+                .a11y_alt("titlebar-left-slot")
+                .maybe(self.left.is_some(), |el| {
+                    el.child(self.left.clone().unwrap())
+                });
+
+            let title = rect()
+                .width(Size::auto())
+                .height(Size::fill())
+                .cross_align(Alignment::Center)
+                .a11y_alt("titlebar-title")
+                .on_mouse_down(window_drag_handler(fixed))
+                .child(title_label);
+
+            let mut root = rect()
+                .width(Size::fill())
+                .height(Size::px(TITLEBAR_CLIENT_HEIGHT as f32))
+                .background(rgba(background))
+                .direction(Direction::Horizontal)
+                .cross_align(Alignment::Center)
+                .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+                .child(left_slot)
+                .child(title);
+
+            if resolved.sidebar.style == SidebarStyle::Flat {
+                root = root.child(
+                    rect()
+                        .position(Position::new_absolute().bottom(0.0).left(0.0))
+                        .width(Size::fill())
+                        .height(Size::px(1.0))
+                        .background(rgba(resolved.sidebar.palette.line)),
+                );
+            }
+
+            return root.into_element();
+        }
+
+        // Classic three-slot titlebar for windows without a sidebar.
+        let left_slot = rect()
+            .width(Size::px(80.0))
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .a11y_alt("titlebar-left-slot")
+            .maybe(self.left.is_some(), |el| {
+                el.child(self.left.clone().unwrap())
+            });
+        let left_slot = if let Some(traffic) = traffic {
+            left_slot.center().child(traffic)
+        } else {
+            left_slot
+        };
+
+        let right_slot = rect()
+            .width(Size::px(80.0))
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .a11y_alt("titlebar-right-slot")
+            .maybe(self.right.is_some(), |el| {
+                el.child(self.right.clone().unwrap())
+            })
+            .on_mouse_down(window_drag_handler(fixed));
+
+        let title = rect()
             .width(Size::flex(1.0))
             .height(Size::fill())
             .cross_align(Alignment::Center)
+            .main_align(Alignment::Center)
             .a11y_alt("titlebar-title")
             .on_mouse_down(window_drag_handler(fixed))
             .child(title_label);
-        if self.sidebar {
-            title = title.main_align(Alignment::Start);
-        } else {
-            title = title.main_align(Alignment::Center);
-        }
 
         let mut root = rect()
             .width(Size::fill())

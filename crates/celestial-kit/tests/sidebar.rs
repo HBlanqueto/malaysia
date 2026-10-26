@@ -17,7 +17,7 @@ use freya_core::prelude::*;
 use freya_testing::TestingRunner;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Size, Size2D};
-use yuki_design::{SIDEBAR, TITLEBAR_CLIENT_HEIGHT, TOOLGROUP};
+use yuki_design::{SIDEBAR, TITLEBAR, TITLEBAR_CLIENT_HEIGHT, TOOLGROUP};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -252,6 +252,69 @@ fn toolgroup_renders_without_panic() {
     assert!(!png.as_ref().is_empty());
 }
 
+struct TrafficLightsCase;
+
+impl App for TrafficLightsCase {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(|| theme::for_scheme(false));
+        Sidebar::new().traffic_lights(true).child(
+            rect()
+                .width(Size::fill())
+                .height(Size::px(30.0))
+                .a11y_alt("sidebar-first-child"),
+        )
+    }
+}
+
+fn traffic_layout() -> Vec<(f32, f32, f32, f32)> {
+    let app = AppComponent::new(TrafficLightsCase);
+    let (test, _) = TestingRunner::new(app, Size2D::new(300.0, 400.0), |_| {}, 1.0);
+    test.find_many(|node, _el| {
+        let area = node.layout().area;
+        Some((
+            area.origin.x,
+            area.origin.y,
+            area.size.width,
+            area.size.height,
+        ))
+    })
+}
+
+#[test]
+fn sidebar_traffic_lights_are_at_design_offset_and_first_child_sits_below() {
+    with_config("island", || {
+        let (_, _, group_w, group_h) = yuki_appearance::traffic::group_rect();
+        let layouts = traffic_layout();
+
+        let lights = layouts
+            .iter()
+            .find(|(_, _, w, h)| {
+                (*w - group_w as f32).abs() < 0.5 && (*h - group_h as f32).abs() < 0.5
+            })
+            .expect("traffic lights container must be sized");
+        assert!(
+            (lights.0 - SIDEBAR.traffic_x as f32).abs() < 0.5
+                && (lights.1 - SIDEBAR.traffic_y as f32).abs() < 0.5,
+            "traffic lights must be at ({}, {}), got ({}, {})",
+            SIDEBAR.traffic_x,
+            SIDEBAR.traffic_y,
+            lights.0,
+            lights.1
+        );
+
+        let first_child = layouts
+            .iter()
+            .find(|(_, _, w, h)| *w > 100.0 && (*h - 30.0).abs() < 0.5)
+            .expect("first child must be laid out");
+        let lights_bottom = lights.1 + lights.3;
+        assert!(
+            first_child.1 >= lights_bottom - 0.5,
+            "first child must sit below the traffic lights (lights end at {lights_bottom}, child starts at {})",
+            first_child.1
+        );
+    });
+}
+
 #[test]
 fn sidebar_traffic_light_tokens_are_sane() {
     // The traffic lights are placed at (SIDEBAR.traffic_x, SIDEBAR.traffic_y)
@@ -260,6 +323,7 @@ fn sidebar_traffic_light_tokens_are_sane() {
     assert_eq!(SIDEBAR.traffic_x, 18);
     assert_eq!(SIDEBAR.traffic_y, 16);
     assert_eq!(TITLEBAR_CLIENT_HEIGHT, 44);
+    assert_eq!(TITLEBAR.buttons.diameter, 12);
 }
 
 struct ItemCase;

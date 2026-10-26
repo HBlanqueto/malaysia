@@ -885,6 +885,38 @@ fn emit_palettes(out: &mut String, tokens: &Value, components: &Value) {
             rgba(theme_color(tokens, theme, "bg-window"))
         ));
     }
+
+    for (name, theme) in [
+        ("BG_CONTROL_LIGHT", "light"),
+        ("BG_CONTROL_DARK", "dark"),
+        ("BG_CONTROL_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} control background (`bg-control`)."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(theme_color(tokens, theme, "bg-control"))
+        ));
+    }
+
+    for (name, theme) in [
+        ("BG_SURFACE_LIGHT", "light"),
+        ("BG_SURFACE_DARK", "dark"),
+        ("BG_SURFACE_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} raised surface background (`bg-surface`)."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(theme_color(tokens, theme, "bg-surface"))
+        ));
+    }
 }
 
 fn shell(tokens: &Value, components: &Value, theme: &str, opaque: bool) -> String {

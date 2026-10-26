@@ -13,8 +13,9 @@ use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use yuki_appearance::SidebarStyle;
 use yuki_design::{DURATION_BASE, Rgba, SIDEBAR, TITLEBAR};
 
-use crate::platform::WindowControls;
+use crate::platform::{DecorationResponse, WindowControls, WindowStatus};
 use crate::titlebar::{window_drag_handler, window_traffic_lights};
+use freya_core::prelude::try_consume_root_context;
 
 fn rgba(color: Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
@@ -119,7 +120,8 @@ impl Component for Sidebar {
         let padding_x = SIDEBAR.padding_x as f32;
         let radius = SIDEBAR.radius as f32;
 
-        let mut sidebar_root = rect()
+        // The scrollable/content area starts below the traffic-light strip.
+        let mut sidebar_body = rect()
             .width(Size::fill())
             .height(Size::fill())
             .direction(Direction::Vertical)
@@ -128,16 +130,16 @@ impl Component for Sidebar {
             .padding(Gaps::new(
                 top_height as f32,
                 padding_x,
-                padding_x,
+                if island { padding_x } else { 0.0 },
                 padding_x,
             ))
             .children(self.children.iter().cloned());
 
         if island {
-            sidebar_root = sidebar_root.corner_radius(radius);
+            sidebar_body = sidebar_body.corner_radius(radius);
 
             if surface.rim.a > 0.0 {
-                sidebar_root = sidebar_root.border(
+                sidebar_body = sidebar_body.border(
                     Border::new()
                         .width(SIDEBAR.rim_width)
                         .alignment(BorderAlignment::Inner)
@@ -146,7 +148,7 @@ impl Component for Sidebar {
             }
 
             if surface.inner.a > 0.0 {
-                sidebar_root = sidebar_root.child(
+                sidebar_body = sidebar_body.child(
                     rect()
                         .position(
                             Position::new_absolute()
@@ -167,9 +169,8 @@ impl Component for Sidebar {
             }
 
             let ambient = &surface.shadow[0];
-            let contact = &surface.shadow[1];
             if ambient.opacity > 0.0 {
-                sidebar_root = sidebar_root.shadow(
+                sidebar_body = sidebar_body.shadow(
                     Shadow::new()
                         .x(0.0)
                         .y(ambient.y_offset as f32)
@@ -177,41 +178,47 @@ impl Component for Sidebar {
                         .color(rgba(ambient.color)),
                 );
             }
-
-            if contact.opacity > 0.0 {
-                return rect()
-                    .width(Size::fill())
-                    .height(Size::fill())
-                    .shadow(
-                        Shadow::new()
-                            .x(0.0)
-                            .y(contact.y_offset as f32)
-                            .blur(contact.blur as f32)
-                            .color(rgba(contact.color)),
-                    )
-                    .child(sidebar_root)
-                    .into_element();
-            }
         } else {
-            sidebar_root = sidebar_root
-                .padding(Gaps::new(top_height as f32, padding_x, 0.0, padding_x))
-                .child(
-                    rect()
-                        .position(Position::new_absolute().top(0.0).right(0.0))
-                        .width(Size::px(SIDEBAR.inner_width))
-                        .height(Size::fill())
-                        .background(rgba(surface.palette.line)),
-                );
+            sidebar_body = sidebar_body.child(
+                rect()
+                    .position(Position::new_absolute().top(0.0).right(0.0))
+                    .width(Size::px(SIDEBAR.inner_width))
+                    .height(Size::fill())
+                    .background(rgba(surface.palette.line)),
+            );
         }
 
+        let mut root = rect().width(Size::fill()).height(Size::fill());
+        if island {
+            let contact = &surface.shadow[1];
+            if contact.opacity > 0.0 {
+                root = root.shadow(
+                    Shadow::new()
+                        .x(0.0)
+                        .y(contact.y_offset as f32)
+                        .blur(contact.blur as f32)
+                        .color(rgba(contact.color)),
+                );
+            }
+        }
+        root = root.child(sidebar_body);
+
         if self.traffic_lights {
-            let controls = WindowControls::get();
-            let status = *controls.status.read();
-            let fixed = controls.fixed;
+            let (status, fixed) = try_consume_root_context::<WindowControls>()
+                .map(|controls| (*controls.status.read(), controls.fixed))
+                .unwrap_or((
+                    WindowStatus {
+                        activated: true,
+                        maximized: false,
+                        decoration: DecorationResponse::Client,
+                        fixed: false,
+                    },
+                    false,
+                ));
             let (_, _, group_w, _) = yuki_appearance::traffic::group_rect();
             let lights_right = SIDEBAR.traffic_x as f32 + group_w as f32;
 
-            sidebar_root = sidebar_root
+            root = root
                 .child(
                     rect()
                         .position(
@@ -221,6 +228,7 @@ impl Component for Sidebar {
                         )
                         .width(Size::px(group_w as f32))
                         .height(Size::px(TITLEBAR.buttons.diameter as f32))
+                        .a11y_alt("sidebar-traffic-lights")
                         .child(window_traffic_lights(
                             self.on_close.clone(),
                             status.activated,
@@ -232,11 +240,12 @@ impl Component for Sidebar {
                         .position(Position::new_absolute().top(0.0).left(lights_right))
                         .width(Size::fill())
                         .height(Size::px(top_height as f32))
+                        .a11y_alt("sidebar-drag-strip")
                         .on_mouse_down(window_drag_handler(fixed)),
                 );
         }
 
-        sidebar_root.into_element()
+        root.into_element()
     }
 }
 
