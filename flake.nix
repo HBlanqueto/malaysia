@@ -238,7 +238,6 @@
           dbus
           nautilus
           zenity
-          kdePackages.kate
         ];
       in {
         default = pkgs.mkShell {
@@ -261,7 +260,7 @@
             # installed on the system.
             weston
             amdgpu_top
-          ];
+          ] ++ labApps;
 
           # `geist-font` is the UI typeface; `inter` is the fixed fallback for
           # the shortcut glyphs (Geist has none of them). Being in buildInputs

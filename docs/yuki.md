@@ -115,4 +115,9 @@ cada una con su log en `$XDG_RUNTIME_DIR/demo-<nombre>.log`. Al arrancar imprime
 una checklist de pruebas manuales; la sesión se cierra con Ctrl-C o cerrando la
 ventana anfitriona. `scripts/lab.sh` actualiza, compila y lanza `lab` de la
 misma forma que `scripts/demo.sh`. Las apps de prueba son opcionales en el
-devShell (`labApps` en `flake.nix`).
+devShell (`labApps` en `flake.nix`). Kate no está en `labApps` porque su
+closure KDE dispara la entrada en frío; para probarlo:
+
+```sh
+nix shell nixpkgs#kdePackages.kate --command ./dev.sh lab --light
+```
