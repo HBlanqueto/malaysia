@@ -79,7 +79,7 @@ toml_edit = "0.22"
 xkbcommon = "0.9"
 
 # System keymap: org.freedesktop.locale1 over the system bus (ADR 0021).
-zbus = "5"
+zbus = { version = "5", features = ["p2p"] }
 
 # Shell clock (yuki-shell menubar): local time formatting.
 chrono = "0.4"

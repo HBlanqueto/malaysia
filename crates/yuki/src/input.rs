@@ -244,7 +244,11 @@ impl TestPointer {
 
     fn parse(value: &str) -> Option<Self> {
         let mut actions = VecDeque::new();
-        for part in value.split(';').map(str::trim).filter(|part| !part.is_empty()) {
+        for part in value
+            .split(';')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+        {
             if part == "1" {
                 continue;
             }
@@ -2497,10 +2501,9 @@ mod tests {
     use xkbcommon::xkb::{self, Keycode, keysyms};
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TestKey,
-        TestPointer, TestPointerAction, TEST_KEY_HOLD, activation_updates, clamp_pointer,
-        compositor_shortcut, desktop_click, double_click, edge_cursor, is_escape,
-        pointer_focus_blocked,
+        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TEST_KEY_HOLD, TestKey,
+        TestPointer, TestPointerAction, activation_updates, clamp_pointer, compositor_shortcut,
+        desktop_click, double_click, edge_cursor, is_escape, pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;

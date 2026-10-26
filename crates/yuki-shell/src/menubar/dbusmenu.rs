@@ -1139,6 +1139,16 @@ async fn proxy(
 
 type RawNode = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
 
+/// Converts a dbusmenu layout item's children into [`RawItem>] trees.
+#[allow(dead_code)]
+pub fn raw_items_from_layout(layout: &celestial_kit::app_menu::layout::LayoutItem) -> Vec<RawItem> {
+    layout
+        .2
+        .iter()
+        .filter_map(|v| raw_item(v.clone()))
+        .collect()
+}
+
 fn raw_item(value: OwnedValue) -> Option<RawItem> {
     let value: zbus::zvariant::Value<'_> = value.into();
     let (id, properties, children) = value.downcast::<RawNode>().ok()?;
