@@ -1743,6 +1743,13 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     Ok(())
 }
 
+/// xdg_toplevel.set_min_size and set_max_size take signed 32-bit ints where
+/// 0 means "unbounded". Values that do not fit in i32 must be sent as 0 to
+/// avoid the `invalid_size` protocol error.
+fn clamp_toplevel_size_dimension(value: u32) -> u32 {
+    if value > i32::MAX as u32 { 0 } else { value }
+}
+
 /// Runs a normal CelestialKit window (`xdg_toplevel`, ADR 0035).
 pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunError> {
     let (conn, event_queue, qh, mut shell) =
@@ -2083,10 +2090,16 @@ impl Shell {
         ));
         window.set_title(options.title.clone());
         if let Some(min) = options.min_size {
-            window.set_min_size(Some(min));
+            window.set_min_size(Some((
+                clamp_toplevel_size_dimension(min.0),
+                clamp_toplevel_size_dimension(min.1),
+            )));
         }
         if let Some(max) = options.max_size {
-            window.set_max_size(Some(max));
+            window.set_max_size(Some((
+                clamp_toplevel_size_dimension(max.0),
+                clamp_toplevel_size_dimension(max.1),
+            )));
         }
         if let Some(parent_id) = parent
             && let Some(parent_window) = self.surfaces.iter().find_map(|s| {
@@ -3663,6 +3676,18 @@ mod tests {
         }
         writer.join().unwrap();
         assert_eq!(seen.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn toplevel_size_dimension_clamps_to_unbounded() {
+        assert_eq!(clamp_toplevel_size_dimension(u32::MAX), 0);
+        assert_eq!(clamp_toplevel_size_dimension(i32::MAX as u32 + 1), 0);
+        assert_eq!(
+            clamp_toplevel_size_dimension(i32::MAX as u32),
+            i32::MAX as u32
+        );
+        assert_eq!(clamp_toplevel_size_dimension(760), 760);
+        assert_eq!(clamp_toplevel_size_dimension(0), 0);
     }
 
     #[test]
