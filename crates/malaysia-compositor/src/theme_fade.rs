@@ -16,7 +16,6 @@ use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderE
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::{Bind, Offscreen};
-use smithay::output::Output;
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::backend::ObjectId;
 use smithay::utils::{Buffer as BufferCoord, Physical, Point, Scale, Size, Transform};
@@ -42,16 +41,10 @@ pub(crate) enum FadeTick {
     Done,
 }
 
-/// A per-output theme crossfade.
+/// Pure state machine of a theme crossfade: phase, timers and pending
+/// surfaces. It has no GPU state and can be unit-tested without EGL.
 #[derive(Debug)]
-pub(crate) struct ThemeFade {
-    /// The output this fade belongs to (kept for future multi-output support).
-    #[allow(dead_code)]
-    output: Output,
-    /// The physical size of the snapshot (kept for future multi-output support).
-    #[allow(dead_code)]
-    output_size: Size<i32, Physical>,
-    texture_buffer: TextureBuffer<GlesTexture>,
+pub(crate) struct FadeState {
     phase: Phase,
 }
 
@@ -62,45 +55,21 @@ enum Phase {
     Waiting {
         since: Instant,
         pending_surfaces: HashSet<ObjectId>,
+        initial_pending: usize,
     },
     /// Fading the snapshot out.
     Fading { started_at: Instant },
 }
 
-impl ThemeFade {
-    /// Creates a new fade from an already-rendered snapshot texture.
-    pub(crate) fn new(
-        renderer: &GlesRenderer,
-        output: Output,
-        output_size: Size<i32, Physical>,
-        texture: GlesTexture,
-        pending_surfaces: HashSet<ObjectId>,
-        now: Instant,
-    ) -> Self {
-        let texture_buffer =
-            TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
+impl FadeState {
+    pub(crate) fn new(pending_surfaces: HashSet<ObjectId>, now: Instant) -> Self {
         Self {
-            output,
-            output_size,
-            texture_buffer,
             phase: Phase::Waiting {
                 since: now,
+                initial_pending: pending_surfaces.len(),
                 pending_surfaces,
             },
         }
-    }
-
-    /// The output this fade belongs to (kept for future multi-output support).
-    #[allow(dead_code)]
-    pub(crate) fn output(&self) -> &Output {
-        &self.output
-    }
-
-    /// The physical size of the snapshot texture (kept for future multi-output
-    /// support).
-    #[allow(dead_code)]
-    pub(crate) fn output_size(&self) -> Size<i32, Physical> {
-        self.output_size
     }
 
     /// Current opacity of the snapshot: `1.0` during the wait and while fading
@@ -121,8 +90,21 @@ impl ThemeFade {
             Phase::Waiting {
                 since,
                 pending_surfaces,
+                initial_pending,
             } => {
+                let pending_before = pending_surfaces.len();
                 if pending_surfaces.is_empty() || now.duration_since(*since) >= WAIT_MAX {
+                    let reason = if pending_surfaces.is_empty() {
+                        "commits"
+                    } else {
+                        "wait_max"
+                    };
+                    tracing::info!(
+                        reason,
+                        pending_before,
+                        initial_pending = *initial_pending,
+                        "theme fade started"
+                    );
                     self.phase = Phase::Fading { started_at: now };
                     FadeTick::Started
                 } else {
@@ -132,6 +114,8 @@ impl ThemeFade {
             Phase::Fading { started_at } => {
                 let t = progress(*started_at, now, DURATION);
                 if t >= 1.0 {
+                    let elapsed = now.duration_since(*started_at);
+                    tracing::info!(?elapsed, "theme fade finished");
                     FadeTick::Done
                 } else {
                     FadeTick::Active
@@ -149,6 +133,45 @@ impl ThemeFade {
         {
             pending_surfaces.remove(&surface_id);
         }
+    }
+}
+
+/// A per-output theme crossfade.
+#[derive(Debug)]
+pub(crate) struct ThemeFade {
+    state: FadeState,
+    texture_buffer: TextureBuffer<GlesTexture>,
+}
+
+impl ThemeFade {
+    /// Creates a new fade from an already-rendered snapshot texture.
+    pub(crate) fn new(
+        renderer: &GlesRenderer,
+        texture: GlesTexture,
+        pending_surfaces: HashSet<ObjectId>,
+        now: Instant,
+    ) -> Self {
+        let texture_buffer =
+            TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
+        Self {
+            state: FadeState::new(pending_surfaces, now),
+            texture_buffer,
+        }
+    }
+
+    /// Current opacity of the snapshot.
+    pub(crate) fn alpha(&self, now: Instant) -> f32 {
+        self.state.alpha(now)
+    }
+
+    /// Advances the state machine.
+    pub(crate) fn tick(&mut self, now: Instant) -> FadeTick {
+        self.state.tick(now)
+    }
+
+    /// Records that a surface committed a new buffer.
+    pub(crate) fn mark_committed(&mut self, surface_id: ObjectId) {
+        self.state.mark_committed(surface_id);
     }
 
     /// Returns a render element covering the whole output with the given alpha.
@@ -265,14 +288,7 @@ pub(crate) fn start_if_allowed(
     }
     let pending = pending_surfaces(state);
     let texture = take_snapshot(state, renderer, cursor, output_size, scale, transform)?;
-    Some(ThemeFade::new(
-        renderer,
-        state.output.clone(),
-        output_size,
-        texture,
-        pending,
-        now,
-    ))
+    Some(ThemeFade::new(renderer, texture, pending, now))
 }
 
 /// Logs a snapshot failure once and tells the caller to fall back to an
@@ -283,7 +299,7 @@ pub(crate) fn log_snapshot_failure(error: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{DURATION, ThemeFade, WAIT_MAX, ease};
+    use super::{DURATION, FadeState, ThemeFade, WAIT_MAX, ease};
     use std::collections::HashSet;
     use std::time::Instant;
 
@@ -291,66 +307,15 @@ mod tests {
     use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
     use smithay::backend::renderer::{
         Bind, ExportMem, Offscreen,
-        element::Element,
         element::solid::{SolidColorBuffer, SolidColorRenderElement},
         gles::{GlesRenderer, GlesTexture},
     };
     use smithay::backend::renderer::damage::OutputDamageTracker;
-    use smithay::output::{Output, PhysicalProperties, Subpixel};
     use smithay::reexports::wayland_server::backend::ObjectId;
     use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size, Transform};
 
-    /// A GLES renderer on the first EGL device, with no window.
-    ///
-    /// EGL context creation is unsafe by API. This is the only place this crate
-    /// allows it, compiled only for tests, and uses a render node rather than
-    /// the host session.
-    #[allow(unsafe_code)]
-    fn test_renderer() -> GlesRenderer {
-        try_test_renderer().expect("the theme fade tests need an EGL device")
-    }
-
-    #[allow(unsafe_code)]
-    fn try_test_renderer() -> Option<GlesRenderer> {
-        let device = EGLDevice::enumerate().ok()?.next()?;
-        let display = unsafe { EGLDisplay::new(device) }.ok()?;
-        let context = EGLContext::new(&display).ok()?;
-        unsafe { GlesRenderer::new(context) }.ok()
-    }
-
-    fn test_output() -> Output {
-        Output::new(
-            "test".to_string(),
-            PhysicalProperties {
-                size: (0, 0).into(),
-                subpixel: Subpixel::Unknown,
-                make: String::new(),
-                model: String::new(),
-                serial_number: String::new(),
-            },
-        )
-    }
-
-    fn test_texture(renderer: &mut GlesRenderer) -> GlesTexture {
-        let size = Size::<i32, BufferCoord>::from((64, 64));
-        Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size)
-            .expect("the tests need a 64x64 offscreen texture")
-    }
-
-    fn test_fade(
-        renderer: &mut GlesRenderer,
-        pending: HashSet<ObjectId>,
-        now: Instant,
-    ) -> ThemeFade {
-        let texture = test_texture(renderer);
-        ThemeFade::new(
-            renderer,
-            test_output(),
-            Size::from((64, 64)),
-            texture,
-            pending,
-            now,
-        )
+    fn test_state(pending: HashSet<ObjectId>, now: Instant) -> FadeState {
+        FadeState::new(pending, now)
     }
 
     #[test]
@@ -374,21 +339,19 @@ mod tests {
     #[test]
     fn empty_pending_starts_fading_immediately() {
         let start = Instant::now();
-        let mut renderer = test_renderer();
-        let mut fade = test_fade(&mut renderer, HashSet::new(), start);
-        assert_eq!(fade.tick(start), super::FadeTick::Started);
+        let mut state = test_state(HashSet::new(), start);
+        assert_eq!(state.tick(start), super::FadeTick::Started);
     }
 
     #[test]
     fn pending_surfaces_start_after_wait_max() {
         let start = Instant::now();
-        let mut renderer = test_renderer();
         let mut pending = HashSet::new();
         pending.insert(ObjectId::null());
-        let mut fade = test_fade(&mut renderer, pending, start);
-        assert_eq!(fade.tick(start), super::FadeTick::Active);
+        let mut state = test_state(pending, start);
+        assert_eq!(state.tick(start), super::FadeTick::Active);
         assert_eq!(
-            fade.tick(start + WAIT_MAX),
+            state.tick(start + WAIT_MAX),
             super::FadeTick::Started,
             "should start right at WAIT_MAX"
         );
@@ -397,15 +360,14 @@ mod tests {
     #[test]
     fn committing_a_pending_surface_starts_fading() {
         let start = Instant::now();
-        let mut renderer = test_renderer();
         let mut pending = HashSet::new();
         let surface = ObjectId::null();
         pending.insert(surface.clone());
-        let mut fade = test_fade(&mut renderer, pending, start);
-        assert_eq!(fade.tick(start), super::FadeTick::Active);
-        fade.mark_committed(surface);
+        let mut state = test_state(pending, start);
+        assert_eq!(state.tick(start), super::FadeTick::Active);
+        state.mark_committed(surface);
         assert_eq!(
-            fade.tick(start),
+            state.tick(start),
             super::FadeTick::Started,
             "should start once the pending surface commits"
         );
@@ -414,11 +376,10 @@ mod tests {
     #[test]
     fn fade_finishes_after_duration() {
         let start = Instant::now();
-        let mut renderer = test_renderer();
-        let mut fade = test_fade(&mut renderer, HashSet::new(), start);
-        assert_eq!(fade.tick(start), super::FadeTick::Started);
+        let mut state = test_state(HashSet::new(), start);
+        assert_eq!(state.tick(start), super::FadeTick::Started);
         assert_eq!(
-            fade.tick(start + DURATION),
+            state.tick(start + DURATION),
             super::FadeTick::Done,
             "should finish right at DURATION"
         );
@@ -427,36 +388,37 @@ mod tests {
     #[test]
     fn alpha_is_one_while_waiting_and_decreases_while_fading() {
         let start = Instant::now();
-        let mut renderer = test_renderer();
-        let fade = test_fade(&mut renderer, HashSet::new(), start);
-        assert!((fade.alpha(start) - 1.0).abs() < 1e-6);
+        let state = test_state(HashSet::new(), start);
+        assert!((state.alpha(start) - 1.0).abs() < 1e-6);
 
-        let mut fade = test_fade(&mut renderer, HashSet::new(), start);
-        fade.tick(start);
-        let alpha_start = fade.alpha(start);
+        let mut state = test_state(HashSet::new(), start);
+        state.tick(start);
+        let alpha_start = state.alpha(start);
         assert!((alpha_start - 1.0).abs() < 1e-6);
 
         let mid = start + DURATION / 2;
-        let alpha_mid = fade.alpha(mid);
+        let alpha_mid = state.alpha(mid);
         assert!(
             alpha_mid > 0.0 && alpha_mid < 1.0,
             "alpha mid-fade should be between 0 and 1, got {alpha_mid}"
         );
 
         let end = start + DURATION;
-        let alpha_end = fade.alpha(end);
+        let alpha_end = state.alpha(end);
         assert!((alpha_end).abs() < 1e-6, "alpha should reach 0 at end");
     }
 
-    #[test]
-    fn element_covers_the_output_size() {
-        let start = Instant::now();
-        let mut renderer = test_renderer();
-        let fade = test_fade(&mut renderer, HashSet::new(), start);
-        let element = fade.element(0.5);
-        let geometry = element.geometry(Scale::from(1.0));
-        assert_eq!(geometry.size, Size::from((64, 64)));
-        assert_eq!(geometry.loc, smithay::utils::Point::from((0, 0)));
+    /// A GLES renderer on the first EGL device, with no window.
+    ///
+    /// EGL context creation is unsafe by API. This is the only place this crate
+    /// allows it, compiled only for tests, and uses a render node rather than
+    /// the host session.
+    #[allow(unsafe_code)]
+    fn try_test_renderer() -> Option<GlesRenderer> {
+        let device = EGLDevice::enumerate().ok()?.next()?;
+        let display = unsafe { EGLDisplay::new(device) }.ok()?;
+        let context = EGLContext::new(&display).ok()?;
+        unsafe { GlesRenderer::new(context) }.ok()
     }
 
     #[test]
@@ -506,14 +468,7 @@ mod tests {
         }
 
         let start = Instant::now();
-        let fade = ThemeFade::new(
-            &mut renderer,
-            test_output(),
-            size,
-            snapshot_texture,
-            HashSet::new(),
-            start,
-        );
+        let fade = ThemeFade::new(&mut renderer, snapshot_texture, HashSet::new(), start);
 
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
