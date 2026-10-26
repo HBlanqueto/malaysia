@@ -302,6 +302,7 @@ impl DbusMenuObject {
             return (revision, layout);
         }
         if let Some(node) = snapshot.nodes.get(&parent_id) {
+            #[allow(clippy::needless_borrow)]
             return (
                 revision,
                 layout_node(&snapshot, parent_id, node, recursion_depth),

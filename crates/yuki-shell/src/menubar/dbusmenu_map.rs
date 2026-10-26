@@ -576,6 +576,7 @@ mod tests {
                 .await
                 .unwrap();
             let signal = stream.next().await.unwrap();
+            #[allow(clippy::type_complexity)]
             let (updated, _removed): (
                 Vec<(i32, HashMap<String, OwnedValue>)>,
                 Vec<(i32, Vec<String>)>,

@@ -318,7 +318,10 @@ fn kit_log_path(name: &str) -> Option<PathBuf> {
     let runtime = env::var_os("XDG_RUNTIME_DIR")?;
     let dir = PathBuf::from(runtime).join("yuki");
     if let Err(error) = std::fs::create_dir_all(&dir) {
-        eprintln!("menubar: could not create log dir {}: {error}", dir.display());
+        eprintln!(
+            "menubar: could not create log dir {}: {error}",
+            dir.display()
+        );
         return None;
     }
     Some(dir.join(format!("{name}.log")))
