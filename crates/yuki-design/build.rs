@@ -2045,12 +2045,77 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
 
     let popup_height = integer(components, "components.settings.popup.height", COMPONENTS) as u32;
     let popup_chevron = integer(components, "components.settings.popup.chevron", COMPONENTS) as u32;
+    let popup_light_gap = integer(
+        components,
+        "components.settings.popup.light-gap",
+        COMPONENTS,
+    ) as u32;
+    let popup_text_gap = integer(
+        components,
+        "components.settings.popup.text-gap",
+        COMPONENTS,
+    ) as u32;
 
     let selected_dark_mix = number(
         components,
         "components.settings.selected-dark-mix",
         COMPONENTS,
     );
+
+    let sidebar_lights_gap = integer(
+        components,
+        "components.settings.sidebar.lights-gap",
+        COMPONENTS,
+    ) as u32;
+    let sidebar_search_gap = integer(
+        components,
+        "components.settings.sidebar.search-gap",
+        COMPONENTS,
+    ) as u32;
+    let sidebar_item_gap = integer(
+        components,
+        "components.settings.sidebar.item-gap",
+        COMPONENTS,
+    ) as u32;
+
+    let toolbar_gap = integer(components, "components.settings.toolbar.gap", COMPONENTS) as u32;
+
+    let content_padding_top = integer(
+        components,
+        "components.settings.content.padding-top",
+        COMPONENTS,
+    ) as u32;
+    let content_padding_bottom = integer(
+        components,
+        "components.settings.content.padding-bottom",
+        COMPONENTS,
+    ) as u32;
+    let content_gap = integer(components, "components.settings.content.gap", COMPONENTS) as u32;
+
+    let group_title_margin_bottom = integer(
+        components,
+        "components.settings.group.title-margin-bottom",
+        COMPONENTS,
+    ) as u32;
+    let group_title_indent = integer(
+        components,
+        "components.settings.group.title-indent",
+        COMPONENTS,
+    ) as u32;
+    let group_desc_gap = integer(
+        components,
+        "components.settings.group.desc-gap",
+        COMPONENTS,
+    ) as u32;
+
+    let swatch_column = integer(components, "components.settings.swatch.column", COMPONENTS) as u32;
+    let swatch_name_gap = integer(
+        components,
+        "components.settings.swatch.name-gap",
+        COMPONENTS,
+    ) as u32;
+
+    let card_outline = color(components, "components.settings.card.outline", COMPONENTS);
 
     const_doc(out, "SETTINGS", "The System Settings window metrics.");
     out.push_str(&format!(
@@ -2101,14 +2166,30 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
          \x20   radio_spacing: {radio_spacing},\n\
          \x20   popup_height: {popup_height},\n\
          \x20   popup_chevron: {popup_chevron},\n\
+         \x20   popup_light_gap: {popup_light_gap},\n\
+         \x20   popup_text_gap: {popup_text_gap},\n\
          \x20   selected_dark_mix: {},\n\
+         \x20   sidebar_lights_gap: {sidebar_lights_gap},\n\
+         \x20   sidebar_search_gap: {sidebar_search_gap},\n\
+         \x20   sidebar_item_gap: {sidebar_item_gap},\n\
+         \x20   toolbar_gap: {toolbar_gap},\n\
+         \x20   content_padding_top: {content_padding_top},\n\
+         \x20   content_padding_bottom: {content_padding_bottom},\n\
+         \x20   content_gap: {content_gap},\n\
+         \x20   group_title_margin_bottom: {group_title_margin_bottom},\n\
+         \x20   group_title_indent: {group_title_indent},\n\
+         \x20   group_desc_gap: {group_desc_gap},\n\
+         \x20   swatch_column: {swatch_column},\n\
+         \x20   swatch_name_gap: {swatch_name_gap},\n\
+         \x20   card_outline: {},\n\
          }};\n\n",
         font(tokens, account_name_font),
         font(tokens, account_detail_font),
         rgba(section_icon_bg),
         font(tokens, swatch_name_font),
         font(tokens, card_caption_font),
-        float(selected_dark_mix)
+        float(selected_dark_mix),
+        rgba(card_outline)
     ));
 
     let swatches = value(

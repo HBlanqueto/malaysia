@@ -348,9 +348,40 @@ pub struct SettingsMetrics {
     pub popup_height: u32,
     /// Popup chevron icon size, in logical pixels.
     pub popup_chevron: u32,
+    /// Gap between traffic-light squares in the popup button, in logical pixels.
+    pub popup_light_gap: u32,
+    /// Gap between the popup button text and its chevron capsule, in logical pixels.
+    pub popup_text_gap: u32,
     /// How much the resolved accent is mixed with the dark sidebar background
     /// for selected rows.
     pub selected_dark_mix: f32,
+    /// Gap below the traffic lights in the settings sidebar, in logical pixels.
+    pub sidebar_lights_gap: u32,
+    /// Gap below the search field in the settings sidebar, in logical pixels.
+    pub sidebar_search_gap: u32,
+    /// Gap between the label and the accessory in a settings sidebar item, in
+    /// logical pixels.
+    pub sidebar_item_gap: u32,
+    /// Gap between the toolbar capsule and the section title, in logical pixels.
+    pub toolbar_gap: u32,
+    /// Top padding of the settings content scroll view, in logical pixels.
+    pub content_padding_top: u32,
+    /// Bottom padding of the settings content scroll view, in logical pixels.
+    pub content_padding_bottom: u32,
+    /// Gap between groups in the settings content, in logical pixels.
+    pub content_gap: u32,
+    /// Bottom margin of a group title, in logical pixels.
+    pub group_title_margin_bottom: u32,
+    /// Left indent of a group title, in logical pixels.
+    pub group_title_indent: u32,
+    /// Gap between a row title and its description, in logical pixels.
+    pub group_desc_gap: u32,
+    /// Width of an accent swatch column, in logical pixels.
+    pub swatch_column: u32,
+    /// Gap between a swatch and its optional label, in logical pixels.
+    pub swatch_name_gap: u32,
+    /// Outline colour of a settings preview card.
+    pub card_outline: Rgba,
 }
 
 /// Compile-time metrics for the Neptunia sidebar.
@@ -852,7 +883,22 @@ mod tests {
         assert_eq!(super::SETTINGS.radio_spacing, 16);
         assert_eq!(super::SETTINGS.popup_height, 26);
         assert_eq!(super::SETTINGS.popup_chevron, 18);
+        assert_eq!(super::SETTINGS.popup_light_gap, 5);
+        assert_eq!(super::SETTINGS.popup_text_gap, 6);
         assert!((super::SETTINGS.selected_dark_mix - 0.5).abs() < 1e-6);
+        assert_eq!(super::SETTINGS.sidebar_lights_gap, 18);
+        assert_eq!(super::SETTINGS.sidebar_search_gap, 12);
+        assert_eq!(super::SETTINGS.sidebar_item_gap, 2);
+        assert_eq!(super::SETTINGS.toolbar_gap, 12);
+        assert_eq!(super::SETTINGS.content_padding_top, 4);
+        assert_eq!(super::SETTINGS.content_padding_bottom, 24);
+        assert_eq!(super::SETTINGS.content_gap, 8);
+        assert_eq!(super::SETTINGS.group_title_margin_bottom, 2);
+        assert_eq!(super::SETTINGS.group_title_indent, 12);
+        assert_eq!(super::SETTINGS.group_desc_gap, 2);
+        assert_eq!(super::SETTINGS.swatch_column, 24);
+        assert_eq!(super::SETTINGS.swatch_name_gap, 5);
+        assert_eq!(super::SETTINGS.card_outline.to_rgba8(), [0, 0, 0, 0x40]);
         assert_eq!(super::ACCENT_SWATCHES.len(), 8);
         assert_eq!(super::ACCENT_SWATCHES[0].0, "Azul");
         assert_eq!(

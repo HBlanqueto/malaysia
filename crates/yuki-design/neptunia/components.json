@@ -421,12 +421,28 @@
       },
       "section-gap": 14,
       "section-icon-bg": "#2b2b2b",
+      "sidebar": {
+        "lights-gap": 18,
+        "search-gap": 12,
+        "item-gap": 2
+      },
+      "toolbar": {
+        "gap": 12
+      },
+      "content": {
+        "padding-top": 4,
+        "padding-bottom": 24,
+        "gap": 8
+      },
       "group": {
         "radius": "radius.lg",
         "row-min-height": 44,
         "row-padding-x": 14,
         "row-padding-y": 10,
         "title-margin-top": 16,
+        "title-margin-bottom": 2,
+        "title-indent": 12,
+        "desc-gap": 2,
         "content-padding-x": 16
       },
       "accent-swatches": [
@@ -442,6 +458,8 @@
       "swatch-size": 22,
       "swatch-gap": 9,
       "swatch": {
+        "column": 24,
+        "name-gap": 5,
         "name": "caption"
       },
       "card": {
@@ -449,10 +467,17 @@
         "height": 46,
         "radius": "radius.sm",
         "gap": 10,
+        "outline": "#00000040",
         "ring": 2,
         "ring-gap": 2,
         "caption-gap": 5,
         "caption": "callout"
+      },
+      "popup": {
+        "height": 26,
+        "chevron": 18,
+        "light-gap": 5,
+        "text-gap": 6
       },
       "preview": {
         "window-x": 14,
@@ -472,10 +497,6 @@
         "dot": 6,
         "gap": 7,
         "spacing": 16
-      },
-      "popup": {
-        "height": 26,
-        "chevron": 18
       },
       "selected-dark-mix": 0.5
     },
