@@ -70,10 +70,16 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %) |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar |
+| `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **activa** | estilo de la barra lateral del kit |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
 contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
 namespace del portal.
+
+`sidebar_style` selecciona la barra lateral del kit: `"island"` (flotante, con
+vibrancy, borde y sombra) o `"flat"` (lista plana integrada en el fondo de la
+ventana). Con `reduce_transparency = true` la isla sigue opaca, pero conserva
+su radio, contorno y sombra.
 
 `window_color` es la idea de Neptunia "Ajustes › Apariencia › Color de las
 ventanas": `neutral` no tiñe, `accent` mezcla el acento con el fondo de la

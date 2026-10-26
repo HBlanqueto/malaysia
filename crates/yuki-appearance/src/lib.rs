@@ -11,12 +11,20 @@ use serde::Deserialize;
 pub mod traffic;
 
 use yuki_design::{
-    DARK, DARK_TINT, LIGHT, MENU_DARK, MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE,
-    MENU_LIGHT, MENU_LIGHT_OPAQUE, MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SHELL_DARK,
-    SHELL_DARK_OPAQUE, SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE,
-    SIDEBAR_DARK, SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE, SIDEBAR_LIGHT,
-    SIDEBAR_LIGHT_OPAQUE, ShellPalette, TITLEBAR, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
-    TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_CONTROL, LIGHT, MENU_DARK,
+    MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE, MENU_LIGHT, MENU_LIGHT_OPAQUE,
+    MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SHELL_DARK, SHELL_DARK_OPAQUE,
+    SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE, SIDEBAR_DARK,
+    SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE, SIDEBAR_ISLAND_DARK,
+    SIDEBAR_ISLAND_DARK_OPAQUE, SIDEBAR_ISLAND_DARK_TINT, SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
+    SIDEBAR_ISLAND_INNER_DARK, SIDEBAR_ISLAND_INNER_DARK_TINT, SIDEBAR_ISLAND_INNER_LIGHT,
+    SIDEBAR_ISLAND_LIGHT, SIDEBAR_ISLAND_LIGHT_OPAQUE, SIDEBAR_ISLAND_RIM_DARK,
+    SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_ISLAND_SHADOW,
+    SIDEBAR_ISLAND_SHADOW_DARK, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE, ShadowLayer, ShellPalette,
+    TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
+    TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW,
+    TOOLGROUP_SHADOW_DARK, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT,
+    WINDOW_TINT_WALLPAPER,
 };
 
 /// The preferred appearance, published as `org.freedesktop.appearance`.
@@ -71,6 +79,17 @@ pub enum WindowTintScope {
     Desktop,
 }
 
+/// The kit sidebar style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SidebarStyle {
+    /// Floating island with vibrancy, rim and inner line.
+    #[default]
+    Island,
+    /// Flat source list that blends into the window background.
+    Flat,
+}
+
 /// Neptunia's traffic-light styles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -111,10 +130,36 @@ pub struct AppearanceConfig {
     pub window_tint_scope: WindowTintScope,
     /// The traffic-light palette.
     pub traffic_lights: TrafficLightStyle,
+    /// The kit sidebar style.
+    pub sidebar_style: SidebarStyle,
 }
 
 fn default_reduce_transparency() -> bool {
     true
+}
+
+/// The resolved kit sidebar surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SidebarSurface {
+    /// The configured style (island or flat).
+    pub style: SidebarStyle,
+    /// Background fill.
+    pub bg: Rgba,
+    /// Outer rim colour (transparent in flat mode).
+    pub rim: Rgba,
+    /// Inner highlight line (transparent in flat mode).
+    pub inner: Rgba,
+    /// Drop shadow (zeroed in flat mode).
+    pub shadow: [ShadowLayer; 2],
+}
+
+/// The resolved toolbar glass capsule surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ToolgroupSurface {
+    /// Capsule background fill.
+    pub bg: Rgba,
+    /// Drop shadow.
+    pub shadow: [ShadowLayer; 2],
 }
 
 /// The colours and tints resolved from one appearance + wallpaper state.
@@ -139,8 +184,10 @@ pub struct Resolved {
     pub shell: ShellPalette,
     /// The menu popup palette for this appearance.
     pub menu: MenuPalette,
-    /// The kit sidebar background for this appearance.
-    pub sidebar: Rgba,
+    /// The kit sidebar surface for this appearance.
+    pub sidebar: SidebarSurface,
+    /// The kit toolbar capsule surface for this appearance.
+    pub toolgroup: ToolgroupSurface,
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -154,19 +201,127 @@ pub fn palette(scheme: ColorScheme) -> Palette {
 
 /// The shell, menu and sidebar surfaces for a concrete theme, choosing the
 /// opaque variants when transparency is reduced.
-fn surfaces(scheme: ColorScheme, opaque: bool) -> (ShellPalette, MenuPalette, Rgba) {
-    match (scheme, opaque) {
-        (ColorScheme::Dark, false) => (SHELL_DARK, MENU_DARK, SIDEBAR_DARK),
-        (ColorScheme::Dark, true) => (SHELL_DARK_OPAQUE, MENU_DARK_OPAQUE, SIDEBAR_DARK_OPAQUE),
-        (ColorScheme::DarkTint, false) => (SHELL_DARK_TINT, MENU_DARK_TINT, SIDEBAR_DARK_TINT),
-        (ColorScheme::DarkTint, true) => (
-            SHELL_DARK_TINT_OPAQUE,
-            MENU_DARK_TINT_OPAQUE,
-            SIDEBAR_DARK_TINT_OPAQUE,
-        ),
-        (_, false) => (SHELL_LIGHT, MENU_LIGHT, SIDEBAR_LIGHT),
-        (_, true) => (SHELL_LIGHT_OPAQUE, MENU_LIGHT_OPAQUE, SIDEBAR_LIGHT_OPAQUE),
+fn surfaces(
+    scheme: ColorScheme,
+    style: SidebarStyle,
+    opaque: bool,
+) -> (ShellPalette, MenuPalette, SidebarSurface, ToolgroupSurface) {
+    (
+        match (scheme, opaque) {
+            (ColorScheme::Dark, false) => SHELL_DARK,
+            (ColorScheme::Dark, true) => SHELL_DARK_OPAQUE,
+            (ColorScheme::DarkTint, false) => SHELL_DARK_TINT,
+            (ColorScheme::DarkTint, true) => SHELL_DARK_TINT_OPAQUE,
+            (_, false) => SHELL_LIGHT,
+            (_, true) => SHELL_LIGHT_OPAQUE,
+        },
+        match (scheme, opaque) {
+            (ColorScheme::Dark, false) => MENU_DARK,
+            (ColorScheme::Dark, true) => MENU_DARK_OPAQUE,
+            (ColorScheme::DarkTint, false) => MENU_DARK_TINT,
+            (ColorScheme::DarkTint, true) => MENU_DARK_TINT_OPAQUE,
+            (_, false) => MENU_LIGHT,
+            (_, true) => MENU_LIGHT_OPAQUE,
+        },
+        sidebar_surface(scheme, style, opaque),
+        toolgroup_surface(scheme, opaque),
+    )
+}
+
+/// Resolves the kit sidebar surface for a concrete theme and style.
+fn sidebar_surface(scheme: ColorScheme, style: SidebarStyle, opaque: bool) -> SidebarSurface {
+    let transparent = Rgba::rgba8(0, 0, 0, 0.0);
+    let zero_shadow = [
+        ShadowLayer {
+            blur: 0,
+            y_offset: 0,
+            opacity: 0.0,
+            color: Rgba::rgb8(0, 0, 0),
+        },
+        ShadowLayer {
+            blur: 0,
+            y_offset: 0,
+            opacity: 0.0,
+            color: Rgba::rgb8(0, 0, 0),
+        },
+    ];
+
+    if style == SidebarStyle::Flat {
+        let bg = match (scheme, opaque) {
+            (ColorScheme::Dark, false) => SIDEBAR_DARK,
+            (ColorScheme::Dark, true) => SIDEBAR_DARK_OPAQUE,
+            (ColorScheme::DarkTint, false) => SIDEBAR_DARK_TINT,
+            (ColorScheme::DarkTint, true) => SIDEBAR_DARK_TINT_OPAQUE,
+            (_, false) => SIDEBAR_LIGHT,
+            (_, true) => SIDEBAR_LIGHT_OPAQUE,
+        };
+        return SidebarSurface {
+            style,
+            bg,
+            rim: transparent,
+            inner: transparent,
+            shadow: zero_shadow,
+        };
     }
+
+    let (bg, rim, inner, shadow) = match (scheme, opaque) {
+        (ColorScheme::Dark, false) => (
+            SIDEBAR_ISLAND_DARK,
+            SIDEBAR_ISLAND_RIM_DARK,
+            SIDEBAR_ISLAND_INNER_DARK,
+            SIDEBAR_ISLAND_SHADOW_DARK,
+        ),
+        (ColorScheme::Dark, true) => (
+            SIDEBAR_ISLAND_DARK_OPAQUE,
+            SIDEBAR_ISLAND_RIM_DARK,
+            SIDEBAR_ISLAND_INNER_DARK,
+            SIDEBAR_ISLAND_SHADOW_DARK,
+        ),
+        (ColorScheme::DarkTint, false) => (
+            SIDEBAR_ISLAND_DARK_TINT,
+            SIDEBAR_ISLAND_RIM_DARK_TINT,
+            SIDEBAR_ISLAND_INNER_DARK_TINT,
+            SIDEBAR_ISLAND_SHADOW_DARK,
+        ),
+        (ColorScheme::DarkTint, true) => (
+            SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
+            SIDEBAR_ISLAND_RIM_DARK_TINT,
+            SIDEBAR_ISLAND_INNER_DARK_TINT,
+            SIDEBAR_ISLAND_SHADOW_DARK,
+        ),
+        (_, false) => (
+            SIDEBAR_ISLAND_LIGHT,
+            SIDEBAR_ISLAND_RIM_LIGHT,
+            SIDEBAR_ISLAND_INNER_LIGHT,
+            SIDEBAR_ISLAND_SHADOW,
+        ),
+        (_, true) => (
+            SIDEBAR_ISLAND_LIGHT_OPAQUE,
+            SIDEBAR_ISLAND_RIM_LIGHT,
+            SIDEBAR_ISLAND_INNER_LIGHT,
+            SIDEBAR_ISLAND_SHADOW,
+        ),
+    };
+    SidebarSurface {
+        style,
+        bg,
+        rim,
+        inner,
+        shadow,
+    }
+}
+
+/// Resolves the kit toolbar glass capsule surface for a concrete theme.
+fn toolgroup_surface(scheme: ColorScheme, opaque: bool) -> ToolgroupSurface {
+    let (bg, shadow) = match (scheme, opaque) {
+        (ColorScheme::Dark, false) => (TOOLGROUP_BG_DARK, TOOLGROUP_SHADOW_DARK),
+        (ColorScheme::Dark, true) => (TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_SHADOW_DARK),
+        (ColorScheme::DarkTint, false) => (TOOLGROUP_BG_DARK_TINT, TOOLGROUP_SHADOW_DARK),
+        (ColorScheme::DarkTint, true) => (TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_SHADOW_DARK),
+        (_, false) => (TOOLGROUP_BG_LIGHT, TOOLGROUP_SHADOW),
+        (_, true) => (TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW),
+    };
+    ToolgroupSurface { bg, shadow }
 }
 
 /// Resolves an appearance configuration with the current wallpaper dominant.
@@ -224,10 +379,18 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(normal_accent)),
     };
 
-    let (mut shell, menu, sidebar) = surfaces(scheme, appearance.reduce_transparency);
+    let (mut shell, menu, mut sidebar, mut toolgroup) = surfaces(
+        scheme,
+        appearance.sidebar_style,
+        appearance.reduce_transparency,
+    );
     if let Some((tint, factor)) = panel_tint {
         shell.bar = shell.bar.mix(tint, factor);
         shell.tile = shell.tile.mix(tint, factor);
+    }
+    if let Some((tint, factor)) = window_tint {
+        sidebar.bg = sidebar.bg.mix(tint, factor * LAYER_FACTOR_BG_SUNKEN);
+        toolgroup.bg = toolgroup.bg.mix(tint, factor * LAYER_FACTOR_CONTROL);
     }
     shell.tile_active = accent;
 
@@ -242,6 +405,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         shell,
         menu,
         sidebar,
+        toolgroup,
     }
 }
 
@@ -392,6 +556,7 @@ mod tests {
             window_color: mode,
             window_tint_scope: scope,
             traffic_lights: lights,
+            sidebar_style: SidebarStyle::Island,
         }
     }
 
@@ -682,7 +847,7 @@ traffic_lights = "auto"
             for (name, color) in [
                 ("shell bar", resolved.shell.bar),
                 ("menu panel", resolved.menu.bg),
-                ("sidebar", resolved.sidebar),
+                ("sidebar", resolved.sidebar.bg),
             ] {
                 assert_eq!(color.a, 1.0, "{scheme:?} {name} is still translucent");
             }
@@ -746,5 +911,176 @@ traffic_lights = "auto"
             accent.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
         );
         assert_eq!(derived.lights[2], accent.lighten(TRAFFIC_ZOOM_LIGHTEN));
+    }
+
+    #[test]
+    fn sidebar_style_defaults_to_island() {
+        let config: AppearanceConfig = toml::from_str("color_scheme = \"light\"\n").unwrap();
+        assert_eq!(config.sidebar_style, SidebarStyle::Island);
+    }
+
+    #[test]
+    fn flat_sidebar_style_deserializes() {
+        let config: AppearanceConfig = toml::from_str(
+            r#"
+color_scheme = "light"
+sidebar_style = "flat"
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.sidebar_style, SidebarStyle::Flat);
+    }
+
+    #[test]
+    fn sidebar_style_chooses_the_right_background_per_scheme_and_transparency() {
+        let check = |scheme, style, opaque, expected: Rgba| {
+            let mut config = appearance(
+                scheme,
+                WindowColorMode::Neutral,
+                WindowTintScope::Windows,
+                TrafficLightStyle::Auto,
+                None,
+            );
+            config.sidebar_style = style;
+            config.reduce_transparency = opaque;
+            let resolved = resolve(&config, None);
+            assert_eq!(resolved.sidebar.style, style);
+            assert_eq!(resolved.sidebar.bg, expected);
+            if opaque {
+                assert_eq!(
+                    resolved.sidebar.bg.a, 1.0,
+                    "{scheme:?} {style:?} must be opaque"
+                );
+            }
+        };
+
+        check(
+            ColorScheme::Light,
+            SidebarStyle::Island,
+            true,
+            SIDEBAR_ISLAND_LIGHT_OPAQUE,
+        );
+        check(
+            ColorScheme::Light,
+            SidebarStyle::Flat,
+            true,
+            SIDEBAR_LIGHT_OPAQUE,
+        );
+        check(
+            ColorScheme::Dark,
+            SidebarStyle::Island,
+            true,
+            SIDEBAR_ISLAND_DARK_OPAQUE,
+        );
+        check(
+            ColorScheme::Dark,
+            SidebarStyle::Flat,
+            true,
+            SIDEBAR_DARK_OPAQUE,
+        );
+        check(
+            ColorScheme::DarkTint,
+            SidebarStyle::Island,
+            true,
+            SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
+        );
+        check(
+            ColorScheme::DarkTint,
+            SidebarStyle::Flat,
+            true,
+            SIDEBAR_DARK_TINT_OPAQUE,
+        );
+
+        check(
+            ColorScheme::Light,
+            SidebarStyle::Island,
+            false,
+            SIDEBAR_ISLAND_LIGHT,
+        );
+        check(ColorScheme::Light, SidebarStyle::Flat, false, SIDEBAR_LIGHT);
+    }
+
+    #[test]
+    fn flat_neutral_matches_the_legacy_sidebar_colour() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark, ColorScheme::DarkTint] {
+            for opaque in [false, true] {
+                let mut config = appearance(
+                    scheme,
+                    WindowColorMode::Neutral,
+                    WindowTintScope::Windows,
+                    TrafficLightStyle::Auto,
+                    None,
+                );
+                config.sidebar_style = SidebarStyle::Flat;
+                config.reduce_transparency = opaque;
+                let resolved = resolve(&config, None);
+                let legacy = match (scheme, opaque) {
+                    (ColorScheme::Dark, false) => SIDEBAR_DARK,
+                    (ColorScheme::Dark, true) => SIDEBAR_DARK_OPAQUE,
+                    (ColorScheme::DarkTint, false) => SIDEBAR_DARK_TINT,
+                    (ColorScheme::DarkTint, true) => SIDEBAR_DARK_TINT_OPAQUE,
+                    (_, false) => SIDEBAR_LIGHT,
+                    (_, true) => SIDEBAR_LIGHT_OPAQUE,
+                };
+                assert_eq!(
+                    resolved.sidebar.bg, legacy,
+                    "{scheme:?} opaque={opaque} flat sidebar must match legacy value"
+                );
+                assert_eq!(resolved.sidebar.rim.a, 0.0);
+                assert_eq!(resolved.sidebar.inner.a, 0.0);
+                assert_eq!(resolved.sidebar.shadow[0].opacity, 0.0);
+                assert_eq!(resolved.sidebar.shadow[1].opacity, 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn accent_and_wallpaper_tint_sidebar_and_toolgroup_but_neutral_does_not() {
+        let accent = Rgba {
+            r: 0.9,
+            g: 0.3,
+            b: 0.1,
+            a: 1.0,
+        };
+        let mut neutral = appearance(
+            ColorScheme::Light,
+            WindowColorMode::Neutral,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Auto,
+            Some([accent.r, accent.g, accent.b]),
+        );
+        neutral.reduce_transparency = true;
+        let neutral = resolve(&neutral, None);
+
+        let mut accent_mode = appearance(
+            ColorScheme::Light,
+            WindowColorMode::Accent,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Auto,
+            Some([accent.r, accent.g, accent.b]),
+        );
+        accent_mode.reduce_transparency = true;
+        let accent_resolved = resolve(&accent_mode, None);
+
+        let expected_factor = WINDOW_TINT_ACCENT[0] * LAYER_FACTOR_BG_SUNKEN;
+        let expected_sidebar_bg = neutral.sidebar.bg.mix(accent, expected_factor);
+        assert_eq!(accent_resolved.sidebar.bg, expected_sidebar_bg);
+
+        let expected_toolgroup_factor = WINDOW_TINT_ACCENT[0] * LAYER_FACTOR_CONTROL;
+        let expected_toolgroup_bg = neutral.toolgroup.bg.mix(accent, expected_toolgroup_factor);
+        assert_eq!(accent_resolved.toolgroup.bg, expected_toolgroup_bg);
+
+        let mut wallpaper = accent_mode.clone();
+        wallpaper.window_color = WindowColorMode::Wallpaper;
+        let wallpaper_resolved = resolve(&wallpaper, Some(dominant()));
+        let tint = dominant();
+        let wallpaper_factor = WINDOW_TINT_WALLPAPER[0] * LAYER_FACTOR_BG_SUNKEN;
+        assert_eq!(
+            wallpaper_resolved.sidebar.bg,
+            neutral.sidebar.bg.mix(tint, wallpaper_factor)
+        );
+
+        assert_eq!(neutral.sidebar.bg, SIDEBAR_ISLAND_LIGHT_OPAQUE);
+        assert_eq!(neutral.toolgroup.bg, TOOLGROUP_BG_LIGHT_OPAQUE);
     }
 }
