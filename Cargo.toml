@@ -70,6 +70,7 @@ xcursor = "0.3"        # Parses Xcursor theme files; smithay ships no cursor loa
 # future D-Bus surface and the settings app.
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+toml_edit = "0.22"
 
 # Keyboard handling (Esc closes a popup level): xkb keysym lookup. Pinned to
 # the same major smithay uses, so the Keysym type is the same crate.

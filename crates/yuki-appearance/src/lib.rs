@@ -13,7 +13,7 @@ pub mod traffic;
 use yuki_design::{
     DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_CONTROL, LIGHT, MENU_DARK,
     MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE, MENU_LIGHT, MENU_LIGHT_OPAQUE,
-    MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SHELL_DARK, SHELL_DARK_OPAQUE,
+    MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SETTINGS, SHELL_DARK, SHELL_DARK_OPAQUE,
     SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE, SIDEBAR_DARK,
     SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE, SIDEBAR_ISLAND_DARK,
     SIDEBAR_ISLAND_DARK_OPAQUE, SIDEBAR_ISLAND_DARK_TINT, SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
@@ -417,6 +417,12 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         appearance.sidebar_style,
         appearance.reduce_transparency,
     );
+    if dark {
+        // In dark modes the selected row blends the accent into the sidebar
+        // background so it is readable on bg-sunken. The ink stays white.
+        sidebar.palette.selected_bg = accent.mix(sidebar.bg, SETTINGS.selected_dark_mix);
+        sidebar.palette.selected_ink = base.on_accent;
+    }
     if let Some((tint, factor)) = panel_tint {
         shell.bar = shell.bar.mix(tint, factor);
         shell.tile = shell.tile.mix(tint, factor);
@@ -511,6 +517,93 @@ pub fn read_appearance_from(path: &Path) -> Result<Option<AppearanceConfig>, tom
         }
         Err(_) => Ok(None),
     }
+}
+
+/// Writes `config` to `path` atomically, preserving unknown keys and comments.
+///
+/// The file is written to a sibling `.tmp` file and then renamed so readers
+/// never see a partial domain. Parent directories are created as needed.
+pub fn write_appearance(path: &Path, config: &AppearanceConfig) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let mut doc = text
+        .parse::<toml_edit::DocumentMut>()
+        .unwrap_or_else(|_| toml_edit::DocumentMut::new());
+
+    doc["color_scheme"] = toml_edit::value(color_scheme_str(config.color_scheme));
+    if let Some(accent) = config.accent_color {
+        doc["accent_color"] = toml_edit::value(accent_array(accent));
+    } else {
+        doc.remove("accent_color");
+    }
+    doc["contrast"] = toml_edit::value(config.contrast);
+    doc["reduced_motion"] = toml_edit::value(config.reduced_motion);
+    doc["reduce_transparency"] = toml_edit::value(config.reduce_transparency);
+    doc["window_color"] = toml_edit::value(window_color_str(config.window_color));
+    doc["window_tint_scope"] = toml_edit::value(window_tint_scope_str(config.window_tint_scope));
+    doc["traffic_lights"] = toml_edit::value(traffic_lights_str(config.traffic_lights));
+    doc["sidebar_style"] = toml_edit::value(sidebar_style_str(config.sidebar_style));
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, doc.to_string())?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Writes the default appearance config to [`appearance_path()`].
+pub fn write_appearance_default() -> std::io::Result<()> {
+    write_appearance(&appearance_path(), &AppearanceConfig::default())
+}
+
+fn color_scheme_str(scheme: ColorScheme) -> &'static str {
+    match scheme {
+        ColorScheme::Auto => "auto",
+        ColorScheme::Dark => "dark",
+        ColorScheme::DarkTint => "dark_tint",
+        ColorScheme::Light => "light",
+    }
+}
+
+fn window_color_str(mode: WindowColorMode) -> &'static str {
+    match mode {
+        WindowColorMode::Neutral => "neutral",
+        WindowColorMode::Accent => "accent",
+        WindowColorMode::Wallpaper => "wallpaper",
+    }
+}
+
+fn window_tint_scope_str(scope: WindowTintScope) -> &'static str {
+    match scope {
+        WindowTintScope::Windows => "windows",
+        WindowTintScope::Desktop => "desktop",
+    }
+}
+
+fn traffic_lights_str(style: TrafficLightStyle) -> &'static str {
+    match style {
+        TrafficLightStyle::Auto => "auto",
+        TrafficLightStyle::Standard => "standard",
+        TrafficLightStyle::Accent => "accent",
+        TrafficLightStyle::Wallpaper => "wallpaper",
+    }
+}
+
+fn sidebar_style_str(style: SidebarStyle) -> &'static str {
+    match style {
+        SidebarStyle::Island => "island",
+        SidebarStyle::Flat => "flat",
+    }
+}
+
+fn accent_array(accent: [f32; 3]) -> toml_edit::Array {
+    let mut arr = toml_edit::Array::new();
+    for channel in accent {
+        let rounded = (channel.clamp(0.0, 1.0) * 1000.0).round() / 1000.0;
+        arr.push(rounded as f64);
+    }
+    arr
 }
 
 /// Warns once when an existing `appearance.domain` still uses the legacy name.
@@ -1148,13 +1241,27 @@ sidebar_style = "flat"
                 None,
             );
             assert_eq!(
-                resolved.sidebar.palette, expected_sidebar,
-                "{scheme:?} sidebar palette"
-            );
-            assert_eq!(
                 resolved.toolgroup.palette, expected_toolgroup,
                 "{scheme:?} toolgroup palette"
             );
+
+            if matches!(scheme, ColorScheme::Dark | ColorScheme::DarkTint) {
+                // Dark modes blend the accent into the sidebar background for
+                // selected rows instead of using the light-mode accent-soft.
+                let accent = resolved.accent;
+                assert_eq!(
+                    resolved.sidebar.palette.selected_bg,
+                    accent.mix(resolved.sidebar.bg, SETTINGS.selected_dark_mix),
+                    "{scheme:?} selected_bg"
+                );
+                assert_eq!(
+                    resolved.sidebar.palette.selected_ink,
+                    palette(scheme).on_accent,
+                    "{scheme:?} selected_ink"
+                );
+            } else {
+                assert_eq!(resolved.sidebar.palette, expected_sidebar);
+            }
         }
     }
 
@@ -1170,5 +1277,130 @@ sidebar_style = "flat"
         config.reduced_motion = true;
         let resolved = resolve(&config, None);
         assert!(resolved.reduced_motion);
+    }
+
+    #[test]
+    fn dark_selected_row_mixes_accent_with_sidebar_bg() {
+        let check = |scheme, accent: [f32; 3]| {
+            let mut config = appearance(
+                scheme,
+                WindowColorMode::Neutral,
+                WindowTintScope::Windows,
+                TrafficLightStyle::Auto,
+                Some(accent),
+            );
+            config.reduce_transparency = true;
+            let resolved = resolve(&config, None);
+            let accent_rgba = Rgba {
+                r: accent[0],
+                g: accent[1],
+                b: accent[2],
+                a: 1.0,
+            };
+            assert_eq!(
+                resolved.sidebar.palette.selected_bg,
+                accent_rgba.mix(resolved.sidebar.bg, SETTINGS.selected_dark_mix),
+                "{scheme:?} selected_bg should mix the accent into the sidebar background"
+            );
+            assert_eq!(
+                resolved.sidebar.palette.selected_ink,
+                palette(scheme).on_accent,
+                "{scheme:?} selected_ink should be on-accent"
+            );
+        };
+        check(ColorScheme::Dark, [0.184, 0.435, 0.894]); // default Azul
+        check(ColorScheme::DarkTint, [0.557, 0.357, 0.847]); // Morado
+        check(ColorScheme::Dark, [0.898, 0.271, 0.561]); // Rosa
+    }
+
+    fn assert_configs_equal(a: &AppearanceConfig, b: &AppearanceConfig) {
+        assert_eq!(a.color_scheme, b.color_scheme);
+        assert_eq!(a.accent_color, b.accent_color);
+        assert_eq!(a.contrast, b.contrast);
+        assert_eq!(a.reduced_motion, b.reduced_motion);
+        assert_eq!(a.reduce_transparency, b.reduce_transparency);
+        assert_eq!(a.window_color, b.window_color);
+        assert_eq!(a.window_tint_scope, b.window_tint_scope);
+        assert_eq!(a.traffic_lights, b.traffic_lights);
+        assert_eq!(a.sidebar_style, b.sidebar_style);
+    }
+
+    #[test]
+    fn write_appearance_roundtrips() {
+        let dir =
+            std::env::temp_dir().join(format!("yuki-appearance-write-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("appearance.domain");
+        let config = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            accent_color: Some([0.184, 0.435, 0.894]),
+            contrast: false,
+            reduced_motion: false,
+            reduce_transparency: true,
+            window_color: WindowColorMode::Accent,
+            window_tint_scope: WindowTintScope::Desktop,
+            traffic_lights: TrafficLightStyle::Accent,
+            sidebar_style: SidebarStyle::Flat,
+        };
+        write_appearance(&path, &config).unwrap();
+        let read = read_appearance_from(&path).unwrap().unwrap();
+        assert_configs_equal(&config, &read);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_appearance_preserves_unknown_keys_and_comments() {
+        let dir =
+            std::env::temp_dir().join(format!("yuki-appearance-preserve-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("appearance.domain");
+        std::fs::write(
+            &path,
+            "# legacy comment preserved\nlegacy_key = true\ncolor_scheme = \"light\"\n",
+        )
+        .unwrap();
+        let config = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            ..AppearanceConfig::default()
+        };
+        write_appearance(&path, &config).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("legacy comment preserved"));
+        assert!(text.contains("legacy_key = true"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_appearance_creates_missing_file_and_leaves_no_temp() {
+        let dir =
+            std::env::temp_dir().join(format!("yuki-appearance-create-{}", std::process::id()));
+        let path = dir.join("appearance.domain");
+        assert!(!path.exists());
+        write_appearance(&path, &AppearanceConfig::default()).unwrap();
+        assert!(path.exists());
+        assert!(!dir.join("appearance.tmp").exists());
+        read_appearance_from(&path)
+            .unwrap()
+            .expect("created file parses");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_appearance_default_uses_config_dir() {
+        let dir =
+            std::env::temp_dir().join(format!("yuki-appearance-default-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = std::env::var_os("YUKI_CONFIG_DIR");
+        unsafe { std::env::set_var("YUKI_CONFIG_DIR", &dir) };
+        write_appearance_default().unwrap();
+        let path = dir.join("appearance.domain");
+        assert!(path.exists());
+        let read = read_appearance_from(&path).unwrap().unwrap();
+        assert_configs_equal(&AppearanceConfig::default(), &read);
+        match old {
+            Some(v) => unsafe { std::env::set_var("YUKI_CONFIG_DIR", v) },
+            None => unsafe { std::env::remove_var("YUKI_CONFIG_DIR") },
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

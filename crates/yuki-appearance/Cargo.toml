@@ -11,4 +11,5 @@ repository.workspace = true
 serde.workspace = true
 tracing.workspace = true
 toml.workspace = true
+toml_edit.workspace = true
 yuki-design.workspace = true

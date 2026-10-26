@@ -62,19 +62,24 @@ No son opciones de dominio; están fijos y documentados aquí:
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | datos | portal `org.freedesktop.appearance`, shell. `auto` resuelve a `light` |
-| `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos | portal, shell, efectos |
+| `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | **activa** | portal `org.freedesktop.appearance`, shell, **Ajustes del sistema** |
+| `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | **activa** | portal, shell, efectos, **Ajustes del sistema** |
 | `appearance.contrast` | bool | `false` | **activa** | portal (`org.freedesktop.appearance` `contrast`) |
 | `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
 | `appearance.reduce_transparency` | bool | `true` | **activa** | shell y kit: fondos sólidos; `false` habilitará el blur del compositor (ADR 0038) |
-| `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor |
-| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %) |
-| `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar |
+| `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor, **Ajustes del sistema** |
+| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %), **Ajustes del sistema** |
+| `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar, **Ajustes del sistema** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **activa** | estilo de la barra lateral del kit |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
 contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
 namespace del portal.
+
+La app **Ajustes del sistema** lee y escribe `appearance.domain` a través de
+`yuki-appearance::write_appearance`. La escritura es atómica (archivo temporal +
+`rename`) y conserva claves desconocidas y comentarios del usuario, de modo que
+editar el archivo a mano y usar la app son compatibles.
 
 `sidebar_style` selecciona la barra lateral del kit: `"island"` (flotante, con
 vibrancy, borde y sombra) o `"flat"` (lista plana integrada en el fondo de la
