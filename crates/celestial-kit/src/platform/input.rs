@@ -101,9 +101,12 @@ pub fn key(keysym: Keysym, utf8: Option<String>) -> (Key, Code) {
     }
     let mapped = match named(keysym) {
         Some(name) => Key::Named(name),
-        None => match utf8 {
-            Some(text) if !text.is_empty() => Key::Character(text),
-            _ => Key::Named(NamedKey::Unidentified),
+        None => match keysym.key_char() {
+            Some(ch) => Key::Character(ch.to_ascii_lowercase().to_string()),
+            None => match utf8 {
+                Some(text) if !text.is_empty() => Key::Character(text),
+                _ => Key::Named(NamedKey::Unidentified),
+            },
         },
     };
     (mapped, code(keysym))
