@@ -117,6 +117,11 @@ impl Layers {
             .find(|entry| entry.surface.wl_surface() == surface)
     }
 
+    /// Every mapped layer surface.
+    pub fn mapped(&self) -> &[LayerEntry] {
+        &self.mapped
+    }
+
     /// Places a newly committed layer surface: computes its geometry, sends the
     /// initial configure, and marks it mapped.
     fn configure(&mut self, surface: &LayerSurface, output_size: Size<i32, Logical>) {

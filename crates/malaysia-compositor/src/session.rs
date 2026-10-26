@@ -477,6 +477,25 @@ pub fn run() -> Result<(), SessionError> {
                     && let Ok(events) = watch.drain()
                     && !events.is_empty()
                 {
+                    let now = Instant::now();
+                    let output_size = session.state.output_size;
+                    let scale = session.state.scale.fractional_scale();
+                    if let Ok((renderer, _)) = session.backend.bind() {
+                        let fade = crate::theme_fade::start_if_allowed(
+                            &mut session.state,
+                            renderer,
+                            &session.cursor,
+                            output_size,
+                            scale,
+                            winit_render_transform(),
+                            now,
+                        );
+                        session.state.theme_fade = fade;
+                    } else {
+                        crate::theme_fade::log_snapshot_failure(
+                            "could not bind the renderer for the theme fade snapshot",
+                        );
+                    }
                     session.state.refresh_theme();
                     if session.state.take_redraw_request() {
                         session.backend.window().request_redraw();
@@ -845,6 +864,15 @@ fn append_border(
     );
 }
 
+/// Pushes the theme-fade overlay between the cursor and everything else.
+fn append_theme_fade(state: &State, elements: &mut Vec<OutputRenderElement>) {
+    let Some(fade) = state.theme_fade.as_ref() else {
+        return;
+    };
+    let alpha = fade.alpha(Instant::now());
+    elements.push(fade.element(alpha));
+}
+
 /// Pushes one solid-colour rectangle as a render element.
 fn append_solid(
     location: Point<i32, Logical>,
@@ -922,6 +950,7 @@ pub(crate) fn build_output_elements(
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
         }
+        append_theme_fade(state, &mut elements);
         append_screenshot_overlay(state, &mut elements);
         append_layers(state, renderer, &mut elements, LayerSide::Front);
         for (id, _parent, rect) in state.windows.iter_popups().rev() {
@@ -1399,7 +1428,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     // Everything that borrows the renderer or the framebuffer is scoped so the
     // frame is submitted after the framebuffer is released.
     let capture_size = session.backend.window_size();
-    let (damage, sync) = {
+    let (damage, sync, request_redraw) = {
         let (renderer, mut framebuffer) = session.backend.bind().map_err(DrawError::Bind)?;
 
         let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
@@ -1495,8 +1524,32 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             )
             .map_err(DrawError::Output)?;
 
-        (result.damage.cloned(), result.sync)
+        let mut damage = result.damage.cloned();
+        let sync = result.sync.clone();
+        drop(result);
+        let mut request_redraw = false;
+        let now = Instant::now();
+        if let Some(fade) = session.state.theme_fade.as_mut() {
+            match fade.tick(now) {
+                crate::theme_fade::FadeTick::Done => session.state.theme_fade = None,
+                _ => {
+                    // Force a full redraw on every frame of the fade and ask
+                    // for the next redraw event.
+                    damage = Some(vec![Rectangle::from_size(capture_size)]);
+                    session.damage_tracker = OutputDamageTracker::from_mode_source(
+                        winit_mode_source(capture_size, session.state.scale.fractional_scale()),
+                    );
+                    request_redraw = true;
+                }
+            }
+        }
+
+        (damage, sync, request_redraw)
     };
+
+    if request_redraw {
+        session.backend.window().request_redraw();
+    }
 
     let now = session.start_time.elapsed();
     let presented = damage.is_some();

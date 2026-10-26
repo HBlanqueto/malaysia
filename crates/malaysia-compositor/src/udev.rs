@@ -296,6 +296,19 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     && let Ok(events) = watch.drain()
                     && !events.is_empty()
                 {
+                    let now = Instant::now();
+                    let output_size = data.state.output_size;
+                    let scale = data.state.scale.fractional_scale();
+                    let fade = crate::theme_fade::start_if_allowed(
+                        &mut data.state,
+                        &mut data.renderer,
+                        &data.cursor,
+                        output_size,
+                        scale,
+                        Transform::Normal,
+                        now,
+                    );
+                    data.state.theme_fade = fade;
                     data.state.refresh_theme();
                     if data.state.take_redraw_request() {
                         data.render();
@@ -675,64 +688,78 @@ impl Udev {
                 }
             }
         }
+        if self.state.theme_fade.is_some() {
+            // The fade overlay changes alpha every frame; force a full redraw.
+            self.compositor.reset_buffer_ages();
+        }
         match self.compositor.render_frame(
             &mut self.renderer,
             &elements,
             [0.06, 0.06, 0.09, 1.0],
             FrameFlags::empty(),
         ) {
-            Ok(result) if !result.is_empty => {
-                self.frames_queued += 1;
-                self.frame_was_empty = false;
-                info!(
-                    frames_queued = self.frames_queued,
-                    "frame queued with damage"
-                );
-                if let Err(error) = self.compositor.queue_frame(()) {
-                    warn!(%error, "queueing a frame");
-                    self.schedule_repaint();
-                }
-            }
-            Ok(_) => {
-                if !self.frame_was_empty {
-                    self.frame_was_empty = true;
-                    tracing::debug!("frame skipped: no damage");
-                }
-                // A commit that only asked for a frame callback has no damage
-                // to queue, so there is no VBlank to send the callback. Answer
-                // it here in the next ~refresh cycle instead of stalling.
-                let time = self.start_time.elapsed();
-                let refresh = self
-                    .output
-                    .current_mode()
-                    .map(|mode| mode.refresh)
-                    .unwrap_or(60_000)
-                    .max(1) as u64;
-                let delay = Duration::from_micros(1_000_000 / refresh);
-                let loop_handle = &self.loop_handle;
-                let repaint_timer = &mut self.repaint_timer;
-                let mut schedule_repaint = move || {
-                    if repaint_timer.is_some() {
-                        return;
+            Ok(mut result) => {
+                let now = Instant::now();
+                if let Some(fade) = self.state.theme_fade.as_mut() {
+                    match fade.tick(now) {
+                        crate::theme_fade::FadeTick::Done => self.state.theme_fade = None,
+                        _ => {
+                            result.is_empty = false;
+                        }
                     }
-                    match loop_handle.insert_source(
-                        Timer::from_duration(delay),
-                        |_, _, data: &mut Udev| {
-                            data.repaint_timer = None;
-                            data.render();
-                            TimeoutAction::Drop
-                        },
-                    ) {
-                        Ok(token) => *repaint_timer = Some(token),
-                        Err(error) => warn!(%error, "scheduling a repaint"),
+                }
+                if !result.is_empty {
+                    self.frames_queued += 1;
+                    self.frame_was_empty = false;
+                    info!(
+                        frames_queued = self.frames_queued,
+                        "frame queued with damage"
+                    );
+                    if let Err(error) = self.compositor.queue_frame(()) {
+                        warn!(%error, "queueing a frame");
+                        self.schedule_repaint();
                     }
-                };
-                crate::session::finish_empty_frame(
-                    &mut self.state,
-                    time,
-                    self.vblank_count,
-                    &mut schedule_repaint,
-                );
+                } else {
+                    if !self.frame_was_empty {
+                        self.frame_was_empty = true;
+                        tracing::debug!("frame skipped: no damage");
+                    }
+                    // A commit that only asked for a frame callback has no damage
+                    // to queue, so there is no VBlank to send the callback. Answer
+                    // it here in the next ~refresh cycle instead of stalling.
+                    let time = self.start_time.elapsed();
+                    let refresh = self
+                        .output
+                        .current_mode()
+                        .map(|mode| mode.refresh)
+                        .unwrap_or(60_000)
+                        .max(1) as u64;
+                    let delay = Duration::from_micros(1_000_000 / refresh);
+                    let loop_handle = &self.loop_handle;
+                    let repaint_timer = &mut self.repaint_timer;
+                    let mut schedule_repaint = move || {
+                        if repaint_timer.is_some() {
+                            return;
+                        }
+                        match loop_handle.insert_source(
+                            Timer::from_duration(delay),
+                            |_, _, data: &mut Udev| {
+                                data.repaint_timer = None;
+                                data.render();
+                                TimeoutAction::Drop
+                            },
+                        ) {
+                            Ok(token) => *repaint_timer = Some(token),
+                            Err(error) => warn!(%error, "scheduling a repaint"),
+                        }
+                    };
+                    crate::session::finish_empty_frame(
+                        &mut self.state,
+                        time,
+                        self.vblank_count,
+                        &mut schedule_repaint,
+                    );
+                }
             }
             Err(error) => {
                 warn!(%error, "rendering a frame");

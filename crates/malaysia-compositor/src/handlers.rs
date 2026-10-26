@@ -203,6 +203,7 @@ impl CompositorHandler for State {
         if commit_requests_redraw(surface) {
             self.request_redraw();
         }
+        self.theme_fade_mark_committed(surface.id());
     }
 
     fn destroyed(&mut self, surface: &WlSurface) {

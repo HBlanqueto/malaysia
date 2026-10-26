@@ -39,6 +39,7 @@ mod popup;
 pub mod session;
 pub mod spawn;
 pub mod state;
+mod theme_fade;
 pub mod udev;
 pub mod window;
 pub mod xdg;

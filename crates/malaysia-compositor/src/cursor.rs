@@ -29,7 +29,7 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::input::pointer::CursorIcon;
 use smithay::utils::{Logical, Point, Rectangle, Size, Transform};
 use xcursor::CursorTheme;
@@ -389,13 +389,15 @@ fn fallback_image() -> ImageData {
 
 smithay::render_elements! {
     /// Any element the output's frame can contain: a window, a client cursor,
-    /// a compositor-drawn cursor or a GPU shader effect.
+    /// a compositor-drawn cursor, a GPU shader effect or a full-screen texture
+    /// overlay (theme fade).
     pub(crate) OutputRenderElement<=GlesRenderer>;
     Surface = WaylandSurfaceRenderElement<GlesRenderer>,
     Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
     Solid = SolidColorRenderElement,
     PixelShader = smithay::backend::renderer::gles::element::PixelShaderElement,
     Rounded = crate::effects::RoundedTextureElement,
+    Texture = smithay::backend::renderer::element::texture::TextureRenderElement<GlesTexture>,
 }
 
 #[cfg(test)]

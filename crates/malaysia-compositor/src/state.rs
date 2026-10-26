@@ -327,6 +327,8 @@ pub struct State {
     /// The Neptunia tint and traffic-light colours, rebuilt when
     /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
+    /// Crossfade state when the appearance theme changes.
+    pub(crate) theme_fade: Option<crate::theme_fade::ThemeFade>,
     /// Compiled rounded-clip texture shader for the window frame, if the
     /// renderer managed to build it.
     pub(crate) rounded_clip: Option<GlesTexProgram>,
@@ -597,6 +599,7 @@ impl State {
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             chrome_theme,
+            theme_fade: None,
             rounded_clip: None,
             shadow: None,
             border: None,
@@ -613,6 +616,16 @@ impl State {
         self.config = Config::load();
         self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
         self.request_redraw();
+    }
+
+    /// Records that `surface_id` committed, advancing any active theme fade.
+    pub(crate) fn theme_fade_mark_committed(
+        &mut self,
+        surface_id: smithay::reexports::wayland_server::backend::ObjectId,
+    ) {
+        if let Some(fade) = self.theme_fade.as_mut() {
+            fade.mark_committed(surface_id);
+        }
     }
 
     /// Asks the event loop to stop and return from its `run` call.
