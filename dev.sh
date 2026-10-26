@@ -952,11 +952,11 @@ lab() {
 
     if [ -n "${YUKI_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/yuki-shell"
-        # Always rebuild the workspace in the dev shell so the lab never runs
-        # stale binaries (the demo keeps the faster "build only when missing"
-        # path for a quick visual check).
-        "$script_dir/dev.sh" build ||
-            fail "$EXIT_RUN_FAILED" "could not build the workspace"
+        # Rebuild only the binaries the lab actually uses. Avoid the full
+        # workspace build because auxiliary crates such as yuki-settings may be
+        # broken.
+        cargo build -p yuki -p yuki-shell -p celestial-kit ||
+            fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
         if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
             [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
             [ ! -x "$script_dir/target/debug/examples/dialog" ] ||
