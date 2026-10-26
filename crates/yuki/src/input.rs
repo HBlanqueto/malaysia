@@ -511,6 +511,15 @@ fn desktop_click(menu_open: bool) -> DesktopClick {
     }
 }
 
+/// Whether any raw sym of a key event is Escape.
+///
+/// `keysym_to_utf32` returns 0 for non-printable keys such as Escape, so the
+/// raw sym must be compared directly.
+fn is_escape(syms: &[xkb::Keysym]) -> bool {
+    syms.iter()
+        .any(|sym| u32::from(*sym) == keysyms::KEY_Escape)
+}
+
 /// The `Activated` updates for moving focus from `previous` to `next`.
 ///
 /// The old window loses the state and the new one gains it; when both are the
@@ -790,12 +799,7 @@ impl State {
                         }
                     }
                     // Esc closes one popup level (the topmost menu).
-                    if pressed
-                        && keysym
-                            .raw_syms()
-                            .iter()
-                            .any(|sym| xkb::keysym_to_utf32(*sym) == keysyms::KEY_Escape)
-                    {
+                    if pressed && is_escape(&keysym.raw_syms()) {
                         state.dismiss_topmost_popup();
                     }
                     FilterResult::Forward
@@ -2437,10 +2441,16 @@ mod tests {
     use super::{
         BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TestKey,
         activation_updates, clamp_pointer, compositor_shortcut, desktop_click, double_click,
-        edge_cursor, pointer_focus_blocked,
+        edge_cursor, is_escape, pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
+
+    #[test]
+    fn escape_is_recognised_by_its_raw_sym() {
+        assert!(is_escape(&[keysyms::KEY_Escape.into()]));
+        assert!(!is_escape(&[keysyms::KEY_Down.into()]));
+    }
 
     #[test]
     fn ctrl_alt_backspace_quits_only_when_unlocked() {

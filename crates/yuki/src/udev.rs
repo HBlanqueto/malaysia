@@ -524,6 +524,12 @@ impl Udev {
     }
 
     fn after_input(&mut self) {
+        // Input sends keyboard and pointer events to clients; flush them now
+        // instead of waiting for the next client request, which an idle popup
+        // may never send (it cannot answer a frame callback it has not got).
+        if let Err(error) = self.display.flush_clients() {
+            warn!(%error, "flushing clients after input");
+        }
         if let Some(vt) = self.state.take_vt_switch()
             && let Err(error) = self.session.change_vt(i32::from(vt))
         {
