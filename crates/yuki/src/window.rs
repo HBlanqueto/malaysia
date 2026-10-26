@@ -658,6 +658,20 @@ impl Windows {
             .map(|data| data.toplevel.wl_surface())
     }
 
+    /// Whether the window for `surface` has been placed in the workspace.
+    pub fn is_placed(&self, surface: &WlSurface) -> bool {
+        self.index_of(surface)
+            .map(|index| self.windows[index].placed)
+            .unwrap_or(false)
+    }
+
+    /// Whether the window for `surface` is mapped and should be shown.
+    pub fn is_mapped(&self, surface: &WlSurface) -> bool {
+        self.index_of(surface)
+            .map(|index| self.windows[index].mapped)
+            .unwrap_or(false)
+    }
+
     /// The window's title and app id, for the shell's active-window state.
     pub fn active_info(&self, id: WindowId) -> Option<(String, String)> {
         let index = self.index(id)?;

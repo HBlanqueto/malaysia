@@ -1529,9 +1529,12 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             }
         }
     } else {
-        for window in session.state.windows.iter() {
-            if window.is_mapped() {
-                send_frame_callbacks(window.surface(), now);
+        for surface in session.state.windows.surfaces() {
+            // Unplaced toplevels have not committed a buffer yet; they still need
+            // frame callbacks so the client can render its first frame and map.
+            if session.state.windows.is_mapped(surface) || !session.state.windows.is_placed(surface)
+            {
+                send_frame_callbacks(surface, now);
             }
         }
         for entry in session.state.layers.all() {
@@ -1855,9 +1858,11 @@ pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
         }
         return;
     }
-    for window in state.windows.iter() {
-        if window.is_mapped() {
-            send_frame_callbacks(window.surface(), time);
+    for surface in state.windows.surfaces() {
+        // Unplaced toplevels have not committed a buffer yet; they still need
+        // frame callbacks so the client can render its first frame and map.
+        if state.windows.is_mapped(surface) || !state.windows.is_placed(surface) {
+            send_frame_callbacks(surface, time);
         }
     }
     for entry in state.layers.all() {
@@ -3121,5 +3126,234 @@ mod tests {
             Point::from((100, 50)),
             "location anchors the dragged edge"
         );
+    }
+
+    /// An xdg_toplevel that has not committed its first buffer is still tracked
+    /// by the compositor but is not placed yet. It must receive frame callbacks
+    /// so the client can render and map.
+    #[test]
+    fn unplaced_toplevel_gets_frame_callbacks() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        use sctk::reexports::client::globals::GlobalListContents;
+        use sctk::reexports::client::globals::registry_queue_init;
+        use sctk::reexports::client::protocol::{
+            wl_callback, wl_compositor, wl_registry, wl_surface,
+        };
+        use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+        use sctk::reexports::protocols::xdg::shell::client::{
+            xdg_surface, xdg_toplevel, xdg_wm_base,
+        };
+        use smithay::reexports::wayland_server::Display;
+        use smithay::utils::Size;
+
+        let event_loop =
+            smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
+                .expect("the test needs an event loop");
+        let mut display = Display::<State>::new().expect("the test needs a display");
+        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+        let (disconnect_ping, _disconnect_source) =
+            smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
+        let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("the feedback should build");
+        let mut state = State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+            None,
+            Box::new(event_loop.handle()),
+            Box::new(()),
+        )
+        .expect("the state should build");
+
+        let (client_side, server_side) =
+            std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let (done_tx, done_rx) = mpsc::channel::<()>();
+
+        std::thread::spawn(move || {
+            struct Client {
+                frame_done: bool,
+                done_tx: mpsc::Sender<()>,
+            }
+
+            impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Client {
+                fn event(
+                    _: &mut Self,
+                    _: &wl_registry::WlRegistry,
+                    _: wl_registry::Event,
+                    _: &GlobalListContents,
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                }
+            }
+
+            impl Dispatch<wl_compositor::WlCompositor, ()> for Client {
+                fn event(
+                    _: &mut Self,
+                    _: &wl_compositor::WlCompositor,
+                    _: wl_compositor::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                }
+            }
+
+            impl Dispatch<xdg_wm_base::XdgWmBase, ()> for Client {
+                fn event(
+                    _: &mut Self,
+                    wm_base: &xdg_wm_base::XdgWmBase,
+                    event: xdg_wm_base::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                    if let xdg_wm_base::Event::Ping { serial } = event {
+                        wm_base.pong(serial);
+                    }
+                }
+            }
+
+            impl Dispatch<xdg_surface::XdgSurface, ()> for Client {
+                fn event(
+                    _: &mut Self,
+                    surface: &xdg_surface::XdgSurface,
+                    event: xdg_surface::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                    if let xdg_surface::Event::Configure { serial } = event {
+                        surface.ack_configure(serial);
+                    }
+                }
+            }
+
+            impl Dispatch<xdg_toplevel::XdgToplevel, ()> for Client {
+                fn event(
+                    _: &mut Self,
+                    _: &xdg_toplevel::XdgToplevel,
+                    _: xdg_toplevel::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                }
+            }
+
+            impl Dispatch<wl_callback::WlCallback, ()> for Client {
+                fn event(
+                    state: &mut Self,
+                    _: &wl_callback::WlCallback,
+                    event: wl_callback::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                    if let wl_callback::Event::Done { .. } = event {
+                        state.frame_done = true;
+                        let _ = state.done_tx.send(());
+                    }
+                }
+            }
+
+            impl Dispatch<wl_surface::WlSurface, ()> for Client {
+                fn event(
+                    _: &mut Self,
+                    _: &wl_surface::WlSurface,
+                    _: wl_surface::Event,
+                    _: &(),
+                    _: &Connection,
+                    _: &QueueHandle<Self>,
+                ) {
+                }
+            }
+
+            let conn = Connection::from_socket(client_side).expect("client connects");
+            let (globals, mut event_queue) =
+                registry_queue_init(&conn).expect("registry initializes");
+            let qh = event_queue.handle();
+            let mut client = Client {
+                frame_done: false,
+                done_tx,
+            };
+
+            let compositor = globals
+                .bind::<wl_compositor::WlCompositor, _, _>(&qh, 1..=5, ())
+                .expect("compositor global exists");
+            let xdg_wm = globals
+                .bind::<xdg_wm_base::XdgWmBase, _, _>(&qh, 1..=6, ())
+                .expect("xdg_wm_base global exists");
+
+            let surface = compositor.create_surface(&qh, ());
+            let xdg_surface = xdg_wm.get_xdg_surface(&surface, &qh, ());
+            let _toplevel = xdg_surface.get_toplevel(&qh, ());
+            surface.frame(&qh, ());
+            surface.commit();
+
+            event_queue
+                .roundtrip(&mut client)
+                .expect("initial configure reaches the client");
+
+            let mut spins = 0;
+            while !client.frame_done {
+                event_queue
+                    .blocking_dispatch(&mut client)
+                    .expect("frame callback is delivered");
+                spins += 1;
+                assert!(spins < 1000, "frame callback never arrived");
+            }
+        });
+
+        let mut handle = display.handle();
+        let _client = handle
+            .insert_client(
+                server_side,
+                std::sync::Arc::new(crate::state::ClientState::new(
+                    disconnect_queue.clone(),
+                    disconnect_ping.clone(),
+                    false,
+                )),
+            )
+            .expect("the server accepts the client");
+
+        let mut spins = 0;
+        loop {
+            display.dispatch_clients(&mut state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if state.windows.len() == 1 {
+                break;
+            }
+            spins += 1;
+            assert!(spins < 1000, "the toplevel was never tracked");
+        }
+
+        let unplaced = state
+            .windows
+            .surfaces()
+            .next()
+            .map(|surface| !state.windows.is_placed(surface))
+            .unwrap_or(false);
+        assert!(
+            unplaced,
+            "the toplevel must not be placed before its first buffer"
+        );
+
+        super::send_frame_callbacks_for_state(&state, Duration::from_millis(1));
+        display.flush_clients().expect("flush callbacks");
+
+        done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the client should receive the frame callback");
     }
 }
