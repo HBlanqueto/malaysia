@@ -53,6 +53,8 @@ pub struct MenuTitleSpec {
     pub live_items: Option<MenuItems>,
     /// Sends the lazy layout request for this title, if it has a remote id.
     pub on_open: Option<Rc<dyn Fn()>>,
+    /// Requests a remote title's children when the pointer enters it.
+    pub on_hover_title: Option<Rc<dyn Fn()>>,
     /// Requests the children of a nested remote submenu.
     pub on_open_submenu: Option<Rc<dyn Fn(String)>>,
     /// Resolves the loaded children of a remote submenu by id.
@@ -302,7 +304,11 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let titles_for_hover = titles.clone();
     let state_for_hover = state.clone();
     let label_for_hover = label_text.clone();
+    let on_hover_title = spec.on_hover_title.clone();
     container = container.on_pointer_enter(move |_: Event<PointerEventData>| {
+        if let Some(callback) = &on_hover_title {
+            callback();
+        }
         let current = open_label_for_hover.borrow().read().clone();
         if current.is_some_and(|current| current != label_for_hover) {
             open_root_menu(&titles_for_hover, title_index, &state_for_hover);

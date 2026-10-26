@@ -165,6 +165,7 @@ impl App for BarApp {
             on_activate: Rc::new(system::on_system_action),
             live_items: None,
             on_open: None,
+            on_hover_title: None,
             on_open_submenu: None,
             submenu_source: None,
             anchor: title_anchor(0),
@@ -275,6 +276,7 @@ impl App for BarApp {
                         callback
                     });
                     let live_items = Some(items.clone());
+                    let on_hover_title = on_open.clone();
                     let is_help = index + 1 == titles.len();
                     let searchable: Option<SearchableItems> = if is_help {
                         let composition = composition.clone();
@@ -294,6 +296,7 @@ impl App for BarApp {
                         on_activate: on_activate.clone(),
                         live_items,
                         on_open,
+                        on_hover_title,
                         on_open_submenu: Some(on_open_submenu.clone()),
                         submenu_source: Some(submenu_source.clone()),
                         anchor: title_anchor(index + 1),
@@ -347,6 +350,7 @@ impl App for BarApp {
                         on_activate: Rc::new(focused::on_action),
                         live_items: None,
                         on_open: None,
+                        on_hover_title: None,
                         on_open_submenu: None,
                         submenu_source: None,
                         anchor: title_anchor(anchor),
@@ -380,6 +384,7 @@ impl App for BarApp {
                     on_activate: Rc::new(appmenu::on_action),
                     live_items: None,
                     on_open: None,
+                    on_hover_title: None,
                     on_open_submenu: None,
                     submenu_source: None,
                     anchor: title_anchor(offset + 1),

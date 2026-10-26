@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use celestial_kit::platform::{AppMenuAddress, WakeHandle};
@@ -18,6 +18,7 @@ pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
 pub const REGISTRAR_PATH: &str = "/com/canonical/AppMenu/Registrar";
 const DBUSMENU_INTERFACE: &str = "com.canonical.dbusmenu";
 const CALL_TIMEOUT: Duration = Duration::from_millis(500);
+const DEBOUNCE: Duration = Duration::from_millis(50);
 
 /// One command for the D-Bus thread.
 #[derive(Clone, Debug)]
@@ -54,6 +55,7 @@ pub struct MenuSnapshot {
     pub address: AppMenuAddress,
     pub parent: Option<i32>,
     pub items: Option<Vec<RawItem>>,
+    pub cached: bool,
 }
 
 /// Render-side handle: commands go in, snapshots come out.
@@ -170,11 +172,118 @@ pub fn start() -> MenuClient {
     }
 }
 
-type ProxyCache = HashMap<AppMenuAddress, zbus::Proxy<'static>>;
+#[derive(Clone, Debug, PartialEq)]
+struct CachedSubtree {
+    revision: u32,
+    items: Vec<RawItem>,
+}
+
+#[derive(Default)]
+struct MenuCache {
+    subtrees: HashMap<i32, CachedSubtree>,
+}
+
+impl MenuCache {
+    fn get(&self, id: i32) -> Option<&CachedSubtree> {
+        self.subtrees.get(&id)
+    }
+
+    fn put(&mut self, id: i32, revision: u32, items: Vec<RawItem>) {
+        self.subtrees.insert(id, CachedSubtree { revision, items });
+    }
+
+    /// Drops only `id` when `revision` is newer than the cached one.
+    fn invalidate(&mut self, id: i32, revision: u32) -> bool {
+        if self
+            .subtrees
+            .get(&id)
+            .is_some_and(|subtree| revision > subtree.revision)
+        {
+            self.subtrees.remove(&id);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn apply_properties(
+        &mut self,
+        updated: &[(i32, HashMap<String, OwnedValue>)],
+        removed: &[(i32, Vec<String>)],
+    ) -> bool {
+        let mut changed = false;
+        for subtree in self.subtrees.values_mut() {
+            changed |= apply_properties(&mut subtree.items, updated, removed);
+        }
+        changed
+    }
+}
+
+fn apply_properties(
+    items: &mut [RawItem],
+    updated: &[(i32, HashMap<String, OwnedValue>)],
+    removed: &[(i32, Vec<String>)],
+) -> bool {
+    let mut changed = false;
+    for item in items {
+        if let Some((_, properties)) = updated.iter().find(|(id, _)| *id == item.id) {
+            item.properties.extend(properties.clone());
+            changed = true;
+        }
+        if let Some((_, keys)) = removed.iter().find(|(id, _)| *id == item.id) {
+            for key in keys {
+                changed |= item.properties.remove(key).is_some();
+            }
+        }
+        changed |= apply_properties(&mut item.children, updated, removed);
+    }
+    changed
+}
+
+#[derive(Default)]
+struct MenuCaches {
+    menus: HashMap<AppMenuAddress, MenuCache>,
+}
+
+impl MenuCaches {
+    fn get(&self, address: &AppMenuAddress) -> Option<&MenuCache> {
+        self.menus.get(address)
+    }
+
+    fn get_mut(&mut self, address: &AppMenuAddress) -> Option<&mut MenuCache> {
+        self.menus.get_mut(address)
+    }
+
+    fn entry(&mut self, address: &AppMenuAddress) -> &mut MenuCache {
+        self.menus.entry(address.clone()).or_default()
+    }
+
+    fn evict_service(&mut self, service: &str) -> bool {
+        let before = self.menus.len();
+        self.menus.retain(|address, _| address.service != service);
+        before != self.menus.len()
+    }
+}
+
+struct AddressProxy {
+    proxy: zbus::Proxy<'static>,
+    owner: Option<String>,
+}
+
+type ProxyCache = HashMap<AppMenuAddress, AddressProxy>;
+
+#[derive(Default)]
+struct Pending {
+    focus: Option<(AppMenuAddress, u64)>,
+    subtrees: Vec<i32>,
+    snapshot: bool,
+}
 
 enum Event {
     Command(Result<Command, async_channel::RecvError>),
     Owner(Option<zbus::fdo::NameOwnerChanged>),
+    Menu(Option<Result<zbus::Message, zbus::Error>>),
+    Timer,
 }
 
 async fn run(
@@ -234,56 +343,98 @@ async fn run(
             return;
         }
     };
+    let mut menu_signals = match menu_stream(&connection).await {
+        Ok(stream) => stream,
+        Err(error) => {
+            tracing::error!(%error, "menubar: could not listen for dbusmenu signals");
+            return;
+        }
+    };
 
     let mut proxies: ProxyCache = HashMap::new();
+    let mut caches = MenuCaches::default();
     let mut focused: Option<(AppMenuAddress, u64)> = None;
+    let mut pending = Pending::default();
+    let mut deadline: Option<Instant> = None;
     loop {
-        let selected = future::or(
-            async { Event::Command(commands.recv().await) },
-            async { Event::Owner(owner_changes.next().await) },
-        )
-        .await;
+        let selected = if let Some(at) = deadline {
+            future::or(
+                future::or(async { Event::Command(commands.recv().await) }, async {
+                    Event::Owner(owner_changes.next().await)
+                }),
+                future::or(async { Event::Menu(menu_signals.next().await) }, async {
+                    async_io::Timer::at(at).await;
+                    Event::Timer
+                }),
+            )
+            .await
+        } else {
+            future::or(
+                future::or(async { Event::Command(commands.recv().await) }, async {
+                    Event::Owner(owner_changes.next().await)
+                }),
+                async { Event::Menu(menu_signals.next().await) },
+            )
+            .await
+        };
         match selected {
             Event::Command(Ok(Command::Focus {
                 address,
                 generation,
             })) => {
                 focused = Some((address.clone(), generation));
-                let started = std::time::Instant::now();
-                let items = children(&connection, &mut proxies, &address, 0, 1).await;
-                let count = items.as_ref().map_or(0, Vec::len);
-                tracing::info!(
-                    generation,
-                    service = %address.service,
-                    titles = count,
-                    ms = started.elapsed().as_millis(),
-                    "menubar: dbusmenu root snapshot"
-                );
-                send(
-                    &snapshots,
-                    &wake,
-                    MenuSnapshot {
+                pending = Pending::default();
+                deadline = None;
+                if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
+                    tracing::info!(
                         generation,
-                        address,
-                        parent: None,
-                        items,
-                    },
-                )
-                .await;
+                        service = %address.service,
+                        titles = root.items.len(),
+                        cached = true,
+                        "menubar: dbusmenu root snapshot"
+                    );
+                    send(
+                        &snapshots,
+                        &wake,
+                        MenuSnapshot {
+                            generation,
+                            address,
+                            parent: None,
+                            items: Some(root.items.clone()),
+                            cached: true,
+                        },
+                    )
+                    .await;
+                } else {
+                    pending.focus = Some((address, generation));
+                    arm(&mut deadline);
+                }
             }
             Event::Command(Ok(Command::Open {
                 address,
                 id,
                 generation,
             })) => {
-                let started = std::time::Instant::now();
-                let items = open_submenu(&connection, &mut proxies, &address, id).await;
+                let started = Instant::now();
+                let cached = caches
+                    .get(&address)
+                    .and_then(|cache| cache.get(id))
+                    .cloned();
+                let shown = about_to_show(&connection, &dbus, &mut proxies, &address, id).await;
+                let items = if shown || cached.is_none() {
+                    fetch_subtree(&connection, &dbus, &mut proxies, &mut caches, &address, id).await
+                } else {
+                    cached.map(|subtree| subtree.items)
+                };
+                pending.subtrees.retain(|pending| *pending != id);
+                let from_cache = !shown && items.is_some();
                 let count = items.as_ref().map_or(0, Vec::len);
                 tracing::info!(
                     generation,
                     id,
                     service = %address.service,
                     items = count,
+                    cached = from_cache,
                     ms = started.elapsed().as_millis(),
                     "menubar: dbusmenu submenu snapshot"
                 );
@@ -295,6 +446,7 @@ async fn run(
                         address,
                         parent: Some(id),
                         items,
+                        cached: from_cache,
                     },
                 )
                 .await;
@@ -305,7 +457,7 @@ async fn run(
                 timestamp,
             })) => {
                 if let Err(error) =
-                    event(&connection, &mut proxies, &address, id, timestamp).await
+                    event(&connection, &dbus, &mut proxies, &address, id, timestamp).await
                 {
                     tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
                 } else {
@@ -322,10 +474,13 @@ async fn run(
                 }
                 let service = args.name().to_string();
                 proxies.retain(|address, _| address.service != service);
+                let evicted = caches.evict_service(&service);
                 if let Some((address, generation)) = &focused
                     && address.service == service
                 {
-                    tracing::info!(%service, generation, "menubar: menu service vanished");
+                    tracing::info!(%service, generation, evicted, "menubar: menu service vanished");
+                    pending = Pending::default();
+                    deadline = None;
                     send(
                         &snapshots,
                         &wake,
@@ -334,12 +489,312 @@ async fn run(
                             address: address.clone(),
                             parent: None,
                             items: None,
+                            cached: false,
                         },
                     )
                     .await;
                 }
             }
             Event::Owner(None) => break,
+            Event::Menu(Some(Ok(message))) => {
+                handle_signal(
+                    message,
+                    &proxies,
+                    &mut caches,
+                    &focused,
+                    &mut pending,
+                    &mut deadline,
+                );
+            }
+            Event::Menu(Some(Err(error))) => {
+                tracing::warn!(%error, "menubar: dbusmenu signal stream error");
+            }
+            Event::Menu(None) => break,
+            Event::Timer => {
+                deadline = None;
+                flush(
+                    &connection,
+                    &dbus,
+                    &mut proxies,
+                    &mut caches,
+                    &snapshots,
+                    &wake,
+                    &focused,
+                    &mut pending,
+                )
+                .await;
+            }
+        }
+    }
+}
+
+fn arm(deadline: &mut Option<Instant>) {
+    if deadline.is_none() {
+        *deadline = Some(Instant::now() + DEBOUNCE);
+    }
+}
+
+fn signal_address(proxies: &ProxyCache, sender: &str, path: &str) -> Option<AppMenuAddress> {
+    proxies.iter().find_map(|(address, entry)| {
+        (address.path == path && entry.owner.as_deref() == Some(sender)).then(|| address.clone())
+    })
+}
+
+fn handle_signal(
+    message: zbus::Message,
+    proxies: &ProxyCache,
+    caches: &mut MenuCaches,
+    focused: &Option<(AppMenuAddress, u64)>,
+    pending: &mut Pending,
+    deadline: &mut Option<Instant>,
+) {
+    let Some(sender) = message.header().sender().map(ToString::to_string) else {
+        return;
+    };
+    let Some(path) = message.header().path().map(ToString::to_string) else {
+        return;
+    };
+    let Some(address) = signal_address(proxies, &sender, &path) else {
+        return;
+    };
+    let is_focused = focused
+        .as_ref()
+        .is_some_and(|(focused, _)| *focused == address);
+    match message.header().member().map(|member| member.as_str()) {
+        Some("LayoutUpdated") => {
+            let Ok((revision, parent)) = message.body().deserialize::<(u32, i32)>() else {
+                return;
+            };
+            let invalidated = caches
+                .get_mut(&address)
+                .is_some_and(|cache| cache.invalidate(parent, revision));
+            tracing::debug!(
+                service = %address.service,
+                revision,
+                parent,
+                invalidated,
+                "menubar: dbusmenu LayoutUpdated"
+            );
+            if invalidated && is_focused {
+                pending.subtrees.push(parent);
+                arm(deadline);
+            }
+        }
+        Some("ItemsPropertiesUpdated") => {
+            let Ok((updated, removed)) = message.body().deserialize::<(
+                Vec<(i32, HashMap<String, OwnedValue>)>,
+                Vec<(i32, Vec<String>)>,
+            )>() else {
+                return;
+            };
+            let changed = caches
+                .get_mut(&address)
+                .is_some_and(|cache| cache.apply_properties(&updated, &removed));
+            if changed && is_focused {
+                pending.snapshot = true;
+                arm(deadline);
+            }
+        }
+        _ => {}
+    }
+}
+
+async fn flush(
+    connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
+    proxies: &mut ProxyCache,
+    caches: &mut MenuCaches,
+    snapshots: &Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
+    focused: &Option<(AppMenuAddress, u64)>,
+    pending: &mut Pending,
+) {
+    let Some((address, generation)) = focused.clone() else {
+        *pending = Pending::default();
+        return;
+    };
+
+    let focus_fetch = pending
+        .focus
+        .take()
+        .is_some_and(|(pending, pending_generation)| {
+            pending == address && pending_generation == generation
+        });
+    if focus_fetch {
+        if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
+            send(
+                snapshots,
+                wake,
+                MenuSnapshot {
+                    generation,
+                    address: address.clone(),
+                    parent: None,
+                    items: Some(root.items.clone()),
+                    cached: true,
+                },
+            )
+            .await;
+        } else {
+            fetch_root(
+                connection, dbus, proxies, caches, snapshots, wake, &address, generation,
+            )
+            .await;
+        }
+    }
+
+    let mut subtrees = std::mem::take(&mut pending.subtrees);
+    subtrees.sort_unstable();
+    subtrees.dedup();
+    for id in subtrees {
+        if id == 0 {
+            if caches
+                .get(&address)
+                .and_then(|cache| cache.get(0))
+                .is_none()
+            {
+                fetch_root(
+                    connection, dbus, proxies, caches, snapshots, wake, &address, generation,
+                )
+                .await;
+            }
+            send_cached_subtrees(caches, snapshots, wake, &address, generation).await;
+        } else {
+            let items = fetch_subtree(connection, dbus, proxies, caches, &address, id).await;
+            send(
+                snapshots,
+                wake,
+                MenuSnapshot {
+                    generation,
+                    address: address.clone(),
+                    parent: Some(id),
+                    items,
+                    cached: false,
+                },
+            )
+            .await;
+        }
+    }
+
+    if pending.snapshot {
+        pending.snapshot = false;
+        if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
+            send(
+                snapshots,
+                wake,
+                MenuSnapshot {
+                    generation,
+                    address: address.clone(),
+                    parent: None,
+                    items: Some(root.items.clone()),
+                    cached: true,
+                },
+            )
+            .await;
+            send_cached_subtrees(caches, snapshots, wake, &address, generation).await;
+        }
+    }
+}
+
+async fn fetch_root(
+    connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
+    proxies: &mut ProxyCache,
+    caches: &mut MenuCaches,
+    snapshots: &Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
+    address: &AppMenuAddress,
+    generation: u64,
+) {
+    let started = Instant::now();
+    let items = match layout(connection, dbus, proxies, address, 0, 1).await {
+        Ok((revision, items)) => {
+            caches
+                .entry(address)
+                .put(0, revision, items.iter().cloned().collect());
+            Some(items)
+        }
+        Err(error) => {
+            tracing::warn!(%error, service = %address.service, "menubar: dbusmenu GetLayout failed");
+            None
+        }
+    };
+    let count = items.as_ref().map_or(0, Vec::len);
+    tracing::info!(
+        generation,
+        service = %address.service,
+        titles = count,
+        cached = false,
+        ms = started.elapsed().as_millis(),
+        "menubar: dbusmenu root snapshot"
+    );
+    send(
+        snapshots,
+        wake,
+        MenuSnapshot {
+            generation,
+            address: address.clone(),
+            parent: None,
+            items,
+            cached: false,
+        },
+    )
+    .await;
+}
+
+async fn send_cached_subtrees(
+    caches: &MenuCaches,
+    snapshots: &Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
+    address: &AppMenuAddress,
+    generation: u64,
+) {
+    let Some(cache) = caches.get(address) else {
+        return;
+    };
+    let mut ids: Vec<i32> = cache
+        .subtrees
+        .keys()
+        .copied()
+        .filter(|id| *id != 0)
+        .collect();
+    ids.sort_unstable();
+    for id in ids {
+        let Some(subtree) = cache.get(id) else {
+            continue;
+        };
+        send(
+            snapshots,
+            wake,
+            MenuSnapshot {
+                generation,
+                address: address.clone(),
+                parent: Some(id),
+                items: Some(subtree.items.clone()),
+                cached: true,
+            },
+        )
+        .await;
+    }
+}
+
+async fn fetch_subtree(
+    connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
+    proxies: &mut ProxyCache,
+    caches: &mut MenuCaches,
+    address: &AppMenuAddress,
+    id: i32,
+) -> Option<Vec<RawItem>> {
+    match layout(connection, dbus, proxies, address, id, 1).await {
+        Ok((revision, items)) => {
+            caches
+                .entry(address)
+                .put(id, revision, items.iter().cloned().collect());
+            Some(items)
+        }
+        Err(error) => {
+            tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu GetLayout failed");
+            None
         }
     }
 }
@@ -359,13 +814,22 @@ fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
     }
 }
 
+async fn menu_stream(connection: &zbus::Connection) -> zbus::Result<zbus::MessageStream> {
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface(DBUSMENU_INTERFACE)?
+        .build();
+    zbus::MessageStream::for_match_rule(rule, connection, None).await
+}
+
 async fn proxy(
     connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
     proxies: &mut ProxyCache,
     address: &AppMenuAddress,
 ) -> zbus::Result<zbus::Proxy<'static>> {
-    if let Some(proxy) = proxies.get(address) {
-        return Ok(proxy.clone());
+    if let Some(entry) = proxies.get(address) {
+        return Ok(entry.proxy.clone());
     }
     let proxy: zbus::Proxy<'static> = zbus::proxy::Builder::new(connection)
         .destination(address.service.clone())?
@@ -374,7 +838,21 @@ async fn proxy(
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
-    proxies.insert(address.clone(), proxy.clone());
+    let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
+        Ok(name) => dbus
+            .get_name_owner(name)
+            .await
+            .ok()
+            .map(|owner| owner.to_string()),
+        Err(_) => None,
+    };
+    proxies.insert(
+        address.clone(),
+        AddressProxy {
+            proxy: proxy.clone(),
+            owner,
+        },
+    );
     Ok(proxy)
 }
 
@@ -392,66 +870,171 @@ fn raw_item(value: OwnedValue) -> Option<RawItem> {
 
 async fn layout(
     connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
     proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     parent: i32,
     depth: i32,
-) -> zbus::Result<Vec<RawItem>> {
-    let proxy = proxy(connection, proxies, address).await?;
-    let (_, root) = proxy
+) -> zbus::Result<(u32, Vec<RawItem>)> {
+    let proxy = proxy(connection, dbus, proxies, address).await?;
+    let (revision, root) = proxy
         .call::<_, _, (u32, RawNode)>("GetLayout", &(parent, depth, &[] as &[&str]))
         .await?;
-    Ok(root.2.into_iter().filter_map(raw_item).collect())
+    Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
 }
 
-async fn children(
+async fn about_to_show(
     connection: &zbus::Connection,
-    proxies: &mut ProxyCache,
-    address: &AppMenuAddress,
-    parent: i32,
-    depth: i32,
-) -> Option<Vec<RawItem>> {
-    match layout(connection, proxies, address, parent, depth).await {
-        Ok(items) => Some(items),
-        Err(error) => {
-            tracing::warn!(
-                %error,
-                parent,
-                service = %address.service,
-                "menubar: dbusmenu GetLayout failed"
-            );
-            None
-        }
-    }
-}
-
-async fn open_submenu(
-    connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
     proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     id: i32,
-) -> Option<Vec<RawItem>> {
-    if let Ok(proxy) = proxy(connection, proxies, address).await {
-        match proxy.call::<_, _, bool>("AboutToShow", &(id,)).await {
-            Ok(shown) => tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow"),
-            Err(error) => tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed"),
+) -> bool {
+    let Ok(proxy) = proxy(connection, dbus, proxies, address).await else {
+        return false;
+    };
+    match proxy.call::<_, _, bool>("AboutToShow", &(id,)).await {
+        Ok(shown) => {
+            tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow");
+            shown
+        }
+        Err(error) => {
+            tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed");
+            false
         }
     }
-    children(connection, proxies, address, id, 1).await
 }
 
 async fn event(
     connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
     proxies: &mut ProxyCache,
     address: &AppMenuAddress,
     id: i32,
     timestamp: u32,
 ) -> zbus::Result<()> {
-    let proxy = proxy(connection, proxies, address).await?;
+    let proxy = proxy(connection, dbus, proxies, address).await?;
     proxy
         .call::<_, _, ()>(
             "Event",
             &(id, "clicked", zbus::zvariant::Value::I32(0), timestamp),
         )
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn text(value: &str) -> OwnedValue {
+        OwnedValue::try_from(zbus::zvariant::Value::from(value)).unwrap()
+    }
+
+    fn item(id: i32, properties: &[(&str, OwnedValue)], children: Vec<RawItem>) -> RawItem {
+        RawItem {
+            id,
+            properties: properties
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), value.clone()))
+                .collect(),
+            children,
+        }
+    }
+
+    fn address(service: &str) -> AppMenuAddress {
+        AppMenuAddress {
+            service: service.to_string(),
+            path: "/MenuBar/1".to_string(),
+        }
+    }
+
+    #[test]
+    fn a_cached_subtree_is_a_hit() {
+        let mut cache = MenuCache::default();
+        cache.put(7, 3, vec![item(8, &[], Vec::new())]);
+        assert_eq!(cache.get(7).unwrap().revision, 3);
+        assert_eq!(cache.get(7).unwrap().items[0].id, 8);
+    }
+
+    #[test]
+    fn invalidation_drops_only_the_signalled_subtree() {
+        let mut cache = MenuCache::default();
+        cache.put(0, 1, vec![item(7, &[], Vec::new())]);
+        cache.put(7, 1, vec![item(8, &[], Vec::new())]);
+        assert!(cache.invalidate(7, 2));
+        assert!(cache.get(7).is_none());
+        assert!(cache.get(0).is_some());
+        assert!(cache.invalidate(0, 2));
+        assert!(cache.get(0).is_none());
+    }
+
+    #[test]
+    fn an_older_revision_is_ignored() {
+        let mut cache = MenuCache::default();
+        cache.put(0, 9, vec![item(1, &[], Vec::new())]);
+        assert!(!cache.invalidate(0, 8));
+        assert!(cache.get(0).is_some());
+    }
+
+    #[test]
+    fn items_properties_updated_changes_the_item_in_place() {
+        let mut cache = MenuCache::default();
+        cache.put(
+            0,
+            1,
+            vec![item(
+                4,
+                &[("toggle-state", OwnedValue::from(0i32))],
+                Vec::new(),
+            )],
+        );
+        let updated = vec![(
+            4,
+            HashMap::from([("toggle-state".to_string(), OwnedValue::from(1i32))]),
+        )];
+        assert!(cache.apply_properties(&updated, &[]));
+        assert_eq!(
+            i32::try_from(cache.get(0).unwrap().items[0].properties["toggle-state"].clone())
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn eviction_drops_every_entry_of_the_service() {
+        let mut caches = MenuCaches::default();
+        caches.entry(&address("org.kde.kate")).put(0, 1, Vec::new());
+        caches.entry(&address("org.kde.kate")).put(7, 1, Vec::new());
+        caches
+            .entry(&address("org.mozilla.firefox"))
+            .put(0, 1, Vec::new());
+        assert!(caches.evict_service("org.kde.kate"));
+        assert!(caches.get(&address("org.kde.kate")).is_none());
+        assert!(caches.get(&address("org.mozilla.firefox")).is_some());
+    }
+
+    #[test]
+    fn properties_updated_in_a_nested_subtree_are_found() {
+        let mut cache = MenuCache::default();
+        cache.put(0, 1, vec![item(4, &[("label", text("Ver"))], Vec::new())]);
+        cache.put(
+            4,
+            1,
+            vec![item(
+                9,
+                &[("toggle-state", OwnedValue::from(0i32))],
+                Vec::new(),
+            )],
+        );
+        let updated = vec![(
+            9,
+            HashMap::from([("toggle-state".to_string(), OwnedValue::from(1i32))]),
+        )];
+        assert!(cache.apply_properties(&updated, &[]));
+        assert_eq!(
+            i32::try_from(cache.get(4).unwrap().items[0].properties["toggle-state"].clone())
+                .unwrap(),
+            1
+        );
+    }
 }
