@@ -289,12 +289,16 @@ mod tests {
 
     use smithay::backend::allocator::Fourcc;
     use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
-    use smithay::backend::renderer::Offscreen;
-    use smithay::backend::renderer::element::Element;
-    use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+    use smithay::backend::renderer::{
+        Bind, ExportMem, Offscreen,
+        element::Element,
+        element::solid::{SolidColorBuffer, SolidColorRenderElement},
+        gles::{GlesRenderer, GlesTexture},
+    };
+    use smithay::backend::renderer::damage::OutputDamageTracker;
     use smithay::output::{Output, PhysicalProperties, Subpixel};
     use smithay::reexports::wayland_server::backend::ObjectId;
-    use smithay::utils::{Buffer as BufferCoord, Scale, Size};
+    use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size, Transform};
 
     /// A GLES renderer on the first EGL device, with no window.
     ///
@@ -303,13 +307,15 @@ mod tests {
     /// the host session.
     #[allow(unsafe_code)]
     fn test_renderer() -> GlesRenderer {
-        let device = EGLDevice::enumerate()
-            .expect("EGL device enumeration should work")
-            .next()
-            .expect("the theme fade tests need an EGL device");
-        let display = unsafe { EGLDisplay::new(device) }.expect("the tests need an EGL display");
-        let context = EGLContext::new(&display).expect("the tests need an EGL context");
-        unsafe { GlesRenderer::new(context) }.expect("the tests need a GLES renderer")
+        try_test_renderer().expect("the theme fade tests need an EGL device")
+    }
+
+    #[allow(unsafe_code)]
+    fn try_test_renderer() -> Option<GlesRenderer> {
+        let device = EGLDevice::enumerate().ok()?.next()?;
+        let display = unsafe { EGLDisplay::new(device) }.ok()?;
+        let context = EGLContext::new(&display).ok()?;
+        unsafe { GlesRenderer::new(context) }.ok()
     }
 
     fn test_output() -> Output {
@@ -451,5 +457,97 @@ mod tests {
         let geometry = element.geometry(Scale::from(1.0));
         assert_eq!(geometry.size, Size::from((64, 64)));
         assert_eq!(geometry.loc, smithay::utils::Point::from((0, 0)));
+    }
+
+    #[test]
+    fn fade_snapshot_keeps_top_bottom_orientation() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping fade_snapshot_keeps_top_bottom_orientation: no EGL device");
+            return;
+        };
+
+        let size = Size::<i32, Physical>::from((64, 64));
+        let buffer_size = Size::<i32, BufferCoord>::from((64, 64));
+        let render_transform = Transform::Flipped180;
+        let red = [1.0, 0.0, 0.0, 1.0];
+        let blue = [0.0, 0.0, 1.0, 1.0];
+        let top = SolidColorRenderElement::from_buffer(
+            &SolidColorBuffer::new(Size::from((64, 32)), red),
+            smithay::utils::Point::from((0, 0)),
+            1.0,
+            1.0,
+            smithay::backend::renderer::element::Kind::Unspecified,
+        );
+        let bottom = SolidColorRenderElement::from_buffer(
+            &SolidColorBuffer::new(Size::from((64, 32)), blue),
+            smithay::utils::Point::from((0, 32)),
+            1.0,
+            1.0,
+            smithay::backend::renderer::element::Kind::Unspecified,
+        );
+        let source_elements: Vec<super::OutputRenderElement> =
+            vec![top.into(), bottom.into()];
+
+        let mut snapshot_texture = Offscreen::<GlesTexture>::create_buffer(
+            &mut renderer,
+            Fourcc::Abgr8888,
+            buffer_size,
+        )
+        .expect("create snapshot texture");
+        {
+            let mut target = renderer.bind(&mut snapshot_texture).expect("bind snapshot");
+            let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), render_transform);
+            tracker
+                .render_output(&mut renderer, &mut target, 0, &source_elements, [0.0; 4])
+                .expect("render source scene")
+                .sync
+                .wait()
+                .expect("snapshot sync");
+        }
+
+        let start = Instant::now();
+        let fade = ThemeFade::new(
+            &mut renderer,
+            test_output(),
+            size,
+            snapshot_texture,
+            HashSet::new(),
+            start,
+        );
+
+        let mut output_texture =
+            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
+                .expect("create output texture");
+        let mut target = renderer.bind(&mut output_texture).expect("bind output");
+        let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), render_transform);
+        tracker
+            .render_output(
+                &mut renderer,
+                &mut target,
+                0,
+                &[fade.element(1.0)],
+                [0.0; 4],
+            )
+            .expect("render fade element")
+            .sync
+            .wait()
+            .expect("output sync");
+        let mapping = renderer
+            .copy_framebuffer(&target, Rectangle::from_size(buffer_size), Fourcc::Abgr8888)
+            .expect("copy framebuffer");
+        let bytes = renderer.map_texture(&mapping).expect("map texture");
+        let pixel = |x: usize, y: usize| {
+            let offset = (y * 64 + x) * 4;
+            [
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]
+        };
+
+        // GL readback is bottom-up; (8, 8) in the raw bytes is the visual top-left.
+        assert_eq!(pixel(8, 8), [255, 0, 0, 255], "visual top-left should be red");
+        assert_eq!(pixel(8, 56), [0, 0, 255, 255], "visual bottom-left should be blue");
     }
 }

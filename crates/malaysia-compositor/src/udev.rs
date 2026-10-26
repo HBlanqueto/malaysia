@@ -50,6 +50,14 @@ use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State};
 use vow_appearance::watch::AppearanceWatch;
 
+/// The render transform shared by DRM captures, screenshots and the theme fade
+/// snapshot. OpenGL's framebuffer origin is bottom-left; Smithay's y-down space
+/// arrives inverted unless the render transform flips it (see
+/// `session::winit_render_transform` for the winit equivalent).
+pub(crate) const fn render_transform() -> Transform {
+    Transform::Flipped180
+}
+
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
@@ -305,7 +313,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                         &data.cursor,
                         output_size,
                         scale,
-                        Transform::Normal,
+                        render_transform(),
                         now,
                     );
                     data.state.theme_fade = fade;
@@ -608,14 +616,11 @@ impl Udev {
             self.capture_requested = false;
             if let Some(mode) = self.output.current_mode() {
                 let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
-                // The capture re-renders offscreen and then flips the GL
-                // readback; Flipped180 keeps it upright, as in winit.
-                let transform = smithay::utils::Transform::Flipped180;
-                if let Err(error) = crate::capture::capture_output(
+                    if let Err(error) = crate::capture::capture_output(
                     &mut self.renderer,
                     &elements,
                     size,
-                    transform,
+                    render_transform(),
                     self.state.scale.fractional_scale(),
                 ) {
                     warn!(%error, "debug capture failed");
@@ -632,7 +637,7 @@ impl Udev {
                 &mut self.renderer,
                 &self.cursor,
                 size,
-                Transform::Flipped180,
+                render_transform(),
                 request,
             ));
         }
