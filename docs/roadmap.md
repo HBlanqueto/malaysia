@@ -238,6 +238,10 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
   elemento; las ventanas CSD reciben esquinas, sombra y borde pero no titlebar.
   Los diálogos usan el mismo marco y se centran sobre la ventana padre. Ver
   [`arquitectura/ventanas.md`](arquitectura/ventanas.md) y el ADR 0037.
+- **Fundido de apariencia — hecho.** Al cambiar claro/oscuro el compositor
+  captura la salida entera en una textura GLES y la funde con una curva
+  ease-in-out cúbica de 420 ms, manteniendo el cursor por encima. Ver el
+  [ADR 0044](decisiones/0044-fundido-de-apariencia.md).
 - **Pendiente:** captura de ventana con marco (Bloque 11).
 - **Después:** el orden es **Bloque 14 (menú global) → 12a** (`Settings` con una
   app real, `Screenshot`/`ScreenCast`) **→ 12b → 8b → 8c**. La aceptación manual
