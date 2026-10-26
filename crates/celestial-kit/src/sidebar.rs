@@ -3,11 +3,15 @@
 //! All colours and measurements come from `yuki-design` and the resolved
 //! `appearance.domain`; there are no hardcoded design values.
 
+use std::time::Duration;
+
+use freya_animation::prelude::{AnimConfiguration, AnimNum, OnChange, use_animation};
+use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
-use yuki_appearance::{SidebarStyle, palette};
-use yuki_design::{Rgba, SIDEBAR, TITLEBAR};
+use yuki_appearance::SidebarStyle;
+use yuki_design::{DURATION_BASE, Rgba, SIDEBAR, TITLEBAR};
 
 use crate::platform::WindowControls;
 use crate::titlebar::{window_drag_handler, window_traffic_lights};
@@ -17,11 +21,40 @@ fn rgba(color: Rgba) -> Color {
     Color::from_argb(a, r, g, b)
 }
 
+fn svg_with_color(template: &str, color: Rgba) -> String {
+    let [r, g, b, _] = color.to_rgba8();
+    template.replace("currentColor", &format!("rgb({r},{g},{b})"))
+}
+
+fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {
+    SvgViewer::new((
+        format!("sidebar-icon-{}", template.len()),
+        Bytes::from(svg_with_color(template, color)),
+    ))
+    .width(Size::px(size as f32))
+    .height(Size::px(size as f32))
+    .show_loader(false)
+}
+
+fn chevron_svg(down: bool, stroke: f32, color: Rgba) -> String {
+    let [r, g, b, _] = color.to_rgba8();
+    let path = if down {
+        "M2 4 L6 8 L10 4"
+    } else {
+        "M4 2 L8 6 L4 10"
+    };
+    let size = SIDEBAR.chevron;
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{size}\" height=\"{size}\" viewBox=\"0 0 12 12\"><path d=\"{path}\" fill=\"none\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{stroke}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>"
+    )
+}
+
 /// A vertical Neptunia sidebar.
 #[derive(PartialEq)]
 pub struct Sidebar {
     children: Vec<Element>,
     traffic_lights: bool,
+    on_close: Option<Callback<(), ()>>,
     key: DiffKey,
 }
 
@@ -36,6 +69,7 @@ impl Sidebar {
         Self {
             children: Vec::new(),
             traffic_lights: false,
+            on_close: None,
             key: DiffKey::None,
         }
     }
@@ -57,6 +91,12 @@ impl Sidebar {
         self
     }
 
+    /// Called when the close light of the sidebar traffic lights is released.
+    pub fn on_close(mut self, callback: impl Into<Callback<(), ()>>) -> Self {
+        self.on_close = Some(callback.into());
+        self
+    }
+
     pub fn key(mut self, key: impl Into<DiffKey>) -> Self {
         self.key = key.into();
         self
@@ -72,86 +112,125 @@ impl KeyExt for Sidebar {
 impl Component for Sidebar {
     fn render(&self) -> impl IntoElement {
         let resolved = crate::theme::resolved();
-        let palette = palette(resolved.scheme);
         let surface = resolved.sidebar;
         let island = surface.style == SidebarStyle::Island;
 
         let top_height = SIDEBAR.traffic_y + TITLEBAR.buttons.diameter;
+        let padding_x = SIDEBAR.padding_x as f32;
+        let radius = SIDEBAR.radius as f32;
 
-        let mut root = rect()
-            .width(Size::px(SIDEBAR.width as f32))
+        let mut sidebar_root = rect()
+            .width(Size::fill())
             .height(Size::fill())
             .direction(Direction::Vertical)
             .background(rgba(surface.bg))
             .a11y_role(AccessibilityRole::Navigation)
+            .padding(Gaps::new(
+                top_height as f32,
+                padding_x,
+                padding_x,
+                padding_x,
+            ))
             .children(self.children.iter().cloned());
 
         if island {
-            let rim = Border::new()
-                .width(SIDEBAR.rim_width)
-                .alignment(BorderAlignment::Inner)
-                .fill(rgba(surface.rim));
-            root = root
-                .corner_radius(SIDEBAR.radius as f32)
-                .border(rim)
-                .padding(Gaps::new(
-                    top_height as f32,
-                    SIDEBAR.inset as f32,
-                    SIDEBAR.inset as f32,
-                    SIDEBAR.inset as f32,
-                ));
-
-            // shortcut: Freya's rect supports a single shadow, so only the
-            // ambient shadow is drawn. Add a second shadow layer when Freya
-            // supports shadow stacks.
-            let shadow_layer = &surface.shadow[0];
-            root = root.shadow(
-                Shadow::new()
-                    .x(0.0)
-                    .y(shadow_layer.y_offset as f32)
-                    .blur(shadow_layer.blur as f32)
-                    .color(rgba(shadow_layer.color)),
+            sidebar_root = sidebar_root.corner_radius(radius).border(
+                Border::new()
+                    .width(SIDEBAR.rim_width)
+                    .alignment(BorderAlignment::Inner)
+                    .fill(rgba(surface.rim)),
             );
 
             if surface.inner.a > 0.0 {
-                root = root.border(
-                    Border::new()
-                        .width(SIDEBAR.inner_width)
-                        .alignment(BorderAlignment::Inner)
-                        .fill(rgba(surface.inner)),
+                sidebar_root = sidebar_root.child(
+                    rect()
+                        .position(
+                            Position::new_absolute()
+                                .top(0.0)
+                                .left(0.0)
+                                .right(0.0)
+                                .bottom(0.0),
+                        )
+                        .margin(Gaps::new(1.0, 1.0, 1.0, 1.0))
+                        .corner_radius((radius - 1.0).max(0.0))
+                        .border(
+                            Border::new()
+                                .width(SIDEBAR.inner_width)
+                                .alignment(BorderAlignment::Inner)
+                                .fill(rgba(surface.inner)),
+                        ),
                 );
             }
-        } else {
-            root = root.padding(Gaps::new(top_height as f32, 0.0, 0.0, 0.0));
-            // Right-hand 1 px separator using the palette hairline.
-            root = root.child(
-                rect()
-                    .position(Position::new_absolute().top(0.0).right(0.0))
-                    .width(Size::px(SIDEBAR.inner_width))
-                    .height(Size::fill())
-                    .background(rgba(palette.hairline)),
+
+            let ambient = &surface.shadow[0];
+            sidebar_root = sidebar_root.shadow(
+                Shadow::new()
+                    .x(0.0)
+                    .y(ambient.y_offset as f32)
+                    .blur(ambient.blur as f32)
+                    .color(rgba(ambient.color)),
             );
+        } else {
+            sidebar_root = sidebar_root
+                .padding(Gaps::new(top_height as f32, padding_x, 0.0, padding_x))
+                .child(
+                    rect()
+                        .position(Position::new_absolute().top(0.0).right(0.0))
+                        .width(Size::px(SIDEBAR.inner_width))
+                        .height(Size::fill())
+                        .background(rgba(surface.palette.line)),
+                );
         }
 
         if self.traffic_lights {
-            let fixed = WindowControls::get().fixed;
-            root = root.child(
-                rect()
-                    .position(Position::new_absolute().top(0.0).left(0.0))
-                    .width(Size::fill())
-                    .height(Size::px(top_height as f32))
-                    .padding(Gaps::new(
-                        SIDEBAR.traffic_y as f32,
-                        SIDEBAR.traffic_x as f32,
-                        0.0,
-                        0.0,
-                    ))
-                    .on_mouse_down(window_drag_handler(fixed))
-                    .child(window_traffic_lights(None, true, fixed)),
-            );
+            let controls = WindowControls::get();
+            let status = *controls.status.read();
+            let fixed = controls.fixed;
+            let (_, _, group_w, _) = yuki_appearance::traffic::group_rect();
+            let lights_right = SIDEBAR.traffic_x as f32 + group_w as f32;
+
+            sidebar_root = sidebar_root
+                .child(
+                    rect()
+                        .position(
+                            Position::new_absolute()
+                                .top(SIDEBAR.traffic_y as f32)
+                                .left(SIDEBAR.traffic_x as f32),
+                        )
+                        .width(Size::px(group_w as f32))
+                        .height(Size::px(TITLEBAR.buttons.diameter as f32))
+                        .child(window_traffic_lights(
+                            self.on_close.clone(),
+                            status.activated,
+                            fixed,
+                        )),
+                )
+                .child(
+                    rect()
+                        .position(Position::new_absolute().top(0.0).left(lights_right))
+                        .width(Size::fill())
+                        .height(Size::px(top_height as f32))
+                        .on_mouse_down(window_drag_handler(fixed)),
+                );
         }
 
-        root
+        if island {
+            let contact = &surface.shadow[1];
+            rect()
+                .width(Size::fill())
+                .height(Size::fill())
+                .shadow(
+                    Shadow::new()
+                        .x(0.0)
+                        .y(contact.y_offset as f32)
+                        .blur(contact.blur as f32)
+                        .color(rgba(contact.color)),
+                )
+                .child(sidebar_root)
+                .into_element()
+        } else {
+            sidebar_root.into_element()
+        }
     }
 }
 
@@ -159,9 +238,10 @@ impl Component for Sidebar {
 #[derive(PartialEq)]
 pub struct SidebarItem {
     label: String,
+    icon: Option<&'static str>,
+    app_icon: Option<(&'static str, Rgba)>,
     badge: Option<u32>,
     selected: bool,
-    app_icon: bool,
     on_select: Option<Callback<(), ()>>,
     key: DiffKey,
 }
@@ -170,12 +250,25 @@ impl SidebarItem {
     pub fn new(label: impl Into<String>) -> Self {
         Self {
             label: label.into(),
+            icon: None,
+            app_icon: None,
             badge: None,
             selected: false,
-            app_icon: false,
             on_select: None,
             key: DiffKey::None,
         }
+    }
+
+    pub fn icon(mut self, svg: &'static str) -> Self {
+        self.icon = Some(svg);
+        self.app_icon = None;
+        self
+    }
+
+    pub fn app_icon(mut self, svg: &'static str, color: Rgba) -> Self {
+        self.app_icon = Some((svg, color));
+        self.icon = None;
+        self
     }
 
     pub fn badge(mut self, badge: u32) -> Self {
@@ -185,12 +278,6 @@ impl SidebarItem {
 
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
-        self
-    }
-
-    /// Use `SIDEBAR.app_icon` instead of `SIDEBAR.item_icon`.
-    pub fn app_icon(mut self) -> Self {
-        self.app_icon = true;
         self
     }
 
@@ -214,30 +301,25 @@ impl KeyExt for SidebarItem {
 impl Component for SidebarItem {
     fn render(&self) -> impl IntoElement {
         let resolved = crate::theme::resolved();
-        let palette = palette(resolved.scheme);
+        let palette = resolved.sidebar.palette;
         let mut hovered = use_state(|| false);
-        let icon_size = if self.app_icon {
-            SIDEBAR.app_icon
-        } else {
-            SIDEBAR.item_icon
-        };
 
         let (bg, fg, weight) = if self.selected {
             (
-                rgba(palette.accent),
-                rgba(palette.titlebar_bg.focused),
+                rgba(palette.selected_bg),
+                rgba(palette.selected_ink),
                 FontWeight::SEMI_BOLD,
             )
         } else if *hovered.read() {
             (
-                rgba(palette.hairline),
-                rgba(palette.text.focused),
+                rgba(palette.hover_bg),
+                rgba(palette.item_ink),
                 FontWeight::MEDIUM,
             )
         } else {
             (
                 Color::TRANSPARENT,
-                rgba(palette.text.focused),
+                rgba(palette.item_ink),
                 FontWeight::MEDIUM,
             )
         };
@@ -247,11 +329,20 @@ impl Component for SidebarItem {
             .height(Size::px(SIDEBAR.item_height as f32))
             .direction(Direction::Horizontal)
             .cross_align(Alignment::Center)
-            .padding(Gaps::new(0.0, 8.0, 0.0, 8.0))
+            .spacing(SIDEBAR.item_gap as f32)
+            .padding(Gaps::new(
+                0.0,
+                SIDEBAR.item_padding_x as f32,
+                0.0,
+                SIDEBAR.item_padding_x as f32,
+            ))
             .corner_radius(SIDEBAR.item_radius as f32)
             .background(bg)
             .a11y_role(AccessibilityRole::ListItem)
             .a11y_focusable(true)
+            .a11y_builder(move |node| {
+                node.set_selected(self.selected);
+            })
             .on_pointer_enter(move |_| hovered.set(true))
             .on_pointer_leave(move |_| hovered.set(false))
             .maybe(self.on_select.is_some(), |el| {
@@ -259,20 +350,24 @@ impl Component for SidebarItem {
                 el.on_press(move |_| callback.call(()))
             });
 
-        // Icon placeholder, sized from the tokens.
-        row = row.child(
-            rect()
-                .width(Size::px(icon_size as f32))
-                .height(Size::px(icon_size as f32))
-                .corner_radius((icon_size as f32 / 4.0).max(1.0))
-                .background(rgba(palette.text.unfocused))
-                .a11y_role(AccessibilityRole::Image),
-        );
+        if let Some((svg, bg_color)) = self.app_icon {
+            row = row.child(
+                rect()
+                    .width(Size::px(SIDEBAR.app_icon as f32))
+                    .height(Size::px(SIDEBAR.app_icon as f32))
+                    .corner_radius(SIDEBAR.item_radius as f32)
+                    .background(rgba(bg_color))
+                    .center()
+                    .child(svg_viewer(svg, Rgba::rgb8(255, 255, 255), SIDEBAR.app_icon)),
+            );
+        } else if let Some(svg) = self.icon {
+            row = row.child(svg_viewer(svg, palette.item_icon, SIDEBAR.item_icon));
+        }
 
         row = row.child(
             label()
                 .text(self.label.clone())
-                .font_size(13.0)
+                .font_size(SIDEBAR.item_text_size as f32)
                 .font_weight(weight)
                 .color(fg)
                 .max_lines(1),
@@ -281,14 +376,16 @@ impl Component for SidebarItem {
         if let Some(badge) = self.badge {
             row = row.child(
                 rect()
-                    .padding(Gaps::new(2.0, 6.0, 2.0, 6.0))
-                    .corner_radius(8.0)
-                    .background(rgba(resolved.accent))
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .main_align(Alignment::End)
+                    .cross_align(Alignment::Center)
                     .child(
                         label()
                             .text(badge.to_string())
-                            .font_size(11.0)
-                            .color(rgba(palette.titlebar_bg.focused)),
+                            .font_size(SIDEBAR.count_size as f32)
+                            .color(rgba(palette.count_ink))
+                            .max_lines(1),
                     ),
             );
         }
@@ -355,8 +452,12 @@ impl Component for SidebarSection {
     fn render(&self) -> impl IntoElement {
         let expanded = use_state(|| self.initial_expanded);
         let resolved = crate::theme::resolved();
-        let palette = palette(resolved.scheme);
-        let mut chevron_visible = use_state(|| false);
+        let palette = resolved.sidebar.palette;
+        let mut hovered = use_state(|| false);
+        let a11y_id = use_a11y();
+        let focus = use_focus(a11y_id);
+        let keyboard_focused = matches!(*focus.read(), Focus::Keyboard);
+        let show_chevron = *hovered.read() || keyboard_focused || *expanded.read();
 
         let on_toggle = self.on_toggle.clone();
         let toggle = {
@@ -386,6 +487,18 @@ impl Component for SidebarSection {
             }
         };
 
+        let full_height = self.children.len() as f32 * SIDEBAR.item_height as f32;
+        let animation = use_animation(move |conf: &mut AnimConfiguration| {
+            if resolved.reduced_motion {
+                conf.on_change(OnChange::Finish);
+            } else {
+                conf.on_change(OnChange::Rerun);
+            }
+            let target = if *expanded.read() { full_height } else { 0.0 };
+            AnimNum::new(0.0, target).time(Duration::from_millis(DURATION_BASE).as_millis() as u64)
+        });
+        let height = animation.get().value();
+
         rect()
             .width(Size::fill())
             .direction(Direction::Vertical)
@@ -394,9 +507,16 @@ impl Component for SidebarSection {
                     .width(Size::fill())
                     .height(Size::px(SIDEBAR.section_height as f32))
                     .margin(Gaps::new(SIDEBAR.section_margin_top as f32, 0.0, 0.0, 0.0))
-                    .padding(Gaps::new(0.0, 8.0, 0.0, 8.0))
+                    .padding(Gaps::new(
+                        0.0,
+                        SIDEBAR.section_padding_x as f32,
+                        0.0,
+                        SIDEBAR.section_padding_x as f32,
+                    ))
                     .direction(Direction::Horizontal)
                     .cross_align(Alignment::Center)
+                    .main_align(Alignment::SpaceBetween)
+                    .a11y_id(a11y_id)
                     .a11y_role(AccessibilityRole::Button)
                     .a11y_focusable(true)
                     .a11y_alt(self.title.clone())
@@ -410,23 +530,28 @@ impl Component for SidebarSection {
                             .text(self.title.clone())
                             .font_size(SIDEBAR.section_size as f32)
                             .font_weight(FontWeight::from(SIDEBAR.section_weight as i32))
-                            .color(rgba(palette.text.unfocused))
+                            .color(rgba(palette.section_ink))
                             .max_lines(1),
                     )
-                    .maybe(*chevron_visible.read() || *expanded.read(), |el| {
-                        el.child(
-                            label()
-                                .text(if *expanded.read() { "▼" } else { "▶" })
-                                .font_size(SIDEBAR.chevron as f32)
-                                .color(rgba(palette.text.unfocused)),
-                        )
+                    .maybe(show_chevron, |el| {
+                        let svg = chevron_svg(
+                            *expanded.read(),
+                            SIDEBAR.chevron_stroke,
+                            palette.section_ink,
+                        );
+                        el.child(svg_viewer(&svg, palette.section_ink, SIDEBAR.chevron))
                     })
-                    .on_pointer_enter(move |_| chevron_visible.set(true))
-                    .on_pointer_leave(move |_| chevron_visible.set(false)),
+                    .on_pointer_enter(move |_| hovered.set(true))
+                    .on_pointer_leave(move |_| hovered.set(false)),
             )
-            .maybe(*expanded.read(), |el| {
-                el.children(self.children.iter().cloned())
-            })
+            .child(
+                rect()
+                    .width(Size::fill())
+                    .height(Size::px(height))
+                    .overflow(Overflow::Clip)
+                    .direction(Direction::Vertical)
+                    .children(self.children.iter().cloned()),
+            )
             .into_element()
     }
 }
@@ -466,15 +591,31 @@ impl Component for SidebarLayout {
         let resolved = crate::theme::resolved();
         let island = resolved.sidebar.style == SidebarStyle::Island;
         let inset = if island { SIDEBAR.inset as f32 } else { 0.0 };
+        let sidebar_width = SIDEBAR.width as f32;
+
+        let sidebar_container_width = if island {
+            sidebar_width + 2.0 * inset
+        } else {
+            sidebar_width
+        };
 
         rect()
             .width(Size::fill())
             .height(Size::fill())
             .direction(Direction::Horizontal)
-            .padding(Gaps::new(inset, inset, inset, inset))
-            .spacing(inset)
-            .child(self.sidebar.clone())
-            .child(self.content.clone())
+            .child(
+                rect()
+                    .width(Size::px(sidebar_container_width))
+                    .height(Size::fill())
+                    .padding(Gaps::new(inset, inset, inset, inset))
+                    .child(self.sidebar.clone()),
+            )
+            .child(
+                rect()
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .child(self.content.clone()),
+            )
             .into_element()
     }
 }

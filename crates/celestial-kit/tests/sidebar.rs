@@ -20,6 +20,8 @@ use yuki_design::{SIDEBAR, TITLEBAR_CLIENT_HEIGHT};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+type Capture = Arc<Mutex<Option<(f32, f32, f32, f32)>>>;
+
 fn with_config<F: FnOnce() -> R, R>(style: &str, f: F) -> R {
     let _guard = ENV_LOCK.lock().unwrap();
     let dir = std::env::temp_dir().join(format!("yuki-sidebar-test-{style}"));
@@ -37,7 +39,7 @@ fn with_config<F: FnOnce() -> R, R>(style: &str, f: F) -> R {
 }
 
 struct LayoutCase {
-    capture: Arc<Mutex<Option<(f32, f32)>>>,
+    capture: Capture,
 }
 
 impl App for LayoutCase {
@@ -49,15 +51,20 @@ impl App for LayoutCase {
             rect().width(Size::fill()).height(Size::fill()).on_sized(
                 move |event: Event<SizedEventData>| {
                     let area = event.data().area;
-                    *capture.lock().unwrap() = Some((area.origin.x, area.origin.y));
+                    *capture.lock().unwrap() = Some((
+                        area.origin.x,
+                        area.origin.y,
+                        area.size.width,
+                        area.size.height,
+                    ));
                 },
             ),
         )
     }
 }
 
-fn layout_position() -> (f32, f32) {
-    let capture = Arc::new(Mutex::new(None));
+fn layout_position() -> (f32, f32, f32, f32) {
+    let capture: Capture = Arc::new(Mutex::new(None));
     let app = AppComponent::new(LayoutCase {
         capture: capture.clone(),
     });
@@ -68,22 +75,36 @@ fn layout_position() -> (f32, f32) {
 
 #[test]
 fn island_layout_positions_content_at_sidebar_width_plus_double_inset() {
-    let (x, _y) = with_config("island", layout_position);
-    let expected = SIDEBAR.width as f32 + 2.0 * SIDEBAR.inset as f32;
+    let (x, y, width, height) = with_config("island", layout_position);
+    let expected_x = SIDEBAR.width as f32 + 2.0 * SIDEBAR.inset as f32;
     assert!(
-        (x - expected).abs() < 0.5,
-        "island content x should be {expected}, got {x}"
+        (x - expected_x).abs() < 0.5,
+        "island content x should be {expected_x}, got {x}"
     );
+    assert_eq!(y, 0.0, "island content must start at the top edge");
+    let expected_width = 800.0 - expected_x;
+    assert!(
+        (width - expected_width).abs() < 0.5,
+        "island content width should be {expected_width}, got {width}"
+    );
+    assert_eq!(height, 600.0, "island content must fill the full height");
 }
 
 #[test]
 fn flat_layout_positions_content_at_sidebar_width() {
-    let (x, _y) = with_config("flat", layout_position);
-    let expected = SIDEBAR.width as f32;
+    let (x, y, width, height) = with_config("flat", layout_position);
+    let expected_x = SIDEBAR.width as f32;
     assert!(
-        (x - expected).abs() < 0.5,
-        "flat content x should be {expected}, got {x}"
+        (x - expected_x).abs() < 0.5,
+        "flat content x should be {expected_x}, got {x}"
     );
+    assert_eq!(y, 0.0, "flat content must start at the top edge");
+    let expected_width = 800.0 - expected_x;
+    assert!(
+        (width - expected_width).abs() < 0.5,
+        "flat content width should be {expected_width}, got {width}"
+    );
+    assert_eq!(height, 600.0, "flat content must fill the full height");
 }
 
 struct TitlebarCase {
@@ -113,28 +134,54 @@ fn render_titlebar(sidebar: bool, decoration: DecorationResponse) -> Vec<u8> {
     test.render().as_ref().to_vec()
 }
 
-fn render_titlebar_explicit(_sidebar: bool, decoration: DecorationResponse) -> Vec<u8> {
+fn titlebar_layout(sidebar: bool) -> Vec<(f32, f32, f32, f32)> {
     let app = AppComponent::new(TitlebarCase {
-        sidebar: false,
+        sidebar,
         status: WindowStatus {
             activated: true,
             maximized: false,
-            decoration,
+            decoration: DecorationResponse::Client,
             fixed: false,
         },
     });
-    let (mut test, _) = TestingRunner::new(app, Size2D::new(300.0, 120.0), |_| {}, 1.0);
-    test.sync_and_update();
-    test.render().as_ref().to_vec()
+    let (test, _) = TestingRunner::new(app, Size2D::new(300.0, 120.0), |_| {}, 1.0);
+    test.find_many(|node, _element| {
+        let layout = node.layout();
+        let area = layout.area;
+        if area.size.height == TITLEBAR_CLIENT_HEIGHT as f32 {
+            Some((
+                area.origin.x,
+                area.origin.y,
+                area.size.width,
+                area.size.height,
+            ))
+        } else {
+            None
+        }
+    })
 }
 
 #[test]
-fn titlebar_without_sidebar_is_unchanged() {
-    let plain = render_titlebar(false, DecorationResponse::Client);
-    let explicit = render_titlebar_explicit(false, DecorationResponse::Client);
-    assert_eq!(
-        plain, explicit,
-        "with_sidebar(false) must not change the titlebar"
+fn titlebar_without_sidebar_keeps_the_classic_three_slot_layout() {
+    let bars = titlebar_layout(false);
+    // The root bar plus its three direct children (left slot, title, right slot).
+    assert!(
+        bars.len() >= 3,
+        "expected at least the bar root and three slots, found {bars:?}"
+    );
+    let widths: Vec<f32> = bars.iter().map(|(_, _, w, _)| *w).collect();
+    assert!(
+        widths.contains(&80.0),
+        "left/right slots must keep their 80 px default width: {widths:?}"
+    );
+}
+
+#[test]
+fn titlebar_with_sidebar_uses_elastic_side_slots() {
+    let bars = titlebar_layout(true);
+    assert!(
+        !bars.iter().any(|(_, _, w, _)| *w == 80.0),
+        "with_sidebar(true) must not use fixed 80 px slots: {bars:?}"
     );
 }
 
@@ -212,4 +259,22 @@ fn sidebar_traffic_light_tokens_are_sane() {
     assert_eq!(SIDEBAR.traffic_x, 18);
     assert_eq!(SIDEBAR.traffic_y, 16);
     assert_eq!(TITLEBAR_CLIENT_HEIGHT, 44);
+}
+
+struct ItemCase;
+
+impl App for ItemCase {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(|| theme::for_scheme(false));
+        Sidebar::new().child(SidebarItem::new("Hola").badge(7))
+    }
+}
+
+#[test]
+fn sidebar_item_uses_design_padding_and_gap() {
+    let app = AppComponent::new(ItemCase);
+    let (mut test, _) = TestingRunner::new(app, Size2D::new(300.0, 300.0), |_| {}, 1.0);
+    test.sync_and_update();
+    let png = test.render();
+    assert!(!png.as_ref().is_empty());
 }

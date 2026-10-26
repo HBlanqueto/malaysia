@@ -13,7 +13,6 @@ pub use freya_components::switch::Switch;
 
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_appearance::palette;
 use yuki_design::{TEXT, TEXT_LINE_HEIGHT, TOOLGROUP};
 
 use crate::password::PasswordField;
@@ -161,9 +160,13 @@ impl Default for ToolGroup {
 
 impl ToolGroup {
     pub fn new() -> Self {
+        let style = match crate::theme::resolved().sidebar.style {
+            yuki_appearance::SidebarStyle::Island => ToolGroupStyle::Island,
+            yuki_appearance::SidebarStyle::Flat => ToolGroupStyle::Flat,
+        };
         Self {
             children: Vec::new(),
-            style: ToolGroupStyle::Island,
+            style,
             key: DiffKey::None,
         }
     }
@@ -171,6 +174,12 @@ impl ToolGroup {
     /// Use the flat style (no background capsule).
     pub fn flat(mut self) -> Self {
         self.style = ToolGroupStyle::Flat;
+        self
+    }
+
+    /// Use the island style (background capsule with shadow).
+    pub fn island(mut self) -> Self {
+        self.style = ToolGroupStyle::Island;
         self
     }
 
@@ -200,7 +209,7 @@ impl KeyExt for ToolGroup {
 impl Component for ToolGroup {
     fn render(&self) -> impl IntoElement {
         let resolved = crate::theme::resolved();
-        let palette = palette(resolved.scheme);
+        let palette = resolved.toolgroup.palette;
 
         let mut items: Vec<Element> = Vec::with_capacity(self.children.len().saturating_mul(2));
         let last = self.children.len().saturating_sub(1);
@@ -211,7 +220,7 @@ impl Component for ToolGroup {
                     rect()
                         .width(Size::px(TOOLGROUP.separator_w as f32))
                         .height(Size::px(TOOLGROUP.separator_h as f32))
-                        .background(rgba(palette.hairline))
+                        .background(rgba(palette.separator))
                         .into_element(),
                 );
             }
@@ -221,16 +230,42 @@ impl Component for ToolGroup {
             .direction(Direction::Horizontal)
             .height(Size::px(TOOLGROUP.height as f32))
             .cross_align(Alignment::Center)
-            .padding(Gaps::new(0.0, 4.0, 0.0, 4.0))
+            .padding(Gaps::new(
+                0.0,
+                TOOLGROUP.padding_x as f32,
+                0.0,
+                TOOLGROUP.padding_x as f32,
+            ))
             .children(items);
 
         if self.style == ToolGroupStyle::Island {
+            let shadow = resolved.toolgroup.shadow;
             root = root
                 .background(rgba(resolved.toolgroup.bg))
-                .corner_radius((TOOLGROUP.height as f32 / 2.0).max(1.0));
+                .corner_radius((TOOLGROUP.height as f32 / 2.0).max(1.0))
+                .shadow(
+                    Shadow::new()
+                        .x(0.0)
+                        .y(shadow[0].y_offset as f32)
+                        .blur(shadow[0].blur as f32)
+                        .color(rgba(shadow[0].color)),
+                );
+
+            return rect()
+                .width(Size::auto())
+                .height(Size::px(TOOLGROUP.height as f32))
+                .shadow(
+                    Shadow::new()
+                        .x(0.0)
+                        .y(shadow[1].y_offset as f32)
+                        .blur(shadow[1].blur as f32)
+                        .color(rgba(shadow[1].color)),
+                )
+                .child(root)
+                .into_element();
         }
 
-        root
+        root.into_element()
     }
 }
 

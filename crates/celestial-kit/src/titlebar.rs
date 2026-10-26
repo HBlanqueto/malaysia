@@ -15,8 +15,12 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use yuki_appearance::palette;
 use yuki_appearance::traffic::TrafficInput;
+use yuki_appearance::{ColorScheme, SidebarStyle};
 use yuki_design::NATIVE_APP_ID_PREFIX;
-use yuki_design::{ButtonKind, Rgba, TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK};
+use yuki_design::{
+    BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, ButtonKind, Rgba, TITLE_2,
+    TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK,
+};
 
 use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStatus};
 
@@ -114,7 +118,9 @@ impl Component for Titlebar {
 
         let resolved = crate::theme::resolved();
         let theme = palette(resolved.scheme);
-        let background = if status.activated {
+        let background = if self.sidebar {
+            bg_window(resolved.scheme)
+        } else if status.activated {
             theme.titlebar_bg.focused
         } else {
             theme.titlebar_bg.unfocused
@@ -134,11 +140,17 @@ impl Component for Titlebar {
             ))
         };
 
+        let slot_width = if self.sidebar {
+            Size::auto()
+        } else {
+            Size::px(80.0)
+        };
+
         let left_slot = rect()
-            .width(Size::px(80.0))
+            .width(slot_width.clone())
             .height(Size::fill())
             .cross_align(Alignment::Center)
-            .on_mouse_down(window_drag_handler(fixed))
+            .a11y_alt("titlebar-left-slot")
             .maybe(self.left.is_some(), |el| {
                 el.child(self.left.clone().unwrap())
             });
@@ -149,15 +161,48 @@ impl Component for Titlebar {
         };
 
         let right_slot = rect()
-            .width(Size::px(80.0))
+            .width(slot_width)
             .height(Size::fill())
             .cross_align(Alignment::Center)
-            .on_mouse_down(window_drag_handler(fixed))
+            .a11y_alt("titlebar-right-slot")
             .maybe(self.right.is_some(), |el| {
                 el.child(self.right.clone().unwrap())
             });
+        let right_slot = if self.sidebar {
+            right_slot
+        } else {
+            right_slot.on_mouse_down(window_drag_handler(fixed))
+        };
 
-        rect()
+        let mut title = rect()
+            .width(Size::flex(1.0))
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .a11y_alt("titlebar-title")
+            .on_mouse_down(window_drag_handler(fixed))
+            .child(
+                label()
+                    .text(truncate(&title))
+                    .font_size(if self.sidebar {
+                        TITLE_2.size as f32
+                    } else {
+                        13.0
+                    })
+                    .font_weight(FontWeight::from(if self.sidebar {
+                        TITLE_2.weight as i32
+                    } else {
+                        500
+                    }))
+                    .color(rgba(title_color))
+                    .max_lines(1),
+            );
+        if self.sidebar {
+            title = title.main_align(Alignment::Start);
+        } else {
+            title = title.main_align(Alignment::Center);
+        }
+
+        let mut root = rect()
             .width(Size::fill())
             .height(Size::px(TITLEBAR_CLIENT_HEIGHT as f32))
             .background(rgba(background))
@@ -165,22 +210,20 @@ impl Component for Titlebar {
             .cross_align(Alignment::Center)
             .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
             .child(left_slot)
-            .child(
+            .child(title)
+            .child(right_slot);
+
+        if self.sidebar && resolved.sidebar.style == SidebarStyle::Flat {
+            root = root.child(
                 rect()
-                    .width(Size::flex(1.0))
-                    .height(Size::fill())
-                    .center()
-                    .on_mouse_down(window_drag_handler(fixed))
-                    .child(
-                        label()
-                            .text(truncate(&title))
-                            .font_size(13.0)
-                            .color(rgba(title_color))
-                            .max_lines(1),
-                    ),
-            )
-            .child(right_slot)
-            .into_element()
+                    .position(Position::new_absolute().bottom(0.0).left(0.0))
+                    .width(Size::fill())
+                    .height(Size::px(1.0))
+                    .background(rgba(resolved.sidebar.palette.line)),
+            );
+        }
+
+        root.into_element()
     }
 }
 
@@ -356,6 +399,14 @@ fn truncate(title: &str) -> String {
 fn rgba(color: Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+fn bg_window(scheme: ColorScheme) -> Rgba {
+    match scheme {
+        ColorScheme::Dark => BG_WINDOW_DARK,
+        ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
+        _ => BG_WINDOW_LIGHT,
+    }
 }
 
 /// The app-id for a CelestialKit window with the given suffix.

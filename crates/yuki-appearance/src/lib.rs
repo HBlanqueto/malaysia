@@ -25,7 +25,7 @@ use yuki_design::{
     TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
     TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE,
     TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT, TOOLGROUP_PALETTE_LIGHT, TOOLGROUP_SHADOW,
-    TOOLGROUP_SHADOW_DARK, ToolgroupPalette, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN,
+    TOOLGROUP_SHADOW_DARK, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, ToolgroupPalette,
     WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 
@@ -350,7 +350,11 @@ fn toolgroup_surface(
         (_, false) => (TOOLGROUP_BG_LIGHT, TOOLGROUP_SHADOW),
         (_, true) => (TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW),
     };
-    ToolgroupSurface { bg, shadow, palette }
+    ToolgroupSurface {
+        bg,
+        shadow,
+        palette,
+    }
 }
 
 /// Resolves an appearance configuration with the current wallpaper dominant.
@@ -1122,7 +1126,11 @@ sidebar_style = "flat"
                 SIDEBAR_PALETTE_LIGHT,
                 TOOLGROUP_PALETTE_LIGHT,
             ),
-            (ColorScheme::Dark, SIDEBAR_PALETTE_DARK, TOOLGROUP_PALETTE_DARK),
+            (
+                ColorScheme::Dark,
+                SIDEBAR_PALETTE_DARK,
+                TOOLGROUP_PALETTE_DARK,
+            ),
             (
                 ColorScheme::DarkTint,
                 SIDEBAR_PALETTE_DARK_TINT,
@@ -1139,7 +1147,10 @@ sidebar_style = "flat"
                 ),
                 None,
             );
-            assert_eq!(resolved.sidebar.palette, expected_sidebar, "{scheme:?} sidebar palette");
+            assert_eq!(
+                resolved.sidebar.palette, expected_sidebar,
+                "{scheme:?} sidebar palette"
+            );
             assert_eq!(
                 resolved.toolgroup.palette, expected_toolgroup,
                 "{scheme:?} toolgroup palette"

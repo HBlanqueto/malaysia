@@ -38,7 +38,7 @@ fn main() {
     emit_shell(&mut out, &tokens, &components);
     emit_sidebar(&mut out, &tokens, &components);
     emit_menu(&mut out, &tokens, &components);
-    emit_metrics(&mut out, &components);
+    emit_metrics(&mut out, &tokens, &components);
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(out_dir.join("neptunia.rs"), out).expect("write neptunia.rs");
@@ -720,6 +720,8 @@ fn emit_font_families(out: &mut String, tokens: &Value) {
 fn emit_typography(out: &mut String, tokens: &Value) {
     const_doc(out, "TEXT", "The body text face.");
     out.push_str(&format!(": Font = {};\n\n", font(tokens, "body")));
+    const_doc(out, "TITLE_2", "The secondary title face (15/600).");
+    out.push_str(&format!(": Font = {};\n\n", font(tokens, "title-2")));
     let line_height = number(tokens, "font.line-height-scale", TOKENS);
     const_doc(
         out,
@@ -847,6 +849,22 @@ fn emit_palettes(out: &mut String, tokens: &Value, components: &Value) {
         out.push_str(&format!(
             ": Palette = {};\n\n",
             palette(tokens, components, theme)
+        ));
+    }
+
+    for (name, theme) in [
+        ("BG_WINDOW_LIGHT", "light"),
+        ("BG_WINDOW_DARK", "dark"),
+        ("BG_WINDOW_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} window background (`bg-window`)."),
+        );
+        out.push_str(&format!(
+            ": Rgba = {};\n\n",
+            rgba(theme_color(tokens, theme, "bg-window"))
         ));
     }
 }
@@ -1115,7 +1133,11 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         ("SIDEBAR_PALETTE_DARK", "dark"),
         ("SIDEBAR_PALETTE_DARK_TINT", "dark-tint"),
     ] {
-        const_doc(out, name, &format!("The {theme} sidebar item/section palette."));
+        const_doc(
+            out,
+            name,
+            &format!("The {theme} sidebar item/section palette."),
+        );
         out.push_str(&format!(
             ": SidebarPalette = {};\n\n",
             sidebar_palette_value(tokens, components, theme)
@@ -1215,14 +1237,15 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.item.padding-x",
         COMPONENTS,
     ) as u32;
-    let item_gap = integer(
-        components,
-        "components.window.sidebar.item.gap",
-        COMPONENTS,
-    ) as u32;
+    let item_gap = integer(components, "components.window.sidebar.item.gap", COMPONENTS) as u32;
     let item_text_size = integer(
         components,
         "components.window.sidebar.item.text-size",
+        COMPONENTS,
+    ) as u32;
+    let count_size = integer(
+        components,
+        "components.window.sidebar.item.count-size",
         COMPONENTS,
     ) as u32;
     let item_icon = integer(
@@ -1294,6 +1317,7 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
          \x20   item_padding_x: {item_padding_x},\n\
          \x20   item_gap: {item_gap},\n\
          \x20   item_text_size: {item_text_size},\n\
+         \x20   count_size: {count_size},\n\
          \x20   item_icon: {item_icon},\n\
          \x20   app_icon: {app_icon},\n\
          \x20   section_height: {section_height},\n\
@@ -1629,7 +1653,15 @@ fn emit_menu(out: &mut String, tokens: &Value, components: &Value) {
     }
 }
 
-fn emit_metrics(out: &mut String, components: &Value) {
+fn emit_metrics(out: &mut String, tokens: &Value, components: &Value) {
+    let duration_base = integer(tokens, "duration.base", TOKENS);
+    const_doc(
+        out,
+        "DURATION_BASE",
+        "The base animation duration, in milliseconds.",
+    );
+    out.push_str(&format!(": u64 = {duration_base};\n\n"));
+
     let metrics = [
         ("MENUBAR_HEIGHT", "i32", "components.shell.menubar.height"),
         (

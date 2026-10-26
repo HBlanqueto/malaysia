@@ -284,6 +284,8 @@ pub struct SidebarMetrics {
     pub item_gap: u32,
     /// Item label text size, in points.
     pub item_text_size: u32,
+    /// Counter text size, in points.
+    pub count_size: u32,
     /// Size of a regular stroke icon, in logical pixels.
     pub item_icon: u32,
     /// Size of an app icon, in logical pixels.
