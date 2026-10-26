@@ -34,7 +34,7 @@ if matches=$(production crates/yuki-shell/src crates/celestial-kit/src |
     report "convert colours with Rgba::to_rgba8, not a local [u8; 4]" "$matches"
 fi
 
-ui_files="crates/yuki-shell/src/menubar.rs
+ui_files="crates/yuki-shell/src/menubar
 crates/yuki-shell/src/dock.rs
 crates/yuki-shell/src/lock.rs
 crates/celestial-kit/src/password.rs
