@@ -18,7 +18,7 @@ use std::{
     },
 };
 
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 const PAM_SUCCESS: c_int = 0;
 const PAM_CONV_ERR: c_int = 19;
@@ -263,6 +263,24 @@ struct ConversationState<'a> {
     answers: &'a Receiver<Zeroizing<String>>,
 }
 
+/// Frees `count` responses, wiping every copied answer before releasing it.
+///
+/// # Safety
+///
+/// `responses` must point to `count` `calloc`'d `PamResponse`s whose `resp` fields are `strdup` allocations or null.
+unsafe fn discard_responses(responses: *mut PamResponse, count: usize) {
+    for j in 0..count {
+        let answer = unsafe { (*responses.add(j)).resp };
+        if !answer.is_null() {
+            unsafe {
+                std::slice::from_raw_parts_mut(answer as *mut u8, libc::strlen(answer)).zeroize();
+                libc::free(answer as *mut c_void);
+            }
+        }
+    }
+    unsafe { libc::free(responses as *mut c_void) };
+}
+
 /// PAM's conversation callback, called on the PAM thread.
 ///
 /// # Safety
@@ -289,7 +307,7 @@ unsafe extern "C" fn conversation(
     for i in 0..count {
         let message = unsafe { *msg.add(i) };
         if message.is_null() {
-            unsafe { libc::free(responses as *mut c_void) };
+            unsafe { discard_responses(responses, count) };
             return PAM_CONV_ERR;
         }
         let text = if unsafe { (*message).msg }.is_null() {
@@ -311,13 +329,13 @@ unsafe extern "C" fn conversation(
                         let _ = stream.write_all(&[1]);
                     }
                 } else {
-                    unsafe { libc::free(responses as *mut c_void) };
+                    unsafe { discard_responses(responses, count) };
                     return PAM_CONV_ERR;
                 }
                 match state.answers.recv() {
                     Ok(answer) => Some(answer),
                     Err(_) => {
-                        unsafe { libc::free(responses as *mut c_void) };
+                        unsafe { discard_responses(responses, count) };
                         return PAM_CONV_ERR;
                     }
                 }
@@ -349,13 +367,13 @@ unsafe extern "C" fn conversation(
             terminated.push(0);
             drop(answer);
             if terminated[..terminated.len() - 1].contains(&0) {
-                unsafe { libc::free(responses as *mut c_void) };
+                unsafe { discard_responses(responses, count) };
                 return PAM_CONV_ERR;
             }
             let copy = unsafe { libc::strdup(terminated.as_ptr() as *const c_char) };
             drop(terminated);
             if copy.is_null() {
-                unsafe { libc::free(responses as *mut c_void) };
+                unsafe { discard_responses(responses, count) };
                 return PAM_BUF_ERR;
             }
             unsafe {
@@ -398,7 +416,15 @@ pub fn prompt_label(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Service, prompt_label, resolve_service};
+    use std::ffi::{CString, c_void};
+    use std::sync::{Arc, Mutex, mpsc};
+
+    use zeroize::Zeroizing;
+
+    use super::{
+        ConversationState, EventBuffer, PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PamMessage, PamResponse,
+        Service, conversation, prompt_label, resolve_service,
+    };
 
     #[test]
     fn prompt_labels_lose_terminal_punctuation() {
@@ -417,5 +443,38 @@ mod tests {
         );
         assert_eq!(pick(&["login"]).to_str(), Ok("login"));
         assert_eq!(pick(&[]).to_str(), Ok("malaysia-lock"));
+    }
+
+    #[test]
+    fn a_failed_conversation_leaves_resp_null() {
+        let events: EventBuffer = Arc::new(Mutex::new(Vec::new()));
+        let (answers, answer_rx) = mpsc::channel();
+        answers.send(Zeroizing::new("secret".to_string())).unwrap();
+        let notify = None;
+        let mut state = ConversationState {
+            events: &events,
+            notify: &notify,
+            answers: &answer_rx,
+        };
+
+        let text = CString::new("Password: ").unwrap();
+        let prompt = PamMessage {
+            msg_style: PAM_PROMPT_ECHO_OFF,
+            msg: text.as_ptr(),
+        };
+        let mut messages = [&prompt as *const PamMessage, std::ptr::null()];
+        let mut responses: *mut PamResponse = std::ptr::null_mut();
+
+        let status = unsafe {
+            conversation(
+                2,
+                messages.as_mut_ptr(),
+                &mut responses,
+                &mut state as *mut ConversationState as *mut c_void,
+            )
+        };
+
+        assert_eq!(status, PAM_CONV_ERR);
+        assert!(responses.is_null());
     }
 }
