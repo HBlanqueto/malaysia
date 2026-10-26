@@ -956,6 +956,20 @@ lab() {
         _dialog="$script_dir/result/bin/dialog"
     fi
 
+    _registrar_stub=
+    if [ "${YUKI_LAB_REGISTRAR_STUB:-}" = "1" ]; then
+        if [ -n "${YUKI_DEV_SHELL:-}" ]; then
+            if [ ! -x "$script_dir/target/debug/examples/appmenu_registrar_stub" ]; then
+                cargo build -p yuki --example appmenu_registrar_stub ||
+                    fail "$EXIT_RUN_FAILED" "could not build the appmenu registrar stub"
+            fi
+            _registrar_stub="$script_dir/target/debug/examples/appmenu_registrar_stub"
+        else
+            fail "$EXIT_RUN_FAILED" \
+                "YUKI_LAB_REGISTRAR_STUB needs the dev shell"
+        fi
+    fi
+
     if ! command -v dbus-daemon >/dev/null 2>&1; then
         fail "$EXIT_RUN_FAILED" \
             "dbus-daemon is not installed; the lab needs a private session bus"
@@ -980,6 +994,12 @@ lab() {
     export DBUS_SESSION_BUS_ADDRESS
     printf 'lab: D-Bus session bus: %s (pid %s)\n' \
         "$DBUS_SESSION_BUS_ADDRESS" "$_lab_bus_pid"
+
+    if [ -n "$_registrar_stub" ]; then
+        "$_registrar_stub" >"$RUNTIME_DIR/demo-registrar.log" 2>&1 &
+        _pids="$_pids $!"
+        printf '%s\n' "$!" >"$RUNTIME_DIR/demo-registrar.pid"
+    fi
 
     start
     _sock=
