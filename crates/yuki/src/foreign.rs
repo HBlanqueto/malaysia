@@ -342,12 +342,7 @@ impl State {
             self.minimized.insert(id);
             self.windows.set_hidden(id, true);
             tracing::info!(window = id.get(), "window minimized");
-            let focused = self
-                .seat
-                .get_keyboard()
-                .and_then(|keyboard| keyboard.current_focus())
-                .and_then(|focused| self.windows.id_of(&focused));
-            if focused == Some(id) {
+            if self.focused_window() == Some(id) {
                 let next = self
                     .windows
                     .iter_visible(&self.minimized)

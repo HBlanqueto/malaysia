@@ -281,6 +281,11 @@ pub struct State {
     /// The tracked toplevels. All window geometry goes through this; the Direct
     /// Session milestone replaces it with `yuki-scene` (see [`crate::window`]).
     pub windows: Windows,
+    /// The logical active window, independent of where the keyboard is.
+    ///
+    /// The menu bar, its popups and the launcher move the keyboard without
+    /// making the active app inactive (14d-4).
+    pub(crate) active_window: ActiveWindowState,
     /// The tracked popups (Bloque 5): positioned, configured and dismissed here.
     pub popups: Popups,
     /// The window list and control protocols for the dock (ADR 0023).
@@ -341,6 +346,37 @@ pub struct State {
     pub(crate) screenshot: Option<ScreenshotRequest>,
     /// The interactive screenshot mode (region or window pick), if any.
     pub(crate) screenshot_mode: Option<ScreenshotMode>,
+}
+
+/// The logical active (frontmost) window, separate from keyboard focus.
+///
+/// The shell's layer surfaces and their popups take the keyboard while a menu
+/// or the launcher is open; that must not deactivate the app (14d-4). Pure so
+/// the policy is testable without Wayland.
+#[derive(Debug, Default)]
+pub(crate) struct ActiveWindowState {
+    id: Option<WindowId>,
+}
+
+impl ActiveWindowState {
+    /// The active window, if any.
+    pub(crate) fn get(&self) -> Option<WindowId> {
+        self.id
+    }
+
+    /// Makes `id` the active window; returns whether it changed.
+    pub(crate) fn set(&mut self, id: Option<WindowId>) -> bool {
+        if self.id == id {
+            return false;
+        }
+        self.id = id;
+        true
+    }
+
+    /// Clears the active window; returns the previous one, if any.
+    pub(crate) fn clear(&mut self) -> Option<WindowId> {
+        self.id.take()
+    }
 }
 
 /// What a queued screenshot should capture.
@@ -545,6 +581,7 @@ impl State {
             output_size: size,
             scale,
             windows: Windows::new(),
+            active_window: ActiveWindowState::default(),
             popups: Popups::new(),
             foreign: ForeignState::new(display_handle),
             appmenu: AppMenuState::new(display_handle),
@@ -649,13 +686,13 @@ impl State {
         self.screenshot.take()
     }
 
-    /// The window that currently holds keyboard focus, if any.
+    /// The active (frontmost) window, if any.
+    ///
+    /// This is deliberately not the keyboard-focused window: while a menu bar
+    /// popup or the launcher owns the keyboard, the active window stays active
+    /// (14d-4).
     pub(crate) fn focused_window(&self) -> Option<WindowId> {
-        let surface = self
-            .seat
-            .get_keyboard()
-            .and_then(|keyboard| keyboard.current_focus())?;
-        self.windows.id_of(&surface)
+        self.active_window.get()
     }
 
     /// Shift+Super+4: start dragging a region.
@@ -1279,5 +1316,53 @@ mod tests {
         assert_eq!(parse_scale(Some("2.5")).fractional_scale(), 2.5);
         assert_eq!(parse_scale(Some("0.5")).integer_scale(), 1);
         assert_eq!(parse_scale(Some("abc")).integer_scale(), 1);
+    }
+
+    #[test]
+    fn a_bar_popup_leaves_the_active_window_alone() {
+        use crate::layers::{LayerFocus, LayerUnfocus};
+        use smithay::wayland::shell::wlr_layer::KeyboardInteractivity;
+
+        let window = WindowId::new(1);
+        let mut active = ActiveWindowState::default();
+        assert!(active.set(Some(window)));
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        // The bar itself takes no keyboard; its popup grabs it.
+        assert!(!focus.mapped(10, KeyboardInteractivity::None, active.get()));
+        assert!(focus.clicked(10, KeyboardInteractivity::OnDemand, active.get()));
+        assert_eq!(
+            active.get(),
+            Some(window),
+            "opening the popup keeps Activated"
+        );
+        assert_eq!(focus.unmapped(&10), LayerUnfocus::Window(Some(window)));
+        assert_eq!(active.get(), Some(window), "closing it keeps Activated");
+    }
+
+    #[test]
+    fn the_launcher_leaves_the_active_window_alone() {
+        use crate::layers::{LayerFocus, LayerUnfocus};
+        use smithay::wayland::shell::wlr_layer::KeyboardInteractivity;
+
+        let window = WindowId::new(2);
+        let mut active = ActiveWindowState::default();
+        active.set(Some(window));
+        let mut focus: LayerFocus<u32> = LayerFocus::default();
+        assert!(focus.mapped(11, KeyboardInteractivity::Exclusive, active.get()));
+        assert_eq!(active.get(), Some(window));
+        assert_eq!(focus.unmapped(&11), LayerUnfocus::Window(Some(window)));
+        assert_eq!(active.get(), Some(window));
+    }
+
+    #[test]
+    fn the_desktop_and_the_lock_clear_the_active_window() {
+        let window = WindowId::new(3);
+        let mut active = ActiveWindowState::default();
+        active.set(Some(window));
+        assert_eq!(active.clear(), Some(window), "a desktop click clears it");
+        assert_eq!(active.get(), None);
+        active.set(Some(window));
+        assert_eq!(active.clear(), Some(window), "locking clears it");
+        assert_eq!(active.get(), None);
     }
 }

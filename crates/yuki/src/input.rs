@@ -865,10 +865,14 @@ impl State {
             }
             return;
         }
-        // A click outside an on-demand layer releases its keyboard focus; the
-        // window under the pointer (if any) takes it next in this same path.
+        // A click outside an on-demand layer releases its keyboard focus back
+        // to the active window without deactivating it; a click on the desktop
+        // below clears the active window, and one on another window focuses it.
         if self.layer_focus.clicked_outside() {
-            self.clear_keyboard_focus();
+            self.apply_focus_restore(crate::popup::FocusRestore::Previous(
+                None,
+                self.focused_window(),
+            ));
         }
 
         let side = f64::from(self.config.window.resize_border);
@@ -1152,6 +1156,7 @@ impl State {
         };
         self.windows.raise(id);
         let previous = self.focused_window();
+        let changed = self.active_window.set(Some(id));
         let serial = SERIAL_COUNTER.next_serial();
         match self.seat.get_keyboard() {
             Some(keyboard) => {
@@ -1166,18 +1171,18 @@ impl State {
             }
             None => tracing::warn!("a window was focused but the seat has no keyboard"),
         }
-        for (window, activated) in activation_updates(previous, Some(id)) {
-            self.windows.set_activated(window, activated);
+        if changed {
+            for (window, activated) in activation_updates(previous, Some(id)) {
+                self.windows.set_activated(window, activated);
+            }
+            // Publish the active window for the menu bar (the store the shell
+            // watches, same as the wallpaper).
+            self.publish_active(Some(id));
+            if let Some(previous) = previous {
+                self.foreign_state_changed(previous);
+            }
+            self.foreign_state_changed(id);
         }
-        // Publish the active window for the menu bar (the store the shell
-        // watches, same as the wallpaper).
-        self.publish_active(Some(id));
-        if let Some(previous) = previous
-            && previous != id
-        {
-            self.foreign_state_changed(previous);
-        }
-        self.foreign_state_changed(id);
         self.log_focus_stack(Some(id));
     }
 
@@ -1409,8 +1414,21 @@ impl State {
                 self.focus_layer_surface(&surface);
             }
             crate::popup::FocusRestore::Previous(surface, window) => {
-                let target = surface.filter(|surface| self.surface_still_exists(surface));
-                if let Some(surface) = target {
+                // The keyboard goes back to the active window; the remembered
+                // window/surface is only a fallback for when it is gone.
+                let target = self
+                    .focused_window()
+                    .or(window)
+                    .filter(|id| self.windows.surface_of(*id).is_some());
+                if let Some(id) = target {
+                    self.focus_window(id);
+                } else if let Some(surface) =
+                    surface.filter(|surface| self.surface_still_exists(surface))
+                {
+                    tracing::info!(
+                        surface = ?surface.id(),
+                        "giving keyboard focus back to a surface"
+                    );
                     if let Some(keyboard) = self.seat.get_keyboard() {
                         keyboard.set_focus(self, Some(surface.clone()), serial);
                         if let Some(client) = surface.client() {
@@ -1422,11 +1440,6 @@ impl State {
                             set_primary_focus(&self.display_handle, &self.seat, Some(client));
                         }
                     }
-                } else if let Some(id) = window
-                    .filter(|id| self.windows.surface_of(*id).is_some())
-                    .or_else(|| self.focused_window())
-                {
-                    self.focus_window(id);
                 } else {
                     self.clear_keyboard_focus();
                 }
@@ -1502,22 +1515,22 @@ impl State {
         }
     }
 
-    /// Drops keyboard focus entirely.
+    /// Drops keyboard focus and clears the active window.
     pub(crate) fn clear_keyboard_focus(&mut self) {
-        let previous = self.focused_window();
+        let previous = self.active_window.clear();
         let serial = SERIAL_COUNTER.next_serial();
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, None, serial);
             set_data_device_focus(&self.display_handle, &self.seat, None);
             set_primary_focus(&self.display_handle, &self.seat, None);
         }
-        for (window, activated) in activation_updates(previous, None) {
-            self.windows.set_activated(window, activated);
-        }
-        self.publish_active(None);
         if let Some(previous) = previous {
+            for (window, activated) in activation_updates(Some(previous), None) {
+                self.windows.set_activated(window, activated);
+            }
             self.foreign_state_changed(previous);
         }
+        self.publish_active(None);
         self.log_focus_stack(None);
     }
 
@@ -1538,10 +1551,7 @@ impl State {
         if self.leak_window(surface) {
             return;
         }
-        let focused = self
-            .seat
-            .get_keyboard()
-            .and_then(|keyboard| keyboard.current_focus());
+        let active = self.focused_window();
         let Some(id) = self.windows.remove(surface) else {
             return;
         };
@@ -1570,7 +1580,7 @@ impl State {
             topmost = ?self.windows.topmost(),
             "window removed"
         );
-        if focused.as_ref() == Some(surface) {
+        if active == Some(id) {
             match self.windows.topmost_visible(&self.minimized) {
                 Some(next) => self.focus_window(next),
                 None => self.clear_keyboard_focus(),
