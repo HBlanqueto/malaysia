@@ -60,6 +60,31 @@ impl App for BarApp {
         let app_id = self.active_app.read().clone();
         let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let focused = app_id.is_some();
+        let last_app_menu = use_hook(|| {
+            Rc::new(RefCell::new(
+                None::<(String, Option<celestial_kit::platform::AppMenuAddress>)>,
+            ))
+        });
+        let toplevels = Toplevels::get().list.read().clone();
+        let active_info = toplevels.iter().find(|window| window.active).or_else(|| {
+            app_id
+                .as_deref()
+                .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
+        });
+        if let Some(info) = active_info {
+            let mut last = last_app_menu.borrow_mut();
+            let key = (info.app_id.clone(), info.app_menu.clone());
+            if last.as_ref() != Some(&key) {
+                match &info.app_menu {
+                    Some(menu) => eprintln!(
+                        "menubar: app_menu app_id={} service={} path={}",
+                        info.app_id, menu.service, menu.path
+                    ),
+                    None => eprintln!("menubar: app_menu app_id={} none", info.app_id),
+                }
+                *last = Some(key);
+            }
+        }
         let palette = celestial_kit::theme::shell_palette(&resolved);
         let text = rgba(palette.text);
         // Opaque by default; the blur for reduce_transparency = false will

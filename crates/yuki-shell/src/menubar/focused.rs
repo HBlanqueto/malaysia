@@ -678,6 +678,7 @@ mod tests {
             maximized: false,
             minimized,
             restorable,
+            app_menu: None,
         }
     }
 

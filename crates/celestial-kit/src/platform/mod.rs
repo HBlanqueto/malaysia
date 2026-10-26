@@ -1020,6 +1020,13 @@ impl AppInstance {
     }
 }
 
+/// Where a window's global menu lives on D-Bus (ADR 0040).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AppMenuAddress {
+    pub service: String,
+    pub path: String,
+}
+
 /// One running toplevel, as the dock lists it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ToplevelInfo {
@@ -1029,6 +1036,8 @@ pub struct ToplevelInfo {
     pub maximized: bool,
     pub minimized: bool,
     pub restorable: bool,
+    /// The app's dbusmenu address, when it announced one.
+    pub app_menu: Option<AppMenuAddress>,
 }
 
 /// A change that only touches one toplevel's metadata. Kept pure so the
@@ -1042,6 +1051,7 @@ enum InfoEvent {
         maximized: bool,
         minimized: bool,
     },
+    AppMenu(Option<AppMenuAddress>),
     Closed,
 }
 
@@ -1061,6 +1071,7 @@ fn apply_info_event(infos: &mut Vec<ToplevelInfo>, index: usize, event: InfoEven
             info.maximized = maximized;
             info.minimized = minimized;
         }
+        InfoEvent::AppMenu(app_menu) => info.app_menu = app_menu,
         InfoEvent::Closed => {
             infos.remove(index);
         }
@@ -1893,7 +1904,7 @@ impl Shell {
             .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 3..=3, ())
             .ok();
         let infinity_manager_bound = globals
-            .bind::<InfinityWindowManagerV1, _, _>(&qh, 1..=1, ())
+            .bind::<InfinityWindowManagerV1, _, _>(&qh, 1..=2, ())
             .ok();
         *infinity_manager.borrow_mut() = infinity_manager_bound;
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
@@ -3484,16 +3495,42 @@ impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
         _: &QueueHandle<Self>,
     ) {
         use infinity::protocol::infinity_window_manager_v1::Event;
-        let Event::Restorable { handle, restorable } = event;
-        let restorable = restorable != 0;
-        for entry in state.toplevel_entries.borrow_mut().iter_mut() {
-            if entry
-                .mgmt
-                .as_ref()
-                .is_some_and(|mgmt| mgmt.id() == handle.id())
-            {
-                entry.restorable = restorable;
-                break;
+        match event {
+            Event::Restorable { handle, restorable } => {
+                let restorable = restorable != 0;
+                for entry in state.toplevel_entries.borrow_mut().iter_mut() {
+                    if entry
+                        .mgmt
+                        .as_ref()
+                        .is_some_and(|mgmt| mgmt.id() == handle.id())
+                    {
+                        entry.restorable = restorable;
+                        break;
+                    }
+                }
+            }
+            Event::AppMenu {
+                toplevel,
+                service,
+                path,
+            } => {
+                let address = if service.is_empty() || path.is_empty() {
+                    None
+                } else {
+                    Some(AppMenuAddress { service, path })
+                };
+                let mut entries = state.toplevel_entries.borrow_mut();
+                if let Some(index) = entries.iter().position(|entry| {
+                    entry
+                        .mgmt
+                        .as_ref()
+                        .is_some_and(|mgmt| mgmt.id() == toplevel.id())
+                }) {
+                    let mut infos: Vec<ToplevelInfo> =
+                        entries.iter().map(|entry| entry.info.clone()).collect();
+                    apply_info_event(&mut infos, index, InfoEvent::AppMenu(address));
+                    entries[index].info = infos[index].clone();
+                }
             }
         }
         state.sync_toplevels();
@@ -3590,5 +3627,26 @@ mod tests {
         apply_info_event(&mut infos, 0, InfoEvent::Closed);
         assert_eq!(infos.len(), 1);
         assert_eq!(infos[0].title, "Navegador");
+    }
+
+    #[test]
+    fn app_menu_event_updates_only_its_toplevel() {
+        let mut infos = vec![ToplevelInfo::default(), ToplevelInfo::default()];
+        apply_info_event(
+            &mut infos,
+            0,
+            InfoEvent::AppMenu(Some(AppMenuAddress {
+                service: ":1.2".to_string(),
+                path: "/MenuBar/1".to_string(),
+            })),
+        );
+        assert_eq!(
+            infos[0].app_menu.as_ref().map(|a| a.service.as_str()),
+            Some(":1.2")
+        );
+        assert!(infos[1].app_menu.is_none());
+
+        apply_info_event(&mut infos, 0, InfoEvent::AppMenu(None));
+        assert!(infos[0].app_menu.is_none());
     }
 }
