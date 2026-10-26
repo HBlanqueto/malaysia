@@ -36,6 +36,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
         ),
         MenuItem::Separator,
         MenuItem::Submenu {
+            id: None,
             label: "Servicios".to_string(),
             enabled: true,
             icon: None,
@@ -126,12 +127,14 @@ pub fn window_menu_items(
         ),
         MenuItem::Separator,
         MenuItem::Submenu {
+            id: None,
             label: "Trasladar y redimensionar".to_string(),
             enabled: true,
             icon: Some(icons::GRID),
             items: move_resize_items(active, active_window),
         },
         MenuItem::Submenu {
+            id: None,
             label: "Ventana a pantalla completa".to_string(),
             enabled: true,
             icon: Some(icons::SPLIT),
@@ -347,7 +350,10 @@ fn collect_searchable(
                 });
             }
             MenuItem::Submenu {
-                label, items: sub, ..
+                id: None,
+                label,
+                items: sub,
+                ..
             } => {
                 let sub_path = format!("{path} › {label}");
                 let mut loc = location.clone();

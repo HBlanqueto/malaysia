@@ -663,6 +663,7 @@ fn edit_menu() -> Vec<MenuItem> {
         },
         MenuItem::Separator,
         MenuItem::Submenu {
+            id: None,
             label: "Ordenar por".to_string(),
             enabled: true,
             icon: None,
@@ -684,6 +685,7 @@ fn edit_menu() -> Vec<MenuItem> {
                     icon: None,
                 },
                 MenuItem::Submenu {
+                    id: None,
                     label: "Orden".to_string(),
                     enabled: true,
                     icon: None,
@@ -714,12 +716,14 @@ fn edit_menu() -> Vec<MenuItem> {
 fn yuki_menu(_palette: yuki_design::MenuPalette) -> Vec<MenuItem> {
     vec![
         MenuItem::Submenu {
+            id: None,
             label: "Ir".to_string(),
             enabled: true,
             icon: None,
             items: go_menu(),
         },
         MenuItem::Submenu {
+            id: None,
             label: "Editar".to_string(),
             enabled: true,
             icon: None,

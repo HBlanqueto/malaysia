@@ -105,10 +105,12 @@ fn menu_items() -> Vec<MenuItem> {
         },
         // Submenu with chevron.
         MenuItem::Submenu {
+            id: None,
             label: "More".to_string(),
             enabled: true,
             icon: None,
             items: vec![MenuItem::Submenu {
+                id: None,
                 label: "Level 2".to_string(),
                 enabled: true,
                 icon: None,

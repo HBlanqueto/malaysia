@@ -44,7 +44,7 @@ pub struct MenuTitleSpec {
     pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
     /// Optional searchable entries for the help search field.
     pub searchable: Option<SearchableItems>,
-    pub on_activate: fn(String),
+    pub on_activate: Rc<dyn Fn(String)>,
     /// Position and size of the title highlight, set by `on_sized`.
     pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
@@ -104,12 +104,11 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
 
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
-    let on_activate = spec.on_activate;
-    let mut view = MenuView::new(items, on_activate, on_dismiss_all, palette).with_navigation(
-        move |direction| {
+    let on_activate = spec.on_activate.clone();
+    let mut view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all, palette)
+        .with_navigation(move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
-        },
-    );
+        });
     if let Some(searchable_fn) = &spec.searchable {
         let lists = searchable_fn();
         view = view

@@ -211,6 +211,9 @@ pub enum MenuItem {
     },
     /// A nested submenu.
     Submenu {
+        /// Stable id used to request remote children, when it came from
+        /// dbusmenu. Static menus leave it `None`.
+        id: Option<String>,
         label: String,
         enabled: bool,
         items: Vec<MenuItem>,
@@ -285,8 +288,15 @@ impl MenuItem {
 /// A Neptunia menu rendered inside a popup.
 pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
+    /// Live item source, re-read on every render so remote menus can update
+    /// while the popup stays open.
+    items_source: Option<Rc<dyn Fn() -> Vec<MenuItem>>>,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
+    /// Called with a submenu id when a remote submenu is opened.
+    on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    /// Resolves the live children of a remote submenu by id.
+    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
     searchable: Option<Rc<Vec<SearchableEntry>>>,
@@ -314,8 +324,11 @@ impl MenuView {
     ) -> Self {
         Self {
             items: Rc::new(items),
+            items_source: None,
             on_activate: Rc::new(on_activate),
             on_dismiss_all: Rc::new(on_dismiss_all),
+            on_open_submenu: None,
+            submenu_source: None,
             on_navigation: None,
             palette,
             searchable: None,
@@ -371,6 +384,28 @@ impl MenuView {
     /// Sets the initial focused row, used when revealing a search result.
     pub fn with_focused_index(mut self, index: Option<usize>) -> Self {
         self.focused_index = index;
+        self
+    }
+
+    /// Re-reads the items on every render. The source can subscribe to a
+    /// `State` so a remote menu updates while its popup stays open.
+    pub fn with_items_source(mut self, source: impl Fn() -> Vec<MenuItem> + 'static) -> Self {
+        self.items_source = Some(Rc::new(source));
+        self
+    }
+
+    /// Called with the id when a remote submenu is opened.
+    pub fn with_open_submenu(mut self, callback: impl Fn(String) + 'static) -> Self {
+        self.on_open_submenu = Some(Rc::new(callback));
+        self
+    }
+
+    /// Resolves the live children of a remote submenu by id.
+    pub fn with_submenu_source(
+        mut self,
+        source: impl Fn(&str) -> Option<Vec<MenuItem>> + 'static,
+    ) -> Self {
+        self.submenu_source = Some(Rc::new(source));
         self
     }
 
@@ -451,8 +486,11 @@ impl Clone for MenuView {
     fn clone(&self) -> Self {
         Self {
             items: self.items.clone(),
+            items_source: self.items_source.clone(),
             on_activate: self.on_activate.clone(),
             on_dismiss_all: self.on_dismiss_all.clone(),
+            on_open_submenu: self.on_open_submenu.clone(),
+            submenu_source: self.submenu_source.clone(),
             on_navigation: self.on_navigation.clone(),
             palette: self.palette,
             searchable: self.searchable.clone(),
@@ -476,9 +514,14 @@ impl PartialEq for MenuView {
 
 impl App for MenuView {
     fn render(&self) -> impl IntoElement {
-        let items = self.items.clone();
+        let items = match &self.items_source {
+            Some(source) => Rc::new(source()),
+            None => self.items.clone(),
+        };
         let on_activate = self.on_activate.clone();
         let on_dismiss_all = self.on_dismiss_all.clone();
+        let on_open_submenu = self.on_open_submenu.clone();
+        let submenu_source = self.submenu_source.clone();
         let on_navigation = self.on_navigation.clone();
         let m = self.palette;
         // The popup may have grown or shrunk after a reposition, so the tree
@@ -497,9 +540,10 @@ impl App for MenuView {
         let popup_spec = self.popup_spec.clone();
         let initial_focused = self.focused_index;
         let items_for_focus = items.clone();
-        let focused =
+        let mut focused =
             use_state(move || initial_focused.or_else(|| first_selectable(&items_for_focus)));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
+        let open_child_index = use_hook(|| Rc::new(Cell::new(None::<usize>)));
         let query_state = self.query_state.clone();
         let initial = query_state
             .as_ref()
@@ -541,18 +585,6 @@ impl App for MenuView {
             *prev_query.borrow_mut() = query_text.clone();
             menu_scroll.set(0);
             help_scroll.set(0);
-            if let (Some(popup), Some(spec)) = (&popup, &popup_spec) {
-                let preview = if query_text.is_empty() {
-                    (*items).clone()
-                } else {
-                    visible_items(&items, &menu_results, &help_results, 0, 0)
-                };
-                let new_size = MenuView::preferred_size(&preview, m);
-                popup.reposition(PopupSpec {
-                    size: (new_size.0 as u32, new_size.1 as u32),
-                    ..spec.clone()
-                });
-            }
         }
 
         let visible = if query_text.is_empty() {
@@ -566,6 +598,24 @@ impl App for MenuView {
                 *help_scroll.read(),
             )
         };
+
+        // Keep the popup size in sync when live items replace a loading row.
+        let last_size = use_hook(|| {
+            Rc::new(Cell::new(
+                popup_spec.as_ref().map(|spec| spec.size).unwrap_or((0, 0)),
+            ))
+        });
+        let wanted = MenuView::preferred_size(&visible, m);
+        let wanted = (wanted.0 as u32, wanted.1 as u32);
+        if wanted != last_size.get() {
+            last_size.set(wanted);
+            if let (Some(popup), Some(spec)) = (&popup, &popup_spec) {
+                popup.reposition(PopupSpec {
+                    size: wanted,
+                    ..spec.clone()
+                });
+            }
+        }
 
         let results_start = visible
             .iter()
@@ -583,6 +633,14 @@ impl App for MenuView {
         let help_section = find_result_section(&visible, SearchSource::Help);
 
         let focused_index = *focused.read();
+        if let Some(index) = focused_index
+            && !items.get(index).is_some_and(MenuItem::selectable)
+        {
+            let next = first_selectable(&items);
+            if next != focused_index {
+                focused.set(next);
+            }
+        }
         let result_focused_index = *result_focused.read();
         let reveal_child_id = use_hook(|| Rc::new(Cell::new(None::<PopupId>)));
         let prev_revealed = use_hook(|| Rc::new(RefCell::new(None::<SearchLocation>)));
@@ -600,7 +658,7 @@ impl App for MenuView {
         });
         if revealed_location != *prev_revealed.borrow() {
             *prev_revealed.borrow_mut() = revealed_location.clone();
-            close_child(reveal_child_id.clone());
+            close_child(reveal_child_id.clone(), Rc::new(Cell::new(None)));
             if let (Some(loc), Some(roots), Some(popup)) =
                 (revealed_location, reveal_roots.as_ref(), popup.clone())
                 && let Some(items) = roots.get(loc.title_index)
@@ -646,12 +704,15 @@ impl App for MenuView {
                     Rc::new(visible.clone()),
                     focused,
                     open_child_id.clone(),
+                    open_child_index.clone(),
                     size,
                     query,
                     selected,
                     menu_search_icon,
                     help_search_icon,
                     result_focused,
+                    on_open_submenu.clone(),
+                    submenu_source.clone(),
                 )
             })
             .collect();
@@ -807,7 +868,10 @@ impl App for MenuView {
                             m,
                             on_activate.clone(),
                             on_dismiss_all.clone(),
-                            open_child_id,
+                            on_open_submenu.clone(),
+                            submenu_source.clone(),
+                            open_child_id.clone(),
+                            open_child_index.clone(),
                             opens_left,
                         );
                     }
@@ -828,7 +892,10 @@ impl App for MenuView {
                             m,
                             on_activate.clone(),
                             on_dismiss_all.clone(),
-                            open_child_id,
+                            on_open_submenu.clone(),
+                            submenu_source.clone(),
+                            open_child_id.clone(),
+                            open_child_index.clone(),
                             opens_left,
                         );
                     }
@@ -873,18 +940,22 @@ impl App for MenuView {
                         return;
                     }
                     if let Some(index) = current {
-                        if let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
+                        if let Some(MenuItem::Submenu { id, items: sub, .. }) = items.get(index)
                             && let Some(popup) = popup.clone()
                         {
                             open_child_popup(
                                 index,
+                                id.as_deref(),
                                 sub,
                                 popup,
                                 size,
                                 m,
                                 on_activate.clone(),
                                 on_dismiss_all.clone(),
-                                open_child_id,
+                                on_open_submenu.clone(),
+                                submenu_source.clone(),
+                                open_child_id.clone(),
+                                open_child_index.clone(),
                                 Rc::new(items.to_vec()),
                                 opens_left,
                             );
@@ -997,24 +1068,31 @@ fn activate_or_open(
     m: MenuPalette,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
+    on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
+    open_child_index: Rc<Cell<Option<usize>>>,
     opens_left: bool,
 ) {
     if let Some(id) = activate_at(items, index) {
         on_activate(id);
         on_dismiss_all();
-    } else if let Some(MenuItem::Submenu { items: sub, .. }) = items.get(index)
+    } else if let Some(MenuItem::Submenu { id, items: sub, .. }) = items.get(index)
         && let Some(popup) = popup
     {
         open_child_popup(
             index,
+            id.as_deref(),
             sub,
             popup,
             size,
             m,
             on_activate,
             on_dismiss_all,
+            on_open_submenu,
+            submenu_source,
             open_child_id,
+            open_child_index,
             Rc::new(items.to_vec()),
             opens_left,
         );
@@ -1270,33 +1348,77 @@ fn submenu_anchor_rect(
     )
 }
 
-fn close_child(open_child_id: Rc<Cell<Option<PopupId>>>) {
+fn close_child(
+    open_child_id: Rc<Cell<Option<PopupId>>>,
+    open_child_index: Rc<Cell<Option<usize>>>,
+) {
     if let Some(id) = open_child_id.get() {
         if let Some(popups) = try_consume_root_context::<Popups>() {
             popups.close(id);
         }
         open_child_id.set(None);
     }
+    open_child_index.set(None);
+}
+
+/// Items shown inside a submenu popup: the first row is a disabled
+/// "Cargando…" while a remote submenu waits for its children.
+fn submenu_contents(id: Option<&str>, items: &[MenuItem]) -> Vec<MenuItem> {
+    if id.is_some() && items.is_empty() {
+        vec![MenuItem::Action {
+            id: String::new(),
+            label: "Cargando…".to_string(),
+            shortcut: None,
+            enabled: false,
+            check: CheckState::None,
+            icon: None,
+        }]
+    } else {
+        items.to_vec()
+    }
+}
+
+fn announce_submenu(on_open: &Option<Rc<dyn Fn(String)>>, id: Option<&str>) {
+    if let (Some(callback), Some(id)) = (on_open, id) {
+        callback(id.to_string());
+    }
+}
+
+fn child_already_open(
+    has_child: bool,
+    open_child_index: &Cell<Option<usize>>,
+    index: usize,
+) -> bool {
+    has_child && open_child_index.get() == Some(index)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn open_child_popup(
     index: usize,
+    id: Option<&str>,
     sub_items: &[MenuItem],
     popup: PopupHandle,
     parent_size: (f32, f32),
     m: MenuPalette,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
+    on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
+    open_child_index: Rc<Cell<Option<usize>>>,
     parent_items: Rc<Vec<MenuItem>>,
     opens_left: bool,
 ) -> Option<PopupId> {
-    close_child(open_child_id.clone());
-    let child_size = MenuView::preferred_size(sub_items, m);
+    if child_already_open(open_child_id.get().is_some(), &open_child_index, index) {
+        return open_child_id.get();
+    }
+    close_child(open_child_id.clone(), open_child_index.clone());
+    announce_submenu(&on_open_submenu, id);
+    let initial_items = submenu_contents(id, sub_items);
+    let child_size = MenuView::preferred_size(&initial_items, m);
     let on_dismiss_for_action = on_dismiss_all.clone();
-    let child_view = MenuView::new(
-        sub_items.to_vec(),
+    let mut child_view = MenuView::new(
+        initial_items.clone(),
         move |id| {
             on_activate(id);
             on_dismiss_for_action();
@@ -1304,9 +1426,29 @@ fn open_child_popup(
         move || on_dismiss_all(),
         m,
     );
+    if let (Some(source), Some(id)) = (&submenu_source, id) {
+        let source = source.clone();
+        let id = id.to_string();
+        let fallback = initial_items;
+        child_view = child_view.with_items_source(move || {
+            source(&id)
+                .filter(|items| !items.is_empty())
+                .unwrap_or_else(|| fallback.clone())
+        });
+    }
+    if let Some(callback) = &on_open_submenu {
+        let callback = callback.clone();
+        child_view = child_view.with_open_submenu(move |id| callback(id));
+    }
+    if let Some(source) = &submenu_source {
+        let source = source.clone();
+        child_view = child_view.with_submenu_source(move |id| source(id));
+    }
     let open_child_id_set = open_child_id.clone();
+    let open_child_index_set = open_child_index.clone();
     let on_dismissed = move || {
         open_child_id_set.set(None);
+        open_child_index_set.set(None);
     };
     let inset = m.padding + m.border_width;
     let (anchor, gravity, dx) = submenu_positioner(opens_left);
@@ -1324,8 +1466,10 @@ fn open_child_popup(
         grab: true,
         on_dismissed: Some(Rc::new(on_dismissed)),
     };
+    child_view = child_view.with_popup_spec(spec.clone());
     let id = popup.open_child(spec, AppComponent::new(child_view));
     open_child_id.set(Some(id));
+    open_child_index.set(Some(index));
     Some(id)
 }
 
@@ -1343,7 +1487,7 @@ fn open_reveal_popup(
     anchor_x: f32,
     anchor_width: f32,
 ) -> Option<PopupId> {
-    close_child(reveal_child_id.clone());
+    close_child(reveal_child_id.clone(), Rc::new(Cell::new(None)));
     let child_size = MenuView::preferred_size(items, m);
     let parent_width = parent_size.0;
     // The parent popup's left edge depends on which side of the title it
@@ -1405,12 +1549,15 @@ fn render_item(
     items: Rc<Vec<MenuItem>>,
     focused: UseState<Option<usize>>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
+    open_child_index: Rc<Cell<Option<usize>>>,
     size: (f32, f32),
     query: UseState<String>,
     selected: UseState<bool>,
     menu_search_icon: Option<&'static str>,
     help_search_icon: Option<&'static str>,
     result_focused: UseState<Option<usize>>,
+    on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
@@ -1440,6 +1587,7 @@ fn render_item(
             let icon = *icon;
             let mut focused = focused;
             let open_child_id_enter = open_child_id.clone();
+            let open_child_index_enter = open_child_index.clone();
             let shortcut_w = shortcut_text
                 .as_ref()
                 .map(|s| measure_text(s, m.font_size))
@@ -1478,19 +1626,27 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .on_pointer_enter({
                     let open_child_id_enter = open_child_id_enter.clone();
+                    let open_child_index_enter = open_child_index_enter.clone();
                     move |_| {
                         if enabled {
                             focused.set(Some(index));
-                            close_child(open_child_id_enter.clone());
+                            close_child(
+                                open_child_id_enter.clone(),
+                                open_child_index_enter.clone(),
+                            );
                         }
                     }
                 })
                 .on_pointer_move({
                     let open_child_id_enter = open_child_id_enter.clone();
+                    let open_child_index_enter = open_child_index_enter.clone();
                     move |_| {
                         if enabled {
                             focused.set(Some(index));
-                            close_child(open_child_id_enter.clone());
+                            close_child(
+                                open_child_id_enter.clone(),
+                                open_child_index_enter.clone(),
+                            );
                         }
                     }
                 })
@@ -1533,11 +1689,13 @@ fn render_item(
                 .into_element()
         }
         MenuItem::Submenu {
+            id,
             label: label_text,
             enabled,
             items: sub_items,
             icon,
         } => {
+            let id = id.clone();
             let label_text = label_text.clone();
             let enabled = *enabled;
             let icon = *icon;
@@ -1564,6 +1722,11 @@ fn render_item(
             let items_click = items.clone();
             let open_child_id_enter = open_child_id.clone();
             let open_child_id_click = open_child_id.clone();
+            let open_child_index_enter = open_child_index.clone();
+            let open_child_index_click = open_child_index.clone();
+            let id_enter = id.clone();
+            let on_open_submenu_enter = on_open_submenu.clone();
+            let submenu_source_enter = submenu_source.clone();
             let mut row = rect()
                 .width(Size::fill())
                 .height(Size::px(m.item_height))
@@ -1579,13 +1742,17 @@ fn render_item(
                     if enabled && let Some(popup) = popup_enter.clone() {
                         open_child_popup(
                             index,
+                            id_enter.as_deref(),
                             &sub_items_enter,
                             popup,
                             size,
                             m,
                             on_activate_enter.clone(),
                             on_dismiss_enter.clone(),
+                            on_open_submenu_enter.clone(),
+                            submenu_source_enter.clone(),
                             open_child_id_enter.clone(),
+                            open_child_index_enter.clone(),
                             items_enter.clone(),
                             opens_left,
                         );
@@ -1595,13 +1762,17 @@ fn render_item(
                     if enabled && let Some(popup) = popup_click.clone() {
                         open_child_popup(
                             index,
+                            id.as_deref(),
                             &sub_items_click,
                             popup,
                             size,
                             m,
                             on_activate_click.clone(),
                             on_dismiss_click.clone(),
+                            on_open_submenu.clone(),
+                            submenu_source.clone(),
                             open_child_id_click.clone(),
+                            open_child_index_click.clone(),
                             items_click.clone(),
                             opens_left,
                         );
@@ -2011,6 +2182,7 @@ mod tests {
                 icon: None,
             },
             MenuItem::Submenu {
+                id: None,
                 label: "Recent".to_string(),
                 enabled: true,
                 icon: None,
@@ -2093,6 +2265,42 @@ mod tests {
     }
 
     #[test]
+    fn empty_remote_submenu_shows_a_disabled_loading_row() {
+        let loading = submenu_contents(Some("7"), &[]);
+        assert_eq!(loading.len(), 1);
+        assert!(matches!(
+            &loading[0],
+            MenuItem::Action {
+                label,
+                enabled: false,
+                ..
+            } if label == "Cargando…"
+        ));
+        assert!(submenu_contents(None, &[]).is_empty());
+    }
+
+    #[test]
+    fn opening_a_remote_submenu_notifies_once() {
+        let calls = Rc::new(Cell::new(0));
+        let counter = calls.clone();
+        let callback: Option<Rc<dyn Fn(String)>> = Some(Rc::new(move |_| {
+            counter.set(counter.get() + 1);
+        }));
+        let open_index = Cell::new(None::<usize>);
+        for _ in 0..2 {
+            if !child_already_open(true, &open_index, 2) {
+                announce_submenu(&callback, Some("7"));
+                open_index.set(Some(2));
+            }
+        }
+        assert_eq!(calls.get(), 1);
+        assert!(!child_already_open(true, &open_index, 3));
+        assert!(!child_already_open(false, &open_index, 2));
+        announce_submenu(&callback, None);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
     fn activate_at_ignores_disabled_and_submenus() {
         let items = sample();
         assert_eq!(activate_at(&items, 0), Some("new".to_string()));
@@ -2127,6 +2335,7 @@ mod tests {
                 placeholder: "Filtrar".to_string(),
             },
             MenuItem::Submenu {
+                id: None,
                 label: "B".to_string(),
                 enabled: true,
                 items: Vec::new(),
@@ -2152,6 +2361,7 @@ mod tests {
                     icon,
                 },
                 MenuItem::Submenu {
+                    id: None,
                     label: "Disposición".to_string(),
                     enabled: true,
                     items: Vec::new(),
@@ -2211,6 +2421,7 @@ mod tests {
             },
             MenuItem::Separator,
             MenuItem::Submenu {
+                id: None,
                 label: "More".to_string(),
                 enabled: true,
                 icon: None,

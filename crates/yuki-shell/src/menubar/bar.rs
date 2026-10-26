@@ -25,10 +25,7 @@ use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 use celestial_kit::menu::SearchQuery;
 
-const MAX_TITLES: usize = 8;
-
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
-type TitleAnchors = Rc<Vec<TitleAnchor>>;
 type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
 
 pub struct BarApp {
@@ -117,21 +114,22 @@ impl App for BarApp {
                 selected: false,
             }))
         });
-        let anchors: TitleAnchors = use_hook(|| {
-            Rc::new(
-                (0..MAX_TITLES)
-                    .map(|_| Rc::new(Cell::new((0.0f32, 0.0f32))))
-                    .collect(),
-            )
-        });
+        let anchors = use_hook(|| Rc::new(RefCell::new(Vec::<TitleAnchor>::new())));
+        let title_anchor = |index: usize| {
+            let mut anchors = anchors.borrow_mut();
+            while anchors.len() <= index {
+                anchors.push(Rc::new(Cell::new((0.0, 0.0))));
+            }
+            anchors[index].clone()
+        };
         let mut specs = vec![MenuTitleSpec {
             label: "Sistema".to_string(),
             glyph: Some(system::SNOWFLAKE_SVG),
             bold: false,
             items: Rc::new(system::system_menu_items),
             searchable: None,
-            on_activate: system::on_system_action,
-            anchor: anchors[0].clone(),
+            on_activate: Rc::new(system::on_system_action),
+            anchor: title_anchor(0),
             enabled: true,
             query_state: None,
             reveal_roots: None,
@@ -206,8 +204,8 @@ impl App for BarApp {
                     bold: offset == 0,
                     items,
                     searchable,
-                    on_activate: focused::on_action,
-                    anchor: anchors[anchor].clone(),
+                    on_activate: Rc::new(focused::on_action),
+                    anchor: title_anchor(anchor),
                     enabled: true,
                     query_state,
                     reveal_roots,
@@ -234,8 +232,8 @@ impl App for BarApp {
                     bold: offset == 0,
                     items,
                     searchable: None,
-                    on_activate: appmenu::on_action,
-                    anchor: anchors[offset + 1].clone(),
+                    on_activate: Rc::new(appmenu::on_action),
+                    anchor: title_anchor(offset + 1),
                     enabled: true,
                     query_state: None,
                     reveal_roots: None,
