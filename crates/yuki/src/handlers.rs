@@ -1025,12 +1025,12 @@ impl State {
 }
 
 impl XdgDecorationHandler for State {
-    fn new_decoration(&mut self, _toplevel: ToplevelSurface) {
-        // The decoration object was created. The initial xdg configure already
-        // carries Yuki's preferred mode (server-side unless overridden), and
-        // any explicit `request_mode` will send a fresh configure. Sending one
-        // here too produced a duplicate configure that clients with a pending
-        // mode request could ack as stale, leaving the window unmapped.
+    fn new_decoration(&mut self, toplevel: ToplevelSurface) {
+        // Remember the ADR 0019 default: joining the protocol without asking for
+        // a mode means the app accepts Yuki's titlebar. Do not send a configure
+        // here: the initial configure (or the next one) already carries the mode.
+        self.windows
+            .set_requested_decoration(toplevel.wl_surface(), Decoration::Server);
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
