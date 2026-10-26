@@ -322,6 +322,7 @@
         "default-style": "island",
         "island": {
           "inset": "size.sidebar-inset",
+          "padding-x": 10,
           "radius": "size.sidebar-radius",
           "bg": "sidebar-island-bg",
           "rim": "sidebar-island-rim",
@@ -337,29 +338,40 @@
           "bg": "sidebar-flat-bg",
           "line": "line",
           "line-width": 1,
+          "padding-x": 10,
           "traffic-x": 18,
           "traffic-y": 16
         },
         "item": {
           "height": 30,
           "radius": "radius.sm",
+          "padding-x": 8,
+          "gap": 8,
           "icon": 16,
           "app-icon": 22,
+          "ink": "ink",
+          "icon-ink": "accent-strong",
+          "text-size": 13,
           "selected-bg": "accent-soft",
           "selected-ink": "accent-strong",
-          "hover-bg": "bg-hover"
+          "hover-bg": "bg-hover",
+          "count-ink": "ink-muted",
+          "count-size": 11
         },
         "section": {
           "height": 28,
           "margin-top": 10,
+          "padding-x": 8,
           "size": 11,
           "weight": 600,
           "ink": "ink-muted",
-          "chevron": 12
+          "chevron": 12,
+          "chevron-stroke": 1.8
         }
       },
       "toolgroup": {
         "height": "size.toolgroup-h",
+        "padding-x": 3,
         "button-w": 34,
         "button-h": 30,
         "separator-w": 1,
@@ -369,7 +381,9 @@
         "shadow": "shadow.glass",
         "flat-button-w": 30,
         "flat-button-h": 28,
-        "flat-radius": "radius.sm"
+        "flat-radius": "radius.sm",
+        "ink": "ink-strong",
+        "disabled-ink": "ink-faint"
       }
     },
     "dialog": {

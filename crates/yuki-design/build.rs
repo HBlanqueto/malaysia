@@ -1078,11 +1078,94 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         surface_shadow(tokens, "shadow.glass", "dark")
     ));
 
+    fn sidebar_palette_value(tokens: &Value, components: &Value, theme: &str) -> String {
+        let color_at = |path: &str| {
+            rgba(color_ref(
+                tokens,
+                theme,
+                string(components, path, COMPONENTS),
+                path,
+                COMPONENTS,
+            ))
+        };
+        format!(
+            "SidebarPalette {{\n\
+             \x20   item_ink: {},\n\
+             \x20   item_icon: {},\n\
+             \x20   selected_bg: {},\n\
+             \x20   selected_ink: {},\n\
+             \x20   hover_bg: {},\n\
+             \x20   section_ink: {},\n\
+             \x20   count_ink: {},\n\
+             \x20   line: {},\n\
+             }}",
+            color_at("components.window.sidebar.item.ink"),
+            color_at("components.window.sidebar.item.icon-ink"),
+            color_at("components.window.sidebar.item.selected-bg"),
+            color_at("components.window.sidebar.item.selected-ink"),
+            color_at("components.window.sidebar.item.hover-bg"),
+            color_at("components.window.sidebar.section.ink"),
+            color_at("components.window.sidebar.item.count-ink"),
+            color_at("components.window.sidebar.flat.line"),
+        )
+    }
+
+    for (name, theme) in [
+        ("SIDEBAR_PALETTE_LIGHT", "light"),
+        ("SIDEBAR_PALETTE_DARK", "dark"),
+        ("SIDEBAR_PALETTE_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(out, name, &format!("The {theme} sidebar item/section palette."));
+        out.push_str(&format!(
+            ": SidebarPalette = {};\n\n",
+            sidebar_palette_value(tokens, components, theme)
+        ));
+    }
+
+    fn toolgroup_palette_value(tokens: &Value, components: &Value, theme: &str) -> String {
+        let color_at = |path: &str| {
+            rgba(color_ref(
+                tokens,
+                theme,
+                string(components, path, COMPONENTS),
+                path,
+                COMPONENTS,
+            ))
+        };
+        format!(
+            "ToolgroupPalette {{\n\
+             \x20   ink: {},\n\
+             \x20   disabled_ink: {},\n\
+             \x20   separator: {},\n\
+             }}",
+            color_at("components.window.toolgroup.ink"),
+            color_at("components.window.toolgroup.disabled-ink"),
+            color_at("components.window.toolgroup.separator"),
+        )
+    }
+
+    for (name, theme) in [
+        ("TOOLGROUP_PALETTE_LIGHT", "light"),
+        ("TOOLGROUP_PALETTE_DARK", "dark"),
+        ("TOOLGROUP_PALETTE_DARK_TINT", "dark-tint"),
+    ] {
+        const_doc(out, name, &format!("The {theme} toolbar capsule palette."));
+        out.push_str(&format!(
+            ": ToolgroupPalette = {};\n\n",
+            toolgroup_palette_value(tokens, components, theme)
+        ));
+    }
+
     let width = integer(tokens, "size.sidebar-w", TOKENS) as u32;
     let inset = metric(
         tokens,
         components,
         "components.window.sidebar.island.inset",
+        COMPONENTS,
+    ) as u32;
+    let padding_x = integer(
+        components,
+        "components.window.sidebar.island.padding-x",
         COMPONENTS,
     ) as u32;
     let radius = metric(
@@ -1127,6 +1210,21 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.item.radius",
         COMPONENTS,
     ) as u32;
+    let item_padding_x = integer(
+        components,
+        "components.window.sidebar.item.padding-x",
+        COMPONENTS,
+    ) as u32;
+    let item_gap = integer(
+        components,
+        "components.window.sidebar.item.gap",
+        COMPONENTS,
+    ) as u32;
+    let item_text_size = integer(
+        components,
+        "components.window.sidebar.item.text-size",
+        COMPONENTS,
+    ) as u32;
     let item_icon = integer(
         components,
         "components.window.sidebar.item.icon",
@@ -1147,6 +1245,11 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.section.margin-top",
         COMPONENTS,
     ) as u32;
+    let section_padding_x = integer(
+        components,
+        "components.window.sidebar.section.padding-x",
+        COMPONENTS,
+    ) as u32;
     let section_size = integer(
         components,
         "components.window.sidebar.section.size",
@@ -1162,6 +1265,11 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.section.chevron",
         COMPONENTS,
     ) as u32;
+    let chevron_stroke = number(
+        components,
+        "components.window.sidebar.section.chevron-stroke",
+        COMPONENTS,
+    );
     let default_island = string(
         components,
         "components.window.sidebar.default-style",
@@ -1174,6 +1282,7 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
          \x20   default_island: {default_island},\n\
          \x20   width: {width},\n\
          \x20   inset: {inset},\n\
+         \x20   padding_x: {padding_x},\n\
          \x20   radius: {radius},\n\
          \x20   rim_width: {},\n\
          \x20   inner_width: {},\n\
@@ -1182,22 +1291,33 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
          \x20   traffic_y: {traffic_y},\n\
          \x20   item_height: {item_height},\n\
          \x20   item_radius: {item_radius},\n\
+         \x20   item_padding_x: {item_padding_x},\n\
+         \x20   item_gap: {item_gap},\n\
+         \x20   item_text_size: {item_text_size},\n\
          \x20   item_icon: {item_icon},\n\
          \x20   app_icon: {app_icon},\n\
          \x20   section_height: {section_height},\n\
          \x20   section_margin_top: {section_margin_top},\n\
+         \x20   section_padding_x: {section_padding_x},\n\
          \x20   section_size: {section_size},\n\
          \x20   section_weight: {section_weight},\n\
          \x20   chevron: {chevron},\n\
+         \x20   chevron_stroke: {},\n\
          }};\n\n",
         float(rim_width),
-        float(inner_width)
+        float(inner_width),
+        float(chevron_stroke)
     ));
 
     let toolgroup_height = metric(
         tokens,
         components,
         "components.window.toolgroup.height",
+        COMPONENTS,
+    ) as u32;
+    let toolgroup_padding_x = integer(
+        components,
+        "components.window.toolgroup.padding-x",
         COMPONENTS,
     ) as u32;
     let button_w = integer(
@@ -1241,6 +1361,7 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
     out.push_str(&format!(
         ": ToolgroupMetrics = ToolgroupMetrics {{\n\
          \x20   height: {toolgroup_height},\n\
+         \x20   padding_x: {toolgroup_padding_x},\n\
          \x20   button_w: {button_w},\n\
          \x20   button_h: {button_h},\n\
          \x20   separator_w: {separator_w},\n\

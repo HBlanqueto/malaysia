@@ -20,11 +20,13 @@ use yuki_design::{
     SIDEBAR_ISLAND_INNER_DARK, SIDEBAR_ISLAND_INNER_DARK_TINT, SIDEBAR_ISLAND_INNER_LIGHT,
     SIDEBAR_ISLAND_LIGHT, SIDEBAR_ISLAND_LIGHT_OPAQUE, SIDEBAR_ISLAND_RIM_DARK,
     SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_ISLAND_SHADOW,
-    SIDEBAR_ISLAND_SHADOW_DARK, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE, ShadowLayer, ShellPalette,
+    SIDEBAR_ISLAND_SHADOW_DARK, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE, SIDEBAR_PALETTE_DARK,
+    SIDEBAR_PALETTE_DARK_TINT, SIDEBAR_PALETTE_LIGHT, ShadowLayer, ShellPalette, SidebarPalette,
     TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
-    TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW,
-    TOOLGROUP_SHADOW_DARK, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT,
-    WINDOW_TINT_WALLPAPER,
+    TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE,
+    TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT, TOOLGROUP_PALETTE_LIGHT, TOOLGROUP_SHADOW,
+    TOOLGROUP_SHADOW_DARK, ToolgroupPalette, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN,
+    WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 
 /// The preferred appearance, published as `org.freedesktop.appearance`.
@@ -151,6 +153,8 @@ pub struct SidebarSurface {
     pub inner: Rgba,
     /// Drop shadow (zeroed in flat mode).
     pub shadow: [ShadowLayer; 2],
+    /// Item/section colours for this theme.
+    pub palette: SidebarPalette,
 }
 
 /// The resolved toolbar glass capsule surface.
@@ -160,6 +164,8 @@ pub struct ToolgroupSurface {
     pub bg: Rgba,
     /// Drop shadow.
     pub shadow: [ShadowLayer; 2],
+    /// Button and separator colours for this theme.
+    pub palette: ToolgroupPalette,
 }
 
 /// The colours and tints resolved from one appearance + wallpaper state.
@@ -180,6 +186,8 @@ pub struct Resolved {
     pub traffic_style: TrafficLightStyle,
     /// Whether the shell and kit must use opaque surfaces.
     pub reduce_transparency: bool,
+    /// Whether motion should be minimised.
+    pub reduced_motion: bool,
     /// The menubar/dock palette for this appearance.
     pub shell: ShellPalette,
     /// The menu popup palette for this appearance.
@@ -206,6 +214,16 @@ fn surfaces(
     style: SidebarStyle,
     opaque: bool,
 ) -> (ShellPalette, MenuPalette, SidebarSurface, ToolgroupSurface) {
+    let sidebar_palette = match scheme {
+        ColorScheme::Dark => SIDEBAR_PALETTE_DARK,
+        ColorScheme::DarkTint => SIDEBAR_PALETTE_DARK_TINT,
+        _ => SIDEBAR_PALETTE_LIGHT,
+    };
+    let toolgroup_palette = match scheme {
+        ColorScheme::Dark => TOOLGROUP_PALETTE_DARK,
+        ColorScheme::DarkTint => TOOLGROUP_PALETTE_DARK_TINT,
+        _ => TOOLGROUP_PALETTE_LIGHT,
+    };
     (
         match (scheme, opaque) {
             (ColorScheme::Dark, false) => SHELL_DARK,
@@ -223,13 +241,18 @@ fn surfaces(
             (_, false) => MENU_LIGHT,
             (_, true) => MENU_LIGHT_OPAQUE,
         },
-        sidebar_surface(scheme, style, opaque),
-        toolgroup_surface(scheme, opaque),
+        sidebar_surface(scheme, style, opaque, sidebar_palette),
+        toolgroup_surface(scheme, opaque, toolgroup_palette),
     )
 }
 
 /// Resolves the kit sidebar surface for a concrete theme and style.
-fn sidebar_surface(scheme: ColorScheme, style: SidebarStyle, opaque: bool) -> SidebarSurface {
+fn sidebar_surface(
+    scheme: ColorScheme,
+    style: SidebarStyle,
+    opaque: bool,
+    palette: SidebarPalette,
+) -> SidebarSurface {
     let transparent = Rgba::rgba8(0, 0, 0, 0.0);
     let zero_shadow = [
         ShadowLayer {
@@ -261,6 +284,7 @@ fn sidebar_surface(scheme: ColorScheme, style: SidebarStyle, opaque: bool) -> Si
             rim: transparent,
             inner: transparent,
             shadow: zero_shadow,
+            palette,
         };
     }
 
@@ -308,11 +332,16 @@ fn sidebar_surface(scheme: ColorScheme, style: SidebarStyle, opaque: bool) -> Si
         rim,
         inner,
         shadow,
+        palette,
     }
 }
 
 /// Resolves the kit toolbar glass capsule surface for a concrete theme.
-fn toolgroup_surface(scheme: ColorScheme, opaque: bool) -> ToolgroupSurface {
+fn toolgroup_surface(
+    scheme: ColorScheme,
+    opaque: bool,
+    palette: ToolgroupPalette,
+) -> ToolgroupSurface {
     let (bg, shadow) = match (scheme, opaque) {
         (ColorScheme::Dark, false) => (TOOLGROUP_BG_DARK, TOOLGROUP_SHADOW_DARK),
         (ColorScheme::Dark, true) => (TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_SHADOW_DARK),
@@ -321,7 +350,7 @@ fn toolgroup_surface(scheme: ColorScheme, opaque: bool) -> ToolgroupSurface {
         (_, false) => (TOOLGROUP_BG_LIGHT, TOOLGROUP_SHADOW),
         (_, true) => (TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW),
     };
-    ToolgroupSurface { bg, shadow }
+    ToolgroupSurface { bg, shadow, palette }
 }
 
 /// Resolves an appearance configuration with the current wallpaper dominant.
@@ -402,6 +431,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         lights,
         traffic_style: style,
         reduce_transparency: appearance.reduce_transparency,
+        reduced_motion: appearance.reduced_motion,
         shell,
         menu,
         sidebar,
@@ -1082,5 +1112,52 @@ sidebar_style = "flat"
 
         assert_eq!(neutral.sidebar.bg, SIDEBAR_ISLAND_LIGHT_OPAQUE);
         assert_eq!(neutral.toolgroup.bg, TOOLGROUP_BG_LIGHT_OPAQUE);
+    }
+
+    #[test]
+    fn sidebar_and_toolgroup_palettes_come_from_the_theme() {
+        for (scheme, expected_sidebar, expected_toolgroup) in [
+            (
+                ColorScheme::Light,
+                SIDEBAR_PALETTE_LIGHT,
+                TOOLGROUP_PALETTE_LIGHT,
+            ),
+            (ColorScheme::Dark, SIDEBAR_PALETTE_DARK, TOOLGROUP_PALETTE_DARK),
+            (
+                ColorScheme::DarkTint,
+                SIDEBAR_PALETTE_DARK_TINT,
+                TOOLGROUP_PALETTE_DARK_TINT,
+            ),
+        ] {
+            let resolved = resolve(
+                &appearance(
+                    scheme,
+                    WindowColorMode::Neutral,
+                    WindowTintScope::Windows,
+                    TrafficLightStyle::Auto,
+                    None,
+                ),
+                None,
+            );
+            assert_eq!(resolved.sidebar.palette, expected_sidebar, "{scheme:?} sidebar palette");
+            assert_eq!(
+                resolved.toolgroup.palette, expected_toolgroup,
+                "{scheme:?} toolgroup palette"
+            );
+        }
+    }
+
+    #[test]
+    fn reduced_motion_is_passed_through() {
+        let mut config = appearance(
+            ColorScheme::Light,
+            WindowColorMode::Neutral,
+            WindowTintScope::Windows,
+            TrafficLightStyle::Auto,
+            None,
+        );
+        config.reduced_motion = true;
+        let resolved = resolve(&config, None);
+        assert!(resolved.reduced_motion);
     }
 }

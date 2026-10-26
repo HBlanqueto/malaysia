@@ -260,6 +260,8 @@ pub struct SidebarMetrics {
     pub width: u32,
     /// Island inset from top/left/bottom, in logical pixels.
     pub inset: u32,
+    /// Horizontal padding inside the sidebar (island and flat), in logical pixels.
+    pub padding_x: u32,
     /// Corner radius of the island, in logical pixels.
     pub radius: u32,
     /// Outer rim width, in logical pixels.
@@ -276,6 +278,12 @@ pub struct SidebarMetrics {
     pub item_height: u32,
     /// Item row corner radius, in logical pixels.
     pub item_radius: u32,
+    /// Horizontal padding inside an item row, in logical pixels.
+    pub item_padding_x: u32,
+    /// Gap between item icon and label, in logical pixels.
+    pub item_gap: u32,
+    /// Item label text size, in points.
+    pub item_text_size: u32,
     /// Size of a regular stroke icon, in logical pixels.
     pub item_icon: u32,
     /// Size of an app icon, in logical pixels.
@@ -284,12 +292,16 @@ pub struct SidebarMetrics {
     pub section_height: u32,
     /// Margin before a section header, in logical pixels.
     pub section_margin_top: u32,
+    /// Section header horizontal padding, in logical pixels.
+    pub section_padding_x: u32,
     /// Section header text size, in points.
     pub section_size: u32,
     /// Section header text weight.
     pub section_weight: u16,
     /// Disclosable arrow size, in logical pixels.
     pub chevron: u32,
+    /// Disclosable arrow stroke width, in logical pixels.
+    pub chevron_stroke: f32,
 }
 
 /// Compile-time metrics for a toolbar capsule group.
@@ -297,6 +309,8 @@ pub struct SidebarMetrics {
 pub struct ToolgroupMetrics {
     /// Capsule height, in logical pixels.
     pub height: u32,
+    /// Horizontal padding inside the capsule, in logical pixels.
+    pub padding_x: u32,
     /// Button width inside the capsule, in logical pixels.
     pub button_w: u32,
     /// Button height inside the capsule, in logical pixels.
@@ -491,6 +505,38 @@ pub struct LockPalette {
     pub accent: Rgba,
 }
 
+/// The colours of a Neptunia sidebar for one mode.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SidebarPalette {
+    /// Item text colour (`ink`).
+    pub item_ink: Rgba,
+    /// Item icon stroke colour (`accent-strong`).
+    pub item_icon: Rgba,
+    /// Selected item background (`accent-soft`).
+    pub selected_bg: Rgba,
+    /// Selected item text and icon colour (`accent-strong`).
+    pub selected_ink: Rgba,
+    /// Hover background (`bg-hover`).
+    pub hover_bg: Rgba,
+    /// Section header text colour (`ink-muted`).
+    pub section_ink: Rgba,
+    /// Counter text colour (`ink-muted`).
+    pub count_ink: Rgba,
+    /// Flat mode separator line (`line`).
+    pub line: Rgba,
+}
+
+/// The colours of a Neptunia toolbar capsule for one mode.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ToolgroupPalette {
+    /// Enabled button icon/text colour (`ink-strong`).
+    pub ink: Rgba,
+    /// Disabled button icon/text colour (`ink-faint`).
+    pub disabled_ink: Rgba,
+    /// Vertical separator line (`line`).
+    pub separator: Rgba,
+}
+
 /// The pointer scale while the user shakes the mouse to locate it, like
 /// macOS Accessibility > Pointer Control. macOS grows the pointer to roughly
 /// three times its normal size; normal drawing uses `1.0`.
@@ -626,10 +672,17 @@ mod tests {
     #[allow(clippy::assertions_on_constants)]
     fn sidebar_metrics_come_from_tokens() {
         assert_eq!(super::SIDEBAR.inset, 8);
+        assert_eq!(super::SIDEBAR.padding_x, 10);
         assert_eq!(super::SIDEBAR.radius, 12);
         assert_eq!(super::SIDEBAR.width, 220);
         assert!(super::SIDEBAR.default_island);
+        assert_eq!(super::SIDEBAR.item_padding_x, 8);
+        assert_eq!(super::SIDEBAR.item_gap, 8);
+        assert_eq!(super::SIDEBAR.item_text_size, 13);
+        assert_eq!(super::SIDEBAR.section_padding_x, 8);
+        assert!((super::SIDEBAR.chevron_stroke - 1.8).abs() < 1e-6);
         assert_eq!(super::TOOLGROUP.height, 34);
+        assert_eq!(super::TOOLGROUP.padding_x, 3);
         assert_eq!(super::TOOLGROUP.flat_button_w, 30);
         assert_eq!(super::TOOLGROUP.flat_button_h, 28);
         assert_eq!(super::TOOLGROUP.flat_radius, 8);
