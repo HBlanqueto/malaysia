@@ -49,6 +49,11 @@ pub enum Command {
         id: i32,
         generation: u64,
     },
+    /// Fetches the whole tree for the Help search.
+    FullTree {
+        address: AppMenuAddress,
+        generation: u64,
+    },
     Activate {
         address: AppMenuAddress,
         id: i32,
@@ -95,6 +100,13 @@ impl MenuClient {
         let _ = self.commands.send_blocking(Command::Open {
             address,
             id,
+            generation,
+        });
+    }
+
+    pub fn full_tree(&self, address: AppMenuAddress, generation: u64) {
+        let _ = self.commands.send_blocking(Command::FullTree {
+            address,
             generation,
         });
     }
@@ -199,6 +211,9 @@ struct CachedSubtree {
 #[derive(Default)]
 struct MenuCache {
     subtrees: HashMap<i32, CachedSubtree>,
+    /// The whole tree fetched for the Help search, kept until any
+    /// `LayoutUpdated` for this address reports a newer revision.
+    full: Option<CachedSubtree>,
 }
 
 impl MenuCache {
@@ -210,6 +225,14 @@ impl MenuCache {
         self.subtrees.insert(id, CachedSubtree { revision, items });
     }
 
+    fn full(&self) -> Option<&CachedSubtree> {
+        self.full.as_ref()
+    }
+
+    fn put_full(&mut self, revision: u32, items: Vec<RawItem>) {
+        self.full = Some(CachedSubtree { revision, items });
+    }
+
     /// Drops only `id` when `revision` is newer than the cached one.
     fn invalidate(&mut self, id: i32, revision: u32) -> bool {
         if self
@@ -218,6 +241,20 @@ impl MenuCache {
             .is_some_and(|subtree| revision > subtree.revision)
         {
             self.subtrees.remove(&id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Any `LayoutUpdated` with a newer revision invalidates the full tree.
+    fn invalidate_full(&mut self, revision: u32) -> bool {
+        if self
+            .full
+            .as_ref()
+            .is_some_and(|full| revision > full.revision)
+        {
+            self.full = None;
             true
         } else {
             false
@@ -471,6 +508,56 @@ async fn run(
                 )
                 .await;
             }
+            Event::Command(Ok(Command::FullTree {
+                address,
+                generation,
+            })) => {
+                let started = Instant::now();
+                let cached = caches
+                    .get(&address)
+                    .and_then(|cache| cache.full())
+                    .cloned();
+                let (items, from_cache) = match cached {
+                    Some(full) => (Some(full.items), true),
+                    None => match layout(&connection, &dbus, &mut proxies, &address, 0, -1).await {
+                        Ok((revision, items)) => {
+                            caches.entry(&address).put_full(revision, items.clone());
+                            (Some(items), false)
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                %error,
+                                service = %address.service,
+                                "menubar: dbusmenu full GetLayout failed"
+                            );
+                            (None, false)
+                        }
+                    },
+                };
+                if let Some(items) = items {
+                    let count = items.len();
+                    tracing::info!(
+                        generation,
+                        service = %address.service,
+                        items = count,
+                        cached = from_cache,
+                        ms = started.elapsed().as_millis(),
+                        "menubar: dbusmenu full tree snapshot"
+                    );
+                    send(
+                        &snapshots,
+                        &wake,
+                        MenuSnapshot {
+                            generation,
+                            address,
+                            parent: None,
+                            items: Some(items),
+                            cached: from_cache,
+                        },
+                    )
+                    .await;
+                }
+            }
             Event::Command(Ok(Command::Activate {
                 address,
                 id,
@@ -585,14 +672,21 @@ fn handle_signal(
             let Ok((revision, parent)) = message.body().deserialize::<(u32, i32)>() else {
                 return;
             };
-            let invalidated = caches
+            let (invalidated, full_invalidated) = caches
                 .get_mut(&address)
-                .is_some_and(|cache| cache.invalidate(parent, revision));
+                .map(|cache| {
+                    (
+                        cache.invalidate(parent, revision),
+                        cache.invalidate_full(revision),
+                    )
+                })
+                .unwrap_or_default();
             tracing::debug!(
                 service = %address.service,
                 revision,
                 parent,
                 invalidated,
+                full_invalidated,
                 "menubar: dbusmenu LayoutUpdated"
             );
             if invalidated && is_focused {
@@ -1003,6 +1097,16 @@ mod tests {
         cache.put(0, 9, vec![item(1, &[], Vec::new())]);
         assert!(!cache.invalidate(0, 8));
         assert!(cache.get(0).is_some());
+    }
+
+    #[test]
+    fn any_newer_layout_update_invalidates_the_full_tree() {
+        let mut cache = MenuCache::default();
+        cache.put_full(3, vec![item(1, &[], Vec::new())]);
+        assert!(!cache.invalidate_full(3));
+        assert!(cache.full().is_some());
+        assert!(cache.invalidate_full(4));
+        assert!(cache.full().is_none());
     }
 
     #[test]

@@ -273,6 +273,8 @@ pub fn find_subtree(items: &[MenuItem], id: i32) -> Option<Vec<MenuItem>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::menubar::dbusmenu::RawItem;
+    use std::collections::HashMap;
 
     fn action(label: &str) -> MenuItem {
         MenuItem::Action {
@@ -442,5 +444,101 @@ mod tests {
         assert_eq!(label, "Archivo");
         assert_eq!(items[0].label(), Some("Nuevo"));
         assert_eq!(find_subtree(&remote, 1).unwrap()[0].label(), Some("Nuevo"));
+    }
+
+    fn text(value: &str) -> zbus::zvariant::OwnedValue {
+        zbus::zvariant::OwnedValue::try_from(zbus::zvariant::Value::from(value)).unwrap()
+    }
+
+    fn kate_item(id: i32, label: &str, enabled: bool, children: Vec<RawItem>) -> RawItem {
+        let mut properties: HashMap<String, zbus::zvariant::OwnedValue> = [
+            ("label".to_string(), text(&format!("_{label}"))),
+            (
+                "enabled".to_string(),
+                zbus::zvariant::OwnedValue::from(enabled),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        if !children.is_empty() {
+            properties.insert("children-display".to_string(), text("submenu"));
+        }
+        RawItem {
+            id,
+            properties,
+            children,
+        }
+    }
+
+    fn kate_menu() -> Vec<RawItem> {
+        vec![
+            kate_item(
+                1,
+                "Archivo",
+                true,
+                vec![
+                    kate_item(10, "Nuevo", true, Vec::new()),
+                    kate_item(11, "Nueva ventana", true, Vec::new()),
+                    kate_item(
+                        12,
+                        "Abrir reciente",
+                        true,
+                        vec![
+                            kate_item(13, "documento.txt", true, Vec::new()),
+                            kate_item(14, "otro.txt", true, Vec::new()),
+                        ],
+                    ),
+                    kate_item(15, "Guardar", false, Vec::new()),
+                ],
+            ),
+            kate_item(
+                2,
+                "Ayuda",
+                true,
+                vec![kate_item(20, "Acerca de Kate", true, Vec::new())],
+            ),
+        ]
+    }
+
+    #[test]
+    fn help_search_indexes_the_full_kate_tree() {
+        let mapped = crate::menubar::dbusmenu_map::menu_items(&kate_menu());
+        let titles = sources().compose(&mapped);
+        let entries = searchable(&titles);
+
+        let hits: Vec<String> = entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .item
+                    .label()
+                    .is_some_and(|label| label.to_lowercase().contains("nuev"))
+            })
+            .map(|entry| format!("{} › {}", entry.path, entry.item.label().unwrap()))
+            .collect();
+        assert!(
+            hits.contains(&"Archivo › Nuevo".to_string()),
+            "hits: {hits:?}"
+        );
+        assert!(hits.contains(&"Archivo › Nueva ventana".to_string()));
+
+        let nested = entries
+            .iter()
+            .find(|entry| entry.item.label() == Some("documento.txt"))
+            .expect("a nested leaf is indexed");
+        assert_eq!(nested.path, "Archivo › Abrir reciente");
+        assert_eq!(nested.source, SearchSource::Menu);
+        let location = nested.location.as_ref().unwrap();
+        assert_eq!(location.title_index, 1);
+        assert_eq!(location.indices.len(), 2);
+
+        let disabled = entries
+            .iter()
+            .find(|entry| entry.item.label() == Some("Guardar"))
+            .expect("a disabled action is still indexed");
+        assert!(matches!(
+            &disabled.item,
+            MenuItem::Action { enabled: false, .. }
+        ));
     }
 }

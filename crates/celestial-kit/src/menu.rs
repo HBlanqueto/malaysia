@@ -193,6 +193,13 @@ pub type SubmenuSource = Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>;
 /// Re-reads menu items on every render.
 pub type ItemsSource = Rc<dyn Fn() -> Vec<MenuItem>>;
 
+/// Re-reads searchable entries on every render, so results that arrive while
+/// the menu stays open show up without losing the query or the scroll.
+pub type SearchableSource = Rc<dyn Fn() -> Vec<SearchableEntry>>;
+
+/// Re-reads the root menus shown when a Help result is revealed.
+pub type RevealRoots = Rc<dyn Fn() -> Vec<Vec<MenuItem>>>;
+
 /// Direction for root-menu keyboard navigation between menubar titles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuNavigation {
@@ -305,13 +312,13 @@ pub struct MenuView {
     submenu_source: Option<SubmenuSource>,
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
-    searchable: Option<Rc<Vec<SearchableEntry>>>,
-    help_search: Option<Rc<Vec<SearchableEntry>>>,
+    searchable: Option<SearchableSource>,
+    help_search: Option<SearchableSource>,
     query_state: Option<Rc<RefCell<SearchQuery>>>,
     menu_search_icon: Option<&'static str>,
     help_search_icon: Option<&'static str>,
     popup_spec: Option<PopupSpec>,
-    reveal_roots: Option<Rc<Vec<Vec<MenuItem>>>>,
+    reveal_roots: Option<RevealRoots>,
     /// Initial focused row, used when revealing a search result.
     focused_index: Option<usize>,
     /// Path of submenu indices to open after mounting, used when revealing a
@@ -358,15 +365,22 @@ impl MenuView {
 
     /// Attaches a list of searchable menu entries. When the menu contains a
     /// [`MenuItem::SearchField`], typing filters these entries and shows them
-    /// under an "Ítems del menú" header.
-    pub fn with_searchable(mut self, items: Vec<SearchableEntry>) -> Self {
-        self.searchable = Some(Rc::new(items));
+    /// under an "Ítems del menú" header. The source is re-read on every render.
+    pub fn with_searchable(
+        mut self,
+        source: impl Fn() -> Vec<SearchableEntry> + 'static,
+    ) -> Self {
+        self.searchable = Some(Rc::new(source));
         self
     }
 
     /// Attaches a list of searchable help topics shown under "Temas de ayuda".
-    pub fn with_help_topics(mut self, items: Vec<SearchableEntry>) -> Self {
-        self.help_search = Some(Rc::new(items));
+    /// The source is re-read on every render.
+    pub fn with_help_topics(
+        mut self,
+        source: impl Fn() -> Vec<SearchableEntry> + 'static,
+    ) -> Self {
+        self.help_search = Some(Rc::new(source));
         self
     }
 
@@ -381,9 +395,14 @@ impl MenuView {
     }
 
     /// Sets the root menus that can be revealed when a menu search result is
-    /// highlighted. The vector index matches [`SearchLocation::title_index`].
-    pub fn with_reveal_roots(mut self, roots: Vec<Vec<MenuItem>>) -> Self {
-        self.reveal_roots = Some(Rc::new(roots));
+    /// highlighted. The source is re-read when a result is revealed, so late
+    /// remote children are already there. The vector index matches
+    /// [`SearchLocation::title_index`].
+    pub fn with_reveal_roots(
+        mut self,
+        source: impl Fn() -> Vec<Vec<MenuItem>> + 'static,
+    ) -> Self {
+        self.reveal_roots = Some(Rc::new(source));
         self
     }
 
@@ -561,8 +580,10 @@ impl App for MenuView {
         let prev_query = use_hook(|| Rc::new(RefCell::new(String::new())));
         let searchable = self.searchable.clone();
         let help_search = self.help_search.clone();
+        let searchable_entries = searchable.as_ref().map(|source| source());
+        let help_entries = help_search.as_ref().map(|source| source());
 
-        let has_search = searchable.is_some() || help_search.is_some();
+        let has_search = searchable_entries.is_some() || help_entries.is_some();
         let query_text = (*query.read()).clone();
         let is_selected = *selected.read();
 
@@ -578,8 +599,8 @@ impl App for MenuView {
         }
 
         let (menu_results, help_results) = search_result_lists(
-            searchable.as_deref().map(|v| v.as_slice()),
-            help_search.as_deref().map(|v| v.as_slice()),
+            searchable_entries.as_deref(),
+            help_entries.as_deref(),
             &query_text,
         )
         .unwrap_or_default();
@@ -667,25 +688,27 @@ impl App for MenuView {
             close_child(reveal_child_id.clone(), Rc::new(Cell::new(None)));
             if let (Some(loc), Some(roots), Some(popup)) =
                 (revealed_location, reveal_roots.as_ref(), popup.clone())
-                && let Some(items) = roots.get(loc.title_index)
             {
-                let (anchor_x, anchor_width) = popup_spec
-                    .as_ref()
-                    .map(|spec| (spec.anchor_rect.0 as f32, spec.anchor_rect.2 as f32))
-                    .unwrap_or((0.0, 1.0));
-                open_reveal_popup(
-                    items,
-                    &loc,
-                    popup,
-                    size,
-                    m,
-                    on_activate.clone(),
-                    on_dismiss_all.clone(),
-                    reveal_child_id.clone(),
-                    opens_left,
-                    anchor_x,
-                    anchor_width,
-                );
+                let roots = roots();
+                if let Some(items) = roots.get(loc.title_index) {
+                    let (anchor_x, anchor_width) = popup_spec
+                        .as_ref()
+                        .map(|spec| (spec.anchor_rect.0 as f32, spec.anchor_rect.2 as f32))
+                        .unwrap_or((0.0, 1.0));
+                    open_reveal_popup(
+                        items,
+                        &loc,
+                        popup,
+                        size,
+                        m,
+                        on_activate.clone(),
+                        on_dismiss_all.clone(),
+                        reveal_child_id.clone(),
+                        opens_left,
+                        anchor_x,
+                        anchor_width,
+                    );
+                }
             }
         }
 

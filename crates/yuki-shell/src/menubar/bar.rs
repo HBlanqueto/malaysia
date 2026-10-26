@@ -265,8 +265,15 @@ impl App for BarApp {
                     })
                 };
                 let titles = composition();
-                let reveal_roots: Rc<Vec<Vec<MenuItem>>> =
-                    Rc::new(titles.iter().map(remote::Title::visible_items).collect());
+                let reveal_roots: celestial_kit::menu::RevealRoots = {
+                    let composition = composition.clone();
+                    Rc::new(move || {
+                        composition()
+                            .iter()
+                            .map(remote::Title::visible_items)
+                            .collect()
+                    })
+                };
                 for (index, title) in titles.iter().enumerate() {
                     let items: MenuItems = {
                         let composition = composition.clone();
@@ -277,14 +284,24 @@ impl App for BarApp {
                                 .unwrap_or_default()
                         })
                     };
-                    let request_open: Option<Rc<dyn Fn()>> = title.remote_id.map(|id| {
+                    let is_help = index + 1 == titles.len();
+                    let request_open: Option<Rc<dyn Fn()>> = if is_help {
                         let dbus = self.dbus.clone();
                         let address = address.clone();
                         let callback: Rc<dyn Fn()> = Rc::new(move || {
-                            dbus.open(address.clone(), id, generation_now);
+                            dbus.full_tree(address.clone(), generation_now);
                         });
-                        callback
-                    });
+                        Some(callback)
+                    } else {
+                        title.remote_id.map(|id| {
+                            let dbus = self.dbus.clone();
+                            let address = address.clone();
+                            let callback: Rc<dyn Fn()> = Rc::new(move || {
+                                dbus.open(address.clone(), id, generation_now);
+                            });
+                            callback
+                        })
+                    };
                     let on_open: Option<Rc<dyn Fn()>> = request_open.as_ref().map(|request| {
                         let request = request.clone();
                         let open_started = open_started.clone();
@@ -296,7 +313,6 @@ impl App for BarApp {
                     });
                     let live_items = Some(items.clone());
                     let on_hover_title = request_open;
-                    let is_help = index + 1 == titles.len();
                     let searchable: Option<SearchableItems> = if is_help {
                         let composition = composition.clone();
                         Some(Rc::new(move || menu::SearchableLists {
@@ -337,7 +353,10 @@ impl App for BarApp {
                         help: focused::help_search_topics(),
                     })
                 };
-                let reveal_roots = Rc::new(vec![(app_items)(), (window_items)()]);
+                let reveal_roots: celestial_kit::menu::RevealRoots = {
+                    let roots = Rc::new(vec![(app_items)(), (window_items)()]);
+                    Rc::new(move || (*roots).clone())
+                };
                 let focused_titles = [
                     (
                         app_name.clone(),
@@ -345,7 +364,7 @@ impl App for BarApp {
                         1usize,
                         None,
                         None::<Rc<RefCell<SearchQuery>>>,
-                        None::<Rc<Vec<Vec<MenuItem>>>>,
+                        None::<celestial_kit::menu::RevealRoots>,
                     ),
                     ("Ventana".to_string(), window_items, 2, None, None, None),
                     (

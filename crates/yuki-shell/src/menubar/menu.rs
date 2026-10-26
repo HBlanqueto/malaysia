@@ -10,7 +10,9 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
-use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView, SearchableEntry, SubmenuSource};
+use celestial_kit::menu::{
+    MenuItem, MenuNavigation, MenuView, RevealRoots, SearchableEntry, SubmenuSource,
+};
 use celestial_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
@@ -67,7 +69,7 @@ pub struct MenuTitleSpec {
     pub query_state: Option<Rc<RefCell<celestial_kit::menu::SearchQuery>>>,
     /// Root menus that can be revealed when a Help search result is
     /// highlighted. The index matches [`SearchLocation::title_index`].
-    pub reveal_roots: Option<Rc<Vec<Vec<MenuItem>>>>,
+    pub reveal_roots: Option<RevealRoots>,
 }
 
 /// State shared by all menu titles on the bar.
@@ -139,17 +141,19 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         view = view.with_submenu_source(move |id| source(id));
     }
     if let Some(searchable_fn) = &spec.searchable {
-        let lists = searchable_fn();
+        let menu_source = searchable_fn.clone();
+        let help_source = searchable_fn.clone();
         view = view
-            .with_searchable(lists.menu)
-            .with_help_topics(lists.help)
+            .with_searchable(move || menu_source().menu)
+            .with_help_topics(move || help_source().help)
             .with_search_icons(icons::MENU_ITEM, icons::HELP);
     }
     if let Some(query_state) = &spec.query_state {
         view = view.with_query_state(query_state.clone());
     }
     if let Some(roots) = &spec.reveal_roots {
-        view = view.with_reveal_roots((**roots).clone());
+        let roots = roots.clone();
+        view = view.with_reveal_roots(move || roots());
     }
 
     let popup_spec = PopupSpec {
