@@ -950,13 +950,15 @@ lab() {
         fi
         if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
             [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/dialog" ]; then
+            [ ! -x "$script_dir/target/debug/examples/dialog" ] ||
+            [ ! -x "$script_dir/target/debug/examples/contador" ]; then
             cargo build -p celestial-kit --examples ||
                 fail "$EXIT_RUN_FAILED" "could not build the window examples"
         fi
         _window_csd="$script_dir/target/debug/examples/window_csd"
         _window_ssd="$script_dir/target/debug/examples/window_ssd"
         _dialog="$script_dir/target/debug/examples/dialog"
+        _contador="$script_dir/target/debug/examples/contador"
     else
         _shell_bin="$script_dir/result/bin/yuki-shell"
         if [ ! -x "$script_dir/result/bin/yuki" ] || [ ! -x "$_shell_bin" ]; then
@@ -965,6 +967,7 @@ lab() {
         _window_csd="$script_dir/result/bin/window_csd"
         _window_ssd="$script_dir/result/bin/window_ssd"
         _dialog="$script_dir/result/bin/dialog"
+        _contador="$script_dir/result/bin/contador"
     fi
 
     if ! command -v dbus-daemon >/dev/null 2>&1; then
@@ -1048,10 +1051,11 @@ lab() {
         printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
     fi
 
-    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
+    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ] && [ -x "$_contador" ]; then
         lab_client window-csd "$_window_csd"
         lab_client window-ssd "$_window_ssd"
         lab_client dialog "$_dialog"
+        lab_client contador "$_contador"
     else
         printf 'lab: window examples not found; skipping them\n' >&2
     fi
