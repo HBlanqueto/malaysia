@@ -1101,7 +1101,7 @@ impl State {
         let fixed_width = self
             .windows
             .client_size_bounds(id)
-            .is_some_and(|(min, max)| min.w > 0 && max.w > 0 && min.w == max.w);
+            .is_some_and(|(min, max)| is_fixed_width(min, max));
         maximize_target_rect(fixed_width, self.workspace(), outer)
     }
 
@@ -2277,6 +2277,14 @@ impl State {
 ///
 /// Fixed-width windows keep their width and horizontal origin and fill only
 /// the workspace height; every other window fills the whole workspace.
+/// Whether the client's width is fixed regardless of height constraints.
+/// xdg_toplevel uses 0 to mean "unbounded" on each axis, so a fixed width
+/// requires a positive, equal min/max width; an unbounded height (0) must not
+/// prevent vertical maximization.
+fn is_fixed_width(min: Size<i32, Logical>, max: Size<i32, Logical>) -> bool {
+    min.w > 0 && max.w > 0 && min.w == max.w
+}
+
 fn maximize_target_rect(
     fixed_width: bool,
     workspace: (Point<i32, Logical>, Size<i32, Logical>),
@@ -3107,6 +3115,27 @@ mod tests {
         assert_eq!(target.y(), 0.0);
         assert_eq!(target.width(), 760.0);
         assert_eq!(target.height(), 1052.0);
+    }
+
+    #[test]
+    fn fixed_width_is_detected_with_unbounded_height() {
+        let min = Size::from((760, 620));
+        let max = Size::from((760, 0));
+        assert!(super::is_fixed_width(min, max));
+    }
+
+    #[test]
+    fn unbounded_width_is_not_fixed_width() {
+        let min = Size::from((0, 620));
+        let max = Size::from((0, 0));
+        assert!(!super::is_fixed_width(min, max));
+    }
+
+    #[test]
+    fn zero_max_width_is_not_fixed_width() {
+        let min = Size::from((760, 620));
+        let max = Size::from((0, 0));
+        assert!(!super::is_fixed_width(min, max));
     }
 
     #[test]
