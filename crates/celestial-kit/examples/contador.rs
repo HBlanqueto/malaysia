@@ -1,6 +1,7 @@
 //! Contador — demo app for CelestialKit's global menu export (ADR 0040 §10).
 
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use celestial_kit::app_menu::{AppMenu, Menu, MenuHandle};
 use celestial_kit::controls::Button;
@@ -34,11 +35,11 @@ fn action(id: &'static str, label: &str, shortcut: Option<&str>, enabled: bool) 
     }
 }
 
-fn radio(id: &'static str, label: &str, active: bool) -> MenuItem {
+fn radio(id: &'static str, label: &str, shortcut: Option<&str>, active: bool) -> MenuItem {
     MenuItem::Action {
         id: id.to_string(),
         label: label.to_string(),
-        shortcut: None,
+        shortcut: shortcut.map(ToOwned::to_owned),
         enabled: true,
         check: CheckState::Radio(active),
         icon: None,
@@ -88,9 +89,9 @@ fn build_menu(count: i32, step: i32, allow_negative: bool) -> AppMenu {
                     enabled: true,
                     icon: None,
                     items: vec![
-                        radio(ID_STEP_1, "1", step == 1),
-                        radio(ID_STEP_5, "5", step == 5),
-                        radio(ID_STEP_10, "10", step == 10),
+                        radio(ID_STEP_1, "1", None, step == 1),
+                        radio(ID_STEP_5, "5", Some("Ctrl+5"), step == 5),
+                        radio(ID_STEP_10, "10", None, step == 10),
                     ],
                 },
                 separator(),
@@ -133,7 +134,7 @@ fn sync_menu(handle: &MenuHandle, count: i32, step: i32, allow_negative: bool) {
 }
 
 struct Contador {
-    action_queue: Arc<Mutex<Vec<String>>>,
+    action_rx: Rc<RefCell<Option<std::sync::mpsc::Receiver<String>>>>,
 }
 
 impl App for Contador {
@@ -149,16 +150,37 @@ impl App for Contador {
             });
         }
 
-        // Drain actions queued by the global menu or in-app shortcuts.
-        while let Some(id) = self.action_queue.lock().expect("queue lock").pop() {
+        // Drain actions queued by the global menu or in-app shortcuts. The
+        // receiver is read on every render because the compositor dispatches a
+        // key event after handling a shortcut, which wakes the component.
+        let mut pending = use_state(Vec::<String>::new);
+        let rx = use_hook(|| {
+            Rc::new(RefCell::new(
+                self.action_rx
+                    .borrow_mut()
+                    .take()
+                    .expect("menu action receiver already taken"),
+            ))
+        });
+        while let Ok(id) = rx.borrow_mut().try_recv() {
+            pending.write().push(id);
+        }
+        let ids: Vec<String> = {
+            let guard = pending.read();
+            guard.clone()
+        };
+        pending.write().clear();
+        for id in ids {
             match id.as_str() {
                 ID_INCREMENT => {
                     let s = *step.read();
-                    count.set(count.read().saturating_add(s));
+                    let current = *count.read();
+                    count.set(current.saturating_add(s));
                 }
                 ID_DECREMENT => {
                     let s = *step.read();
-                    let next = count.read().saturating_sub(s);
+                    let current = *count.read();
+                    let next = current.saturating_sub(s);
                     if next < 0 && !*allow_negative.read() {
                         count.set(0);
                     } else {
@@ -169,7 +191,10 @@ impl App for Contador {
                 ID_STEP_1 => step.set(1),
                 ID_STEP_5 => step.set(5),
                 ID_STEP_10 => step.set(10),
-                ID_ALLOW_NEGATIVE => allow_negative.set(!*allow_negative.read()),
+                ID_ALLOW_NEGATIVE => {
+                    let current = *allow_negative.read();
+                    allow_negative.set(!current);
+                }
                 ID_CLOSE_WINDOW => std::process::exit(0),
                 _ => {}
             }
@@ -211,12 +236,18 @@ impl App for Contador {
                             .child(
                                 Button::new()
                                     .on_press({
-                                        let queue = self.action_queue.clone();
+                                        let mut count = count;
+                                        let step = step;
+                                        let allow_negative = allow_negative;
                                         move |_| {
-                                            queue
-                                                .lock()
-                                                .expect("queue lock")
-                                                .push(ID_DECREMENT.to_string())
+                                            let s = *step.read();
+                                            let current = *count.read();
+                                            let next = current.saturating_sub(s);
+                                            count.set(if next < 0 && !*allow_negative.read() {
+                                                0
+                                            } else {
+                                                next
+                                            });
                                         }
                                     })
                                     .child(label().text("−").font_size(24.0).color(text)),
@@ -224,12 +255,12 @@ impl App for Contador {
                             .child(
                                 Button::new()
                                     .on_press({
-                                        let queue = self.action_queue.clone();
+                                        let mut count = count;
+                                        let step = step;
                                         move |_| {
-                                            queue
-                                                .lock()
-                                                .expect("queue lock")
-                                                .push(ID_INCREMENT.to_string())
+                                            let s = *step.read();
+                                            let current = *count.read();
+                                            count.set(current.saturating_add(s));
                                         }
                                     })
                                     .child(label().text("+").font_size(24.0).color(text)),
@@ -242,9 +273,9 @@ impl App for Contador {
 
 fn main() {
     tracing_subscriber::fmt::init();
-    let action_queue: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let (action_tx, action_rx) = std::sync::mpsc::channel::<String>();
     let app = AppComponent::new(Contador {
-        action_queue: action_queue.clone(),
+        action_rx: Rc::new(RefCell::new(Some(action_rx))),
     });
     let menu = build_menu(0, 1, false);
     run_window(
@@ -256,10 +287,7 @@ fn main() {
             .menu(menu)
             .on_menu_action(move |id| {
                 tracing::info!(action = id, "contador: menu action");
-                action_queue
-                    .lock()
-                    .expect("queue lock")
-                    .push(id.to_string());
+                let _ = action_tx.send(id.to_string());
             }),
     )
     .expect("contador");
