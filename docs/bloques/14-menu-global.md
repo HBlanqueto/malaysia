@@ -429,9 +429,9 @@ Diseño cerrado en el [ADR 0040](../decisiones/0040-menu-global-real.md). Fases:
   `app_menu` a Infinity v2. La barra no cambia: solo loguea el evento.
 - **14d-2 — Cliente y barra.** Hilo D-Bus con zbus, caché por ventana, carga
   perezosa, fusión de títulos y buscador de Ayuda.
-- **14d-3 — Registrar y aceptación.** La barra sirve
-  `com.canonical.AppMenu.Registrar` y se prueba con Kate y Firefox. Las dos
-  preferencias de Firefox viven en `~/nixdots`, nunca en el repo.
+- **14d-3 — Árbol completo y aceptación.** Prefetch del árbol completo en
+  segundo plano y prueba con Kate, Firefox y GTK3. Las dos preferencias de
+  Firefox viven en `~/nixdots`, nunca en el repo.
 - **14e — Apps propias.** CelestialKit exporta dbusmenu por la misma vía, con la
   app Contador de los mockups 14 y 15.
 
@@ -547,6 +547,63 @@ menú de la app compuesto; el campo conserva el texto y la lista su scroll.
 
 `kate-sin-menu-global.png`: `menubar.app_menus = false`; la barra muestra solo
 Kate · Ventana · Ayuda y Kate pinta su propia barra de menús.
+
+### 14d-3 — Árbol completo en segundo plano y aceptación (implementado)
+
+Implementado el **2026-10-26** en sesión anidada con Kate 26.08.2 y Firefox
+158.0. `GetLayout(0, -1, [])` medía 354–478 ms con el límite de 500 ms de las
+demás llamadas, así que el árbol completo pasa a tener su propio timeout de
+**2 s** (`FULL_TREE_TIMEOUT`); el resto sigue en 500 ms. El hilo D-Bus pide
+`FullTree` **1 s después del foco** si la ventana sigue enfocada, si aún no hay
+árbol completo cacheado para esa revisión y si no hay ya una petición pendiente
+para esa dirección. La barra sigue usando la caché al abrir Ayuda y, si aún no
+está, la pide como antes. La petición de fondo no bloquea el render: vive en el
+hilo D-Bus; si el foco se pierde durante la espera, la barra manda `Unfocus`,
+se cancela la petición y no se envía snapshot (si el resultado llega igual, se
+cachea y la generación antigua lo descarta). Los tests puros cubren el
+temporizador de 1 s y la deduplicación por dirección.
+
+**Kate.** `appmenu set window=5 service=:1.6 path=/MenuBar/2`; primer nivel en
+1 ms. Un segundo después del foco, el prefetch de fondo tarda **362–710 ms**
+en cinco sesiones (`dbusmenu full tree prefetch … items=11 focused=true`, la
+última con `ms=709`). Al volver a enfocar Kate y abrir **Ayuda**,
+`full tree snapshot … items=11 cached=true ms=0` dos veces: la primera apertura
+ya no espera a D-Bus.
+
+**Firefox.** Con las dos preferencias del perfil temporal del lab,
+`appmenu set window=7 service=:1.8 path=/com/canonical/menu/0`. Firefox
+publica el menú tarde: el primer `root snapshot` llega con 0 títulos y el
+`LayoutUpdated` posterior trae los 7 (`File`, `Edit`, `View`, `History`,
+`Bookmarks`, `Tools`, y nuestros `Ventana`/`Ayuda`). El prefetch de ese primer
+foco cachea un árbol vacío (0 ítems) y la revisión nueva lo invalida; Ayuda lo
+pide entonces en primer plano. Abrir **File** pide el submenú `id=1954` (18
+ítems, 2 ms) y pinta **New Tab** (la app está en inglés). Captura:
+
+![Firefox con File abierto y el menú global](img/14d/firefox-archivo-claro.png)
+
+**GTK3.** `appmenu-gtk-module` (vala-panel-appmenu) en Wayland no usa
+`org_kde_kwin_appmenu` ni el Registrar con un id X11: exporta el `GMenuModel`
+del `GtkApplicationWindow` por la conexión D-Bus de la propia app y llama a
+`gdk_wayland_window_set_dbus_properties_libgtk_only`, es decir, la vía
+`gtk_shell1`/`org.gtk.Menus` (fuente 3 del ADR 0040, fuera de 14d). Su
+`wayland/org.kde.appmenu.xml` se genera pero ningún `.c` lo usa; en X11 solo
+publica `_GTK_MENUBAR_OBJECT_PATH` para que lo lea el panel. Por eso no hay
+commit de shell en 14d-3: el casado por pid del Registrar queda **pendiente de
+XWayland** y GTK necesita `gtk_shell1`/`org.gtk.Menus` en una fase posterior.
+El paquete `appmenu-gtk3-module` tampoco existe en nixpkgs (`does not provide
+attribute … appmenu-gtk3-module`), así que no hubo prueba con `gtk3-demo`.
+
+**Limitaciones conocidas.**
+
+- Qt no vuelve al menú global sin reiniciar tras `menubar.app_menus`
+  `false → true`: la barra recupera el nombre del Registrar, pero Kate sigue
+  pintando su propia barra hasta relanzarse.
+- Firefox publica el menú después del primer foco; el prefetch de fondo no se
+  reintenta, aunque el `LayoutUpdated` refresca el primer nivel y el árbol
+  completo se pide on demand.
+- GTK3 no entra en 14d: `appmenu-gtk-module` depende de `gtk_shell1`.
+- Con muchos títulos la barra recorta por la derecha (sin menú de
+  desbordamiento), como ya fijó el ADR 0040 §6.
 
 
 ## Aceptación de 14a

@@ -120,13 +120,21 @@ defecto** y se activa con dos preferencias:
 **protocolo appmenu de KDE** (`org_kde_kwin_appmenu` para anunciar el servicio,
 `com.canonical.dbusmenu` para el contenido).
 
-**X11 / Wayland.** El soporte existe para los dos. **No verificado:** si en
-Wayland necesita además `appmenu-gtk-module` o si las dos preferencias bastan.
-El ADR 0036 lo deja como comprobación de la aceptación del Bloque 14d.
+**X11 / Wayland.** El soporte existe para los dos. **Verificado (2026-10-26,
+Firefox 158.0 de nixpkgs en sesión anidada):** en Wayland las dos preferencias
+bastan; no hace falta `appmenu-gtk-module`. Firefox publica su menú por
+`org_kde_kwin_appmenu` y el contenido por `com.canonical.dbusmenu`, como Kate.
+El binario hace `dlopen` de `libdbusmenu-glib.so.4` y `libdbusmenu-gtk3.so.4`:
+el wrapper de nixpkgs pone `libdbusmenu-gtk3-16.04.0` en `LD_LIBRARY_PATH` y
+las encuentra; el log del lab no muestra ningún error de carga. La primera
+publicación llega unos segundos después del map (primer `GetLayout` con 0
+títulos; el árbol real llega por `LayoutUpdated`, ya con `File`, `Edit`, etc.).
 
 **Qué toma Yuki.** Nada de código. Las dos preferencias son **configuración del
 usuario** (`~/nixdots`), no del repositorio de Yuki: el compositor y la menubar
-no las tocan. Firefox es el cliente de aceptación del menú real en Wayland.
+no las tocan. El perfil temporal de `dev.sh lab` las escribe en su `user.js`
+solo como fixture de pruebas. Firefox es el cliente de aceptación del menú real
+en Wayland.
 
 ## 7. El ecosistema: el protocolo appmenu de KDE
 

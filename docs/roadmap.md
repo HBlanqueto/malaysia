@@ -271,8 +271,12 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
     barra: hilo D-Bus con zbus, caché, carga perezosa, fusión de títulos,
     buscador de Ayuda sobre el árbol real, iconos de mapa de bits y
     `menubar.app_menus`.
-  - **14d-3:** `com.canonical.AppMenu.Registrar` y aceptación con Kate y
-    Firefox (sus dos preferencias en `~/nixdots`, nunca en el repo).
+  - **14d-3:** **implementado (anidado, 2026-10-26)**: árbol completo en
+    segundo plano (timeout de 2 s, 1 s tras el foco, una petición por
+    dirección) y aceptación con Kate y Firefox; el Registrar sigue servido por
+    la barra desde 14d-2. GTK3 queda para `gtk_shell1`/`org.gtk.Menus`; el
+    casado por pid del Registrar, pendiente de XWayland. Las dos preferencias
+    de Firefox viven en `~/nixdots`, nunca en el repo.
 - **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
   Infinity.
 - **Después:** `gtk_shell1`/`org.gtk.Menus`, HUD en el launcher y menú de atajos
@@ -395,8 +399,8 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a, 14b-1, 14c y 14d-2 en anidado; 14b-2,
-  14d-3 y 14e pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
+- **Bloque 14 — 14a, 14b-1, 14c, 14d-2 y 14d-3 en anidado; 14b-2 y 14e
+  pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
   `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
   CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
   (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el
