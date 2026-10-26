@@ -118,10 +118,7 @@ use sctk::{
 };
 use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
-use vow_appearance::{
-    Resolved, load_appearance, load_dominant, resolve,
-    watch::AppearanceWatch,
-};
+use vow_appearance::{Resolved, load_appearance, load_dominant, resolve, watch::AppearanceWatch};
 use wayland_egl::WlEglSurface;
 use wayland_protocols_plasma::appmenu::client::{
     org_kde_kwin_appmenu::{self, OrgKdeKwinAppmenu},

@@ -616,7 +616,7 @@ impl Udev {
             self.capture_requested = false;
             if let Some(mode) = self.output.current_mode() {
                 let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
-                    if let Err(error) = crate::capture::capture_output(
+                if let Err(error) = crate::capture::capture_output(
                     &mut self.renderer,
                     &elements,
                     size,

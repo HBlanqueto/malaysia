@@ -161,10 +161,8 @@ mod tests {
 
     fn with_temp_dirs<F: FnOnce() -> R, R>(f: F) -> R {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let dir = std::env::temp_dir().join(format!(
-            "barrier-kit-theme-test-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("barrier-kit-theme-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let old_config = std::env::var_os("MALAYSIA_CONFIG_DIR");

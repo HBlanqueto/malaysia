@@ -305,12 +305,12 @@ mod tests {
 
     use smithay::backend::allocator::Fourcc;
     use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+    use smithay::backend::renderer::damage::OutputDamageTracker;
     use smithay::backend::renderer::{
         Bind, ExportMem, Offscreen,
         element::solid::{SolidColorBuffer, SolidColorRenderElement},
         gles::{GlesRenderer, GlesTexture},
     };
-    use smithay::backend::renderer::damage::OutputDamageTracker;
     use smithay::reexports::wayland_server::backend::ObjectId;
     use smithay::utils::{Buffer as BufferCoord, Physical, Rectangle, Scale, Size, Transform};
 
@@ -447,15 +447,11 @@ mod tests {
             1.0,
             smithay::backend::renderer::element::Kind::Unspecified,
         );
-        let source_elements: Vec<super::OutputRenderElement> =
-            vec![top.into(), bottom.into()];
+        let source_elements: Vec<super::OutputRenderElement> = vec![top.into(), bottom.into()];
 
-        let mut snapshot_texture = Offscreen::<GlesTexture>::create_buffer(
-            &mut renderer,
-            Fourcc::Abgr8888,
-            buffer_size,
-        )
-        .expect("create snapshot texture");
+        let mut snapshot_texture =
+            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
+                .expect("create snapshot texture");
         {
             let mut target = renderer.bind(&mut snapshot_texture).expect("bind snapshot");
             let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), render_transform);
@@ -468,7 +464,7 @@ mod tests {
         }
 
         let start = Instant::now();
-        let fade = ThemeFade::new(&mut renderer, snapshot_texture, HashSet::new(), start);
+        let fade = ThemeFade::new(&renderer, snapshot_texture, HashSet::new(), start);
 
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
@@ -502,7 +498,15 @@ mod tests {
         };
 
         // GL readback is bottom-up; (8, 8) in the raw bytes is the visual top-left.
-        assert_eq!(pixel(8, 8), [255, 0, 0, 255], "visual top-left should be red");
-        assert_eq!(pixel(8, 56), [0, 0, 255, 255], "visual bottom-left should be blue");
+        assert_eq!(
+            pixel(8, 8),
+            [255, 0, 0, 255],
+            "visual top-left should be red"
+        );
+        assert_eq!(
+            pixel(8, 56),
+            [0, 0, 255, 255],
+            "visual bottom-left should be blue"
+        );
     }
 }

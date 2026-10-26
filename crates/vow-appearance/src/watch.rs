@@ -151,9 +151,8 @@ mod tests {
     fn creates_watched_directories_when_missing() {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
-        let config_dir = std::env::temp_dir().join(format!(
-            "vow-appearance-watch-missing-config-{pid}-{n}"
-        ));
+        let config_dir =
+            std::env::temp_dir().join(format!("vow-appearance-watch-missing-config-{pid}-{n}"));
         let data_dir =
             std::env::temp_dir().join(format!("vow-appearance-watch-missing-data-{pid}-{n}"));
         let _ = std::fs::remove_dir_all(&config_dir);
@@ -179,7 +178,10 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert!(found, "appearance.domain rename was not detected after creating dirs");
+        assert!(
+            found,
+            "appearance.domain rename was not detected after creating dirs"
+        );
         let _ = std::fs::remove_dir_all(&config_dir);
         let _ = std::fs::remove_dir_all(&data_dir);
     }
