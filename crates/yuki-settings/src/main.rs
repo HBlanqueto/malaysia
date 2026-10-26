@@ -4,6 +4,9 @@
 //! Todos los colores y medidas salen de `yuki-design`, `yuki-appearance` y los
 //! componentes de `celestial-kit`; no hay literales de diseño.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use celestial_kit::controls::{ScrollView, TextField, ToolButton, ToolGroup};
 use celestial_kit::menu::{CheckState, MenuItem, MenuView};
 use celestial_kit::platform::{
@@ -17,14 +20,14 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Gaps, Size};
+use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use yuki_appearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightStyle, WindowColorMode, WindowTintScope,
     appearance_path, load_appearance, palette, read_dominant, resolve, write_appearance,
 };
 use yuki_design::{
-    ACCENT_SWATCHES, BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, Rgba, SETTINGS, SIDEBAR,
-    TEXT, TEXT_LINE_HEIGHT, TITLE_2, TITLEBAR, WINDOW,
+    ACCENT_SWATCHES, BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, CALLOUT, HEADLINE,
+    LAYER_FACTOR_BG_SUNKEN, Rgba, SETTINGS, SIDEBAR, TEXT, TITLE_2, TITLEBAR,
 };
 
 fn rgba(color: Rgba) -> Color {
@@ -51,6 +54,9 @@ impl App for SettingsApp {
         use_init_theme(theme::shell);
 
         let search = use_state(String::new);
+        let appearance_error = use_state(|| None::<String>);
+        let color_error = use_state(|| None::<String>);
+        let windows_error = use_state(|| None::<String>);
         let config = load_appearance();
         let dominant = read_dominant();
         let resolved = resolve(&config, dominant);
@@ -58,7 +64,15 @@ impl App for SettingsApp {
 
         SidebarLayout::new(
             sidebar(search, &config, &resolved),
-            content(&config, dominant, &resolved, &query),
+            content(
+                &config,
+                dominant,
+                &resolved,
+                &query,
+                appearance_error,
+                color_error,
+                windows_error,
+            ),
         )
     }
 }
@@ -70,17 +84,22 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
 
     let search_field = rect()
         .width(Size::fill())
-        .height(Size::px((TEXT.size as f32 * TEXT_LINE_HEIGHT).max(30.0)))
+        .height(Size::px(SETTINGS.search_height as f32))
         .corner_radius(999.0)
         .background(rgba(resolved.toolgroup.bg))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
-        .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+        .padding(Gaps::new(
+            0.0,
+            SETTINGS.search_padding_x as f32,
+            0.0,
+            SETTINGS.search_padding_x as f32,
+        ))
         .spacing(8.0)
         .child(svg_viewer(
             SEARCH_ICON,
             sidebar_palette.item_ink,
-            SIDEBAR.item_icon,
+            SETTINGS.search_icon,
         ))
         .child(
             TextField::new(search)
@@ -102,7 +121,7 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
     let account = rect()
         .width(Size::fill())
         .direction(Direction::Horizontal)
-        .spacing(SIDEBAR.item_gap as f32)
+        .spacing(SETTINGS.account_gap as f32)
         .cross_align(Alignment::Center)
         .padding(Gaps::new(
             SIDEBAR.item_padding_x as f32,
@@ -112,15 +131,15 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
         ))
         .child(
             rect()
-                .width(Size::px(36.0))
-                .height(Size::px(36.0))
-                .corner_radius(18.0)
+                .width(Size::px(SETTINGS.account_avatar as f32))
+                .height(Size::px(SETTINGS.account_avatar as f32))
+                .corner_radius((SETTINGS.account_avatar as f32 / 2.0).max(0.0))
                 .background(rgba(resolved.accent))
                 .center()
                 .child(
                     label()
                         .text(initials(&account_name()))
-                        .font_size(14.0)
+                        .font_size((SETTINGS.account_avatar as f32 / 2.5).max(10.0))
                         .font_weight(FontWeight::SEMI_BOLD)
                         .color(rgba(scheme_palette.on_accent)),
                 ),
@@ -132,15 +151,16 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
                 .child(
                     label()
                         .text(account_name())
-                        .font_size(SIDEBAR.item_text_size as f32)
-                        .font_weight(FontWeight::MEDIUM)
+                        .font_size(SETTINGS.account_name_font.size as f32)
+                        .font_weight(FontWeight::from(SETTINGS.account_name_font.weight as i32))
                         .color(rgba(sidebar_palette.item_ink))
                         .max_lines(1),
                 )
                 .child(
                     label()
                         .text("Cuenta local")
-                        .font_size(11.0)
+                        .font_size(SETTINGS.account_detail_font.size as f32)
+                        .font_weight(FontWeight::from(SETTINGS.account_detail_font.weight as i32))
                         .color(rgba(sidebar_palette.count_ink))
                         .max_lines(1),
                 ),
@@ -151,11 +171,15 @@ fn sidebar(mut search: State<String>, _config: &AppearanceConfig, resolved: &Res
         .on_close(move |()| std::process::exit(0))
         .child(search_field)
         .child(account)
-        .child(rect().width(Size::fill()).height(Size::flex(1.0)))
+        .child(
+            rect()
+                .width(Size::fill())
+                .height(Size::px(SETTINGS.section_gap as f32)),
+        )
         .child(
             SidebarItem::new("Apariencia")
                 .selected(true)
-                .app_icon(APPEARANCE_ICON, scheme_palette.accent)
+                .app_icon(APPEARANCE_ICON, SETTINGS.section_icon_bg)
                 .on_select(move |_| {
                     // La única sección por ahora; el buscador la filtra.
                 }),
@@ -167,6 +191,9 @@ fn content(
     dominant: Option<Rgba>,
     resolved: &Resolved,
     query: &str,
+    appearance_error: State<Option<String>>,
+    color_error: State<Option<String>>,
+    windows_error: State<Option<String>>,
 ) -> impl IntoElement {
     let resolved = *resolved;
     let scheme_palette = palette(resolved.scheme);
@@ -207,7 +234,15 @@ fn content(
                     ScrollView::new()
                         .width(Size::fill())
                         .height(Size::flex(1.0))
-                        .child(scroll_content(query, config, dominant, &resolved)),
+                        .child(scroll_content(
+                            query,
+                            config,
+                            dominant,
+                            &resolved,
+                            appearance_error,
+                            color_error,
+                            windows_error,
+                        )),
                 ),
         )
         .child(resize_edges())
@@ -218,32 +253,40 @@ fn scroll_content(
     config: &AppearanceConfig,
     dominant: Option<Rgba>,
     resolved: &Resolved,
+    appearance_error: State<Option<String>>,
+    color_error: State<Option<String>>,
+    windows_error: State<Option<String>>,
 ) -> impl IntoElement {
     let resolved = *resolved;
-    let palette = resolved.sidebar.palette;
+    let scheme_palette = palette(resolved.scheme);
 
     let mut children: Vec<Element> = Vec::new();
 
     let appearance_visible = matches_filter(query, "apariencia tema claro oscuro automático");
     if appearance_visible {
-        children.push(group_title("", palette.section_ink));
-        children.push(appearance_group(config, dominant, &resolved));
+        children.push(group_title("", &scheme_palette));
+        children.push(appearance_group(
+            config,
+            dominant,
+            &resolved,
+            appearance_error,
+        ));
     }
 
     let color_visible = matches_filter(query, "color acento ventanas fondo escritorio tinte");
     if color_visible {
-        children.push(group_title("Color", palette.section_ink));
-        children.push(color_group(config, &resolved));
+        children.push(group_title("Color", &scheme_palette));
+        children.push(color_group(config, &resolved, color_error));
     }
 
     let windows_visible = matches_filter(query, "ventanas semáforos");
     if windows_visible {
-        children.push(group_title("Ventanas", palette.section_ink));
-        children.push(windows_group(config, &resolved));
+        children.push(group_title("Ventanas", &scheme_palette));
+        children.push(windows_group(config, &resolved, windows_error));
     }
 
     if children.is_empty() {
-        return no_results(query, palette).into_element();
+        return no_results(query, resolved.sidebar.palette).into_element();
     }
 
     rect()
@@ -255,19 +298,30 @@ fn scroll_content(
         .into_element()
 }
 
-fn group_title(label_text: &str, color: Rgba) -> Element {
+fn group_title(label_text: &str, scheme_palette: &yuki_design::Palette) -> Element {
     if label_text.is_empty() {
         return rect()
             .width(Size::fill())
             .height(Size::px(0.0))
             .into_element();
     }
-    label()
-        .text(label_text.to_string())
-        .font_size(TEXT.size as f32)
-        .font_weight(FontWeight::from(TEXT.weight as i32))
-        .color(rgba(color))
-        .max_lines(1)
+    rect()
+        .width(Size::fill())
+        .height(Size::auto())
+        .margin(Gaps::new(
+            SETTINGS.group_title_margin_top as f32,
+            0.0,
+            0.0,
+            0.0,
+        ))
+        .child(
+            label()
+                .text(label_text.to_string())
+                .font_size(HEADLINE.size as f32)
+                .font_weight(FontWeight::from(HEADLINE.weight as i32))
+                .color(rgba(scheme_palette.ink_strong))
+                .max_lines(1),
+        )
         .into_element()
 }
 
@@ -275,15 +329,25 @@ fn appearance_group(
     config: &AppearanceConfig,
     dominant: Option<Rgba>,
     resolved: &Resolved,
+    error: State<Option<String>>,
 ) -> Element {
     let resolved = *resolved;
     let scheme_palette = palette(resolved.scheme);
+    let card_bg = card_background(dominant, resolved.accent);
 
     let selected = match config.color_scheme {
         ColorScheme::Light => "light",
         ColorScheme::Auto => "auto",
         ColorScheme::Dark | ColorScheme::DarkTint => "dark",
     };
+
+    let mut test_config = config.clone();
+    test_config.color_scheme = ColorScheme::Light;
+    let light_resolved = resolve(&test_config, dominant);
+    test_config.color_scheme = ColorScheme::Dark;
+    let dark_resolved = resolve(&test_config, dominant);
+    test_config.color_scheme = ColorScheme::Auto;
+    let auto_resolved = resolve(&test_config, dominant);
 
     card_container(&resolved)
         .child(
@@ -292,132 +356,245 @@ fn appearance_group(
                 .direction(Direction::Horizontal)
                 .spacing(SETTINGS.card_gap as f32)
                 .padding(Gaps::new(
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
+                    SETTINGS.group_content_padding_x as f32,
+                    SETTINGS.group_content_padding_x as f32,
+                    SETTINGS.group_content_padding_x as f32,
+                    SETTINGS.group_content_padding_x as f32,
                 ))
                 .child(theme_card(
                     "Claro",
-                    ColorScheme::Light,
                     "light",
                     selected,
-                    preview_color(ColorScheme::Light, dominant),
-                    resolved,
+                    card_bg,
+                    light_resolved,
+                    error,
                 ))
                 .child(theme_card(
                     "Oscuro",
-                    ColorScheme::Dark,
                     "dark",
                     selected,
-                    preview_color(ColorScheme::Dark, dominant),
-                    resolved,
+                    card_bg,
+                    dark_resolved,
+                    error,
                 ))
                 .child(theme_card(
                     "Automático",
-                    ColorScheme::Auto,
                     "auto",
                     selected,
-                    preview_color(ColorScheme::Auto, dominant),
-                    resolved,
+                    card_bg,
+                    auto_resolved,
+                    error,
                 )),
         )
-        .child(
-            label()
-                .text("Elige el aspecto general del escritorio.")
-                .font_size(11.0)
-                .color(rgba(scheme_palette.text.focused))
-                .max_lines(2)
-                .padding(Gaps::new(
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
-                    SIDEBAR.item_padding_x as f32,
-                )),
-        )
+        .child(error_label(&error, &scheme_palette))
         .into_element()
 }
 
-fn preview_color(scheme: ColorScheme, dominant: Option<Rgba>) -> Rgba {
-    match scheme {
-        ColorScheme::Light => BG_WINDOW_LIGHT,
-        ColorScheme::Dark | ColorScheme::DarkTint => BG_WINDOW_DARK,
-        ColorScheme::Auto => dominant.unwrap_or(yuki_design::LIGHT.accent),
-    }
+fn card_background(dominant: Option<Rgba>, accent: Rgba) -> Rgba {
+    dominant.unwrap_or(accent)
 }
 
 fn theme_card(
     caption: &'static str,
-    scheme: ColorScheme,
     id: &'static str,
     selected: &str,
-    preview: Rgba,
-    resolved: Resolved,
-) -> Rect {
+    card_bg: Rgba,
+    preview_resolved: Resolved,
+    error: State<Option<String>>,
+) -> Element {
     let is_selected = selected == id;
-    let accent = resolved.accent;
-    let scheme_palette = palette(resolved.scheme);
-    let preview_fg = if scheme == ColorScheme::Light {
-        scheme_palette.text.focused
-    } else {
-        scheme_palette.title.focused
-    };
+    let accent = preview_resolved.accent;
+    let scheme_palette = palette(preview_resolved.scheme);
+    let scheme = preview_resolved.scheme;
 
+    let mut error = error;
     let on_select = move |_| {
         let mut config = load_appearance();
-        config.color_scheme = scheme;
-        apply_change(config);
+        if scheme == ColorScheme::Dark && config.color_scheme == ColorScheme::DarkTint {
+            // Keep dark-tint when the user presses "Dark".
+        } else {
+            config.color_scheme = scheme;
+        }
+        if let Err(err) = write_appearance(&appearance_path(), &config) {
+            error.set(Some(err.to_string()));
+        }
     };
 
-    let mut card = rect()
+    selectable_card(
+        caption,
+        card_bg,
+        theme_preview(scheme, &preview_resolved),
+        is_selected,
+        accent,
+        scheme_palette,
+        on_select,
+    )
+}
+
+fn theme_preview(scheme: ColorScheme, preview_resolved: &Resolved) -> Rect {
+    let window_bg = tinted_bg_window(preview_resolved);
+    let accent = preview_resolved.accent;
+    let card_w = SETTINGS.card_width as f32;
+    let card_h = SETTINGS.card_height as f32;
+    let radius = SETTINGS.preview_window_radius as f32;
+    let x = SETTINGS.preview_window_x as f32;
+    let y = SETTINGS.preview_window_y as f32;
+    let bar_w = SETTINGS.preview_bar_w as f32;
+    let bar_h = SETTINGS.preview_bar_h as f32;
+    let inset = SETTINGS.preview_bar_inset as f32;
+    let light = SETTINGS.preview_light as f32;
+    let light_gap = SETTINGS.preview_light_gap as f32;
+
+    let mut window = rect()
+        .width(Size::px(card_w))
+        .height(Size::px(card_h))
+        .corner_radius(radius)
+        .background(rgba(window_bg))
+        .overflow(Overflow::Clip)
+        .position(Position::new_absolute().top(y).left(x));
+
+    if scheme == ColorScheme::Auto {
+        window = window
+            .child(
+                rect()
+                    .position(Position::new_absolute().top(0.0).left(0.0).bottom(0.0))
+                    .width(Size::px(card_w / 2.0))
+                    .background(rgba(BG_WINDOW_LIGHT)),
+            )
+            .child(
+                rect()
+                    .position(Position::new_absolute().top(0.0).right(0.0).bottom(0.0))
+                    .width(Size::px(card_w / 2.0))
+                    .background(rgba(BG_WINDOW_DARK)),
+            );
+    }
+
+    window
+        .child(
+            rect()
+                .position(Position::new_absolute().top(inset).left(inset))
+                .width(Size::px(bar_w))
+                .height(Size::px(bar_h))
+                .corner_radius((bar_h / 2.0).max(0.0))
+                .background(rgba(accent)),
+        )
+        .child(
+            rect()
+                .position(Position::new_absolute().bottom(inset).left(inset))
+                .width(Size::auto())
+                .height(Size::px(light))
+                .direction(Direction::Horizontal)
+                .spacing(light_gap)
+                .children(preview_resolved.lights.iter().map(|color| {
+                    rect()
+                        .width(Size::px(light))
+                        .height(Size::px(light))
+                        .corner_radius((light / 2.0).max(0.0))
+                        .background(rgba(*color))
+                        .into_element()
+                })),
+        )
+}
+
+fn tinted_bg_window(preview_resolved: &Resolved) -> Rgba {
+    let base = match preview_resolved.scheme {
+        ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
+        ColorScheme::Dark => BG_WINDOW_DARK,
+        _ => BG_WINDOW_LIGHT,
+    };
+    match preview_resolved.window_tint {
+        Some((tint, factor)) => base.mix(tint, factor),
+        None => base,
+    }
+}
+
+fn tinted_bg_sunken(preview_resolved: &Resolved) -> Rgba {
+    let base = palette(preview_resolved.scheme).titlebar_bg.unfocused;
+    match preview_resolved.window_tint {
+        Some((tint, factor)) => base.mix(tint, factor * LAYER_FACTOR_BG_SUNKEN),
+        None => base,
+    }
+}
+
+fn selectable_card(
+    caption: &'static str,
+    card_bg: Rgba,
+    preview: Rect,
+    is_selected: bool,
+    accent: Rgba,
+    scheme_palette: yuki_design::Palette,
+    on_select: impl FnMut(Event<PressEventData>) + 'static,
+) -> Element {
+    let card = rect()
         .width(Size::px(SETTINGS.card_width as f32))
         .height(Size::px(SETTINGS.card_height as f32))
         .corner_radius(SETTINGS.card_radius as f32)
-        .background(rgba(preview))
-        .direction(Direction::Vertical)
-        .padding(Gaps::new(4.0, 4.0, 4.0, 4.0))
-        .child(
-            rect()
-                .width(Size::fill())
-                .height(Size::flex(1.0))
-                .corner_radius((SETTINGS.card_radius as f32 - 2.0).max(0.0))
-                .background(rgba(preview))
-                .child(window_preview_mini(resolved, scheme, preview_fg))
-                .on_press(on_select),
+        .background(rgba(card_bg))
+        .border(
+            Border::new()
+                .width(1.0)
+                .alignment(BorderAlignment::Inner)
+                .fill(rgba(scheme_palette.line)),
         )
+        .overflow(Overflow::Clip)
+        .child(preview);
+
+    let wrapper = rect()
+        .width(Size::auto())
+        .height(Size::auto())
+        .padding(SETTINGS.card_ring_gap as f32)
+        .corner_radius((SETTINGS.card_radius + SETTINGS.card_ring_gap) as f32)
+        .border(
+            Border::new()
+                .width(if is_selected {
+                    SETTINGS.card_ring as f32
+                } else {
+                    0.0
+                })
+                .alignment(BorderAlignment::Outer)
+                .fill(rgba(accent)),
+        )
+        .child(card);
+
+    let caption_weight = if is_selected {
+        FontWeight::SEMI_BOLD
+    } else {
+        FontWeight::from(SETTINGS.card_caption_font.weight as i32)
+    };
+    let caption_color = if is_selected {
+        scheme_palette.ink_strong
+    } else {
+        scheme_palette.text.focused
+    };
+
+    rect()
+        .width(Size::auto())
+        .height(Size::auto())
+        .direction(Direction::Vertical)
+        .spacing(SETTINGS.card_caption_gap as f32)
+        .cross_align(Alignment::Center)
+        .child(wrapper)
         .child(
             label()
                 .text(caption)
-                .font_size(11.0)
-                .font_weight(if is_selected {
-                    FontWeight::SEMI_BOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
-                .color(rgba(if is_selected {
-                    accent
-                } else {
-                    scheme_palette.text.focused
-                }))
-                .max_lines(1)
-                .on_press(on_select),
-        );
-
-    if is_selected {
-        card = card.border(
-            Border::new()
-                .width(SETTINGS.card_ring as f32)
-                .alignment(BorderAlignment::Outer)
-                .fill(rgba(accent)),
-        );
-    }
-
-    card
+                .font_size(SETTINGS.card_caption_font.size as f32)
+                .font_weight(caption_weight)
+                .color(rgba(caption_color))
+                .max_lines(1),
+        )
+        .on_press(on_select)
+        .into_element()
 }
 
-fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
+fn color_group(
+    config: &AppearanceConfig,
+    resolved: &Resolved,
+    error: State<Option<String>>,
+) -> Element {
     let resolved = *resolved;
+    let scheme_palette = palette(resolved.scheme);
     let wallpaper_mode = config.window_color == WindowColorMode::Wallpaper;
+    let card_bg = card_background(read_dominant(), resolved.accent);
 
     let swatches = rect()
         .width(Size::fill())
@@ -425,7 +602,7 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
         .spacing(SETTINGS.swatch_gap as f32)
         .children(ACCENT_SWATCHES.iter().map(|(name, color)| {
             let selected = config.accent_color == Some([color.r, color.g, color.b]);
-            accent_swatch(name, *color, selected, wallpaper_mode).into_element()
+            accent_swatch(name, *color, selected, wallpaper_mode, error).into_element()
         }));
 
     let accent_row = row_card(&resolved, "Color de acento", swatches.into_element());
@@ -442,19 +619,25 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
                 "Neutro",
                 WindowColorMode::Neutral,
                 selected_window_mode,
+                card_bg,
                 resolved,
+                error,
             ))
             .child(window_color_card(
                 "Acento",
                 WindowColorMode::Accent,
                 selected_window_mode,
+                card_bg,
                 resolved,
+                error,
             ))
             .child(window_color_card(
                 "Fondo",
                 WindowColorMode::Wallpaper,
                 selected_window_mode,
+                card_bg,
                 resolved,
+                error,
             ))
             .into_element(),
     );
@@ -466,16 +649,22 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
         rect()
             .width(Size::fill())
             .direction(Direction::Horizontal)
-            .spacing(SIDEBAR.item_gap as f32)
+            .spacing(SETTINGS.radio_spacing as f32)
             .child(radio(
                 "Solo las ventanas",
                 config.window_tint_scope == WindowTintScope::Windows,
                 scope_disabled,
-                move |_| {
-                    if !scope_disabled {
-                        let mut config = load_appearance();
-                        config.window_tint_scope = WindowTintScope::Windows;
-                        apply_change(config);
+                resolved,
+                {
+                    let mut error = error;
+                    move |_| {
+                        if !scope_disabled {
+                            let mut config = load_appearance();
+                            config.window_tint_scope = WindowTintScope::Windows;
+                            if let Err(err) = write_appearance(&appearance_path(), &config) {
+                                error.set(Some(err.to_string()));
+                            }
+                        }
                     }
                 },
             ))
@@ -483,11 +672,17 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
                 "Todo el escritorio",
                 config.window_tint_scope == WindowTintScope::Desktop,
                 scope_disabled,
-                move |_| {
-                    if !scope_disabled {
-                        let mut config = load_appearance();
-                        config.window_tint_scope = WindowTintScope::Desktop;
-                        apply_change(config);
+                resolved,
+                {
+                    let mut error = error;
+                    move |_| {
+                        if !scope_disabled {
+                            let mut config = load_appearance();
+                            config.window_tint_scope = WindowTintScope::Desktop;
+                            if let Err(err) = write_appearance(&appearance_path(), &config) {
+                                error.set(Some(err.to_string()));
+                            }
+                        }
                     }
                 },
             ))
@@ -497,7 +692,8 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
     let note: Element = if wallpaper_mode {
         label()
             .text("Lo pone el fondo de pantalla.")
-            .font_size(11.0)
+            .font_size(CALLOUT.size as f32)
+            .font_weight(FontWeight::from(CALLOUT.weight as i32))
             .color(rgba(resolved.sidebar.palette.count_ink))
             .max_lines(1)
             .into_element()
@@ -510,49 +706,69 @@ fn color_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
         .child(window_mode_row)
         .child(scope_row)
         .child(note)
+        .child(error_label(&error, &scheme_palette))
         .into_element()
 }
 
-fn accent_swatch(name: &'static str, color: Rgba, selected: bool, disabled: bool) -> Rect {
-    let mut swatch = rect()
-        .width(Size::px(SETTINGS.swatch_size as f32))
-        .height(Size::px(SETTINGS.swatch_size as f32))
-        .corner_radius((SETTINGS.swatch_size as f32 / 2.0).max(0.0))
-        .background(rgba(color))
-        .center();
+fn accent_swatch(
+    name: &'static str,
+    color: Rgba,
+    selected: bool,
+    disabled: bool,
+    error: State<Option<String>>,
+) -> Rect {
+    let swatch_size = SETTINGS.swatch_size as f32;
+    let ring_gap = SETTINGS.swatch_gap as f32; // reused as ring gap; swatch has no separate ring gap token
+    let ring = 1.5f32;
 
-    if selected {
-        swatch = swatch.child(
-            rect()
-                .width(Size::px(8.0))
-                .height(Size::px(8.0))
-                .corner_radius(4.0)
-                .background(rgba(yuki_design::LIGHT.text.focused)),
-        );
-    }
+    let inner = rect()
+        .width(Size::px(swatch_size))
+        .height(Size::px(swatch_size))
+        .corner_radius((swatch_size / 2.0).max(0.0))
+        .background(rgba(color));
 
-    let row = rect()
+    let wrapper = rect()
+        .width(Size::auto())
+        .height(Size::auto())
+        .padding(ring_gap)
+        .corner_radius(((swatch_size + ring_gap * 2.0) / 2.0).max(0.0))
+        .border(
+            Border::new()
+                .width(if selected { ring } else { 0.0 })
+                .alignment(BorderAlignment::Outer)
+                .fill(rgba(yuki_design::LIGHT.text.focused)),
+        )
+        .child(inner);
+
+    let mut column = rect()
         .width(Size::auto())
         .height(Size::auto())
         .direction(Direction::Vertical)
         .spacing(2.0)
         .cross_align(Alignment::Center)
-        .child(swatch)
-        .child(
+        .child(wrapper);
+
+    if selected {
+        column = column.child(
             label()
                 .text(name)
-                .font_size(10.0)
+                .font_size(SETTINGS.swatch_name_font.size as f32)
+                .font_weight(FontWeight::from(SETTINGS.swatch_name_font.weight as i32))
                 .color(rgba(yuki_design::LIGHT.text.focused))
                 .max_lines(1),
         );
+    }
 
     if disabled {
-        row.opacity(0.4)
+        column.opacity(0.4)
     } else {
-        row.on_press(move |_| {
+        let mut error = error;
+        column.on_press(move |_| {
             let mut config = load_appearance();
             config.accent_color = Some([color.r, color.g, color.b]);
-            apply_change(config);
+            if let Err(err) = write_appearance(&appearance_path(), &config) {
+                error.set(Some(err.to_string()));
+            }
         })
     }
 }
@@ -561,68 +777,107 @@ fn window_color_card(
     caption: &'static str,
     mode: WindowColorMode,
     selected: WindowColorMode,
+    card_bg: Rgba,
     resolved: Resolved,
-) -> Rect {
+    error: State<Option<String>>,
+) -> Element {
     let mut test_config = load_appearance();
     test_config.window_color = mode;
     let preview_resolved = resolve(&test_config, read_dominant());
-    let bg = preview_resolved.toolgroup.bg;
     let is_selected = selected == mode;
     let scheme_palette = palette(resolved.scheme);
 
+    let mut error = error;
     let on_select = move |_| {
         let mut config = load_appearance();
         config.window_color = mode;
-        apply_change(config);
+        if let Err(err) = write_appearance(&appearance_path(), &config) {
+            error.set(Some(err.to_string()));
+        }
     };
 
-    let mut card = rect()
-        .width(Size::px(SETTINGS.card_width as f32))
-        .height(Size::px(SETTINGS.card_height as f32))
-        .corner_radius(SETTINGS.card_radius as f32)
-        .background(rgba(bg))
-        .direction(Direction::Vertical)
-        .padding(Gaps::new(4.0, 4.0, 4.0, 4.0))
-        .child(
-            window_preview_mini(
-                preview_resolved,
-                resolved.scheme,
-                scheme_palette.text.focused,
-            )
-            .on_press(on_select),
-        )
-        .child(
-            label()
-                .text(caption)
-                .font_size(11.0)
-                .font_weight(if is_selected {
-                    FontWeight::SEMI_BOLD
-                } else {
-                    FontWeight::MEDIUM
-                })
-                .color(rgba(if is_selected {
-                    resolved.accent
-                } else {
-                    scheme_palette.text.focused
-                }))
-                .max_lines(1)
-                .on_press(on_select),
-        );
-
-    if is_selected {
-        card = card.border(
-            Border::new()
-                .width(SETTINGS.card_ring as f32)
-                .alignment(BorderAlignment::Outer)
-                .fill(rgba(resolved.accent)),
-        );
-    }
-
-    card
+    selectable_card(
+        caption,
+        card_bg,
+        window_color_preview(&preview_resolved),
+        is_selected,
+        resolved.accent,
+        scheme_palette,
+        on_select,
+    )
 }
 
-fn windows_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
+fn window_color_preview(preview_resolved: &Resolved) -> Rect {
+    let window_bg = tinted_bg_window(preview_resolved);
+    let sunken = tinted_bg_sunken(preview_resolved);
+    let x = SETTINGS.preview_tint_window_x as f32;
+    let y = SETTINGS.preview_tint_window_y as f32;
+    let side_w = SETTINGS.preview_tint_side_w as f32;
+    let card_w = SETTINGS.card_width as f32;
+    let card_h = SETTINGS.card_height as f32;
+    let radius = SETTINGS.preview_window_radius as f32;
+    let light = SETTINGS.preview_light as f32;
+    let light_gap = SETTINGS.preview_light_gap as f32;
+    let inset = SETTINGS.preview_bar_inset as f32;
+
+    rect()
+        .width(Size::px(card_w))
+        .height(Size::px(card_h))
+        .corner_radius(radius)
+        .background(rgba(window_bg))
+        .overflow(Overflow::Clip)
+        .position(Position::new_absolute().top(y).left(x))
+        .child(
+            rect()
+                .position(Position::new_absolute().top(0.0).left(0.0).bottom(0.0))
+                .width(Size::px(side_w))
+                .background(rgba(sunken)),
+        )
+        .child(
+            rect()
+                .position(Position::new_absolute().bottom(inset).left(inset))
+                .width(Size::auto())
+                .height(Size::px(light))
+                .direction(Direction::Horizontal)
+                .spacing(light_gap)
+                .children(preview_resolved.lights.iter().map(|color| {
+                    rect()
+                        .width(Size::px(light))
+                        .height(Size::px(light))
+                        .corner_radius((light / 2.0).max(0.0))
+                        .background(rgba(*color))
+                        .into_element()
+                })),
+        )
+}
+
+fn error_label(error: &State<Option<String>>, scheme_palette: &yuki_design::Palette) -> Element {
+    if let Some(ref msg) = *error.read() {
+        label()
+            .text(msg.clone())
+            .font_size(CALLOUT.size as f32)
+            .font_weight(FontWeight::from(CALLOUT.weight as i32))
+            .color(rgba(scheme_palette.danger))
+            .max_lines(2)
+            .padding(Gaps::new(
+                SETTINGS.group_content_padding_x as f32,
+                SETTINGS.group_content_padding_x as f32,
+                SETTINGS.group_content_padding_x as f32,
+                SETTINGS.group_content_padding_x as f32,
+            ))
+            .into_element()
+    } else {
+        rect().into_element()
+    }
+}
+
+fn windows_group(
+    config: &AppearanceConfig,
+    resolved: &Resolved,
+    error: State<Option<String>>,
+) -> Element {
     let resolved = *resolved;
+    let scheme_palette = palette(resolved.scheme);
     let palette = resolved.sidebar.palette;
     let current = config.traffic_lights;
 
@@ -636,7 +891,7 @@ fn windows_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
 
     let traffic_button = rect()
         .width(Size::auto())
-        .height(Size::px(30.0))
+        .height(Size::px(SETTINGS.popup_height as f32))
         .corner_radius(SETTINGS.card_radius as f32)
         .background(rgba(resolved.toolgroup.bg))
         .direction(Direction::Horizontal)
@@ -662,13 +917,20 @@ fn windows_group(config: &AppearanceConfig, resolved: &Resolved) -> Element {
         .child(svg_viewer(
             CHEVRON_UP_DOWN_ICON,
             palette.item_ink,
-            SIDEBAR.item_icon,
+            SETTINGS.popup_chevron,
         ))
         .on_press(move |_| {
-            open_traffic_menu(current, resolved);
+            open_traffic_menu(current, resolved, error);
         });
 
-    row_card(&resolved, "Semáforos", traffic_button.into_element()).into_element()
+    card_container(&resolved)
+        .child(row_card(
+            &resolved,
+            "Semáforos",
+            traffic_button.into_element(),
+        ))
+        .child(error_label(&error, &scheme_palette))
+        .into_element()
 }
 
 fn traffic_squares(lights: [Rgba; 3]) -> Rect {
@@ -696,7 +958,7 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
     }
 }
 
-fn open_traffic_menu(current: TrafficLightStyle, resolved: Resolved) {
+fn open_traffic_menu(current: TrafficLightStyle, resolved: Resolved, error: State<Option<String>>) {
     let items = vec![
         traffic_menu_item("auto", "Automático", current == TrafficLightStyle::Auto),
         traffic_menu_item("standard", "macOS", current == TrafficLightStyle::Standard),
@@ -707,6 +969,7 @@ fn open_traffic_menu(current: TrafficLightStyle, resolved: Resolved) {
             current == TrafficLightStyle::Wallpaper,
         ),
     ];
+    let error = Rc::new(RefCell::new(error));
     let view = MenuView::new(
         items,
         move |id| {
@@ -719,7 +982,9 @@ fn open_traffic_menu(current: TrafficLightStyle, resolved: Resolved) {
             };
             let mut config = load_appearance();
             config.traffic_lights = style;
-            let _ = write_appearance(&appearance_path(), &config);
+            if let Err(err) = write_appearance(&appearance_path(), &config) {
+                error.borrow_mut().set(Some(err.to_string()));
+            }
             PopupHandle::get().close();
         },
         || {
@@ -786,87 +1051,42 @@ fn card_container(resolved: &Resolved) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::auto())
-        .corner_radius(WINDOW.corner_radius as f32)
+        .corner_radius(SETTINGS.group_radius as f32)
         .background(rgba(scheme_palette.titlebar_bg.focused))
         .direction(Direction::Vertical)
         .spacing(1.0)
-}
-
-fn window_preview_mini(resolved: Resolved, scheme: ColorScheme, text: Rgba) -> Rect {
-    let dark = matches!(scheme, ColorScheme::Dark | ColorScheme::DarkTint);
-    let titlebar_bg = if dark {
-        BG_WINDOW_DARK
-    } else {
-        BG_WINDOW_LIGHT
-    };
-    rect()
-        .width(Size::fill())
-        .height(Size::flex(1.0))
-        .corner_radius((SETTINGS.card_radius as f32 - 4.0).max(0.0))
-        .background(rgba(titlebar_bg))
-        .direction(Direction::Vertical)
-        .child(
-            rect()
-                .width(Size::fill())
-                .height(Size::px(14.0))
-                .background(rgba(resolved.toolgroup.bg))
-                .direction(Direction::Horizontal)
-                .cross_align(Alignment::Center)
-                .padding(Gaps::new(0.0, 6.0, 0.0, 6.0))
-                .spacing(3.0)
-                .children(resolved.lights.iter().map(|color| {
-                    rect()
-                        .width(Size::px(8.0))
-                        .height(Size::px(8.0))
-                        .corner_radius(TITLEBAR.buttons.corner_radius as f32)
-                        .background(rgba(*color))
-                        .into_element()
-                })),
-        )
-        .child(
-            rect()
-                .width(Size::fill())
-                .height(Size::flex(1.0))
-                .center()
-                .child(
-                    label()
-                        .text("Aa")
-                        .font_size(10.0)
-                        .color(rgba(text))
-                        .max_lines(1),
-                ),
-        )
 }
 
 fn radio(
     label_text: &str,
     selected: bool,
     disabled: bool,
-    on_press: impl Fn(Event<PressEventData>) + 'static,
+    resolved: Resolved,
+    on_press: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Rect {
-    let resolved = resolve(&load_appearance(), read_dominant());
     let scheme_palette = palette(resolved.scheme);
     let fg = if disabled {
         resolved.sidebar.palette.count_ink
     } else {
         scheme_palette.text.focused
     };
-    let accent = resolved.accent;
+    let radio_size = SETTINGS.radio_size as f32;
+    let dot_size = SETTINGS.radio_dot as f32;
 
     let mut dot = rect()
-        .width(Size::px(16.0))
-        .height(Size::px(16.0))
-        .corner_radius(8.0)
+        .width(Size::px(radio_size))
+        .height(Size::px(radio_size))
+        .corner_radius((radio_size / 2.0).max(0.0))
         .background(rgba(resolved.toolgroup.bg))
         .center();
 
     if selected {
         dot = dot.child(
             rect()
-                .width(Size::px(8.0))
-                .height(Size::px(8.0))
-                .corner_radius(4.0)
-                .background(rgba(accent)),
+                .width(Size::px(dot_size))
+                .height(Size::px(dot_size))
+                .corner_radius((dot_size / 2.0).max(0.0))
+                .background(rgba(yuki_design::LIGHT.text.focused)),
         );
     }
 
@@ -874,7 +1094,7 @@ fn radio(
         .width(Size::auto())
         .height(Size::auto())
         .direction(Direction::Horizontal)
-        .spacing(SIDEBAR.item_gap as f32)
+        .spacing(SETTINGS.radio_gap as f32)
         .cross_align(Alignment::Center)
         .child(dot)
         .child(
@@ -918,10 +1138,6 @@ fn no_results(query: &str, palette: yuki_design::SidebarPalette) -> Rect {
         )
 }
 
-fn apply_change(config: AppearanceConfig) {
-    let _ = write_appearance(&appearance_path(), &config);
-}
-
 fn bg_window(scheme: ColorScheme) -> Rgba {
     match scheme {
         ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
@@ -931,9 +1147,31 @@ fn bg_window(scheme: ColorScheme) -> Rgba {
 }
 
 fn account_name() -> String {
-    std::env::var("USER")
-        .or_else(|_| std::env::var("LOGNAME"))
-        .unwrap_or_else(|_| "Usuario".into())
+    full_account_name().unwrap_or_else(|| {
+        std::env::var("USER")
+            .or_else(|_| std::env::var("LOGNAME"))
+            .unwrap_or_else(|_| "Usuario".into())
+    })
+}
+
+/// Returns the user's full name from `passwd` (the `pw_gecos` field), or `None`
+/// when the lookup fails. The first comma-separated entry is the display name.
+fn full_account_name() -> Option<String> {
+    // SAFETY: `getpwuid` returns a pointer to static libc data; we only read
+    // it and copy the resulting C string before the next call.
+    let pw = unsafe { libc::getpwuid(libc::getuid()) };
+    if pw.is_null() {
+        return None;
+    }
+    let gecos = unsafe { std::ffi::CStr::from_ptr((*pw).pw_gecos) };
+    gecos
+        .to_str()
+        .ok()?
+        .split(',')
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
 }
 
 fn initials(name: &str) -> String {
@@ -1030,6 +1268,9 @@ mod tests {
         fn render(&self) -> impl IntoElement {
             use_init_theme(|| theme::for_scheme(false));
             let resolved = resolve(&self.config, self.dominant);
+            let appearance_error = use_state(|| None::<String>);
+            let color_error = use_state(|| None::<String>);
+            let windows_error = use_state(|| None::<String>);
             rect()
                 .width(Size::fill())
                 .height(Size::fill())
@@ -1038,6 +1279,9 @@ mod tests {
                     &self.config,
                     self.dominant,
                     &resolved,
+                    appearance_error,
+                    color_error,
+                    windows_error,
                 ))
         }
     }
@@ -1163,7 +1407,15 @@ mod tests {
     #[test]
     fn choosing_purple_accent_writes_three_decimals() {
         with_temp_config(|_dir| {
-            let initial = AppearanceConfig::default();
+            let purple = ACCENT_SWATCHES
+                .iter()
+                .find(|(name, _)| *name == "Morado")
+                .map(|(_, color)| color)
+                .expect("purple swatch exists");
+            let initial = AppearanceConfig {
+                accent_color: Some([purple.r, purple.g, purple.b]),
+                ..Default::default()
+            };
             write_appearance(&appearance_path(), &initial).unwrap();
 
             let mut test = run_content("color", initial, None);
@@ -1177,6 +1429,82 @@ mod tests {
                     && (accent[1] - 0.357).abs() < 0.001
                     && (accent[2] - 0.847).abs() < 0.001,
                 "choosing purple must round to three decimals: {accent:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn only_selected_swatch_shows_its_name() {
+        let purple = ACCENT_SWATCHES
+            .iter()
+            .find(|(name, _)| *name == "Morado")
+            .map(|(_, color)| color)
+            .expect("purple swatch exists");
+        let config = AppearanceConfig {
+            accent_color: Some([purple.r, purple.g, purple.b]),
+            ..Default::default()
+        };
+
+        let test = run_content("color", config, None);
+        let names: Vec<&str> = ACCENT_SWATCHES.iter().map(|(name, _)| *name).collect();
+        let visible: Vec<&str> = names
+            .iter()
+            .filter(|name| find_label(&test, name).is_some())
+            .copied()
+            .collect();
+        assert_eq!(
+            visible,
+            vec!["Morado"],
+            "only the selected accent swatch should display its name: {visible:?}"
+        );
+    }
+
+    #[test]
+    fn pressing_dark_preserves_dark_tint() {
+        with_temp_config(|dir| {
+            let path = dir.join("appearance.domain");
+            let initial = AppearanceConfig {
+                color_scheme: ColorScheme::DarkTint,
+                ..Default::default()
+            };
+            write_appearance(&path, &initial).unwrap();
+
+            let mut test = run_content("", initial, None);
+            let node = find_label(&test, "Oscuro").expect("dark theme card label exists");
+            click_node(&mut test, node);
+
+            let config = load_appearance();
+            assert_eq!(
+                config.color_scheme,
+                ColorScheme::DarkTint,
+                "pressing Dark while in dark-tint must keep dark-tint"
+            );
+        });
+    }
+
+    #[test]
+    fn write_error_is_displayed() {
+        with_temp_config(|dir| {
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = dir.join("appearance.domain");
+            let initial = AppearanceConfig::default();
+            write_appearance(&path, &initial).unwrap();
+
+            // Make the config directory read-only so subsequent writes fail.
+            let mut permissions = fs::metadata(&dir).unwrap().permissions();
+            permissions.set_mode(0o555);
+            fs::set_permissions(&dir, permissions).unwrap();
+
+            let mut test = run_content("", initial, None);
+            let node = find_label(&test, "Oscuro").expect("dark theme card label exists");
+            click_node(&mut test, node);
+
+            assert!(
+                find_label(&test, "No se pudo guardar").is_some()
+                    || find_label(&test, "Permission denied").is_some()
+                    || find_label(&test, "denegado").is_some(),
+                "the write error message must be rendered"
             );
         });
     }

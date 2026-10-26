@@ -16,6 +16,7 @@ celestial-kit = { path = "../celestial-kit" }
 yuki-appearance = { path = "../yuki-appearance" }
 yuki-design = { path = "../yuki-design" }
 
+libc.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
 freya-engine.workspace = true
