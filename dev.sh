@@ -906,12 +906,26 @@ lab() {
     export YUKI_CONFIG_DIR
 
     _pids=
+    _lab_bus_pid=
     _lab_cleanup() {
-        trap - EXIT INT TERM
+        trap - EXIT
+        trap '' INT TERM
         for _pid in ${_pids:-}; do
             kill "$_pid" 2>/dev/null || true
         done
         stop
+        if [ -n "${_lab_bus_pid:-}" ]; then
+            kill -TERM "$_lab_bus_pid" 2>/dev/null || true
+            _lab_waited=0
+            while kill -0 "$_lab_bus_pid" 2>/dev/null; do
+                _lab_waited=$((_lab_waited + 1))
+                if [ "$_lab_waited" -ge 50 ]; then
+                    kill -KILL "$_lab_bus_pid" 2>/dev/null || true
+                    break
+                fi
+                sleep 0.1
+            done
+        fi
         if [ -n "${_lab_config:-}" ]; then
             rm -rf "$_lab_config"
         fi
@@ -942,6 +956,31 @@ lab() {
         _dialog="$script_dir/result/bin/dialog"
     fi
 
+    if ! command -v dbus-daemon >/dev/null 2>&1; then
+        fail "$EXIT_RUN_FAILED" \
+            "dbus-daemon is not installed; the lab needs a private session bus"
+    fi
+    _lab_bus_address_file="$_lab_config/dbus.address"
+    _lab_bus_pid_file="$_lab_config/dbus.pid"
+    if ! dbus-daemon --session --fork \
+        --print-address=3 --print-pid=4 \
+        3>"$_lab_bus_address_file" 4>"$_lab_bus_pid_file"; then
+        fail "$EXIT_RUN_FAILED" "could not start the lab D-Bus session bus"
+    fi
+    DBUS_SESSION_BUS_ADDRESS=$(cat "$_lab_bus_address_file")
+    _lab_bus_pid=$(cat "$_lab_bus_pid_file")
+    if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+        fail "$EXIT_RUN_FAILED" "the lab D-Bus session bus printed no address"
+    fi
+    case "$_lab_bus_pid" in
+        '' | *[!0-9]*)
+            fail "$EXIT_RUN_FAILED" "the lab D-Bus session bus printed no pid"
+            ;;
+    esac
+    export DBUS_SESSION_BUS_ADDRESS
+    printf 'lab: D-Bus session bus: %s (pid %s)\n' \
+        "$DBUS_SESSION_BUS_ADDRESS" "$_lab_bus_pid"
+
     start
     _sock=
     _waited=0
@@ -969,28 +1008,19 @@ lab() {
     }
 
     # Launch a third-party app so it lands in the nested session and not in the
-    # host GNOME session.  Isolating D-Bus (dbus-run-session) and forcing the
-    # Wayland backend prevents activation/portal hand-off to the host.
+    # host GNOME session.  It inherits the lab's private D-Bus bus (app and
+    # menubar must share it for the global menu) and the Wayland backend is
+    # forced so activation/portals do not hand off to the host.
     lab_app_client() {
         _name=$1
         shift
-        if command -v dbus-run-session >/dev/null 2>&1; then
-            lab_client "$_name" dbus-run-session -- env \
-                GDK_BACKEND=wayland \
-                MOZ_ENABLE_WAYLAND=1 \
-                QT_QPA_PLATFORM=wayland \
-                QT_QPA_PLATFORMTHEME=kde \
-                XDG_CURRENT_DESKTOP=Yuki \
-                "$@"
-        else
-            lab_client "$_name" env -u DBUS_SESSION_BUS_ADDRESS \
-                GDK_BACKEND=wayland \
-                MOZ_ENABLE_WAYLAND=1 \
-                QT_QPA_PLATFORM=wayland \
-                QT_QPA_PLATFORMTHEME=kde \
-                XDG_CURRENT_DESKTOP=Yuki \
-                "$@"
-        fi
+        lab_client "$_name" env \
+            GDK_BACKEND=wayland \
+            MOZ_ENABLE_WAYLAND=1 \
+            QT_QPA_PLATFORM=wayland \
+            QT_QPA_PLATFORMTHEME=kde \
+            XDG_CURRENT_DESKTOP=Yuki \
+            "$@"
     }
 
     lab_client wallpaper "$_shell_bin" wallpaper
