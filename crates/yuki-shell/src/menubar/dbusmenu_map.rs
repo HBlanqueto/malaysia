@@ -7,11 +7,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
-use celestial_kit::menu::{CheckState, MenuIcon, MenuItem};
+use celestial_kit::menu::{CheckState, MenuItem};
 use zbus::zvariant::OwnedValue;
 
 use crate::menubar::dbusmenu::RawItem;
-use crate::menubar::icons;
 
 const KNOWN_PROPERTIES: &[&str] = &[
     "label",
@@ -47,10 +46,14 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
 
     let label = mnemonic(&string(props, "label").unwrap_or_default());
     let enabled = bool_prop(props, "enabled", true);
-    let icon = string(props, "icon-name")
-        .and_then(|name| icon(&name))
-        .map(MenuIcon::Svg)
-        .or_else(|| icon_data(props));
+    // App menus never draw icons (14d-4): only three of Kate's 89 entries
+    // carry one, and a mostly bare column looks broken. The kit keeps
+    // `MenuIcon::Image` for the apps of 14e and future use.
+    for key in ["icon-name", "icon-data"] {
+        if props.contains_key(key) {
+            debug_once(key, props.get(key));
+        }
+    }
     let children = menu_items(&item.children);
 
     if string(props, "children-display").as_deref() == Some("submenu") {
@@ -59,7 +62,7 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
             label,
             enabled,
             items: children,
-            icon,
+            icon: None,
         });
     }
 
@@ -69,7 +72,7 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
         shortcut: shortcut(props),
         enabled,
         check: toggle(props),
-        icon,
+        icon: None,
     })
 }
 
@@ -126,33 +129,6 @@ fn shortcut(props: &HashMap<String, OwnedValue>) -> Option<String> {
         return None;
     }
     Some(keys.join("+"))
-}
-
-/// The bar only draws its own static SVG set; other icon names are ignored.
-fn icon(name: &str) -> Option<&'static str> {
-    match name {
-        "info" | "help-about" | "dialog-information" => Some(icons::INFO),
-        "preferences-system" | "settings" | "emblem-system" => Some(icons::GEAR),
-        "view-grid" | "view-grid-symbolic" => Some(icons::GRID),
-        "view-split" | "view-split-left-right" => Some(icons::SPLIT),
-        _ => {
-            debug_once("icon-name", None);
-            None
-        }
-    }
-}
-
-/// dbusmenu `icon-data` is a PNG; the kit decodes and caches it, and drops
-/// anything over 64 KiB.
-fn icon_data(props: &HashMap<String, OwnedValue>) -> Option<MenuIcon> {
-    let bytes = props
-        .get("icon-data")
-        .and_then(|value| Vec::<u8>::try_from(value.clone()).ok())?;
-    let icon = MenuIcon::image(bytes);
-    if icon.is_none() {
-        debug_once("icon-data", props.get("icon-data"));
-    }
-    icon
 }
 
 fn debug_once(key: &str, value: Option<&OwnedValue>) {
@@ -317,7 +293,9 @@ mod tests {
     }
 
     #[test]
-    fn enabled_defaults_to_true_and_icon_names_use_the_static_set() {
+    fn enabled_defaults_to_true_and_app_icons_are_ignored() {
+        let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        let data = OwnedValue::try_from(zbus::zvariant::Value::from(png)).unwrap();
         let items = menu_items(&[
             item(
                 1,
@@ -326,9 +304,15 @@ mod tests {
             ),
             item(
                 2,
+                &[("label", text("bitmap")), ("icon-data", data)],
+                Vec::new(),
+            ),
+            item(
+                3,
                 &[
-                    ("label", text("custom")),
-                    ("icon-name", text("no-such-icon")),
+                    ("label", text("submenu")),
+                    ("children-display", text("submenu")),
+                    ("icon-name", text("settings")),
                 ],
                 Vec::new(),
             ),
@@ -337,28 +321,11 @@ mod tests {
             &items[0],
             MenuItem::Action {
                 enabled: true,
-                icon: Some(MenuIcon::Svg(_)),
+                icon: None,
                 ..
             }
         ));
         assert!(matches!(&items[1], MenuItem::Action { icon: None, .. }));
-    }
-
-    #[test]
-    fn icon_data_becomes_a_bitmap_icon() {
-        let png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
-        let value = OwnedValue::try_from(zbus::zvariant::Value::from(png.clone())).unwrap();
-        let items = menu_items(&[item(
-            1,
-            &[("label", text("bitmap")), ("icon-data", value)],
-            Vec::new(),
-        )]);
-        assert!(matches!(
-            &items[0],
-            MenuItem::Action {
-                icon: Some(MenuIcon::Image(bytes)),
-                ..
-            } if bytes.as_ref() == png.as_slice()
-        ));
+        assert!(matches!(&items[2], MenuItem::Submenu { icon: None, .. }));
     }
 }
