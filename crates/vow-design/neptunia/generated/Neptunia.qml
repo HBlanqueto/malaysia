@@ -249,6 +249,7 @@ QtObject {
   readonly property real duration_base: 220;
   readonly property real duration_fast: 120;
   readonly property real duration_slow: 420;
+  readonly property real duration_wait_max: 150;
   readonly property real text_body_size: 13;
   readonly property real text_callout_size: 12;
   readonly property real text_caption_size: 11;
