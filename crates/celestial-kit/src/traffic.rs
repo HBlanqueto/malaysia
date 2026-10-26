@@ -19,6 +19,7 @@ pub struct TrafficLights {
     input: Option<TrafficInput>,
     focused: bool,
     zoom_supported: bool,
+    fixed_width: bool,
     on_action: Option<Callback<ButtonKind, ()>>,
 }
 
@@ -35,6 +36,7 @@ impl TrafficLights {
             input: None,
             focused: true,
             zoom_supported: true,
+            fixed_width: false,
             on_action: None,
         }
     }
@@ -54,6 +56,13 @@ impl TrafficLights {
     /// Whether zoom is admitted; fixed-size windows pass `false`.
     pub fn zoom_supported(mut self, supported: bool) -> Self {
         self.zoom_supported = supported;
+        self
+    }
+
+    /// Whether the window has a fixed width; the zoom light becomes a vertical
+    /// maximise indicator (a plus glyph) instead of the arrows.
+    pub fn fixed_width(mut self, fixed: bool) -> Self {
+        self.fixed_width = fixed;
         self
     }
 
@@ -78,10 +87,24 @@ impl Component for TrafficLights {
                 zoom_supported: self.zoom_supported,
             }
         });
-        let visuals = traffic::visual(resolved.lights, resolved.traffic_style, inactive, input);
+        let visual_input = if self.fixed_width {
+            TrafficInput {
+                zoom_supported: true,
+                ..input
+            }
+        } else {
+            input
+        };
+        let visuals = traffic::visual(
+            resolved.lights,
+            resolved.traffic_style,
+            inactive,
+            visual_input,
+        );
         let interactive = self.input.is_none();
         let action = self.on_action.clone();
         let zoom_supported = self.zoom_supported;
+        let fixed_width = self.fixed_width;
         let (_, _, diameter) = traffic::button_rect(0);
         let gap = light_gap();
 
@@ -92,7 +115,7 @@ impl Component for TrafficLights {
             let mut release = pointer;
             let mut leave = pointer;
             let action = action.clone();
-            let clickable = zoom_supported || kind != ButtonKind::Maximize;
+            let clickable = zoom_supported || fixed_width || kind != ButtonKind::Maximize;
             rect()
                 .width(Size::px(diameter as f32))
                 .height(Size::px(diameter as f32))
@@ -101,8 +124,8 @@ impl Component for TrafficLights {
                 .center()
                 .maybe_child(visual.glyph.map(|glyph| {
                     SvgViewer::new((
-                        format!("traffic-{index}-{:?}", glyph.to_rgba8()),
-                        Bytes::from(glyph_svg(index, glyph)),
+                        format!("traffic-{index}-{:?}-{fixed_width}", glyph.to_rgba8()),
+                        Bytes::from(glyph_svg(index, glyph, fixed_width)),
                     ))
                     .width(Size::px(TRAFFIC_GLYPHS.box_size))
                     .height(Size::px(TRAFFIC_GLYPHS.box_size))
@@ -167,6 +190,18 @@ pub fn traffic_lights_view(
     style: TrafficLightStyle,
     inactive: Rgba,
 ) -> Element {
+    traffic_lights_view_with_fixed(input, lights, style, inactive, false)
+}
+
+/// The pure visual used by previews and tests, optionally with a fixed-width
+/// plus glyph on the green light.
+pub fn traffic_lights_view_with_fixed(
+    input: TrafficInput,
+    lights: [Rgba; 3],
+    style: TrafficLightStyle,
+    inactive: Rgba,
+    fixed_width: bool,
+) -> Element {
     let visuals = traffic::visual(lights, style, inactive, input);
     let (_, _, diameter) = traffic::button_rect(0);
     let gap = light_gap();
@@ -184,8 +219,8 @@ pub fn traffic_lights_view(
                 .center()
                 .maybe_child(visual.glyph.map(|glyph| {
                     SvgViewer::new((
-                        format!("traffic-view-{index}-{:?}", glyph.to_rgba8()),
-                        Bytes::from(glyph_svg(index, glyph)),
+                        format!("traffic-view-{index}-{:?}-{fixed_width}", glyph.to_rgba8()),
+                        Bytes::from(glyph_svg(index, glyph, fixed_width)),
                     ))
                     .width(Size::px(TRAFFIC_GLYPHS.box_size))
                     .height(Size::px(TRAFFIC_GLYPHS.box_size))
@@ -204,7 +239,7 @@ fn light_gap() -> f64 {
     f64::from(TITLEBAR.buttons.spacing)
 }
 
-fn glyph_svg(index: usize, color: Rgba) -> String {
+fn glyph_svg(index: usize, color: Rgba, fixed_width: bool) -> String {
     let [r, g, b, a] = color.to_rgba8();
     let color = format!("#{r:02x}{g:02x}{b:02x}");
     let opacity = f32::from(a) / 255.0;
@@ -232,15 +267,37 @@ fn glyph_svg(index: usize, color: Rgba) -> String {
             )
         }
         _ => {
-            let polygons = TRAFFIC_GLYPHS
-                .zoom
-                .iter()
-                .map(polygon)
-                .collect::<Vec<_>>()
-                .join("");
-            format!(
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{box_size}\" height=\"{box_size}\" viewBox=\"0 0 {box_size} {box_size}\"><g fill=\"{color}\" fill-opacity=\"{opacity}\">{polygons}</g></svg>"
-            )
+            let segments = if fixed_width {
+                TRAFFIC_GLYPHS.plus
+            } else {
+                &[]
+            };
+            if !segments.is_empty() {
+                let path = segments
+                    .iter()
+                    .map(|segment| {
+                        format!(
+                            "M{} {} L{} {}",
+                            segment.a.0, segment.a.1, segment.b.0, segment.b.1
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!(
+                    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{box_size}\" height=\"{box_size}\" viewBox=\"0 0 {box_size} {box_size}\"><path d=\"{path}\" fill=\"none\" stroke=\"{color}\" stroke-opacity=\"{opacity}\" stroke-width=\"{}\" stroke-linecap=\"round\"/></svg>",
+                    TRAFFIC_GLYPHS.stroke
+                )
+            } else {
+                let polygons = TRAFFIC_GLYPHS
+                    .zoom
+                    .iter()
+                    .map(polygon)
+                    .collect::<Vec<_>>()
+                    .join("");
+                format!(
+                    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{box_size}\" height=\"{box_size}\" viewBox=\"0 0 {box_size} {box_size}\"><g fill=\"{color}\" fill-opacity=\"{opacity}\">{polygons}</g></svg>"
+                )
+            }
         }
     }
 }

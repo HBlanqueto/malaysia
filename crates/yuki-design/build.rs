@@ -592,10 +592,11 @@ fn emit_traffic(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.traffic-lights.glyphs.minimize",
     );
     let zoom = glyph_triangles(components, "components.window.traffic-lights.glyphs.zoom");
+    let plus = glyph_segments(components, "components.window.traffic-lights.glyphs.plus");
     const_doc(
         out,
         "TRAFFIC_GLYPHS",
-        "The close, minimize and zoom glyph geometry for traffic lights.",
+        "The close, minimize, zoom and plus glyph geometry for traffic lights.",
     );
     out.push_str(&format!(
         ": TrafficGlyphs = TrafficGlyphs {{\n\
@@ -604,12 +605,14 @@ fn emit_traffic(out: &mut String, tokens: &Value, components: &Value) {
          \x20   close: &[{}],\n\
          \x20   minimize: &[{}],\n\
          \x20   zoom: &[{}],\n\
+         \x20   plus: &[{}],\n\
          }};\n\n",
         float(box_size),
         float(stroke),
         close,
         minimize,
-        zoom
+        zoom,
+        plus
     ));
 
     let _ = tokens;

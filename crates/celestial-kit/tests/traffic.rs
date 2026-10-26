@@ -1,6 +1,6 @@
 //! Pixel checks for the client-side traffic lights (ADR 0035).
 
-use celestial_kit::traffic::traffic_lights_view;
+use celestial_kit::traffic::{TrafficLights, traffic_lights_view};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use freya_testing::TestingRunner;
@@ -60,6 +60,42 @@ fn sample(input: TrafficInput, scale: f64) -> [u8; 4] {
     let x = (6.0 * scale).round() as usize;
     let y = (1.0 * scale).round() as usize;
     pixel(&image, width, x, y)
+}
+
+struct FixedCase {
+    input: TrafficInput,
+    fixed: bool,
+}
+
+impl App for FixedCase {
+    fn render(&self) -> impl IntoElement {
+        TrafficLights::new()
+            .input(self.input)
+            .fixed_width(self.fixed)
+    }
+}
+
+fn render_fixed(input: TrafficInput, fixed: bool, scale: f64) -> (Vec<u8>, usize) {
+    let app = AppComponent::new(FixedCase { input, fixed });
+    let (mut test, _) = TestingRunner::new(app, Size2D::new(80.0, 40.0), |_| {}, scale);
+    test.sync_and_update();
+    let _ = test.render();
+    test.sync_and_update();
+    let png = test.render();
+    let mut decoder = png::Decoder::new(Cursor::new(png.as_bytes()));
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().unwrap();
+    let mut buffer = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buffer).unwrap();
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => buffer[..info.buffer_size()].to_vec(),
+        png::ColorType::Rgb => buffer[..info.buffer_size()]
+            .chunks(3)
+            .flat_map(|px| [px[0], px[1], px[2], 255])
+            .collect(),
+        other => panic!("unexpected PNG colour type {other:?}"),
+    };
+    (rgba, info.width as usize)
 }
 
 fn compare(actual: [u8; 4], expected: Rgba) {
@@ -125,4 +161,26 @@ fn the_shared_module_has_the_same_group_footprint() {
     assert_eq!(width, 3.0 * 12.0 + 2.0 * 8.0);
     assert_eq!(height, 12.0);
     assert_eq!(yuki_appearance::traffic::button_rect(1).2, 12.0);
+}
+
+#[test]
+fn fixed_width_green_uses_plus_glyph() {
+    let input = TrafficInput {
+        focused: true,
+        group_hovered: true,
+        pressed: None,
+        zoom_supported: false,
+    };
+    let (normal, width) = render_fixed(input, false, 1.0);
+    let (fixed, _) = render_fixed(input, true, 1.0);
+    // The three lights are laid out with 12 px diameter and 8 px gaps inside
+    // a 52 px-wide group. The third light starts at x=40; its centre is x=46.
+    let center_x = 46;
+    let center_y = 6;
+    let normal_center = pixel(&normal, width, center_x, center_y);
+    let fixed_center = pixel(&fixed, width, center_x, center_y);
+    assert_ne!(
+        normal_center, fixed_center,
+        "fixed-width green light must render the plus glyph"
+    );
 }

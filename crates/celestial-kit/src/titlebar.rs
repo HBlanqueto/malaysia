@@ -237,6 +237,7 @@ pub fn window_traffic_lights(
     TrafficLights::new()
         .focused(focused)
         .zoom_supported(green_admitted(behavior.green_button, fixed))
+        .fixed_width(fixed)
         .on_action(move |kind| {
             let controls = WindowControls::get();
             match kind {
@@ -246,6 +247,7 @@ pub fn window_traffic_lights(
                     }
                 }
                 ButtonKind::Minimize => controls.minimize(),
+                ButtonKind::Maximize if fixed => controls.toggle_vertical_maximize(),
                 ButtonKind::Maximize => run_action(&controls, green),
             }
         })

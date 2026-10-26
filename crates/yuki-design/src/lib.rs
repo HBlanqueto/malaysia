@@ -173,7 +173,7 @@ pub struct Segment {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Triangle(pub [(f32, f32); 3]);
 
-/// The geometry of the close, minimize and zoom traffic-light glyphs.
+/// The geometry of the close, minimize, zoom and plus traffic-light glyphs.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrafficGlyphs {
     /// Side of the square glyph canvas, centred in the traffic light.
@@ -186,6 +186,8 @@ pub struct TrafficGlyphs {
     pub minimize: &'static [Segment],
     /// The two triangles of the zoom glyph.
     pub zoom: &'static [Triangle],
+    /// The two crossed strokes of the plus glyph for fixed-width windows.
+    pub plus: &'static [Segment],
 }
 
 /// The titlebar double-click gesture.
@@ -622,6 +624,7 @@ mod tests {
         assert_eq!(super::TRAFFIC_GLYPHS.close.len(), 2);
         assert_eq!(super::TRAFFIC_GLYPHS.minimize.len(), 1);
         assert_eq!(super::TRAFFIC_GLYPHS.zoom.len(), 2);
+        assert_eq!(super::TRAFFIC_GLYPHS.plus.len(), 2);
     }
 
     #[test]

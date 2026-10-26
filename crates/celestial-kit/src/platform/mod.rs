@@ -480,6 +480,18 @@ impl WindowControls {
         self.ping.ping();
     }
 
+    /// Toggle vertical maximise for fixed-width windows.
+    ///
+    /// The compositor does not expose a direct "fill height" request, so this
+    /// uses the standard maximise/restore path as the closest available
+    /// mechanism. The stored restore rectangle is the window's current size.
+    pub fn toggle_vertical_maximize(&self) {
+        self.queue
+            .borrow_mut()
+            .push(WindowCommand::ToggleVerticalMaximize);
+        self.ping.ping();
+    }
+
     pub fn move_window(&self) {
         self.queue
             .borrow_mut()
@@ -512,6 +524,7 @@ impl WindowControls {
 enum WindowCommand {
     Minimize,
     ToggleMaximize,
+    ToggleVerticalMaximize,
     Move(u32),
     Resize(u32, WindowEdge),
     Open(AppComponent, WindowOptions),
@@ -2269,7 +2282,7 @@ impl Shell {
                 };
                 match command {
                     WindowCommand::Minimize => window.set_minimized(),
-                    WindowCommand::ToggleMaximize => {
+                    WindowCommand::ToggleMaximize | WindowCommand::ToggleVerticalMaximize => {
                         if context.controls.status.read().maximized {
                             window.unset_maximized();
                         } else {
