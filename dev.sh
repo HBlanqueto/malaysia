@@ -957,6 +957,8 @@ lab() {
         # broken.
         cargo build -p yuki -p yuki-shell -p celestial-kit ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
+        cargo build -p celestial-kit --examples ||
+            fail "$EXIT_RUN_FAILED" "could not build the window examples"
         if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
             [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
             [ ! -x "$script_dir/target/debug/examples/dialog" ] ||
