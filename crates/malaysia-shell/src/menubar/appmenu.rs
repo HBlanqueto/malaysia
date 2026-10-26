@@ -1,6 +1,6 @@
 //! The desktop menus of the menubar.
 //!
-//! With no focused window the bar shows the Yuki menu next to the shared
+//! With no focused window the bar shows the MalaysiaDreams menu next to the shared
 //! Archivo, Edición, Visualización, Ir, Ventana and Ayuda menus. Each title owns
 //! one menu and every action reuses a shell helper that already exists.
 
@@ -15,7 +15,7 @@ use crate::menubar::{
     create_desktop_folder, resolve_app_name, spawn_component, xdg_open, xdg_user_dir,
 };
 
-/// The Yuki menu (about, settings, empty trash).
+/// The MalaysiaDreams menu (about, settings, empty trash).
 pub fn malaysia_menu_items() -> Vec<MenuItem> {
     vec![
         action("malaysia-about", "Acerca de MalaysiaDreams", false),
@@ -109,7 +109,7 @@ pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
 pub fn help_menu_items() -> Vec<MenuItem> {
     vec![
         action("help-shortcuts", "Atajos de teclado", false),
-        action("help-docs", "Documentación de Yuki", false),
+        action("help-docs", "Documentación de MalaysiaDreams", false),
     ]
 }
 

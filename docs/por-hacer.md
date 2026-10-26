@@ -17,10 +17,10 @@ ejecución y se apuntan las pruebas que faltan.
   `unconfigured_buffer`. Ahora `smoke`, `block4`, `move`, `decoration`,
   `popup_probe` y `popup_live` pasan.
 - **Nautilus**: una instancia abierta en GNOME absorbe el lanzamiento por
-  D-Bus. Para probarla dentro de Yuki:
+  D-Bus. Para probarla dentro de MalaysiaDreams:
   `dbus-run-session -- nautilus --no-desktop`. Nautilus 50 pide decoración
   server-side y ADR 0019 la respeta.
-- **Módulo NixOS** base: `programs.yuki.enable`, sesión, PAM, graphics y units.
+- **Módulo NixOS** base: `programs.malaysia.enable`, sesión, PAM, graphics y units.
 - **Capturas al estilo macOS**: `Shift+Super+3` (pantalla), `Shift+Super+4`
   (región con cruz, `Espacio` para ventana, `Esc` cancela) y PrintScreen;
   guardan en el Escritorio XDG. Ver
@@ -35,11 +35,11 @@ server-side; `wezterm` es el cliente manual de aceptación.
 ## Bloque 9 — cerrado
 
 Aceptado en panel real a 1.0, 1.25 y 1.5 (2026-10-21). Hecho: `State::scale`,
-`YUKI_SCALE`, `wl_output` + fractional-scale, render, cursor y viewporter de la
+`MALAYSIA_SCALE`, `wl_output` + fractional-scale, render, cursor y viewporter de la
 shell; ver `bloques/09-escala-fraccional.md`.
 
 - [x] Aceptación en panel real a 1.25 y 1.5 con `wezterm`, shell y puntero.
-- [x] `display.scale` persistente en `display.domain` (`YUKI_SCALE` queda como
+- [x] `display.scale` persistente en `display.domain` (`MALAYSIA_SCALE` queda como
       override de desarrollo).
 - [ ] Escala por salida/monitor cuando 8b introduzca varios outputs.
 - [x] Redondeo de rectángulos lógicos (ADR 0004): floor posición, ceil tamaño.
@@ -63,7 +63,7 @@ semáforos de 12, tema claro por defecto.
 - [ ] **Modo foco (`window.green_button = "focus"`)**: el verde ya ejecuta la
       acción configurable y registra `focus mode requested`; falta el modo foco
       real (atenuar el resto y mantener la ventana al frente).
-- [ ] Launcher `yuki-shell launcher` + `Super+Space` (requiere foco de teclado
+- [ ] Launcher `malaysia-shell launcher` + `Super+Space` (requiere foco de teclado
       en layer surfaces).
 - [ ] Esquinas redondeadas, sombra, glifos de hover y doble clic para zoom.
 - [x] Resize por bordes con banda exterior de 10 px, «L» de esquina de 20 px
@@ -73,12 +73,12 @@ semáforos de 12, tema claro por defecto.
       [`investigacion/resize-bordes-y-cursores.md`](investigacion/resize-bordes-y-cursores.md)
       (incluye el traspaso y los siguientes pasos).
 - [ ] Documentar/portar el resto de tokens de Neptunia y, si se puede, generar
-      `yuki-design` desde sus JSON.
+      `vow-design` desde sus JSON.
 
 ## Shell sobre Freya — pendientes
 
 - [x] **Doble clic de la titlebar CSD**: lee `window.double_click_titlebar`
-      de `~/.config/yuki/window.domain` (y `window.green_button`), con los
+      de `~/.config/malaysia/window.domain` (y `window.green_button`), con los
       mismos defaults que el compositor.
 - [ ] **Portapapeles propio por `wl_data_device`** (y selección primaria
       `zwp_primary_selection`). Hoy `freya-clipboard` aporta `copypasta`, que
@@ -114,7 +114,7 @@ se revisará si el ThinkPad mide algo muy distinto.
 
 ## Deuda técnica
 
-- `crates/yuki-design/neptunia/default.nix` (generador de `neptunia.slint`)
+- `crates/vow-design/neptunia/default.nix` (generador de `neptunia.slint`)
   convierte duraciones, recuentos e intervalos en `px` porque Slint no tiene
   unidades para todo. Hay que separar esos tokens numéricos puros de las
   longitudes con unidad para no mentir en los outputs de otros toolkits.
@@ -132,7 +132,7 @@ se revisará si el ThinkPad mide algo muy distinto.
    `bloques/11-protocolos-de-uso-diario.md`.
 2. **Bloque 12a — portal nativo.** `Settings` /
    `org.freedesktop.appearance` **hecho** (backend D-Bus, `SettingChanged`,
-   `xdg.portal.config.yuki` con GTK de fallback). Siguen `Screenshot` y
+   `xdg.portal.config.malaysia` con GTK de fallback). Siguen `Screenshot` y
    `ScreenCast` sobre la captura del Bloque 11 y PipeWire. GTK sigue sirviendo
    FileChooser, Print y Notification.
 3. **Bloque 12b — servicios de escritorio.** Notificaciones, agente polkit,
@@ -144,10 +144,10 @@ se revisará si el ThinkPad mide algo muy distinto.
 El módulo `nixosModules.default` ya instala el paquete, la sesión, PAM,
 `hardware.graphics` y las units de la shell. Falta:
 
-- [ ] `xdg.portal` con GTK como fallback y el portal de Yuki cuando exista.
+- [ ] `xdg.portal` con GTK como fallback y el portal de MalaysiaDreams cuando exista.
 - [ ] `services.graphical-desktop`, `security.polkit`, keyring y AT-SPI con
       `mkDefault`.
-- [ ] Una VM NixOS que arranque la sesión y ejecute `yuki-session.target`.
+- [ ] Una VM NixOS que arranque la sesión y ejecute `malaysia-session.target`.
 
 ## Futuro opcional (no ahora)
 

@@ -1,4 +1,4 @@
-# yuki
+# MalaysiaDreams
 
 Un compositor Wayland construido sobre Smithay, desarrollado bloque a bloque. Cada
 bloque es un incremento que funciona: la casilla es **puede correr**, lo que significa
@@ -41,48 +41,48 @@ procesos de la shell (ADR 0023), los de la shell nativa:
 
 | Crate | Rol | Ver |
 |---|---|---|
-| `yuki` | el compositor (display server, decoración, input, render) | `docs/bloques/` |
-| `yuki-design` | los design tokens (radios, colores, sombras — ADR 0011) | — |
-| `yuki-scene` | layout de ventanas y popups: geometría, stacking, hit-testing (ADR 0015) | `crates/yuki-scene/src/scene.rs` |
+| `malaysia-compositor` | el compositor (display server, decoración, input, render) | `docs/bloques/` |
+| `vow-design` | los design tokens (radios, colores, sombras — ADR 0011) | — |
+| `malaysia-scene` | layout de ventanas y popups: geometría, stacking, hit-testing (ADR 0015) | `crates/malaysia-scene/src/scene.rs` |
 | `grade-graphics` | los shaders GLSL compartidos (≈ Core Graphics/Core Text) | `docs/glossary.md` |
-| `celestial-kit` | el toolkit de la shell y las apps (≈ AppKit): render GLES, texto | `docs/glossary.md`, `docs/arquitectura/wallpaper.md` |
-| `yuki-shell` | un binario, un proceso por componente: `yuki-shell wallpaper`, `menubar`, ... | `docs/arquitectura/modelo-de-procesos.md` |
+| `barrier-kit` | el toolkit de la shell y las apps (≈ AppKit): render GLES, texto | `docs/glossary.md`, `docs/arquitectura/wallpaper.md` |
+| `malaysia-shell` | un binario, un proceso por componente: `malaysia-shell wallpaper`, `menubar`, ... | `docs/arquitectura/modelo-de-procesos.md` |
 | `tools/sctk-probe` | clientes de prueba (dev only) | `tools/sctk-probe/README.md` |
 
-Los nombres siguen el reparto de macOS (glosario): CelestialKit ≈ AppKit, Grade
+Los nombres siguen el reparto de macOS (glosario): BarrierKit ≈ AppKit, Grade
 Graphics ≈ Core Graphics/Core Text, Grade Animation ≈ Core Animation, Infinity ≈
 SkyLight.
 
 ## La shell
 
 La shell corre como **procesos nativos separados** (ADR 0023/0025): un binario
-`yuki-shell`, un proceso por componente, cada uno un cliente Wayland propio.
-No hay dependencias de shell externas; el toolkit es `celestial-kit`, construido
+`malaysia-shell`, un proceso por componente, cada uno un cliente Wayland propio.
+No hay dependencias de shell externas; el toolkit es `barrier-kit`, construido
 sobre los crates de núcleo de Freya con Skia en los procesos cliente (ADR 0034).
 
 Estado de los componentes:
 
-- **Wallpaper** (`yuki-shell wallpaper`) — hecho. Dibuja la capa `Background` con
-  el render GLES de `celestial-kit`, presentado por **EGL**/dmabuf sobre un
+- **Wallpaper** (`malaysia-shell wallpaper`) — hecho. Dibuja la capa `Background` con
+  el render GLES de `barrier-kit`, presentado por **EGL**/dmabuf sobre un
   `wl_egl_window` (Bloque 7c, ADR 0027; sin copias por CPU), y vigila
   `wallpaper.domain` (cambio en vivo). Ver
   [`arquitectura/wallpaper.md`](arquitectura/wallpaper.md).
-- **Menubar** (`yuki-shell menubar`) — hecho. Capa `Top` con zona exclusiva:
+- **Menubar** (`malaysia-shell menubar`) — hecho. Capa `Top` con zona exclusiva:
   app activa (el compositor la publica en `window.domain`) + reloj. Ver
   [`arquitectura/menubar.md`](arquitectura/menubar.md).
-- **Dock** (`yuki-shell dock`) — hecho. Capa `Top` en el borde inferior con zona
+- **Dock** (`malaysia-shell dock`) — hecho. Capa `Top` en el borde inferior con zona
   exclusiva: lista las apps (`ext-foreign-toplevel-list-v1`) y las activa al
   clic (`zwlr_foreign_toplevel_management_v1`). Ver
   [`arquitectura/dock.md`](arquitectura/dock.md).
-- **Lock** (`yuki-shell lock`) — hecho. `ext-session-lock-v1`: bloquea la
-  sesión, autentica con PAM (`yuki-lock`, fallback `login`) y garantiza que
+- **Lock** (`malaysia-shell lock`) — hecho. `ext-session-lock-v1`: bloquea la
+  sesión, autentica con PAM (`malaysia-lock`, fallback `login`) y garantiza que
   **no se desbloquea si el cliente muere**: lo relanza con backoff y límite de
   intentos mientras `locked` sigue siendo `true`. El compositor lo lanza solo tras
   `lock.idle_timeout_seconds` de inactividad, respetando
   `zwp_idle_inhibit_manager_v1`. Ver
   [`arquitectura/lock.md`](arquitectura/lock.md).
-- Supervisión: unidades systemd de usuario en el flake (`yuki-shell@.service`,
-  `yuki-session.target`); `scripts/test.sh` las emula en desarrollo.
+- Supervisión: unidades systemd de usuario en el flake (`malaysia-shell@.service`,
+  `malaysia-session.target`); `scripts/test.sh` las emula en desarrollo.
 
 ## Desarrollo
 
@@ -103,10 +103,10 @@ nix develop
 ./dev.sh --help    # todos los comandos
 ```
 
-`demo --dark|--light` copia `~/.config/yuki` a un directorio temporal, escribe
+`demo --dark|--light` copia `~/.config/malaysia` a un directorio temporal, escribe
 allí `color_scheme` y lo borra al salir: nunca toca la configuración real.
 Los ficheros de desarrollo (pid, log y logs de los clientes del lab) viven en
-`$XDG_RUNTIME_DIR/yuki-dev-<hash>`, con un hash corto de la ruta del checkout
+`$XDG_RUNTIME_DIR/malaysia-dev-<hash>`, con un hash corto de la ruta del checkout
 (`git rev-parse --show-toplevel`): dos worktrees pueden correr `run`, `demo` o
 `lab` a la vez sin compartir ni el pid ni el log.
 `scripts/demo.sh` hace `git pull --ff-only`, compila y lanza el demo (pasa los

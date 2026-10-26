@@ -1,4 +1,4 @@
-//! Yuki's server-side window chrome: the Neptunia titlebar.
+//! MalaysiaDreams's server-side window chrome: the Neptunia titlebar.
 //!
 //! Only windows that negotiated server-side decoration and reserve a titlebar
 //! inset get one. The bar is rasterized on the CPU into an RGBA buffer and
@@ -1282,11 +1282,11 @@ mod tests {
                 ..TrafficInput::default()
             };
             let mut text = TextEngine::new();
-            let _ = text.rasterize("Yuki", true, 1200, 1.5, theme, input);
+            let _ = text.rasterize("MalaysiaDreams", true, 1200, 1.5, theme, input);
             let iterations = 20;
             let start = Instant::now();
             for _ in 0..iterations {
-                let _ = text.rasterize("Yuki", true, 1200, 1.5, theme, input);
+                let _ = text.rasterize("MalaysiaDreams", true, 1200, 1.5, theme, input);
             }
             eprintln!(
                 "rasterize 1200x32 @1.5 hovered={hovered}: {:?}",

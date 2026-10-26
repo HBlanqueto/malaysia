@@ -41,10 +41,10 @@ use crate::desktop::DesktopEntry;
 ///    non-trivial segment), use that entry's `Name`.
 /// 3. Otherwise, use the last non-empty segment of the app id with an
 ///    initial capital.
-/// 4. With no app id, the desktop is «Yuki».
+/// 4. With no app id, the desktop is «MalaysiaDreams».
 pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> String {
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return "Yuki".to_string();
+        return "MalaysiaDreams".to_string();
     };
     if let Some(entry) = entries
         .iter()
@@ -110,7 +110,7 @@ pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
         .map(|store| store.active)
 }
 
-/// Converts a Yuki design RGBA into a Freya colour.
+/// Converts a MalaysiaDreams design RGBA into a Freya colour.
 pub fn rgba(c: vow_design::Rgba) -> freya_core::prelude::Color {
     let [r, g, b, a] = c.to_rgba8();
     freya_core::prelude::Color::from_argb(a, r, g, b)
@@ -149,7 +149,7 @@ pub fn spawn_component(component: &str) {
     spawn_logged(&log_name, &program, command);
 }
 
-/// Spawns a standalone Yuki app detached, keeping the Wayland socket.
+/// Spawns a standalone MalaysiaDreams app detached, keeping the Wayland socket.
 ///
 /// Kit binaries (`malaysia-settings`, `malaysia-shell`) keep the same runtime
 /// environment as the shell so a dev build from `target/debug` still finds its
@@ -468,10 +468,10 @@ mod tests {
     }
 
     #[test]
-    fn no_window_or_no_app_id_is_yuki() {
+    fn no_window_or_no_app_id_is_malaysia() {
         let entries = Vec::new();
-        assert_eq!(resolve_app_name(None, &entries), "Yuki");
-        assert_eq!(resolve_app_name(Some("   "), &entries), "Yuki");
+        assert_eq!(resolve_app_name(None, &entries), "MalaysiaDreams");
+        assert_eq!(resolve_app_name(Some("   "), &entries), "MalaysiaDreams");
     }
 
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

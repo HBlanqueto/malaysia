@@ -241,7 +241,7 @@ struct WindowData {
     /// When the last configure during an interactive resize was sent, so a
     /// slow app is eventually reconfigured even if it never acks.
     resize_configure_sent: Option<Instant>,
-    /// Whether Yuki's titlebar requested the maximized state.
+    /// Whether MalaysiaDreams's titlebar requested the maximized state.
     maximized: bool,
     /// Whether the window is in fullscreen state, as the next configure says.
     fullscreen: bool,
@@ -570,7 +570,7 @@ impl Windows {
     ///
     /// Only the serial of the configure most recently sent is accepted. An ack
     /// for any other serial is stale — the client is acknowledging a configure
-    /// Yuki has already replaced — so it is discarded rather than marking
+    /// MalaysiaDreams has already replaced — so it is discarded rather than marking
     /// the window ready.
     pub fn ack_configure(&mut self, surface: &WlSurface, configure: Configure) {
         let Configure::Toplevel(configure) = configure else {

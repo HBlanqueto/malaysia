@@ -565,7 +565,7 @@ fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // A shell component must not pass Yuki's private Mesa environment to apps.
+    // A shell component must not pass MalaysiaDreams's private Mesa environment to apps.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() < 0 {

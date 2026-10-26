@@ -254,12 +254,18 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
         MenuItem::Separator,
         action(
             "app-help-shortcuts",
-            "Atajos de teclado de Yuki",
+            "Atajos de teclado de MalaysiaDreams",
             None,
             false,
             None,
         ),
-        action("app-help-docs", "Documentación de Yuki", None, false, None),
+        action(
+            "app-help-docs",
+            "Documentación de MalaysiaDreams",
+            None,
+            false,
+            None,
+        ),
         action(
             "app-help-report",
             "Informar de un problema…",
@@ -726,7 +732,7 @@ mod tests {
 
     fn toplevels() -> Vec<ToplevelInfo> {
         vec![
-            window("foot", "Yuki", true, false, false),
+            window("foot", "MalaysiaDreams", true, false, false),
             window("foot", "Segunda ventana", false, true, false),
             window(
                 "org.mozilla.firefox",
@@ -741,7 +747,7 @@ mod tests {
     #[test]
     fn active_index_prefers_the_flag_then_the_last_window() {
         let mut list = vec![
-            window("foot", "Yuki", false, false, false),
+            window("foot", "MalaysiaDreams", false, false, false),
             window("foot", "Segunda ventana", false, false, false),
         ];
         assert_eq!(active_index(&list, "foot"), Some(1));
@@ -779,7 +785,7 @@ mod tests {
             "Foot",
             "foot",
             &[
-                window("foot", "Yuki", true, false, false),
+                window("foot", "MalaysiaDreams", true, false, false),
                 window("foot", "Otra", false, false, false),
             ],
         );
@@ -796,7 +802,10 @@ mod tests {
             .collect();
         assert_eq!(listed.len(), 2);
         let names: Vec<&str> = listed.iter().filter_map(|item| label(item)).collect();
-        assert_eq!(names, vec!["Foot — Yuki", "Foot — Segunda ventana"]);
+        assert_eq!(
+            names,
+            vec!["Foot — MalaysiaDreams", "Foot — Segunda ventana"]
+        );
         assert!(matches!(
             listed[0],
             MenuItem::Action {
@@ -904,8 +913,8 @@ mod tests {
         assert!(matches!(items[0], MenuItem::SearchField { .. }));
         assert!(enabled(&items, "Informar de un problema…"));
         assert!(!enabled(&items, "Ayuda de Foot"));
-        assert!(!enabled(&items, "Atajos de teclado de Yuki"));
-        assert!(!enabled(&items, "Documentación de Yuki"));
+        assert!(!enabled(&items, "Atajos de teclado de MalaysiaDreams"));
+        assert!(!enabled(&items, "Documentación de MalaysiaDreams"));
     }
 
     fn search_results(query: &str) -> Vec<(String, String)> {

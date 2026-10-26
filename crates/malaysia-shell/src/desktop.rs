@@ -32,7 +32,7 @@ pub struct DesktopEntry {
     pub startup_wm_class: Option<String>,
 }
 
-/// Reads every application visible to the Yuki desktop.
+/// Reads every application visible to the MalaysiaDreams desktop.
 ///
 /// Directories are visited in XDG precedence order and the first file wins for
 /// each id. NixOS's `~/.nix-profile/share` and `/run/current-system/sw/share`
@@ -150,11 +150,11 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
         return None;
     }
     let show_in = values.get("OnlyShowIn").map(String::as_str).unwrap_or("");
-    if !show_in.is_empty() && !list_contains(show_in, "Yuki") {
+    if !show_in.is_empty() && !list_contains(show_in, "MalaysiaDreams") {
         return None;
     }
     let not_show_in = values.get("NotShowIn").map(String::as_str).unwrap_or("");
-    if list_contains(not_show_in, "Yuki") {
+    if list_contains(not_show_in, "MalaysiaDreams") {
         return None;
     }
     let try_exec = values.get("TryExec").map(String::as_str).unwrap_or("");
@@ -515,7 +515,7 @@ mod tests {
         );
         assert!(
             parse_desktop(
-                &format!("[Desktop Entry]\n{base}NotShowIn=Yuki;\n"),
+                &format!("[Desktop Entry]\n{base}NotShowIn=MalaysiaDreams;\n"),
                 "a",
                 &[]
             )
@@ -523,7 +523,7 @@ mod tests {
         );
         assert!(
             parse_desktop(
-                &format!("[Desktop Entry]\n{base}OnlyShowIn=Yuki;\n"),
+                &format!("[Desktop Entry]\n{base}OnlyShowIn=MalaysiaDreams;\n"),
                 "a",
                 &[]
             )

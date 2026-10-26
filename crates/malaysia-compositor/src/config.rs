@@ -27,7 +27,7 @@ pub use vow_appearance::{
 /// Which windows get the compositor's server-side chrome.
 ///
 /// `Default` is the ADR 0019/0020 policy: GTK/Libadwaita keep their client-side
-/// appearance, Qt and the rest get Yuki's titlebar. The other two values force
+/// appearance, Qt and the rest get MalaysiaDreams's titlebar. The other two values force
 /// the decision either way, for theming experiments and debugging.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -35,9 +35,9 @@ pub enum DecorationPolicy {
     /// Honour the client negotiation (ADR 0019) — the default and recommended.
     #[default]
     Default,
-    /// Draw Yuki's chrome on every window, even a GTK headerbar.
+    /// Draw MalaysiaDreams's chrome on every window, even a GTK headerbar.
     ForceServer,
-    /// Draw no Yuki chrome on any window.
+    /// Draw no MalaysiaDreams chrome on any window.
     ForceClient,
 }
 
@@ -134,7 +134,7 @@ pub struct Config {
     /// The system wallpapers. The current selection lives in a *separate* store,
     /// like macOS keeps it in `com.apple.wallpaper` (see `docs/configuracion`).
     pub wallpaper: WallpaperConfig,
-    /// Display scale (System Settings → Displays). Yuki-specific: macOS has no
+    /// Display scale (System Settings → Displays). MalaysiaDreams-specific: macOS has no
     /// fractional-scale preference, it picks a mode per display.
     pub display: DisplayConfig,
     /// Screenshots (macOS Screenshot app and `com.apple.screencapture`).
@@ -169,7 +169,7 @@ pub enum WallpaperScale {
 pub struct DisplayConfig {
     /// The output scale, `1.0..=4.0`. Fractional values go to clients through
     /// `wp_fractional_scale_v1`; the integer part is what `wl_output` carries.
-    /// This is Yuki-specific: macOS chooses a display mode instead.
+    /// This is MalaysiaDreams-specific: macOS chooses a display mode instead.
     pub scale: f64,
 }
 
@@ -328,7 +328,7 @@ pub struct WindowConfig {
     /// resize. Larger than `resize_border` so corners are easier to hit.
     pub resize_corner: i32,
     /// Whether Qt applications should use the compositor's server-side
-    /// decorations. When `true` (the default), Yuki exports
+    /// decorations. When `true` (the default), MalaysiaDreams exports
     /// `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` for spawned clients and in the
     /// session environment, so Qt falls back to xdg-decoration / SSD.
     pub qt_server_decorations: bool,

@@ -1033,7 +1033,7 @@ impl State {
 impl XdgDecorationHandler for State {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
         // Remember the ADR 0019 default: joining the protocol without asking for
-        // a mode means the app accepts Yuki's titlebar. Do not send a configure
+        // a mode means the app accepts MalaysiaDreams's titlebar. Do not send a configure
         // here: the initial configure (or the next one) already carries the mode.
         self.windows
             .set_requested_decoration(toplevel.wl_surface(), Decoration::Server);
@@ -1041,7 +1041,7 @@ impl XdgDecorationHandler for State {
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
         // An explicit choice is honoured: a client that asks for client-side
-        // chrome keeps it, and one that accepts server-side gets Yuki's.
+        // chrome keeps it, and one that accepts server-side gets MalaysiaDreams's.
         self.apply_requested_decoration(toplevel.wl_surface(), Some(decoration_for_xdg_mode(mode)));
     }
 
@@ -1061,7 +1061,7 @@ impl KdeDecorationHandler for State {
 
     fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
         // GTK creates this object before its xdg_toplevel may exist. Announce
-        // Yuki's preference (server-side) and remember the decision so the
+        // MalaysiaDreams's preference (server-side) and remember the decision so the
         // initial configure already carries it when the toplevel arrives.
         decoration.mode(KdeMode::Server);
         self.apply_requested_decoration(surface, Some(Decoration::Server));
@@ -1129,7 +1129,7 @@ mod tests {
     }
 
     #[test]
-    fn a_kde_client_that_asks_for_no_decoration_gets_none_from_yuki() {
+    fn a_kde_client_that_asks_for_no_decoration_gets_none_from_malaysia_compositor() {
         assert_eq!(decoration_for_kde_mode(KdeMode::None), Decoration::Client);
     }
 

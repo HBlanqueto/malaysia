@@ -64,7 +64,7 @@ fn main() {
     });
     run_window(
         app,
-        WindowOptions::new("Yuki CSD", "demo.csd")
+        WindowOptions::new("MalaysiaDreams CSD", "demo.csd")
             .decorations(Decorations::Client)
             .size((640, 420)),
     )

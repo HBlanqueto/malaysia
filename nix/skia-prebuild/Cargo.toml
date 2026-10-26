@@ -16,5 +16,5 @@ freya-skia-safe = "=0.98.0"
 [lib]
 path = "src/lib.rs"
 
-# Workspace propio: no es miembro del workspace de Yuki.
+# Workspace propio: no es miembro del workspace de MalaysiaDreams.
 [workspace]

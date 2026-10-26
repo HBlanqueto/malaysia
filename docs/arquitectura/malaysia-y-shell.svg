@@ -12,13 +12,13 @@
   </defs>
 
   <!-- Título -->
-  <text x="550" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">Yuki + yuki-shell — división de trabajo</text>
-  <text x="550" y="68" text-anchor="middle" font-size="14" fill="#555">la shell dibuja el contenido · Yuki decide dónde, en qué capa y cómo se rodea</text>
+  <text x="550" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">MalaysiaDreams + malaysia-shell — división de trabajo</text>
+  <text x="550" y="68" text-anchor="middle" font-size="14" fill="#555">la shell dibuja el contenido · MalaysiaDreams decide dónde, en qué capa y cómo se rodea</text>
 
   <!-- ============ LA SHELL (arriba) ============ -->
   <rect x="40" y="90" width="1020" height="190" rx="14" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2"/>
-  <text x="60" y="118" font-size="18" font-weight="bold" fill="#0d47a1">YUKI-SHELL — la shell (un proceso por componente, ADR 0023)</text>
-  <text x="60" y="140" font-size="13" fill="#1565c0">Dibuja el CONTENIDO de las superficies de la shell (celestial-kit → píxeles). Solo pide colocación; nunca decide el orden.</text>
+  <text x="60" y="118" font-size="18" font-weight="bold" fill="#0d47a1">MALAYSIA-SHELL — la shell (un proceso por componente, ADR 0023)</text>
+  <text x="60" y="140" font-size="13" fill="#1565c0">Dibuja el CONTENIDO de las superficies de la shell (barrier-kit → píxeles). Solo pide colocación; nunca decide el orden.</text>
 
   <!-- Wallpaper -->
   <rect x="60" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
@@ -47,14 +47,14 @@
 
   <!-- ============ PANTALLA (medio) ============ -->
   <rect x="40" y="322" width="1020" height="200" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
-  <text x="60" y="350" font-size="17" font-weight="bold" fill="#333">PANTALLA — el orden de composición (lo fija Yuki)</text>
+  <text x="60" y="350" font-size="17" font-weight="bold" fill="#333">PANTALLA — el orden de composición (lo fija MalaysiaDreams)</text>
 
   <!-- Overlay -->
   <rect x="60" y="364" width="980" height="26" rx="6" fill="#fff3e0" stroke="#ffb74d"/>
-  <text x="78" y="382" font-size="13" fill="#e65100">Overlay — OSD, lock screen (yuki-shell lock)</text>
+  <text x="78" y="382" font-size="13" fill="#e65100">Overlay — OSD, lock screen (malaysia-shell lock)</text>
   <!-- Top -->
   <rect x="60" y="398" width="980" height="26" rx="6" fill="#ffe0b2" stroke="#ffa726"/>
-  <text x="78" y="416" font-size="13" fill="#ef6c00">Top — menu bar + dock (yuki-shell)</text>
+  <text x="78" y="416" font-size="13" fill="#ef6c00">Top — menu bar + dock (malaysia-shell)</text>
   <!-- Ventanas -->
   <rect x="60" y="432" width="980" height="26" rx="6" fill="#eceff1" stroke="#90a4ae"/>
   <text x="78" y="450" font-size="13" fill="#37474f">Ventanas — apps (wezterm, nautilus, ...)</text>
@@ -63,21 +63,21 @@
   <text x="78" y="484" font-size="13" fill="#616161">Bottom — widgets de escritorio (opcional)</text>
   <!-- Background -->
   <rect x="60" y="500" width="980" height="26" rx="6" fill="#cfd8dc" stroke="#78909c"/>
-  <text x="78" y="518" font-size="13" fill="#37474f">Background — wallpaper (yuki-shell wallpaper)</text>
+  <text x="78" y="518" font-size="13" fill="#37474f">Background — wallpaper (malaysia-shell wallpaper)</text>
 
-  <!-- Flecha: Yuki coloca/compone -->
+  <!-- Flecha: MalaysiaDreams coloca/compone -->
   <line x1="1030" y1="524" x2="1030" y2="560" stroke="#5e35b1" stroke-width="2.5" marker-end="url(#arrow-purple)"/>
-  <text x="900" y="546" font-size="12" font-weight="bold" fill="#5e35b1">Yuki coloca, compone y configura cada superficie</text>
+  <text x="900" y="546" font-size="12" font-weight="bold" fill="#5e35b1">MalaysiaDreams coloca, compone y configura cada superficie</text>
 
-  <!-- ============ YUKI (abajo) ============ -->
+  <!-- ============ MALAYSIA_COMPOSITOR (abajo) ============ -->
   <rect x="40" y="564" width="1020" height="210" rx="14" fill="#ede7f6" stroke="#5e35b1" stroke-width="2"/>
-  <text x="60" y="592" font-size="18" font-weight="bold" fill="#311b92">YUKI — el compositor (display server). Decide dónde, en qué capa y cómo se rodea.</text>
+  <text x="60" y="592" font-size="18" font-weight="bold" fill="#311b92">MALAYSIA_COMPOSITOR — el compositor (display server). Decide dónde, en qué capa y cómo se rodea.</text>
 
   <!-- Items -->
   <rect x="60" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
   <text x="75" y="628" font-size="13" font-weight="bold" fill="#4527a0">Display server</text>
   <text x="75" y="648" font-size="11" fill="#333">wl_surface, xdg_shell, layer-shell, ...</text>
-  <text x="75" y="666" font-size="11" fill="#333">todo pasa por Yuki</text>
+  <text x="75" y="666" font-size="11" fill="#333">todo pasa por MalaysiaDreams</text>
 
   <rect x="225" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
   <text x="240" y="628" font-size="13" font-weight="bold" fill="#4527a0">Geometría y capas</text>
@@ -107,6 +107,6 @@
   <!-- Futuro D-Bus -->
   <text x="60" y="744" font-size="12" fill="#555">
     <tspan x="60" dy="0" font-weight="bold" fill="#333">Futuro (ADR 0021):</tspan>
-    <tspan dx="8">D-Bus <tspan font-family="monospace">org.yuki.Compositor1</tspan> — la app de ajustes y el comando <tspan font-family="monospace">domain</tspan> piden cambios a Yuki; Yuki aplica y notifica (OptionChanged) para que la shell y la app se mantengan al día.</tspan>
+    <tspan dx="8">D-Bus <tspan font-family="monospace">org.malaysia.Compositor1</tspan> — la app de ajustes y el comando <tspan font-family="monospace">domain</tspan> piden cambios a MalaysiaDreams; MalaysiaDreams aplica y notifica (OptionChanged) para que la shell y la app se mantengan al día.</tspan>
   </text>
 </svg>

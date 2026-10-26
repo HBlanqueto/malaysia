@@ -1,4 +1,4 @@
-# yuki
+# MalaysiaDreams
 
 Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque.
 
@@ -12,24 +12,24 @@ sin enlaces manuales de systemd:
 
 ```nix
 {
-  inputs.yuki.url = "github:HBlanqueto/yukiwm";
+  inputs.malaysia.url = "github:HBlanqueto/malaysia";
 
-  outputs = { nixpkgs, yuki, ... }: {
+  outputs = { nixpkgs, malaysia, ... }: {
     nixosConfigurations.mi-pc = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        yuki.nixosModules.default
-        { programs.yuki.enable = true; }
+        malaysia.nixosModules.default
+        { programs.malaysia.enable = true; }
       ];
     };
   };
 }
 ```
 
-`programs.yuki.enable` instala el paquete, registra la sesión en el display
-manager, crea `/etc/pam.d/yuki-lock`, activa `hardware.graphics` y arranca
-`yuki-session.target` con `wallpaper`, `menubar` y `dock` (configurable con
-`programs.yuki.shellComponents`). El display manager ejecuta `yuki --drm`, la
+`programs.malaysia.enable` instala el paquete, registra la sesión en el display
+manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
+`malaysia-session.target` con `wallpaper`, `menubar` y `dock` (configurable con
+`programs.malaysia.shellComponents`). El display manager ejecuta `malaysia-compositor --drm`, la
 sesión directa del Bloque 8a.
 
 ## Datos generales
@@ -43,7 +43,7 @@ sesión directa del Bloque 8a.
 | DRM/KMS | Sí: sesión directa atómica con libseat/libinput; vkms verificado y panel real aceptado |
 | Vulkan | No como renderer del compositor; los clientes sí pueden usar Vulkan (p. ej. vkcube) |
 | OpenGL | OpenGL ES 3 vía EGL; no hay renderer OpenGL de escritorio ni fallback por software |
-| Shell | `yuki-shell` nativa, un proceso por componente (ADR 0023) |
+| Shell | `malaysia-shell` nativa, un proceso por componente (ADR 0023) |
 
 ## Comandos y configuración del escritorio
 
@@ -52,16 +52,16 @@ sesión directa del Bloque 8a.
 Cada componente es un proceso propio:
 
 ```sh
-yuki-shell wallpaper   # fondo de pantalla
-yuki-shell menubar     # barra superior: app activa + reloj
-yuki-shell dock        # dock de apps
-yuki-shell lock        # pantalla de bloqueo
+malaysia-shell wallpaper   # fondo de pantalla
+malaysia-shell menubar     # barra superior: app activa + reloj
+malaysia-shell dock        # dock de apps
+malaysia-shell lock        # pantalla de bloqueo
 ```
 
 ### Configuración (ADR 0021)
 
 La interfaz acordada es el comando `domain`, con la sintaxis de `defaults` de
-macOS. Habla con el compositor por D-Bus (`org.yuki.Compositor1`); el binario
+macOS. Habla con el compositor por D-Bus (`org.malaysia.Compositor1`); el binario
 todavía no está implementado, pero la interfaz es esta:
 
 ```sh
@@ -136,7 +136,7 @@ La configuración se guarda como TOML, un archivo por dominio, al estilo de los
 `.plist` de macOS:
 
 ```text
-~/.config/yuki/                 preferencias
+~/.config/malaysia/                 preferencias
 ├── appearance.domain
 ├── window.domain
 ├── dock.domain
@@ -145,7 +145,7 @@ La configuración se guarda como TOML, un archivo por dominio, al estilo de los
 ├── effects.domain
 └── debug.domain
 
-~/.local/share/yuki/            estado y datos
+~/.local/share/malaysia/            estado y datos
 ├── wallpaper.domain            catálogo + selección actual
 └── window.domain               app activa (la escribe el compositor)
 ```
@@ -153,9 +153,9 @@ La configuración se guarda como TOML, un archivo por dominio, al estilo de los
 Cada archivo es opcional; si falta, se usan los valores por defecto. El
 compositor lee sus preferencias al arrancar; la shell relee sus almacenes en
 vivo (por ejemplo, el wallpaper cambia al editar `wallpaper.domain`).
-`YUKI_CONFIG_DIR` y `YUKI_DATA_DIR` permiten usar otros directorios.
+`MALAYSIA_CONFIG_DIR` y `MALAYSIA_DATA_DIR` permiten usar otros directorios.
 
-El wallpaper se elige en `~/.local/share/yuki/wallpaper.domain`:
+El wallpaper se elige en `~/.local/share/malaysia/wallpaper.domain`:
 
 ```toml
 dir = "/run/current-system/sw/share/wallpapers/solid-colors"
@@ -170,7 +170,7 @@ default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqu
 
 Toda la documentación vive en [`docs/`](docs/README.md):
 
-- [`docs/yuki.md`](docs/yuki.md) — visión general y desarrollo
+- [`docs/malaysia.md`](docs/malaysia.md) — visión general y desarrollo
 - [`docs/roadmap.md`](docs/roadmap.md) — el roadmap por bloques
 - [`docs/bloques/`](docs/bloques/) — lo implementado, bloque por bloque
 - [`docs/decisiones/`](docs/decisiones/) — las decisiones (ADRs)

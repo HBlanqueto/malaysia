@@ -1,4 +1,4 @@
-# Documentación de yuki
+# Documentación de MalaysiaDreams
 
 Índice de toda la documentación del proyecto. La estructura va del plan general a
 lo concreto: primero la visión del proyecto, luego el **roadmap** (el plan de
@@ -10,8 +10,8 @@ bloques), después cada **bloque implementado**, y por debajo las **decisiones**
 ```
 docs/
 ├── README.md          ← este índice
-├── yuki.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
-├── glossary.md        glosario de nombres (celestial-kit, grade-graphics, ...)
+├── malaysia-compositor.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
+├── glossary.md        glosario de nombres (barrier-kit, grade-graphics, ...)
 ├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–14 + lo siguiente)
 ├── por-hacer.md       plan corto: aceptación de 8a/10 y orden de 9, 11, 12
 ├── bloques/           qué se ha hecho e implementado, bloque por bloque
@@ -35,8 +35,8 @@ docs/
 ├── arquitectura/
 │   ├── interfaz.md             mapa completo de la UI (diseño, shell, ventanas, capas)
 │   ├── neptunia.md             Neptunia vendorizado, build.rs y comprobaciones
-│   ├── yuki-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
-│   ├── yuki-y-shell.svg       diagrama de la división de trabajo
+│   ├── malaysia-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
+│   ├── malaysia-y-shell.svg       diagrama de la división de trabajo
 │   ├── modelo-de-procesos.md  distribución de procesos del shell (ADR 0023)
 │   ├── wallpaper.md           el componente nativo del wallpaper (ADR 0023/0034)
 │   ├── menubar.md             la menubar nativa (app activa + reloj)
@@ -49,18 +49,18 @@ docs/
 ├── hardware.md        línea base de hardware/gráficos de la máquina
 └── investigacion/
     ├── como-renderiza-macos.md   investigación a fondo del renderizado de macOS
-    ├── wayland-vs-macos.md       comparación con Wayland y qué probar en yuki
+    ├── wayland-vs-macos.md       comparación con Wayland y qué probar en malaysia-compositor
     ├── otto-y-forks.md           Otto y los forks de HBlanqueto: contexto histórico
     ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
     ├── escalado-macos.md         puntos, backing store y downsample en macOS
     ├── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
     ├── resize-bordes-y-cursores.md  resize por bordes y cursores: GNOME, Otto y macOS
-    └── global-menu.md            menú global: proyectos de referencia y qué toma Yuki
+    └── global-menu.md            menú global: proyectos de referencia y qué toma MalaysiaDreams
 ```
 
 > **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
 > **POLÍTICA DE DISEÑO** (ADR 0020) — chrome separado (GTK/Libadwaita conserva su
-> apariencia; Qt y demás reciben el chrome de Yuki) y efectos para todas las
+> apariencia; Qt y demás reciben el chrome de MalaysiaDreams) y efectos para todas las
 > ventanas (inner border, sombra, blur). Si vas a tocar diseño, léelo.
 >
 > **Avisos de terceros.** `NOTICE` debe actualizarse en el mismo commit en que se copie código de un tercero (Otto incluido).
@@ -90,9 +90,9 @@ Tiempos medidos en esta máquina (Ryzen 5 PRO 5650U, x86_64-linux):
 
 | Caso | Tiempo |
 | --- | --- |
-| Limpio, `cargo build -p yuki` con `target/` vacío | ~3 min 50 s |
+| Limpio, `cargo build -p malaysia-compositor` con `target/` vacío | ~3 min 50 s |
 | Incremental sin cambios | <1 s |
-| Incremental tras tocar un crate propio (`yuki`) | ~5 s |
+| Incremental tras tocar un crate propio (`malaysia-compositor`) | ~5 s |
 
 El primer `nix build .#default` puede tardar más porque construye Skia una vez;
 después Skia y las dependencias salen de la caché de Nix. Los checks del flake
@@ -120,9 +120,9 @@ Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
 
 ## Cómo leerlo
 
-1. **[`yuki.md`](yuki.md)** — qué es el proyecto y cómo compilarlo/ejecutarlo.
+1. **[`malaysia-compositor.md`](malaysia-compositor.md)** — qué es el proyecto y cómo compilarlo/ejecutarlo.
 2. **[`glossary.md`](glossary.md)** — los nombres del proyecto y su reparto
-   (CelestialKit ≈ AppKit sobre Freya, Grade Graphics ≈ Core Graphics/Core Text, Grade
+   (BarrierKit ≈ AppKit sobre Freya, Grade Graphics ≈ Core Graphics/Core Text, Grade
    Animation ≈ Core Animation, Infinity ≈ SkyLight).
 3. **[`roadmap.md`](roadmap.md)** — el **ROADMAP básico**: la lista canónica de
    bloques, su estado (hecho / no empezado) y sus pruebas de aceptación. Es la
@@ -140,8 +140,8 @@ Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
    configuración. Empieza aquí si vas a tocar algo visual. El detalle del
    [Neptunia vendorizado](arquitectura/neptunia.md), su `build.rs` y sus
    comprobaciones está en su propia página.
-8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo Yuki
-   (compositor) y la shell nativa (`yuki-shell`, ADR 0025): documento + diagrama
+8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo MalaysiaDreams
+   (compositor) y la shell nativa (`malaysia-shell`, ADR 0025): documento + diagrama
    SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
    (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
    [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md),
@@ -180,12 +180,12 @@ real y añade la **captura de depuración** (volcado PNG por `SIGUSR1`).
 sin flip) que ocultaba los tiles del dock y el texto del lock, y re-verifica
 los criterios visuales de los bloques 2–6 por captura. **7.3** (hecho) añade la
 **verificación por patrón** (4 cuadrantes), el **test de regresión UV** en
-`celestial-kit`, un **verificador por regiones** (`scripts/verify-captures.py`),
+`barrier-kit`, un **verificador por regiones** (`scripts/verify-captures.py`),
 determina que **la titlebar nunca se implementó** (solo se reserva la banda), y
 corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
 superficie EGL de la ventana; la captura ahora corre antes del render de la
 ventana). Ya corren wezterm,
-Firefox, vkcube y mpv acelerados dentro de Yuki anidado.
+Firefox, vkcube y mpv acelerados dentro de MalaysiaDreams anidado.
 El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
 aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
 (hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
@@ -200,10 +200,10 @@ empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
 `appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
 ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
 la titlebar Neptunia arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
-launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Neptunia (`crates/yuki-design/neptunia`) es la fuente de diseño
+launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Neptunia (`crates/vow-design/neptunia`) es la fuente de diseño
 (ADR 0032); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
 polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
-nativa (`yuki-shell`, ADR 0025): **wallpaper**, **menubar**, **dock**,
+nativa (`malaysia-shell`, ADR 0025): **wallpaper**, **menubar**, **dock**,
 **lock** y **launcher** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y
 [`por-hacer.md`](por-hacer.md).

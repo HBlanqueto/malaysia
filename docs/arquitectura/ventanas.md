@@ -2,7 +2,7 @@
 
 > Mapa general de la interfaz: [`interfaz.md`](interfaz.md).
 
-La titlebar de Yuki es **compositor-side** (ADR 0020) y usa el diseño de
+La titlebar de MalaysiaDreams es **compositor-side** (ADR 0020) y usa el diseño de
 **Neptunia** (ADR 0032): barra **arriba** de **32 px lógicos** para las ventanas
 SSD de terceros, semáforos de 12 px
 (**cuadrados redondeados** de radio 4) con 8 px de separación y radio de
@@ -24,28 +24,28 @@ ventana de 16 px.
 Solo reciben titlebar las ventanas **server-side** que reservan inset (ADR
 0014/0019). Las apps GTK/Libadwaita y las que piden CSD conservan su propio
 chrome; los diálogos, los popups y el fullscreen no llevan chrome. Wezterm, por
-ejemplo, pide CSD y por eso no lleva la barra de Yuki; para forzarla está
+ejemplo, pide CSD y por eso no lleva la barra de MalaysiaDreams; para forzarla está
 `window.decorations = "force_server"`.
 
 Telegram (Qt) dibuja su propia barra de título y, con `window.qt_server_decorations = true`
 (predeterminado), necesita desactivarla desde la propia aplicación:
 **Ajustes › Avanzado › «Usar el marco de ventana del sistema»**. Poner
 `window.qt_server_decorations = false` devuelve el control a Qt, pero entonces
-la app no usará la titlebar de Yuki.
+la app no usará la titlebar de MalaysiaDreams.
 
 ## Apps propias y CSD (ADR 0035)
 
-Una app de CelestialKit se identifica con un `app_id` que empieza por
-`NATIVE_APP_ID_PREFIX` (`io.github.hblanqueto.yuki.`) y pide siempre su modo de
+Una app de BarrierKit se identifica con un `app_id` que empieza por
+`NATIVE_APP_ID_PREFIX` (`io.github.hblanqueto.malaysia.`) y pide siempre su modo de
 decoración por `xdg-decoration` antes del primer commit:
 
 - `Decorations::Client` (por defecto): dibuja su barra unificada de **44 px**
   (`titlebar-h`) con `TrafficLights` y hueco de toolbar. Es la opción para apps
   con toolbar o sidebar, como Ajustes.
-- `Decorations::Server`: Yuki dibuja su barra de **32 px** (`titlebar-ssd-h`).
+- `Decorations::Server`: MalaysiaDreams dibuja su barra de **32 px** (`titlebar-ssd-h`).
   Es la opción para utilidades simples sin toolbar.
 
-Para estas ventanas Yuki respeta el modo pedido y no aplica
+Para estas ventanas MalaysiaDreams respeta el modo pedido y no aplica
 `window.decorations`: `force_server`/`force_client` solo afectan a apps ajenas.
 Si una app propia no envía `request_mode`, negocia `Client` y el compositor
 avisa una vez por ventana («app propia sin modo de decoración»). Si el
@@ -89,7 +89,7 @@ WindowMap::iter (topmost → bottom)
   cliente con coordenadas negativas y los clics de los botones llegan al
   compositor.
 - El texto de la titlebar es un motor pequeño dentro del compositor
-  (`crates/yuki/src/chrome.rs`); no usa `celestial-kit`, que es el toolkit de
+  (`crates/malaysia-compositor/src/chrome.rs`); no usa `barrier-kit`, que es el toolkit de
   la shell (ADR 0024).
 - La ventana se eleva al recibir foco; el foco y el orden de apilado no se
   separan.
@@ -105,7 +105,7 @@ Neptunia:
 | `accent` | el acento, 6 % en claro / 8 % en oscuro | derivados del acento |
 | `wallpaper` | el color dominante del wallpaper, 7 % / 9 % | derivados del wallpaper |
 
-El color dominante lo calcula `yuki-shell wallpaper` al decodificar la imagen:
+El color dominante lo calcula `malaysia-shell wallpaper` al decodificar la imagen:
 muestreo en rejilla, histograma de 4 bits ponderado por croma, descarte de grises
 y normalización de luminosidad HSL a 45–65 %. Lo escribe en `wallpaper.state`;
 si no hay color, se usa el acento. El compositor vigila ese archivo y
@@ -125,7 +125,7 @@ cambian `appearance.domain` o `wallpaper.state`.
 | Minimizar | sale de la escena y queda en el dock (`State::set_minimized`) |
 | Maximizar | guarda el rectángulo, ocupa el workspace, envía `maximized`; al repetir, restaura |
 
-El hit-testing vive en `yuki_appearance::traffic` y se comprueba antes de
+El hit-testing vive en `vow_appearance::traffic` y se comprueba antes de
 iniciar un move; un clic en el resto de la barra mueve la ventana. Los botones
 solo actúan con el botón primario.
 
@@ -150,7 +150,7 @@ solo actúan con el botón primario.
 ## Límites actuales
 
 - No se dibujan aún las **esquinas redondeadas de la ventana** (16 px) ni la
-  **sombra**; el radio y los valores de sombra ya están en `yuki-design`. Los
+  **sombra**; el radio y los valores de sombra ya están en `vow-design`. Los
   semáforos sí son cuadrados redondeados.
 - La titlebar no aparece en la captura de **ventana** (`build_window_elements`
   sigue capturando solo el contenido del cliente); sí aparece en la captura de
@@ -161,10 +161,10 @@ solo actúan con el botón primario.
 - `./dev.sh demo`: titlebar clara con título centrado y semáforos de color en la
   ventana con foco; la de atrás queda gris.
 - `./dev.sh titlebar` lanza un `foot`, pulsa el centro exacto de cada botón
-  (`YUKI_TEST_TITLEBAR_BUTTON`) y comprueba en el log `window removed`,
+  (`MALAYSIA_TEST_TITLEBAR_BUTTON`) y comprueba en el log `window removed`,
   `window minimized` y `window maximized`. Pasa a 1.0 y con
-  `YUKI_SCALE=1.5` (los centros se calculan en lógico y el hit-test usa la
+  `MALAYSIA_SCALE=1.5` (los centros se calculan en lógico y el hit-test usa la
   misma geometría).
-- `YUKI_SCALE=1.5 ./dev.sh demo`: la barra y el texto se rasterizan a la escala
+- `MALAYSIA_SCALE=1.5 ./dev.sh demo`: la barra y el texto se rasterizan a la escala
   física.
 - `./dev.sh check` pasa (tests de `button_at` incluidos).

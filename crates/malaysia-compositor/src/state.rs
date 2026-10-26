@@ -143,7 +143,7 @@ pub struct State {
     pub(crate) blocker_sink: Box<dyn crate::blockers::BlockerSink>,
     /// The factory for `wl_seat` globals.
     pub seat_state: SeatState<State>,
-    /// The one seat Yuki offers.
+    /// The one seat MalaysiaDreams offers.
     pub seat: Seat<State>,
     /// The cursor image the pointer should draw.
     ///
@@ -167,7 +167,7 @@ pub struct State {
     /// The `wp_cursor_shape_manager_v1` state.
     ///
     /// The compositor keeps owning the cursor theme: clients name a shape and
-    /// Yuki draws the matching themed cursor (ADR 0020).
+    /// MalaysiaDreams draws the matching themed cursor (ADR 0020).
     pub cursor_shape_state: CursorShapeManagerState,
     /// The `zwp_pointer_constraints_v1` state (pointer lock and confinement).
     pub pointer_constraints_state: PointerConstraintsState,
@@ -209,7 +209,7 @@ pub struct State {
     ///
     /// GTK3 and GTK4 negotiate decorations only through this protocol; the
     /// advertised default mode is server-side so a plain GTK window accepts
-    /// Yuki's chrome (ADR 0019).
+    /// MalaysiaDreams's chrome (ADR 0019).
     pub kde_decoration_state: KdeDecorationState,
     /// The `zwlr_layer_shell_v1` state (ADR 0023).
     ///
@@ -244,7 +244,7 @@ pub struct State {
     /// The `ext-session-lock-v1` state.
     ///
     /// The lock client binds the manager and asks to lock the session; while
-    /// locked, Yuki renders only the lock surfaces (see `lock.rs` and ADR 0023).
+    /// locked, MalaysiaDreams renders only the lock surfaces (see `lock.rs` and ADR 0023).
     pub lock_state: SessionLockManagerState,
     /// Whether the session is locked: only the lock surfaces are rendered and
     /// fed input.
@@ -296,7 +296,7 @@ pub struct State {
     pub list_handles: ListHandles,
     /// Windows minimized to the dock (kept out of the scene).
     pub minimized: std::collections::HashSet<WindowId>,
-    /// Windows maximized by Yuki's titlebar, with the rectangle to restore.
+    /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
     pub(crate) arranged: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
@@ -1199,7 +1199,7 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
         PhysicalProperties {
             size: (0, 0).into(),
             subpixel: Subpixel::Unknown,
-            make: "Yuki".to_string(),
+            make: "MalaysiaDreams".to_string(),
             model: "Winit".to_string(),
             serial_number: String::new(),
         },

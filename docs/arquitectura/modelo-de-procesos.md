@@ -9,7 +9,7 @@ resultante y cómo se relacionan.
 ```
 COMPOSITOR (un proceso)
   ┌────────────────────────────────────────────┐
-  │ YUKI — display server                      │
+  │ MALAYSIA_COMPOSITOR — display server                      │
   │ scene · capas · geometría · input ·        │
   │ efectos · almacén .domain · lock garantía  │
   └────────────────────────────────────────────┘
@@ -17,7 +17,7 @@ COMPOSITOR (un proceso)
       │layer-shell   │layer-shell   │layer-shell  │ext-session-lock-v1
       │              │              │             │
   ┌───┴────┐    ┌────┴────┐    ┌───┴────┐   ┌─────┴─────┐
-  │ yuki-  │    │ yuki-   │    │ yuki-  │   │ yuki-     │
+  │ malaysia-compositor-  │    │ malaysia-compositor-   │    │ malaysia-compositor-  │   │ malaysia-compositor-     │
   │ shell  │    │ shell   │    │ shell  │   │ shell     │
   │ dock   │    │ topbar  │    │ notify │   │ lock      │  (+ launcher, …)
   └────────┘    └─────────┘    └────────┘   └───────────┘
@@ -25,19 +25,19 @@ COMPOSITOR (un proceso)
 ```
 
 Un proceso por componente — dock, barra superior, notificaciones, launcher,
-pantalla de bloqueo, ... — todos clientes Wayland de Yuki. Ninguno depende de otro:
+pantalla de bloqueo, ... — todos clientes Wayland de MalaysiaDreams. Ninguno depende de otro:
 si el dock muere, la barra sigue funcionando.
 
-**Estado**: cuatro componentes nativos funcionan — **`yuki-shell wallpaper`**
-(render GLES de `celestial-kit`, presentado por **EGL**/dmabuf — Bloque 7c,
-ADR 0027), **`yuki-shell menubar`** (capa `Top`, app activa + reloj),
-**`yuki-shell dock`** (capa `Top` abajo, lista de apps + activar al clic) y
-**`yuki-shell lock`** (`ext-session-lock-v1`, con la garantía de que la sesión
+**Estado**: cuatro componentes nativos funcionan — **`malaysia-shell wallpaper`**
+(render GLES de `barrier-kit`, presentado por **EGL**/dmabuf — Bloque 7c,
+ADR 0027), **`malaysia-shell menubar`** (capa `Top`, app activa + reloj),
+**`malaysia-shell dock`** (capa `Top` abajo, lista de apps + activar al clic) y
+**`malaysia-shell lock`** (`ext-session-lock-v1`, con la garantía de que la sesión
 no se desbloquea si el cliente muere).
 La shell es nativa (ADR 0025); no hay dependencias de shell externas.
 
-**Fuera de la shell** hay un proceso más: **`xdg-desktop-portal-yuki`** (ADR
-0031). No es un cliente Wayland ni se supervisa con `yuki-session.target`: lo
+**Fuera de la shell** hay un proceso más: **`xdg-desktop-portal-malaysia`** (ADR
+0031). No es un cliente Wayland ni se supervisa con `malaysia-session.target`: lo
 arranca `xdg-desktop-portal` por activación D-Bus cuando una app pide
 `Settings` (después `Screenshot`/`ScreenCast`). Si cae, el compositor y la
 shell siguen; las apps pierden el portal hasta que D-Bus lo relance.
@@ -75,7 +75,7 @@ dock usan `xdg-activation-v1` para dar el foco a las apps que lanzan;
 
 El estado del sistema — batería, red, audio, brillo — va por D-Bus desde cada
 componente (UPower, NetworkManager, PipeWire), no por Wayland. Un protocolo privado
-de Yuki solo se introduce cuando aparezca una necesidad concreta que los protocolos
+de MalaysiaDreams solo se introduce cuando aparezca una necesidad concreta que los protocolos
 estándar no cubran.
 
 ### Estado del arte de la lista de protocolos
@@ -110,7 +110,7 @@ pointer constraints, `relative-pointer`, el sync explícito
 | cae la pantalla de bloqueo | la sesión **sigue bloqueada** | el compositor muestra un color sólido y nunca desbloquea (`ext-session-lock-v1`) |
 | cae el dock y su zona exclusiva | las ventanas maximizadas se reacomodan | se vuelven a reacomodar al reiniciar el dock; se acepta el parpadeo |
 | cae el compositor | mueren todos los clientes | es el único punto de falla inevitable |
-| cae el portal (`xdg-desktop-portal-yuki`) | las apps pierden `Settings` (y después `Screenshot`/`ScreenCast`) | D-Bus lo relanza en la siguiente petición; el escritorio sigue |
+| cae el portal (`xdg-desktop-portal-malaysia`) | las apps pierden `Settings` (y después `Screenshot`/`ScreenCast`) | D-Bus lo relanza en la siguiente petición; el escritorio sigue |
 | reinicio de GPU (amdgpu) | afecta a todos los procesos con contexto GL | separar procesos no protege contra esto |
 
 ## Relación con el resto de la documentación
@@ -118,9 +118,9 @@ pointer constraints, `relative-pointer`, el sync explícito
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI y sus capas.
 
 - ADR 0023 — la decisión (este documento es su consecuencia en forma de distribución).
-- ADR 0025 — la shell es nativa: los componentes `yuki-shell` son estos procesos.
+- ADR 0025 — la shell es nativa: los componentes `malaysia-shell` son estos procesos.
 - ADR 0031 — el portal es un backend D-Bus aparte, no un componente del shell.
-- `yuki-y-shell.md` — la división de trabajo compositor ↔ shell (quién decide
+- `malaysia-y-shell.md` — la división de trabajo compositor ↔ shell (quién decide
   cada cosa).
 - [`../bloques/12-portales-y-servicios.md`](../bloques/12-portales-y-servicios.md)
   — el portal `Settings` y lo que sigue.

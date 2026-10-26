@@ -1,4 +1,4 @@
-# El dock (`yuki-shell dock`)
+# El dock (`malaysia-shell dock`)
 
 El tercer componente nativo del shell (ADR 0023): el dock estilo macOS en el
 borde inferior. Lista las apps abiertas desde
@@ -14,13 +14,13 @@ dock.domain ──► tilesize, orientation
 window.domain ──► app activa (resaltada)
         │
         ▼
-  frame RGBA: barra + tiles (celestial-kit::text)
+  frame RGBA: barra + tiles (barrier-kit::text)
         │
         ▼
   superficie layer-shell Top, borde inferior, exclusive zone
         │  eglSwapBuffers (wl_egl_window → dmabuf)
         ▼
-       Yuki (compositor)
+       MalaysiaDreams (compositor)
 ```
 
 1. **La superficie**: capa **`Top`**, anclada al borde inferior, alto =
@@ -40,7 +40,7 @@ window.domain ──► app activa (resaltada)
 4. **App activa resaltada**: desde `window.domain` (el estado que publica el
    compositor), como la menubar.
 
-## El lado del compositor (`crates/yuki/src/foreign.rs`)
+## El lado del compositor (`crates/malaysia-compositor/src/foreign.rs`)
 
 - `ext-foreign-toplevel-list-v1` — estado de smithay + handler + handles por
   ventana (creados al mapear, `closed` al destruir). El protocolo no lleva
@@ -82,7 +82,7 @@ window.domain ──► app activa (resaltada)
 ## Relación
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
-- ADR 0023 (procesos y protocolos), ADR 0034 (CelestialKit sobre Freya),
+- ADR 0023 (procesos y protocolos), ADR 0034 (BarrierKit sobre Freya),
   ADR 0032 (Neptunia).
 - `menubar.md` / `wallpaper.md` — componentes hermanos (presentación EGL,
   ADR 0027).

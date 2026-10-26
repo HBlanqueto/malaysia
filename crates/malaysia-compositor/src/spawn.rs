@@ -39,7 +39,7 @@ pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     command
 }
 
-/// Builds a command for another Yuki process (the shell components).
+/// Builds a command for another MalaysiaDreams process (the shell components).
 ///
 /// Unlike a client, a shell component is part of Malaysia's own runtime and may
 /// need the EGL/GBM environment the compositor was started with — in

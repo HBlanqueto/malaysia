@@ -44,7 +44,7 @@ impl App for Demo {
                     .main_align(Alignment::Center)
                     .child(
                         label()
-                            .text("Ventana SSD de Yuki")
+                            .text("Ventana SSD de MalaysiaDreams")
                             .font_size(16.0)
                             .color(text),
                     )
@@ -64,7 +64,7 @@ fn main() {
     });
     run_window(
         app,
-        WindowOptions::new("Yuki SSD", "demo.ssd")
+        WindowOptions::new("MalaysiaDreams SSD", "demo.ssd")
             .decorations(Decorations::Server)
             .size((640, 420)),
     )

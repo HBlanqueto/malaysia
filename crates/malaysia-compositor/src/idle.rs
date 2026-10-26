@@ -160,7 +160,7 @@ impl IdleState {
         self.sink.insert(id, duration);
     }
 
-    /// Records the compositor's socket so a spawned lock connects to Yuki, not
+    /// Records the compositor's socket so a spawned lock connects to MalaysiaDreams, not
     /// to the host session.
     pub fn set_wayland_display(&mut self, display: String) {
         self.wayland_display = Some(display);

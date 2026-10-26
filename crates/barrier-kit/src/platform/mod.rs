@@ -362,13 +362,13 @@ impl PopupHandle {
     }
 }
 
-/// Who draws a Yuki app's titlebar (ADR 0035).
+/// Who draws a MalaysiaDreams app's titlebar (ADR 0035).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Decorations {
     /// BarrierKit draws its 44 px titlebar.
     #[default]
     Client,
-    /// Yuki's compositor draws the 32 px titlebar.
+    /// MalaysiaDreams's compositor draws the 32 px titlebar.
     Server,
 }
 
@@ -2943,7 +2943,7 @@ impl Shell {
                 .find(|ctx| ctx.controls.surface_id == surface_id)
                 .map(|ctx| ctx.controls.status.read().decoration == DecorationResponse::Server)
                 .unwrap_or(false);
-            // Yuki always grants an explicit Server request. Some compositors do
+            // MalaysiaDreams always grants an explicit Server request. Some compositors do
             // not send the decoration configure at all, so keep the requested mode
             // when they advertise the protocol; without it, fall back to the
             // client-side bar.

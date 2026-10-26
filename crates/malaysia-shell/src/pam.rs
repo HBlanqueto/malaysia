@@ -111,7 +111,7 @@ pub enum Event {
 pub struct Service {
     /// Malaysia's own stack, `/etc/pam.d/malaysia-lock`.
     pub preferred: &'static str,
-    /// Used when Yuki's file is not installed.
+    /// Used when MalaysiaDreams's file is not installed.
     pub fallback: &'static str,
 }
 

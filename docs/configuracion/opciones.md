@@ -1,4 +1,4 @@
-# Catálogo de opciones de Yuki
+# Catálogo de opciones de MalaysiaDreams
 
 Catálogo canónico de las opciones del compositor (ADR 0021). **Los nombres y
 valores son idénticos a los de macOS** siempre que exista un equivalente: las
@@ -9,11 +9,11 @@ claves imitan `com.apple.dock` y demás (`autohide`, `orientation`, `tilesize`,
 Mapa visual completo: [`../arquitectura/interfaz.md`](../arquitectura/interfaz.md).
 
 **Como macOS, la configuración se guarda en un archivo por dominio** (extensión
-**`.domain`**, el formato propio de Yuki, como `.plist` lo es de macOS) en dos
+**`.domain`**, el formato propio de MalaysiaDreams, como `.plist` lo es de macOS) en dos
 directorios — preferencias y estado:
 
 ```
-~/.config/yuki/            ← ~/Library/Preferences
+~/.config/malaysia/            ← ~/Library/Preferences
 ├── appearance.domain
 ├── display.domain
 ├── window.domain
@@ -24,7 +24,7 @@ directorios — preferencias y estado:
 ├── effects.domain
 └── debug.domain
 
-~/.local/share/yuki/       ← ~/Library/Application Support
+~/.local/share/malaysia/       ← ~/Library/Application Support
 ├── wallpaper.domain       ← catálogo + selección actual ([desktops]), como
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← color dominante del fondo (lo escribe la shell)
@@ -34,7 +34,7 @@ directorios — preferencias y estado:
 Cada archivo es opcional; los que no existen usan su default (como los dominios
 `com.apple.dock`, `com.apple.menubar`... de macOS). El mismo catálogo alimenta el
 comando `domain` y la futura app de ajustes (ambos por D-Bus, interfaz
-`org.yuki.Compositor1`).
+`org.malaysia.Compositor1`).
 
 Estado de cada opción:
 - **activa** — se lee en tiempo de ejecución y cambia el comportamiento.
@@ -49,7 +49,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 
 | Atajo | Acción |
 |---|---|
-| `Super+Space` | abre o cierra `yuki-shell launcher`; bloqueado con la sesión bloqueada |
+| `Super+Space` | abre o cierra `malaysia-shell launcher`; bloqueado con la sesión bloqueada |
 | `Ctrl+Alt+Backspace` | salida de emergencia (bloqueada con la sesión bloqueada) |
 | `Ctrl+Alt+L` | bloquea o relanza el lock |
 | `Ctrl+Alt+F1..F12` | cambia de VT |
@@ -77,7 +77,7 @@ contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
 namespace del portal.
 
 La app **Ajustes del sistema** lee y escribe `appearance.domain` a través de
-`yuki-appearance::write_appearance`. La escritura es atómica (archivo temporal +
+`vow-appearance::write_appearance`. La escritura es atómica (archivo temporal +
 `rename`) y conserva claves desconocidas y comentarios del usuario, de modo que
 editar el archivo a mano y usar la app son compatibles.
 
@@ -99,9 +99,9 @@ derivados del acento/wallpaper en los otros).
 | `display.scale` | float `1.0..=4.0` | `1.0` | **activa** | `State::scale`, `wl_output`, `wp_fractional_scale_v1` |
 
 No tiene equivalente exacto en macOS: macOS elige un **modo de pantalla** por
-monitor, no una escala fraccional. Yuki sigue el modelo Wayland y publica la
+monitor, no una escala fraccional. MalaysiaDreams sigue el modelo Wayland y publica la
 parte entera por `wl_output` y la fraccionaria por `wp_fractional_scale_v1`.
-`YUKI_SCALE` sigue existiendo como **override de desarrollo** y gana cuando está
+`MALAYSIA_SCALE` sigue existiendo como **override de desarrollo** y gana cuando está
 definido; sirve para `dev.sh` sin escribir configuración. Con 8b esta opción
 pasará a ser por salida.
 
@@ -123,7 +123,7 @@ pasará a ser por salida.
 ofrece en ventanas SSD normales (no maximizadas ni fullscreen).
 
 `"default"` respeta la negociación (GTK/Libadwaita conservan su headerbar; Qt y el
-resto reciben el chrome de Yuki). `"force_server"` dibuja el chrome de Yuki en todas
+resto reciben el chrome de MalaysiaDreams). `"force_server"` dibuja el chrome de MalaysiaDreams en todas
 las ventanas; `"force_client"` no dibuja ninguno.
 
 `double_click_titlebar` usa las palabras de macOS: "**Fill / Minimize / Zoom / No
@@ -136,8 +136,8 @@ el marco; `fullscreen` y el modo foco se conectarán más adelante; `none` no ha
 nada. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
 
 `qt_server_decorations` exporta `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` para los
-clientes que lanza `yuki::spawn` y en el entorno de la sesión, de modo que Qt
-use el protocolo `xdg-decoration` y reciba el marco de Yuki. Ponerlo a `false`
+clientes que lanza `malaysia_compositor::spawn` y en el entorno de la sesión, de modo que Qt
+use el protocolo `xdg-decoration` y reciba el marco de MalaysiaDreams. Ponerlo a `false`
 permite que Qt dibuje su propia barra (como hace Telegram; véase
 [`../arquitectura/ventanas.md`](../arquitectura/ventanas.md)).
 
@@ -174,43 +174,43 @@ ver [`../investigacion/portapapeles-capturas.md`](../investigacion/portapapeles-
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `wallpaper.dir` | string (ruta) | `/run/current-system/sw/share/wallpapers/solid-colors` | datos | shell (`yuki-shell wallpaper`), app de ajustes |
+| `wallpaper.dir` | string (ruta) | `/run/current-system/sw/share/wallpapers/solid-colors` | datos | shell (`malaysia-shell wallpaper`), app de ajustes |
 | `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | datos | shell |
 | `wallpaper.shuffle` | bool | `false` | datos | shell |
 
-**Los wallpapers de Yuki viven en el propio proyecto** (`share/wallpapers/solid-colors/`,
+**Los wallpapers de MalaysiaDreams viven en el propio proyecto** (`share/wallpapers/solid-colors/`,
 el set macOS "Solid Colors", vendored en el repo) y el flake los instala como datos
 del sistema en `/run/current-system/sw/share/wallpapers/`, igual que GNOME instala
 los suyos en `/usr/share/backgrounds`. `wallpaper.dir` por defecto apunta ahí; un
 desarrollo puede apuntarlo al repo o a otra carpeta. El componente
-**`yuki-shell wallpaper`** dibuja el wallpaper en la capa `Background` con las
+**`malaysia-shell wallpaper`** dibuja el wallpaper en la capa `Background` con las
 imágenes de esa carpeta (ADR 0023/0024; render GLES presentado por **EGL**/dmabuf,
 ADR 0027).
 
-**El wallpaper por defecto es `Solid Aqua Blue.png`** (`yuki_design::WALLPAPER`):
+**El wallpaper por defecto es `Solid Aqua Blue.png`** (`vow_design::WALLPAPER`):
 es el que se ve cuando el almacén no elige ninguno o todavía no existe, como la
 imagen por defecto de una cuenta nueva de macOS. Si `wallpaper.dir` apunta a una
 carpeta propia que no lo tiene, se usa la primera imagen de esa carpeta.
 
 **Como macOS, la selección actual vive en un almacén aparte**:
-`~/.local/share/yuki/wallpaper.domain` (el equivalente a `~/Library/Application
+`~/.local/share/malaysia/wallpaper.domain` (el equivalente a `~/Library/Application
 Support`, donde macOS guarda `com.apple.wallpaper`) — por desktop, con un `file://`
 a la imagen:
 
 ```toml
-# ~/.local/share/yuki/wallpaper.domain  (current selection, per desktop)
+# ~/.local/share/malaysia/wallpaper.domain  (current selection, per desktop)
 [desktops]
 default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, Solid Aqua Blue
 ```
 
-Editar ese archivo cambia el wallpaper **en vivo** (`yuki-shell wallpaper` vigila el
+Editar ese archivo cambia el wallpaper **en vivo** (`malaysia-shell wallpaper` vigila el
 almacén y repinta). El catálogo (qué wallpapers existen) y la selección actual (qué
 se muestra) están juntos en el dominio `wallpaper.domain`; el catálogo está en el
 sistema (`share/wallpapers/`). Al cambiar de fondo, la shell escribe el color
 dominante en `wallpaper.state` (`dominant = [r, g, b]`) para el tinte de las
 ventanas y el `accent-color` del portal.
 
-## `dock` — dock de la shell (`yuki-shell dock`; macOS `com.apple.dock`)
+## `dock` — dock de la shell (`malaysia-shell dock`; macOS `com.apple.dock`)
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
@@ -235,7 +235,7 @@ Las claves con guion son **exactamente** las de `defaults write com.apple.dock .
 | `lock.idle_timeout_seconds` | entero (segundos) | `300` | **activa** | `ext-idle-notify-v1` / auto-lock |
 
 `0` desactiva el bloqueo automático. Al vencer el timeout sin input, el
-compositor lanza `yuki-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v1`
+compositor lanza `malaysia-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v1`
 (video en pantalla completa) detiene el reloj.
 
 ## `menubar` — barra de menús de la shell (macOS "Menu Bar")
@@ -276,7 +276,7 @@ hace que el compositor difumine lo que hay detrás (vibrancy tipo macOS).
 ## El comando `domain`
 
 El comando de control del compositor, con la misma estructura que `defaults` de
-macOS. Habla con el compositor por D-Bus (`org.yuki.Compositor1`); la app de
+macOS. Habla con el compositor por D-Bus (`org.malaysia.Compositor1`); la app de
 ajustes y la shell usan el mismo canal. El dominio de cada opción es su sección:
 `appearance`, `window`, `dock`, `menubar`, `lock`, `effects`, `debug`.
 
@@ -303,10 +303,10 @@ domain find  blur
 
 ## Archivos de ejemplo (extensión `.domain`, un archivo por dominio)
 
-Como macOS, un archivo por dominio en `~/.config/yuki/`:
+Como macOS, un archivo por dominio en `~/.config/malaysia/`:
 
 ```toml
-# ~/.config/yuki/appearance.domain
+# ~/.config/malaysia/appearance.domain
 color_scheme = "dark"           # auto | dark | dark_tint | light
 accent_color = [0.208, 0.518, 0.894]
 contrast = false                # Increase contrast
@@ -318,12 +318,12 @@ traffic_lights = "auto"         # auto | standard | accent | wallpaper
 ```
 
 ```toml
-# ~/.config/yuki/display.domain
+# ~/.config/malaysia/display.domain
 scale = 1.5                     # 1.0 .. 4.0
 ```
 
 ```toml
-# ~/.config/yuki/window.domain
+# ~/.config/malaysia/window.domain
 decorations = "default"         # default | force_server | force_client
 titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
@@ -335,7 +335,7 @@ qt_server_decorations = true    # false para la barra nativa de Qt
 ```
 
 ```toml
-# ~/.config/yuki/screenshot.domain
+# ~/.config/malaysia/screenshot.domain
 show_pointer = false            # macOS lo oculta por defecto
 show_thumbnail = true
 target = "desktop"              # desktop | clipboard | preview | mail | messages | other
@@ -348,12 +348,12 @@ remember_selection = false
 ```
 
 ```toml
-# ~/.config/yuki/lock.domain
+# ~/.config/malaysia/lock.domain
 idle_timeout_seconds = 300      # 0 desactiva el auto-lock
 ```
 
 ```toml
-# ~/.config/yuki/dock.domain
+# ~/.config/malaysia/dock.domain
 autohide = false
 orientation = "bottom"          # bottom | left | right
 magnification = false
@@ -367,7 +367,7 @@ show-recents = true
 ```
 
 ```toml
-# ~/.local/share/yuki/wallpaper.domain
+# ~/.local/share/malaysia/wallpaper.domain
 dir = "/run/current-system/sw/share/wallpapers/solid-colors"
 scale = "fill"                  # fill | stretch | fit | center (palabras de macOS)
 shuffle = false
@@ -378,13 +378,13 @@ default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqu
 ```
 
 ```toml
-# ~/.config/yuki/menubar.domain
+# ~/.config/malaysia/menubar.domain
 autohide = false
 app_menus = true                 # menú global de la app enfocada (dbusmenu)
 ```
 
 ```toml
-# ~/.config/yuki/effects.domain
+# ~/.config/malaysia/effects.domain
 corner_radius = 12.0
 [inner_border]
 enabled = true
@@ -401,7 +401,7 @@ radius = 20.0
 ```
 
 ```toml
-# ~/.config/yuki/debug.domain
+# ~/.config/malaysia/debug.domain
 damage_highlight = false
 ```
 
@@ -409,5 +409,5 @@ damage_highlight = false
 > prefijo del dominio** (`[inner_border]` en `effects.domain`, no
 > `[effects.inner_border]`); el archivo *es* el dominio.
 
-El catálogo vive en `crates/yuki/src/config.rs` como tipos `serde` tipados; cualquier
+El catálogo vive en `crates/malaysia-compositor/src/config.rs` como tipos `serde` tipados; cualquier
 cambio en este documento debe reflejarse ahí y viceversa (ADR 0021).

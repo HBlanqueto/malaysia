@@ -1,7 +1,7 @@
 //! The `ext-session-lock-v1` integration: locking the session.
 //!
 //! A lock client (`malaysia-shell lock`) binds the manager and asks to lock the
-//! session. While locked, Yuki renders only the lock surfaces and feeds input
+//! session. While locked, MalaysiaDreams renders only the lock surfaces and feeds input
 //! only to them: normal clients stop receiving frames and keyboard focus. The
 //! shell panels and the windows are hidden (ADR 0023, the "lock stays locked"
 //! failure case).

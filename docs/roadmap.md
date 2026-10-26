@@ -7,7 +7,7 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 
 ## Bloque 0 — Andamiaje
 
-- Workspace de Cargo con `yuki` y `yuki-design` (vacío)
+- Workspace de Cargo con `malaysia-compositor` y `vow-design` (vacío)
 - Smithay anclado a un `rev` fijo, con las features: `backend_winit`, `renderer_gl`,
   `wayland_frontend`, `desktop`
 - `tracing` + `tracing-subscriber` con filtrado basado en variables de entorno
@@ -55,7 +55,7 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
 ## Bloque 5 — Popups
 
 - `XdgShellHandler::new_popup` y `PopupSurface` (`wayland_frontend`)
-- Un árbol de popups propiedad de `yuki-scene`; el `desktop::PopupManager` de
+- Un árbol de popups propiedad de `malaysia-scene`; el `desktop::PopupManager` de
   Smithay está detrás de la feature `desktop`, que el ADR 0015 mantiene desactivada
 - Posicionamiento contra el rectángulo decorado del padre desde ese árbol
 - Ajustes de restricciones (flip, slide, resize) contra el área utilizable del
@@ -97,7 +97,7 @@ hecho cada bloque, incluyendo cualquier divergencia deliberada con respecto al r
   componentes de texto (≈ 19 MB USS + 22 MiB GPU) es borderline pero no
   "claramente mayor" que el umbral pactado; el lock bloquea por EGL y matar su
   cliente no desbloquea la sesión.
-- Aceptación: wezterm y Firefox acelerados dentro de Yuki anidado (más vkcube y
+- Aceptación: wezterm y Firefox acelerados dentro de MalaysiaDreams anidado (más vkcube y
   mpv); la shell sin copias por CPU. Ver `bloques/07-linux-dmabuf-y-explicit-sync.md`
   y los ADR 0026/0027.
 
@@ -126,7 +126,7 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 ## Bloque 9 — Escala fraccional
 
 - **Hecho:** `State::scale` (`output::Scale`), `display.scale` persistente en
-  `display.domain` (`YUKI_SCALE` queda como override de desarrollo), `wl_output`
+  `display.domain` (`MALAYSIA_SCALE` queda como override de desarrollo), `wl_output`
   entero + `wp_fractional_scale_v1` exacto, escala en `logical_output_size`,
   render, damage tracker, cursor y viewporter de la shell, y el redondeo
   floor/ceil de rectángulos lógicos (ADR 0004). Ver
@@ -138,7 +138,7 @@ Se divide en tres entregas. 8a es la única con código en este árbol.
 
 ## Bloque 10 — Lock con autenticación
 
-- Implementado: PAM en el proceso del lock (`yuki-lock`, fallback `login`),
+- Implementado: PAM en el proceso del lock (`malaysia-lock`, fallback `login`),
   campo enmascarado + estados, auto-lock por `ext-idle-notify-v1`,
   `zwp_idle_inhibit_manager_v1` y recuperación del lock (destruction hook,
   watchdog de arranque y backoff 1/2/4/8/16 s, máximo 5 intentos).
@@ -163,7 +163,7 @@ panel real (el probe existe y `drm-vkms` lo ejecuta con `Vsync` obligatorio).
 - **`wp_cursor_shape_v1` — hecho.** `TabletSeatHandler` completo, 35 formas
   mapeadas al tema Xcursor y restauración del cursor del cliente tras un borde.
 - **Shake to locate — hecho.** El puntero crece con animación suave hasta 3×
-  y encoge en cuanto el ratón se detiene; valores en `yuki-design`.
+  y encoge en cuanto el ratón se detiene; valores en `vow-design`.
 - `xdg-output` ya se anuncia con `OutputManagerState::new_with_xdg_output`;
   no está pendiente.
 - **`zwp_pointer_constraints_v1` + `zwp_relative_pointer_manager_v1` — hechos.**
@@ -191,18 +191,18 @@ panel real (el probe existe y `drm-vkms` lo ejecuta con `Vsync` obligatorio).
 
 Se divide en dos entregas. Depende de la captura del Bloque 11.
 
-- **12a — `xdg-desktop-portal-yuki`.** Backend propio para lo que depende del
+- **12a — `xdg-desktop-portal-malaysia`.** Backend propio para lo que depende del
   compositor (ADR 0031). **Settings hecho**: `org.freedesktop.appearance`
   (dark/light, accent-color, contraste y reduced-motion) desde
   `appearance.domain`, con `SettingChanged`; portal registrado con
-  `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback.
+  `UseIn=Malaysia` y `xdg.portal.config.malaysia` con GTK de fallback.
   - `Screenshot` y `ScreenCast` sobre `ext-image-copy-capture` +
     `ext-image-capture-source` y PipeWire (dmabuf, modificadores, fences).
     Las capturas de ventana se guardan por defecto en el Escritorio del
-    usuario, resuelto con `yuki::xdg::desktop_dir()` desde XDG (nombre
+    usuario, resuelto con `malaysia_compositor::xdg::desktop_dir()` desde XDG (nombre
     localizado, nunca fijo).
   - Diálogos de permiso de la shell y concesiones por app.
-  - `xdg.portal.config.yuki` enruta solo estas interfaces a Yuki; FileChooser,
+  - `xdg.portal.config.malaysia` enruta solo estas interfaces a MalaysiaDreams; FileChooser,
     AppChooser, Print, Notification y Access siguen en `-gtk`.
 - **12b — servicios de escritorio.** Notificaciones
   (`org.freedesktop.Notifications`), agente polkit, keyring/Secret Service y
@@ -228,7 +228,7 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
   minimizar y maximizar; modos de color `neutral`/`accent`/`wallpaper` con
   tinte de la titlebar y semáforos derivados; también se elevan las ventanas al enfocarlas. Ver
   [`arquitectura/ventanas.md`](arquitectura/ventanas.md).
-- **Launcher — hecho (2026-10-23).** `yuki-shell launcher` en la capa Overlay,
+- **Launcher — hecho (2026-10-23).** `malaysia-shell launcher` en la capa Overlay,
   `Super+Space`, foco exclusivo de capa, búsqueda y ranking `.desktop`,
   lanzamiento con token de activación e iconos. Latencia release 121 ms hasta
   la superficie configurada. Ver `bloques/13-chrome-y-launcher.md`.
@@ -250,15 +250,15 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
 [`investigacion/global-menu.md`](investigacion/global-menu.md). Usa
 `org_kde_kwin_appmenu` + `com.canonical.dbusmenu`.
 
-- **14a — Popups en CelestialKit.** Aceptado (2026-10-24, ThinkPad, sesión
+- **14a — Popups en BarrierKit.** Aceptado (2026-10-24, ThinkPad, sesión
   anidada): `xdg_popup` con padre layer-shell en el runner propio, navegación
   con teclado en el ejemplo, cierre al clic fuera y restauración del foco.
-- **14b-1 — Menú «Yuki» de escritorio.** Aceptado (2026-10-24, sesión anidada):
-  títulos **Sistema** y **Yuki/nombre de app**, submenús Ir, Archivo, Edición,
+- **14b-1 — Menú «MalaysiaDreams» de escritorio.** Aceptado (2026-10-24, sesión anidada):
+  títulos **Sistema** y **MalaysiaDreams/nombre de app**, submenús Ir, Archivo, Edición,
   Ventana y Sistema; el menú Ventana usa `zwlr_foreign_toplevel_management_v1`.
 - **14b-2 — Diálogos del sistema.** Suspender, Reiniciar, Apagar, Cerrar sesión.
 - **14c — Menú por aplicación (respaldo).** Implementado (2026-10-25, sesión
-  anidada): reutiliza `yuki-shell/src/desktop.rs` para el nombre y las ventanas
+  anidada): reutiliza `malaysia-shell/src/desktop.rs` para el nombre y las ventanas
   de la app; la barra muestra ❄ · {App} · Ventana · Ayuda con Ocultar/Mostrar
   todo/Salir, Minimizar/Maximizar/Cerrar, los submenús de disposición con
   iconos y el Ayuda con buscador. Maximizar queda pendiente del `State` de wlr
@@ -277,24 +277,24 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
     la barra desde 14d-2. GTK3 queda para `gtk_shell1`/`org.gtk.Menus`; el
     casado por pid del Registrar, pendiente de XWayland. Las dos preferencias
     de Firefox viven en `~/nixdots`, nunca en el repo.
-- **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
+- **14e — Apps de BarrierKit exportan dbusmenu.** Sin atajo privado por
   Infinity.
 - **Después:** `gtk_shell1`/`org.gtk.Menus`, HUD en el launcher y menú de atajos
   por app.
 
-Detalle del menú «Yuki» y de las medidas de Neptunia en
+Detalle del menú «MalaysiaDreams» y de las medidas de Neptunia en
 [`arquitectura/menubar.md`](arquitectura/menubar.md#menú-global-planeado-bloque-14).
 
 ## Transversal — NixOS
 
-- **Hecho:** `nixosModules.default` (`programs.yuki.enable`) instala el
-  paquete, registra la sesión, crea `/etc/pam.d/yuki-lock`, activa
-  `hardware.graphics` y define `yuki-session.target` con un proceso por
+- **Hecho:** `nixosModules.default` (`programs.malaysia.enable`) instala el
+  paquete, registra la sesión, crea `/etc/pam.d/malaysia-lock`, activa
+  `hardware.graphics` y define `malaysia-session.target` con un proceso por
   componente.
-- **Pendiente:** `xdg.portal` con `-gtk` como fallback y el portal de Yuki
+- **Pendiente:** `xdg.portal` con `-gtk` como fallback y el portal de MalaysiaDreams
   cuando exista; `services.graphical-desktop`, `security.polkit`, keyring y
   AT-SPI con `mkDefault`; y una VM NixOS que arranque la sesión y ejecute
-  `yuki-session.target`.
+  `malaysia-session.target`.
 
 ## Después del Bloque 12
 
@@ -324,16 +324,16 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
 - **Smithay — actualizado.** La subida a `023b78b1c5a05ca512767cacc07efca55fae8be4`
   (ADR 0028) está hecha y la aceptación con el backend anidado pasó.
 - **Bloque 0 — hecho, con divergencias.** Los tipos de coordenadas viven en el
-  crate `yuki-scene`, no en el compositor (ADR 0001). Smithay está anclado por
+  crate `malaysia-scene`, no en el compositor (ADR 0001). Smithay está anclado por
   `rev` a `023b78b1c5a05ca512767cacc07efca55fae8be4` con `desktop` desactivado
   (ADR 0009, ADR 0010). El nivel de log se establece con `--log-level`,
-  no con filtrado basado en variables de entorno. `yuki-design` no está vacío.
+  no con filtrado basado en variables de entorno. `vow-design` no está vacío.
 - **Bloque 1 — hecho.** `wayland-info` (el dev shell no tiene `weston-info`) enumera
   todos los globals. Véase `bloques/00-cimientos.md` y el registro a nivel de sesión
   `bloques/01-sesion.md`, que cubre los Bloques 1–3 juntos.
 - **Bloque 2 — hecho, con divergencias.** El mapeo ocurre en el primer commit con
   buffer, no en `ack_configure` (`bloques/01-sesion.md`, Divergencias 1).
-  Los toplevels se rastrean en `crates/yuki/src/window.rs` sin envoltorio de
+  Los toplevels se rastrean en `crates/malaysia-compositor/src/window.rs` sin envoltorio de
   `desktop::Space` (ADR 0009; la elección es ahora una decisión escrita, ADR
   0015). El cliente de aceptación es `foot`, ya que weston no está instalado. Véase
   `bloques/02-ventana-en-pantalla.md`.
@@ -346,7 +346,7 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
 - **Bloque 4 — hecho, con lagunas verificadas a mano.** El movimiento (arrastre de
   la titlebar y `xdg_toplevel.move`), el redimensionado (zonas de borde y `xdg_toplevel.resize`, todos
   los bordes, min/max respetados), cerrar, el apilado, el click-to-focus y los cursores de
-  redimensionado de borde están implementados en `yuki-scene` y en el compositor. Los
+  redimensionado de borde están implementados en `malaysia-scene` y en el compositor. Los
   serials de `xdg_toplevel.move`/`resize` se validan contra la última pulsación del puntero. `./dev.sh block4` ejecuta
   tres tandas de 50 ventanas y comprueba que la escena vuelve a estar vacía (recuento de
   objetos vivos) sin crecimiento de memoria por tanda; `./dev.sh move` ejercita el
@@ -357,7 +357,7 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   política de decoración siempre del lado del servidor (ADRs 0018 y 0019); `./dev.sh
   decoration` verifica la política contra aplicaciones reales.
 - **Bloque 5 — hecho, con divergencias.** Los popups se rastrean en `popup.rs`
-  (árbol de geometría en `yuki-scene`, superficies en el compositor), con
+  (árbol de geometría en `malaysia-scene`, superficies en el compositor), con
   ajuste de restricciones contra el output (`get_unconstrained_geometry`),
   configure antes de mapear, render encima de las ventanas, y cierre por clic
   fuera, Esc y muerte del cliente. Verificado en vivo con `popup_probe`
@@ -384,7 +384,7 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   Ver `bloques/08-direct-session.md`, ADR 0029 y ADR 0030.
 - **Bloque 9 — aceptado.** `State::scale` sustituye el literal global; la escala
   entera y fraccionaria llega a `wl_output`, render, damage tracker, cursor y
-  shell, y `display.scale` es persistente (`YUKI_SCALE` es el override de
+  shell, y `display.scale` es persistente (`MALAYSIA_SCALE` es el override de
   desarrollo). Verificado en anidado a 1.25/1.5/2.0 y aceptado en panel real a
   1.0/1.25/1.5, incluidas capturas y cursor. Falta la escala por salida de 8b.
   Ver `bloques/09-escala-fraccional.md`.
@@ -394,7 +394,7 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   5 intentos, y `Ctrl+Alt+L` para bloquear o relanzar el lock sin desbloquear.
   Aceptado en el panel real el 2026-10-21. Ver `bloques/10-lock.md`.
 - **Integración NixOS — hecha la base.** El flake expone
-  `nixosModules.default` (`programs.yuki.enable`): paquete, sesión, PAM,
+  `nixosModules.default` (`programs.malaysia.enable`): paquete, sesión, PAM,
   `hardware.graphics` y units de la shell. Faltan portal, keyring, AT-SPI,
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
@@ -402,12 +402,12 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
 - **Bloque 14 — 14a, 14b-1, 14c, 14d-2 y 14d-3 en anidado; 14b-2 y 14e
   pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
   `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
-  CelestialKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
-  (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el
+  BarrierKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
+  (menú «MalaysiaDreams» de escritorio en `malaysia-shell menubar`) aceptado en anidado el
   2026-10-24. 14c (menús de la app enfocada) implementado el 2026-10-25; el
   compositor aún no envía `State` ni implementa `set_maximized`.
-- **Ajustes del sistema (`yuki-settings`) — integrado.** Se abre desde el menú
-  ❄ de `yuki-shell menubar`, se empaqueta en Nix con su `.desktop` y se
+- **Ajustes del sistema (`malaysia-settings`) — integrado.** Se abre desde el menú
+  ❄ de `malaysia-shell menubar`, se empaqueta en Nix con su `.desktop` y se
   documenta en los ADR 0041 y 0042. Hoy solo tiene la sección Apariencia; más
   dominios llegarán con el backend D-Bus de configuración (ADR 0021).
 
@@ -426,15 +426,30 @@ con un bloque del roadmap:
 
 Ningún documento ni comentario de este repositorio usa "Bloque N" para algo distinto
 del bloque N de este roadmap.
-## Trabajo fuera de bloque — migración de CelestialKit a Freya
+## Bloque 15 — Rebranding a MalaysiaDreams
+
+- Renombrar crates, paquetes, librerías y binarios a los nombres de Malaysia
+  (`malaysia-compositor`, `malaysia-shell`, `barrier-kit`, etc.).
+- Renombrar identificadores de runtime: D-Bus (`org.malaysia.Compositor1`),
+  variables de entorno (`MALAYSIA_*`), rutas (`~/.config/malaysia`), systemd,
+  PAM, portal y sesión (`MalaysiaDreams` / `Malaysia`).
+- Actualizar Nix: flake, módulo NixOS (`programs.malaysia`), derivación Skia,
+  `dev.sh` y scripts auxiliares.
+- Actualizar documentación viva: README.md, AGENTS.md, docs/README.md,
+  docs/roadmap.md, glosario, docs/malaysia.md y ADR 0043.
+- Aceptación: compila, pasa tests/clippy/fmt, `nix flake check` limpio, y no
+  quedan los nombres anteriores fuera de `docs/decisiones/`, `docs/bloques/`,
+  `docs/investigacion/` y el ADR 0043.
+
+## Trabajo fuera de bloque — migración de BarrierKit a Freya
 
 Derivado del ADR 0034; no es un bloque nuevo ni renumera nada.
 
-- Construir CelestialKit sobre los crates de núcleo de Freya `=0.4.3` y añadir su
+- Construir BarrierKit sobre los crates de núcleo de Freya `=0.4.3` y añadir su
   runner Wayland (layer-shell, ext-session-lock, xdg_toplevel futuro).
 - Compilar Skia para `freya-skia-bindings` 0.98.0 en Nix y guardar versión y
   features contra el árbol de Cargo.
-- Migrar `yuki-shell` componente a componente (wallpaper, menubar, dock, lock) y
+- Migrar `malaysia-shell` componente a componente (wallpaper, menubar, dock, lock) y
   eliminar el camino GLES de la shell.
 - Mantener Grade Animation como módulo del kit sobre `freya-animation`.
 

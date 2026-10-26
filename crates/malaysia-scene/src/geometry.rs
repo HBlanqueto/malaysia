@@ -1,4 +1,4 @@
-//! Coordinate types for the three spaces Yuki works in.
+//! Coordinate types for the three spaces MalaysiaDreams works in.
 //!
 //! These are the scene graph's own types: the compositor uses `smithay::utils`
 //! directly and converts into these at the boundary where it feeds the scene,
@@ -12,7 +12,7 @@
 //! [`PhantomData`] space parameter, and arithmetic is only implemented within
 //! a single space.
 //!
-//! Logical coordinates are `f64`. Yuki is built around spring-driven
+//! Logical coordinates are `f64`. MalaysiaDreams is built around spring-driven
 //! animation, and a spring interpolating over integers visibly steps right at
 //! the end of a motion, where per-frame movement is sub-pixel — exactly where
 //! smoothness matters most. Fractional output scales such as 1.25 also place

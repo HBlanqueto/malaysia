@@ -1,6 +1,6 @@
-# AGENTS.md — Guía para agentes de IA en Yuki
+# AGENTS.md — Guía para agentes de IA en MalaysiaDreams
 
-Yuki es un compositor Wayland en Rust sobre Smithay. Si eres un agente de IA (o un
+MalaysiaDreams es un compositor Wayland en Rust sobre Smithay. Si eres un agente de IA (o un
 humano) trabajando en este repo, **lee esto primero**. La documentación completa
 vive en `docs/` (índice: `docs/README.md`).
 
@@ -14,20 +14,20 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 
 ### Regla de oro: chrome separado, efectos para todos
 
-0. **La shell es nativa: `yuki-shell` (ADR 0025).** Un binario, un proceso por
+0. **La shell es nativa: `malaysia-shell` (ADR 0025).** Un binario, un proceso por
    componente (`wallpaper`, `menubar`, `dock`, `lock`, ...), cada uno un cliente
-   Wayland propio dibujando con `celestial-kit` (ADR 0024). No hay dependencias
+   Wayland propio dibujando con `barrier-kit` (ADR 0024). No hay dependencias
    de shell externas (la anterior, Quickshell, se eliminó con el ADR 0025). La
-   shell se integra en profundidad, leyendo el almacén de Yuki
-   (`appearance.*`, `dock.*`, `menubar.*`, los estados en `~/.local/share/yuki/`)
-   y usando los tokens de `yuki-design`.
+   shell se integra en profundidad, leyendo el almacén de MalaysiaDreams
+   (`appearance.*`, `dock.*`, `menubar.*`, los estados en `~/.local/share/malaysia/`)
+   y usando los tokens de `vow-design`.
 
-1. **GTK/Libadwaita (apps GNOME) → NO reciben la barra de título de Yuki.**
+1. **GTK/Libadwaita (apps GNOME) → NO reciben la barra de título de MalaysiaDreams.**
    Conservan su headerbar y su apariencia nativa (client-side). No les pongas un
    titlebar del compositor ni sus controles.
 
 2. **Qt y las demás apps (Electron, nuevas, terceros) → SÍ reciben el chrome
-   unificado de Yuki** (barra de título + controles del compositor, server-side).
+   unificado de MalaysiaDreams** (barra de título + controles del compositor, server-side).
 
 3. **Los efectos de superficie del compositor se aplican a TODAS las ventanas**,
    sin importar el modo de decoración:
@@ -44,9 +44,9 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
    `otto-surface-style`). El interior de las apps GTK es de la app; lo que rodea a
    la ventana es del compositor.
 
-5. **Todos los valores de diseño viven en `yuki-design`** (ADR 0011): radios,
+5. **Todos los valores de diseño viven en `vow-design`** (ADR 0011): radios,
    sombras, blur, colores, márgenes del inner border. No pongas literales de
-   diseño en `crates/yuki/src`.
+   diseño en `crates/malaysia-compositor/src`.
 
 6. **Preferencias de apariencia**: dark/light y accent se publicarán vía
    `org.freedesktop.appearance` (xdg-desktop-portal), como GNOME. El compositor
@@ -55,13 +55,13 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 7. **El shell propio** (top bar, dock, menús del sistema) usa el mismo lenguaje de
    diseño y los mismos tokens que decoraciones y efectos.
 
-8. **Skia solo en clientes.** La shell y las apps propias (`celestial-kit`,
+8. **Skia solo en clientes.** La shell y las apps propias (`barrier-kit`,
    ADR 0034) pueden usar Skia. El **compositor nunca** usa Skia ni enlaza
-   `freya-*`: sigue con GLES, `grade-graphics` y `cosmic-text`. `celestial-kit`
+   `freya-*`: sigue con GLES, `grade-graphics` y `cosmic-text`. `barrier-kit`
    se construye sobre los crates de núcleo de Freya `=0.4.3` (`freya-core`,
    `freya-components` con `default-features = false`, `freya-animation`,
    `freya-engine`, `torin`, `ragnarok`), **nunca** `freya` ni `freya-winit`, y
-   usa los tokens de `yuki-design`. Grade Animation es un módulo del kit sobre
+   usa los tokens de `vow-design`. Grade Animation es un módulo del kit sobre
    `freya-animation`, con un resorte propio. Infinity es el protocolo privado
    app↔compositor (opcional hasta que el compositor lo implemente). No se usan
    `otto-kit`, `otto-foundations`, `otto-dbus`, `otto-surface-style` ni
@@ -78,33 +78,33 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   **0020** (política de diseño), **0021** (superficie de configuración),
   **0023** (los componentes del shell corren como procesos separados, uno por
   cliente Wayland; ver `docs/arquitectura/modelo-de-procesos.md`), **0024**
-  (stack de render del toolkit), **0025** (la shell es nativa, `yuki-shell`) y
-  **0033** (Skia en clientes, reemplazado por **0034**: CelestialKit sobre
+  (stack de render del toolkit), **0025** (la shell es nativa, `malaysia-shell`) y
+  **0033** (Skia en clientes, reemplazado por **0034**: BarrierKit sobre
   Freya).
   La 0019 documenta cómo negocian GTK3/GTK4/Qt. Índice y decisiones abiertas:
   `docs/decisiones/README.md`.
 - **Configuración**: `docs/configuracion/opciones.md` — **catálogo canónico de
   opciones**, con **nombres y valores idénticos a macOS** (`appearance`, `window`,
   `dock.autohide`, `mineffect`...). **Como macOS, un archivo por dominio** con
-  extensión **`.domain`** (el formato propio de Yuki, como `.plist` en macOS):
-  preferencias en `~/.config/yuki/` (`~/Library/Preferences`), estado/`wallpaper`
-  en `~/.local/share/yuki/` (`~/Library/Application Support`). Override con
-  `YUKI_CONFIG_DIR`/`YUKI_DATA_DIR`. Las opciones viven tipadas en
-  `crates/yuki/src/config.rs`; si añades/cambias una, actualiza AMBOS sitios. La
+  extensión **`.domain`** (el formato propio de MalaysiaDreams, como `.plist` en macOS):
+  preferencias en `~/.config/malaysia/` (`~/Library/Preferences`), estado/`wallpaper`
+  en `~/.local/share/malaysia/` (`~/Library/Application Support`). Override con
+  `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. Las opciones viven tipadas en
+  `crates/malaysia-compositor/src/config.rs`; si añades/cambias una, actualiza AMBOS sitios. La
   futura app de ajustes y el comando **`domain`** (sintaxis de `defaults`:
   `read`/`write`/`delete`/`find`; "domain" solo es una referencia a *Jujutsu
-  Kaisen*) hablarán por D-Bus (`org.yuki.Compositor1`) — ADR 0021. **Wallpaper**:
-  el dominio `wallpaper.domain` (en `.local/share/yuki/`) lleva el catálogo y la
+  Kaisen*) hablarán por D-Bus (`org.malaysia.Compositor1`) — ADR 0021. **Wallpaper**:
+  el dominio `wallpaper.domain` (en `.local/share/malaysia-compositor/`) lleva el catálogo y la
   selección actual en `[desktops]`, como `com.apple.wallpaper`; lo dibuja el
-  componente nativo **`yuki-shell wallpaper`** (ADR 0023/0024, render GLES de
-  `celestial-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
+  componente nativo **`malaysia-shell wallpaper`** (ADR 0023/0024, render GLES de
+  `barrier-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
 - **Investigación**: `docs/investigacion/` — cómo renderiza macOS y comparación
   con Wayland (contexto de diseño).
 - **Interfaz**: `docs/arquitectura/interfaz.md` reúne todo lo visual (Neptunia,
   capas, shell, ventanas, capturas, cursor y opciones). Léelo antes de tocar UI.
-- **Arquitectura**: `docs/arquitectura/yuki-y-shell.md` (+ `yuki-y-shell.svg`)
-  — **quién decide cada cosa entre Yuki (compositor) y la shell (`yuki-shell`)**:
-  la shell dibuja el contenido, Yuki coloca/compone/regula. Léelo antes de tocar
+- **Arquitectura**: `docs/arquitectura/malaysia-y-shell.md` (+ `malaysia-y-shell.svg`)
+  — **quién decide cada cosa entre MalaysiaDreams (compositor) y la shell (`malaysia-shell`)**:
+  la shell dibuja el contenido, MalaysiaDreams coloca/compone/regula. Léelo antes de tocar
   la integración de la shell. Componentes: `wallpaper.md`, `menubar.md`,
   `dock.md`, `lock.md`, `capturas.md` (capturas: capacidad del compositor, no
   proceso de shell), `ventanas.md` (titlebar Neptunia) e
@@ -116,7 +116,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   feedback), **7b** (explicit sync + sync implícito, release diferido por
   fence) y **7c** (la shell presenta por EGL, un solo camino, sin `wl_shm`)
   (`docs/bloques/07-linux-dmabuf-y-explicit-sync.md`). Ya corren wezterm,
-  Firefox, vkcube (Vulkan) y mpv (gpu-next) acelerados dentro de Yuki anidado.
+  Firefox, vkcube (Vulkan) y mpv (gpu-next) acelerados dentro de MalaysiaDreams anidado.
   Los ADR 0026 (dmabuf + explicit sync) y 0027 (shell por EGL) fijan el diseño.
   **7.1 hecho**: el texto de la shell arreglado (`shape_until_scroll` +
   formato Alpha de swash), daño real medido, y **captura de depuración por
@@ -133,13 +133,13 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   bindear (`ext-foreign-toplevel-list` y `zwlr`). Probes nuevos `popup_live` y
   `decor_live` (sctk-probe). Nota: la captura re-renderiza offscreen, así que
   no detecta bugs de daño parcial en pantalla.
-- **Shell sobre Freya (ADR 0034, 2026-10-22):** `yuki-shell` dibuja con
-  CelestialKit sobre los crates de núcleo de Freya 0.4.3 y su runner Wayland
+- **Shell sobre Freya (ADR 0034, 2026-10-22):** `malaysia-shell` dibuja con
+  BarrierKit sobre los crates de núcleo de Freya 0.4.3 y su runner Wayland
   propio (SCTK + calloop + EGL); el camino GLES/`cosmic-text` de la shell se
   eliminó. Nix precompila Skia para `freya-skia-bindings` 0.98.0.
-- Shell: componentes nativos `yuki-shell wallpaper`, `menubar`, `dock` y `lock`
+- Shell: componentes nativos `malaysia-shell wallpaper`, `menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
-  `~/.local/share/yuki/window.domain`, sirve `ext-foreign-toplevel-list-v1` +
+  `~/.local/share/malaysia/window.domain`, sirve `ext-foreign-toplevel-list-v1` +
   `zwlr_foreign_toplevel_management_v1` (dock), `ext-session-lock-v1` (lock,
   con la garantía de no desbloquear si el cliente muere) y `zwp_linux_dmabuf_v1`
   v5 (7a).
@@ -161,12 +161,12 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 - **Bloque 13 adelantado:** titlebar Neptunia con botones (cerrar, minimizar,
   maximizar), menubar/dock en paleta clara; el launcher es lo siguiente. Los
   portales quedan después.
-- **Bloque 12a empezado:** backend `xdg-desktop-portal-yuki` con `Settings`
+- **Bloque 12a empezado:** backend `xdg-desktop-portal-malaysia` con `Settings`
   (`org.freedesktop.appearance` desde `appearance.domain`, `SettingChanged`,
-  `UseIn=Yuki` y `xdg.portal.config.yuki` con GTK de fallback). Siguen
+  `UseIn=Malaysia` y `xdg.portal.config.malaysia` con GTK de fallback). Siguen
   `Screenshot`/`ScreenCast` y el Bloque 12b (notificaciones, polkit, keyring,
   AT-SPI). Ver `docs/bloques/12-portales-y-servicios.md`.
-- **Diseño:** **Neptunia** vive en `crates/yuki-design/neptunia/`
+- **Diseño:** **Neptunia** vive en `crates/vow-design/neptunia/`
   (`tokens.json` + `components.json`) y es la fuente por defecto del escritorio
   (ADR 0032): titlebar **arriba** de 32 px para ventanas SSD, semáforos de 12,
   radio 16, tema claro, y modos de color `neutral`/`accent`/`wallpaper` (tinte
@@ -180,7 +180,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
 ## Cómo compilar y probar
 
 ```sh
-nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
+nix develop            # el dev shell es obligatorio (marca MALAYSIA_DEV_SHELL)
 ./dev.sh check         # fmt + clippy + tests
 ./dev.sh run           # lanza el compositor anidado
 ./dev.sh demo          # sesión anidada con wallpaper, menubar, dock y ventanas
@@ -191,9 +191,9 @@ nix develop            # el dev shell es obligatorio (marca YUKI_DEV_SHELL)
 
 No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).
 
-En NixOS, el flake expone `nixosModules.default` (`programs.yuki.enable = true`):
-instala el paquete, registra la sesión, crea `/etc/pam.d/yuki-lock` y arranca
-`yuki-session.target` con los componentes de la shell.
+En NixOS, el flake expone `nixosModules.default` (`programs.malaysia.enable = true`):
+instala el paquete, registra la sesión, crea `/etc/pam.d/malaysia-lock` y arranca
+`malaysia-session.target` con los componentes de la shell.
 
 ## Convenciones de commits
 
@@ -203,16 +203,16 @@ El tipo va delante y el ámbito entre paréntesis: `fix(kit): …`,
 
 ## Regla de entorno (permanente)
 
-Nunca borres ni modifiques nada fuera del repo y de `$XDG_RUNTIME_DIR/yuki`:
+Nunca borres ni modifiques nada fuera del repo y de `$XDG_RUNTIME_DIR/malaysia`:
 ni sockets de Wayland del host, ni ficheros de la sesión, ni servicios. En
 concreto:
 
-- **Sockets**: solo los de Yuki (`wayland-N` servidos por el binario `yuki`),
+- **Sockets**: solo los de MalaysiaDreams (`wayland-N` servidos por el binario `malaysia-compositor`),
   y solo por nombre exacto. Nunca borres `wayland-0` del host ni cualquier
-  otro socket que no haya creado Yuki.
+  otro socket que no haya creado MalaysiaDreams.
 - **Servicios del host**: nunca reinicies mutter, gnome-shell, la sesión ni
   ningún proceso ajeno al repo. Si algo del host falla o falta (p. ej. un
   socket de Wayland desaparece), **detente y repórtalo**; no intentes
   recuperarlo tú.
 - **Ficheros**: solo se escriben capturas y volcados dentro de
-  `$XDG_RUNTIME_DIR/yuki` y de `/tmp` para diagnósticos del propio repo.
+  `$XDG_RUNTIME_DIR/malaysia` y de `/tmp` para diagnósticos del propio repo.

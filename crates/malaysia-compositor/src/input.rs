@@ -748,7 +748,7 @@ impl State {
                     // focused client must not see Ctrl+Alt+F*,
                     // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
                     // Backspace is blocked outright; the way out is a
-                    // VT switch and killing Yuki from another TTY.
+                    // VT switch and killing MalaysiaDreams from another TTY.
                     match compositor_shortcut(
                         mods.ctrl,
                         mods.alt,
@@ -1098,7 +1098,7 @@ impl State {
             || self.windows.zoom_supported(id)
     }
 
-    /// Maximizes or restores a window from Yuki's titlebar.
+    /// Maximizes or restores a window from MalaysiaDreams's titlebar.
     #[track_caller]
     pub(crate) fn toggle_maximize(&mut self, id: WindowId) {
         let location = std::panic::Location::caller();
@@ -1842,7 +1842,7 @@ impl State {
         self.pointer_motion(location, time);
         // The compositor's own press logic runs before the protocol event, as in
         // `process_input_event`: click-to-focus, and a move grab when the press
-        // lands on Yuki's decoration rather than the client's surface.
+        // lands on MalaysiaDreams's decoration rather than the client's surface.
         self.pointer_press(BUTTON_LEFT, location, time);
         let Some(pointer) = self.seat.get_pointer() else {
             return;

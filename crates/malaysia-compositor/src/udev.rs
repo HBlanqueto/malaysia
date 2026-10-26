@@ -81,7 +81,7 @@ pub struct DrmOptions {
     pub no_input: bool,
 }
 
-/// Runs Yuki on the primary DRM device, or on a development `--drm-device`.
+/// Runs MalaysiaDreams on the primary DRM device, or on a development `--drm-device`.
 ///
 /// No fallback: the caller asked for `--drm`, so a missing seat, GPU or eDP
 /// connector is a startup error, not a silent switch to winit. With a device
@@ -439,7 +439,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
 }
 
 /// Starts the shell target after the socket exists. The target's units read
-/// `WAYLAND_DISPLAY` from the user manager, not from Yuki's process.
+/// `WAYLAND_DISPLAY` from the user manager, not from MalaysiaDreams's process.
 fn start_shell_session(socket: &str) -> bool {
     let import = systemctl(
         &[

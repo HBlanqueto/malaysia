@@ -1,4 +1,4 @@
-//! Popup menu example: a layer-shell top bar that opens the Yuki menu.
+//! Popup menu example: a layer-shell top bar that opens the MalaysiaDreams menu.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -118,7 +118,7 @@ impl App for Demo {
         let title_pad = 8.0;
         let bar_pad = 12.0;
         let malaysia_x = bar_pad;
-        let ir_x = malaysia_x + measure_text("Yuki", 13.0) + title_pad * 2.0;
+        let ir_x = malaysia_x + measure_text("MalaysiaDreams", 13.0) + title_pad * 2.0;
         let editar_x = ir_x + measure_text("Ir", 13.0) + title_pad * 2.0;
 
         let open_label: OpenLabel = Rc::new(RefCell::new(use_state(|| None::<&'static str>)));
@@ -156,14 +156,14 @@ impl App for Demo {
         let left = rect()
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start)
-            .child(menu_label("Yuki", open_label.clone(), palette, {
+            .child(menu_label("MalaysiaDreams", open_label.clone(), palette, {
                 let root_id = root_id.clone();
                 let open_label = open_label.clone();
                 move || {
                     toggle_menu(
                         &root_id,
                         open_label.clone(),
-                        "Yuki",
+                        "MalaysiaDreams",
                         malaysia_menu(palette),
                         palette,
                         malaysia_x as i32,

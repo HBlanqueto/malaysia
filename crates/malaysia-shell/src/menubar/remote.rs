@@ -307,7 +307,7 @@ mod tests {
                     MenuItem::SearchField {
                         placeholder: "Buscar".to_string(),
                     },
-                    action("Documentación de Yuki"),
+                    action("Documentación de MalaysiaDreams"),
                 ]
             }),
         }

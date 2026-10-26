@@ -5,7 +5,7 @@
 Las capturas son una capacidad del escritorio al mismo nivel que el
 [wallpaper](wallpaper.md), la [menubar](menubar.md) o el [dock](dock.md), pero
 **no son un proceso de la shell**: las hace el compositor. La shell no
-participa; Yuki compone la escena, la vuelve a renderizar offscreen y guarda el
+participa; MalaysiaDreams compone la escena, la vuelve a renderizar offscreen y guarda el
 PNG. Es el equivalente a la app **Captura** de macOS y a
 `com.apple.screencapture`, con los atajos de macOS.
 
@@ -45,13 +45,13 @@ save_screenshot (session.rs)
 
 - **Selección**: el exterior se atenúa y la región lleva un borde blanco de
   1 px lógico. En modo ventana se resalta el rectángulo exterior de la ventana
-  bajo el puntero. Los valores viven en `yuki-design`.
+  bajo el puntero. Los valores viven en `vow-design`.
 - **Región**: se normaliza (arrastrar hacia atrás) y se recorta al tamaño de la
   salida. Un arrastre de tamaño cero no captura: se puede reintentar o cancelar.
 - **Render**: salida y región re-renderizan la escena completa en offscreen con
   el `Transform` del backend y la escala de la salida (no leen el framebuffer
   presentado). Ventana renderiza solo la superficie del cliente.
-- **Guardado**: con `target = "desktop"` (default), `yuki::xdg::desktop_dir()`
+- **Guardado**: con `target = "desktop"` (default), `malaysia_compositor::xdg::desktop_dir()`
   resuelve el Escritorio desde XDG user-dirs (nombre localizado: Escritorio,
   Desktop, Schreibtisch…), nunca un literal. El nombre es
   `Screenshot AAAA-MM-DD at HH.MM.SS.png`, con ` (2)`, ` (3)`… si coincide en
@@ -65,7 +65,7 @@ save_screenshot (session.rs)
 
 ## Configuración
 
-Dominio propio, como macOS: `~/.config/yuki/screenshot.domain`. El catálogo
+Dominio propio, como macOS: `~/.config/malaysia/screenshot.domain`. El catálogo
 canónico (tipos, valores y estado de cada opción) está en
 [`../configuracion/opciones.md`](../configuracion/opciones.md#screenshot--capturas-app-captura-macos-comapplescreencapture).
 
@@ -92,12 +92,12 @@ distingue Escritorio de portapapeles; el resto de destinos cae al Escritorio.
 
 | Pieza | Archivo |
 |---|---|
-| Atajos, interceptación de teclado/puntero | `crates/yuki/src/input.rs` |
-| `ScreenshotMode`, `ScreenshotRequest`, rect de región | `crates/yuki/src/state.rs` |
-| Overlay, `save_screenshot`, captura de ventana/salida | `crates/yuki/src/session.rs` |
-| Render offscreen, recorte, PNG, nombre y destino | `crates/yuki/src/capture.rs` |
-| Escritorio XDG localizado | `crates/yuki/src/xdg.rs` |
-| Opciones `screenshot.*` | `crates/yuki/src/config.rs` |
+| Atajos, interceptación de teclado/puntero | `crates/malaysia-compositor/src/input.rs` |
+| `ScreenshotMode`, `ScreenshotRequest`, rect de región | `crates/malaysia-compositor/src/state.rs` |
+| Overlay, `save_screenshot`, captura de ventana/salida | `crates/malaysia-compositor/src/session.rs` |
+| Render offscreen, recorte, PNG, nombre y destino | `crates/malaysia-compositor/src/capture.rs` |
+| Escritorio XDG localizado | `crates/malaysia-compositor/src/xdg.rs` |
+| Opciones `screenshot.*` | `crates/malaysia-compositor/src/config.rs` |
 | Captura por protocolo (`ext-image-copy-capture-v1`) | `handlers.rs` + `capture.rs` |
 
 ## Capturas por protocolo
@@ -124,22 +124,22 @@ ficheros ni pasa por `screenshot.domain`. La integración con el portal
   tiene un cliente de prueba (los probes usan SHM).
 - HDR/HEIF/PDF no se escriben.
 - El volcado de depuración por `SIGUSR1` es otra cosa: escribe en
-  `$XDG_RUNTIME_DIR/yuki`, no en el Escritorio, y no es la vía de usuario.
+  `$XDG_RUNTIME_DIR/malaysia`, no en el Escritorio, y no es la vía de usuario.
 
 ## Verificación
 
 ```sh
 ./dev.sh demo                                  # sesión anidada con shell y ventanas
-YUKI_TEST_SCREENSHOT=1 ./dev.sh smoke          # captura la ventana enfocada
-YUKI_TEST_SCREENSHOT=region ./dev.sh smoke     # captura un rectángulo fijo (100,100 300x200)
-YUKI_SCREENSHOT_DIR=/tmp/shots ./dev.sh smoke  # redirige el guardado
+MALAYSIA_TEST_SCREENSHOT=1 ./dev.sh smoke          # captura la ventana enfocada
+MALAYSIA_TEST_SCREENSHOT=region ./dev.sh smoke     # captura un rectángulo fijo (100,100 300x200)
+MALAYSIA_SCREENSHOT_DIR=/tmp/shots ./dev.sh smoke  # redirige el guardado
 # target = "clipboard" en screenshot.domain; luego, dentro de la sesión:
 WAYLAND_DISPLAY=wayland-N wl-paste --type image/png > /tmp/clip.png
 ```
 
-`YUKI_TEST_SCREENSHOT=region` con `YUKI_TEST_INPUT=1` y `YUKI_TEST_PRESS_AT`
+`MALAYSIA_TEST_SCREENSHOT=region` con `MALAYSIA_TEST_INPUT=1` y `MALAYSIA_TEST_PRESS_AT`
 permite poner el puntero dentro del rectángulo y comparar las capturas con
 `show_pointer = false` y `true`. Con `target = "clipboard"` no aparece ningún
 fichero en el destino y `wl-paste --list-types` muestra `image/png`. La verificación del look del cursor ampliado
-usa `YUKI_TEST_CURSOR_BOOST=3`. El histórico de la implementación y sus pruebas
+usa `MALAYSIA_TEST_CURSOR_BOOST=3`. El histórico de la implementación y sus pruebas
 está en [`../bloques/11-protocolos-de-uso-diario.md`](../bloques/11-protocolos-de-uso-diario.md).

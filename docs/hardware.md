@@ -1,14 +1,14 @@
 # Hardware y línea base gráfica
 
-Esto registra la máquina donde tuvo lugar el primer contacto con la GPU de Yuki y
+Esto registra la máquina donde tuvo lugar el primer contacto con la GPU de MalaysiaDreams y
 el stack gráfico tal y como se reportó a sí mismo. Es un punto de referencia, no un
 requisito: nada de lo que hay aquí se promete que siga siendo cierto.
 
 ## Por qué existe
 
-La sesión anidada ejecuta Yuki anidado sobre el backend winit, que deja que el
+La sesión anidada ejecuta MalaysiaDreams anidado sobre el backend winit, que deja que el
 stack EGL/GLES2 de la sesión anfitriona maneje la ventana. El hito Direct Session
-pasa al backend udev/DRM, donde Yuki es dueño del dispositivo directamente y la
+pasa al backend udev/DRM, donde MalaysiaDreams es dueño del dispositivo directamente y la
 plataforma EGL cambia de `PLATFORM_WAYLAND_KHR` a una superficie GBM/DRM. Cuando algo
 se comporte distinto allí, este archivo es el punto conocido-bueno con el que
 comparar: la misma GPU, el mismo Mesa, el mismo kernel, y la cadena del renderer

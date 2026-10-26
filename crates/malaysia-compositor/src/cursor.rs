@@ -37,7 +37,7 @@ use xcursor::parser::{Image, parse_xcursor};
 
 /// The compositor-drawn cursors, one per shape the compositor uses itself.
 ///
-/// Client cursor surfaces do not pass through here; this is only what Yuki
+/// Client cursor surfaces do not pass through here; this is only what MalaysiaDreams
 /// draws when no client has set a cursor, including the resize shapes it shows
 /// over its own edge zones.
 pub struct Cursors {

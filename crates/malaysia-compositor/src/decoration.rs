@@ -1,6 +1,6 @@
-//! How much room Yuki reserves around a client's surface.
+//! How much room MalaysiaDreams reserves around a client's surface.
 //!
-//! A client draws its own content; Yuki may draw a titlebar and other chrome
+//! A client draws its own content; MalaysiaDreams may draw a titlebar and other chrome
 //! around it. [`Insets`] is the space that chrome takes from each edge, in
 //! logical pixels, and it answers exactly one question: given this window, in
 //! this state, what insets? [`Insets::for_window`] is the one place that
@@ -62,7 +62,7 @@ impl Insets {
         self.top + self.bottom
     }
 
-    /// The insets for a window, with `titlebar` describing Yuki's chrome.
+    /// The insets for a window, with `titlebar` describing MalaysiaDreams's chrome.
     ///
     /// This is the single place the decision is resolved. In order: a popup or
     /// a dialog (a toplevel with a parent) is never decorated; a fullscreen

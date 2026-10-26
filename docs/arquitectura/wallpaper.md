@@ -1,14 +1,14 @@
-# El wallpaper (`yuki-shell wallpaper`)
+# El wallpaper (`malaysia-shell wallpaper`)
 
 El primer componente nativo del shell (ADR 0023/0034): un proceso Rust que dibuja
 la imagen de escritorio en la capa `Background`, como macOS. Es parte de la shell
-nativa (`yuki-shell`, ADR 0025).
+nativa (`malaysia-shell`, ADR 0025).
 
 ## Cómo funciona
 
 ```
-wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit)
-   (~/.local/share/yuki)                       │
+wallpaper.domain ──► decodificar PNG/JPEG ──► textura (barrier-kit)
+   (~/.local/share/malaysia)                       │
                                               GLES
                                               (render "fill", cubrir)
                                                │  eglSwapBuffers
@@ -16,13 +16,13 @@ wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit
                                         wl_egl_window (Mesa: dmabuf)
                                                │  attach + commit
                                                ▼
-                                    capa Background de Yuki (compositor)
+                                    capa Background de MalaysiaDreams (compositor)
 ```
 
-1. **`celestial-kit`** (el toolkit, ≈ AppKit) abre su propio contexto
+1. **`barrier-kit`** (el toolkit, ≈ AppKit) abre su propio contexto
    EGL/GLES sobre el `wl_display` del compositor y dibuja la textura con la
    escala "fill" de macOS (cubrir, recortando el exceso).
-2. **`yuki-shell wallpaper`** (el proceso del componente) es un cliente
+2. **`malaysia-shell wallpaper`** (el proceso del componente) es un cliente
    `wlr-layer-shell`: superficie en la capa `Background`, anclada a todo el
    output, con `wp_fractional_scale_v1` + `wp_viewporter` para HiDPI.
 3. El frame se presenta por **EGL** sobre un `wl_egl_window` (Bloque 7c,
@@ -30,24 +30,24 @@ wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit
    directo — sin readback, sin copias por CPU, sin `wl_shm`.
 4. El componente **vigila `wallpaper.domain`** (cada 500 ms) y repinta al
    cambiar — como macOS, la selección actual vive en `~/Library/Application
-   Support` (`~/.local/share/yuki/`). Al cambiar de fondo calcula su color
+   Support` (`~/.local/share/malaysia/`). Al cambiar de fondo calcula su color
    dominante y lo escribe en `wallpaper.state` (`dominant = [r, g, b]`) para
    el compositor y el portal; el compositor ya no decodifica imágenes.
 
 ## Crates y ficheros
 
-- `crates/celestial-kit/src/gl.rs` — el render GLES (EGL, quad, presentación a
+- `crates/barrier-kit/src/gl.rs` — el render GLES (EGL, quad, presentación a
   una EGL window surface).
-- `crates/yuki-shell/src/main.rs` — subcomandos: `yuki-shell wallpaper`.
-- `crates/yuki-shell/src/wallpaper.rs` — el componente: cliente layer-shell,
+- `crates/malaysia-shell/src/main.rs` — subcomandos: `malaysia-shell wallpaper`.
+- `crates/malaysia-shell/src/wallpaper.rs` — el componente: cliente layer-shell,
   lectura del store, decodificación PNG/JPEG, color dominante y presentación.
-- `crates/yuki-shell/src/present.rs` — `EglPresenter` (el `wl_egl_window`).
+- `crates/malaysia-shell/src/present.rs` — `EglPresenter` (el `wl_egl_window`).
 - `crates/grade-graphics/` — los shaders GLSL compartidos (vacío aún).
 
 ## Supervisión (ADR 0023)
 
-- **Producción**: unidad de usuario `yuki-shell@.service` (template, `%i` =
-  `wallpaper`) + `yuki-session.target`, instaladas por el flake en
+- **Producción**: unidad de usuario `malaysia-shell@.service` (template, `%i` =
+  `wallpaper`) + `malaysia-session.target`, instaladas por el flake en
   `$out/lib/systemd/user`. `Restart=on-failure`, `RestartSec=2`, límite de
   reintentos, logs por componente en el journal.
 - **Desarrollo**: `scripts/test.sh [componente]` lanza el componente a mano
@@ -70,8 +70,8 @@ wallpaper.domain ──► decodificar PNG/JPEG ──► textura (celestial-kit
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
 - ADR 0023 — el modelo de procesos (un proceso por componente).
-- ADR 0034 — el stack de render del toolkit (CelestialKit sobre Freya, Skia en
+- ADR 0034 — el stack de render del toolkit (BarrierKit sobre Freya, Skia en
   los clientes).
 - ADR 0027 — la shell presenta por EGL (Bloque 7c).
 - `modelo-de-procesos.md` — la distribución de procesos resultante.
-- `glossary.md` — celestial-kit / grade-graphics / Grade Animation / Infinity.
+- `glossary.md` — barrier-kit / grade-graphics / Grade Animation / Infinity.

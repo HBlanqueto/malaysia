@@ -1,6 +1,6 @@
 //! Minimal `wlr_layer_shell_v1` support.
 //!
-//! Yuki serves layer-shell for its shell (`malaysia-shell`, ADR 0023). This module
+//! MalaysiaDreams serves layer-shell for its shell (`malaysia-shell`, ADR 0023). This module
 //! tracks the layer surfaces a client creates, computes their geometry from
 //! anchors/margins/size, sends the configures, and exposes them for rendering
 //! and hit-testing.
@@ -18,7 +18,7 @@ use smithay::wayland::shell::wlr_layer::{
     Anchor, ExclusiveZone, KeyboardInteractivity, Layer, LayerSurface, LayerSurfaceCachedState,
 };
 
-/// A layer surface Yuki has placed on the output.
+/// A layer surface MalaysiaDreams has placed on the output.
 #[derive(Debug)]
 pub struct LayerEntry {
     /// The layer surface.

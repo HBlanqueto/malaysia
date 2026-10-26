@@ -587,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn the_default_wallpaper_ships_with_yuki() {
+    fn the_default_wallpaper_ships_with_malaysia() {
         let shipped = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../share/wallpapers/solid-colors")
             .join(vow_design::WALLPAPER);

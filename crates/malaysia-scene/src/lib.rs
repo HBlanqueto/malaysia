@@ -1,4 +1,4 @@
-//! Yuki's scene graph and renderable tree.
+//! MalaysiaDreams's scene graph and renderable tree.
 //!
 //! This crate describes what to draw, independent of how it is drawn. It must
 //! not depend on Smithay: the compositor converts Smithay geometry into the

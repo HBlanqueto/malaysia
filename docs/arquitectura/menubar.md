@@ -1,4 +1,4 @@
-# La menubar (`yuki-shell menubar`)
+# La menubar (`malaysia-shell menubar`)
 
 El segundo componente nativo del shell (ADR 0023/0034): la barra superior,
 como la menu bar de macOS. Primera versión: **nombre de la app activa** a la
@@ -9,21 +9,21 @@ izquierda y **reloj** a la derecha. El menú global por app está planeado
 
 ```
 window.domain ──► app_id de la app activa (el compositor lo publica)
-   (~/.local/share/yuki)                │
+   (~/.local/share/malaysia)                │
                                         ▼
-  frame RGBA: fondo + texto (celestial-kit::text, cosmic-text)
+  frame RGBA: fondo + texto (barrier-kit::text, cosmic-text)
                                         │
                                         ▼
   superficie layer-shell Top, 1280×28, exclusive zone 28
                                         │  eglSwapBuffers (wl_egl_window → dmabuf)
                                         ▼
-                        Yuki (compositor) lo compone sobre las ventanas
+                        MalaysiaDreams (compositor) lo compone sobre las ventanas
 ```
 
 1. **La superficie**: capa **`Top`**, anclada a arriba/izquierda/derecha,
    **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
    debajo de la barra.
-2. **El render** es CPU: `celestial-kit::text` (cosmic-text + swash) compone el
+2. **El render** es CPU: `barrier-kit::text` (cosmic-text + swash) compone el
    texto en un frame RGBA sobre la `ShellPalette` de Neptunia (barra
    translúcida, `#f2f4f7e6` en claro) y la textura se presenta
    por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
@@ -42,8 +42,8 @@ window.domain ──► app_id de la app activa (el compositor lo publica)
 `ext-foreign-toplevel-list-v1` no lleva el estado "activada" (no existe en el
 protocolo), así que la menubar no puede saber qué ventana es la activa por ahí.
 El compositor conoce la ventana enfocada, y la publica en el almacén de estado
-(`crates/yuki/src/active.rs`): al dar foco (`focus_window`) escribe
-`~/.local/share/yuki/window.domain` con el título y el app_id de la ventana; al
+(`crates/malaysia-compositor/src/active.rs`): al dar foco (`focus_window`) escribe
+`~/.local/share/malaysia/window.domain` con el título y el app_id de la ventana; al
 quitarlo, vacío. Es el mecanismo de primera versión; el canal de notificación
 adecuado (D-Bus, ADR 0021) lo reemplazará cuando llegue. `ext-foreign-toplevel-list`
 sigue siendo la vía para la **lista** de ventanas del dock (paso 4).
@@ -58,11 +58,11 @@ título del documento. A partir del `app_id` publicado en `window.domain`:
    `foot` → «Foot», `org.wezfurlong.wezterm` → «WezTerm»;
 2. si no hay `.desktop`, usa el último segmento del app_id con mayúscula
    inicial (`org.example.notes` → «Notes»);
-3. sin app_id ni ventana enfocada, «Yuki».
+3. sin app_id ni ventana enfocada, «MalaysiaDreams».
 
 El nombre va en negrita (`MENUBAR_APP_NAME_WEIGHT`, token
 `components.shell.menubar.app-name.weight`, 700), color `ink-strong` y 13 px.
-La menubar entera usa la pila sans de `yuki-design` (Geist); el reloj queda en
+La menubar entera usa la pila sans de `vow-design` (Geist); el reloj queda en
 el peso normal.
 
 ## La zona exclusiva en el compositor
@@ -103,8 +103,8 @@ el área útil).
 
 ### 14b-1 — Menús de escritorio (implementado)
 
-La barra real integra `celestial_kit::menu::MenuView`. Sin ventana enfocada
-muestra el copo (glifo SVG), «Yuki» en negrita y los títulos **Archivo**,
+La barra real integra `barrier_kit::menu::MenuView`. Sin ventana enfocada
+muestra el copo (glifo SVG), «MalaysiaDreams» en negrita y los títulos **Archivo**,
 **Edición**, **Visualización**, **Ir**, **Ventana** y **Ayuda**, cada uno con su
 propio menú; el reloj va a la derecha. Con una ventana enfocada quedan el copo y
 el nombre de la app en negrita. Falta el teclado en los menús y la aceptación
@@ -123,20 +123,20 @@ app ──org_kde_kwin_appmenu──► compositor ──window.domain──► 
                                                               │
                                               com.canonical.dbusmenu
                                                               ▼
-                                                     popups CelestialKit
+                                                     popups BarrierKit
 ```
 
 El cliente anuncia el servicio y la ruta de su menú por superficie. El
 compositor guarda el par y publica el de la ventana enfocada en `window.domain`.
-La menubar pide el árbol dbusmenu y lo dibuja en popups de CelestialKit.
+La menubar pide el árbol dbusmenu y lo dibuja en popups de BarrierKit.
 
 ### Los cuatro modos
 
-1. **Escritorio** (sin ventana enfocada): menú «Yuki».
+1. **Escritorio** (sin ventana enfocada): menú «MalaysiaDreams».
 2. **Menú real**: la app entrega su menú por dbusmenu.
 3. **Respaldo**: la app no entrega menú; se usan nombre y acciones del
    `.desktop`, los controles reales de la ventana y Salir.
-4. **App propia**: una app de CelestialKit exporta su menú por la misma vía
+4. **App propia**: una app de BarrierKit exporta su menú por la misma vía
    dbusmenu.
 
 ### Menús implementados en 14b-1
@@ -146,7 +146,7 @@ Las carpetas usan `xdg-open` y los `xdg-user-dirs`. Contenido exacto:
 - **❄** (sistema): Acerca de este equipo · Ajustes del sistema… · — · Forzar
   salida… (`⌥❖⎋`) · — · Suspender · Reiniciar… · Apagar… · — · Bloquear
   pantalla · Cerrar sesión…
-- **Yuki**: Acerca de Yuki · — · Ajustes… · — · Vaciar papelera…
+- **MalaysiaDreams**: Acerca de MalaysiaDreams · — · Ajustes… · — · Vaciar papelera…
 - **Archivo**: Nueva ventana (gestor de archivos en `~`) · Nueva carpeta en el
   escritorio · Abrir… · Buscar (abre el launcher)
 - **Edición**: Deshacer · Cortar · Copiar · Pegar · Seleccionar todo
@@ -155,18 +155,18 @@ Las carpetas usan `xdg-open` y los `xdg-user-dirs`. Contenido exacto:
   Imágenes · Música · Vídeos · — · Papelera · — · Ir a la carpeta…
 - **Ventana**: Minimizar todo · Mostrar escritorio · — · lista de ventanas (o
   «No hay ventanas abiertas»)
-- **Ayuda**: Atajos de teclado · Documentación de Yuki
+- **Ayuda**: Atajos de teclado · Documentación de MalaysiaDreams
 
 Habilitados en esta entrega: los de Ir salvo Atrás, Adelante e Ir a la
 carpeta…; Nueva ventana, Nueva carpeta en el escritorio y Buscar; Minimizar
 todo, Mostrar escritorio y la lista de ventanas; Bloquear pantalla; y Ajustes
-del sistema (lanza `yuki-settings`). El resto se ve deshabilitado.
+del sistema (lanza `malaysia-settings`). El resto se ve deshabilitado.
 `zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y activar la lista.
 
 ### Medidas de Neptunia
 
 Menubar 28 px, menús con radio 12, elementos de menú de 24 px con radio 8 y
-texto 13. Se dibujaron como maquetas en el lienzo de diseño «Yuki — Global
+texto 13. Se dibujaron como maquetas en el lienzo de diseño «MalaysiaDreams — Global
 menu».
 
 ### Glifos de atajos (decidido)
@@ -188,7 +188,7 @@ mano. Ejemplos: `Ctrl+Shift+G` → `⌃⇧G`, `Alt+Inicio` → `⌥Inicio`,
 ## Relación
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
-- ADR 0023 (procesos), ADR 0034 (CelestialKit sobre Freya), ADR 0032
+- ADR 0023 (procesos), ADR 0034 (BarrierKit sobre Freya), ADR 0032
   (Neptunia).
 - `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
 - `modelo-de-procesos.md` — la distribución de procesos.

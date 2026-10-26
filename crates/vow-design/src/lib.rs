@@ -1,4 +1,4 @@
-//! Yuki's system defaults: the one place every visual value lives.
+//! MalaysiaDreams's system defaults: the one place every visual value lives.
 //!
 //! These are compile-time constants, not a theme system. There is exactly one
 //! look, in three modes ([`LIGHT`], [`DARK`] and [`DARK_TINT`]); the values are
@@ -706,7 +706,7 @@ pub const SCREENSHOT_BORDER: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 /// The screenshot selection border width, in logical pixels.
 pub const SCREENSHOT_BORDER_WIDTH: i32 = 1;
 
-/// Where the wallpapers Yuki ships are installed, like GNOME's
+/// Where the wallpapers MalaysiaDreams ships are installed, like GNOME's
 /// `/usr/share/backgrounds`. The flake installs `share/wallpapers/` under
 /// `/run/current-system/sw/share/wallpapers`.
 pub const WALLPAPER_DIR: &str = "/run/current-system/sw/share/wallpapers/solid-colors";

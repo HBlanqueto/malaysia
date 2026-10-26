@@ -1,17 +1,17 @@
-# Neptunia en yukiwm: datos, generación y comprobaciones
+# Neptunia en malaysia: datos, generación y comprobaciones
 
-Neptunia es el sistema de diseño del escritorio (ADR 0032). En yukiwm ya no se
+Neptunia es el sistema de diseño del escritorio (ADR 0032). En malaysia ya no se
 lee de `~/dotfiles`: vive **dentro del repo**, en
-`crates/yuki-design/neptunia/`, y `build.rs` convierte sus JSON en las
-constantes Rust de `yuki-design`. Siguen siendo constantes de compilación
-(ADR 0011); lo que cambia es de dónde salen. `yuki-appearance` aplica esas
+`crates/vow-design/neptunia/`, y `build.rs` convierte sus JSON en las
+constantes Rust de `vow-design`. Siguen siendo constantes de compilación
+(ADR 0011); lo que cambia es de dónde salen. `vow-appearance` aplica esas
 constantes a `appearance.domain` y `wallpaper.state` para el compositor, la
 shell y el portal.
 
 ## Fuente de verdad
 
 ```
-crates/yuki-design/neptunia/
+crates/vow-design/neptunia/
 ├── tokens.json        colores por tema, radios, espacios, tamaños, duración,
 │                      tipografía, sombras y acentos
 ├── components.json    medidas y estados de los componentes, shell y ssd-titlebar
@@ -23,7 +23,7 @@ crates/yuki-design/neptunia/
 ```
 
 `SOURCE.md` registra el commit de dotfiles del que se copió la carpeta. **Esta
-copia es la fuente para yukiwm**: los cambios se hacen aquí y, si se quieren,
+copia es la fuente para malaysia**: los cambios se hacen aquí y, si se quieren,
 se devuelven a dotfiles a mano. Ni Cargo ni Nix leen `~/dotfiles` ni otro repo.
 
 `tools/sync-neptunia.sh <ruta>` trae cambios de una copia externa en un solo
@@ -32,24 +32,24 @@ en CI; es una herramienta manual.
 
 ## Generación de constantes
 
-`crates/yuki-design/build.rs`:
+`crates/vow-design/build.rs`:
 
 1. Lee `neptunia/tokens.json` y `neptunia/components.json` con `serde_json`
    (solo `build-dependencies`).
 2. Escribe `$OUT_DIR/neptunia.rs` con paletas, radios, tipografía, sombras,
    semáforos, factores de tinte, medidas de shell y `ssd-titlebar`.
 3. Emite `cargo:rerun-if-changed` para los dos JSON.
-4. Si falta un campo que `yuki-design` necesita, falla indicando el campo y el
+4. Si falta un campo que `vow-design` necesita, falla indicando el campo y el
    archivo.
 
-`crates/yuki-design/src/lib.rs` conserva los tipos (`Rgba`, `Palette`,
+`crates/vow-design/src/lib.rs` conserva los tipos (`Rgba`, `Palette`,
 `Titlebar`, `ShellPalette`, `LockPalette`, …) y la API pública, y termina con:
 
 ```rust
 include!(concat!(env!("OUT_DIR"), "/neptunia.rs"));
 ```
 
-Chrome, la shell y `celestial-kit` siguen leyendo los mismos nombres. Los
+Chrome, la shell y `barrier-kit` siguen leyendo los mismos nombres. Los
 literales que antes estaban copiados a mano ya no viven en `src/`.
 
 ## Valores que manda Neptunia
@@ -81,9 +81,9 @@ literales que antes estaban copiados a mano ya no viven en `src/`.
   `ColorScheme::resolved()`, la misma fuente que publica el portal.
 - `window_tint_scope = "desktop"` mezcla barra y dock con el dominante del
   wallpaper (20 % claro / 26 % oscuro), leyendo `wallpaper.state`.
-- `yuki-shell wallpaper` decodifica PNG/JPEG, calcula el dominante (rejilla
+- `malaysia-shell wallpaper` decodifica PNG/JPEG, calcula el dominante (rejilla
   ~256×256, histograma 4 bits ponderado por croma, grises descartados, HSL
-  45–65 %) y escribe `~/.local/share/yuki/wallpaper.state`
+  45–65 %) y escribe `~/.local/share/malaysia/wallpaper.state`
   (`dominant = [r, g, b]`). El compositor ya no decodifica imágenes: lee ese
   archivo y vigila su mtime junto con `appearance.domain` para reconstruir
   `ChromeTheme` en caliente.
@@ -95,7 +95,7 @@ literales que antes estaban copiados a mano ya no viven en `src/`.
 En `./dev.sh check`:
 
 - `scripts/check-design-tokens.sh`: ningún color o medida de UI fuera de
-  `yuki-design` en `crates/yuki`, `crates/yuki-shell` y `celestial-kit`; se
+  `vow-design` en `crates/malaysia-compositor`, `crates/malaysia-shell` y `barrier-kit`; se
   saltan los módulos de test y se permiten formatos de buffer.
 - `scripts/check-neptunia-generated.sh`: compara `generated/neptunia.slint`,
   `neptunia.css` y `Neptunia.qml` con lo que produce `default.nix`.
@@ -111,18 +111,18 @@ En el flake:
 
 ## Cambiar un valor
 
-1. Edita `crates/yuki-design/neptunia/tokens.json` o `components.json`.
+1. Edita `crates/vow-design/neptunia/tokens.json` o `components.json`.
 2. Regenera las salidas si hace falta:
 
    ```sh
-   cd crates/yuki-design/neptunia
+   cd crates/vow-design/neptunia
    nix eval --raw -f . slint > generated/neptunia.slint
    nix eval --raw -f . css   > generated/neptunia.css
    nix eval --raw -f . qml   > generated/Neptunia.qml
    ```
 
 3. Ejecuta `./dev.sh check` (y, si toca, `nix build .#checks…`).
-4. No edites `crates/yuki-design/src/` para cambiar un valor.
+4. No edites `crates/vow-design/src/` para cambiar un valor.
 
 ## Relación
 
@@ -131,4 +131,4 @@ En el flake:
 - [`wallpaper.md`](wallpaper.md) — el componente del fondo y su estado.
 - ADR 0011 — los valores son constantes Rust.
 - ADR 0032 — Neptunia como fuente de diseño.
-- `crates/yuki-design/neptunia/README.md` — catálogo y uso por proyecto.
+- `crates/vow-design/neptunia/README.md` — catálogo y uso por proyecto.
