@@ -262,10 +262,42 @@ pub struct SettingsMetrics {
     pub window_height: u32,
     /// Minimum settings window height, in logical pixels.
     pub window_min_height: u32,
+    /// Search field height, in logical pixels.
+    pub search_height: u32,
+    /// Horizontal padding inside the search field, in logical pixels.
+    pub search_padding_x: u32,
+    /// Search icon size, in logical pixels.
+    pub search_icon: u32,
+    /// Account avatar size, in logical pixels.
+    pub account_avatar: u32,
+    /// Gap between the avatar and the account text, in logical pixels.
+    pub account_gap: u32,
+    /// Font for the account name.
+    pub account_name_font: Font,
+    /// Font for the account detail line.
+    pub account_detail_font: Font,
+    /// Gap between the account row and the first section, in logical pixels.
+    pub section_gap: u32,
+    /// Background colour of the Appearance section icon.
+    pub section_icon_bg: Rgba,
+    /// Group container corner radius, in logical pixels.
+    pub group_radius: u32,
+    /// Minimum height of a grouped row, in logical pixels.
+    pub group_row_min_height: u32,
+    /// Horizontal padding of a grouped row, in logical pixels.
+    pub group_row_padding_x: u32,
+    /// Vertical padding of a grouped row, in logical pixels.
+    pub group_row_padding_y: u32,
+    /// Top margin of a group title, in logical pixels.
+    pub group_title_margin_top: u32,
+    /// Horizontal padding inside a group container, in logical pixels.
+    pub group_content_padding_x: u32,
     /// Accent color swatch size, in logical pixels.
     pub swatch_size: u32,
     /// Gap between accent color swatches, in logical pixels.
     pub swatch_gap: u32,
+    /// Font used for swatch labels.
+    pub swatch_name_font: Font,
     /// Accent preview card width, in logical pixels.
     pub card_width: u32,
     /// Accent preview card height, in logical pixels.
@@ -278,6 +310,44 @@ pub struct SettingsMetrics {
     pub card_ring: u32,
     /// Gap between the ring and the card it surrounds, in logical pixels.
     pub card_ring_gap: u32,
+    /// Gap between a card preview and its caption, in logical pixels.
+    pub card_caption_gap: u32,
+    /// Font used for card captions.
+    pub card_caption_font: Font,
+    /// X offset of the theme preview window inside its card.
+    pub preview_window_x: u32,
+    /// Y offset of the theme preview window inside its card.
+    pub preview_window_y: u32,
+    /// Corner radius of the theme preview window.
+    pub preview_window_radius: u32,
+    /// Width of the accent bar in the theme preview.
+    pub preview_bar_w: u32,
+    /// Height of the accent bar in the theme preview.
+    pub preview_bar_h: u32,
+    /// Inset of the accent bar in the theme preview.
+    pub preview_bar_inset: u32,
+    /// Size of each traffic light in the theme preview.
+    pub preview_light: u32,
+    /// Gap between traffic lights in the theme preview.
+    pub preview_light_gap: u32,
+    /// X offset of the window-colour preview window.
+    pub preview_tint_window_x: u32,
+    /// Y offset of the window-colour preview window.
+    pub preview_tint_window_y: u32,
+    /// Width of the tinted side strip in the window-colour preview.
+    pub preview_tint_side_w: u32,
+    /// Radio button outer size, in logical pixels.
+    pub radio_size: u32,
+    /// Radio button inner dot size, in logical pixels.
+    pub radio_dot: u32,
+    /// Gap between a radio button and its label, in logical pixels.
+    pub radio_gap: u32,
+    /// Horizontal spacing between radio buttons, in logical pixels.
+    pub radio_spacing: u32,
+    /// Popup button height, in logical pixels.
+    pub popup_height: u32,
+    /// Popup chevron icon size, in logical pixels.
+    pub popup_chevron: u32,
     /// How much the resolved accent is mixed with the dark sidebar background
     /// for selected rows.
     pub selected_dark_mix: f32,
@@ -409,10 +479,16 @@ pub struct Palette {
     pub title: FocusPair,
     /// Body text, focused and unfocused.
     pub text: FocusPair,
+    /// Strong text colour (`ink-strong`).
+    pub ink_strong: Rgba,
+    /// Separator and outline colour (`line`).
+    pub line: Rgba,
     /// The accent color.
     pub accent: Rgba,
     /// Text or glyphs drawn on top of the accent color.
     pub on_accent: Rgba,
+    /// Danger/error colour.
+    pub danger: Rgba,
     /// The traffic lights when the window does not have focus. Neptunia uses a
     /// different grey per theme, so it belongs to the palette, not the bar.
     pub traffic_lights_inactive: Rgba,
@@ -730,9 +806,52 @@ mod tests {
         assert_eq!(super::SETTINGS.window_width, 760);
         assert_eq!(super::SETTINGS.window_height, 620);
         assert_eq!(super::SETTINGS.window_min_height, 480);
+        assert_eq!(super::SETTINGS.search_height, 30);
+        assert_eq!(super::SETTINGS.search_padding_x, 10);
+        assert_eq!(super::SETTINGS.search_icon, 16);
+        assert_eq!(super::SETTINGS.account_avatar, 36);
+        assert_eq!(super::SETTINGS.account_gap, 10);
+        assert_eq!(super::SETTINGS.account_name_font, super::HEADLINE);
+        assert_eq!(super::SETTINGS.account_detail_font, super::CALLOUT);
+        assert_eq!(super::SETTINGS.section_gap, 14);
+        assert_eq!(
+            super::SETTINGS.section_icon_bg,
+            super::Rgba::rgb8(0x2b, 0x2b, 0x2b)
+        );
+        assert_eq!(super::SETTINGS.group_radius, 16);
+        assert_eq!(super::SETTINGS.group_row_min_height, 44);
+        assert_eq!(super::SETTINGS.group_row_padding_x, 14);
+        assert_eq!(super::SETTINGS.group_row_padding_y, 10);
+        assert_eq!(super::SETTINGS.group_title_margin_top, 16);
+        assert_eq!(super::SETTINGS.group_content_padding_x, 16);
         assert_eq!(super::SETTINGS.swatch_size, 22);
+        assert_eq!(super::SETTINGS.swatch_gap, 9);
+        assert_eq!(super::SETTINGS.swatch_name_font, super::CAPTION);
         assert_eq!(super::SETTINGS.card_width, 70);
+        assert_eq!(super::SETTINGS.card_height, 46);
         assert_eq!(super::SETTINGS.card_radius, 8);
+        assert_eq!(super::SETTINGS.card_gap, 10);
+        assert_eq!(super::SETTINGS.card_ring, 2);
+        assert_eq!(super::SETTINGS.card_ring_gap, 2);
+        assert_eq!(super::SETTINGS.card_caption_gap, 5);
+        assert_eq!(super::SETTINGS.card_caption_font, super::CALLOUT);
+        assert_eq!(super::SETTINGS.preview_window_x, 14);
+        assert_eq!(super::SETTINGS.preview_window_y, 12);
+        assert_eq!(super::SETTINGS.preview_window_radius, 5);
+        assert_eq!(super::SETTINGS.preview_bar_w, 22);
+        assert_eq!(super::SETTINGS.preview_bar_h, 4);
+        assert_eq!(super::SETTINGS.preview_bar_inset, 5);
+        assert_eq!(super::SETTINGS.preview_light, 5);
+        assert_eq!(super::SETTINGS.preview_light_gap, 3);
+        assert_eq!(super::SETTINGS.preview_tint_window_x, 10);
+        assert_eq!(super::SETTINGS.preview_tint_window_y, 9);
+        assert_eq!(super::SETTINGS.preview_tint_side_w, 14);
+        assert_eq!(super::SETTINGS.radio_size, 16);
+        assert_eq!(super::SETTINGS.radio_dot, 6);
+        assert_eq!(super::SETTINGS.radio_gap, 7);
+        assert_eq!(super::SETTINGS.radio_spacing, 16);
+        assert_eq!(super::SETTINGS.popup_height, 26);
+        assert_eq!(super::SETTINGS.popup_chevron, 18);
         assert!((super::SETTINGS.selected_dark_mix - 0.5).abs() < 1e-6);
         assert_eq!(super::ACCENT_SWATCHES.len(), 8);
         assert_eq!(super::ACCENT_SWATCHES[0].0, "Azul");
@@ -740,6 +859,12 @@ mod tests {
             super::ACCENT_SWATCHES[1].1,
             super::Rgba::rgb8(0x8e, 0x5b, 0xd8)
         );
+        assert_eq!(super::HEADLINE.size, 13);
+        assert_eq!(super::HEADLINE.weight, 600);
+        assert_eq!(super::CALLOUT.size, 12);
+        assert_eq!(super::CALLOUT.weight, 400);
+        assert_eq!(super::CAPTION.size, 11);
+        assert_eq!(super::CAPTION.weight, 500);
     }
 
     #[test]

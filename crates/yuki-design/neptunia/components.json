@@ -408,6 +408,27 @@
         "height": 620,
         "min-height": 480
       },
+      "search": {
+        "height": "size.control-md",
+        "padding-x": 10,
+        "icon": 16
+      },
+      "account": {
+        "avatar": 36,
+        "gap": 10,
+        "name": "headline",
+        "detail": "callout"
+      },
+      "section-gap": 14,
+      "section-icon-bg": "#2b2b2b",
+      "group": {
+        "radius": "radius.lg",
+        "row-min-height": 44,
+        "row-padding-x": 14,
+        "row-padding-y": 10,
+        "title-margin-top": 16,
+        "content-padding-x": 16
+      },
       "accent-swatches": [
         {"name": "Azul", "color": "#2f6fe4"},
         {"name": "Morado", "color": "#8e5bd8"},
@@ -420,13 +441,41 @@
       ],
       "swatch-size": 22,
       "swatch-gap": 9,
+      "swatch": {
+        "name": "caption"
+      },
       "card": {
         "width": 70,
         "height": 46,
         "radius": "radius.sm",
         "gap": 10,
         "ring": 2,
-        "ring-gap": 2
+        "ring-gap": 2,
+        "caption-gap": 5,
+        "caption": "callout"
+      },
+      "preview": {
+        "window-x": 14,
+        "window-y": 12,
+        "window-radius": 5,
+        "bar-w": 22,
+        "bar-h": 4,
+        "bar-inset": 5,
+        "light": 5,
+        "light-gap": 3,
+        "tint-window-x": 10,
+        "tint-window-y": 9,
+        "tint-side-w": 14
+      },
+      "radio": {
+        "size": 16,
+        "dot": 6,
+        "gap": 7,
+        "spacing": 16
+      },
+      "popup": {
+        "height": 26,
+        "chevron": 18
       },
       "selected-dark-mix": 0.5
     },

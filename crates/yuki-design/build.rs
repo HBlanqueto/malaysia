@@ -726,6 +726,12 @@ fn emit_typography(out: &mut String, tokens: &Value) {
     out.push_str(&format!(": Font = {};\n\n", font(tokens, "body")));
     const_doc(out, "TITLE_2", "The secondary title face (15/600).");
     out.push_str(&format!(": Font = {};\n\n", font(tokens, "title-2")));
+    const_doc(out, "HEADLINE", "The headline face (13/600).");
+    out.push_str(&format!(": Font = {};\n\n", font(tokens, "headline")));
+    const_doc(out, "CALLOUT", "The callout face (12/400).");
+    out.push_str(&format!(": Font = {};\n\n", font(tokens, "callout")));
+    const_doc(out, "CAPTION", "The caption face (11/500).");
+    out.push_str(&format!(": Font = {};\n\n", font(tokens, "caption")));
     let line_height = number(tokens, "font.line-height-scale", TOKENS);
     const_doc(
         out,
@@ -827,8 +833,11 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
          \x20   outer_border: {},\n\
          \x20   title: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   text: FocusPair {{ focused: {}, unfocused: {} }},\n\
+         \x20   ink_strong: {},\n\
+         \x20   line: {},\n\
          \x20   accent: {},\n\
          \x20   on_accent: {},\n\
+         \x20   danger: {},\n\
          \x20   traffic_lights_inactive: {},\n\
          }}",
         rgba(theme_color(tokens, theme, "titlebar-bg")),
@@ -839,8 +848,11 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
         rgba(theme_color(tokens, theme, "titlebar-title-inactive")),
         rgba(theme_color(tokens, theme, "ink")),
         rgba(theme_color(tokens, theme, "ink-muted")),
+        rgba(theme_color(tokens, theme, "ink-strong")),
+        rgba(theme_color(tokens, theme, "line")),
         rgba(theme_color(tokens, theme, "accent")),
         rgba(theme_color(tokens, theme, "on-accent")),
+        rgba(theme_color(tokens, theme, "danger")),
         rgba(inactive)
     )
 }
@@ -1861,7 +1873,7 @@ fn emit_metrics(out: &mut String, tokens: &Value, components: &Value) {
     out.push_str(&format!(": i32 = {};\n\n", tilesize + padding * 2));
 }
 
-fn emit_settings(out: &mut String, _tokens: &Value, components: &Value) {
+fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
     let window_width = integer(components, "components.settings.window.width", COMPONENTS) as u32;
     let window_height = integer(components, "components.settings.window.height", COMPONENTS) as u32;
     let window_min_height = integer(
@@ -1870,13 +1882,72 @@ fn emit_settings(out: &mut String, _tokens: &Value, components: &Value) {
         COMPONENTS,
     ) as u32;
 
+    let search_height = metric(
+        tokens,
+        components,
+        "components.settings.search.height",
+        COMPONENTS,
+    ) as u32;
+    let search_padding_x = integer(
+        components,
+        "components.settings.search.padding-x",
+        COMPONENTS,
+    ) as u32;
+    let search_icon = integer(components, "components.settings.search.icon", COMPONENTS) as u32;
+
+    let account_avatar =
+        integer(components, "components.settings.account.avatar", COMPONENTS) as u32;
+    let account_gap = integer(components, "components.settings.account.gap", COMPONENTS) as u32;
+    let account_name_font = string(components, "components.settings.account.name", COMPONENTS);
+    let account_detail_font = string(components, "components.settings.account.detail", COMPONENTS);
+
+    let section_gap = integer(components, "components.settings.section-gap", COMPONENTS) as u32;
+    let section_icon_bg = color(
+        components,
+        "components.settings.section-icon-bg",
+        COMPONENTS,
+    );
+
+    let group_radius = metric(
+        tokens,
+        components,
+        "components.settings.group.radius",
+        COMPONENTS,
+    ) as u32;
+    let group_row_min_height = integer(
+        components,
+        "components.settings.group.row-min-height",
+        COMPONENTS,
+    ) as u32;
+    let group_row_padding_x = integer(
+        components,
+        "components.settings.group.row-padding-x",
+        COMPONENTS,
+    ) as u32;
+    let group_row_padding_y = integer(
+        components,
+        "components.settings.group.row-padding-y",
+        COMPONENTS,
+    ) as u32;
+    let group_title_margin_top = integer(
+        components,
+        "components.settings.group.title-margin-top",
+        COMPONENTS,
+    ) as u32;
+    let group_content_padding_x = integer(
+        components,
+        "components.settings.group.content-padding-x",
+        COMPONENTS,
+    ) as u32;
+
     let swatch_size = integer(components, "components.settings.swatch-size", COMPONENTS) as u32;
     let swatch_gap = integer(components, "components.settings.swatch-gap", COMPONENTS) as u32;
+    let swatch_name_font = string(components, "components.settings.swatch.name", COMPONENTS);
 
     let card_width = integer(components, "components.settings.card.width", COMPONENTS) as u32;
     let card_height = integer(components, "components.settings.card.height", COMPONENTS) as u32;
     let card_radius = metric(
-        _tokens,
+        tokens,
         components,
         "components.settings.card.radius",
         COMPONENTS,
@@ -1884,6 +1955,64 @@ fn emit_settings(out: &mut String, _tokens: &Value, components: &Value) {
     let card_gap = integer(components, "components.settings.card.gap", COMPONENTS) as u32;
     let card_ring = integer(components, "components.settings.card.ring", COMPONENTS) as u32;
     let card_ring_gap = integer(components, "components.settings.card.ring-gap", COMPONENTS) as u32;
+    let card_caption_gap = integer(
+        components,
+        "components.settings.card.caption-gap",
+        COMPONENTS,
+    ) as u32;
+    let card_caption_font = string(components, "components.settings.card.caption", COMPONENTS);
+
+    let preview_window_x = integer(
+        components,
+        "components.settings.preview.window-x",
+        COMPONENTS,
+    ) as u32;
+    let preview_window_y = integer(
+        components,
+        "components.settings.preview.window-y",
+        COMPONENTS,
+    ) as u32;
+    let preview_window_radius = integer(
+        components,
+        "components.settings.preview.window-radius",
+        COMPONENTS,
+    ) as u32;
+    let preview_bar_w = integer(components, "components.settings.preview.bar-w", COMPONENTS) as u32;
+    let preview_bar_h = integer(components, "components.settings.preview.bar-h", COMPONENTS) as u32;
+    let preview_bar_inset = integer(
+        components,
+        "components.settings.preview.bar-inset",
+        COMPONENTS,
+    ) as u32;
+    let preview_light = integer(components, "components.settings.preview.light", COMPONENTS) as u32;
+    let preview_light_gap = integer(
+        components,
+        "components.settings.preview.light-gap",
+        COMPONENTS,
+    ) as u32;
+    let preview_tint_window_x = integer(
+        components,
+        "components.settings.preview.tint-window-x",
+        COMPONENTS,
+    ) as u32;
+    let preview_tint_window_y = integer(
+        components,
+        "components.settings.preview.tint-window-y",
+        COMPONENTS,
+    ) as u32;
+    let preview_tint_side_w = integer(
+        components,
+        "components.settings.preview.tint-side-w",
+        COMPONENTS,
+    ) as u32;
+
+    let radio_size = integer(components, "components.settings.radio.size", COMPONENTS) as u32;
+    let radio_dot = integer(components, "components.settings.radio.dot", COMPONENTS) as u32;
+    let radio_gap = integer(components, "components.settings.radio.gap", COMPONENTS) as u32;
+    let radio_spacing = integer(components, "components.settings.radio.spacing", COMPONENTS) as u32;
+
+    let popup_height = integer(components, "components.settings.popup.height", COMPONENTS) as u32;
+    let popup_chevron = integer(components, "components.settings.popup.chevron", COMPONENTS) as u32;
 
     let selected_dark_mix = number(
         components,
@@ -1897,16 +2026,56 @@ fn emit_settings(out: &mut String, _tokens: &Value, components: &Value) {
          \x20   window_width: {window_width},\n\
          \x20   window_height: {window_height},\n\
          \x20   window_min_height: {window_min_height},\n\
+         \x20   search_height: {search_height},\n\
+         \x20   search_padding_x: {search_padding_x},\n\
+         \x20   search_icon: {search_icon},\n\
+         \x20   account_avatar: {account_avatar},\n\
+         \x20   account_gap: {account_gap},\n\
+         \x20   account_name_font: {},\n\
+         \x20   account_detail_font: {},\n\
+         \x20   section_gap: {section_gap},\n\
+         \x20   section_icon_bg: {},\n\
+         \x20   group_radius: {group_radius},\n\
+         \x20   group_row_min_height: {group_row_min_height},\n\
+         \x20   group_row_padding_x: {group_row_padding_x},\n\
+         \x20   group_row_padding_y: {group_row_padding_y},\n\
+         \x20   group_title_margin_top: {group_title_margin_top},\n\
+         \x20   group_content_padding_x: {group_content_padding_x},\n\
          \x20   swatch_size: {swatch_size},\n\
          \x20   swatch_gap: {swatch_gap},\n\
+         \x20   swatch_name_font: {},\n\
          \x20   card_width: {card_width},\n\
          \x20   card_height: {card_height},\n\
          \x20   card_radius: {card_radius},\n\
          \x20   card_gap: {card_gap},\n\
          \x20   card_ring: {card_ring},\n\
          \x20   card_ring_gap: {card_ring_gap},\n\
+         \x20   card_caption_gap: {card_caption_gap},\n\
+         \x20   card_caption_font: {},\n\
+         \x20   preview_window_x: {preview_window_x},\n\
+         \x20   preview_window_y: {preview_window_y},\n\
+         \x20   preview_window_radius: {preview_window_radius},\n\
+         \x20   preview_bar_w: {preview_bar_w},\n\
+         \x20   preview_bar_h: {preview_bar_h},\n\
+         \x20   preview_bar_inset: {preview_bar_inset},\n\
+         \x20   preview_light: {preview_light},\n\
+         \x20   preview_light_gap: {preview_light_gap},\n\
+         \x20   preview_tint_window_x: {preview_tint_window_x},\n\
+         \x20   preview_tint_window_y: {preview_tint_window_y},\n\
+         \x20   preview_tint_side_w: {preview_tint_side_w},\n\
+         \x20   radio_size: {radio_size},\n\
+         \x20   radio_dot: {radio_dot},\n\
+         \x20   radio_gap: {radio_gap},\n\
+         \x20   radio_spacing: {radio_spacing},\n\
+         \x20   popup_height: {popup_height},\n\
+         \x20   popup_chevron: {popup_chevron},\n\
          \x20   selected_dark_mix: {},\n\
          }};\n\n",
+        font(tokens, account_name_font),
+        font(tokens, account_detail_font),
+        rgba(section_icon_bg),
+        font(tokens, swatch_name_font),
+        font(tokens, card_caption_font),
         float(selected_dark_mix)
     ));
 
