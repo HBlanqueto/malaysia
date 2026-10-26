@@ -1406,6 +1406,7 @@ struct SurfaceWindow {
     pending_configure: Option<(WindowConfigure, u32)>,
     appmenu: Option<OrgKdeKwinAppmenu>,
     appmenu_address: Option<AppMenuAddress>,
+    menu_handle: Option<crate::app_menu::MenuHandle>,
 }
 
 #[allow(dead_code)]
@@ -1780,6 +1781,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
         pending_configure: None,
         appmenu: None,
         appmenu_address: None,
+        menu_handle: None,
     });
     shell.surface_count.set(shell.surfaces.len());
 
@@ -2234,7 +2236,7 @@ impl Shell {
             title: options.title.clone(),
             fixed,
             surface_id,
-            menu_handle,
+            menu_handle: menu_handle.clone(),
         };
         self.window_contexts.push(WindowContext {
             controls: controls.clone(),
@@ -2293,6 +2295,7 @@ impl Shell {
             pending_configure: None,
             appmenu: appmenu_object,
             appmenu_address: appmenu_address.clone(),
+            menu_handle,
         });
         self.surface_count.set(self.surfaces.len());
         Some(controls)
@@ -2361,6 +2364,7 @@ impl Shell {
             pending_configure: None,
             appmenu: None,
             appmenu_address: None,
+            menu_handle: None,
         });
         self.surface_count.set(self.surfaces.len());
         Some(self.surfaces.len() - 1)
@@ -2598,6 +2602,7 @@ impl Shell {
             pending_configure: None,
             appmenu: None,
             appmenu_address: None,
+            menu_handle: None,
         });
         self.surface_count.set(self.surfaces.len());
     }
@@ -3336,21 +3341,31 @@ impl Shell {
         let (key, code) = input::key(event.keysym, event.utf8.clone());
         let modifiers = input::modifiers(self.modifiers);
 
-        if name == KeyboardEventName::KeyDown
-            && let Some(index) = self
-                .keyboard_focus
-                .as_ref()
-                .and_then(|surface| self.surface_for(surface))
-                .or_else(|| (!self.surfaces.is_empty()).then_some(0))
+        let index = self
+            .keyboard_focus
+            .as_ref()
+            .and_then(|surface| self.surface_for(surface))
+            .or_else(|| (!self.surfaces.is_empty()).then_some(0));
+
+        let shortcut_action = if name == KeyboardEventName::KeyDown {
+            index.and_then(|idx| {
+                let surface = &self.surfaces[idx];
+                let menu = surface
+                    .menu_handle
+                    .as_ref()
+                    .map(|h| h.snapshot().0)
+                    .or_else(|| surface.app.menu.clone())?;
+                crate::app_menu::find_menu_shortcut(&menu, modifiers, &key)
+                    .map(|action_id| (idx, action_id))
+            })
+        } else {
+            None
+        };
+
+        if let Some((idx, ref action_id)) = shortcut_action
+            && let Some(on_action) = self.surfaces[idx].app.on_menu_action.as_ref()
         {
-            let app = &self.surfaces[index].app;
-            if let (Some(menu), Some(on_action)) = (app.menu.as_ref(), app.on_menu_action.as_ref())
-                && let Some(action_id) = crate::app_menu::find_menu_shortcut(menu, modifiers, &key)
-            {
-                on_action(&action_id);
-                self.surfaces[index].request_redraw(qh);
-                return;
-            }
+            on_action(action_id);
         }
 
         let platform_event = PlatformEvent::Keyboard {
@@ -3359,14 +3374,13 @@ impl Shell {
             code,
             modifiers,
         };
-        let index = self
-            .keyboard_focus
-            .as_ref()
-            .and_then(|surface| self.surface_for(surface))
-            .or_else(|| (!self.surfaces.is_empty()).then_some(0));
-        if let Some(index) = index {
-            self.surfaces[index].app.push(platform_event);
-            self.surfaces[index].request_redraw(qh);
+        if let Some(idx) = index {
+            self.surfaces[idx].app.push(platform_event);
+            self.surfaces[idx].request_redraw(qh);
+            if shortcut_action.is_some() {
+                self.poll_all();
+                self.redraw_all();
+            }
         }
     }
 
