@@ -305,6 +305,12 @@ pub struct ToolgroupMetrics {
     pub separator_w: u32,
     /// Separator line height, in logical pixels.
     pub separator_h: u32,
+    /// Flat variant button width, in logical pixels.
+    pub flat_button_w: u32,
+    /// Flat variant button height, in logical pixels.
+    pub flat_button_h: u32,
+    /// Flat variant corner radius, in logical pixels.
+    pub flat_radius: u32,
 }
 
 /// The two-layer window shadow.
@@ -617,11 +623,16 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn sidebar_metrics_come_from_tokens() {
         assert_eq!(super::SIDEBAR.inset, 8);
         assert_eq!(super::SIDEBAR.radius, 12);
         assert_eq!(super::SIDEBAR.width, 220);
+        assert!(super::SIDEBAR.default_island);
         assert_eq!(super::TOOLGROUP.height, 34);
+        assert_eq!(super::TOOLGROUP.flat_button_w, 30);
+        assert_eq!(super::TOOLGROUP.flat_button_h, 28);
+        assert_eq!(super::TOOLGROUP.flat_radius, 8);
     }
 
     #[test]
