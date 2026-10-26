@@ -421,6 +421,23 @@ repinta con el texto inactivo de `text`, no `on-accent`.
   con dos ventanas del mismo título resalta las dos. La barra ya no usa ese
   respaldo.
 
+## 14d — Menú real
+
+Diseño cerrado en el [ADR 0040](../decisiones/0040-menu-global-real.md). Fases:
+
+- **14d-1 — Compositor.** Sirve `org_kde_kwin_appmenu` y añade el evento
+  `app_menu` a Infinity v2. La barra no cambia: solo loguea el evento.
+- **14d-2 — Cliente y barra.** Hilo D-Bus con zbus, caché por ventana, carga
+  perezosa, fusión de títulos y buscador de Ayuda.
+- **14d-3 — Registrar y aceptación.** La barra sirve
+  `com.canonical.AppMenu.Registrar` y se prueba con Kate y Firefox. Las dos
+  preferencias de Firefox viven en `~/nixdots`, nunca en el repo.
+- **14e — Apps propias.** CelestialKit exporta dbusmenu por la misma vía, con la
+  app Contador de los mockups 14 y 15.
+
+14d no usa AT-SPI ni un atajo privado por Infinity: el respaldo de 14c sigue
+siendo el modo sin menú real.
+
 ## Aceptación de 14a
 
 Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual:

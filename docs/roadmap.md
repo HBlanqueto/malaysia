@@ -245,7 +245,8 @@ abrir apps. El diseño es **Neptunia** (ADR 0032).
 
 ## Bloque 14 — Menú global
 
-Documentado en el [ADR 0036](decisiones/0036-menu-global.md) y en
+Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
+[0040](decisiones/0040-menu-global-real.md) y en
 [`investigacion/global-menu.md`](investigacion/global-menu.md). Usa
 `org_kde_kwin_appmenu` + `com.canonical.dbusmenu`.
 
@@ -262,8 +263,14 @@ Documentado en el [ADR 0036](decisiones/0036-menu-global.md) y en
   todo/Salir, Minimizar/Maximizar/Cerrar, los submenús de disposición con
   iconos y el Ayuda con buscador. Maximizar queda pendiente del `State` de wlr
   y de `set_maximized` en el compositor. Ver `bloques/14-menu-global.md`.
-- **14d — Compositor `org_kde_kwin_appmenu` + cliente dbusmenu.** Aceptación:
-  menú real de Kate y de Firefox con sus dos preferencias.
+- **14d — Menú real.** Arquitectura en el
+  [ADR 0040](decisiones/0040-menu-global-real.md); 14d no usa AT-SPI.
+  - **14d-1:** compositor, `org_kde_kwin_appmenu` + Infinity v2 (`app_menu`);
+    la barra solo loguea el evento.
+  - **14d-2:** cliente dbusmenu y barra: hilo D-Bus con zbus, caché, carga
+    perezosa, fusión de títulos y buscador de Ayuda.
+  - **14d-3:** `com.canonical.AppMenu.Registrar` y aceptación con Kate y
+    Firefox (sus dos preferencias en `~/nixdots`, nunca en el repo).
 - **14e — Apps de CelestialKit exportan dbusmenu.** Sin atajo privado por
   Infinity.
 - **Después:** `gtk_shell1`/`org.gtk.Menus`, HUD en el launcher y menú de atajos

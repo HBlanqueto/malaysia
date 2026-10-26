@@ -46,6 +46,7 @@ continua.
 | 0037 | Marco de ventanas dibujado por el compositor | aceptado |
 | 0038 | Reducir transparencia por defecto | aceptado |
 | 0039 | Infinity v1: gestión de ventanas para la shell | aceptado |
+| 0040 | Menú global real: arquitectura propia | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
