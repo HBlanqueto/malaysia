@@ -182,8 +182,8 @@ Contenido exacto de cada menú:
 
 Habilitados: los de **Ir** salvo Atrás, Adelante e Ir a la carpeta…; Nueva
 ventana, Nueva carpeta en el escritorio y Buscar; Minimizar todo, Mostrar
-escritorio y la lista de ventanas; y Bloquear pantalla. Todo lo demás se ve
-deshabilitado.
+escritorio y la lista de ventanas; Bloquear pantalla; y Ajustes del sistema
+(lanza `yuki-settings`). Todo lo demás se ve deshabilitado.
 
 Cada título ancla su popup a su propio rectángulo. Solo hay un árbol abierto:
 pulsar un título distinto cierra el anterior y, con un menú abierto, mover el
