@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 pub mod traffic;
+pub mod watch;
 
 use vow_design::{
     DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_CONTROL, LIGHT, MENU_DARK,
