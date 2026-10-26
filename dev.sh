@@ -1067,56 +1067,65 @@ lab() {
         printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
     fi
 
-    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ] && [ -x "$_contador" ]; then
+    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
         lab_client window-csd "$_window_csd"
         lab_client window-ssd "$_window_ssd"
         lab_client dialog "$_dialog"
-        lab_client contador "$_contador"
     else
         printf 'lab: window examples not found; skipping them\n' >&2
     fi
 
     # Optional third-party apps, only if installed.  Each gets its own log.
-    if command -v nautilus >/dev/null 2>&1; then
-        lab_app_client nautilus nautilus
-    else
-        printf 'lab: nautilus not found; skipping GTK4/libadwaita test\n' >&2
-    fi
+    # When YUKI_TEST_INPUT drives the session we keep only the kit examples so
+    # Contador ends up on top and the scripted coordinates remain valid.
+    if [ -z "${YUKI_TEST_INPUT:-}" ]; then
+        if command -v nautilus >/dev/null 2>&1; then
+            lab_app_client nautilus nautilus
+        else
+            printf 'lab: nautilus not found; skipping GTK4/libadwaita test\n' >&2
+        fi
 
-    if command -v zenity >/dev/null 2>&1; then
-        lab_app_client zenity zenity --info --text "Prueba GTK sin headerbar"
-    elif command -v gnome-calculator >/dev/null 2>&1; then
-        lab_app_client gnome-calculator gnome-calculator
-    else
-        printf 'lab: zenity or gnome-calculator not found; skipping GTK test\n' >&2
-    fi
+        if command -v zenity >/dev/null 2>&1; then
+            lab_app_client zenity zenity --info --text "Prueba GTK sin headerbar"
+        elif command -v gnome-calculator >/dev/null 2>&1; then
+            lab_app_client gnome-calculator gnome-calculator
+        else
+            printf 'lab: zenity or gnome-calculator not found; skipping GTK test\n' >&2
+        fi
 
-    if command -v kate >/dev/null 2>&1; then
-        lab_app_client kate kate
-    elif command -v kwrite >/dev/null 2>&1; then
-        lab_app_client kwrite kwrite
-    else
-        printf 'lab: kate/kwrite not found; skipping Qt test\n' >&2
-    fi
+        if command -v kate >/dev/null 2>&1; then
+            lab_app_client kate kate
+        elif command -v kwrite >/dev/null 2>&1; then
+            lab_app_client kwrite kwrite
+        else
+            printf 'lab: kate/kwrite not found; skipping Qt test\n' >&2
+        fi
 
-    if command -v telegram-desktop >/dev/null 2>&1; then
-        lab_app_client telegram telegram-desktop
-    else
-        printf 'lab: telegram-desktop not found; skipping Telegram test\n' >&2
-    fi
+        if command -v telegram-desktop >/dev/null 2>&1; then
+            lab_app_client telegram telegram-desktop
+        else
+            printf 'lab: telegram-desktop not found; skipping Telegram test\n' >&2
+        fi
 
-    if command -v firefox >/dev/null 2>&1; then
-        _lab_firefox_profile="$_lab_config/firefox"
-        mkdir -p "$_lab_firefox_profile" ||
-            fail "$EXIT_RUN_FAILED" "could not create the lab Firefox profile"
-        cat >"$_lab_firefox_profile/user.js" <<'EOF'
+        if command -v firefox >/dev/null 2>&1; then
+            _lab_firefox_profile="$_lab_config/firefox"
+            mkdir -p "$_lab_firefox_profile" ||
+                fail "$EXIT_RUN_FAILED" "could not create the lab Firefox profile"
+            cat >"$_lab_firefox_profile/user.js" <<'EOF'
 user_pref("widget.gtk.global-menu.enabled", true);
 user_pref("widget.gtk.global-menu.wayland.enabled", true);
 EOF
-        lab_app_client firefox firefox \
-            --no-remote --profile "$_lab_firefox_profile"
-    else
-        printf 'lab: firefox not found; skipping Firefox test\n' >&2
+            lab_app_client firefox firefox \
+                --no-remote --profile "$_lab_firefox_profile"
+        else
+            printf 'lab: firefox not found; skipping Firefox test\n' >&2
+        fi
+    fi
+
+    # Contador last so it stays on top for automated 14e acceptance.
+    sleep 0.5
+    if [ -x "$_contador" ]; then
+        lab_client contador "$_contador"
     fi
 
     cat <<'EOF'
