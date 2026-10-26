@@ -10,8 +10,7 @@ use crate::cards::{theme_card, window_color_card};
 use crate::controls::{accent_swatch, radio, traffic_dropdown};
 use crate::state::{
     AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, WindowTintScope, bg_control,
-    bg_surface, card_background, load_appearance, matches_filter, palette, read_dominant, rgba,
-    save_config,
+    bg_surface, card_background, load_appearance, matches_filter, palette, rgba, save_config,
 };
 
 /// Contenido principal desplazable con los grupos filtrados por búsqueda.
@@ -42,7 +41,7 @@ pub fn content_scroll(
     let color_visible = matches_filter(query, "color acento ventanas fondo escritorio tinte");
     if color_visible {
         children.push(group_title("Color", &scheme_palette));
-        children.push(color_group(config, &resolved, color_error));
+        children.push(color_group(config, dominant, &resolved, color_error));
     }
 
     let windows_visible = matches_filter(query, "ventanas semáforos");
@@ -139,6 +138,7 @@ fn appearance_group(
                         dominant,
                         resolved.accent,
                         scheme_palette,
+                        config,
                         {
                             let mut error = error;
                             move |_| {
@@ -158,6 +158,7 @@ fn appearance_group(
                         dominant,
                         resolved.accent,
                         scheme_palette,
+                        config,
                         {
                             let mut error = error;
                             move |_| {
@@ -181,6 +182,7 @@ fn appearance_group(
                         dominant,
                         resolved.accent,
                         scheme_palette,
+                        config,
                         {
                             let mut error = error;
                             move |_| {
@@ -204,13 +206,14 @@ fn appearance_group(
 
 fn color_group(
     config: &AppearanceConfig,
+    dominant: Option<Rgba>,
     resolved: &Resolved,
     error: State<Option<String>>,
 ) -> Element {
     let resolved = *resolved;
     let scheme_palette = palette(resolved.scheme);
     let wallpaper_mode = config.window_color == WindowColorMode::Wallpaper;
-    let card_bg = card_background(read_dominant(), resolved.accent);
+    let card_bg = card_background(dominant, resolved.accent);
     let bg_control = bg_control(resolved.scheme);
     let text_color = scheme_palette.text.focused;
 
@@ -262,6 +265,7 @@ fn color_group(
                 selected_window_mode,
                 card_bg,
                 resolved,
+                dominant,
                 {
                     let mut error = error;
                     move |_| {
@@ -279,6 +283,7 @@ fn color_group(
                 selected_window_mode,
                 card_bg,
                 resolved,
+                dominant,
                 {
                     let mut error = error;
                     move |_| {
@@ -296,6 +301,7 @@ fn color_group(
                 selected_window_mode,
                 card_bg,
                 resolved,
+                dominant,
                 {
                     let mut error = error;
                     move |_| {

@@ -6,8 +6,22 @@ use vow_design::{BG_WINDOW_DARK, BG_WINDOW_LIGHT, SETTINGS};
 
 use crate::state::{
     AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, bg_surface, load_appearance,
-    read_dominant, resolve, rgba, tinted_bg_sunken, tinted_bg_window,
+    resolve, rgba, tinted_bg_sunken, tinted_bg_window,
 };
+
+/// Resolves the preview for a theme card while keeping the rest of the
+/// current config (window colour mode, accent, etc.).
+fn preview_for_theme(
+    base_config: &AppearanceConfig,
+    scheme: ColorScheme,
+    dominant: Option<Rgba>,
+) -> Resolved {
+    let test_config = AppearanceConfig {
+        color_scheme: scheme,
+        ..base_config.clone()
+    };
+    resolve(&test_config, dominant)
+}
 
 /// Construye una tarjeta de tema (Claro/Oscuro/Automático).
 #[allow(clippy::too_many_arguments)]
@@ -19,14 +33,11 @@ pub fn theme_card(
     dominant: Option<Rgba>,
     accent: Rgba,
     scheme_palette: vow_design::Palette,
+    base_config: &AppearanceConfig,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let is_selected = selected_scheme == scheme;
-    let test_config = AppearanceConfig {
-        color_scheme: scheme,
-        ..Default::default()
-    };
-    let preview_resolved = resolve(&test_config, dominant);
+    let preview_resolved = preview_for_theme(base_config, scheme, dominant);
 
     selectable_card(
         caption,
@@ -113,6 +124,7 @@ pub fn window_color_card(
     selected: WindowColorMode,
     card_bg: Rgba,
     resolved: Resolved,
+    dominant: Option<Rgba>,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let base_config = load_appearance();
@@ -120,7 +132,7 @@ pub fn window_color_card(
         window_color: mode,
         ..base_config
     };
-    let preview_resolved = resolve(&test_config, read_dominant());
+    let preview_resolved = resolve(&test_config, dominant);
     let is_selected = selected == mode;
     let scheme_palette = crate::state::palette(resolved.scheme);
 
@@ -253,4 +265,46 @@ pub fn selectable_card(
         )
         .on_press(on_select)
         .into_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vow_appearance::{AppearanceConfig, ColorScheme, WindowColorMode};
+    use vow_design::Rgba;
+
+    #[test]
+    fn auto_theme_preview_keeps_window_color_and_uses_dominant() {
+        let dominant = Rgba {
+            r: 0.8,
+            g: 0.2,
+            b: 0.1,
+            a: 1.0,
+        };
+        let config = AppearanceConfig {
+            window_color: WindowColorMode::Wallpaper,
+            ..AppearanceConfig::default()
+        };
+        let preview = preview_for_theme(&config, ColorScheme::Auto, Some(dominant));
+        assert_eq!(preview.accent, dominant);
+        assert!(preview.window_tint.is_some());
+    }
+
+    #[test]
+    fn auto_theme_preview_keeps_accent_when_window_color_is_neutral() {
+        let accent = Rgba {
+            r: 0.2,
+            g: 0.5,
+            b: 0.9,
+            a: 1.0,
+        };
+        let config = AppearanceConfig {
+            accent_color: Some([accent.r, accent.g, accent.b]),
+            window_color: WindowColorMode::Neutral,
+            ..AppearanceConfig::default()
+        };
+        let preview = preview_for_theme(&config, ColorScheme::Auto, None);
+        assert_eq!(preview.accent, accent);
+        assert!(preview.window_tint.is_none());
+    }
 }
