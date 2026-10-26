@@ -13,6 +13,9 @@ use zbus::zvariant::{OwnedValue, Value};
 use crate::menu::{CheckState, MenuItem};
 use crate::platform::WakeHandle;
 
+pub(crate) mod layout;
+pub(crate) mod server;
+
 /// A declarative application menu.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppMenu {
