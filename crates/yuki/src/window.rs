@@ -1197,12 +1197,7 @@ impl Windows {
         if data.maximized {
             tracing::info!(window = id.get(), ?configured, "configure with Maximized");
         }
-        tracing::debug!(
-            window = id.get(),
-            ?configured,
-            resizing,
-            "send_configure"
-        );
+        tracing::debug!(window = id.get(), ?configured, resizing, "send_configure");
         data.pending_configure = Some(data.toplevel.send_configure());
         data.configured = Some(configured);
     }

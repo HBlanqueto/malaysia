@@ -753,7 +753,9 @@ impl Graphics {
             WlEglSurface::new(surface.id(), size.0 as i32, size.1 as i32)
                 .map_err(|_| RunError::Egl("wl_egl_window_create failed"))?,
         );
-        shared.egl_window_creations.set(shared.egl_window_creations.get() + 1);
+        shared
+            .egl_window_creations
+            .set(shared.egl_window_creations.get() + 1);
         if let Some(old) = self.surface.take() {
             let _ = shared.egl.destroy_surface(shared.display, old);
         }
@@ -2705,7 +2707,7 @@ impl Shell {
             let size_changed = size != self.surfaces[index].logical_size;
             self.surfaces[index].configure_count += 1;
             let count = self.surfaces[index].configure_count;
-            if count % 30 == 0 {
+            if count.is_multiple_of(30) {
                 tracing::info!(
                     surface = ?self.surfaces[index].surface.id(),
                     configures = count,
@@ -2758,10 +2760,8 @@ impl Shell {
             // Acknowledge the configure and let SCTK apply the decoration mode
             // before drawing the first frame. A size change is committed by the
             // redraw below, not here, to avoid sending the old buffer size.
-            if !size_changed {
-                if let SurfaceRole::Window(window) = &self.surfaces[index].role {
-                    window.commit();
-                }
+            if !size_changed && let SurfaceRole::Window(window) = &self.surfaces[index].role {
+                window.commit();
             }
             // A toplevel must attach its first buffer before it can map; unlike a
             // layer surface there is no frame callback to wait for yet.
