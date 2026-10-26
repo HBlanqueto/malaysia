@@ -144,6 +144,35 @@ pub fn spawn_component(component: &str) {
     }
 }
 
+/// Spawns a standalone Yuki app detached, keeping the Wayland socket but
+/// stripping the compositor's private Mesa wrapper environment.
+pub fn spawn_app(binary: &str, args: &[&str]) {
+    let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
+        eprintln!("menubar: cannot spawn {binary}: WAYLAND_DISPLAY not set");
+        return;
+    };
+    let mut command = Command::new(binary);
+    command
+        .args(args)
+        .env("WAYLAND_DISPLAY", display)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    sanitize_client_env(&mut command);
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    match command.spawn() {
+        Ok(_) => eprintln!("menubar: spawn {binary}"),
+        Err(error) => eprintln!("menubar: could not spawn {binary}: {error}"),
+    }
+}
+
 /// Opens `path` with the user's default application, stripping the wrapper
 /// environment so it does not inherit Mesa debug paths from the compositor.
 pub fn xdg_open(path: impl AsRef<std::path::Path>) {
