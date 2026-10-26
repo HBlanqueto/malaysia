@@ -101,11 +101,22 @@ esac
 # host session owns. The compositor's Wayland socket is not here: it is
 # auto-named `wayland-N` in the compositor's own XDG_RUNTIME_DIR, which `start`
 # passes through from the caller.
+#
+# A short hash of the checkout path keeps two worktrees from sharing a pid,
+# log and demo logs. `git rev-parse` resolves the worktree root; a tarball
+# without git falls back to the script directory.
+checkout_hash() {
+    _root=$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null ||
+        printf '%s' "$script_dir")
+    printf '%s' "$_root" | cksum | cut -d' ' -f1
+}
+
 runtime_dir() {
+    _hash=$(checkout_hash)
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
-        printf '%s\n' "$XDG_RUNTIME_DIR/yuki-dev"
+        printf '%s\n' "$XDG_RUNTIME_DIR/yuki-dev-$_hash"
     else
-        printf '%s\n' "/tmp/yuki-$(id -u)"
+        printf '%s\n' "/tmp/yuki-$(id -u)-$_hash"
     fi
 }
 
