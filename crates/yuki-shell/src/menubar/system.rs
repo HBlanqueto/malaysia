@@ -2,7 +2,7 @@
 
 use celestial_kit::menu::{CheckState, MenuItem};
 
-use crate::menubar::spawn_component;
+use crate::menubar::{spawn_app, spawn_component};
 
 /// The snowflake drawn as the system-menu title.
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
@@ -11,7 +11,7 @@ pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 pub fn system_menu_items() -> Vec<MenuItem> {
     vec![
         action("about-this-computer", "Acerca de este equipo", None, false),
-        action("system-settings", "Ajustes del sistema…", None, false),
+        action("system-settings", "Ajustes del sistema…", None, true),
         MenuItem::Separator,
         action(
             "force-quit",
@@ -40,9 +40,11 @@ fn action(id: &str, label: &str, shortcut: Option<&str>, enabled: bool) -> MenuI
     }
 }
 
-/// Handles the only enabled system action today: lock the session.
+/// Handles enabled system-menu actions.
 pub fn on_system_action(id: String) {
-    if id == "lock-screen" {
-        spawn_component("lock");
+    match id.as_str() {
+        "lock-screen" => spawn_component("lock"),
+        "system-settings" => spawn_app("yuki-settings", &[]),
+        _ => {}
     }
 }
