@@ -10,7 +10,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
-use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView, SearchableEntry};
+use celestial_kit::menu::{MenuItem, MenuNavigation, MenuView, SearchableEntry, SubmenuSource};
 use celestial_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
@@ -30,6 +30,9 @@ pub struct SearchableLists {
     pub help: Vec<SearchableEntry>,
 }
 
+/// Function that lazily returns a title's menu items.
+pub type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
+
 /// Function that lazily returns searchable menu entries.
 pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
 
@@ -45,6 +48,15 @@ pub struct MenuTitleSpec {
     /// Optional searchable entries for the help search field.
     pub searchable: Option<SearchableItems>,
     pub on_activate: Rc<dyn Fn(String)>,
+    /// Re-reads the title's items on every render, so a remote menu updates
+    /// while its popup stays open.
+    pub live_items: Option<MenuItems>,
+    /// Sends the lazy layout request for this title, if it has a remote id.
+    pub on_open: Option<Rc<dyn Fn()>>,
+    /// Requests the children of a nested remote submenu.
+    pub on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    /// Resolves the loaded children of a remote submenu by id.
+    pub submenu_source: Option<SubmenuSource>,
     /// Position and size of the title highlight, set by `on_sized`.
     pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
@@ -86,6 +98,9 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         return;
     };
     close_root_menu(state);
+    if let Some(on_open) = &spec.on_open {
+        on_open();
+    }
 
     let items = (spec.items)();
     let palette = celestial_kit::theme::menu_palette(&celestial_kit::theme::resolved());
@@ -109,6 +124,18 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         .with_navigation(move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
         });
+    if let Some(source) = &spec.live_items {
+        let source = source.clone();
+        view = view.with_items_source(move || source());
+    }
+    if let Some(callback) = &spec.on_open_submenu {
+        let callback = callback.clone();
+        view = view.with_open_submenu(move |id| callback(id));
+    }
+    if let Some(source) = &spec.submenu_source {
+        let source = source.clone();
+        view = view.with_submenu_source(move |id| source(id));
+    }
     if let Some(searchable_fn) = &spec.searchable {
         let lists = searchable_fn();
         view = view

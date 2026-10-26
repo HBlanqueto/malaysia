@@ -22,13 +22,23 @@ use yuki_appearance::{Resolved, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::dbusmenu::{self, MenuClient, MenuSnapshot};
-use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
+use crate::menubar::dbusmenu::{self, MenuClient};
+use crate::menubar::dbusmenu_map;
+use crate::menubar::menu::{self, MenuItems, MenuState, MenuTitleSpec, SearchableItems};
+use crate::menubar::remote;
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 use celestial_kit::menu::SearchQuery;
+use celestial_kit::platform::AppMenuAddress;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
-type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
+/// The mapped menu of the focused window, kept only while its generation is
+/// current.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RemoteMenu {
+    pub generation: u64,
+    pub address: AppMenuAddress,
+    pub items: Vec<MenuItem>,
+}
 
 pub struct BarApp {
     pub clock: State<String>,
@@ -37,7 +47,7 @@ pub struct BarApp {
     pub window_store: PathBuf,
     pub entries: Vec<DesktopEntry>,
     pub dbus: MenuClient,
-    pub menu_snapshot: State<Option<Arc<MenuSnapshot>>>,
+    pub menu_snapshot: State<Option<Arc<RemoteMenu>>>,
 }
 
 impl App for BarApp {
@@ -153,6 +163,10 @@ impl App for BarApp {
             items: Rc::new(system::system_menu_items),
             searchable: None,
             on_activate: Rc::new(system::on_system_action),
+            live_items: None,
+            on_open: None,
+            on_open_submenu: None,
+            submenu_source: None,
             anchor: title_anchor(0),
             enabled: true,
             query_state: None,
@@ -187,53 +201,160 @@ impl App for BarApp {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
-            let help_searchable: SearchableItems = {
-                let app_name = app_name.clone();
-                let app_id = app_id.clone();
-                Rc::new(move || menu::SearchableLists {
-                    menu: focused::searchable_menu_items(
-                        &app_name,
-                        &app_id,
-                        &Toplevels::get().list.read().clone(),
+            let remote_menu = self.menu_snapshot.read().as_ref().cloned();
+            if let Some(remote_menu) = remote_menu {
+                let sources = remote::MenuSources {
+                    app_name: app_name.clone(),
+                    app_items: app_items.clone(),
+                    window_items: window_items.clone(),
+                    help_items: help_items.clone(),
+                };
+                let snapshot = self.menu_snapshot;
+                let composition: Rc<dyn Fn() -> Vec<remote::Title>> = {
+                    let sources = sources.clone();
+                    Rc::new(move || {
+                        let items = snapshot
+                            .read()
+                            .as_ref()
+                            .map(|menu| menu.items.clone())
+                            .unwrap_or_default();
+                        sources.compose(&items)
+                    })
+                };
+                let address = remote_menu.address.clone();
+                let generation_now = remote_menu.generation;
+                let on_activate: Rc<dyn Fn(String)> = {
+                    let dbus = self.dbus.clone();
+                    let address = address.clone();
+                    Rc::new(move |id| {
+                        if let Some(remote_id) = id.strip_prefix("dbusmenu:") {
+                            if let Ok(remote_id) = remote_id.parse::<i32>() {
+                                dbus.activate(address.clone(), remote_id, now_ms());
+                            }
+                        } else {
+                            focused::on_action(id);
+                        }
+                    })
+                };
+                let on_open_submenu: Rc<dyn Fn(String)> = {
+                    let dbus = self.dbus.clone();
+                    let address = address.clone();
+                    Rc::new(move |id| {
+                        if let Ok(id) = id.parse::<i32>() {
+                            dbus.open(address.clone(), id, generation_now);
+                        }
+                    })
+                };
+                let submenu_source: celestial_kit::menu::SubmenuSource = {
+                    let snapshot = self.menu_snapshot;
+                    Rc::new(move |id| {
+                        let id = id.parse::<i32>().ok()?;
+                        let menu = snapshot.read().as_ref().cloned()?;
+                        remote::find_subtree(&menu.items, id)
+                    })
+                };
+                let titles = composition();
+                let reveal_roots: Rc<Vec<Vec<MenuItem>>> =
+                    Rc::new(titles.iter().map(remote::Title::visible_items).collect());
+                for (index, title) in titles.iter().enumerate() {
+                    let items: MenuItems = {
+                        let composition = composition.clone();
+                        Rc::new(move || {
+                            composition()
+                                .get(index)
+                                .map(remote::Title::visible_items)
+                                .unwrap_or_default()
+                        })
+                    };
+                    let on_open: Option<Rc<dyn Fn()>> = title.remote_id.map(|id| {
+                        let dbus = self.dbus.clone();
+                        let address = address.clone();
+                        let callback: Rc<dyn Fn()> = Rc::new(move || {
+                            dbus.open(address.clone(), id, generation_now);
+                        });
+                        callback
+                    });
+                    let live_items = Some(items.clone());
+                    let is_help = index + 1 == titles.len();
+                    let searchable: Option<SearchableItems> = if is_help {
+                        let composition = composition.clone();
+                        Some(Rc::new(move || menu::SearchableLists {
+                            menu: remote::searchable(&composition()),
+                            help: focused::help_search_topics(),
+                        }))
+                    } else {
+                        None
+                    };
+                    specs.push(MenuTitleSpec {
+                        label: title.label.clone(),
+                        glyph: None,
+                        bold: title.bold,
+                        items,
+                        searchable,
+                        on_activate: on_activate.clone(),
+                        live_items,
+                        on_open,
+                        on_open_submenu: Some(on_open_submenu.clone()),
+                        submenu_source: Some(submenu_source.clone()),
+                        anchor: title_anchor(index + 1),
+                        enabled: title.enabled,
+                        query_state: is_help.then(|| help_query.clone()),
+                        reveal_roots: is_help.then(|| reveal_roots.clone()),
+                    });
+                }
+            } else {
+                let help_searchable: SearchableItems = {
+                    let app_name = app_name.clone();
+                    let app_id = app_id.clone();
+                    Rc::new(move || menu::SearchableLists {
+                        menu: focused::searchable_menu_items(
+                            &app_name,
+                            &app_id,
+                            &Toplevels::get().list.read().clone(),
+                        ),
+                        help: focused::help_search_topics(),
+                    })
+                };
+                let reveal_roots = Rc::new(vec![(app_items)(), (window_items)()]);
+                let focused_titles = [
+                    (
+                        app_name.clone(),
+                        app_items,
+                        1usize,
+                        None,
+                        None::<Rc<RefCell<SearchQuery>>>,
+                        None::<Rc<Vec<Vec<MenuItem>>>>,
                     ),
-                    help: focused::help_search_topics(),
-                })
-            };
-            let reveal_roots = Rc::new(vec![(app_items)(), (window_items)()]);
-            let focused_titles = [
-                (
-                    app_name.clone(),
-                    app_items,
-                    1usize,
-                    None,
-                    None::<Rc<RefCell<SearchQuery>>>,
-                    None::<Rc<Vec<Vec<MenuItem>>>>,
-                ),
-                ("Ventana".to_string(), window_items, 2, None, None, None),
-                (
-                    "Ayuda".to_string(),
-                    help_items,
-                    3,
-                    Some(help_searchable),
-                    Some(help_query.clone()),
-                    Some(reveal_roots),
-                ),
-            ];
-            for (offset, (label, items, anchor, searchable, query_state, reveal_roots)) in
-                focused_titles.into_iter().enumerate()
-            {
-                specs.push(MenuTitleSpec {
-                    label,
-                    glyph: None,
-                    bold: offset == 0,
-                    items,
-                    searchable,
-                    on_activate: Rc::new(focused::on_action),
-                    anchor: title_anchor(anchor),
-                    enabled: true,
-                    query_state,
-                    reveal_roots,
-                });
+                    ("Ventana".to_string(), window_items, 2, None, None, None),
+                    (
+                        "Ayuda".to_string(),
+                        help_items,
+                        3,
+                        Some(help_searchable),
+                        Some(help_query.clone()),
+                        Some(reveal_roots),
+                    ),
+                ];
+                for (offset, (label, items, anchor, searchable, query_state, reveal_roots)) in
+                    focused_titles.into_iter().enumerate()
+                {
+                    specs.push(MenuTitleSpec {
+                        label,
+                        glyph: None,
+                        bold: offset == 0,
+                        items,
+                        searchable,
+                        on_activate: Rc::new(focused::on_action),
+                        live_items: None,
+                        on_open: None,
+                        on_open_submenu: None,
+                        submenu_source: None,
+                        anchor: title_anchor(anchor),
+                        enabled: true,
+                        query_state,
+                        reveal_roots,
+                    });
+                }
             }
         } else {
             let entries_for_window = self.entries.clone();
@@ -257,6 +378,10 @@ impl App for BarApp {
                     items,
                     searchable: None,
                     on_activate: Rc::new(appmenu::on_action),
+                    live_items: None,
+                    on_open: None,
+                    on_open_submenu: None,
+                    submenu_source: None,
                     anchor: title_anchor(offset + 1),
                     enabled: true,
                     query_state: None,
@@ -291,19 +416,59 @@ fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State
 fn schedule_snapshot_drain(
     timers: Timers,
     dbus: MenuClient,
-    snapshot: State<Option<Arc<MenuSnapshot>>>,
+    snapshot: State<Option<Arc<RemoteMenu>>>,
     generation: Rc<Cell<u64>>,
 ) {
     let retry = timers.clone();
     timers.after(std::time::Duration::from_millis(16), move || {
         let mut snapshot = snapshot;
         while let Some(next) = dbus.try_recv() {
-            if next.generation == generation.get() {
-                snapshot.set(Some(Arc::new(next)));
+            if next.generation != generation.get() {
+                continue;
+            }
+            let mapped = next
+                .items
+                .as_ref()
+                .map(|items| dbusmenu_map::menu_items(items));
+            match next.parent {
+                None => {
+                    let menu = mapped.map(|items| {
+                        Arc::new(RemoteMenu {
+                            generation: next.generation,
+                            address: next.address.clone(),
+                            items,
+                        })
+                    });
+                    snapshot.set(menu);
+                }
+                Some(id) => {
+                    let Some(current) = snapshot.peek().as_ref().cloned() else {
+                        continue;
+                    };
+                    if current.generation != next.generation || current.address != next.address {
+                        continue;
+                    }
+                    let children = mapped.unwrap_or_else(|| vec![remote::unavailable()]);
+                    let mut items = current.items.clone();
+                    if remote::merge_subtree(&mut items, id, &children) {
+                        snapshot.set(Some(Arc::new(RemoteMenu {
+                            generation: current.generation,
+                            address: current.address.clone(),
+                            items,
+                        })));
+                    }
+                }
             }
         }
         schedule_snapshot_drain(retry.clone(), dbus.clone(), snapshot, generation.clone());
     });
+}
+
+fn now_ms() -> u32 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u32
 }
 
 fn schedule_appearance_poll(timers: Timers, appearance: State<Option<Resolved>>) {
@@ -362,7 +527,7 @@ pub fn run() -> anyhow::Result<()> {
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
     let appearance = State::create_global(Some(celestial_kit::theme::resolved()));
-    let menu_snapshot = State::create_global(None::<Arc<MenuSnapshot>>);
+    let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
     let app = AppComponent::new(BarApp {
         clock,
         active_app,

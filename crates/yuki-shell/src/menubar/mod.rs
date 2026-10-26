@@ -19,6 +19,7 @@ pub mod focused;
 pub mod help_topics;
 pub mod icons;
 pub mod menu;
+pub mod remote;
 pub mod system;
 
 pub use bar::run;

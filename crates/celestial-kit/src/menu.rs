@@ -187,6 +187,12 @@ pub enum CheckState {
     Radio(bool),
 }
 
+/// Resolves the live children of a remote submenu by id.
+pub type SubmenuSource = Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>;
+
+/// Re-reads menu items on every render.
+pub type ItemsSource = Rc<dyn Fn() -> Vec<MenuItem>>;
+
 /// Direction for root-menu keyboard navigation between menubar titles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuNavigation {
@@ -290,13 +296,13 @@ pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
     /// Live item source, re-read on every render so remote menus can update
     /// while the popup stays open.
-    items_source: Option<Rc<dyn Fn() -> Vec<MenuItem>>>,
+    items_source: Option<ItemsSource>,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     /// Called with a submenu id when a remote submenu is opened.
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
     /// Resolves the live children of a remote submenu by id.
-    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
+    submenu_source: Option<SubmenuSource>,
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
     palette: MenuPalette,
     searchable: Option<Rc<Vec<SearchableEntry>>>,
@@ -1069,7 +1075,7 @@ fn activate_or_open(
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
-    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
+    submenu_source: Option<SubmenuSource>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
     open_child_index: Rc<Cell<Option<usize>>>,
     opens_left: bool,
@@ -1403,7 +1409,7 @@ fn open_child_popup(
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
-    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
+    submenu_source: Option<SubmenuSource>,
     open_child_id: Rc<Cell<Option<PopupId>>>,
     open_child_index: Rc<Cell<Option<usize>>>,
     parent_items: Rc<Vec<MenuItem>>,
@@ -1557,7 +1563,7 @@ fn render_item(
     help_search_icon: Option<&'static str>,
     result_focused: UseState<Option<usize>>,
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
-    submenu_source: Option<Rc<dyn Fn(&str) -> Option<Vec<MenuItem>>>>,
+    submenu_source: Option<SubmenuSource>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
