@@ -746,3 +746,38 @@ ejemplo. El menú sí está anclado en la posición de esas etiquetas.
 - Navegación por teclado completa dentro de los popups (flechas, Esc, Enter)
   y atajos subrayados al pulsar `Alt`.
 - Scroll para menús largos.
+
+## 14e — Apps propias (CelestialKit)
+
+Aceptado el **2026-10-26** en sesión anidada clara con el ejemplo `contador`.
+CelestialKit exporta dbusmenu por la misma vía que Qt/KDE; la barra lo detecta,
+fusiona los títulos y abre el menú real al hacer clic.
+
+### Aceptación automatizada
+
+```sh
+YUKI_TEST_INPUT="wait:2000;key:ctrl+Up;wait:200;key:ctrl+5;wait:200;key:ctrl+Up;wait:200;key:ctrl+r;wait:500;click:60,16;wait:2000" ./dev.sh lab --light
+```
+
+- `Ctrl+Up` incrementa el contador (`count=1`).
+- `Ctrl+5` cambia el paso a 5.
+- `Ctrl+Up` vuelve a incrementar (`count=6`).
+- `Ctrl+R` reinicia el contador (`count=0`).
+- `click:60,16` abre el menú **Contador** de la barra.
+- `SIGUSR1` al compositor genera la captura.
+
+Logs del ejemplo (`demo-contador.log`):
+
+```text
+contador: action increment count=1
+contador: action step-5 count=1
+contador: action increment count=6
+contador: action reset count=0
+```
+
+### Captura
+
+![Menú Contador en claro](img/14e/contador-claro.png)
+
+`contador-claro.png`: ventana de Contador con el menú global abierto en tema
+claro; se ven Incrementar, Decrementar, Reiniciar, Paso y Permitir negativos.
