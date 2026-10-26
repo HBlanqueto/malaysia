@@ -441,4 +441,43 @@ mod tests {
         assert_eq!(dbusmenu_label("a_b"), "a__b");
         assert_eq!(dbusmenu_label("Archivo"), "Archivo");
     }
+
+    #[test]
+    fn ctrl_shift_s_matches() {
+        assert!(shortcut_matches(
+            "Ctrl+Shift+S",
+            Modifiers::CONTROL | Modifiers::SHIFT,
+            &Key::Character("s".into())
+        ));
+    }
+
+    #[test]
+    fn disabled_action_does_not_fire() {
+        let menu = AppMenu::new(vec![Menu::new(
+            "Archivo",
+            vec![MenuItem::Action {
+                id: "save".into(),
+                label: "Guardar".into(),
+                shortcut: Some("Ctrl+S".into()),
+                enabled: false,
+                check: CheckState::None,
+                icon: None,
+            }],
+        )]);
+        assert!(find_menu_shortcut(
+            &menu,
+            Modifiers::CONTROL | Modifiers::SHIFT,
+            &Key::Character("s".into())
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn plain_typing_does_not_trigger_shortcut() {
+        assert!(!shortcut_matches(
+            "Ctrl+R",
+            Modifiers::empty(),
+            &Key::Character("r".into())
+        ));
+    }
 }
