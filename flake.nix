@@ -118,7 +118,7 @@
             # The binary must start outside `nix develop`. The RUNPATH covers
             # the shared libraries, but libglvnd/Mesa also read these three
             # environment variables, so bake the flake's Mesa into a wrapper.
-            for program in yuki yuki-shell; do
+            for program in yuki yuki-shell yuki-settings; do
               wrapProgram "$out/bin/$program" \
                 --run 'export YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS="''${YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS-''${__EGL_VENDOR_LIBRARY_DIRS-}}"' \
                 --run 'export YUKI_ORIG_LIBGL_DRIVERS_PATH="''${YUKI_ORIG_LIBGL_DRIVERS_PATH-''${LIBGL_DRIVERS_PATH-}}"' \
@@ -142,6 +142,9 @@
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
+            # The Settings app launcher entry.
+            install -Dm644 share/applications/io.github.hblanqueto.yuki.settings.desktop \
+              $out/share/applications/io.github.hblanqueto.yuki.settings.desktop
             # Ship the systemd user units that supervise the shell components
             # (ADR 0023), with the package's binary path substituted in.
             mkdir -p $out/lib/systemd/user
