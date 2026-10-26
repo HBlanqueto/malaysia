@@ -824,6 +824,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
          \x20   title: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   text: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   accent: {},\n\
+         \x20   on_accent: {},\n\
          \x20   traffic_lights_inactive: {},\n\
          }}",
         rgba(theme_color(tokens, theme, "titlebar-bg")),
@@ -835,6 +836,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
         rgba(theme_color(tokens, theme, "ink")),
         rgba(theme_color(tokens, theme, "ink-muted")),
         rgba(theme_color(tokens, theme, "accent")),
+        rgba(theme_color(tokens, theme, "on-accent")),
         rgba(inactive)
     )
 }

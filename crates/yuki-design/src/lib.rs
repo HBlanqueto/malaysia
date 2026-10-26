@@ -379,6 +379,8 @@ pub struct Palette {
     pub text: FocusPair,
     /// The accent color.
     pub accent: Rgba,
+    /// Text or glyphs drawn on top of the accent color.
+    pub on_accent: Rgba,
     /// The traffic lights when the window does not have focus. Neptunia uses a
     /// different grey per theme, so it belongs to the palette, not the bar.
     pub traffic_lights_inactive: Rgba,
@@ -691,13 +693,41 @@ mod tests {
     }
 
     #[test]
-    fn sidebar_island_opaque_is_solid_and_lighter_than_window() {
-        let opaque = super::SIDEBAR_ISLAND_LIGHT_OPAQUE;
-        let window = super::LIGHT.titlebar_bg.focused;
-        assert_eq!(opaque.a, 1.0);
-        assert!(
-            opaque.r + opaque.g + opaque.b > window.r + window.g + window.b,
-            "island opaque should be lighter than bg-window"
+    fn sidebar_island_opaque_matches_bg_sunken() {
+        // The opaque island background is now the same as the flat sidebar
+        // background (bg-sunken) so it reads darker than the window content.
+        assert_eq!(super::SIDEBAR_ISLAND_LIGHT_OPAQUE, super::SIDEBAR_LIGHT);
+        assert_eq!(super::SIDEBAR_ISLAND_DARK_OPAQUE, super::SIDEBAR_DARK);
+        assert_eq!(
+            super::SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
+            super::SIDEBAR_DARK_TINT
         );
+        assert_eq!(super::SIDEBAR_ISLAND_LIGHT_OPAQUE.a, 1.0);
+        assert_eq!(super::SIDEBAR.rim_width, 1.0);
+    }
+
+    #[test]
+    fn sidebar_island_light_has_no_rim_inner_or_shadow() {
+        // In light mode the island sits flush against the window; the rim,
+        // inner line and drop shadow are fully transparent.
+        assert_eq!(super::SIDEBAR_ISLAND_RIM_LIGHT.a, 0.0);
+        assert_eq!(super::SIDEBAR_ISLAND_INNER_LIGHT.a, 0.0);
+        assert_eq!(super::SIDEBAR_ISLAND_SHADOW[0].opacity, 0.0);
+        assert_eq!(super::SIDEBAR_ISLAND_SHADOW[1].opacity, 0.0);
+    }
+
+    #[test]
+    fn sidebar_island_dark_has_gray_rim() {
+        // In dark modes the island keeps a subtle gray rim (#ffffff21).
+        assert_eq!(
+            super::SIDEBAR_ISLAND_RIM_DARK.to_rgba8(),
+            [0xff, 0xff, 0xff, 0x21]
+        );
+        assert_eq!(
+            super::SIDEBAR_ISLAND_RIM_DARK_TINT.to_rgba8(),
+            [0xff, 0xff, 0xff, 0x21]
+        );
+        assert!(super::SIDEBAR_ISLAND_SHADOW_DARK[0].opacity > 0.0);
+        assert_eq!(super::SIDEBAR_ISLAND_SHADOW_DARK[1].opacity, 0.0);
     }
 }

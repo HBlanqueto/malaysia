@@ -37,9 +37,9 @@
   --shadow-soft: #0d12192e;
   --shell-bar: #f2f4f7e6;
   --sidebar-flat-bg: #e7ebf1;
-  --sidebar-island-bg: #ffffffc7;
+  --sidebar-island-bg: #e7ebf1;
   --sidebar-island-inner: #ffffff00;
-  --sidebar-island-rim: #0d12191f;
+  --sidebar-island-rim: #0d121900;
   --success: #1a7f37;
   --sys-blue: #2f6fe4;
   --sys-cyan: #0f86b8;
@@ -114,9 +114,9 @@
   --shadow-soft: #0d12192e;
   --shell-bar: #1e1e1ee6;
   --sidebar-flat-bg: #161616;
-  --sidebar-island-bg: #2c2c2ed1;
-  --sidebar-island-inner: #ffffff1a;
-  --sidebar-island-rim: #000000d9;
+  --sidebar-island-bg: #161616;
+  --sidebar-island-inner: #ffffff00;
+  --sidebar-island-rim: #ffffff21;
   --success: #5fcf7c;
   --sys-blue: #2f6fe4;
   --sys-cyan: #0f86b8;
@@ -191,9 +191,9 @@
   --shadow-soft: #0d12192e;
   --shell-bar: #1d1e20e6;
   --sidebar-flat-bg: #151617;
-  --sidebar-island-bg: #2b2c2fd1;
-  --sidebar-island-inner: #ffffff1a;
-  --sidebar-island-rim: #000000d9;
+  --sidebar-island-bg: #151617;
+  --sidebar-island-inner: #ffffff00;
+  --sidebar-island-rim: #ffffff21;
   --success: #5fcf7c;
   --sys-blue: #2f6fe4;
   --sys-cyan: #0f86b8;

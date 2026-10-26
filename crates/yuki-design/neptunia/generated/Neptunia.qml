@@ -43,9 +43,9 @@ QtObject {
   readonly property color light_shadow_soft: #0d12192e;
   readonly property color light_shell_bar: #f2f4f7e6;
   readonly property color light_sidebar_flat_bg: #e7ebf1;
-  readonly property color light_sidebar_island_bg: #ffffffc7;
+  readonly property color light_sidebar_island_bg: #e7ebf1;
   readonly property color light_sidebar_island_inner: #ffffff00;
-  readonly property color light_sidebar_island_rim: #0d12191f;
+  readonly property color light_sidebar_island_rim: #0d121900;
   readonly property color light_success: #1a7f37;
   readonly property color light_sys_blue: #2f6fe4;
   readonly property color light_sys_cyan: #0f86b8;
@@ -116,9 +116,9 @@ QtObject {
   readonly property color dark_shadow_soft: #0d12192e;
   readonly property color dark_shell_bar: #1e1e1ee6;
   readonly property color dark_sidebar_flat_bg: #161616;
-  readonly property color dark_sidebar_island_bg: #2c2c2ed1;
-  readonly property color dark_sidebar_island_inner: #ffffff1a;
-  readonly property color dark_sidebar_island_rim: #000000d9;
+  readonly property color dark_sidebar_island_bg: #161616;
+  readonly property color dark_sidebar_island_inner: #ffffff00;
+  readonly property color dark_sidebar_island_rim: #ffffff21;
   readonly property color dark_success: #5fcf7c;
   readonly property color dark_sys_blue: #2f6fe4;
   readonly property color dark_sys_cyan: #0f86b8;
@@ -189,9 +189,9 @@ QtObject {
   readonly property color dark_tint_shadow_soft: #0d12192e;
   readonly property color dark_tint_shell_bar: #1d1e20e6;
   readonly property color dark_tint_sidebar_flat_bg: #151617;
-  readonly property color dark_tint_sidebar_island_bg: #2b2c2fd1;
-  readonly property color dark_tint_sidebar_island_inner: #ffffff1a;
-  readonly property color dark_tint_sidebar_island_rim: #000000d9;
+  readonly property color dark_tint_sidebar_island_bg: #151617;
+  readonly property color dark_tint_sidebar_island_inner: #ffffff00;
+  readonly property color dark_tint_sidebar_island_rim: #ffffff21;
   readonly property color dark_tint_success: #5fcf7c;
   readonly property color dark_tint_sys_blue: #2f6fe4;
   readonly property color dark_tint_sys_cyan: #0f86b8;
