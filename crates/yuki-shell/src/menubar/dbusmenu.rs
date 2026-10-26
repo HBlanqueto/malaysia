@@ -20,6 +20,10 @@ pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
 pub const REGISTRAR_PATH: &str = "/com/canonical/AppMenu/Registrar";
 const DBUSMENU_INTERFACE: &str = "com.canonical.dbusmenu";
 const CALL_TIMEOUT: Duration = Duration::from_millis(500);
+/// `GetLayout(0, -1, [])` measures 354–478 ms in Kate, so the full tree gets
+/// its own budget instead of the 500 ms of the other calls.
+const FULL_TREE_TIMEOUT: Duration = Duration::from_secs(2);
+const FULL_TREE_DELAY: Duration = Duration::from_secs(1);
 const DEBOUNCE: Duration = Duration::from_millis(50);
 
 static RENDER_THREAD: OnceLock<ThreadId> = OnceLock::new();
@@ -44,6 +48,8 @@ pub enum Command {
         address: AppMenuAddress,
         generation: u64,
     },
+    /// The focused window has no menu; drops any pending full-tree prefetch.
+    Unfocus,
     Open {
         address: AppMenuAddress,
         id: i32,
@@ -96,6 +102,10 @@ impl MenuClient {
             address,
             generation,
         });
+    }
+
+    pub fn unfocus(&self) {
+        let _ = self.commands.send_blocking(Command::Unfocus);
     }
 
     pub fn open(&self, address: AppMenuAddress, id: i32, generation: u64) {
@@ -387,6 +397,55 @@ struct Pending {
     snapshot: bool,
 }
 
+/// The background full-tree fetch: at most one per address, one second after
+/// the window got the focus. A new focus on the same address keeps the first
+/// deadline and only updates the generation.
+#[derive(Default)]
+struct BackgroundFullTree {
+    wait: Option<(AppMenuAddress, u64, Instant)>,
+}
+
+impl BackgroundFullTree {
+    fn schedule(&mut self, address: &AppMenuAddress, generation: u64, cached: bool, now: Instant) {
+        if cached {
+            self.cancel(address);
+            return;
+        }
+        match &mut self.wait {
+            Some((pending, pending_generation, _)) if pending == address => {
+                *pending_generation = generation;
+            }
+            _ => {
+                self.wait = Some((address.clone(), generation, now + FULL_TREE_DELAY));
+            }
+        }
+    }
+
+    fn cancel(&mut self, address: &AppMenuAddress) {
+        if self
+            .wait
+            .as_ref()
+            .is_some_and(|(pending, _, _)| pending == address)
+        {
+            self.wait = None;
+        }
+    }
+
+    fn next(&self) -> Option<Instant> {
+        self.wait.as_ref().map(|(_, _, at)| *at)
+    }
+
+    fn due(&mut self, now: Instant) -> Option<(AppMenuAddress, u64)> {
+        if self.wait.as_ref().is_some_and(|(_, _, at)| *at <= now) {
+            self.wait
+                .take()
+                .map(|(address, generation, _)| (address, generation))
+        } else {
+            None
+        }
+    }
+}
+
 enum Event {
     Command(Result<Command, async_channel::RecvError>),
     Owner(Option<zbus::fdo::NameOwnerChanged>),
@@ -401,7 +460,7 @@ async fn run(
     initial_app_menus: bool,
 ) {
     let builder = match zbus::connection::Builder::session() {
-        Ok(builder) => builder.method_timeout(CALL_TIMEOUT),
+        Ok(builder) => builder.method_timeout(FULL_TREE_TIMEOUT),
         Err(error) => {
             tracing::error!(%error, "menubar: could not build the session bus connection");
             return;
@@ -447,8 +506,13 @@ async fn run(
     let mut focused: Option<(AppMenuAddress, u64)> = None;
     let mut pending = Pending::default();
     let mut deadline: Option<Instant> = None;
+    let mut background = BackgroundFullTree::default();
     loop {
-        let selected = if let Some(at) = deadline {
+        let timer = match (deadline, background.next()) {
+            (Some(debounce), Some(full)) => Some(debounce.min(full)),
+            (debounce, full) => debounce.or(full),
+        };
+        let selected = if let Some(at) = timer {
             future::or(
                 future::or(async { Event::Command(commands.recv().await) }, async {
                     Event::Owner(owner_changes.next().await)
@@ -478,6 +542,7 @@ async fn run(
                 deadline = None;
                 if !enabled {
                     focused = None;
+                    background = BackgroundFullTree::default();
                 }
                 tracing::info!(enabled, "menubar: app_menus changed");
                 set_registrar(&connection, &windows, enabled).await;
@@ -492,6 +557,15 @@ async fn run(
                 focused = Some((address.clone(), generation));
                 pending = Pending::default();
                 deadline = None;
+                background.schedule(
+                    &address,
+                    generation,
+                    caches
+                        .get(&address)
+                        .and_then(|cache| cache.full())
+                        .is_some(),
+                    Instant::now(),
+                );
                 if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
                     tracing::info!(
                         generation,
@@ -516,6 +590,12 @@ async fn run(
                     pending.focus = Some((address, generation));
                     arm(&mut deadline);
                 }
+            }
+            Event::Command(Ok(Command::Unfocus)) => {
+                focused = None;
+                pending = Pending::default();
+                deadline = None;
+                background = BackgroundFullTree::default();
             }
             Event::Command(Ok(Command::Open {
                 address,
@@ -573,9 +653,20 @@ async fn run(
                 let cached = caches.get(&address).and_then(|cache| cache.full()).cloned();
                 let (items, from_cache) = match cached {
                     Some(full) => (Some(full.items), true),
-                    None => match layout(&connection, &dbus, &mut proxies, &address, 0, -1).await {
+                    None => match layout(
+                        &connection,
+                        &dbus,
+                        &mut proxies,
+                        &address,
+                        0,
+                        -1,
+                        FULL_TREE_TIMEOUT,
+                    )
+                    .await
+                    {
                         Ok((revision, items)) => {
                             caches.entry(&address).put_full(revision, items.clone());
+                            background.cancel(&address);
                             (Some(items), false)
                         }
                         Err(error) => {
@@ -672,18 +763,35 @@ async fn run(
             }
             Event::Menu(None) => break,
             Event::Timer => {
-                deadline = None;
-                flush(
-                    &connection,
-                    &dbus,
-                    &mut proxies,
-                    &mut caches,
-                    &snapshots,
-                    &wake,
-                    &focused,
-                    &mut pending,
-                )
-                .await;
+                let now = Instant::now();
+                if deadline.is_some_and(|at| at <= now) {
+                    deadline = None;
+                    flush(
+                        &connection,
+                        &dbus,
+                        &mut proxies,
+                        &mut caches,
+                        &snapshots,
+                        &wake,
+                        &focused,
+                        &mut pending,
+                    )
+                    .await;
+                }
+                if let Some((address, generation)) = background.due(now) {
+                    prefetch_full_tree(
+                        &connection,
+                        &dbus,
+                        &mut proxies,
+                        &mut caches,
+                        &snapshots,
+                        &wake,
+                        &focused,
+                        &address,
+                        generation,
+                    )
+                    .await;
+                }
             }
         }
     }
@@ -883,7 +991,7 @@ async fn fetch_root(
     generation: u64,
 ) {
     let started = Instant::now();
-    let items = match layout(connection, dbus, proxies, address, 0, 1).await {
+    let items = match layout(connection, dbus, proxies, address, 0, 1, CALL_TIMEOUT).await {
         Ok((revision, items)) => {
             caches.entry(address).put(0, revision, items.to_vec());
             Some(items)
@@ -960,7 +1068,7 @@ async fn fetch_subtree(
     address: &AppMenuAddress,
     id: i32,
 ) -> Option<Vec<RawItem>> {
-    match layout(connection, dbus, proxies, address, id, 1).await {
+    match layout(connection, dbus, proxies, address, id, 1, CALL_TIMEOUT).await {
         Ok((revision, items)) => {
             caches.entry(address).put(id, revision, items.to_vec());
             Some(items)
@@ -1013,10 +1121,9 @@ async fn proxy(
         .await?;
     note_call();
     let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
-        Ok(name) => dbus
-            .get_name_owner(name)
+        Ok(name) => timed(CALL_TIMEOUT, dbus.get_name_owner(name))
             .await
-            .ok()
+            .and_then(Result::ok)
             .map(|owner| owner.to_string()),
         Err(_) => None,
     };
@@ -1049,13 +1156,92 @@ async fn layout(
     address: &AppMenuAddress,
     parent: i32,
     depth: i32,
+    limit: Duration,
 ) -> zbus::Result<(u32, Vec<RawItem>)> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
     note_call();
-    let (revision, root) = proxy
-        .call::<_, _, (u32, RawNode)>("GetLayout", &(parent, depth, &[] as &[&str]))
-        .await?;
+    let args = (parent, depth, &[] as &[&str]);
+    let call = proxy.call::<_, _, (u32, RawNode)>("GetLayout", &args);
+    let Some(result) = timed(limit, call).await else {
+        return Err(zbus::Error::Failure("GetLayout timed out".to_string()));
+    };
+    let (revision, root) = result?;
     Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
+}
+
+/// Resolves to `None` when `future` has not finished after `limit`.
+async fn timed<F: std::future::Future>(limit: Duration, future: F) -> Option<F::Output> {
+    future::or(async move { Some(future.await) }, async move {
+        async_io::Timer::after(limit).await;
+        None
+    })
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn prefetch_full_tree(
+    connection: &zbus::Connection,
+    dbus: &zbus::fdo::DBusProxy<'_>,
+    proxies: &mut ProxyCache,
+    caches: &mut MenuCaches,
+    snapshots: &Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
+    focused: &Option<(AppMenuAddress, u64)>,
+    address: &AppMenuAddress,
+    generation: u64,
+) {
+    let still_focused = has_focus(focused, address, generation);
+    if !still_focused || caches.get(address).and_then(|cache| cache.full()).is_some() {
+        return;
+    }
+    let started = Instant::now();
+    match layout(connection, dbus, proxies, address, 0, -1, FULL_TREE_TIMEOUT).await {
+        Ok((revision, items)) => {
+            caches.entry(address).put_full(revision, items.clone());
+            let still_focused = has_focus(focused, address, generation);
+            tracing::info!(
+                generation,
+                service = %address.service,
+                items = items.len(),
+                focused = still_focused,
+                ms = started.elapsed().as_millis(),
+                "menubar: dbusmenu full tree prefetch"
+            );
+            if still_focused {
+                send(
+                    snapshots,
+                    wake,
+                    MenuSnapshot {
+                        generation,
+                        address: address.clone(),
+                        parent: None,
+                        items: Some(items),
+                        cached: false,
+                    },
+                )
+                .await;
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                service = %address.service,
+                "menubar: dbusmenu full tree prefetch failed"
+            );
+        }
+    }
+}
+
+fn has_focus(
+    focused: &Option<(AppMenuAddress, u64)>,
+    address: &AppMenuAddress,
+    generation: u64,
+) -> bool {
+    focused
+        .as_ref()
+        .is_some_and(|(current, current_generation)| {
+            current == address && *current_generation == generation
+        })
 }
 
 async fn about_to_show(
@@ -1069,13 +1255,19 @@ async fn about_to_show(
         return false;
     };
     note_call();
-    match proxy.call::<_, _, bool>("AboutToShow", &(id,)).await {
-        Ok(shown) => {
+    let args = (id,);
+    let call = proxy.call::<_, _, bool>("AboutToShow", &args);
+    match timed(CALL_TIMEOUT, call).await {
+        Some(Ok(shown)) => {
             tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow");
             shown
         }
-        Err(error) => {
+        Some(Err(error)) => {
             tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed");
+            false
+        }
+        None => {
+            tracing::warn!(id, "menubar: dbusmenu AboutToShow timed out");
             false
         }
     }
@@ -1091,12 +1283,11 @@ async fn event(
 ) -> zbus::Result<()> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
     note_call();
-    proxy
-        .call::<_, _, ()>(
-            "Event",
-            &(id, "clicked", zbus::zvariant::Value::I32(0), timestamp),
-        )
+    let args = (id, "clicked", zbus::zvariant::Value::I32(0), timestamp);
+    let call = proxy.call::<_, _, ()>("Event", &args);
+    timed(CALL_TIMEOUT, call)
         .await
+        .unwrap_or_else(|| Err(zbus::Error::Failure("Event timed out".to_string())))
 }
 
 #[cfg(test)]
@@ -1223,5 +1414,46 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[test]
+    fn the_full_tree_prefetch_fires_after_one_second() {
+        let mut background = BackgroundFullTree::default();
+        let kate = address("org.kde.kate");
+        let now = Instant::now();
+        background.schedule(&kate, 1, false, now);
+        assert_eq!(background.next(), Some(now + FULL_TREE_DELAY));
+        assert_eq!(
+            background.due(now + FULL_TREE_DELAY - Duration::from_millis(1)),
+            None
+        );
+        assert_eq!(background.due(now + FULL_TREE_DELAY), Some((kate, 1)));
+        assert_eq!(background.next(), None);
+    }
+
+    #[test]
+    fn a_second_focus_on_the_same_address_does_not_enqueue_another_prefetch() {
+        let mut background = BackgroundFullTree::default();
+        let kate = address("org.kde.kate");
+        let now = Instant::now();
+        background.schedule(&kate, 1, false, now);
+        background.schedule(&kate, 2, false, now + Duration::from_millis(400));
+        assert_eq!(background.next(), Some(now + FULL_TREE_DELAY));
+        assert_eq!(background.due(now + FULL_TREE_DELAY), Some((kate, 2)));
+    }
+
+    #[test]
+    fn a_cached_full_tree_or_a_new_focus_cancels_the_prefetch() {
+        let mut background = BackgroundFullTree::default();
+        let kate = address("org.kde.kate");
+        let firefox = address("org.mozilla.firefox");
+        let now = Instant::now();
+        background.schedule(&kate, 1, false, now);
+        background.schedule(&kate, 1, true, now);
+        assert_eq!(background.next(), None);
+        background.schedule(&kate, 1, false, now);
+        background.schedule(&firefox, 2, false, now);
+        assert_eq!(background.next(), Some(now + FULL_TREE_DELAY));
+        assert_eq!(background.due(now + FULL_TREE_DELAY), Some((firefox, 2)));
     }
 }

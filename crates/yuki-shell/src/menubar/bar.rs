@@ -137,12 +137,14 @@ impl App for BarApp {
                         self.dbus.focus(menu.clone(), next_generation);
                     }
                     Some((app_id, _, false)) => {
-                        tracing::info!(app_id = %app_id, "menubar: app_menus disabled")
+                        tracing::info!(app_id = %app_id, "menubar: app_menus disabled");
+                        self.dbus.unfocus();
                     }
                     Some((app_id, None, true)) => {
-                        tracing::info!(app_id = %app_id, "menubar: app_menu none")
+                        tracing::info!(app_id = %app_id, "menubar: app_menu none");
+                        self.dbus.unfocus();
                     }
-                    None => {}
+                    None => self.dbus.unfocus(),
                 }
                 *last = key;
             }
