@@ -173,6 +173,7 @@ impl App for Contador {
                 ID_CLOSE_WINDOW => std::process::exit(0),
                 _ => {}
             }
+            tracing::info!(action = id, count = *count.read(), "contador: action");
         }
 
         if let Some(handle) = menu_handle.read().as_ref() {
@@ -240,6 +241,7 @@ impl App for Contador {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
     let action_queue: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let app = AppComponent::new(Contador {
         action_queue: action_queue.clone(),
