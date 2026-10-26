@@ -146,6 +146,8 @@ fn debug_once(key: &str, value: Option<&OwnedValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use celestial_kit::app_menu::{AppMenu, Menu, RawItem as KitRawItem};
+    use celestial_kit::menu::{CheckState, MenuItem};
 
     fn text(value: &str) -> OwnedValue {
         OwnedValue::try_from(zbus::zvariant::Value::from(value)).unwrap()
@@ -268,6 +270,128 @@ mod tests {
                 id,
                 ..
             } if shortcut == "Ctrl+Shift+S" && id == "dbusmenu:1"
+        ));
+    }
+
+    fn kit_to_bar(item: &KitRawItem) -> RawItem {
+        RawItem {
+            id: item.id,
+            properties: item.properties.clone(),
+            children: item.children.iter().map(kit_to_bar).collect(),
+        }
+    }
+
+    #[test]
+    fn contador_menu_round_trips_through_dbusmenu_map() {
+        let menu = AppMenu::new(vec![
+            Menu::new(
+                "Archivo",
+                vec![
+                    MenuItem::Action {
+                        id: "new-window".to_string(),
+                        label: "Nueva ventana".to_string(),
+                        shortcut: Some("Ctrl+N".to_string()),
+                        enabled: false,
+                        check: CheckState::None,
+                        icon: None,
+                    },
+                    MenuItem::Separator,
+                    MenuItem::Action {
+                        id: "close-window".to_string(),
+                        label: "Cerrar ventana".to_string(),
+                        shortcut: Some("Ctrl+W".to_string()),
+                        enabled: true,
+                        check: CheckState::None,
+                        icon: None,
+                    },
+                ],
+            ),
+            Menu::new(
+                "Contador",
+                vec![
+                    MenuItem::Action {
+                        id: "reset".to_string(),
+                        label: "Reiniciar".to_string(),
+                        shortcut: Some("Ctrl+R".to_string()),
+                        enabled: true,
+                        check: CheckState::None,
+                        icon: None,
+                    },
+                    MenuItem::Submenu {
+                        id: Some("step-submenu".to_string()),
+                        label: "Paso".to_string(),
+                        enabled: true,
+                        icon: None,
+                        items: vec![MenuItem::Action {
+                            id: "step-5".to_string(),
+                            label: "5".to_string(),
+                            shortcut: None,
+                            enabled: true,
+                            check: CheckState::Radio(true),
+                            icon: None,
+                        }],
+                    },
+                    MenuItem::Action {
+                        id: "allow-negative".to_string(),
+                        label: "Permitir negativos".to_string(),
+                        shortcut: None,
+                        enabled: true,
+                        check: CheckState::Checkbox(false),
+                        icon: None,
+                    },
+                ],
+            ),
+        ]);
+        let root = celestial_kit::app_menu::to_dbusmenu(&menu);
+        let items = menu_items(&root.children.iter().map(kit_to_bar).collect::<Vec<_>>());
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].label(), Some("Archivo"));
+        assert!(matches!(&items[0], MenuItem::Submenu { enabled: true, .. }));
+        let archivo = match &items[0] {
+            MenuItem::Submenu { items, .. } => items,
+            _ => panic!(),
+        };
+        assert!(matches!(
+            &archivo[0],
+            MenuItem::Action {
+                label,
+                shortcut: Some(shortcut),
+                enabled: false,
+                ..
+            } if label == "Nueva ventana" && shortcut == "Control+N"
+        ));
+        assert!(matches!(&archivo[1], MenuItem::Separator));
+        assert!(matches!(
+            &archivo[2],
+            MenuItem::Action {
+                label,
+                shortcut: Some(shortcut),
+                enabled: true,
+                ..
+            } if label == "Cerrar ventana" && shortcut == "Control+W"
+        ));
+        let contador = match &items[1] {
+            MenuItem::Submenu { items, .. } => items,
+            _ => panic!(),
+        };
+        assert!(matches!(
+            &contador[0],
+            MenuItem::Action {
+                label,
+                shortcut: Some(shortcut),
+                check: CheckState::None,
+                enabled: true,
+                ..
+            } if label == "Reiniciar" && shortcut == "Control+R"
+        ));
+        assert!(matches!(
+            &contador[2],
+            MenuItem::Action {
+                label,
+                check: CheckState::Checkbox(false),
+                enabled: true,
+                ..
+            } if label == "Permitir negativos"
         ));
     }
 
