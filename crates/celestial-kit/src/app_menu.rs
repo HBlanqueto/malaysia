@@ -13,8 +13,8 @@ use zbus::zvariant::{OwnedValue, Value};
 use crate::menu::{CheckState, MenuItem};
 use crate::platform::WakeHandle;
 
-pub(crate) mod layout;
-pub(crate) mod server;
+pub mod layout;
+pub mod server;
 
 /// A declarative application menu.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -67,6 +67,12 @@ impl MenuHandle {
         }
     }
 
+    /// Builds a handle for tests that do not need a render wake.
+    #[doc(hidden)]
+    pub fn for_test(menu: AppMenu) -> Self {
+        Self::new(menu, None)
+    }
+
     pub(crate) fn set_path(&self, path: impl Into<String>) {
         if let Ok(mut slot) = self.path.lock() {
             *slot = Some(path.into());
@@ -94,7 +100,9 @@ impl MenuHandle {
     }
 
     /// The live menu and the current dbusmenu revision.
-    pub(crate) fn snapshot(&self) -> (AppMenu, u32) {
+    /// Returns the current menu and its revision.
+    #[doc(hidden)]
+    pub fn snapshot(&self) -> (AppMenu, u32) {
         let state = self.state.lock().expect("menu state poisoned");
         (state.menu.clone(), state.revision)
     }
@@ -137,13 +145,15 @@ fn update_menu_items(items: &mut [MenuItem], id: &str, f: &dyn Fn(&mut MenuItem)
 /// synthetic ids based on their position and label so they stay stable across
 /// hot updates.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct IdMap {
+#[doc(hidden)]
+pub struct IdMap {
     ids: HashMap<String, i32>,
     next: i32,
 }
 
 impl IdMap {
-    pub(crate) fn get(&mut self, key: impl Into<String>) -> i32 {
+    #[doc(hidden)]
+    pub fn get(&mut self, key: impl Into<String>) -> i32 {
         let key = key.into();
         if let Some(id) = self.ids.get(&key) {
             return *id;
@@ -464,12 +474,14 @@ mod tests {
                 icon: None,
             }],
         )]);
-        assert!(find_menu_shortcut(
-            &menu,
-            Modifiers::CONTROL | Modifiers::SHIFT,
-            &Key::Character("s".into())
-        )
-        .is_none());
+        assert!(
+            find_menu_shortcut(
+                &menu,
+                Modifiers::CONTROL | Modifiers::SHIFT,
+                &Key::Character("s".into())
+            )
+            .is_none()
+        );
     }
 
     #[test]

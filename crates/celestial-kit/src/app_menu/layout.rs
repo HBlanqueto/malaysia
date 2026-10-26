@@ -9,7 +9,7 @@ use crate::app_menu::{
 use crate::menu::MenuItem;
 
 /// One dbusmenu layout item: `(id, properties, children)`.
-pub type LayoutItem = (i32, HashMap<String, OwnedValue>, Vec<Value<'static>>);
+pub type LayoutItem = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
 
 /// The value returned by `GetLayout`: `(revision, layout_item)`.
 pub type DbusMenuLayout = (u32, LayoutItem);
@@ -44,14 +44,16 @@ impl RegisteredMenu {
 /// Snapshot of a generated layout used to decide between
 /// `ItemsPropertiesUpdated` and `LayoutUpdated`.
 #[derive(Clone, Debug)]
-pub(crate) struct LayoutSnapshot {
+#[doc(hidden)]
+pub struct LayoutSnapshot {
     pub revision: u32,
     pub nodes: HashMap<i32, LayoutNode>,
     pub root_children: Vec<i32>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LayoutNode {
+#[doc(hidden)]
+pub struct LayoutNode {
     pub properties: HashMap<String, OwnedValue>,
     pub children: Vec<i32>,
 }
@@ -67,14 +69,18 @@ pub fn build_layout(
         nodes: HashMap::new(),
         root_children: Vec::new(),
     };
+    // Reserve id 0 for the root so top-level menus start at 1 and never
+    // collide with it.
+    id_map.get("__root__");
     let root_id = 0;
-    let mut root_children_values: Vec<Value<'static>> = Vec::new();
+    let mut root_children_values: Vec<OwnedValue> = Vec::new();
     for m in &menu.menus {
         let menu_id = id_map.get(format!("__menu__:{}", m.title));
         snapshot.root_children.push(menu_id);
-        let (item, node) = layout_menu(menu_id, m, id_map);
-        snapshot.nodes.insert(menu_id, node);
-        root_children_values.push(Value::Structure(zbus::zvariant::Structure::from(item)));
+        let item = layout_menu(menu_id, m, id_map, &mut snapshot);
+        root_children_values.push(
+            OwnedValue::try_from(Value::Structure(zbus::zvariant::Structure::from(item))).unwrap(),
+        );
     }
     snapshot.nodes.insert(
         root_id,
@@ -91,31 +97,54 @@ pub fn build_layout(
     (snapshot, root)
 }
 
-fn layout_menu(id: i32, menu: &Menu, id_map: &mut IdMap) -> (LayoutItem, LayoutNode) {
+fn layout_menu(
+    id: i32,
+    menu: &Menu,
+    id_map: &mut IdMap,
+    snapshot: &mut LayoutSnapshot,
+) -> LayoutItem {
     let mut props = HashMap::new();
     props.insert("label".to_string(), owned(dbusmenu_label(&menu.title)));
     props.insert("children-display".to_string(), owned("submenu"));
     let mut children = Vec::new();
     let mut child_ids = Vec::new();
     for child in &menu.items {
-        let (child_item, child_id) = layout_item(child, id_map);
+        let (child_item, child_id) = layout_item(child, id_map, snapshot);
         child_ids.push(child_id);
-        children.push(Value::Structure(zbus::zvariant::Structure::from(child_item)));
+        children.push(
+            OwnedValue::try_from(Value::Structure(zbus::zvariant::Structure::from(
+                child_item,
+            )))
+            .unwrap(),
+        );
     }
-    let node = LayoutNode {
-        properties: props.clone(),
-        children: child_ids,
-    };
-    let item = item_value(id, &props, children);
-    (item, node)
+    snapshot.nodes.insert(
+        id,
+        LayoutNode {
+            properties: props.clone(),
+            children: child_ids,
+        },
+    );
+    item_value(id, &props, children)
 }
 
-fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (LayoutItem, i32) {
+fn layout_item(
+    item: &MenuItem,
+    id_map: &mut IdMap,
+    snapshot: &mut LayoutSnapshot,
+) -> (LayoutItem, i32) {
     match item {
         MenuItem::Separator => {
             let id = id_map.get("__separator__");
             let mut props = HashMap::new();
             props.insert("type".to_string(), owned("separator"));
+            snapshot.nodes.insert(
+                id,
+                LayoutNode {
+                    properties: props.clone(),
+                    children: Vec::new(),
+                },
+            );
             (item_value(id, &props, Vec::new()), id)
         }
         MenuItem::Action {
@@ -143,6 +172,13 @@ fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (LayoutItem, i32) {
                 props.insert("toggle-type".to_string(), owned(toggle_type));
                 props.insert("toggle-state".to_string(), owned(toggle_state));
             }
+            snapshot.nodes.insert(
+                id,
+                LayoutNode {
+                    properties: props.clone(),
+                    children: Vec::new(),
+                },
+            );
             (item_value(id, &props, Vec::new()), id)
         }
         MenuItem::Submenu {
@@ -164,20 +200,35 @@ fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (LayoutItem, i32) {
             let mut children = Vec::new();
             let mut child_ids = Vec::new();
             for child in items {
-                let (child_item, child_id) = layout_item(child, id_map);
+                let (child_item, child_id) = layout_item(child, id_map, snapshot);
                 child_ids.push(child_id);
-                children.push(Value::Structure(zbus::zvariant::Structure::from(child_item)));
+                children.push(
+                    OwnedValue::try_from(Value::Structure(zbus::zvariant::Structure::from(
+                        child_item,
+                    )))
+                    .unwrap(),
+                );
             }
-            let _node = LayoutNode {
-                properties: props.clone(),
-                children: child_ids,
-            };
+            snapshot.nodes.insert(
+                id,
+                LayoutNode {
+                    properties: props.clone(),
+                    children: child_ids,
+                },
+            );
             (item_value(id, &props, children), id)
         }
         // Headers and search fields are not part of app menus.
         _ => {
             let id = id_map.get("__ignored__");
             let props = HashMap::new();
+            snapshot.nodes.insert(
+                id,
+                LayoutNode {
+                    properties: props.clone(),
+                    children: Vec::new(),
+                },
+            );
             (item_value(id, &props, Vec::new()), id)
         }
     }
@@ -186,7 +237,7 @@ fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (LayoutItem, i32) {
 fn item_value(
     id: i32,
     props: &HashMap<String, OwnedValue>,
-    children: Vec<Value<'static>>,
+    children: Vec<OwnedValue>,
 ) -> LayoutItem {
     (id, props.clone(), children)
 }
@@ -248,6 +299,7 @@ pub fn action_id_for_numeric(registered: &Arc<RegisteredMenu>, numeric_id: i32) 
 
 fn find_action_id(menu: &AppMenu, numeric_id: i32) -> Option<String> {
     let mut id_map = IdMap::default();
+    id_map.get("__root__");
     for m in &menu.menus {
         let _ = id_map.get(format!("__menu__:{}", m.title));
         if let Some(id) = find_action_id_in_items(&m.items, numeric_id, &mut id_map) {

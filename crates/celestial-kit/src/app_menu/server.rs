@@ -250,7 +250,10 @@ async fn run(commands: Receiver<Command>) {
 fn build_layout_from_handle(
     registered: &Arc<RegisteredMenu>,
     id_map: &mut IdMap,
-) -> (crate::app_menu::layout::LayoutSnapshot, crate::app_menu::layout::LayoutItem) {
+) -> (
+    crate::app_menu::layout::LayoutSnapshot,
+    crate::app_menu::layout::LayoutItem,
+) {
     let (menu, revision) = registered.handle.snapshot();
     build_layout(&menu, id_map, revision)
 }
@@ -279,7 +282,7 @@ impl DbusMenuObject {
     fn get_layout(
         &self,
         parent_id: i32,
-        _recursion_depth: i32,
+        recursion_depth: i32,
         _property_names: Vec<String>,
     ) -> DbusMenuLayout {
         let guard = self
@@ -297,6 +300,12 @@ impl DbusMenuObject {
             let mut id_map = IdMap::default();
             let (_snapshot, layout) = build_layout(&menu, &mut id_map, revision);
             return (revision, layout);
+        }
+        if let Some(node) = snapshot.nodes.get(&parent_id) {
+            return (
+                revision,
+                layout_node(&snapshot, parent_id, node, recursion_depth),
+            );
         }
         (revision, empty_subtree(parent_id))
     }
@@ -378,10 +387,128 @@ fn empty_root() -> crate::app_menu::layout::LayoutItem {
     (
         0i32,
         HashMap::<String, OwnedValue>::new(),
-        Vec::<Value<'static>>::new(),
+        Vec::<OwnedValue>::new(),
     )
 }
 
 fn empty_subtree(id: i32) -> crate::app_menu::layout::LayoutItem {
-    (id, HashMap::<String, OwnedValue>::new(), Vec::<Value<'static>>::new())
+    (
+        id,
+        HashMap::<String, OwnedValue>::new(),
+        Vec::<OwnedValue>::new(),
+    )
+}
+
+fn layout_node(
+    snapshot: &crate::app_menu::layout::LayoutSnapshot,
+    id: i32,
+    node: &crate::app_menu::layout::LayoutNode,
+    recursion_depth: i32,
+) -> crate::app_menu::layout::LayoutItem {
+    let children: Vec<OwnedValue> = if recursion_depth == 0 {
+        Vec::new()
+    } else {
+        node.children
+            .iter()
+            .filter_map(|child_id| {
+                snapshot.nodes.get(child_id).map(|child_node| {
+                    let child = layout_node(
+                        snapshot,
+                        *child_id,
+                        child_node,
+                        recursion_depth.saturating_sub(1),
+                    );
+                    OwnedValue::try_from(Value::Structure(zbus::zvariant::Structure::from(child)))
+                        .unwrap()
+                })
+            })
+            .collect()
+    };
+    (id, node.properties.clone(), children)
+}
+
+/// Test-only peer-to-peer server handle (Commit B, ADR 0040 §10).
+///
+/// Lets integration tests in other crates serve a kit menu over a private
+/// `UnixStream::pair` connection without needing a session bus.
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct TestMenuServer {
+    registered: Arc<RegisteredMenu>,
+    path: String,
+}
+
+impl TestMenuServer {
+    /// Creates a server for `menu` that calls `on_action` for "clicked" events.
+    pub fn new(
+        menu: AppMenu,
+        path: impl Into<String>,
+        on_action: Arc<dyn Fn(&str) + Send + Sync>,
+    ) -> Self {
+        let handle = crate::app_menu::MenuHandle::for_test(menu);
+        let registered = RegisteredMenu::new(handle, on_action);
+        Self {
+            registered,
+            path: path.into(),
+        }
+    }
+
+    /// Registers the dbusmenu object on `connection` and emits the initial
+    /// `LayoutUpdated`.
+    pub async fn serve(&self, connection: &zbus::Connection) -> zbus::Result<()> {
+        connection
+            .object_server()
+            .at(
+                self.path.clone(),
+                DbusMenuObject {
+                    registered: self.registered.clone(),
+                },
+            )
+            .await?;
+        let mut id_map = IdMap::default();
+        let (menu, _) = self.registered.handle.snapshot();
+        let (snapshot, _) = build_layout(&menu, &mut id_map, 1);
+        let revision = snapshot.revision;
+        *self
+            .registered
+            .last_layout
+            .lock()
+            .expect("layout lock poisoned") = Some(snapshot);
+        if let Ok(iface_ref) = connection
+            .object_server()
+            .interface::<_, DbusMenuObject>(self.path.as_str())
+            .await
+        {
+            DbusMenuObject::layout_updated(iface_ref.signal_emitter(), revision, 0).await?;
+        }
+        Ok(())
+    }
+
+    /// Updates the cached properties and emits `ItemsPropertiesUpdated`.
+    pub async fn update_properties(
+        &self,
+        connection: &zbus::Connection,
+        updated: Vec<(i32, HashMap<String, OwnedValue>)>,
+    ) -> zbus::Result<()> {
+        {
+            let mut guard = self
+                .registered
+                .last_layout
+                .lock()
+                .expect("layout lock poisoned");
+            if let Some(snapshot) = guard.as_mut() {
+                for (id, props) in &updated {
+                    if let Some(node) = snapshot.nodes.get_mut(id) {
+                        node.properties.extend(props.clone());
+                    }
+                }
+            }
+        }
+        let iface_ref = connection
+            .object_server()
+            .interface::<_, DbusMenuObject>(self.path.as_str())
+            .await?;
+        DbusMenuObject::items_properties_updated(iface_ref.signal_emitter(), updated, Vec::new())
+            .await
+    }
 }
