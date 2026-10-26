@@ -1075,7 +1075,11 @@ lab() {
     fi
 
     if command -v firefox >/dev/null 2>&1; then
-        lab_app_client firefox firefox
+        _lab_firefox_profile="$_lab_config/firefox"
+        mkdir -p "$_lab_firefox_profile" ||
+            fail "$EXIT_RUN_FAILED" "could not create the lab Firefox profile"
+        lab_app_client firefox firefox \
+            --no-remote --profile "$_lab_firefox_profile"
     else
         printf 'lab: firefox not found; skipping Firefox test\n' >&2
     fi
