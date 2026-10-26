@@ -26,7 +26,7 @@ pub use bar::run;
 
 use std::env;
 use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::desktop::DesktopEntry;
@@ -151,7 +151,25 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
         eprintln!("menubar: cannot spawn {binary}: WAYLAND_DISPLAY not set");
         return;
     };
-    let mut command = Command::new(binary);
+
+    let program = if binary == "yuki-settings" {
+        match resolve_settings_binary() {
+            Some(path) => path,
+            None => {
+                let searched = env::current_exe()
+                    .ok()
+                    .and_then(|exe| exe.parent().map(|dir| dir.join("yuki-settings")))
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "next to yuki-shell".to_string());
+                tracing::warn!("menubar: yuki-settings not found (searched {searched} and PATH)");
+                return;
+            }
+        }
+    } else {
+        PathBuf::from(binary)
+    };
+
+    let mut command = Command::new(program);
     command
         .args(args)
         .env("WAYLAND_DISPLAY", display)
@@ -171,6 +189,20 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
         Ok(_) => eprintln!("menubar: spawn {binary}"),
         Err(error) => eprintln!("menubar: could not spawn {binary}: {error}"),
     }
+}
+
+/// Resolves the `yuki-settings` binary: first next to the running
+/// `yuki-shell` binary, then in `PATH`.
+fn resolve_settings_binary() -> Option<PathBuf> {
+    let current = env::current_exe().ok()?;
+    let candidate = current.parent()?.join("yuki-settings");
+    if candidate.is_file() {
+        return Some(candidate);
+    }
+    let path = env::var("PATH").ok()?;
+    path.split(':')
+        .map(|dir| Path::new(dir).join("yuki-settings"))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Opens `path` with the user's default application, stripping the wrapper

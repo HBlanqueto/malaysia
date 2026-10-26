@@ -193,7 +193,10 @@ impl App for BarApp {
             bold: false,
             items: Rc::new(system::system_menu_items),
             searchable: None,
-            on_activate: Rc::new(system::on_system_action),
+            on_activate: Rc::new(|id| {
+                let toplevels = Toplevels::get().list.read().clone();
+                system::on_system_action(id, &toplevels);
+            }),
             live_items: None,
             on_open: None,
             on_hover_title: None,
