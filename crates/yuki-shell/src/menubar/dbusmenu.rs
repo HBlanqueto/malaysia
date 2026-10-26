@@ -440,13 +440,14 @@ async fn run(
                     .and_then(|cache| cache.get(id))
                     .cloned();
                 let shown = about_to_show(&connection, &dbus, &mut proxies, &address, id).await;
+                let had_cache = cached.is_some();
                 let items = if shown || cached.is_none() {
                     fetch_subtree(&connection, &dbus, &mut proxies, &mut caches, &address, id).await
                 } else {
                     cached.map(|subtree| subtree.items)
                 };
                 pending.subtrees.retain(|pending| *pending != id);
-                let from_cache = !shown && items.is_some();
+                let from_cache = !shown && had_cache;
                 let count = items.as_ref().map_or(0, Vec::len);
                 tracing::info!(
                     generation,
@@ -609,6 +610,13 @@ fn handle_signal(
             let changed = caches
                 .get_mut(&address)
                 .is_some_and(|cache| cache.apply_properties(&updated, &removed));
+            tracing::info!(
+                service = %address.service,
+                ?updated,
+                ?removed,
+                changed,
+                "menubar: dbusmenu ItemsPropertiesUpdated"
+            );
             if changed && is_focused {
                 pending.snapshot = true;
                 arm(deadline);
