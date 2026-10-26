@@ -3,7 +3,7 @@
 //! The Nix wrapper gives `malaysia-compositor` and `malaysia-shell` a private Mesa/EGL
 //! environment. That environment must not reach the clients they launch: a
 //! client has to resolve its own Mesa (the system one) and its own EGL vendor
-//! directory. The wrapper also saves the previous values in `YUKI_ORIG_*`, so
+//! directory. The wrapper also saves the previous values in `MALAYSIA_ORIG_*`, so
 //! a child gets the same environment it would have had without the wrapper.
 //!
 //! Use [`command`] to build the command and [`spawn`] to start it. Do not call
@@ -24,7 +24,7 @@ pub const WRAPPER_ENV: &[&str] = &[
 ];
 
 /// Prefix the wrapper uses to save the value each variable had before it.
-pub const ORIGINAL_PREFIX: &str = "YUKI_ORIG_";
+pub const ORIGINAL_PREFIX: &str = "MALAYSIA_ORIG_";
 
 /// Builds a command with the wrapper environment removed and the Qt
 /// decoration variable set according to the configuration.
@@ -144,15 +144,15 @@ mod tests {
         command.env("__EGL_VENDOR_LIBRARY_DIRS", "/wrapper/egl");
         command.env("LIBGL_DRIVERS_PATH", "/wrapper/dri");
         command.env("GBM_BACKENDS_PATH", "/wrapper/gbm");
-        command.env("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
-        command.env("YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS", "/orig/egl");
-        command.env("YUKI_ORIG_LIBGL_DRIVERS_PATH", "");
+        command.env("MALAYSIA_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+        command.env("MALAYSIA_ORIG___EGL_VENDOR_LIBRARY_DIRS", "/orig/egl");
+        command.env("MALAYSIA_ORIG_LIBGL_DRIVERS_PATH", "");
 
         sanitize_with(&mut command, |name| match name {
-            "YUKI_ORIG_LD_LIBRARY_PATH" => Some(OsString::from("/orig/lib")),
-            "YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS" => Some(OsString::from("/orig/egl")),
-            "YUKI_ORIG_LIBGL_DRIVERS_PATH" => Some(OsString::new()),
-            "YUKI_ORIG_GBM_BACKENDS_PATH" => None,
+            "MALAYSIA_ORIG_LD_LIBRARY_PATH" => Some(OsString::from("/orig/lib")),
+            "MALAYSIA_ORIG___EGL_VENDOR_LIBRARY_DIRS" => Some(OsString::from("/orig/egl")),
+            "MALAYSIA_ORIG_LIBGL_DRIVERS_PATH" => Some(OsString::new()),
+            "MALAYSIA_ORIG_GBM_BACKENDS_PATH" => None,
             _ => None,
         });
 

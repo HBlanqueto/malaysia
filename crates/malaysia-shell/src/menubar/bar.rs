@@ -423,7 +423,7 @@ impl App for BarApp {
         } else {
             let entries_for_window = self.entries.clone();
             let menus: [(&str, MenuItems); 7] = [
-                ("Yuki", Rc::new(appmenu::yuki_menu_items)),
+                ("Yuki", Rc::new(appmenu::malaysia_menu_items)),
                 ("Archivo", Rc::new(appmenu::file_menu_items)),
                 ("Edición", Rc::new(appmenu::edit_menu_items)),
                 ("Visualización", Rc::new(appmenu::view_menu_items)),

@@ -459,9 +459,12 @@ fn start_shell_session(socket: &str) -> bool {
         );
     }
 
-    match systemctl(&["--user", "start", "yuki-session.target"], Some(socket)) {
+    match systemctl(
+        &["--user", "start", "malaysia-session.target"],
+        Some(socket),
+    ) {
         Ok(output) if output.status.success() => {
-            info!("yuki-session.target started");
+            info!("malaysia-session.target started");
             true
         }
         Ok(output) => {
@@ -481,7 +484,7 @@ fn start_shell_session(socket: &str) -> bool {
 }
 
 fn stop_shell_session() {
-    let _ = systemctl(&["--user", "stop", "yuki-session.target"], None);
+    let _ = systemctl(&["--user", "stop", "malaysia-session.target"], None);
 }
 
 fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::process::Output> {
@@ -492,7 +495,7 @@ fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::proces
         .stderr(Stdio::piped());
     if let Some(socket) = socket {
         command.env("WAYLAND_DISPLAY", socket);
-        command.env("XDG_CURRENT_DESKTOP", "Yuki");
+        command.env("XDG_CURRENT_DESKTOP", "Malaysia");
     }
     crate::spawn::spawn(command, &crate::config::Config::default())?.wait_with_output()
 }
@@ -502,7 +505,7 @@ fn missing_target_help() -> String {
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "result/share/systemd/user".to_string());
     format!(
-        "yuki-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/yuki-session.target;          systemctl --user link {units}/malaysia-shell@.service; systemctl --user daemon-reload;          systemctl --user enable --now malaysia-shell@wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service"
+        "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/malaysia-session.target;          systemctl --user link {units}/malaysia-shell@.service; systemctl --user daemon-reload;          systemctl --user enable --now malaysia-shell@wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service"
     )
 }
 

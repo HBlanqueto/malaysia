@@ -5,17 +5,17 @@
 # Installed by the flake with the `@out@` placeholder replaced by the store
 # path of the package.
 [Unit]
-Description=Yuki shell component (%i)
-PartOf=yuki-session.target
-After=yuki-session.target
+Description=MalaysiaDreams shell component (%i)
+PartOf=malaysia-session.target
+After=malaysia-session.target
 
 [Service]
 Type=simple
-ExecStart=@out@/bin/yuki-shell %i
+ExecStart=@out@/bin/malaysia-shell %i
 Restart=on-failure
 RestartSec=2
 StartLimitBurst=10
 StartLimitIntervalSec=30
 
 [Install]
-WantedBy=yuki-session.target
+WantedBy=malaysia-session.target

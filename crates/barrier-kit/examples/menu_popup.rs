@@ -117,8 +117,8 @@ impl App for Demo {
         // minus 8 px.
         let title_pad = 8.0;
         let bar_pad = 12.0;
-        let yuki_x = bar_pad;
-        let ir_x = yuki_x + measure_text("Yuki", 13.0) + title_pad * 2.0;
+        let malaysia_x = bar_pad;
+        let ir_x = malaysia_x + measure_text("Yuki", 13.0) + title_pad * 2.0;
         let editar_x = ir_x + measure_text("Ir", 13.0) + title_pad * 2.0;
 
         let open_label: OpenLabel = Rc::new(RefCell::new(use_state(|| None::<&'static str>)));
@@ -145,7 +145,7 @@ impl App for Demo {
                         palette,
                         popups.clone(),
                         output_width,
-                        yuki_x as i32,
+                        malaysia_x as i32,
                         ir_x as i32,
                         editar_x as i32,
                         open_label.clone(),
@@ -164,9 +164,9 @@ impl App for Demo {
                         &root_id,
                         open_label.clone(),
                         "Yuki",
-                        yuki_menu(palette),
+                        malaysia_menu(palette),
                         palette,
-                        yuki_x as i32,
+                        malaysia_x as i32,
                     )
                 }
             }))
@@ -276,7 +276,7 @@ fn open_root_for_selftest(
     popups: Popups,
     on_dismissed: Rc<dyn Fn()>,
 ) -> PopupId {
-    let items = yuki_menu(palette);
+    let items = malaysia_menu(palette);
     let size = MenuView::preferred_size(&items, palette);
     let cell = root_id.clone();
     let on_dismiss_all = move || {
@@ -357,7 +357,7 @@ fn open_show(
     palette: vow_design::MenuPalette,
     popups: Popups,
     output_width: f32,
-    _yuki_x: i32,
+    _malaysia_x: i32,
     ir_x: i32,
     editar_x: i32,
     open_label: OpenLabel,
@@ -713,7 +713,7 @@ fn edit_menu() -> Vec<MenuItem> {
     ]
 }
 
-fn yuki_menu(_palette: vow_design::MenuPalette) -> Vec<MenuItem> {
+fn malaysia_menu(_palette: vow_design::MenuPalette) -> Vec<MenuItem> {
     vec![
         MenuItem::Submenu {
             id: None,

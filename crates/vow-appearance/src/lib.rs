@@ -457,9 +457,9 @@ fn derived_lights(source: Rgba) -> [Rgba; 3] {
     ]
 }
 
-/// The preferences directory: `YUKI_CONFIG_DIR`, else `$XDG_CONFIG_HOME/yuki`.
+/// The preferences directory: `MALAYSIA_CONFIG_DIR`, else `$XDG_CONFIG_HOME/malaysia`.
 pub fn config_dir() -> PathBuf {
-    std::env::var_os("YUKI_CONFIG_DIR").map_or_else(
+    std::env::var_os("MALAYSIA_CONFIG_DIR").map_or_else(
         || {
             let base = std::env::var_os("XDG_CONFIG_HOME")
                 .map(PathBuf::from)
@@ -475,9 +475,9 @@ pub fn config_dir() -> PathBuf {
     )
 }
 
-/// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`.
+/// The state/data directory: `MALAYSIA_DATA_DIR`, else `$XDG_DATA_HOME/malaysia`.
 pub fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
+    std::env::var_os("MALAYSIA_DATA_DIR").map_or_else(
         || {
             let base = std::env::var_os("XDG_DATA_HOME")
                 .map(PathBuf::from)
@@ -493,12 +493,12 @@ pub fn data_dir() -> PathBuf {
     )
 }
 
-/// `~/.config/yuki/appearance.domain`.
+/// `~/.config/malaysia/appearance.domain`.
 pub fn appearance_path() -> PathBuf {
     config_dir().join("appearance.domain")
 }
 
-/// `~/.local/share/yuki/wallpaper.state`.
+/// `~/.local/share/malaysia/wallpaper.state`.
 pub fn wallpaper_state_path() -> PathBuf {
     data_dir().join("wallpaper.state")
 }
@@ -1389,16 +1389,16 @@ sidebar_style = "flat"
         let dir =
             std::env::temp_dir().join(format!("vow-appearance-default-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let old = std::env::var_os("YUKI_CONFIG_DIR");
-        unsafe { std::env::set_var("YUKI_CONFIG_DIR", &dir) };
+        let old = std::env::var_os("MALAYSIA_CONFIG_DIR");
+        unsafe { std::env::set_var("MALAYSIA_CONFIG_DIR", &dir) };
         write_appearance_default().unwrap();
         let path = dir.join("appearance.domain");
         assert!(path.exists());
         let read = read_appearance_from(&path).unwrap().unwrap();
         assert_configs_equal(&AppearanceConfig::default(), &read);
         match old {
-            Some(v) => unsafe { std::env::set_var("YUKI_CONFIG_DIR", v) },
-            None => unsafe { std::env::remove_var("YUKI_CONFIG_DIR") },
+            Some(v) => unsafe { std::env::set_var("MALAYSIA_CONFIG_DIR", v) },
+            None => unsafe { std::env::remove_var("MALAYSIA_CONFIG_DIR") },
         }
         std::fs::remove_dir_all(&dir).ok();
     }

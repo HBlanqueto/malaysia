@@ -54,7 +54,7 @@ const TEST_KEY_HOLD: Duration = Duration::from_millis(20);
 /// A titlebar press remembered for double-click detection.
 pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 
-/// A scripted input sequence from `YUKI_TEST_INPUT`.
+/// A scripted input sequence from `MALAYSIA_TEST_INPUT`.
 ///
 /// The actions go through the same paths as a host pointer and keyboard;
 /// they do not call a client directly. `move:x,y` moves, `click:x,y` presses
@@ -231,10 +231,10 @@ enum TestPointerAction {
 }
 
 impl TestPointer {
-    /// Parses `YUKI_TEST_INPUT`; returns `None` for the legacy `1` (a window
+    /// Parses `MALAYSIA_TEST_INPUT`; returns `None` for the legacy `1` (a window
     /// press on first map) or when there is no script.
     pub(crate) fn from_env() -> Option<Self> {
-        Self::parse(std::env::var("YUKI_TEST_INPUT").ok()?.as_str())
+        Self::parse(std::env::var("MALAYSIA_TEST_INPUT").ok()?.as_str())
     }
 
     #[cfg(test)]
@@ -1682,12 +1682,12 @@ impl State {
 
     /// Test-only: leave one window (and with it its surface) behind.
     ///
-    /// Only when `YUKI_TEST_LEAK_WINDOW` is set. The first destroyed window,
+    /// Only when `MALAYSIA_TEST_LEAK_WINDOW` is set. The first destroyed window,
     /// and every repeat of that same surface's destruction, is not removed, so
     /// the live-object counts cannot return to their baseline. The Block 4
     /// harness runs it once to show that its teardown assertion can fail.
     fn leak_window(&mut self, surface: &WlSurface) -> bool {
-        if std::env::var_os("YUKI_TEST_LEAK_WINDOW").is_none() {
+        if std::env::var_os("MALAYSIA_TEST_LEAK_WINDOW").is_none() {
             return false;
         }
         let Some(id) = self.windows.id_of(surface) else {
@@ -1698,7 +1698,7 @@ impl State {
             Some(leaked) if leaked == id => {}
             Some(_) => return false,
         }
-        tracing::warn!("YUKI_TEST_LEAK_WINDOW: deliberately leaving a window behind");
+        tracing::warn!("MALAYSIA_TEST_LEAK_WINDOW: deliberately leaving a window behind");
         tracing::info!(
             windows = self.windows.len(),
             topmost = ?self.windows.topmost(),
@@ -1707,7 +1707,7 @@ impl State {
         true
     }
 
-    /// Advances a scripted `YUKI_TEST_INPUT` pointer sequence by one action.
+    /// Advances a scripted `MALAYSIA_TEST_INPUT` pointer sequence by one action.
     ///
     /// Returns the delay before the next action, or `None` when the script is
     /// finished or absent. The session owns the timer; this method only drives
@@ -1796,16 +1796,16 @@ impl State {
 
     /// Test-only: press the primary button on the first window that maps.
     ///
-    /// Only when `YUKI_TEST_INPUT` is set. The client-initiated
+    /// Only when `MALAYSIA_TEST_INPUT` is set. The client-initiated
     /// move/resize path needs a real button press to supply a serial, which a
     /// probe cannot make on its own; this moves the pointer onto the window (at
-    /// the fraction named by `YUKI_TEST_PRESS_AT`, the center by default),
+    /// the fraction named by `MALAYSIA_TEST_PRESS_AT`, the center by default),
     /// runs the compositor's real press path so click-to-focus happens, presses
     /// and holds. Several motions follow, so a client whose drag gesture waits
     /// for a threshold still sends its request while the button is held. The
     /// release is sent by [`Self::inject_test_release`].
     pub(crate) fn inject_test_press(&mut self, id: WindowId) {
-        if std::env::var_os("YUKI_TEST_INPUT").is_none()
+        if std::env::var_os("MALAYSIA_TEST_INPUT").is_none()
             || self.test_press.is_some()
             || self.test_pointer.is_some()
         {
@@ -1886,7 +1886,7 @@ impl State {
         }
     }
 
-    /// Test-only: drag the pressed window by `YUKI_TEST_DRAG`.
+    /// Test-only: drag the pressed window by `MALAYSIA_TEST_DRAG`.
     ///
     /// Called when the compositor accepts a client's move or resize request.
     /// The motion goes through the normal input path, so the grab that just
@@ -1894,7 +1894,7 @@ impl State {
     /// logged for a harness to assert. The button stays held, so a client can
     /// still make a second request with the same serial.
     pub(crate) fn inject_test_drag(&mut self, id: WindowId) {
-        if std::env::var_os("YUKI_TEST_INPUT").is_none() {
+        if std::env::var_os("MALAYSIA_TEST_INPUT").is_none() {
             return;
         }
         let Some(press) = self.test_press else {
@@ -1952,10 +1952,10 @@ impl State {
 
     /// Test-only: request a screenshot on the first mapped window.
     ///
-    /// Only when `YUKI_TEST_SCREENSHOT` is set. With `YUKI_SCREENSHOT_DIR` it
+    /// Only when `MALAYSIA_TEST_SCREENSHOT` is set. With `MALAYSIA_SCREENSHOT_DIR` it
     /// lets a check exercise the PrintScreen path without the real key.
     pub(crate) fn inject_test_screenshot(&mut self) {
-        let Ok(mode) = std::env::var("YUKI_TEST_SCREENSHOT") else {
+        let Ok(mode) = std::env::var("MALAYSIA_TEST_SCREENSHOT") else {
             return;
         };
         let request = if mode == "region" {
@@ -1972,11 +1972,11 @@ impl State {
     /// Test-only: inject a rapid left-right motion that trips the shake
     /// detector, so the locate enlargement can be seen without a real hand.
     ///
-    /// Only when `YUKI_TEST_SHAKE` is set. The motions go through the real
+    /// Only when `MALAYSIA_TEST_SHAKE` is set. The motions go through the real
     /// pointer path, so the same detector and draw path run as for a host
     /// pointer; the four swings complete well inside the one-second window.
     pub(crate) fn inject_test_shake(&mut self) {
-        if std::env::var_os("YUKI_TEST_SHAKE").is_none() {
+        if std::env::var_os("MALAYSIA_TEST_SHAKE").is_none() {
             return;
         }
         let Some(location) = self
@@ -2003,7 +2003,7 @@ impl State {
         }
     }
 
-    /// Test-only: hover the pointer over the points in `YUKI_TEST_HOVER`.
+    /// Test-only: hover the pointer over the points in `MALAYSIA_TEST_HOVER`.
     ///
     /// The value is a `;`-separated list of global `x,y` points. They are
     /// injected with no button held, through the same motion path a host
@@ -2433,20 +2433,23 @@ fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-/// The window fraction the scripted press lands on, from `YUKI_TEST_PRESS_AT`
+/// The window fraction the scripted press lands on, from `MALAYSIA_TEST_PRESS_AT`
 /// (`x,y` as fractions of the window's outer size), the center by default.
 ///
 /// The Nautilus drag needs the press on its headerbar, a few percent below the
 /// top edge; the probes press the center.
 fn test_press_fraction() -> (f64, f64) {
-    parse_pair("YUKI_TEST_PRESS_AT").unwrap_or((0.5, 0.5))
+    parse_pair("MALAYSIA_TEST_PRESS_AT").unwrap_or((0.5, 0.5))
 }
 
 /// The pointer delta the scripted drag applies once a grab starts, from
 /// Test-only: press an exact titlebar button (`close`, `minimize` or
 /// `maximize`) instead of a window fraction.
 fn test_titlebar_button() -> Option<vow_design::ButtonKind> {
-    match std::env::var("YUKI_TEST_TITLEBAR_BUTTON").ok()?.as_str() {
+    match std::env::var("MALAYSIA_TEST_TITLEBAR_BUTTON")
+        .ok()?
+        .as_str()
+    {
         "close" => Some(vow_design::ButtonKind::Close),
         "minimize" => Some(vow_design::ButtonKind::Minimize),
         "maximize" => Some(vow_design::ButtonKind::Maximize),
@@ -2454,15 +2457,15 @@ fn test_titlebar_button() -> Option<vow_design::ButtonKind> {
     }
 }
 
-/// `YUKI_TEST_DRAG` (`dx,dy` in logical pixels), `(60, 40)` by default.
+/// `MALAYSIA_TEST_DRAG` (`dx,dy` in logical pixels), `(60, 40)` by default.
 fn test_drag_delta() -> (f64, f64) {
-    parse_pair("YUKI_TEST_DRAG").unwrap_or((60.0, 40.0))
+    parse_pair("MALAYSIA_TEST_DRAG").unwrap_or((60.0, 40.0))
 }
 
-/// The global points the scripted hover visits, from `YUKI_TEST_HOVER`
+/// The global points the scripted hover visits, from `MALAYSIA_TEST_HOVER`
 /// (`x,y` points separated by `;`), none by default.
 fn test_hover_points() -> Vec<(f64, f64)> {
-    let Ok(value) = std::env::var("YUKI_TEST_HOVER") else {
+    let Ok(value) = std::env::var("MALAYSIA_TEST_HOVER") else {
         return Vec::new();
     };
     value

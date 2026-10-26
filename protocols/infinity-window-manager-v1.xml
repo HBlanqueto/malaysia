@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="infinity_window_manager_v1">
   <copyright>
-    Copyright © 2026 Yuki contributors
+    Copyright © 2026 MalaysiaDreams contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,8 +24,8 @@
   </copyright>
 
   <interface name="infinity_window_manager_v1" version="2">
-    <description summary="private window geometry channel for yuki-shell">
-      This protocol is private to yuki-shell. It lets the shell ask the
+    <description summary="private window geometry channel for malaysia-shell">
+      This protocol is private to malaysia-shell. It lets the shell ask the
       compositor to place windows in halves, quarters, pairs and fullscreen
       arrangements, and reports the D-Bus address of each window's global
       menu.

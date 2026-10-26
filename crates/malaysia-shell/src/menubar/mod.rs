@@ -283,7 +283,7 @@ fn sanitize_client_env(command: &mut Command) {
         "GBM_BACKENDS_PATH",
     ] {
         command.env_remove(name);
-        let saved = format!("YUKI_ORIG_{name}");
+        let saved = format!("MALAYSIA_ORIG_{name}");
         if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
             command.env(name, value);
         }
@@ -298,7 +298,7 @@ fn is_kit_binary(binary: &str) -> bool {
 }
 
 /// Restores the original Mesa/runtime paths saved by the Nix wrapper, if they
-/// exist. In a dev shell there are no `YUKI_ORIG_*` variables, so the current
+/// exist. In a dev shell there are no `MALAYSIA_ORIG_*` variables, so the current
 /// environment (LD_LIBRARY_PATH, ...) is left untouched.
 fn prepare_kit_env(command: &mut Command) {
     for name in [
@@ -307,7 +307,7 @@ fn prepare_kit_env(command: &mut Command) {
         "LIBGL_DRIVERS_PATH",
         "GBM_BACKENDS_PATH",
     ] {
-        let saved = format!("YUKI_ORIG_{name}");
+        let saved = format!("MALAYSIA_ORIG_{name}");
         if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
             command.env(name, value);
         }
@@ -510,10 +510,10 @@ mod tests {
     fn client_env_strips_wrapper_and_restores_original() {
         with_env(|| {
             let _ld = guard("LD_LIBRARY_PATH");
-            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
             unsafe {
                 env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
-                env::set_var("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+                env::set_var("MALAYSIA_ORIG_LD_LIBRARY_PATH", "/orig/lib");
             }
 
             let mut command = Command::new("env");
@@ -535,10 +535,10 @@ mod tests {
     fn kit_env_keeps_dev_library_path_when_no_original_saved() {
         with_env(|| {
             let _ld = guard("LD_LIBRARY_PATH");
-            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
             unsafe {
                 env::set_var("LD_LIBRARY_PATH", "/dev/lib");
-                env::remove_var("YUKI_ORIG_LD_LIBRARY_PATH");
+                env::remove_var("MALAYSIA_ORIG_LD_LIBRARY_PATH");
             }
 
             let mut command = Command::new("env");
@@ -556,10 +556,10 @@ mod tests {
     fn kit_env_restores_original_when_it_was_saved() {
         with_env(|| {
             let _ld = guard("LD_LIBRARY_PATH");
-            let _orig = guard("YUKI_ORIG_LD_LIBRARY_PATH");
+            let _orig = guard("MALAYSIA_ORIG_LD_LIBRARY_PATH");
             unsafe {
                 env::set_var("LD_LIBRARY_PATH", "/wrapper/lib");
-                env::set_var("YUKI_ORIG_LD_LIBRARY_PATH", "/orig/lib");
+                env::set_var("MALAYSIA_ORIG_LD_LIBRARY_PATH", "/orig/lib");
             }
 
             let mut command = Command::new("env");

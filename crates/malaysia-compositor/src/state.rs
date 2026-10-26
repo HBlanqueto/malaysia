@@ -310,18 +310,18 @@ pub struct State {
     /// The last dock icon rectangle (`set_rectangle`), for the minimize anim.
     pub dock_rectangle: Option<(WindowId, Rectangle<i32, Logical>)>,
     /// The runtime configuration, loaded from the per-domain files in
-    /// `~/.config/yuki/` (ADR 0021), one TOML per section like macOS.
+    /// `~/.config/malaysia/` (ADR 0021), one TOML per section like macOS.
     pub config: Config,
     /// An interactive move or resize, if one is in progress.
     pub(crate) grab: Option<Grab>,
     /// Test-only: the press the scripted input is holding, if any.
     ///
-    /// Only when `YUKI_TEST_INPUT` is set. See [`TestPress`].
+    /// Only when `MALAYSIA_TEST_INPUT` is set. See [`TestPress`].
     pub(crate) test_press: Option<TestPress>,
-    /// Test-only: the pointer actions from `YUKI_TEST_INPUT`, if it carries a
+    /// Test-only: the pointer actions from `MALAYSIA_TEST_INPUT`, if it carries a
     /// script (`move:x,y;click:x,y`) instead of the legacy `1`.
     pub(crate) test_pointer: Option<crate::input::TestPointer>,
-    /// Test-only: the window left behind by `YUKI_TEST_LEAK_WINDOW`.
+    /// Test-only: the window left behind by `MALAYSIA_TEST_LEAK_WINDOW`.
     pub(crate) leaked_window: Option<WindowId>,
     /// Cached titlebar textures for server-decorated windows.
     pub(crate) chrome: crate::chrome::ChromeCache,
@@ -1001,7 +1001,7 @@ pub(crate) fn region_rect(
     Rectangle::new(Point::from((x0, y0)), Size::from((x1 - x0, y1 - y0)))
 }
 
-/// Test-only: `YUKI_TEST_CURSOR_BOOST` pins the pointer's enlargement.
+/// Test-only: `MALAYSIA_TEST_CURSOR_BOOST` pins the pointer's enlargement.
 ///
 /// The shake is driven by a timer, so a capture cannot reliably catch it at
 /// full size. This holds the boost steady for one run, through the same draw
@@ -1009,7 +1009,7 @@ pub(crate) fn region_rect(
 fn test_cursor_boost() -> Option<f32> {
     static BOOST: OnceLock<Option<f32>> = OnceLock::new();
     *BOOST.get_or_init(|| {
-        std::env::var("YUKI_TEST_CURSOR_BOOST")
+        std::env::var("MALAYSIA_TEST_CURSOR_BOOST")
             .ok()
             .and_then(|value| value.parse::<f32>().ok())
             .filter(|value| (1.0..=4.0).contains(value))
@@ -1089,7 +1089,7 @@ impl Grab {
 
 /// Test-only: a pointer press the scripted input is holding.
 ///
-/// Only when `YUKI_TEST_INPUT` is set. The scripted input presses once, on
+/// Only when `MALAYSIA_TEST_INPUT` is set. The scripted input presses once, on
 /// the first window that maps, and holds the button so a client's
 /// `xdg_toplevel.move`/`resize` can be validated against a real press. The
 /// window and location are remembered so the follow-up drag is aimed at the
@@ -1233,12 +1233,12 @@ fn modified(path: &Path) -> Option<SystemTime> {
 
 /// The output scale for this session.
 ///
-/// `config_scale` is the persistent `display.scale` (ADR 0021). `YUKI_SCALE`
+/// `config_scale` is the persistent `display.scale` (ADR 0021). `MALAYSIA_SCALE`
 /// remains the development override and wins when set, so `dev.sh` can test a
 /// scale without writing a config file. Either value is clamped to `1.0..=4.0`
 /// and an invalid one falls back to 1.
 pub(crate) fn output_scale(config_scale: f64) -> Scale {
-    match std::env::var("YUKI_SCALE").ok().as_deref() {
+    match std::env::var("MALAYSIA_SCALE").ok().as_deref() {
         Some(value) => parse_scale(Some(value)),
         None => clamp_scale(config_scale),
     }

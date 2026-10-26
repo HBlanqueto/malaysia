@@ -1,6 +1,0 @@
-[Desktop Entry]
-Name=Yuki
-Comment=Yuki Wayland compositor
-Exec=@out@/bin/yuki --drm
-Type=Application
-DesktopNames=Yuki

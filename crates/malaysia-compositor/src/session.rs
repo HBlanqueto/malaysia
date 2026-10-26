@@ -144,7 +144,7 @@ pub(crate) struct Session {
     start_time: Instant,
     /// Whether live-object counts are tracked and logged.
     ///
-    /// Off unless `YUKI_TEST_OBJECTS` is set, so a normal run pays nothing;
+    /// Off unless `MALAYSIA_TEST_OBJECTS` is set, so a normal run pays nothing;
     /// the Block 4 harness turns it on to assert teardown.
     track_objects: bool,
     /// The last live-object counts logged, so only changes are emitted.
@@ -387,7 +387,7 @@ pub fn run() -> Result<(), SessionError> {
         state.scale.fractional_scale(),
     ));
     let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
-    let track_objects = std::env::var_os("YUKI_TEST_OBJECTS").is_some();
+    let track_objects = std::env::var_os("MALAYSIA_TEST_OBJECTS").is_some();
     let mut session = Session {
         loop_handle: loop_handle.clone(),
         display,
@@ -436,7 +436,7 @@ pub fn run() -> Result<(), SessionError> {
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
 
-    // A scripted `YUKI_TEST_INPUT` sequence drives the same motion/button path
+    // A scripted `MALAYSIA_TEST_INPUT` sequence drives the same motion/button path
     // as the host pointer. The timer starts after the compositor is up; the
     // script itself waits for its target surface to map.
     if session.state.test_pointer.is_some() {
@@ -669,7 +669,7 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
             session.state.stop();
         }
         WinitEvent::Input(event) => {
-            // A scripted `YUKI_TEST_INPUT` sequence is the only pointer in the
+            // A scripted `MALAYSIA_TEST_INPUT` sequence is the only pointer in the
             // test session. Dropping host events keeps a real mouse or touchpad
             // from interleaving with it; the script still goes through the same
             // motion/button path.

@@ -29,7 +29,7 @@ impl App for Parent {
     fn render(&self) -> impl IntoElement {
         let started = self.started;
         use_hook(move || {
-            if std::env::var_os("YUKI_WINDOW_TIMING").is_some() {
+            if std::env::var_os("MALAYSIA_WINDOW_TIMING").is_some() {
                 eprintln!("dialog parent: first render after {:?}", started.elapsed());
             }
         });
@@ -81,7 +81,7 @@ impl App for Dialog {
     fn render(&self) -> impl IntoElement {
         let started = self.started;
         use_hook(move || {
-            if std::env::var_os("YUKI_WINDOW_TIMING").is_some() {
+            if std::env::var_os("MALAYSIA_WINDOW_TIMING").is_some() {
                 eprintln!("dialog child: first render after {:?}", started.elapsed());
             }
         });

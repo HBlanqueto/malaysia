@@ -15,7 +15,7 @@ impl App for Demo {
     fn render(&self) -> impl IntoElement {
         let started = self.started;
         use_hook(move || {
-            if std::env::var_os("YUKI_WINDOW_TIMING").is_some() {
+            if std::env::var_os("MALAYSIA_WINDOW_TIMING").is_some() {
                 eprintln!("window_csd: first render after {:?}", started.elapsed());
             }
         });

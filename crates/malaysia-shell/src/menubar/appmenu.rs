@@ -16,7 +16,7 @@ use crate::menubar::{
 };
 
 /// The Yuki menu (about, settings, empty trash).
-pub fn yuki_menu_items() -> Vec<MenuItem> {
+pub fn malaysia_menu_items() -> Vec<MenuItem> {
     vec![
         action("malaysia-about", "Acerca de MalaysiaDreams", false),
         MenuItem::Separator,

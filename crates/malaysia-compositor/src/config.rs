@@ -115,8 +115,8 @@ pub enum GreenButtonAction {
 ///
 /// Malaysia's own preference files carry the `.domain` extension (like macOS's
 /// `.plist`); their content is TOML. Like macOS, preferences live in
-/// `~/.config/yuki/` (`~/Library/Preferences`) and *state/data* — the wallpaper
-/// store — in `~/.local/share/yuki/` (`~/Library/Application Support`).
+/// `~/.config/malaysia/` (`~/Library/Preferences`) and *state/data* — the wallpaper
+/// store — in `~/.local/share/malaysia/` (`~/Library/Application Support`).
 ///
 /// The sections mirror macOS System Settings (`appearance`, `window`, `dock`,
 /// `menubar`); the keys mirror macOS defaults keys verbatim where one exists.
@@ -511,13 +511,13 @@ impl Config {
     /// instead of a single monolithic file. Preference domains (`appearance`,
     /// `window`, `dock`, `menubar`, `screenshot`, `display`, `lock`, `effects`,
     /// `debug`) load from
-    /// `~/.config/yuki/` — the `~/Library/Preferences` equivalent. The wallpaper
+    /// `~/.config/malaysia/` — the `~/Library/Preferences` equivalent. The wallpaper
     /// domain — catalog *and* current selection — loads from
-    /// `~/.local/share/yuki/`, the `~/Library/Application Support` equivalent,
+    /// `~/.local/share/malaysia/`, the `~/Library/Application Support` equivalent,
     /// exactly as macOS keeps `com.apple.wallpaper` there.
     ///
     /// Each domain file is optional: a missing file, or an unparsable one, falls
-    /// back to that domain's default. `YUKI_CONFIG_DIR`/`YUKI_DATA_DIR` override
+    /// back to that domain's default. `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR` override
     /// the two directories.
     pub fn load() -> Self {
         Self::load_from_dirs(&config_dir(), &data_dir())

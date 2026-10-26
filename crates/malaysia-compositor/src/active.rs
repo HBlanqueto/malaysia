@@ -2,7 +2,7 @@
 //!
 //! The menu bar shows the active app's name (macOS: the frontmost app). The
 //! active window is internal to the compositor, so it is published through the
-//! state store — `~/.local/share/yuki/window.domain`, the `~/Library/Application
+//! state store — `~/.local/share/malaysia/window.domain`, the `~/Library/Application
 //! Support` equivalent — which the shell components watch. It is the same
 //! pattern as the wallpaper store: the compositor owns the state, the shell
 //! reads it.
@@ -21,11 +21,11 @@ pub struct ActiveWindow {
     pub app_id: String,
 }
 
-/// The state/data directory: `YUKI_DATA_DIR`, else `$XDG_DATA_HOME/yuki`
-/// (`~/.local/share/yuki` by default) — the `~/Library/Application Support`
+/// The state/data directory: `MALAYSIA_DATA_DIR`, else `$XDG_DATA_HOME/malaysia`
+/// (`~/.local/share/malaysia` by default) — the `~/Library/Application Support`
 /// equivalent.
 fn data_dir() -> PathBuf {
-    std::env::var_os("YUKI_DATA_DIR").map_or_else(
+    std::env::var_os("MALAYSIA_DATA_DIR").map_or_else(
         || {
             let base = std::env::var_os("XDG_DATA_HOME")
                 .map(PathBuf::from)

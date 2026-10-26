@@ -47,7 +47,7 @@ impl Server {
                 .spawn(move || {
                     async_io::block_on(run(rx));
                 })
-                .expect("celestial-dbusmenu thread");
+                .expect("barrier-dbusmenu thread");
             Server {
                 commands,
                 menus: Mutex::new(HashMap::new()),
@@ -123,7 +123,7 @@ async fn run(commands: Receiver<Command>) {
     let connection = match zbus::Connection::session().await {
         Ok(c) => c,
         Err(error) => {
-            tracing::warn!(%error, "celestial-dbusmenu: no session bus; menus are local only");
+            tracing::warn!(%error, "barrier-dbusmenu: no session bus; menus are local only");
             while let Ok(command) = commands.recv().await {
                 if let Command::Register { reply, .. } = command {
                     let _ = reply.send(None).await;
@@ -152,7 +152,7 @@ async fn run(commands: Receiver<Command>) {
                         .map(|s| s.to_string())
                         .unwrap_or_default();
                     if let Err(error) = connection.object_server().at(path.clone(), iface).await {
-                        tracing::warn!(%error, path, "celestial-dbusmenu: could not register object");
+                        tracing::warn!(%error, path, "barrier-dbusmenu: could not register object");
                         None
                     } else {
                         menus.insert(path.clone(), registered.clone());
@@ -177,7 +177,7 @@ async fn run(commands: Receiver<Command>) {
                             )
                             .await
                         {
-                            tracing::warn!(%error, "celestial-dbusmenu: could not emit initial LayoutUpdated");
+                            tracing::warn!(%error, "barrier-dbusmenu: could not emit initial LayoutUpdated");
                         }
                         Some(crate::platform::AppMenuAddress {
                             service: unique,
@@ -219,7 +219,7 @@ async fn run(commands: Receiver<Command>) {
                             )
                             .await
                         {
-                            tracing::warn!(%error, "celestial-dbusmenu: could not emit LayoutUpdated");
+                            tracing::warn!(%error, "barrier-dbusmenu: could not emit LayoutUpdated");
                         }
                     }
                     Update::Properties(updated) => {
@@ -237,7 +237,7 @@ async fn run(commands: Receiver<Command>) {
                             )
                             .await
                             {
-                                tracing::warn!(%error, "celestial-dbusmenu: could not emit ItemsPropertiesUpdated");
+                                tracing::warn!(%error, "barrier-dbusmenu: could not emit ItemsPropertiesUpdated");
                             }
                         }
                     }

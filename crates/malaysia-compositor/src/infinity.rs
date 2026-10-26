@@ -3,7 +3,7 @@
 //! This module serves the private `infinity_window_manager_v1` protocol that
 //! malaysia-shell uses to ask the compositor for window geometry: halves, quarters,
 //! pairs, fill, center, restore and fullscreen. The global is only visible to
-//! the malaysia-shell binary or when `YUKI_DEV=1`.
+//! the malaysia-shell binary or when `MALAYSIA_DEV=1`.
 
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -60,7 +60,7 @@ pub struct InfinityGlobalData;
 /// Must be called before `insert_client`: reading the peer credentials needs
 /// the socket, and the global filter later runs with the backend lock held.
 pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
-    if std::env::var("YUKI_DEV").is_ok_and(|v| v == "1") {
+    if std::env::var("MALAYSIA_DEV").is_ok_and(|v| v == "1") {
         return true;
     }
     let Ok(credentials) = getsockopt(stream, sockopt::PeerCredentials) else {
@@ -83,7 +83,7 @@ pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
 /// demo, the packaged session and manual launches all agree.
 fn trusted_shell_exes() -> Vec<PathBuf> {
     let mut exes = Vec::new();
-    if let Some(path) = std::env::var_os("YUKI_SHELL_EXE")
+    if let Some(path) = std::env::var_os("MALAYSIA_SHELL_EXE")
         && let Ok(path) = std::fs::canonicalize(path)
     {
         exes.push(path);
@@ -773,33 +773,33 @@ mod tests {
 
     #[test]
     #[allow(unsafe_code)]
-    fn trusted_shell_list_accepts_a_yuki_shell_exe_override() {
+    fn trusted_shell_list_accepts_a_malaysia_shell_exe_override() {
         let dir =
             std::env::temp_dir().join(format!("malaysia-shell-exe-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let fake = dir.join("fake-shell");
         std::fs::write(&fake, "").unwrap();
 
-        let previous = std::env::var_os("YUKI_SHELL_EXE");
+        let previous = std::env::var_os("MALAYSIA_SHELL_EXE");
         // SAFETY: only used during this single-threaded test.
         unsafe {
-            std::env::set_var("YUKI_SHELL_EXE", &fake);
+            std::env::set_var("MALAYSIA_SHELL_EXE", &fake);
         }
         let exes = trusted_shell_exes();
         if let Some(previous) = previous {
             // SAFETY: only used during this single-threaded test.
             unsafe {
-                std::env::set_var("YUKI_SHELL_EXE", previous);
+                std::env::set_var("MALAYSIA_SHELL_EXE", previous);
             }
         } else {
             // SAFETY: only used during this single-threaded test.
             unsafe {
-                std::env::remove_var("YUKI_SHELL_EXE");
+                std::env::remove_var("MALAYSIA_SHELL_EXE");
             }
         }
         assert!(
             is_trusted_shell_exe(&std::fs::canonicalize(&fake).unwrap(), &exes),
-            "YUKI_SHELL_EXE must be trusted"
+            "MALAYSIA_SHELL_EXE must be trusted"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

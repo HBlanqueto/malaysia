@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Ajustes del sistema
+Comment=Preferencias del escritorio MalaysiaDreams
+Exec=malaysia-settings
+Icon=io.github.hblanqueto.malaysia.settings
+Type=Application
+Categories=Settings;System;
+StartupWMClass=io.github.hblanqueto.malaysia.settings

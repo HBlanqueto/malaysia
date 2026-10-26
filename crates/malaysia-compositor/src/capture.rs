@@ -74,7 +74,7 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
     Some(CaptureDma { node, formats })
 }
 
-/// Captures the composed output to `$XDG_RUNTIME_DIR/yuki/capture-*.png`.
+/// Captures the composed output to `$XDG_RUNTIME_DIR/malaysia/capture-*.png`.
 ///
 /// The output is re-rendered offscreen (reading the presented buffer is
 /// unreliable), with the backend's render transform and output scale so the
@@ -196,11 +196,11 @@ fn crop_region(
 
 /// `Screenshot <date> at <time>.png` in the XDG Desktop directory.
 ///
-/// `YUKI_SCREENSHOT_DIR` is a test seam (like `YUKI_SCALE`): it redirects the
+/// `MALAYSIA_SCREENSHOT_DIR` is a test seam (like `MALAYSIA_SCALE`): it redirects the
 /// save so a check does not touch the user's real Desktop. A name already taken
 /// (two captures in the same second) gets a ` (2)`, ` (3)` suffix.
 fn screenshot_path() -> std::io::Result<PathBuf> {
-    let dir = std::env::var_os("YUKI_SCREENSHOT_DIR")
+    let dir = std::env::var_os("MALAYSIA_SCREENSHOT_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(crate::xdg::desktop_dir);
     fs::create_dir_all(&dir)?;
@@ -397,7 +397,7 @@ fn capture_into_shm(
     .map_err(|error| format!("shm buffer access failed: {error}"))?
 }
 
-/// The directory for captures: `$XDG_RUNTIME_DIR/yuki` (or `/tmp/yuki`).
+/// The directory for captures: `$XDG_RUNTIME_DIR/malaysia` (or `/tmp/malaysia`).
 fn capture_dir() -> PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)

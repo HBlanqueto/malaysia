@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Ajustes del sistema
-Comment=Preferencias del escritorio Yuki
-Exec=yuki-settings
-Icon=io.github.hblanqueto.yuki.settings
-Type=Application
-Categories=Settings;System;
-StartupWMClass=io.github.hblanqueto.yuki.settings

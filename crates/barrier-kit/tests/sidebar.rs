@@ -29,12 +29,12 @@ fn with_config<F: FnOnce() -> R, R>(style: &str, f: F) -> R {
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("appearance.domain");
     fs::write(&path, format!("sidebar_style = \"{style}\"\n")).unwrap();
-    let old = env::var_os("YUKI_CONFIG_DIR");
-    unsafe { env::set_var("YUKI_CONFIG_DIR", &dir) };
+    let old = env::var_os("MALAYSIA_CONFIG_DIR");
+    unsafe { env::set_var("MALAYSIA_CONFIG_DIR", &dir) };
     let result = f();
     match old {
-        Some(v) => unsafe { env::set_var("YUKI_CONFIG_DIR", v) },
-        None => unsafe { env::remove_var("YUKI_CONFIG_DIR") },
+        Some(v) => unsafe { env::set_var("MALAYSIA_CONFIG_DIR", v) },
+        None => unsafe { env::remove_var("MALAYSIA_CONFIG_DIR") },
     }
     result
 }

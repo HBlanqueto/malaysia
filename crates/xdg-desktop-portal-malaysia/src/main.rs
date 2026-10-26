@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::Result;
 
 /// The backend name `xdg-desktop-portal` connects to.
-const BUS_NAME: &str = "org.freedesktop.impl.portal.desktop.yuki";
+const BUS_NAME: &str = "org.freedesktop.impl.portal.desktop.malaysia";
 /// The standard backend object path.
 const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 

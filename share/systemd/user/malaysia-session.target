@@ -1,6 +1,6 @@
-# The Yuki shell session (ADR 0023): the target the per-component units belong
+# The MalaysiaDreams shell session (ADR 0023): the target the per-component units belong
 # to. The session wrapper starts this target after the compositor has imported
 # WAYLAND_DISPLAY into the user manager; the units then start one process per
 # component.
 [Unit]
-Description=Yuki shell session
+Description=MalaysiaDreams shell session

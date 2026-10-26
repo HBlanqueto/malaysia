@@ -487,7 +487,7 @@ fn load_icon(icon: Option<&str>) -> Option<IconData> {
                 PathBuf::from("/usr/share"),
             ]
         });
-    let theme = env::var("YUKI_ICON_THEME").unwrap_or_else(|_| "Adwaita".to_string());
+    let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Adwaita".to_string());
     let themes = [theme.as_str(), "hicolor"];
     let sizes = [
         "scalable", "512x512", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32", "24x24",
@@ -537,7 +537,7 @@ fn icon_data(path: &std::path::Path) -> Option<IconData> {
 
 /// Launches a desktop entry detached, with the activation token when present.
 fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
-    let terminal = env::var("YUKI_TERMINAL")
+    let terminal = env::var("MALAYSIA_TERMINAL")
         .or_else(|_| env::var("TERMINAL"))
         .unwrap_or_else(|_| "wezterm".to_string());
     let mut argv = if entry.terminal {
@@ -588,7 +588,7 @@ fn sanitize_client_env(command: &mut Command) {
         "GBM_BACKENDS_PATH",
     ] {
         command.env_remove(name);
-        let saved = format!("YUKI_ORIG_{name}");
+        let saved = format!("MALAYSIA_ORIG_{name}");
         if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
             command.env(name, value);
         }

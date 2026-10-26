@@ -109,17 +109,17 @@ pub enum Event {
 /// Which PAM stack the lock uses.
 #[derive(Debug, Clone, Copy)]
 pub struct Service {
-    /// Malaysia's own stack, `/etc/pam.d/yuki-lock`.
+    /// Malaysia's own stack, `/etc/pam.d/malaysia-lock`.
     pub preferred: &'static str,
     /// Used when Yuki's file is not installed.
     pub fallback: &'static str,
 }
 
 impl Service {
-    /// The lock's stack: `yuki-lock`, or `login` on a system that has not
+    /// The lock's stack: `malaysia-lock`, or `login` on a system that has not
     /// installed the NixOS PAM service yet.
     pub const LOCK: Service = Service {
-        preferred: "yuki-lock",
+        preferred: "malaysia-lock",
         fallback: "login",
     };
 }
@@ -141,7 +141,7 @@ impl Attempt {
         let (answers, answer_rx) = std::sync::mpsc::channel();
 
         std::thread::Builder::new()
-            .name("yuki-pam".to_string())
+            .name("malaysia-pam".to_string())
             .spawn(move || {
                 let outcome = converse(&service, &user, &events, &notify, &answer_rx);
                 if let Ok(mut buffer) = events.lock() {
@@ -408,11 +408,14 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_yuki_lock_falls_back_to_login() {
+    fn a_missing_malaysia_lock_falls_back_to_login() {
         let only = |present: &'static [&'static str]| move |name: &str| present.contains(&name);
         let pick = |present| resolve_service(Service::LOCK, only(present));
-        assert_eq!(pick(&["yuki-lock", "login"]).to_str(), Ok("yuki-lock"));
+        assert_eq!(
+            pick(&["malaysia-lock", "login"]).to_str(),
+            Ok("malaysia-lock")
+        );
         assert_eq!(pick(&["login"]).to_str(), Ok("login"));
-        assert_eq!(pick(&[]).to_str(), Ok("yuki-lock"));
+        assert_eq!(pick(&[]).to_str(), Ok("malaysia-lock"));
     }
 }
