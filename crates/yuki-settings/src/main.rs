@@ -42,7 +42,7 @@ fn main() {
             .decorations(Decorations::Client)
             .size((SETTINGS.window_width, SETTINGS.window_height))
             .min_size(Some((SETTINGS.window_width, SETTINGS.window_min_height)))
-            .max_size(Some((SETTINGS.window_width, u32::MAX))),
+            .max_size(Some((SETTINGS.window_width, 0))),
     )
     .expect("yuki-settings");
 }
