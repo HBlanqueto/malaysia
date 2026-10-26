@@ -830,6 +830,13 @@ demo() {
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
 
+    # Make the repository's .desktop entries visible to the menubar so it can
+    # resolve native app ids (io.github.hblanqueto.yuki.settings) to their
+    # localized names.
+    _data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
+    export XDG_DATA_DIRS
+
     # Every component is its own Wayland client; one log per component.
     demo_client() {
         _name=$1
@@ -945,9 +952,11 @@ lab() {
 
     if [ -n "${YUKI_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/yuki-shell"
-        if [ ! -x "$script_dir/target/debug/yuki" ] || [ ! -x "$_shell_bin" ]; then
-            "$script_dir/dev.sh" build
-        fi
+        # Always rebuild the workspace in the dev shell so the lab never runs
+        # stale binaries (the demo keeps the faster "build only when missing"
+        # path for a quick visual check).
+        "$script_dir/dev.sh" build ||
+            fail "$EXIT_RUN_FAILED" "could not build the workspace"
         if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
             [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
             [ ! -x "$script_dir/target/debug/examples/dialog" ] ||
@@ -1010,6 +1019,13 @@ lab() {
         stop
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
+
+    # Make the repository's .desktop entries visible to the menubar so it can
+    # resolve native app ids (io.github.hblanqueto.yuki.settings) to their
+    # localized names.
+    _data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
+    export XDG_DATA_DIRS
 
     lab_client() {
         _name=$1
