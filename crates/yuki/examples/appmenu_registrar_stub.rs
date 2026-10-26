@@ -1,11 +1,8 @@
-//! Dev-only `com.canonical.AppMenu.Registrar` stub (ADR 0040, 14d-1).
+//! Dev-only `com.canonical.AppMenu.Registrar` diagnostic stub (ADR 0040).
 //!
-//! Qt and Firefox only export their menus when the registrar name has an
-//! owner. This example owns it on the lab's private bus so the acceptance can
-//! observe `org_kde_kwin_appmenu`; it is not part of the compositor or the
-//! package.
-//!
-//! Run with `YUKI_LAB_REGISTRAR_STUB=1 ./dev.sh lab`.
+//! The bar owns the registrar name since 14d-2, so the lab no longer starts
+//! this example. It stays as a manual diagnostic for checking whether an app
+//! exports `org_kde_kwin_appmenu` without the bar running.
 
 use std::time::Duration;
 

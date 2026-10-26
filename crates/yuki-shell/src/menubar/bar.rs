@@ -8,6 +8,7 @@
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use celestial_kit::menu::MenuItem;
 use celestial_kit::platform::{
@@ -21,6 +22,7 @@ use yuki_appearance::{Resolved, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
+use crate::menubar::dbusmenu::{self, MenuClient, MenuSnapshot};
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
 use celestial_kit::menu::SearchQuery;
@@ -34,6 +36,8 @@ pub struct BarApp {
     pub appearance: State<Option<Resolved>>,
     pub window_store: PathBuf,
     pub entries: Vec<DesktopEntry>,
+    pub dbus: MenuClient,
+    pub menu_snapshot: State<Option<Arc<MenuSnapshot>>>,
 }
 
 impl App for BarApp {
@@ -51,6 +55,15 @@ impl App for BarApp {
         let timers = Timers::get();
         let appearance = self.appearance;
         use_hook(move || schedule_appearance_poll(timers, appearance));
+
+        let generation = use_hook(|| Rc::new(Cell::new(0u64)));
+        let timers = Timers::get();
+        let dbus = self.dbus.clone();
+        let menu_snapshot = self.menu_snapshot;
+        let generation_for_drain = generation.clone();
+        use_hook(move || {
+            schedule_snapshot_drain(timers, dbus, menu_snapshot, generation_for_drain)
+        });
         let resolved = (*self.appearance.read()).unwrap_or_else(celestial_kit::theme::resolved);
 
         let now = self.clock.read().clone();
@@ -68,20 +81,31 @@ impl App for BarApp {
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
-        if let Some(info) = active_info {
+        let key = active_info.map(|info| (info.app_id.clone(), info.app_menu.clone()));
+        {
+            let mut snapshot_state = self.menu_snapshot;
             let mut last = last_app_menu.borrow_mut();
-            let key = (info.app_id.clone(), info.app_menu.clone());
-            if last.as_ref() != Some(&key) {
-                match &info.app_menu {
-                    Some(menu) => tracing::info!(
-                        app_id = %info.app_id,
-                        service = %menu.service,
-                        path = %menu.path,
-                        "menubar: app_menu"
-                    ),
-                    None => tracing::info!(app_id = %info.app_id, "menubar: app_menu none"),
+            if *last != key {
+                let next_generation = generation.get() + 1;
+                generation.set(next_generation);
+                snapshot_state.set(None);
+                match &key {
+                    Some((app_id, Some(menu))) => {
+                        tracing::info!(
+                            app_id = %app_id,
+                            service = %menu.service,
+                            path = %menu.path,
+                            generation = next_generation,
+                            "menubar: app_menu"
+                        );
+                        self.dbus.focus(menu.clone(), next_generation);
+                    }
+                    Some((app_id, None)) => {
+                        tracing::info!(app_id = %app_id, "menubar: app_menu none")
+                    }
+                    None => {}
                 }
-                *last = Some(key);
+                *last = key;
             }
         }
         let palette = celestial_kit::theme::shell_palette(&resolved);
@@ -264,6 +288,24 @@ fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State
     });
 }
 
+fn schedule_snapshot_drain(
+    timers: Timers,
+    dbus: MenuClient,
+    snapshot: State<Option<Arc<MenuSnapshot>>>,
+    generation: Rc<Cell<u64>>,
+) {
+    let retry = timers.clone();
+    timers.after(std::time::Duration::from_millis(16), move || {
+        let mut snapshot = snapshot;
+        while let Some(next) = dbus.try_recv() {
+            if next.generation == generation.get() {
+                snapshot.set(Some(Arc::new(next)));
+            }
+        }
+        schedule_snapshot_drain(retry.clone(), dbus.clone(), snapshot, generation.clone());
+    });
+}
+
 fn schedule_appearance_poll(timers: Timers, appearance: State<Option<Resolved>>) {
     let retry = timers.clone();
     timers.after(std::time::Duration::from_millis(500), move || {
@@ -320,12 +362,15 @@ pub fn run() -> anyhow::Result<()> {
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
     let appearance = State::create_global(Some(celestial_kit::theme::resolved()));
+    let menu_snapshot = State::create_global(None::<Arc<MenuSnapshot>>);
     let app = AppComponent::new(BarApp {
         clock,
         active_app,
         appearance,
         window_store,
         entries,
+        dbus: dbusmenu::start(),
+        menu_snapshot,
     });
 
     run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"))

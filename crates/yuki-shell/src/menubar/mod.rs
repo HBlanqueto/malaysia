@@ -13,6 +13,7 @@
 pub mod appmenu;
 pub mod bar;
 pub mod clock;
+pub mod dbusmenu;
 pub mod focused;
 pub mod help_topics;
 pub mod icons;

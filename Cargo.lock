@@ -4366,6 +4366,7 @@ dependencies = [
  "wayland-egl",
  "yuki-appearance",
  "yuki-design",
+ "zbus",
  "zeroize",
  "zune-jpeg",
 ]
