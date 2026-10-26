@@ -1,0 +1,26 @@
+[package]
+name = "yuki-settings"
+description = "Ajustes del sistema de Yuki (System Settings), a CelestialKit app."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "yuki-settings"
+path = "src/main.rs"
+
+[dependencies]
+celestial-kit = { path = "../celestial-kit" }
+yuki-appearance = { path = "../yuki-appearance" }
+yuki-design = { path = "../yuki-design" }
+
+freya-core.workspace = true
+freya-components.workspace = true
+freya-engine.workspace = true
+torin.workspace = true
+keyboard-types.workspace = true
+
+[dev-dependencies]
+freya-testing.workspace = true

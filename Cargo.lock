@@ -4341,6 +4341,21 @@ name = "yuki-scene"
 version = "0.1.0"
 
 [[package]]
+name = "yuki-settings"
+version = "0.1.0"
+dependencies = [
+ "celestial-kit",
+ "freya-components",
+ "freya-core",
+ "freya-engine",
+ "freya-testing",
+ "keyboard-types",
+ "torin",
+ "yuki-appearance",
+ "yuki-design",
+]
+
+[[package]]
 name = "yuki-shell"
 version = "0.1.0"
 dependencies = [

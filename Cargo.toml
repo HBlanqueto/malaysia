@@ -12,6 +12,7 @@ members = [
     "crates/grade-graphics",
     "crates/celestial-kit",
     "crates/yuki-shell",
+    "crates/yuki-settings",
     "crates/xdg-desktop-portal-yuki",
     "tools/sctk-probe",
 ]
@@ -29,6 +30,7 @@ default-members = [
     "crates/grade-graphics",
     "crates/celestial-kit",
     "crates/yuki-shell",
+    "crates/yuki-settings",
     "crates/xdg-desktop-portal-yuki",
 ]
 
