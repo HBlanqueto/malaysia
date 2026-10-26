@@ -36,3 +36,6 @@ pub mod controls;
 
 /// Neptunia menu popup control (global menus, context menus).
 pub mod menu;
+
+/// Neptunia sidebar, sidebar items, collapsible sections and sidebar layout.
+pub mod sidebar;

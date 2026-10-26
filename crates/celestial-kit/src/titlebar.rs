@@ -25,6 +25,9 @@ use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStat
 pub struct Titlebar {
     preview: Option<Preview>,
     on_close: Option<Callback<(), ()>>,
+    sidebar: bool,
+    left: Option<Element>,
+    right: Option<Element>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -46,6 +49,9 @@ impl Titlebar {
         Self {
             preview: None,
             on_close: None,
+            sidebar: false,
+            left: None,
+            right: None,
         }
     }
 
@@ -58,12 +64,34 @@ impl Titlebar {
                 fixed,
             }),
             on_close: None,
+            sidebar: false,
+            left: None,
+            right: None,
         }
     }
 
     /// Called when the close light is released.
     pub fn on_close(mut self, callback: impl Into<Callback<(), ()>>) -> Self {
         self.on_close = Some(callback.into());
+        self
+    }
+
+    /// Configure the titlebar to live above a sidebar; it will not draw its own
+    /// traffic lights.
+    pub fn with_sidebar(mut self, sidebar: bool) -> Self {
+        self.sidebar = sidebar;
+        self
+    }
+
+    /// Content for the left slot (next to the centred title).
+    pub fn left(mut self, child: impl IntoElement) -> Self {
+        self.left = Some(child.into_element());
+        self
+    }
+
+    /// Content for the right slot (next to the centred title).
+    pub fn right(mut self, child: impl IntoElement) -> Self {
+        self.right = Some(child.into_element());
         self
     }
 }
@@ -96,7 +124,38 @@ impl Component for Titlebar {
         } else {
             theme.title.unfocused
         };
-        let traffic = window_traffic_lights(self.on_close.clone(), status.activated, fixed);
+        let traffic = if self.sidebar {
+            None
+        } else {
+            Some(window_traffic_lights(
+                self.on_close.clone(),
+                status.activated,
+                fixed,
+            ))
+        };
+
+        let left_slot = rect()
+            .width(Size::px(80.0))
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .on_mouse_down(window_drag_handler(fixed))
+            .maybe(self.left.is_some(), |el| {
+                el.child(self.left.clone().unwrap())
+            });
+        let left_slot = if let Some(traffic) = traffic {
+            left_slot.center().child(traffic)
+        } else {
+            left_slot
+        };
+
+        let right_slot = rect()
+            .width(Size::px(80.0))
+            .height(Size::fill())
+            .cross_align(Alignment::Center)
+            .on_mouse_down(window_drag_handler(fixed))
+            .maybe(self.right.is_some(), |el| {
+                el.child(self.right.clone().unwrap())
+            });
 
         rect()
             .width(Size::fill())
@@ -105,13 +164,7 @@ impl Component for Titlebar {
             .direction(Direction::Horizontal)
             .cross_align(Alignment::Center)
             .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
-            .child(
-                rect()
-                    .width(Size::px(80.0))
-                    .height(Size::fill())
-                    .center()
-                    .child(traffic),
-            )
+            .child(left_slot)
             .child(
                 rect()
                     .width(Size::flex(1.0))
@@ -126,12 +179,7 @@ impl Component for Titlebar {
                             .max_lines(1),
                     ),
             )
-            .child(
-                rect()
-                    .width(Size::px(80.0))
-                    .height(Size::fill())
-                    .on_mouse_down(window_drag_handler(fixed)),
-            )
+            .child(right_slot)
             .into_element()
     }
 }
