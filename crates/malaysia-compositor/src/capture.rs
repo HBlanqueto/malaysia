@@ -342,9 +342,6 @@ fn capture_into_dmabuf(
 
 /// Validates the client's SHM buffer against the capture size and returns the
 /// copy geometry: `(offset, stride, row_bytes, rows)`.
-///
-/// `shortcut: rejecting a size mismatch with CaptureFailureReason::Unknown;
-/// upgrade to BufferConstraints once the protocol needs to scale instead.`
 fn shm_layout(
     pool_len: usize,
     data_offset: i32,
@@ -357,6 +354,7 @@ fn shm_layout(
     if width <= 0 || height <= 0 {
         return Err(format!("invalid capture size {width}x{height}"));
     }
+    // shortcut: a size mismatch fails with CaptureFailureReason::Unknown; switch to BufferConstraints if capture ever needs to scale.
     if data_width != width || data_height != height {
         return Err(format!(
             "shm buffer is {data_width}x{data_height}, capture is {width}x{height}"
