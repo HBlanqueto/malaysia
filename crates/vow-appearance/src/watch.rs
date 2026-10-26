@@ -42,7 +42,10 @@ impl AppearanceWatch {
     /// Creates a watcher for explicit directories.
     pub fn new_for(config_dir: PathBuf, data_dir: PathBuf) -> io::Result<Self> {
         // Watch the directories, not the files, so atomic renames trigger
-        // IN_MOVED_TO.
+        // IN_MOVED_TO. Create them first so a fresh install or a wiped cache
+        // does not fail before the first write.
+        std::fs::create_dir_all(&config_dir)?;
+        std::fs::create_dir_all(&data_dir)?;
         let inotify = Inotify::init(InitFlags::IN_NONBLOCK).map_err(into_io_error)?;
         inotify
             .add_watch(&config_dir, Self::flags())
@@ -142,6 +145,43 @@ mod tests {
         let tmp = path.with_extension("tmp");
         std::fs::write(&tmp, text).unwrap();
         std::fs::rename(&tmp, path).unwrap();
+    }
+
+    #[test]
+    fn creates_watched_directories_when_missing() {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let pid = std::process::id();
+        let config_dir = std::env::temp_dir().join(format!(
+            "vow-appearance-watch-missing-config-{pid}-{n}"
+        ));
+        let data_dir =
+            std::env::temp_dir().join(format!("vow-appearance-watch-missing-data-{pid}-{n}"));
+        let _ = std::fs::remove_dir_all(&config_dir);
+        let _ = std::fs::remove_dir_all(&data_dir);
+        assert!(!config_dir.exists());
+        assert!(!data_dir.exists());
+
+        let watch = AppearanceWatch::new_for(config_dir.clone(), data_dir.clone()).unwrap();
+        assert!(config_dir.exists());
+        assert!(data_dir.exists());
+
+        let path = config_dir.join("appearance.domain");
+        write(&path, "color_scheme = \"dark\"\n");
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut found = false;
+        while Instant::now() < deadline {
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::Appearance)
+            {
+                found = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(found, "appearance.domain rename was not detected after creating dirs");
+        let _ = std::fs::remove_dir_all(&config_dir);
+        let _ = std::fs::remove_dir_all(&data_dir);
     }
 
     #[test]
