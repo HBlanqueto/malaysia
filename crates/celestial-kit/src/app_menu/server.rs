@@ -250,7 +250,7 @@ async fn run(commands: Receiver<Command>) {
 fn build_layout_from_handle(
     registered: &Arc<RegisteredMenu>,
     id_map: &mut IdMap,
-) -> (crate::app_menu::layout::LayoutSnapshot, Value<'static>) {
+) -> (crate::app_menu::layout::LayoutSnapshot, crate::app_menu::layout::LayoutItem) {
     let (menu, revision) = registered.handle.snapshot();
     build_layout(&menu, id_map, revision)
 }
@@ -374,18 +374,14 @@ impl DbusMenuObject {
     ) -> zbus::Result<()>;
 }
 
-fn empty_root() -> Value<'static> {
-    Value::Structure(zbus::zvariant::Structure::from((
+fn empty_root() -> crate::app_menu::layout::LayoutItem {
+    (
         0i32,
         HashMap::<String, OwnedValue>::new(),
-        zbus::zvariant::Array::from(Vec::<Value<'static>>::new()),
-    )))
+        Vec::<Value<'static>>::new(),
+    )
 }
 
-fn empty_subtree(id: i32) -> Value<'static> {
-    Value::Structure(zbus::zvariant::Structure::from((
-        id,
-        HashMap::<String, OwnedValue>::new(),
-        zbus::zvariant::Array::from(Vec::<Value<'static>>::new()),
-    )))
+fn empty_subtree(id: i32) -> crate::app_menu::layout::LayoutItem {
+    (id, HashMap::<String, OwnedValue>::new(), Vec::<Value<'static>>::new())
 }

@@ -8,8 +8,11 @@ use crate::app_menu::{
 };
 use crate::menu::MenuItem;
 
+/// One dbusmenu layout item: `(id, properties, children)`.
+pub type LayoutItem = (i32, HashMap<String, OwnedValue>, Vec<Value<'static>>);
+
 /// The value returned by `GetLayout`: `(revision, layout_item)`.
-pub type DbusMenuLayout = (u32, Value<'static>);
+pub type DbusMenuLayout = (u32, LayoutItem);
 
 /// Update record for `ItemsPropertiesUpdated`.
 #[derive(Debug, Clone)]
@@ -58,20 +61,20 @@ pub fn build_layout(
     menu: &AppMenu,
     id_map: &mut IdMap,
     revision: u32,
-) -> (LayoutSnapshot, Value<'static>) {
+) -> (LayoutSnapshot, LayoutItem) {
     let mut snapshot = LayoutSnapshot {
         revision,
         nodes: HashMap::new(),
         root_children: Vec::new(),
     };
     let root_id = 0;
-    let mut root_children_items: Vec<Value<'static>> = Vec::new();
+    let mut root_children_values: Vec<Value<'static>> = Vec::new();
     for m in &menu.menus {
         let menu_id = id_map.get(format!("__menu__:{}", m.title));
         snapshot.root_children.push(menu_id);
         let (item, node) = layout_menu(menu_id, m, id_map);
         snapshot.nodes.insert(menu_id, node);
-        root_children_items.push(item);
+        root_children_values.push(Value::Structure(zbus::zvariant::Structure::from(item)));
     }
     snapshot.nodes.insert(
         root_id,
@@ -80,15 +83,15 @@ pub fn build_layout(
             children: snapshot.root_children.clone(),
         },
     );
-    let root = Value::Structure(zbus::zvariant::Structure::from((
+    let root = (
         root_id,
         HashMap::<String, OwnedValue>::new(),
-        Array::from(root_children_items),
-    )));
+        root_children_values,
+    );
     (snapshot, root)
 }
 
-fn layout_menu(id: i32, menu: &Menu, id_map: &mut IdMap) -> (Value<'static>, LayoutNode) {
+fn layout_menu(id: i32, menu: &Menu, id_map: &mut IdMap) -> (LayoutItem, LayoutNode) {
     let mut props = HashMap::new();
     props.insert("label".to_string(), owned(dbusmenu_label(&menu.title)));
     props.insert("children-display".to_string(), owned("submenu"));
@@ -97,7 +100,7 @@ fn layout_menu(id: i32, menu: &Menu, id_map: &mut IdMap) -> (Value<'static>, Lay
     for child in &menu.items {
         let (child_item, child_id) = layout_item(child, id_map);
         child_ids.push(child_id);
-        children.push(child_item);
+        children.push(Value::Structure(zbus::zvariant::Structure::from(child_item)));
     }
     let node = LayoutNode {
         properties: props.clone(),
@@ -107,7 +110,7 @@ fn layout_menu(id: i32, menu: &Menu, id_map: &mut IdMap) -> (Value<'static>, Lay
     (item, node)
 }
 
-fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (Value<'static>, i32) {
+fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (LayoutItem, i32) {
     match item {
         MenuItem::Separator => {
             let id = id_map.get("__separator__");
@@ -163,7 +166,7 @@ fn layout_item(item: &MenuItem, id_map: &mut IdMap) -> (Value<'static>, i32) {
             for child in items {
                 let (child_item, child_id) = layout_item(child, id_map);
                 child_ids.push(child_id);
-                children.push(child_item);
+                children.push(Value::Structure(zbus::zvariant::Structure::from(child_item)));
             }
             let _node = LayoutNode {
                 properties: props.clone(),
@@ -184,12 +187,8 @@ fn item_value(
     id: i32,
     props: &HashMap<String, OwnedValue>,
     children: Vec<Value<'static>>,
-) -> Value<'static> {
-    Value::Structure(zbus::zvariant::Structure::from((
-        id,
-        props.clone(),
-        Array::from(children),
-    )))
+) -> LayoutItem {
+    (id, props.clone(), children)
 }
 
 /// Compares the new layout with the previous one and returns either a
