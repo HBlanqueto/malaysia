@@ -105,6 +105,10 @@ nix develop
 
 `demo --dark|--light` copia `~/.config/yuki` a un directorio temporal, escribe
 allí `color_scheme` y lo borra al salir: nunca toca la configuración real.
+Los ficheros de desarrollo (pid, log y logs de los clientes del lab) viven en
+`$XDG_RUNTIME_DIR/yuki-dev-<hash>`, con un hash corto de la ruta del checkout
+(`git rev-parse --show-toplevel`): dos worktrees pueden correr `run`, `demo` o
+`lab` a la vez sin compartir ni el pid ni el log.
 `scripts/demo.sh` hace `git pull --ff-only`, compila y lanza el demo (pasa los
 mismos argumentos) desde la raíz del repo; fuera del dev shell falla con un
 mensaje.
