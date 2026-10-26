@@ -968,6 +968,31 @@ lab() {
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
 
+    # Launch a third-party app so it lands in the nested session and not in the
+    # host GNOME session.  Isolating D-Bus (dbus-run-session) and forcing the
+    # Wayland backend prevents activation/portal hand-off to the host.
+    lab_app_client() {
+        _name=$1
+        shift
+        if command -v dbus-run-session >/dev/null 2>&1; then
+            lab_client "$_name" dbus-run-session -- env \
+                GDK_BACKEND=wayland \
+                MOZ_ENABLE_WAYLAND=1 \
+                QT_QPA_PLATFORM=wayland \
+                QT_QPA_PLATFORMTHEME=kde \
+                XDG_CURRENT_DESKTOP=Yuki \
+                "$@"
+        else
+            lab_client "$_name" env -u DBUS_SESSION_BUS_ADDRESS \
+                GDK_BACKEND=wayland \
+                MOZ_ENABLE_WAYLAND=1 \
+                QT_QPA_PLATFORM=wayland \
+                QT_QPA_PLATFORMTHEME=kde \
+                XDG_CURRENT_DESKTOP=Yuki \
+                "$@"
+        fi
+    }
+
     lab_client wallpaper "$_shell_bin" wallpaper
     lab_client menubar "$_shell_bin" menubar
     lab_client dock "$_shell_bin" dock
@@ -992,35 +1017,35 @@ lab() {
 
     # Optional third-party apps, only if installed.  Each gets its own log.
     if command -v nautilus >/dev/null 2>&1; then
-        lab_client nautilus nautilus
+        lab_app_client nautilus nautilus
     else
         printf 'lab: nautilus not found; skipping GTK4/libadwaita test\n' >&2
     fi
 
     if command -v zenity >/dev/null 2>&1; then
-        lab_client zenity zenity --info --text "Prueba GTK sin headerbar"
+        lab_app_client zenity zenity --info --text "Prueba GTK sin headerbar"
     elif command -v gnome-calculator >/dev/null 2>&1; then
-        lab_client gnome-calculator gnome-calculator
+        lab_app_client gnome-calculator gnome-calculator
     else
         printf 'lab: zenity or gnome-calculator not found; skipping GTK test\n' >&2
     fi
 
     if command -v kate >/dev/null 2>&1; then
-        lab_client kate env QT_QPA_PLATFORMTHEME=kde kate
+        lab_app_client kate kate
     elif command -v kwrite >/dev/null 2>&1; then
-        lab_client kwrite env QT_QPA_PLATFORMTHEME=kde kwrite
+        lab_app_client kwrite kwrite
     else
         printf 'lab: kate/kwrite not found; skipping Qt test\n' >&2
     fi
 
     if command -v telegram-desktop >/dev/null 2>&1; then
-        lab_client telegram telegram-desktop
+        lab_app_client telegram telegram-desktop
     else
         printf 'lab: telegram-desktop not found; skipping Telegram test\n' >&2
     fi
 
     if command -v firefox >/dev/null 2>&1; then
-        lab_client firefox firefox
+        lab_app_client firefox firefox
     else
         printf 'lab: firefox not found; skipping Firefox test\n' >&2
     fi

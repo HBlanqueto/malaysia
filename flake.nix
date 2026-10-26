@@ -235,6 +235,7 @@
         # required to build or run Yuki; the lab script skips any that are
         # missing. Keep this list short so it does not bloat devShell entry.
         labApps = with pkgs; [
+          dbus
           nautilus
           zenity
           kdePackages.kate
