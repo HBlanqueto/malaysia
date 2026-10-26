@@ -159,9 +159,9 @@ Las carpetas usan `xdg-open` y los `xdg-user-dirs`. Contenido exacto:
 
 Habilitados en esta entrega: los de Ir salvo Atrás, Adelante e Ir a la
 carpeta…; Nueva ventana, Nueva carpeta en el escritorio y Buscar; Minimizar
-todo, Mostrar escritorio y la lista de ventanas; y Bloquear pantalla. El resto
-se ve deshabilitado. `zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y
-activar la lista.
+todo, Mostrar escritorio y la lista de ventanas; Bloquear pantalla; y Ajustes
+del sistema (lanza `yuki-settings`). El resto se ve deshabilitado.
+`zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y activar la lista.
 
 ### Medidas de Neptunia
 

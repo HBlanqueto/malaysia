@@ -47,6 +47,8 @@ continua.
 | 0038 | Reducir transparencia por defecto | aceptado |
 | 0039 | Infinity v1: gestión de ventanas para la shell | aceptado |
 | 0040 | Menú global real: arquitectura propia | aceptado |
+| 0041 | Barra lateral en isla | aceptado |
+| 0042 | Ajustes del sistema (`yuki-settings`) | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

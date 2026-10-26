@@ -406,6 +406,10 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   (menú «Yuki» de escritorio en `yuki-shell menubar`) aceptado en anidado el
   2026-10-24. 14c (menús de la app enfocada) implementado el 2026-10-25; el
   compositor aún no envía `State` ni implementa `set_maximized`.
+- **Ajustes del sistema (`yuki-settings`) — integrado.** Se abre desde el menú
+  ❄ de `yuki-shell menubar`, se empaqueta en Nix con su `.desktop` y se
+  documenta en los ADR 0041 y 0042. Hoy solo tiene la sección Apariencia; más
+  dominios llegarán con el backend D-Bus de configuración (ADR 0021).
 
 ## Numeración de bloques
 
