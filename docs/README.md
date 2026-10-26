@@ -73,6 +73,8 @@ El dev shell es obligatorio para cargo (ADR 0007):
 nix develop
 ./dev.sh build            # debug de los miembros por defecto
 ./dev.sh run              # compositor anidado
+./dev.sh demo             # sesión anidada con shell y ventanas de prueba
+./dev.sh lab              # sesión anidada con apps reales para pruebas manuales
 ./dev.sh check            # fmt + clippy + tests + checks de diseño/Neptunia
 nix build .#default       # paquete instalable (perfil dist)
 ```

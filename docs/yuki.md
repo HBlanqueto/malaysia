@@ -96,6 +96,8 @@ nix develop
 ./dev.sh demo      # sesión anidada con wallpaper, menubar, dock y ventanas
 ./dev.sh demo --dark   # ídem, con appearance.color_scheme forzado a oscuro
 ./dev.sh demo --light  # ídem, en claro
+./dev.sh lab       # sesión anidada con apps reales para pruebas manuales
+./dev.sh lab --light   # ídem, con apariencia clara
 ./dev.sh smoke     # compila y ejecuta la prueba de mapeo de toplevels
 ./dev.sh check     # formato, clippy y pruebas
 ./dev.sh --help    # todos los comandos
@@ -106,3 +108,11 @@ allí `color_scheme` y lo borra al salir: nunca toca la configuración real.
 `scripts/demo.sh` hace `git pull --ff-only`, compila y lanza el demo (pasa los
 mismos argumentos) desde la raíz del repo; fuera del dev shell falla con un
 mensaje.
+
+`lab` es igual que `demo` pero también lanza, si están instaladas, `nautilus`,
+`zenity` (o `gnome-calculator`), `kate`/`kwrite`, `telegram-desktop` y `firefox`,
+cada una con su log en `$XDG_RUNTIME_DIR/demo-<nombre>.log`. Al arrancar imprime
+una checklist de pruebas manuales; la sesión se cierra con Ctrl-C o cerrando la
+ventana anfitriona. `scripts/lab.sh` actualiza, compila y lanza `lab` de la
+misma forma que `scripts/demo.sh`. Las apps de prueba son opcionales en el
+devShell (`labApps` en `flake.nix`).
