@@ -4,7 +4,9 @@
 //! Ventana and Ayuda. The constructors are pure so the tests can drive them
 //! with fake [`ToplevelInfo`]s; [`on_action`] reads the live list again.
 
-use celestial_kit::menu::{CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry};
+use celestial_kit::menu::{
+    CheckState, MenuIcon, MenuItem, SearchLocation, SearchSource, SearchableEntry,
+};
 use celestial_kit::platform::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::menubar::{help_topics, icons, xdg_open};
@@ -24,7 +26,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             format!("Acerca de {app_name}"),
             None,
             false,
-            Some(icons::INFO),
+            Some(MenuIcon::Svg(icons::INFO)),
         ),
         MenuItem::Separator,
         action(
@@ -32,7 +34,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             "Configuración…",
             Some("Super+,"),
             false,
-            Some(icons::GEAR),
+            Some(MenuIcon::Svg(icons::GEAR)),
         ),
         MenuItem::Separator,
         MenuItem::Submenu {
@@ -130,14 +132,14 @@ pub fn window_menu_items(
             id: None,
             label: "Trasladar y redimensionar".to_string(),
             enabled: true,
-            icon: Some(icons::GRID),
+            icon: Some(MenuIcon::Svg(icons::GRID)),
             items: move_resize_items(active, active_window),
         },
         MenuItem::Submenu {
             id: None,
             label: "Ventana a pantalla completa".to_string(),
             enabled: true,
-            icon: Some(icons::SPLIT),
+            icon: Some(MenuIcon::Svg(icons::SPLIT)),
             items: vec![
                 action(
                     "app-window-screen-left",
@@ -521,28 +523,28 @@ fn move_resize_items(active: Option<usize>, active_window: Option<&ToplevelInfo>
             "Izquierda",
             Some("Ctrl+Super+Left"),
             has_active,
-            Some(icons::HALF_LEFT),
+            Some(MenuIcon::Svg(icons::HALF_LEFT)),
         ),
         action(
             active_id("app-move-right", active),
             "Derecha",
             Some("Ctrl+Super+Right"),
             has_active,
-            Some(icons::HALF_RIGHT),
+            Some(MenuIcon::Svg(icons::HALF_RIGHT)),
         ),
         action(
             active_id("app-move-up", active),
             "Superior",
             Some("Ctrl+Super+Up"),
             has_active,
-            Some(icons::HALF_TOP),
+            Some(MenuIcon::Svg(icons::HALF_TOP)),
         ),
         action(
             active_id("app-move-down", active),
             "Inferior",
             Some("Ctrl+Super+Down"),
             has_active,
-            Some(icons::HALF_BOTTOM),
+            Some(MenuIcon::Svg(icons::HALF_BOTTOM)),
         ),
         MenuItem::Separator,
         header("Cuartos"),
@@ -551,28 +553,28 @@ fn move_resize_items(active: Option<usize>, active_window: Option<&ToplevelInfo>
             "Superior izquierdo",
             None,
             has_active,
-            Some(icons::QUARTER_TOP_LEFT),
+            Some(MenuIcon::Svg(icons::QUARTER_TOP_LEFT)),
         ),
         action(
             active_id("app-quarter-top-right", active),
             "Superior derecho",
             None,
             has_active,
-            Some(icons::QUARTER_TOP_RIGHT),
+            Some(MenuIcon::Svg(icons::QUARTER_TOP_RIGHT)),
         ),
         action(
             active_id("app-quarter-bottom-left", active),
             "Inferior izquierdo",
             None,
             has_active,
-            Some(icons::QUARTER_BOTTOM_LEFT),
+            Some(MenuIcon::Svg(icons::QUARTER_BOTTOM_LEFT)),
         ),
         action(
             active_id("app-quarter-bottom-right", active),
             "Inferior derecho",
             None,
             has_active,
-            Some(icons::QUARTER_BOTTOM_RIGHT),
+            Some(MenuIcon::Svg(icons::QUARTER_BOTTOM_RIGHT)),
         ),
         MenuItem::Separator,
         header("Disposición"),
@@ -581,35 +583,35 @@ fn move_resize_items(active: Option<usize>, active_window: Option<&ToplevelInfo>
             "Izquierda y derecha",
             Some("Ctrl+Shift+Super+Left"),
             has_active,
-            Some(icons::HALVES_LEFT_RIGHT),
+            Some(MenuIcon::Svg(icons::HALVES_LEFT_RIGHT)),
         ),
         action(
             active_id("app-layout-reversed-side-by-side", active),
             "Derecha e izquierda",
             Some("Ctrl+Shift+Super+Right"),
             has_active,
-            Some(icons::HALVES_RIGHT_LEFT),
+            Some(MenuIcon::Svg(icons::HALVES_RIGHT_LEFT)),
         ),
         action(
             active_id("app-layout-stacked", active),
             "Superior e inferior",
             Some("Ctrl+Shift+Super+Up"),
             has_active,
-            Some(icons::HALVES_TOP_BOTTOM),
+            Some(MenuIcon::Svg(icons::HALVES_TOP_BOTTOM)),
         ),
         action(
             active_id("app-layout-reversed-stacked", active),
             "Inferior y superior",
             Some("Ctrl+Shift+Super+Down"),
             has_active,
-            Some(icons::HALVES_BOTTOM_TOP),
+            Some(MenuIcon::Svg(icons::HALVES_BOTTOM_TOP)),
         ),
         action(
             active_id("app-layout-quarters", active),
             "En cuartos",
             None,
             has_active,
-            Some(icons::GRID),
+            Some(MenuIcon::Svg(icons::GRID)),
         ),
         MenuItem::Separator,
         action(
@@ -655,7 +657,7 @@ fn action(
     label: impl Into<String>,
     shortcut: Option<&str>,
     enabled: bool,
-    icon: Option<&'static str>,
+    icon: Option<MenuIcon>,
 ) -> MenuItem {
     MenuItem::Action {
         id: id.into(),

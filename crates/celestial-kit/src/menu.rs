@@ -6,12 +6,18 @@
 
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use freya_components::svg_viewer::SvgViewer;
+use freya_core::elements::image::ImageHandle;
 use freya_core::integration::{AppComponent, default_fonts};
 use freya_core::prelude::*;
-use freya_engine::prelude::{ParagraphBuilder, ParagraphStyle, TextStyle};
+use freya_engine::prelude::{
+    AlphaType, ColorType, ImageInfo, ParagraphBuilder, ParagraphStyle, Pixmap, SkData, SkImage,
+    TextStyle,
+};
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 
@@ -209,6 +215,33 @@ pub enum MenuNavigation {
     Next,
 }
 
+/// Leading icon of a menu row.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MenuIcon {
+    /// The bar's own static SVG set, tinted with the row colour.
+    Svg(&'static str),
+    /// An encoded PNG (dbusmenu `icon-data`), drawn as-is.
+    Image(Arc<[u8]>),
+}
+
+impl MenuIcon {
+    /// Largest PNG accepted from dbusmenu, in bytes.
+    pub const MAX_IMAGE_BYTES: usize = 64 * 1024;
+
+    /// Wraps an encoded PNG, dropping anything above [`Self::MAX_IMAGE_BYTES`].
+    pub fn image(bytes: impl Into<Arc<[u8]>>) -> Option<Self> {
+        let bytes = bytes.into();
+        if bytes.len() > Self::MAX_IMAGE_BYTES {
+            tracing::debug!(
+                bytes = bytes.len(),
+                "menu: icon-data is too large; dropping the icon"
+            );
+            return None;
+        }
+        Some(Self::Image(bytes))
+    }
+}
+
 /// One entry in a Neptunia menu.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuItem {
@@ -219,8 +252,8 @@ pub enum MenuItem {
         shortcut: Option<String>,
         enabled: bool,
         check: CheckState,
-        /// Leading SVG icon, drawn in the mark column.
-        icon: Option<&'static str>,
+        /// Leading icon, drawn in the mark column.
+        icon: Option<MenuIcon>,
     },
     /// A nested submenu.
     Submenu {
@@ -230,8 +263,8 @@ pub enum MenuItem {
         label: String,
         enabled: bool,
         items: Vec<MenuItem>,
-        /// Leading SVG icon, drawn in the mark column.
-        icon: Option<&'static str>,
+        /// Leading icon, drawn in the mark column.
+        icon: Option<MenuIcon>,
     },
     /// A non-selectable group header. `count` is shown on the right when the
     /// header introduces a scrollable search-result section.
@@ -366,20 +399,14 @@ impl MenuView {
     /// Attaches a list of searchable menu entries. When the menu contains a
     /// [`MenuItem::SearchField`], typing filters these entries and shows them
     /// under an "Ítems del menú" header. The source is re-read on every render.
-    pub fn with_searchable(
-        mut self,
-        source: impl Fn() -> Vec<SearchableEntry> + 'static,
-    ) -> Self {
+    pub fn with_searchable(mut self, source: impl Fn() -> Vec<SearchableEntry> + 'static) -> Self {
         self.searchable = Some(Rc::new(source));
         self
     }
 
     /// Attaches a list of searchable help topics shown under "Temas de ayuda".
     /// The source is re-read on every render.
-    pub fn with_help_topics(
-        mut self,
-        source: impl Fn() -> Vec<SearchableEntry> + 'static,
-    ) -> Self {
+    pub fn with_help_topics(mut self, source: impl Fn() -> Vec<SearchableEntry> + 'static) -> Self {
         self.help_search = Some(Rc::new(source));
         self
     }
@@ -398,10 +425,7 @@ impl MenuView {
     /// highlighted. The source is re-read when a result is revealed, so late
     /// remote children are already there. The vector index matches
     /// [`SearchLocation::title_index`].
-    pub fn with_reveal_roots(
-        mut self,
-        source: impl Fn() -> Vec<Vec<MenuItem>> + 'static,
-    ) -> Self {
+    pub fn with_reveal_roots(mut self, source: impl Fn() -> Vec<Vec<MenuItem>> + 'static) -> Self {
         self.reveal_roots = Some(Rc::new(source));
         self
     }
@@ -1613,7 +1637,7 @@ fn render_item(
             let shortcut_text = shortcut_text.as_ref().map(|s| format_shortcut(s));
             let enabled = *enabled;
             let check = *check;
-            let icon = *icon;
+            let icon = icon.clone();
             let mut focused = focused;
             let open_child_id_enter = open_child_id.clone();
             let open_child_index_enter = open_child_index.clone();
@@ -1693,7 +1717,7 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
-                    icon,
+                    icon.as_ref(),
                     check,
                     fg,
                     shortcut_fg(enabled, is_focused, m),
@@ -1727,7 +1751,7 @@ fn render_item(
             let id = id.clone();
             let label_text = label_text.clone();
             let enabled = *enabled;
-            let icon = *icon;
+            let icon = icon.clone();
             let mut focused = focused;
             let sub_items_enter = sub_items.clone();
             let sub_items_click = sub_items.clone();
@@ -1815,7 +1839,7 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
-                    icon,
+                    icon.as_ref(),
                     CheckState::None,
                     fg,
                     shortcut_fg(enabled, is_focused, m),
@@ -2124,7 +2148,7 @@ fn search_icon_element(
 }
 
 fn mark_slot(
-    icon: Option<&'static str>,
+    icon: Option<&MenuIcon>,
     check: CheckState,
     fg: Rgba,
     icon_fg: Rgba,
@@ -2133,19 +2157,87 @@ fn mark_slot(
     let Some(icon) = icon else {
         return mark_element(check, fg, m);
     };
+    let child = match icon {
+        MenuIcon::Svg(svg) => SvgViewer::new(svg.as_bytes())
+            .width(Size::px(m.icon_size))
+            .height(Size::px(m.icon_size))
+            .color(rgba(icon_fg))
+            .show_loader(false)
+            .into_element(),
+        MenuIcon::Image(bytes) => icon_image(bytes, m.icon_size).map_or_else(
+            || {
+                rect()
+                    .width(Size::px(m.icon_size))
+                    .height(Size::px(m.icon_size))
+                    .into_element()
+            },
+            |handle| {
+                image(handle)
+                    .width(Size::px(m.icon_size))
+                    .height(Size::px(m.icon_size))
+                    .into_element()
+            },
+        ),
+    };
     rect()
         .width(Size::px(m.mark_width))
         .direction(Direction::Horizontal)
         .main_align(Alignment::Center)
-        .child(
-            SvgViewer::new(icon.as_bytes())
-                .width(Size::px(m.icon_size))
-                .height(Size::px(m.icon_size))
-                .color(rgba(icon_fg))
-                .show_loader(false)
-                .into_element(),
-        )
+        .child(child)
         .into_element()
+}
+
+thread_local! {
+    static IMAGE_CACHE: RefCell<HashMap<u64, Option<ImageHandle>>> = RefCell::new(HashMap::new());
+}
+
+/// Decodes and scales a PNG icon once per hash and size.
+fn icon_image(bytes: &[u8], size: f32) -> Option<ImageHandle> {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    size.to_bits().hash(&mut hasher);
+    let key = hasher.finish();
+    IMAGE_CACHE.with(|cache| {
+        if let Some(cached) = cache.borrow().get(&key) {
+            return cached.clone();
+        }
+        let decoded = decode_icon(bytes, size);
+        if decoded.is_none() {
+            tracing::debug!(
+                bytes = bytes.len(),
+                "menu: icon-data could not be decoded; dropping the icon"
+            );
+        }
+        cache.borrow_mut().insert(key, decoded.clone());
+        decoded
+    })
+}
+
+fn decode_icon(bytes: &[u8], size: f32) -> Option<ImageHandle> {
+    let data = unsafe { SkData::new_bytes(bytes) };
+    let image = SkImage::from_encoded(data)?;
+    let image = image.make_raster_image(None, None).unwrap_or(image);
+    let target = size.max(1.0).round() as i32;
+    let info = ImageInfo::new(
+        (target, target),
+        ColorType::RGBA8888,
+        AlphaType::Premul,
+        None,
+    );
+    let mut pixels = vec![0u8; (target * target * 4) as usize];
+    let pixmap = Pixmap::new(&info, &mut pixels, info.min_row_bytes())?;
+    if !image.scale_pixels(&pixmap, SamplingMode::Bilinear.sampling_options(), None) {
+        return None;
+    }
+    drop(pixmap);
+    ImageHandle::from_rgba(
+        target as u32,
+        target as u32,
+        Bytes::from(pixels),
+        AlphaType::Premul,
+    )
 }
 
 fn mark_element(check: CheckState, color: Rgba, m: MenuPalette) -> Element {
@@ -2379,7 +2471,7 @@ mod tests {
 
     #[test]
     fn icons_do_not_widen_the_menu() {
-        let built = |icon| {
+        let built = |icon: Option<MenuIcon>| {
             vec![
                 MenuItem::Action {
                     id: "a".to_string(),
@@ -2387,7 +2479,7 @@ mod tests {
                     shortcut: Some("Super+,".to_string()),
                     enabled: true,
                     check: CheckState::None,
-                    icon,
+                    icon: icon.clone(),
                 },
                 MenuItem::Submenu {
                     id: None,
@@ -2399,7 +2491,7 @@ mod tests {
             ]
         };
         let plain = MenuView::preferred_size(&built(None), MENU_LIGHT);
-        let with_icons = MenuView::preferred_size(&built(Some("x")), MENU_LIGHT);
+        let with_icons = MenuView::preferred_size(&built(Some(MenuIcon::Svg("x"))), MENU_LIGHT);
         assert_eq!(plain, with_icons);
     }
 
@@ -2672,6 +2764,38 @@ mod tests {
             })
             .count();
         assert_eq!(menu_result_count, MenuView::MAX_MENU_ROWS);
+    }
+
+    fn png_16() -> Vec<u8> {
+        let mut pixels = vec![0u8; 16 * 16 * 4];
+        for pixel in pixels.chunks_mut(4) {
+            pixel.copy_from_slice(&[255, 0, 0, 255]);
+        }
+        let mut out = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut out, 16, 16);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&pixels).unwrap();
+        }
+        out
+    }
+
+    #[test]
+    fn a_16px_png_icon_is_decoded_scaled_and_cached() {
+        let bytes = png_16();
+        let handle = icon_image(&bytes, 16.0).expect("the PNG decodes");
+        assert_eq!(handle.image.width(), 16);
+        assert_eq!(handle.image.height(), 16);
+        assert_eq!(&handle.bytes[..4], &[255, 0, 0, 255]);
+
+        let again = icon_image(&bytes, 16.0).expect("the cached PNG decodes");
+        assert!(handle == again, "the cache returns the same Skia image");
+
+        let too_big = vec![0u8; MenuIcon::MAX_IMAGE_BYTES + 1];
+        assert!(MenuIcon::image(too_big).is_none());
+        assert!(decode_icon(b"not a png", 16.0).is_none());
     }
 
     #[test]
