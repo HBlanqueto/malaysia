@@ -36,6 +36,10 @@ Commands:
     demo [--dark|--light]
                         Nested session with the shell and demo windows; the flag
                         forces that appearance in a temporary config (Ctrl-C ends it)
+    lab [--dark|--light]
+                        Nested session with shell + demo windows + optional real
+                        apps (nautilus, zenity, kate, telegram, firefox) for manual
+                        testing; uses a temporary config (Ctrl-C ends it)
     example <name>      Run target/debug/examples/<name> against the running demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
@@ -856,6 +860,193 @@ demo() {
     wait "$_compositor" 2>/dev/null || true
 }
 
+# lab - interactive manual-test session with shell, demo windows and optional
+# third-party apps.  It behaves like `demo`, but also launches nautilus, zenity
+# (or gnome-calculator), kate/kwrite, telegram-desktop and firefox when they are
+# available, each with its own log.  The session keeps running until the host
+# window closes or the user presses Ctrl-C.
+lab() {
+    _scheme=
+    case "${1:-}" in
+        --dark | --light)
+            _scheme=${1#--}
+            shift
+            ;;
+    esac
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for lab: $1"
+    fi
+    if is_running; then
+        fail "$EXIT_ALREADY_RUNNING" "yuki is already running (pid $(read_pid))"
+    fi
+
+    # Always use a throwaway config directory so we can clean it up on exit.
+    _lab_config=$(mktemp -d) ||
+        fail "$EXIT_RUN_FAILED" "could not create the lab config directory"
+    if [ -d "$HOME/.config/yuki" ]; then
+        cp -R "$HOME/.config/yuki/." "$_lab_config/" ||
+            fail "$EXIT_RUN_FAILED" "could not copy ~/.config/yuki"
+    fi
+    if [ -n "$_scheme" ]; then
+        _appearance="$_lab_config/appearance.domain"
+        if [ -f "$_appearance" ]; then
+            awk -v scheme="$_scheme" '
+                BEGIN { print "color_scheme = \"" scheme "\"" }
+                /^[[:space:]]*\[/ { table = 1 }
+                !table && /^[[:space:]]*color_scheme[[:space:]]*=/ { next }
+                { print }
+            ' "$_appearance" >"$_appearance.tmp" &&
+                mv "$_appearance.tmp" "$_appearance" ||
+                fail "$EXIT_RUN_FAILED" "could not write $_appearance"
+        else
+            printf 'color_scheme = "%s"\n' "$_scheme" >"$_appearance"
+        fi
+    fi
+    YUKI_CONFIG_DIR="$_lab_config"
+    export YUKI_CONFIG_DIR
+
+    _pids=
+    _lab_cleanup() {
+        trap - EXIT INT TERM
+        for _pid in ${_pids:-}; do
+            kill "$_pid" 2>/dev/null || true
+        done
+        stop
+        if [ -n "${_lab_config:-}" ]; then
+            rm -rf "$_lab_config"
+        fi
+    }
+    trap _lab_cleanup EXIT INT TERM
+
+    if [ -n "${YUKI_DEV_SHELL:-}" ]; then
+        _shell_bin="$script_dir/target/debug/yuki-shell"
+        if [ ! -x "$script_dir/target/debug/yuki" ] || [ ! -x "$_shell_bin" ]; then
+            "$script_dir/dev.sh" build
+        fi
+        if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
+            [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
+            [ ! -x "$script_dir/target/debug/examples/dialog" ]; then
+            cargo build -p celestial-kit --examples ||
+                fail "$EXIT_RUN_FAILED" "could not build the window examples"
+        fi
+        _window_csd="$script_dir/target/debug/examples/window_csd"
+        _window_ssd="$script_dir/target/debug/examples/window_ssd"
+        _dialog="$script_dir/target/debug/examples/dialog"
+    else
+        _shell_bin="$script_dir/result/bin/yuki-shell"
+        if [ ! -x "$script_dir/result/bin/yuki" ] || [ ! -x "$_shell_bin" ]; then
+            fail "$EXIT_RUN_FAILED" "no existe result/bin/yuki-shell; ejecuta: nix build .#default"
+        fi
+        _window_csd="$script_dir/result/bin/window_csd"
+        _window_ssd="$script_dir/result/bin/window_ssd"
+        _dialog="$script_dir/result/bin/dialog"
+    fi
+
+    start
+    _sock=
+    _waited=0
+    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
+        _sock=$(sed -n \
+            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+            "$LOG_FILE" 2>/dev/null | tail -n 1)
+        [ -n "$_sock" ] && break
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    if [ -z "$_sock" ]; then
+        stop
+        fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
+    fi
+
+    lab_client() {
+        _name=$1
+        shift
+        env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+            YUKI_SHELL_EXE="$_shell_bin" \
+            "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+        _pids="$_pids $!"
+        printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
+    }
+
+    lab_client wallpaper "$_shell_bin" wallpaper
+    lab_client menubar "$_shell_bin" menubar
+    lab_client dock "$_shell_bin" dock
+    sleep 0.5
+
+    if command -v foot >/dev/null 2>&1; then
+        lab_client foot-1 foot -T "Yuki"
+        lab_client foot-2 foot -T "Segunda ventana"
+    elif command -v wezterm >/dev/null 2>&1; then
+        lab_client wezterm wezterm start
+    else
+        printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
+    fi
+
+    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
+        lab_client window-csd "$_window_csd"
+        lab_client window-ssd "$_window_ssd"
+        lab_client dialog "$_dialog"
+    else
+        printf 'lab: window examples not found; skipping them\n' >&2
+    fi
+
+    # Optional third-party apps, only if installed.  Each gets its own log.
+    if command -v nautilus >/dev/null 2>&1; then
+        lab_client nautilus nautilus
+    else
+        printf 'lab: nautilus not found; skipping GTK4/libadwaita test\n' >&2
+    fi
+
+    if command -v zenity >/dev/null 2>&1; then
+        lab_client zenity zenity --info --text "Prueba GTK sin headerbar"
+    elif command -v gnome-calculator >/dev/null 2>&1; then
+        lab_client gnome-calculator gnome-calculator
+    else
+        printf 'lab: zenity or gnome-calculator not found; skipping GTK test\n' >&2
+    fi
+
+    if command -v kate >/dev/null 2>&1; then
+        lab_client kate env QT_QPA_PLATFORMTHEME=kde kate
+    elif command -v kwrite >/dev/null 2>&1; then
+        lab_client kwrite env QT_QPA_PLATFORMTHEME=kde kwrite
+    else
+        printf 'lab: kate/kwrite not found; skipping Qt test\n' >&2
+    fi
+
+    if command -v telegram-desktop >/dev/null 2>&1; then
+        lab_client telegram telegram-desktop
+    else
+        printf 'lab: telegram-desktop not found; skipping Telegram test\n' >&2
+    fi
+
+    if command -v firefox >/dev/null 2>&1; then
+        lab_client firefox firefox
+    else
+        printf 'lab: firefox not found; skipping Firefox test\n' >&2
+    fi
+
+    cat <<'EOF'
+
+lab session running. Manual checklist:
+    1) Ventana > Trasladar > Izquierda/Superior izquierdo/Regresar con foot.
+    2) ^Win+Left y ^Win+Return (if the host eats the combo, use the menu).
+    3) Resize window_csd, window_ssd and "Padre" from 4 corners and 4 edges:
+       no jumps, buttons keep responding.
+    4) Resize foot with another window behind it: the back window does not focus.
+    5) Nautilus must NOT have the Yuki titlebar; kate MUST have it.
+    6) Help > type "oc": no other menu opens; Down reveals Foot.
+    7) Many results ("s"): list scrolls inside the screen.
+    8) Minimize, move and restore: returns where it was.
+
+EOF
+    printf 'lab: logs: %s/demo-*.log\n' "$RUNTIME_DIR"
+    printf 'lab: follow compositor log: ./dev.sh log -f\n'
+    printf 'lab: close the host window or press Ctrl-C to end\n'
+
+    _compositor=$(read_pid)
+    wait "$_compositor" 2>/dev/null || true
+}
+
 # example - run a CelestialKit example against the demo that is already running.
 #
 # Uses the same client environment as demo_client: the demo socket, no DISPLAY,
@@ -1159,6 +1350,7 @@ case "$command_name" in
     titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
+    lab) lab "$@" ;;
     example) example "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
