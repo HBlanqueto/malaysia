@@ -153,6 +153,8 @@ pub(crate) struct Session {
     capture_requested: bool,
     /// Sequence number for `wp_presentation` feedback.
     frame_seq: u64,
+    /// When the previous presented frame happened, for per-frame timing logs.
+    last_frame_duration: Option<Duration>,
     /// One-refresh timer for empty frames: winit only emits `Redraw` events
     /// when the window is explicitly requested, so an idle output that only
     /// needs to answer frame callbacks needs this fallback.
@@ -398,6 +400,7 @@ pub fn run() -> Result<(), SessionError> {
         last_objects: LiveObjects::default(),
         capture_requested: false,
         frame_seq: 0,
+        last_frame_duration: None,
         repaint_timer: None,
     };
     if session.track_objects {
@@ -1548,6 +1551,12 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         .backend
         .submit(damage.as_deref())
         .map_err(DrawError::Submit)?;
+    let now = session.start_time.elapsed();
+    if let Some(previous) = session.last_frame_duration {
+        let delta = now - previous;
+        tracing::debug!(frame = session.frame_seq, ?delta, "frame presented");
+    }
+    session.last_frame_duration = Some(now);
     session.frame_seq = session.frame_seq.wrapping_add(1);
     send_presentation_feedbacks_for_state(
         &session.state,

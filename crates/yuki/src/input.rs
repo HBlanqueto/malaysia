@@ -190,6 +190,14 @@ impl TestPointer {
                 if let Some((x, y)) = parse_pair_value(rest) {
                     actions.push_back(TestPointerAction::Move(Point::new(x, y)));
                 }
+            } else if let Some(rest) = part.strip_prefix("press:") {
+                if let Some((x, y)) = parse_pair_value(rest) {
+                    let point = Point::new(x, y);
+                    actions.push_back(TestPointerAction::Move(point));
+                    actions.push_back(TestPointerAction::Press(point));
+                }
+            } else if part.strip_prefix("release:").is_some() {
+                actions.push_back(TestPointerAction::Release);
             } else if let Some(rest) = part.strip_prefix("click:") {
                 if let Some((x, y)) = parse_pair_value(rest) {
                     let point = Point::new(x, y);

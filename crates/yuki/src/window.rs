@@ -491,6 +491,12 @@ impl Windows {
             );
             if self.scene.set_outer(id, outer) {
                 self.windows[index].outer_size = outer_size;
+                tracing::debug!(
+                    window = id.get(),
+                    ?outer_size,
+                    resizing = self.windows[index].resizing,
+                    "commit resized window"
+                );
                 if self.windows[index].resizing {
                     // The client has caught up: the frame now follows the
                     // committed size, and any newer pointer request is sent.
@@ -553,7 +559,8 @@ impl Windows {
             );
             let id = data.id;
             self.scene.insert(id, outer);
-            tracing::info!(window = id.get(), ?origin, "window mapped");
+            let app_id = self.app_id(surface);
+            tracing::info!(window = id.get(), app_id, ?origin, "window mapped");
             return Some(id);
         }
         None
@@ -1190,6 +1197,12 @@ impl Windows {
         if data.maximized {
             tracing::info!(window = id.get(), ?configured, "configure with Maximized");
         }
+        tracing::debug!(
+            window = id.get(),
+            ?configured,
+            resizing,
+            "send_configure"
+        );
         data.pending_configure = Some(data.toplevel.send_configure());
         data.configured = Some(configured);
     }
