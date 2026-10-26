@@ -243,6 +243,7 @@ compositor lanza `yuki-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v1`
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
 | `menubar.autohide` | bool | `false` | pendiente | shell |
+| `menubar.app_menus` | bool | `true` | **activa** | shell |
 
 ## `effects` — efectos de superficie del compositor (ADR 0020)
 
@@ -379,6 +380,7 @@ default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqu
 ```toml
 # ~/.config/yuki/menubar.domain
 autohide = false
+app_menus = true                 # menú global de la app enfocada (dbusmenu)
 ```
 
 ```toml

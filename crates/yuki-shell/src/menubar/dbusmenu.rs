@@ -59,6 +59,8 @@ pub enum Command {
         id: i32,
         timestamp: u32,
     },
+    /// Enables or disables the global menu at runtime.
+    SetAppMenus(bool),
 }
 
 /// The properties and children of one dbusmenu node, before mapping.
@@ -117,6 +119,11 @@ impl MenuClient {
             id,
             timestamp,
         });
+    }
+
+    /// Enables or disables the global menu on the D-Bus thread.
+    pub fn set_app_menus(&self, enabled: bool) {
+        let _ = self.commands.send_blocking(Command::SetAppMenus(enabled));
     }
 
     /// Installs the render-loop wake used after every snapshot.
@@ -181,9 +188,55 @@ impl Registrar {
     }
 }
 
+/// Owns or releases the `AppMenu.Registrar` name and its object.
+async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows, enabled: bool) {
+    if enabled {
+        match connection.request_name(REGISTRAR_NAME).await {
+            Ok(_) => {
+                tracing::info!(name = REGISTRAR_NAME, "menubar: Registrar acquired");
+                let registrar = Registrar {
+                    windows: windows.clone(),
+                };
+                if let Err(error) = connection
+                    .object_server()
+                    .at(REGISTRAR_PATH, registrar)
+                    .await
+                {
+                    tracing::warn!(%error, "menubar: could not serve the Registrar");
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    name = REGISTRAR_NAME,
+                    "menubar: Registrar name already owned; continuing without it"
+                );
+            }
+        }
+    } else {
+        match connection.release_name(REGISTRAR_NAME).await {
+            Ok(released) => {
+                tracing::info!(
+                    name = REGISTRAR_NAME,
+                    released,
+                    "menubar: Registrar released"
+                );
+            }
+            Err(error) => tracing::warn!(%error, "menubar: could not release the Registrar"),
+        }
+        if let Err(error) = connection
+            .object_server()
+            .remove::<Registrar, _>(REGISTRAR_PATH)
+            .await
+        {
+            tracing::warn!(%error, "menubar: could not remove the Registrar object");
+        }
+    }
+}
+
 /// Starts the D-Bus thread. On connection failure the client keeps accepting
 /// commands and simply never answers; the bar stays on the 14c fallback.
-pub fn start() -> MenuClient {
+pub fn start(app_menus: bool) -> MenuClient {
     RENDER_THREAD.get_or_init(|| std::thread::current().id());
     let (commands, command_rx) = async_channel::unbounded();
     let (snapshot_tx, snapshot_rx) = async_channel::unbounded();
@@ -192,7 +245,7 @@ pub fn start() -> MenuClient {
     std::thread::Builder::new()
         .name("yuki-dbusmenu".to_string())
         .spawn(move || {
-            async_io::block_on(run(command_rx, snapshot_tx, thread_wake));
+            async_io::block_on(run(command_rx, snapshot_tx, thread_wake, app_menus));
         })
         .expect("yuki-dbusmenu thread");
     MenuClient {
@@ -345,6 +398,7 @@ async fn run(
     commands: Receiver<Command>,
     snapshots: Sender<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
+    initial_app_menus: bool,
 ) {
     let builder = match zbus::connection::Builder::session() {
         Ok(builder) => builder.method_timeout(CALL_TIMEOUT),
@@ -361,28 +415,9 @@ async fn run(
         }
     };
 
-    match connection.request_name(REGISTRAR_NAME).await {
-        Ok(_) => {
-            tracing::info!(name = REGISTRAR_NAME, "menubar: Registrar acquired");
-            let registrar = Registrar {
-                windows: Arc::new(Mutex::new(HashMap::new())),
-            };
-            if let Err(error) = connection
-                .object_server()
-                .at(REGISTRAR_PATH, registrar)
-                .await
-            {
-                tracing::warn!(%error, "menubar: could not serve the Registrar");
-            }
-        }
-        Err(error) => {
-            tracing::warn!(
-                %error,
-                name = REGISTRAR_NAME,
-                "menubar: Registrar name already owned; continuing without it"
-            );
-        }
-    }
+    let windows: RegistrarWindows = Arc::new(Mutex::new(HashMap::new()));
+    let mut app_menus = initial_app_menus;
+    set_registrar(&connection, &windows, app_menus).await;
 
     note_call();
     let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
@@ -434,10 +469,26 @@ async fn run(
             .await
         };
         match selected {
+            Event::Command(Ok(Command::SetAppMenus(enabled))) => {
+                if enabled == app_menus {
+                    continue;
+                }
+                app_menus = enabled;
+                pending = Pending::default();
+                deadline = None;
+                if !enabled {
+                    focused = None;
+                }
+                tracing::info!(enabled, "menubar: app_menus changed");
+                set_registrar(&connection, &windows, enabled).await;
+            }
             Event::Command(Ok(Command::Focus {
                 address,
                 generation,
             })) => {
+                if !app_menus {
+                    continue;
+                }
                 focused = Some((address.clone(), generation));
                 pending = Pending::default();
                 deadline = None;
@@ -471,6 +522,9 @@ async fn run(
                 id,
                 generation,
             })) => {
+                if !app_menus {
+                    continue;
+                }
                 let started = Instant::now();
                 let cached = caches
                     .get(&address)
@@ -512,11 +566,11 @@ async fn run(
                 address,
                 generation,
             })) => {
+                if !app_menus {
+                    continue;
+                }
                 let started = Instant::now();
-                let cached = caches
-                    .get(&address)
-                    .and_then(|cache| cache.full())
-                    .cloned();
+                let cached = caches.get(&address).and_then(|cache| cache.full()).cloned();
                 let (items, from_cache) = match cached {
                     Some(full) => (Some(full.items), true),
                     None => match layout(&connection, &dbus, &mut proxies, &address, 0, -1).await {

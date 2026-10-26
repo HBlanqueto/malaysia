@@ -6,7 +6,7 @@
 //! at a time.
 
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ use celestial_kit::platform::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_appearance::{Resolved, data_dir};
+use yuki_appearance::{Resolved, config_dir, data_dir};
 use yuki_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
@@ -44,7 +44,9 @@ pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
     pub appearance: State<Option<Resolved>>,
+    pub app_menus: State<bool>,
     pub window_store: PathBuf,
+    pub menubar_store: PathBuf,
     pub entries: Vec<DesktopEntry>,
     pub dbus: MenuClient,
     pub menu_snapshot: State<Option<Arc<RemoteMenu>>>,
@@ -64,7 +66,12 @@ impl App for BarApp {
 
         let timers = Timers::get();
         let appearance = self.appearance;
-        use_hook(move || schedule_appearance_poll(timers, appearance));
+        let app_menus = self.app_menus;
+        let dbus = self.dbus.clone();
+        let menubar_store = self.menubar_store.clone();
+        use_hook(move || {
+            schedule_appearance_poll(timers, appearance, app_menus, dbus, menubar_store)
+        });
 
         let generation = use_hook(|| Rc::new(Cell::new(0u64)));
         let open_started = use_hook(|| Rc::new(Cell::new(None::<std::time::Instant>)));
@@ -88,9 +95,14 @@ impl App for BarApp {
         let app_id = self.active_app.read().clone();
         let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let focused = app_id.is_some();
+        let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| {
             Rc::new(RefCell::new(
-                None::<(String, Option<celestial_kit::platform::AppMenuAddress>)>,
+                None::<(
+                    String,
+                    Option<celestial_kit::platform::AppMenuAddress>,
+                    bool,
+                )>,
             ))
         });
         let toplevels = Toplevels::get().list.read().clone();
@@ -99,7 +111,13 @@ impl App for BarApp {
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
-        let key = active_info.map(|info| (info.app_id.clone(), info.app_menu.clone()));
+        let key = active_info.map(|info| {
+            (
+                info.app_id.clone(),
+                info.app_menu.clone(),
+                app_menus_enabled,
+            )
+        });
         {
             let mut snapshot_state = self.menu_snapshot;
             let mut last = last_app_menu.borrow_mut();
@@ -108,7 +126,7 @@ impl App for BarApp {
                 generation.set(next_generation);
                 snapshot_state.set(None);
                 match &key {
-                    Some((app_id, Some(menu))) => {
+                    Some((app_id, Some(menu), true)) => {
                         tracing::info!(
                             app_id = %app_id,
                             service = %menu.service,
@@ -118,7 +136,10 @@ impl App for BarApp {
                         );
                         self.dbus.focus(menu.clone(), next_generation);
                     }
-                    Some((app_id, None)) => {
+                    Some((app_id, _, false)) => {
+                        tracing::info!(app_id = %app_id, "menubar: app_menus disabled")
+                    }
+                    Some((app_id, None, true)) => {
                         tracing::info!(app_id = %app_id, "menubar: app_menu none")
                     }
                     None => {}
@@ -528,7 +549,33 @@ fn now_ms() -> u32 {
         .as_millis() as u32
 }
 
-fn schedule_appearance_poll(timers: Timers, appearance: State<Option<Resolved>>) {
+/// `menubar.domain`; `app_menus` defaults to true.
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct MenubarConfig {
+    #[serde(default = "app_menus_default")]
+    app_menus: bool,
+}
+
+fn app_menus_default() -> bool {
+    true
+}
+
+fn load_app_menus(path: &Path) -> bool {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| toml::from_str::<MenubarConfig>(&text).ok())
+        .map(|config| config.app_menus)
+        .unwrap_or(true)
+}
+
+fn schedule_appearance_poll(
+    timers: Timers,
+    appearance: State<Option<Resolved>>,
+    app_menus: State<bool>,
+    dbus: MenuClient,
+    menubar_store: PathBuf,
+) {
     let retry = timers.clone();
     timers.after(std::time::Duration::from_millis(500), move || {
         let resolved = celestial_kit::theme::resolved();
@@ -536,7 +583,19 @@ fn schedule_appearance_poll(timers: Timers, appearance: State<Option<Resolved>>)
         if appearance.peek().as_ref() != Some(&resolved) {
             appearance.set(Some(resolved));
         }
-        schedule_appearance_poll(retry.clone(), appearance);
+        let enabled = load_app_menus(&menubar_store);
+        let mut app_menus = app_menus;
+        if *app_menus.peek() != enabled {
+            app_menus.set(enabled);
+            dbus.set_app_menus(enabled);
+        }
+        schedule_appearance_poll(
+            retry.clone(),
+            appearance,
+            app_menus,
+            dbus.clone(),
+            menubar_store.clone(),
+        );
     });
 }
 
@@ -580,17 +639,21 @@ fn surface_spec() -> SurfaceSpec {
 /// Connects to the compositor and runs the menu bar until closed.
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
+    let menubar_store = config_dir().join("menubar.domain");
     let entries = crate::desktop::read_entries();
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
     let appearance = State::create_global(Some(celestial_kit::theme::resolved()));
+    let app_menus = State::create_global(load_app_menus(&menubar_store));
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
-    let dbus = dbusmenu::start();
+    let dbus = dbusmenu::start(*app_menus.peek());
     let app = AppComponent::new(BarApp {
         clock,
         active_app,
         appearance,
+        app_menus,
         window_store,
+        menubar_store,
         entries,
         dbus,
         menu_snapshot,
@@ -606,6 +669,19 @@ pub fn run() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn menubar_domain_defaults_app_menus_to_true() {
+        let dir = std::env::temp_dir().join(format!("yuki-menubar-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("menubar.domain");
+        assert!(load_app_menus(&path));
+        std::fs::write(&path, "app_menus = false\nautohide = true\n").unwrap();
+        assert!(!load_app_menus(&path));
+        std::fs::write(&path, "autohide = true\n").unwrap();
+        assert!(load_app_menus(&path));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn the_bar_reserves_the_menubar_height() {
