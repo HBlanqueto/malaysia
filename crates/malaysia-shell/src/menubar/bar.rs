@@ -580,7 +580,12 @@ fn schedule_menubar_poll(
             app_menus.set(enabled);
             dbus.set_app_menus(enabled);
         }
-        schedule_menubar_poll(retry.clone(), app_menus, dbus.clone(), menubar_store.clone());
+        schedule_menubar_poll(
+            retry.clone(),
+            app_menus,
+            dbus.clone(),
+            menubar_store.clone(),
+        );
     });
 }
 

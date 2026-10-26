@@ -209,7 +209,9 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
                 let mut guard = values.write().expect("the settings lock is not poisoned");
                 std::mem::replace(&mut *guard, new.clone())
             };
-            let Ok(interface) = connection.object_server().interface::<_, Settings>(OBJECT_PATH)
+            let Ok(interface) = connection
+                .object_server()
+                .interface::<_, Settings>(OBJECT_PATH)
             else {
                 tracing::warn!("the Settings interface is not registered");
                 continue;

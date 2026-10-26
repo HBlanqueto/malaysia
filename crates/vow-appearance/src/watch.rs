@@ -4,10 +4,10 @@
 //! so atomic renames are handled correctly. The raw fd is owned by this struct
 //! and can be registered with calloop or any other fd-poller.
 
+use std::io;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
-use std::{io};
 
 use nix::sys::inotify::{AddWatchFlags, InitFlags, Inotify, InotifyEvent};
 
@@ -131,8 +131,7 @@ mod tests {
     fn tmp_dirs() -> (PathBuf, PathBuf) {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
-        let config =
-            std::env::temp_dir().join(format!("vow-appearance-watch-config-{pid}-{n}"));
+        let config = std::env::temp_dir().join(format!("vow-appearance-watch-config-{pid}-{n}"));
         let data = std::env::temp_dir().join(format!("vow-appearance-watch-data-{pid}-{n}"));
         std::fs::create_dir_all(&config).unwrap();
         std::fs::create_dir_all(&data).unwrap();
@@ -156,11 +155,11 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut found = false;
         while Instant::now() < deadline {
-            if let Ok(events) = watch.drain() {
-                if events.contains(&AppearanceEvent::Appearance) {
-                    found = true;
-                    break;
-                }
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::Appearance)
+            {
+                found = true;
+                break;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
@@ -178,11 +177,11 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(2);
         let mut found = false;
         while Instant::now() < deadline {
-            if let Ok(events) = watch.drain() {
-                if events.contains(&AppearanceEvent::Wallpaper) {
-                    found = true;
-                    break;
-                }
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::Wallpaper)
+            {
+                found = true;
+                break;
             }
             std::thread::sleep(Duration::from_millis(5));
         }
@@ -205,11 +204,11 @@ mod tests {
         let deadline = start + Duration::from_millis(50);
         let mut latency = None;
         while Instant::now() < deadline {
-            if let Ok(events) = watch.drain() {
-                if events.contains(&AppearanceEvent::Appearance) {
-                    latency = Some(start.elapsed());
-                    break;
-                }
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::Appearance)
+            {
+                latency = Some(start.elapsed());
+                break;
             }
             std::thread::sleep(Duration::from_micros(100));
         }

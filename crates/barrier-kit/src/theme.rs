@@ -4,18 +4,30 @@
 //! resolved Neptunia palette, so the compositor, the shell and the apps keep
 //! sharing one source.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::Color;
-use vow_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
+use vow_appearance::{
+    ColorScheme, Resolved, config_dir, data_dir, load_appearance, load_dominant, resolve,
+};
 use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
 
-static RESOLVED: OnceLock<Mutex<Resolved>> = OnceLock::new();
+static RESOLVED: OnceLock<Mutex<HashMap<(PathBuf, PathBuf), Resolved>>> = OnceLock::new();
 
 fn load_resolved() -> Resolved {
     resolve(&load_appearance(), load_dominant())
+}
+
+fn cache_key() -> (PathBuf, PathBuf) {
+    (config_dir(), data_dir())
+}
+
+fn cache() -> &'static Mutex<HashMap<(PathBuf, PathBuf), Resolved>> {
+    RESOLVED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn color(c: Rgba) -> Color {
@@ -64,24 +76,27 @@ fn sheet(background: Rgba, surface: Rgba, text: Rgba, accent: Rgba, border: Rgba
 
 /// Resolves the current appearance and its shell palette.
 ///
-/// The first call loads and caches the value; later calls return the cached
-/// value until [`refresh`] updates it.
+/// The first call for a given config/data directory pair loads and caches the
+/// value; later calls return the cached value until [`refresh`] updates it.
 pub fn resolved() -> Resolved {
-    *RESOLVED
-        .get_or_init(|| Mutex::new(load_resolved()))
-        .lock()
-        .expect("theme cache is not poisoned")
+    let key = cache_key();
+    let mut cache = cache().lock().expect("theme cache is not poisoned");
+    cache.get(&key).copied().unwrap_or_else(|| {
+        let resolved = load_resolved();
+        cache.insert(key, resolved);
+        resolved
+    })
 }
 
 /// Reloads the appearance from disk and updates the cache. Returns `true` when
 /// the resolved values changed.
 pub fn refresh() -> bool {
+    let key = cache_key();
     let resolved = load_resolved();
-    let cache = RESOLVED.get_or_init(|| Mutex::new(resolved));
-    let mut guard = cache.lock().expect("theme cache is not poisoned");
-    let changed = *guard != resolved;
+    let mut cache = cache().lock().expect("theme cache is not poisoned");
+    let changed = cache.get(&key) != Some(&resolved);
     if changed {
-        *guard = resolved;
+        cache.insert(key, resolved);
     }
     changed
 }

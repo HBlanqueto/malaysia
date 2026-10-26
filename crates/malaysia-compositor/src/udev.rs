@@ -281,9 +281,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
 
     // Rebuild the chrome theme when appearance.domain or wallpaper.state
     // changes, without a restart.
-    let appearance_watch = AppearanceWatch::new().map_err(|error| {
-        anyhow!("creating the appearance watcher: {error}")
-    })?;
+    let appearance_watch = AppearanceWatch::new()
+        .map_err(|error| anyhow!("creating the appearance watcher: {error}"))?;
     let appearance_fd = appearance_watch
         .as_fd()
         .try_clone_to_owned()

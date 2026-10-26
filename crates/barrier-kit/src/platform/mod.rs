@@ -118,12 +118,12 @@ use sctk::{
 };
 use std::task::Waker;
 use torin::prelude::{CursorPoint, Size2D};
+use vow_appearance::watch::AppearanceWatch;
 use wayland_egl::WlEglSurface;
 use wayland_protocols_plasma::appmenu::client::{
     org_kde_kwin_appmenu::{self, OrgKdeKwinAppmenu},
     org_kde_kwin_appmenu_manager::{self, OrgKdeKwinAppmenuManager},
 };
-use vow_appearance::watch::AppearanceWatch;
 
 pub use infinity::{
     InfinityWindowManagerV1, Layout as InfinityLayout, PairLayout as InfinityPairLayout,
@@ -1944,10 +1944,7 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
             "creating the appearance watcher: {error}"
         )))
     })?;
-    let watch_fd = watch
-        .as_fd()
-        .try_clone_to_owned()
-        .map_err(RunError::Io)?;
+    let watch_fd = watch.as_fd().try_clone_to_owned().map_err(RunError::Io)?;
     shell.appearance_watch = Some(watch);
     event_loop
         .handle()
