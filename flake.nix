@@ -231,6 +231,14 @@
             <dir>${pkgs.inter}/share/fonts</dir>
           </fontconfig>
         '';
+        # Optional apps for `./dev.sh lab` (manual testing). They are not
+        # required to build or run Yuki; the lab script skips any that are
+        # missing. Keep this list short so it does not bloat devShell entry.
+        labApps = with pkgs; [
+          nautilus
+          zenity
+          kdePackages.kate
+        ];
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
