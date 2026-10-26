@@ -23,11 +23,12 @@
     DEALINGS IN THE SOFTWARE.
   </copyright>
 
-  <interface name="infinity_window_manager_v1" version="1">
+  <interface name="infinity_window_manager_v1" version="2">
     <description summary="private window geometry channel for yuki-shell">
       This protocol is private to yuki-shell. It lets the shell ask the
       compositor to place windows in halves, quarters, pairs and fullscreen
-      arrangements.
+      arrangements, and reports the D-Bus address of each window's global
+      menu.
 
       The shell identifies windows with the same zwlr_foreign_toplevel_handle_v1
       objects it already uses for the dock. Requests are silently ignored when
@@ -102,7 +103,22 @@
       <arg name="restorable" type="uint"/>
     </event>
 
-    <request name="destroy" type="destructor">
+    <event name="app_menu" since="2">
+      <description summary="D-Bus address of the window's global menu">
+        The com.canonical.dbusmenu service and object path of this window's
+        menu, as announced by the client over org_kde_kwin_appmenu. Empty
+        service and path mean the window has no menu.
+
+        Sent when the address changes, when the toplevel handle is created and
+        when the manager binds, never when focus changes.
+      </description>
+      <arg name="toplevel" type="object"
+           interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="service" type="string"/>
+      <arg name="path" type="string"/>
+  </event>
+
+  <request name="destroy" type="destructor">
       <description summary="destroy the manager object">
       </description>
     </request>

@@ -131,6 +131,23 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
             .unwrap_or(0);
         info!(pid, "infinity bound by trusted shell");
         let manager = data_init.init(resource, self.clone());
+        if manager.version() >= 2 {
+            let client_id = client.id();
+            let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
+            for id in ids {
+                let Some(address) = state.appmenu_address(id) else {
+                    continue;
+                };
+                let Some(handle) = state
+                    .foreign
+                    .management
+                    .handle_for_client(id, client_id.clone())
+                else {
+                    continue;
+                };
+                manager.app_menu(handle, address.service, address.path);
+            }
+        }
         state.infinity_managers.push(manager);
     }
 
@@ -232,7 +249,7 @@ impl InfinityGlobalData {
     /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         let data = InfinityGlobalData;
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(1, data)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(2, data)
     }
 }
 
@@ -364,6 +381,64 @@ impl State {
             manager.restorable(handle, restorable as u32);
         }
     }
+
+    /// Sends the window's current app_menu address (or empty strings when it
+    /// has none) to every Infinity v2 client that has a handle for it.
+    pub(crate) fn send_app_menu(&mut self, id: WindowId) {
+        let address = self.appmenu_address(id).unwrap_or_default();
+        self.infinity_managers.retain(|manager| manager.is_alive());
+        for manager in &self.infinity_managers {
+            let Some(client) = manager.client() else {
+                continue;
+            };
+            let handle = self.foreign.management.handle_for_client(id, client.id());
+            if !delivers_app_menu(manager.version(), handle.is_some()) {
+                continue;
+            }
+            let Some(handle) = handle else {
+                continue;
+            };
+            manager.app_menu(handle, address.service.clone(), address.path.clone());
+        }
+    }
+
+    /// Sends the window's pair to one client's Infinity v2 manager, if it has
+    /// one and the window has a pair. Used when a wlr handle is created.
+    pub(crate) fn send_app_menu_to_client(
+        &mut self,
+        id: WindowId,
+        client: smithay::reexports::wayland_server::backend::ClientId,
+    ) {
+        let Some(address) = self.appmenu_address(id) else {
+            return;
+        };
+        let client_id = client;
+        for manager in &self.infinity_managers {
+            let Some(owner) = manager.client() else {
+                continue;
+            };
+            if owner.id() != client_id {
+                continue;
+            }
+            let handle = self
+                .foreign
+                .management
+                .handle_for_client(id, client_id.clone());
+            if !delivers_app_menu(manager.version(), handle.is_some()) {
+                continue;
+            }
+            let Some(handle) = handle else {
+                continue;
+            };
+            manager.app_menu(handle, address.service.clone(), address.path.clone());
+        }
+    }
+}
+
+/// Whether a manager receives the app_menu event. Pure so the two bind orders
+/// and the v1 rule can be tested without a protocol harness.
+fn delivers_app_menu(manager_version: u32, has_handle: bool) -> bool {
+    manager_version >= 2 && has_handle
 }
 
 /// Rounds a logical length to whole pixels.
@@ -499,8 +574,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, pair_rects,
-        quarter_rects, trusted_shell_exes,
+        Layout, PairLayout, arranged_rect, available, delivers_app_menu, is_trusted_shell_exe,
+        pair_rects, quarter_rects, trusted_shell_exes,
     };
     use yuki_scene::scene::WindowId;
 
@@ -748,5 +823,31 @@ mod tests {
         let trusted = PathBuf::from("/run/current-system/sw/bin/yuki-shell");
         let attacker = PathBuf::from("/tmp/evil-shell");
         assert!(!is_trusted_shell_exe(&attacker, &[trusted]));
+    }
+
+    #[test]
+    fn a_v1_manager_never_gets_app_menu() {
+        assert!(!delivers_app_menu(1, true));
+        assert!(!delivers_app_menu(1, false));
+    }
+
+    #[test]
+    fn a_v2_manager_needs_a_handle() {
+        assert!(delivers_app_menu(2, true));
+        assert!(!delivers_app_menu(2, false));
+    }
+
+    #[test]
+    fn the_pair_reaches_the_bar_in_either_bind_order() {
+        // wlr manager first: the handle exists before Infinity binds.
+        let manager = 2;
+        let mut handle = true;
+        assert!(delivers_app_menu(manager, handle));
+        // Infinity manager first: binding alone sends nothing; the handle
+        // created later by the wlr side completes the delivery.
+        handle = false;
+        assert!(!delivers_app_menu(manager, handle));
+        handle = true;
+        assert!(delivers_app_menu(manager, handle));
     }
 }

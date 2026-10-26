@@ -18,6 +18,7 @@ use wayland_protocols_plasma::appmenu::server::org_kde_kwin_appmenu::{self, OrgK
 use wayland_protocols_plasma::appmenu::server::org_kde_kwin_appmenu_manager::{
     self, OrgKdeKwinAppmenuManager,
 };
+use yuki_scene::scene::WindowId;
 
 use crate::state::State;
 
@@ -48,7 +49,6 @@ impl<K: Eq + Hash> AddressStore<K> {
         self.addresses.insert(key, address);
     }
 
-    #[cfg(test)]
     fn get(&self, key: &K) -> Option<&AppMenuAddress> {
         self.addresses.get(key)
     }
@@ -81,6 +81,10 @@ impl AppMenuState {
 
     fn clear(&mut self, surface: &WlSurface) -> bool {
         self.addresses.clear(&surface.id())
+    }
+
+    fn get(&self, surface: &WlSurface) -> Option<&AppMenuAddress> {
+        self.addresses.get(&surface.id())
     }
 }
 
@@ -172,6 +176,7 @@ impl State {
                 path = %address.path,
                 "appmenu set"
             );
+            self.send_app_menu(id);
         } else {
             debug!(
                 surface = ?surface.id(),
@@ -188,9 +193,18 @@ impl State {
             return;
         }
         match self.windows.id_of(surface) {
-            Some(id) => info!(window = id.get(), "appmenu cleared"),
+            Some(id) => {
+                info!(window = id.get(), "appmenu cleared");
+                self.send_app_menu(id);
+            }
             None => debug!(surface = ?surface.id(), "appmenu cleared pending map"),
         }
+    }
+
+    /// The stored pair for a tracked window, if any.
+    pub(crate) fn appmenu_address(&self, id: WindowId) -> Option<AppMenuAddress> {
+        let surface = self.windows.surface_of(id)?;
+        self.appmenu.get(surface).cloned()
     }
 }
 
