@@ -22,10 +22,9 @@
 //! [`Display`]: smithay::reexports::wayland_server::Display
 
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
 use malaysia_scene::scene::{Edge, WindowId};
@@ -69,7 +68,7 @@ use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
 
 use crate::appmenu::AppMenuState;
-use crate::config::{Config, config_dir, data_dir};
+use crate::config::Config;
 use crate::foreign::{ForeignState, ListHandles};
 use crate::infinity::protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
 use crate::input::ShakeDetector;
@@ -339,8 +338,6 @@ pub struct State {
     pub(crate) chrome_pointer: Option<(WindowId, vow_appearance::traffic::TrafficPointer)>,
     /// The last primary press on a titlebar, for double click.
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
-    /// The mtimes of those two files at the last theme refresh.
-    theme_sources: Option<(Option<SystemTime>, Option<SystemTime>)>,
     /// A screenshot asked for by PrintScreen or the macOS shortcuts; the
     /// backend renders it on the next frame.
     pub(crate) screenshot: Option<ScreenshotRequest>,
@@ -605,7 +602,6 @@ impl State {
             border: None,
             chrome_pointer: None,
             titlebar_click: None,
-            theme_sources: None,
             screenshot: None,
             screenshot_mode: None,
         })
@@ -614,14 +610,6 @@ impl State {
     /// Rebuilds the chrome theme when `appearance.domain` or the wallpaper
     /// state changes, without restarting the compositor.
     pub(crate) fn refresh_theme(&mut self) {
-        let sources = (
-            modified(&config_dir().join("appearance.domain")),
-            modified(&data_dir().join("wallpaper.state")),
-        );
-        if self.theme_sources == Some(sources) {
-            return;
-        }
-        self.theme_sources = Some(sources);
         self.config = Config::load();
         self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
         self.request_redraw();
@@ -1222,13 +1210,6 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
     );
     output.set_preferred(mode);
     output
-}
-
-/// The modification time of a file, or `None` when it does not exist.
-fn modified(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .ok()
 }
 
 /// The output scale for this session.

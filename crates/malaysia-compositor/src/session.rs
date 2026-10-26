@@ -66,6 +66,7 @@ use crate::config::ScreenshotTarget;
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
+use vow_appearance::watch::AppearanceWatch;
 
 /// Failures that can stop the session from starting.
 #[derive(Debug, thiserror::Error)]
@@ -159,6 +160,8 @@ pub(crate) struct Session {
     /// when the window is explicitly requested, so an idle output that only
     /// needs to answer frame callbacks needs this fallback.
     repaint_timer: Option<RegistrationToken>,
+    /// Watches `appearance.domain` and `wallpaper.state` for changes.
+    appearance_watch: Option<AppearanceWatch>,
 }
 
 /// The buffers a finished frame read, held until their GPU work completes.
@@ -402,6 +405,7 @@ pub fn run() -> Result<(), SessionError> {
         frame_seq: 0,
         last_frame_duration: None,
         repaint_timer: None,
+        appearance_watch: None,
     };
     if session.track_objects {
         session.last_objects = live_objects(&session.display, &session.state);
@@ -459,15 +463,26 @@ pub fn run() -> Result<(), SessionError> {
 
     // Rebuild the chrome theme when appearance.domain or wallpaper.state
     // changes, without a restart.
+    let appearance_watch = AppearanceWatch::new().map_err(SessionError::Fd)?;
+    let appearance_fd = appearance_watch
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(SessionError::Fd)?;
+    session.appearance_watch = Some(appearance_watch);
     loop_handle
         .insert_source(
-            Timer::from_duration(Duration::from_millis(500)),
+            Generic::new(appearance_fd, Interest::READ, Mode::Level),
             |_, _, session: &mut Session| {
-                session.state.refresh_theme();
-                if session.state.take_redraw_request() {
-                    session.backend.window().request_redraw();
+                if let Some(watch) = session.appearance_watch.as_ref()
+                    && let Ok(events) = watch.drain()
+                    && !events.is_empty()
+                {
+                    session.state.refresh_theme();
+                    if session.state.take_redraw_request() {
+                        session.backend.window().request_redraw();
+                    }
                 }
-                TimeoutAction::ToDuration(Duration::from_millis(500))
+                Ok(PostAction::Continue)
             },
         )
         .map_err(|error| SessionError::EventLoop(error.into()))?;

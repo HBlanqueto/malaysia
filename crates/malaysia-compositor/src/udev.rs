@@ -48,6 +48,7 @@ use tracing::{error, info, warn};
 
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State};
+use vow_appearance::watch::AppearanceWatch;
 
 type Compositor =
     DrmCompositor<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
@@ -70,6 +71,7 @@ struct Udev {
     vblank_count: u64,
     frames_queued: u64,
     frame_was_empty: bool,
+    appearance_watch: Option<AppearanceWatch>,
 }
 
 /// Development-only overrides for the direct session.
@@ -274,19 +276,33 @@ pub fn run(options: DrmOptions) -> Result<()> {
         vblank_count: 0,
         frames_queued: 0,
         frame_was_empty: false,
+        appearance_watch: None,
     };
 
     // Rebuild the chrome theme when appearance.domain or wallpaper.state
     // changes, without a restart.
+    let appearance_watch = AppearanceWatch::new().map_err(|error| {
+        anyhow!("creating the appearance watcher: {error}")
+    })?;
+    let appearance_fd = appearance_watch
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(|error| anyhow!("duplicating the appearance watcher fd: {error}"))?;
+    udev.appearance_watch = Some(appearance_watch);
     loop_handle
         .insert_source(
-            Timer::from_duration(Duration::from_millis(500)),
+            Generic::new(appearance_fd, Interest::READ, Mode::Level),
             |_, _, data: &mut Udev| {
-                data.state.refresh_theme();
-                if data.state.take_redraw_request() {
-                    data.render();
+                if let Some(watch) = data.appearance_watch.as_ref()
+                    && let Ok(events) = watch.drain()
+                    && !events.is_empty()
+                {
+                    data.state.refresh_theme();
+                    if data.state.take_redraw_request() {
+                        data.render();
+                    }
                 }
-                TimeoutAction::ToDuration(Duration::from_millis(500))
+                Ok(PostAction::Continue)
             },
         )
         .map_err(|error| anyhow!("inserting the theme watcher: {error}"))?;
