@@ -61,14 +61,16 @@ pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 /// and releases after [`TEST_CLICK_HOLD`] (so an xdg popup can grab with the
 /// press serial), `doubleclick:x,y` sends two such clicks with no step between
 /// them, `key:<name>` presses and releases a named key after [`TEST_KEY_HOLD`],
-/// and `wait:ms` pauses. Actions are separated by `;`.
+/// `key:ctrl+r` (also `shift`, `alt`, `super`) holds the modifiers, presses the
+/// key and releases everything in reverse order, and `wait:ms` pauses. Actions
+/// are separated by `;`.
 #[derive(Debug, Default)]
 pub(crate) struct TestPointer {
     actions: VecDeque<TestPointerAction>,
 }
 
 /// A scripted key injected through the real keyboard path.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TestKey {
     Up,
     Down,
@@ -78,6 +80,11 @@ enum TestKey {
     Escape,
     Home,
     End,
+    Space,
+    Ctrl,
+    Shift,
+    Alt,
+    Super,
     Char(char),
 }
 
@@ -98,6 +105,7 @@ impl TestKey {
             "Escape" => Some(Self::Escape),
             "Home" => Some(Self::Home),
             "End" => Some(Self::End),
+            "Space" => Some(Self::Space),
             _ => None,
         }
     }
@@ -113,8 +121,58 @@ impl TestKey {
             Self::Escape => 9,
             Self::Home => 110,
             Self::End => 115,
+            Self::Space => 65,
+            Self::Ctrl => 37,
+            Self::Shift => 50,
+            Self::Alt => 64,
+            Self::Super => 133,
             Self::Char(ch) => ascii_keycode(ch),
         })
+    }
+}
+
+/// Parses `key:<modifiers>+<key>` (e.g. `ctrl+r`, `ctrl+shift+s`, `super+Space`)
+/// into KeyDown/KeyUp actions that hold the modifiers while the key is pressed.
+fn parse_key_actions(rest: &str, actions: &mut VecDeque<TestPointerAction>) {
+    let tokens: Vec<&str> = rest
+        .split('+')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    let mut modifiers = Vec::new();
+    let mut key = None;
+    for (i, token) in tokens.iter().enumerate() {
+        let lower = token.to_ascii_lowercase();
+        match lower.as_str() {
+            "ctrl" | "control" => modifiers.push(TestKey::Ctrl),
+            "shift" => modifiers.push(TestKey::Shift),
+            "alt" => modifiers.push(TestKey::Alt),
+            "super" | "meta" | "cmd" | "command" => modifiers.push(TestKey::Super),
+            _ => {
+                if i == tokens.len() - 1 {
+                    key = TestKey::from_name(token);
+                } else {
+                    // Unknown token before the last position: fall back to the
+                    // legacy single-key form so `key:Prior` still works.
+                    key = TestKey::from_name(rest.trim());
+                    modifiers.clear();
+                    break;
+                }
+            }
+        }
+    }
+    let Some(key) = key else { return };
+    for modifier in &modifiers {
+        actions.push_back(TestPointerAction::KeyDown(*modifier));
+        actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
+    }
+    actions.push_back(TestPointerAction::KeyDown(key));
+    actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
+    actions.push_back(TestPointerAction::KeyUp(key));
+    actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
+    for modifier in modifiers.iter().rev() {
+        actions.push_back(TestPointerAction::KeyUp(*modifier));
+        actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
     }
 }
 
@@ -162,7 +220,7 @@ fn ascii_keycode(ch: char) -> u32 {
     evdev + 8
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum TestPointerAction {
     Move(Point<f64, Logical>),
     Press(Point<f64, Logical>),
@@ -176,13 +234,17 @@ impl TestPointer {
     /// Parses `YUKI_TEST_INPUT`; returns `None` for the legacy `1` (a window
     /// press on first map) or when there is no script.
     pub(crate) fn from_env() -> Option<Self> {
-        let value = std::env::var("YUKI_TEST_INPUT").ok()?;
+        Self::parse(std::env::var("YUKI_TEST_INPUT").ok()?.as_str())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_env_with(value: &str) -> Option<Self> {
+        Self::parse(value)
+    }
+
+    fn parse(value: &str) -> Option<Self> {
         let mut actions = VecDeque::new();
-        for part in value
-            .split(';')
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-        {
+        for part in value.split(';').map(str::trim).filter(|part| !part.is_empty()) {
             if part == "1" {
                 continue;
             }
@@ -223,12 +285,8 @@ impl TestPointer {
                 && let Ok(millis) = rest.trim().parse::<u64>()
             {
                 actions.push_back(TestPointerAction::Wait(Duration::from_millis(millis)));
-            } else if let Some(rest) = part.strip_prefix("key:")
-                && let Some(key) = TestKey::from_name(rest.trim())
-            {
-                actions.push_back(TestPointerAction::KeyDown(key));
-                actions.push_back(TestPointerAction::Wait(TEST_KEY_HOLD));
-                actions.push_back(TestPointerAction::KeyUp(key));
+            } else if let Some(rest) = part.strip_prefix("key:") {
+                parse_key_actions(rest.trim(), &mut actions);
             }
         }
         (!actions.is_empty()).then_some(Self { actions })
@@ -2440,8 +2498,9 @@ mod tests {
 
     use super::{
         BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TestKey,
-        activation_updates, clamp_pointer, compositor_shortcut, desktop_click, double_click,
-        edge_cursor, is_escape, pointer_focus_blocked,
+        TestPointer, TestPointerAction, TEST_KEY_HOLD, activation_updates, clamp_pointer,
+        compositor_shortcut, desktop_click, double_click, edge_cursor, is_escape,
+        pointer_focus_blocked,
     };
     use crate::state::State;
     use yuki_scene::scene::WindowId;
@@ -3169,5 +3228,47 @@ mod tests {
         assert_eq!(target.y(), 0.0);
         assert_eq!(target.width(), 1920.0);
         assert_eq!(target.height(), 1052.0);
+    }
+
+    #[test]
+    fn scripted_modifier_keys_hold_while_key_is_pressed() {
+        let pointer = TestPointer::from_env_with("key:ctrl+r").unwrap();
+        let actions: Vec<_> = pointer.actions.into_iter().collect();
+        assert_eq!(
+            actions,
+            vec![
+                TestPointerAction::KeyDown(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyDown(TestKey::Char('r')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Char('r')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+            ]
+        );
+    }
+
+    #[test]
+    fn scripted_multiple_modifiers_keep_order() {
+        let pointer = TestPointer::from_env_with("key:ctrl+shift+s").unwrap();
+        let actions: Vec<_> = pointer.actions.into_iter().collect();
+        assert_eq!(
+            actions,
+            vec![
+                TestPointerAction::KeyDown(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyDown(TestKey::Shift),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyDown(TestKey::Char('s')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Char('s')),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Shift),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+                TestPointerAction::KeyUp(TestKey::Ctrl),
+                TestPointerAction::Wait(TEST_KEY_HOLD),
+            ]
+        );
     }
 }
