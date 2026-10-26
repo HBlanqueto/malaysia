@@ -3333,8 +3333,26 @@ impl KeyboardHandler for Shell {
 
 impl Shell {
     fn key_event(&mut self, qh: &QueueHandle<Self>, event: KeyEvent, name: KeyboardEventName) {
-        let (key, code) = input::key(event.keysym, event.utf8);
+        let (key, code) = input::key(event.keysym, event.utf8.clone());
         let modifiers = input::modifiers(self.modifiers);
+
+        if name == KeyboardEventName::KeyDown
+            && let Some(index) = self
+                .keyboard_focus
+                .as_ref()
+                .and_then(|surface| self.surface_for(surface))
+                .or_else(|| (!self.surfaces.is_empty()).then_some(0))
+        {
+            let app = &self.surfaces[index].app;
+            if let (Some(menu), Some(on_action)) = (app.menu.as_ref(), app.on_menu_action.as_ref())
+                && let Some(action_id) = crate::app_menu::find_menu_shortcut(menu, modifiers, &key)
+            {
+                on_action(&action_id);
+                self.surfaces[index].request_redraw(qh);
+                return;
+            }
+        }
+
         let platform_event = PlatformEvent::Keyboard {
             name,
             key,
