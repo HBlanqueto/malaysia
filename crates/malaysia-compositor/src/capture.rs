@@ -15,7 +15,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use smithay::backend::allocator::{Fourcc, Modifier};
+use smithay::backend::allocator::{Format, Fourcc, Modifier};
 use smithay::backend::drm::DrmNode;
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::damage::OutputDamageTracker;
@@ -61,16 +61,24 @@ pub(crate) struct PendingCapture {
     pub draw_cursor: bool,
 }
 
+/// Groups the renderer's formats by fourcc, keeping every modifier.
+fn group_modifiers(formats: impl IntoIterator<Item = Format>) -> Vec<(Fourcc, Vec<Modifier>)> {
+    let mut grouped: Vec<(Fourcc, Vec<Modifier>)> = Vec::new();
+    for format in formats {
+        match grouped.iter_mut().find(|(code, _)| *code == format.code) {
+            Some((_, modifiers)) => modifiers.push(format.modifier),
+            None => grouped.push((format.code, vec![format.modifier])),
+        }
+    }
+    grouped
+}
+
 /// Derives the DMA-BUF constraints for capture from the renderer's device.
 pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> {
     let node = EGLDevice::device_for_display(renderer.egl_context().display())
         .ok()
         .and_then(|device| device.try_get_render_node().ok().flatten())?;
-    let formats = renderer
-        .dmabuf_formats()
-        .iter()
-        .map(|format| (format.code, vec![format.modifier]))
-        .collect();
+    let formats = group_modifiers(renderer.dmabuf_formats().iter().copied());
     Some(CaptureDma { node, formats })
 }
 
@@ -503,9 +511,36 @@ fn capture_dir() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::copy_into_shm_pool;
+    use super::{copy_into_shm_pool, group_modifiers};
+    use smithay::backend::allocator::{Format, Fourcc, Modifier};
 
     const UNTOUCHED: u8 = 0xaa;
+
+    #[test]
+    fn modifiers_are_grouped_by_fourcc() {
+        let formats = [
+            Format {
+                code: Fourcc::Argb8888,
+                modifier: Modifier::Linear,
+            },
+            Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Linear,
+            },
+            Format {
+                code: Fourcc::Argb8888,
+                modifier: Modifier::Invalid,
+            },
+        ];
+
+        assert_eq!(
+            group_modifiers(formats),
+            vec![
+                (Fourcc::Argb8888, vec![Modifier::Linear, Modifier::Invalid],),
+                (Fourcc::Xrgb8888, vec![Modifier::Linear]),
+            ]
+        );
+    }
 
     fn src(bytes: usize) -> Vec<u8> {
         (1..=bytes).map(|byte| byte as u8).collect()
