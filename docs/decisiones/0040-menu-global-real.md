@@ -229,13 +229,23 @@ contador se registra al cerrar la barra.
 Ninguna fila implica código, estructuras ni ficheros copiados: solo
 comportamiento y decisiones de diseño.
 
+## Enmienda (14d-1)
+
+Verificadas las fuentes de Qt 6 y Firefox, ambos exigen que
+`com.canonical.AppMenu.Registrar` tenga dueño para exportar el menú, también en
+Wayland (`QGenericUnixTheme::isDBusGlobalMenuAvailable` y
+`DBusMenuBar::OnNameOwnerChanged`). Por eso la barra es dueña del nombre
+**desde 14d-2**, con `menubar.app_menus = true`; 14d-3 conserva el casado por
+pid de `RegisterWindow` para GTK. El stub de 14d-1 solo existe para la
+aceptación.
+
 ## Consecuencias
 
 - **El ADR 0036 queda superado en dos puntos.** El par appmenu viaja por
   Infinity v2, no por `window.domain`, y la implementación es propia: no se
   porta código de Otto, así que no hay actualización de `NOTICE` por 14d. El
   resto del 0036 (protocolo, reparto compositor ↔ shell, respaldo) sigue vivo.
-- **`ToplevelInfo` gana el par del menú** (`Option<(String, String)>`), que la
+- **`ToplevelInfo` gana el par del menú** (`Option<AppMenuAddress>`), que la
   barra lee de la entrada `active`; el compositor lo rellena desde el estado por
   superficie. No se adivina por `app_id`.
 - **14d-2 toca tres costuras del kit/barra:** `MenuItem::Submenu` necesita `id`

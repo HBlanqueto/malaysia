@@ -438,6 +438,42 @@ Diseño cerrado en el [ADR 0040](../decisiones/0040-menu-global-real.md). Fases:
 14d no usa AT-SPI ni un atajo privado por Infinity: el respaldo de 14c sigue
 siendo el modo sin menú real.
 
+### 14d-1 — Compositor (implementado)
+
+- `org_kde_kwin_appmenu_manager` v2, visible para todos los clientes. El par
+  (servicio, ruta) se guarda por `wl_surface`, antes o después del map; se
+  borra con `release`, al destruir el objeto y al destruir la superficie.
+- Infinity v2: evento `app_menu` con `since=2`, emitido al cambiar el par
+  (vacío = sin menú), al crear un handle wlr y al bindear el manager. Un
+  manager v1 no recibe nada; el foco no dispara el evento.
+- `ToplevelInfo.app_menu` y log de la barra al cambiar la ventana activa:
+  `menubar: app_menu app_id=org.kde.kate service=:1.8 path=/MenuBar/2` o
+  `... none`.
+- Stub de aceptación `crates/yuki/examples/appmenu_registrar_stub.rs` (solo
+  dev, `YUKI_LAB_REGISTRAR_STUB=1`): la barra aún no sirve el Registrar.
+
+Aceptación no interactiva (15 s, Kate vía `nix shell`, lab con bus privado):
+
+```text
+INFO appmenu set window=5 service=:1.8 path=/MenuBar/2
+menubar: app_menu app_id=org.kde.kate service=:1.8 path=/MenuBar/2
+menubar: app_menu app_id=foot none
+```
+
+`busctl introspect` muestra `com.canonical.dbusmenu` con `GetLayout iias` y
+`Version 4`; `GetLayout 0 1 0` devuelve el primer nivel de Kate: `_Archivo`,
+`_Editar`, `Sele_cción`, `_Ver`, `_Ir`, `_Proyectos`, `Cliente _LSP`,
+`_Sesiones`, `Herramientas`, `Preferencias`, `_Ayuda`. Sin el stub no hay
+ninguna línea `appmenu set`, Kate queda `none` y el nombre del Registrar no
+tiene dueño.
+
+La hipótesis de 14d-1 se confirmó: Qt
+(`QGenericUnixTheme::isDBusGlobalMenuAvailable` →
+`isServiceRegistered("com.canonical.AppMenu.Registrar")`), KDE
+(`checkDBusGlobalMenuAvailable`, salvo `KDE_NO_GLOBAL_MENU`) y Firefox
+(`DBusMenuBar::OnNameOwnerChanged` exige `g_dbus_proxy_get_name_owner`) solo
+exportan con el nombre ocupado.
+
 ## Aceptación de 14a
 
 Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual:
