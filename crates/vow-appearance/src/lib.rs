@@ -525,9 +525,17 @@ pub fn read_appearance_from(path: &Path) -> Result<Option<AppearanceConfig>, tom
 /// never see a partial domain. Parent directories are created as needed.
 pub fn write_appearance(path: &Path, config: &AppearanceConfig) -> std::io::Result<()> {
     let text = std::fs::read_to_string(path).unwrap_or_default();
-    let mut doc = text
-        .parse::<toml_edit::DocumentMut>()
-        .unwrap_or_else(|_| toml_edit::DocumentMut::new());
+    let parsed = text.parse::<toml_edit::DocumentMut>();
+    if !text.is_empty() && parsed.is_err() {
+        let backup = path.with_extension("domain.bak");
+        std::fs::copy(path, &backup)?;
+        tracing::warn!(
+            path = %path.display(),
+            backup = %backup.display(),
+            "unreadable appearance domain backed up before overwrite"
+        );
+    }
+    let mut doc = parsed.unwrap_or_else(|_| toml_edit::DocumentMut::new());
 
     doc["color_scheme"] = toml_edit::value(color_scheme_str(config.color_scheme));
     if let Some(accent) = config.accent_color {
@@ -1366,6 +1374,42 @@ sidebar_style = "flat"
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("legacy comment preserved"));
         assert!(text.contains("legacy_key = true"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_appearance_backs_up_an_unreadable_domain() {
+        let dir =
+            std::env::temp_dir().join(format!("vow-appearance-backup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("appearance.domain");
+        let original = "color_scheme = ";
+        std::fs::write(&path, original).unwrap();
+        let config = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            ..AppearanceConfig::default()
+        };
+
+        write_appearance(&path, &config).unwrap();
+
+        let backup = dir.join("appearance.domain.bak");
+        assert_eq!(std::fs::read(&backup).unwrap(), original.as_bytes());
+        let read = read_appearance_from(&path).unwrap().unwrap();
+        assert_eq!(read.color_scheme, ColorScheme::Dark);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_appearance_does_not_back_up_a_readable_domain() {
+        let dir =
+            std::env::temp_dir().join(format!("vow-appearance-nobackup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("appearance.domain");
+        std::fs::write(&path, "color_scheme = \"light\"\n").unwrap();
+
+        write_appearance(&path, &AppearanceConfig::default()).unwrap();
+
+        assert!(!dir.join("appearance.domain.bak").exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 
