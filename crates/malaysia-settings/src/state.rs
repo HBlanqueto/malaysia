@@ -5,42 +5,11 @@ pub use vow_appearance::{
     load_appearance, palette, resolve, write_appearance,
 };
 pub use vow_design::Rgba;
-use vow_design::{
-    BG_CONTROL_DARK, BG_CONTROL_DARK_TINT, BG_CONTROL_LIGHT, BG_SURFACE_DARK, BG_SURFACE_DARK_TINT,
-    BG_SURFACE_LIGHT, BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT,
-};
 
 /// Convierte un [`Rgba`] de `vow-design` en un [`Color`] de Freya.
 pub fn rgba(color: Rgba) -> freya_core::prelude::Color {
     let [r, g, b, a] = color.to_rgba8();
     freya_core::prelude::Color::from_argb(a, r, g, b)
-}
-
-/// Fondo de ventana para el esquema actual.
-pub fn bg_window(scheme: ColorScheme) -> Rgba {
-    match scheme {
-        ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
-        ColorScheme::Dark => BG_WINDOW_DARK,
-        _ => BG_WINDOW_LIGHT,
-    }
-}
-
-/// Fondo de control para el esquema actual.
-pub fn bg_control(scheme: ColorScheme) -> Rgba {
-    match scheme {
-        ColorScheme::DarkTint => BG_CONTROL_DARK_TINT,
-        ColorScheme::Dark => BG_CONTROL_DARK,
-        _ => BG_CONTROL_LIGHT,
-    }
-}
-
-/// Fondo de superficie para el esquema actual.
-pub fn bg_surface(scheme: ColorScheme) -> Rgba {
-    match scheme {
-        ColorScheme::DarkTint => BG_SURFACE_DARK_TINT,
-        ColorScheme::Dark => BG_SURFACE_DARK,
-        _ => BG_SURFACE_LIGHT,
-    }
 }
 
 /// Escribe la config y devuelve el error como string si falla.
@@ -112,26 +81,4 @@ fn normalize(s: &str) -> String {
 /// Fondo de tarjeta: el color dominante del wallpaper, o el acento si no hay.
 pub fn card_background(dominant: Option<Rgba>, accent: Rgba) -> Rgba {
     dominant.unwrap_or(accent)
-}
-
-/// Fondo de ventana teñido según el modo de color de ventanas.
-pub fn tinted_bg_window(preview_resolved: &Resolved) -> Rgba {
-    let base = match preview_resolved.scheme {
-        ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
-        ColorScheme::Dark => BG_WINDOW_DARK,
-        _ => BG_WINDOW_LIGHT,
-    };
-    match preview_resolved.window_tint {
-        Some((tint, factor)) => base.mix(tint, factor),
-        None => base,
-    }
-}
-
-/// Fondo hundido teñido según el modo de color de ventanas.
-pub fn tinted_bg_sunken(preview_resolved: &Resolved) -> Rgba {
-    let base = palette(preview_resolved.scheme).titlebar_bg.unfocused;
-    match preview_resolved.window_tint {
-        Some((tint, factor)) => base.mix(tint, factor * vow_design::LAYER_FACTOR_BG_SUNKEN),
-        None => base,
-    }
 }

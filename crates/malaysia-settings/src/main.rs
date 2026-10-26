@@ -23,7 +23,7 @@ use vow_design::{Rgba, SETTINGS};
 
 use crate::groups::content_scroll;
 use crate::sidebar::sidebar;
-use crate::state::{bg_window, rgba};
+use crate::state::rgba;
 use crate::toolbar::toolbar;
 
 fn main() {
@@ -46,6 +46,13 @@ impl App for SettingsApp {
         app_view(
             None::<(AppearanceConfig, Option<Rgba>, Resolved)>,
             Titlebar::new().with_sidebar(true),
+            Some(Callback::new(|_| std::process::exit(0))),
+            Callback::new(|_| {
+                barrier_kit::platform::WindowControls::get().minimize();
+            }),
+            Callback::new(|_| {
+                barrier_kit::platform::WindowControls::get().toggle_vertical_maximize();
+            }),
         )
     }
 }
@@ -56,6 +63,9 @@ impl App for SettingsApp {
 pub fn app_view(
     state: Option<(AppearanceConfig, Option<Rgba>, Resolved)>,
     titlebar: Titlebar,
+    on_close: Option<Callback<(), ()>>,
+    on_minimize: Callback<(), ()>,
+    on_maximize: Callback<(), ()>,
 ) -> impl IntoElement {
     let search = use_state(String::new);
     let appearance_error = use_state(|| None::<String>);
@@ -74,9 +84,15 @@ pub fn app_view(
     rect()
         .width(Size::px(SETTINGS.window_width as f32))
         .height(Size::fill())
-        .background(rgba(bg_window(resolved.scheme)))
+        .background(rgba(resolved.surfaces.window))
         .direction(Direction::Horizontal)
-        .child(sidebar(search, &resolved))
+        .child(sidebar(
+            search,
+            &resolved,
+            on_close,
+            on_minimize,
+            on_maximize,
+        ))
         .child(
             rect()
                 .width(Size::fill())
@@ -162,6 +178,9 @@ mod tests {
                     false,
                 )
                 .with_sidebar(true),
+                None,
+                Callback::new(|_| {}),
+                Callback::new(|_| {}),
             )
         }
     }
@@ -267,6 +286,55 @@ mod tests {
                 pixel(&image, width, 232, 8),
                 BG_WINDOW_LIGHT,
                 "top of content column must be bg-window",
+            );
+        });
+    }
+
+    #[test]
+    fn accent_purple_tints_window_and_group_surfaces() {
+        let purple = ACCENT_SWATCHES
+            .iter()
+            .find(|(name, _)| *name == "Morado")
+            .map(|(_, color)| *color)
+            .expect("purple swatch exists");
+        let dark_accent = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            accent_color: Some([purple.r, purple.g, purple.b]),
+            window_color: WindowColorMode::Accent,
+            ..AppearanceConfig::default()
+        };
+        let resolved = resolve(&dark_accent, None);
+
+        with_temp_config(|_dir| {
+            let mut test = run_app(dark_accent, None);
+            let (image, width) = render(&mut test);
+            // (700, 600) is in the content margin, away from cards and text.
+            let window_pixel = pixel(&image, width, 700, 600);
+            compare(
+                window_pixel,
+                resolved.surfaces.window,
+                "window background must use resolved.surfaces.window",
+            );
+            // A point inside the first card container, below the theme row.
+            let group_pixel = pixel(&image, width, 300, 220);
+            compare(
+                group_pixel,
+                resolved.surfaces.surface,
+                "group background must use resolved.surfaces.surface",
+            );
+
+            let mut neutral_test = run_app(AppearanceConfig::default(), None);
+            let neutral_resolved = resolve(&AppearanceConfig::default(), None);
+            let (neutral_image, _) = render(&mut neutral_test);
+            let neutral_window_pixel = pixel(&neutral_image, width, 700, 600);
+            assert_ne!(
+                neutral_window_pixel, window_pixel,
+                "accent window background must differ from neutral"
+            );
+            compare(
+                neutral_window_pixel,
+                neutral_resolved.surfaces.window,
+                "neutral window background must match neutral surfaces.window",
             );
         });
     }

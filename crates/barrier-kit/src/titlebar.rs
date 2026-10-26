@@ -13,14 +13,11 @@ use serde::Deserialize;
 use crate::traffic::TrafficLights;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
+use vow_appearance::SidebarStyle;
 use vow_appearance::palette;
 use vow_appearance::traffic::TrafficInput;
-use vow_appearance::{ColorScheme, SidebarStyle};
 use vow_design::NATIVE_APP_ID_PREFIX;
-use vow_design::{
-    BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, ButtonKind, Rgba, TITLE_2,
-    TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK,
-};
+use vow_design::{ButtonKind, Rgba, TITLE_2, TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK};
 
 use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStatus};
 
@@ -131,7 +128,7 @@ impl Component for Titlebar {
         let resolved = crate::theme::resolved();
         let theme = palette(resolved.scheme);
         let background = if self.sidebar {
-            bg_window(resolved.scheme)
+            resolved.surfaces.window
         } else if status.activated {
             theme.titlebar_bg.focused
         } else {
@@ -447,14 +444,6 @@ fn truncate(title: &str) -> String {
 fn rgba(color: Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
     Color::from_argb(a, r, g, b)
-}
-
-fn bg_window(scheme: ColorScheme) -> Rgba {
-    match scheme {
-        ColorScheme::Dark => BG_WINDOW_DARK,
-        ColorScheme::DarkTint => BG_WINDOW_DARK_TINT,
-        _ => BG_WINDOW_LIGHT,
-    }
 }
 
 /// The app-id for a BarrierKit window with the given suffix.

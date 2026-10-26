@@ -1,23 +1,26 @@
 //! Isla lateral de Ajustes: semáforos, buscador, cuenta y sección.
 
 use barrier_kit::controls::TextField;
-use barrier_kit::traffic::traffic_lights_view_with_fixed;
+use barrier_kit::traffic::TrafficLights;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
-use vow_appearance::traffic::TrafficInput;
-use vow_design::{CALLOUT, HEADLINE, SETTINGS, SIDEBAR, TITLEBAR};
+use vow_design::{ButtonKind, CALLOUT, HEADLINE, SETTINGS, SIDEBAR, TITLEBAR};
 
-use crate::state::{
-    Resolved, Rgba, account_name, bg_control, initials, load_appearance, palette, rgba,
-};
+use crate::state::{Resolved, Rgba, account_name, initials, load_appearance, palette, rgba};
 
 const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M10 10l3.2 3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
 const CLEAR_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 4l8 8M12 4l-8 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
 const APPEARANCE_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><circle cx=\"11\" cy=\"11\" r=\"9\" fill=\"currentColor\"/><path d=\"M11 2v18\" stroke=\"white\" stroke-width=\"2\"/><path d=\"M2 11h18\" stroke=\"white\" stroke-width=\"2\"/></svg>";
 
 /// Isla lateral completa.
-pub fn sidebar(search: State<String>, resolved: &Resolved) -> freya_core::prelude::Rect {
+pub fn sidebar(
+    search: State<String>,
+    resolved: &Resolved,
+    on_close: Option<Callback<(), ()>>,
+    on_minimize: Callback<(), ()>,
+    on_maximize: Callback<(), ()>,
+) -> freya_core::prelude::Rect {
     let sidebar_palette = resolved.sidebar.palette;
     let island_bg = resolved.sidebar.bg;
     let rim = resolved.sidebar.rim;
@@ -38,7 +41,7 @@ pub fn sidebar(search: State<String>, resolved: &Resolved) -> freya_core::prelud
         .child(search_field(
             search,
             sidebar_palette,
-            bg_control(resolved.scheme),
+            resolved.surfaces.control,
         ))
         .child(account_row(sidebar_palette))
         .child(sidebar_item("Apariencia", true, sidebar_palette));
@@ -84,18 +87,7 @@ pub fn sidebar(search: State<String>, resolved: &Resolved) -> freya_core::prelud
                 ))
                 .height(Size::px(TITLEBAR.buttons.diameter as f32))
                 .a11y_alt("sidebar-traffic-lights")
-                .child(traffic_lights_view_with_fixed(
-                    TrafficInput {
-                        focused: true,
-                        group_hovered: false,
-                        pressed: None,
-                        zoom_supported: true,
-                    },
-                    resolved.lights,
-                    resolved.traffic_style,
-                    palette(resolved.scheme).traffic_lights_inactive,
-                    true,
-                )),
+                .child(sidebar_traffic_lights(on_close, on_minimize, on_maximize)),
         )
 }
 
@@ -236,6 +228,27 @@ fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPa
                 .color(rgba(fg))
                 .max_lines(1),
         )
+}
+
+/// Semáforos interactivos de la isla lateral para ventanas de ancho fijo.
+fn sidebar_traffic_lights(
+    on_close: Option<Callback<(), ()>>,
+    on_minimize: Callback<(), ()>,
+    on_maximize: Callback<(), ()>,
+) -> TrafficLights {
+    TrafficLights::new()
+        .focused(true)
+        .zoom_supported(true)
+        .fixed_width(true)
+        .on_action(move |kind| match kind {
+            ButtonKind::Close => {
+                if let Some(on_close) = &on_close {
+                    on_close.call(());
+                }
+            }
+            ButtonKind::Minimize => on_minimize.call(()),
+            ButtonKind::Maximize => on_maximize.call(()),
+        })
 }
 
 fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {

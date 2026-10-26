@@ -26,8 +26,8 @@ use vow_appearance::{
     palette as base_palette, resolve,
 };
 use vow_design::{
-    ButtonKind, FocusPair, Font, LAYER_FACTOR_LINE, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR,
-    TRAFFIC_GLYPHS, TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
+    ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
+    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
 };
 
 use crate::config::Config;
@@ -58,13 +58,11 @@ impl ChromeTheme {
         let base = base_palette(resolved.scheme);
         let mut palette = base;
         palette.accent = resolved.accent;
-        if let Some((source, factor)) = resolved.window_tint {
-            palette.titlebar_bg = FocusPair {
-                focused: base.titlebar_bg.focused.mix(source, factor),
-                unfocused: base.titlebar_bg.unfocused.mix(source, factor),
-            };
-            palette.hairline = base.hairline.mix(source, factor * LAYER_FACTOR_LINE);
-        }
+        palette.titlebar_bg = FocusPair {
+            focused: resolved.surfaces.window,
+            unfocused: resolved.surfaces.sunken,
+        };
+        palette.hairline = resolved.surfaces.line;
 
         let traffic_style = match appearance.traffic_lights {
             TrafficLightStyle::Auto => match appearance.window_color {
@@ -904,8 +902,9 @@ mod tests {
     use super::*;
     use malaysia_scene::geometry::Rect;
     use vow_design::{
-        ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_GLYPH_STANDARD,
-        TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+        BG_SUNKEN_LIGHT, BG_WINDOW_LIGHT, ButtonKind, DARK, DARK_TINT, LIGHT,
+        TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN,
+        WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
     };
 
     fn outer() -> SceneRect<f64, SceneLogical> {
@@ -965,11 +964,17 @@ mod tests {
         assert_eq!(theme.palette.accent, accent);
         assert_eq!(
             theme.palette.titlebar_bg.focused,
-            LIGHT.titlebar_bg.focused.mix(accent, factor)
+            BG_WINDOW_LIGHT.mix(accent, factor)
+        );
+        assert_eq!(
+            theme.palette.titlebar_bg.unfocused,
+            BG_SUNKEN_LIGHT.mix(accent, factor * vow_design::LAYER_FACTOR_BG_SUNKEN)
         );
         assert_eq!(
             theme.palette.hairline,
-            LIGHT.hairline.mix(accent, factor * LAYER_FACTOR_LINE)
+            LIGHT
+                .line
+                .mix(accent, factor * vow_design::LAYER_FACTOR_LINE)
         );
         assert_eq!(
             theme.lights[0],
@@ -996,11 +1001,16 @@ mod tests {
         assert_eq!(theme.palette.accent, wallpaper);
         assert_eq!(
             theme.palette.titlebar_bg.focused,
-            DARK.titlebar_bg.focused.mix(wallpaper, factor)
+            vow_design::BG_WINDOW_DARK.mix(wallpaper, factor)
+        );
+        assert_eq!(
+            theme.palette.titlebar_bg.unfocused,
+            vow_design::BG_SUNKEN_DARK.mix(wallpaper, factor * vow_design::LAYER_FACTOR_BG_SUNKEN)
         );
         assert_eq!(
             theme.palette.hairline,
-            DARK.hairline.mix(wallpaper, factor * LAYER_FACTOR_LINE)
+            DARK.line
+                .mix(wallpaper, factor * vow_design::LAYER_FACTOR_LINE)
         );
         assert_eq!(theme.lights[2], wallpaper.lighten(TRAFFIC_ZOOM_LIGHTEN));
     }

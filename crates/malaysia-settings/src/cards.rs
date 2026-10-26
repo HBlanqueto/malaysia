@@ -2,11 +2,10 @@
 
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
-use vow_design::{BG_WINDOW_DARK, BG_WINDOW_LIGHT, SETTINGS};
+use vow_design::SETTINGS;
 
 use crate::state::{
-    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, bg_surface, load_appearance,
-    resolve, rgba, tinted_bg_sunken, tinted_bg_window,
+    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, load_appearance, resolve, rgba,
 };
 
 /// Resolves the preview for a theme card while keeping the rest of the
@@ -42,18 +41,23 @@ pub fn theme_card(
     selectable_card(
         caption,
         card_bg,
-        theme_preview(scheme, &preview_resolved),
+        theme_preview(scheme, base_config, dominant, &preview_resolved),
         is_selected,
         accent,
-        bg_surface(preview_resolved.scheme),
+        preview_resolved.surfaces.surface,
         scheme_palette,
         on_select,
     )
 }
 
 /// Miniatura de tema: ventana con barra de acento y semáforos.
-pub fn theme_preview(scheme: ColorScheme, preview_resolved: &Resolved) -> Rect {
-    let window_bg = tinted_bg_window(preview_resolved);
+pub fn theme_preview(
+    scheme: ColorScheme,
+    base_config: &AppearanceConfig,
+    dominant: Option<Rgba>,
+    preview_resolved: &Resolved,
+) -> Rect {
+    let window_bg = preview_resolved.surfaces.window;
     let accent = preview_resolved.accent;
     let card_w = SETTINGS.card_width as f32;
     let card_h = SETTINGS.card_height as f32;
@@ -75,18 +79,24 @@ pub fn theme_preview(scheme: ColorScheme, preview_resolved: &Resolved) -> Rect {
         .position(Position::new_absolute().top(y).left(x));
 
     if scheme == ColorScheme::Auto {
+        let light = preview_for_theme(base_config, ColorScheme::Light, dominant)
+            .surfaces
+            .window;
+        let dark = preview_for_theme(base_config, ColorScheme::Dark, dominant)
+            .surfaces
+            .window;
         window = window
             .child(
                 rect()
                     .position(Position::new_absolute().top(0.0).left(0.0).bottom(0.0))
                     .width(Size::px(card_w / 2.0))
-                    .background(rgba(BG_WINDOW_LIGHT)),
+                    .background(rgba(light)),
             )
             .child(
                 rect()
                     .position(Position::new_absolute().top(0.0).right(0.0).bottom(0.0))
                     .width(Size::px(card_w / 2.0))
-                    .background(rgba(BG_WINDOW_DARK)),
+                    .background(rgba(dark)),
             );
     }
 
@@ -142,7 +152,7 @@ pub fn window_color_card(
         window_color_preview(&preview_resolved),
         is_selected,
         resolved.accent,
-        bg_surface(resolved.scheme),
+        resolved.surfaces.surface,
         scheme_palette,
         on_select,
     )
@@ -150,8 +160,8 @@ pub fn window_color_card(
 
 /// Miniatura de color de ventanas.
 pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
-    let window_bg = tinted_bg_window(preview_resolved);
-    let sunken = tinted_bg_sunken(preview_resolved);
+    let window_bg = preview_resolved.surfaces.window;
+    let sunken = preview_resolved.surfaces.sunken;
     let x = SETTINGS.preview_tint_window_x as f32;
     let y = SETTINGS.preview_tint_window_y as f32;
     let side_w = SETTINGS.preview_tint_side_w as f32;

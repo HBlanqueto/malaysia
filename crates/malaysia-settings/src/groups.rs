@@ -9,8 +9,8 @@ use vow_design::{CALLOUT, HEADLINE, SETTINGS, TEXT, TITLE_2};
 use crate::cards::{theme_card, window_color_card};
 use crate::controls::{accent_swatch, radio, traffic_dropdown};
 use crate::state::{
-    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, WindowTintScope, bg_control,
-    bg_surface, card_background, load_appearance, matches_filter, palette, rgba, save_config,
+    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, WindowTintScope,
+    card_background, load_appearance, matches_filter, palette, rgba, save_config,
 };
 
 /// Contenido principal desplazable con los grupos filtrados por búsqueda.
@@ -214,7 +214,7 @@ fn color_group(
     let scheme_palette = palette(resolved.scheme);
     let wallpaper_mode = config.window_color == WindowColorMode::Wallpaper;
     let card_bg = card_background(dominant, resolved.accent);
-    let bg_control = bg_control(resolved.scheme);
+    let control_bg = resolved.surfaces.control;
     let text_color = scheme_palette.text.focused;
 
     let swatches =
@@ -330,7 +330,7 @@ fn color_group(
                     "Solo las ventanas",
                     config.window_tint_scope == WindowTintScope::Windows,
                     scope_disabled,
-                    bg_control,
+                    control_bg,
                     resolved.accent,
                     text_color,
                     {
@@ -350,7 +350,7 @@ fn color_group(
                     "Todo el escritorio",
                     config.window_tint_scope == WindowTintScope::Desktop,
                     scope_disabled,
-                    bg_control,
+                    control_bg,
                     resolved.accent,
                     text_color,
                     {
@@ -392,7 +392,7 @@ fn windows_group(
     let resolved = *resolved;
     let scheme_palette = palette(resolved.scheme);
     let current = config.traffic_lights;
-    let bg_control = bg_control(resolved.scheme);
+    let control_bg = resolved.surfaces.control;
     let text_color = resolved.sidebar.palette.item_ink;
 
     let mut error = error;
@@ -400,7 +400,7 @@ fn windows_group(
         current,
         resolved.lights,
         text_color,
-        bg_control,
+        control_bg,
         resolved.menu,
         move |style| {
             let mut config = load_appearance();
@@ -512,7 +512,7 @@ fn card_container(resolved: &Resolved, rows: Vec<Element>) -> Rect {
         .width(Size::fill())
         .height(Size::auto())
         .corner_radius(SETTINGS.group_radius as f32)
-        .background(rgba(bg_surface(resolved.scheme)))
+        .background(rgba(resolved.surfaces.surface))
         .border(
             Border::new()
                 .width(1.0)
