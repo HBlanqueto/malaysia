@@ -99,14 +99,21 @@ pub fn key(keysym: Keysym, utf8: Option<String>) -> (Key, Code) {
     if keysym == Keysym::space {
         return (Key::Character(" ".into()), Code::Space);
     }
+    let raw = keysym.raw();
     let mapped = match named(keysym) {
         Some(name) => Key::Named(name),
         None => match keysym.key_char() {
             Some(ch) => Key::Character(ch.to_ascii_lowercase().to_string()),
-            None => match utf8 {
-                Some(text) if !text.is_empty() => Key::Character(text),
-                _ => Key::Named(NamedKey::Unidentified),
-            },
+            None => {
+                if (0x20..=0x7e).contains(&raw) {
+                    Key::Character((raw as u8 as char).to_ascii_lowercase().to_string())
+                } else {
+                    match utf8.as_deref() {
+                        Some(text) if !text.is_empty() => Key::Character(text.to_string()),
+                        _ => Key::Named(NamedKey::Unidentified),
+                    }
+                }
+            }
         },
     };
     (mapped, code(keysym))
