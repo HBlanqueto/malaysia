@@ -68,6 +68,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
 
+use crate::appmenu::AppMenuState;
 use crate::config::{Config, config_dir, data_dir};
 use crate::foreign::{ForeignState, ListHandles};
 use crate::infinity::protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
@@ -284,6 +285,8 @@ pub struct State {
     pub popups: Popups,
     /// The window list and control protocols for the dock (ADR 0023).
     pub foreign: ForeignState,
+    /// The global-menu addresses announced per surface (ADR 0040).
+    pub(crate) appmenu: AppMenuState,
     /// The `ext-foreign-toplevel-list` handles, by window.
     pub list_handles: ListHandles,
     /// Windows minimized to the dock (kept out of the scene).
@@ -544,6 +547,7 @@ impl State {
             windows: Windows::new(),
             popups: Popups::new(),
             foreign: ForeignState::new(display_handle),
+            appmenu: AppMenuState::new(display_handle),
             list_handles: Vec::new(),
             infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
             minimized: std::collections::HashSet::new(),

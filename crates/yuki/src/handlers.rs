@@ -77,6 +77,7 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 use yuki_scene::scene::Decoration;
 
 use crate::capture::CaptureTarget;
+use crate::delegate_appmenu;
 use crate::delegate_foreign_management;
 use crate::state::{ClientState, State};
 
@@ -202,6 +203,10 @@ impl CompositorHandler for State {
         if commit_requests_redraw(surface) {
             self.request_redraw();
         }
+    }
+
+    fn destroyed(&mut self, surface: &WlSurface) {
+        self.clear_surface_appmenu(surface);
     }
 }
 
@@ -647,6 +652,7 @@ impl ForeignToplevelListHandler for State {
 }
 
 delegate_foreign_management!(State);
+delegate_appmenu!(State);
 
 impl WlrLayerShellHandler for State {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {

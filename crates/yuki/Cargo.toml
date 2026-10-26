@@ -28,6 +28,7 @@ wayland-scanner.workspace = true
 wayland-server = "0.31"
 wayland-backend = "0.3"
 wayland-protocols-wlr = { workspace = true, features = ["server"] }
+wayland-protocols-plasma = { workspace = true, features = ["server"] }
 grade-graphics.workspace = true
 yuki-appearance.workspace = true
 yuki-design.workspace = true

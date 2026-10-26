@@ -3516,6 +3516,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]
@@ -4292,6 +4293,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-segmentation",
  "wayland-backend",
+ "wayland-protocols-plasma",
  "wayland-protocols-wlr",
  "wayland-scanner",
  "wayland-server",

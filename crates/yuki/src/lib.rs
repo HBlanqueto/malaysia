@@ -19,6 +19,7 @@
 #![warn(missing_docs)]
 
 mod active;
+mod appmenu;
 mod blockers;
 pub mod capture;
 mod chrome;
