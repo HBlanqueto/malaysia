@@ -164,6 +164,66 @@ fn the_shared_module_has_the_same_group_footprint() {
 }
 
 #[test]
+fn fixed_width_clicks_call_the_expected_actions() {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let actions = Rc::new(RefCell::new(Vec::new()));
+    let closes = Rc::new(RefCell::new(0u32));
+
+    struct ActionCase {
+        actions: Rc<RefCell<Vec<ButtonKind>>>,
+        closes: Rc<RefCell<u32>>,
+    }
+
+    impl App for ActionCase {
+        fn render(&self) -> impl IntoElement {
+            let actions = self.actions.clone();
+            let closes = self.closes.clone();
+            TrafficLights::new()
+                .focused(true)
+                .fixed_width(true)
+                .zoom_supported(true)
+                .on_action(move |kind| {
+                    actions.borrow_mut().push(kind);
+                    if kind == ButtonKind::Close {
+                        *closes.borrow_mut() += 1;
+                    }
+                })
+        }
+    }
+
+    let app = AppComponent::new(ActionCase {
+        actions: actions.clone(),
+        closes: closes.clone(),
+    });
+    let (mut test, _) = TestingRunner::new(app, Size2D::new(80.0, 40.0), |_| {}, 1.0);
+    test.sync_and_update();
+
+    // The three 12 px lights are laid out at x=0, 20, 40 with centres at x=6, 26, 46.
+    let centers = [(6.0, 6.0), (26.0, 6.0), (46.0, 6.0)];
+    for (x, y) in centers {
+        test.click_cursor((x, y));
+        test.sync_and_update();
+    }
+
+    let actions = actions.borrow();
+    assert_eq!(
+        *actions,
+        vec![
+            ButtonKind::Close,
+            ButtonKind::Minimize,
+            ButtonKind::Maximize
+        ]
+    );
+    assert_eq!(
+        *closes.borrow(),
+        1,
+        "only the close light must call on_close"
+    );
+}
+
+#[test]
 fn fixed_width_green_uses_plus_glyph() {
     let input = TrafficInput {
         focused: true,

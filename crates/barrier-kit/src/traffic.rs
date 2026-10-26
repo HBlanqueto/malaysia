@@ -8,9 +8,7 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
 use vow_appearance::traffic::{self, TrafficInput, TrafficPointer};
-use vow_appearance::{
-    TrafficLightStyle, load_appearance, load_dominant, palette as base_palette, resolve,
-};
+use vow_appearance::{TrafficLightStyle, palette as base_palette};
 use vow_design::{ButtonKind, Rgba, TITLEBAR, TRAFFIC_GLYPHS, Triangle};
 
 /// The three-client-side-traffic-lights component.
@@ -75,7 +73,7 @@ impl TrafficLights {
 
 impl Component for TrafficLights {
     fn render(&self) -> impl IntoElement {
-        let resolved = resolve(&load_appearance(), load_dominant());
+        let resolved = crate::theme::resolved();
         let inactive = base_palette(resolved.scheme).traffic_lights_inactive;
         let mut pointer = use_state(TrafficPointer::default);
         let input = self.input.unwrap_or_else(|| {
