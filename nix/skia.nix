@@ -1,5 +1,5 @@
 # Skia precompilado para freya-skia-bindings 0.98.0 (el que usa freya-engine
-# 0.4.3) en su propia derivación, para que el build de Yuki lo reutilice en vez
+# 0.4.3) en su propia derivación, para que el build de MalaysiaDreams lo reutilice en vez
 # de reconstruirlo en cada cambio.
 #
 # Compila el crate mínimo de nix/skia-prebuild (que depende de freya-engine
@@ -100,7 +100,7 @@ rustPlatform.buildRustPackage.override { stdenv = clangStdenv; } {
     rm -rf $out/skia-binaries
 
     # Features con las que se compiló, para que el preBuild del paquete
-    # compruebe que las de freya-engine/CelestialKit no cambiaron.
+    # compruebe que las de freya-engine/BarrierKit no cambiaron.
     cargo tree --offline -e features -i freya-skia-bindings --prefix none \
       | sed -n 's/^freya-skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > $out/features.txt
 

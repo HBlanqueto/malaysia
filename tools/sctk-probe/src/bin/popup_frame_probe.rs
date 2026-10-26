@@ -1,7 +1,7 @@
 //! Maps a toplevel and a popup with grab, then asserts the popup receives
 //! three `wl_callback.done` events when only the popup surface commits damage.
 //!
-//! The compositor is started with `YUKI_TEST_INPUT=1`, which injects a press on
+//! The compositor is started with `MALAYSIA_TEST_INPUT=1`, which injects a press on
 //! the toplevel. The probe captures that press serial and uses it for the popup
 //! grab, then drives three damaged commits of the popup and counts the
 //! resulting frame callbacks.

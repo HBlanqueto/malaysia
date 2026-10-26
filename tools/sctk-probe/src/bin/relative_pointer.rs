@@ -1,6 +1,6 @@
 //! Asserts that relative pointer motion reaches the client.
 //!
-//! With `YUKI_TEST_INPUT=1` the compositor hovers the pointer over the first
+//! With `MALAYSIA_TEST_INPUT=1` the compositor hovers the pointer over the first
 //! mapped window and follows it with motions. This client binds
 //! `zwp_relative_pointer_manager_v1`, creates a relative pointer for the seat's
 //! pointer, and waits for a `relative_motion` event with a non-zero delta.
@@ -8,7 +8,7 @@
 //! A compositor that advertises the global but never forwards motion times out
 //! here.
 //!
-//! Run against a compositor started with `YUKI_TEST_INPUT=1`.
+//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`.
 
 use std::time::Duration;
 

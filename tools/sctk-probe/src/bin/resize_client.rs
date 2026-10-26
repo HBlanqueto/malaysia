@@ -2,8 +2,8 @@
 //! compositor configures it to.
 //!
 //! `block4` uses this client to assert pointer-driven resizes: with
-//! `YUKI_TEST_INPUT=1` the compositor presses an edge or corner of the
-//! window (aimed by `YUKI_TEST_PRESS_AT`) and drags the grab with its
+//! `MALAYSIA_TEST_INPUT=1` the compositor presses an edge or corner of the
+//! window (aimed by `MALAYSIA_TEST_PRESS_AT`) and drags the grab with its
 //! scripted motions. The client prints each configure and, once the stream
 //! settles, the final size:
 //!
@@ -18,9 +18,9 @@
 //! environment as an offset from the initial configure, in the surface
 //! coordinates `xdg_toplevel.set_min_size`/`set_max_size` take:
 //!
-//! - `YUKI_RESIZE_MIN=10,10` — the minimum is the initial size minus
+//! - `MALAYSIA_RESIZE_MIN=10,10` — the minimum is the initial size minus
 //!   `(10, 10)`;
-//! - `YUKI_RESIZE_MAX=10,10` — the maximum is the initial size plus
+//! - `MALAYSIA_RESIZE_MAX=10,10` — the maximum is the initial size plus
 //!   `(10, 10)`.
 //!
 //! Only one of the two is set per run. It exits non-zero if the window is never
@@ -156,12 +156,12 @@ impl App {
     /// Sets the client's minimum or maximum from the environment, relative to
     /// the initial configure, before the mapping commit.
     fn apply_bounds(&self, width: u32, height: u32) {
-        if let Some((dw, dh)) = offset("YUKI_RESIZE_MIN") {
+        if let Some((dw, dh)) = offset("MALAYSIA_RESIZE_MIN") {
             self.window
                 .set_min_size(Some((width.saturating_sub(dw), height.saturating_sub(dh))));
             println!("resize_client: set the minimum to the initial size minus ({dw}, {dh})");
         }
-        if let Some((dw, dh)) = offset("YUKI_RESIZE_MAX") {
+        if let Some((dw, dh)) = offset("MALAYSIA_RESIZE_MAX") {
             self.window
                 .set_max_size(Some((width.saturating_add(dw), height.saturating_add(dh))));
             println!("resize_client: set the maximum to the initial size plus ({dw}, {dh})");

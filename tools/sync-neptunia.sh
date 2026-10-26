@@ -1,9 +1,9 @@
 #!/bin/sh
-# Bring a Neptunia folder into yukiwm on purpose. Never run from the build or CI.
+# Bring a Neptunia folder into malaysia on purpose. Never run from the build or CI.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-dest="$root/crates/yuki-design/neptunia"
+dest="$root/crates/vow-design/neptunia"
 
 if [ "$#" -ne 1 ]; then
     printf 'usage: %s <neptunia-directory>\n' "$0" >&2
@@ -33,19 +33,19 @@ cat > "$dest/SOURCE.md" <<SOURCE
 - **Commit de origen:** \`$origin_commit\`.
 - **Fecha de la copia:** $copy_date.
 
-Esta carpeta es una **copia real** dentro de yukiwm, no un enlace ni una
+Esta carpeta es una **copia real** dentro de malaysia, no un enlace ni una
 dependencia del build.
 
 ## Regla
 
-Esta copia es la fuente para yukiwm: los cambios de diseño se hacen aquí
+Esta copia es la fuente para malaysia: los cambios de diseño se hacen aquí
 (\`tokens.json\`, \`components.json\`) y, si se quiere, se devuelven a dotfiles a
 mano. Ni Cargo ni Nix leen \`~/dotfiles\` ni ningún otro repositorio.
 
 ## Regenerar \`generated/\`
 
 \`\`\`sh
-cd crates/yuki-design/neptunia
+cd crates/vow-design/neptunia
 nix eval --raw -f . slint > generated/neptunia.slint
 nix eval --raw -f . css   > generated/neptunia.css
 nix eval --raw -f . qml   > generated/Neptunia.qml

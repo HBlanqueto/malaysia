@@ -1,6 +1,6 @@
 # Crate mínimo que solo existe para que nix/skia.nix compile Skia (vía
 # freya-skia-bindings) una vez, en su propia derivación. freya-engine =0.4.3
-# activa en Linux exactamente las features que usará CelestialKit; el preBuild
+# activa en Linux exactamente las features que usará BarrierKit; el preBuild
 # del paquete las comprueba contra $out/features.txt.
 [package]
 name = "skia-prebuild"

@@ -21,15 +21,15 @@ absent() {
 }
 
 # The compositor's package must not reach the client render stack.
-absent freya-engine -p yuki
-absent freya-skia-bindings -p yuki
-absent freya-skia-safe -p yuki
-absent skia-bindings -p yuki
+absent freya-engine -p malaysia-compositor
+absent freya-skia-bindings -p malaysia-compositor
+absent freya-skia-safe -p malaysia-compositor
+absent skia-bindings -p malaysia-compositor
 
 # The window backend is the compositor's own (smithay backend_winit, ADR 0009),
-# so `winit` is expected under `yuki`; it must not reach a client crate.
-absent winit -p celestial-kit
-absent winit -p yuki-shell
+# so `winit` is expected under `malaysia-compositor`; it must not reach a client crate.
+absent winit -p barrier-kit
+absent winit -p malaysia-shell
 absent tokio --workspace
 absent gtk --workspace
 absent glutin --workspace
@@ -47,9 +47,9 @@ if cargo tree --workspace -i copypasta >/dev/null 2>&1; then
 fi
 
 # Duplicate versions in the kit that are avoidable are build noise and bloat.
-if cargo tree -d -p celestial-kit 2>/dev/null | grep -q '^[a-z]'; then
-  echo "check-client-only-deps: duplicated crates in celestial-kit:" >&2
-  cargo tree -d -p celestial-kit >&2 || true
+if cargo tree -d -p barrier-kit 2>/dev/null | grep -q '^[a-z]'; then
+  echo "check-client-only-deps: duplicated crates in barrier-kit:" >&2
+  cargo tree -d -p barrier-kit >&2 || true
 fi
 
 exit "$fail"

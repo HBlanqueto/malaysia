@@ -18,7 +18,7 @@
 //! be accepted even though a raise, a focus change and a keyboard enter
 //! happened in between.
 //!
-//! `YUKI_TEST_INPUT=1` makes the compositor press once, on the first window
+//! `MALAYSIA_TEST_INPUT=1` makes the compositor press once, on the first window
 //! that maps, and hold the button; the motions and the release come from the
 //! same scripted input. Run from the dev shell, or `./dev.sh move`.
 

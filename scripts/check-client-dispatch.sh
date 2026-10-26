@@ -1,13 +1,13 @@
 #!/bin/sh
 # Guard against client filters that freeze the compositor (ADR 0039).
 #
-# Starts the real compositor without YUKI_DEV, waits for its own socket and
+# Starts the real compositor without MALAYSIA_DEV, waits for its own socket and
 # connects a plain client (`wayland-info`) with a 5 s deadline. The client must
 # finish, and the private Infinity global must stay hidden from it.
 set -eu
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-bin=${YUKI_BIN:-$repo_root/target/debug/yuki}
+bin=${MALAYSIA_BIN:-$repo_root/target/debug/malaysia-compositor}
 if [ ! -x "$bin" ]; then
     printf 'check-client-dispatch: missing %s; build it first\n' "$bin" >&2
     exit 1
@@ -32,8 +32,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Never inherit a developer's bypass: this exercises the filtered path.
-unset YUKI_DEV YUKI_SHELL_EXE
-YUKI_CONFIG_DIR="$tmp/config" YUKI_DATA_DIR="$tmp/data" \
+unset MALAYSIA_DEV MALAYSIA_SHELL_EXE
+MALAYSIA_CONFIG_DIR="$tmp/config" MALAYSIA_DATA_DIR="$tmp/data" \
     "$bin" >"$log" 2>&1 &
 pid=$!
 

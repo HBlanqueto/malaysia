@@ -1,16 +1,16 @@
 //! Asserts the surface-local coordinates a hovered client receives.
 //!
-//! Yuki's test backend, with `YUKI_TEST_INPUT=1`, presses on the first
+//! MalaysiaDreams's test backend, with `MALAYSIA_TEST_INPUT=1`, presses on the first
 //! mapped window, follows the press with motions and releases. This client asks
 //! for client-side decorations, so its surface origin is its window origin, and
 //! sends `move` and `resize` with the press serial: the move makes the
 //! compositor's scripted drag move the window to a non-zero origin, and the
 //! resize makes the compositor release the button. It then hovers the pointer
-//! with no button held over the global points in `YUKI_TEST_HOVER`.
+//! with no button held over the global points in `MALAYSIA_TEST_HOVER`.
 //!
 //! The client asserts that the `wl_pointer.enter` and `wl_pointer.motion` it
 //! receives for that hover carry the surface-local positions in
-//! `YUKI_EXPECT_HOVER` (an `x,y` list separated by `;`). A compositor that
+//! `MALAYSIA_EXPECT_HOVER` (an `x,y` list separated by `;`). A compositor that
 //! hands Smithay the surface-local point where it expects the surface origin
 //! makes every client read the window origin instead, which fails here.
 //!
@@ -63,9 +63,9 @@ const THRESHOLD_MOTIONS: usize = 3;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
-    let expect = parse_points("YUKI_EXPECT_HOVER");
+    let expect = parse_points("MALAYSIA_EXPECT_HOVER");
     if expect.is_empty() {
-        eprintln!("hover_client: FAIL YUKI_EXPECT_HOVER is not set");
+        eprintln!("hover_client: FAIL MALAYSIA_EXPECT_HOVER is not set");
         std::process::exit(1);
     }
     let (mut event_loop, globals, qh) = sctk_probe::init_connection::<App>();

@@ -8,7 +8,7 @@ set -eu
 
 cd "$(dirname "$0")/.."
 
-if [ "${YUKI_DEV_SHELL:-}" != "1" ]; then
+if [ "${MALAYSIA_DEV_SHELL:-}" != "1" ]; then
     printf 'scripts/demo.sh: not inside the dev shell; run nix develop first (see ADR 0007)\n' >&2
     exit 7
 fi

@@ -14,7 +14,7 @@
 //! Both clients are this same binary: the parent spawns it with
 //! `ACTIVATION_CHILD=1` and talks to it over stdin/stdout.
 //!
-//! Run against a compositor started with `YUKI_TEST_INPUT=1`, or
+//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`, or
 //! `./dev.sh activation`.
 
 use std::{

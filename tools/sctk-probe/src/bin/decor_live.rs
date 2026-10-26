@@ -1,7 +1,7 @@
 //! Maps a server-side-decorated toplevel that renders its content, holding it
 //! open so the composed output can be captured (Bloque 7.2, criterion 4).
 //!
-//! Yuki reserves the titlebar band for a server-decorated window, so the
+//! MalaysiaDreams reserves the titlebar band for a server-decorated window, so the
 //! client's content is inset by the titlebar thickness and a band shows above
 //! it in the capture; a client-decorated window fills its whole geometry. The
 //! buffer is created and attached on the first configure (a buffer attached

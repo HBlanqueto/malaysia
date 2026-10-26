@@ -1,8 +1,8 @@
-# NixOS integration for Yuki. The flake exposes this as `nixosModules.default`.
+# NixOS integration for MalaysiaDreams. The flake exposes this as `nixosModules.default`.
 #
 # The module installs the compositor, registers its Wayland session with the
 # display manager, creates the lock's PAM stack, and starts one shell process
-# per component in `yuki-session.target` (ADR 0023). The compositor imports
+# per component in `malaysia-session.target` (ADR 0023). The compositor imports
 # `WAYLAND_DISPLAY` into the user manager and starts that target itself.
 { self }:
 {
@@ -12,17 +12,17 @@
   ...
 }:
 let
-  cfg = config.programs.yuki;
+  cfg = config.programs.malaysia;
 in
 {
-  options.programs.yuki = {
-    enable = lib.mkEnableOption "the Yuki Wayland compositor";
+  options.programs.malaysia = {
+    enable = lib.mkEnableOption "the MalaysiaDreams Wayland compositor";
 
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       defaultText = lib.literalExpression "self.packages.\${pkgs.stdenv.hostPlatform.system}.default";
-      description = "The Yuki package to install.";
+      description = "The Malaysia package to install.";
     };
 
     shellComponents = lib.mkOption {
@@ -32,7 +32,7 @@ in
         "menubar"
         "dock"
       ];
-      description = "The yuki-shell components started in yuki-session.target.";
+      description = "The malaysia-shell components started in malaysia-session.target.";
     };
   };
 
@@ -46,41 +46,41 @@ in
       pkgs.inter
     ];
 
-    # The session file in the package makes Yuki selectable in GDM, SDDM and
+    # The session file in the package makes MalaysiaDreams selectable in GDM, SDDM and
     # greetd.
     services.displayManager.sessionPackages = [ cfg.package ];
 
     # Both the compositor and the shell render through GBM/EGL.
     hardware.graphics.enable = lib.mkDefault true;
 
-    # ADR 0031: Yuki's backend serves Settings; GTK keeps FileChooser, Print
-    # and Notification. `UseIn=Yuki` ties the backend to this session.
+    # ADR 0031: MalaysiaDreams's backend serves Settings; GTK keeps FileChooser, Print
+    # and Notification. `UseIn=Malaysia` ties the backend to this session.
     xdg.portal = {
       enable = lib.mkDefault true;
       extraPortals = lib.mkAfter [
         cfg.package
         pkgs.xdg-desktop-portal-gtk
       ];
-      config.yuki = lib.mkDefault {
+      config.malaysia = lib.mkDefault {
         default = [ "gtk" ];
-        "org.freedesktop.impl.portal.Settings" = [ "yuki" ];
+        "org.freedesktop.impl.portal.Settings" = [ "malaysia" ];
       };
     };
 
     # The lock prefers this stack and falls back to `login` when it is absent.
-    security.pam.services.yuki-lock.text = ''
+    security.pam.services.malaysia-lock.text = ''
       auth include login
       account include login
       session include login
     '';
 
-    systemd.user.targets.yuki-session = {
-      description = "Yuki shell session";
-      wants = map (component: "yuki-shell@${component}.service") cfg.shellComponents;
+    systemd.user.targets.malaysia-session = {
+      description = "MalaysiaDreams shell session";
+      wants = map (component: "malaysia-shell@${component}.service") cfg.shellComponents;
     };
 
-    systemd.user.units."yuki-shell@.service".text =
+    systemd.user.units."malaysia-shell@.service".text =
       builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
-        (builtins.readFile "${../share/systemd/user}/yuki-shell@.service");
+        (builtins.readFile "${../share/systemd/user}/malaysia-shell@.service");
   };
 }

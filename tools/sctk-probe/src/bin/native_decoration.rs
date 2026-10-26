@@ -2,7 +2,7 @@
 //!
 //! Each scenario talks to a compositor started with
 //! `window.decorations = "force_server"` and checks the configure width:
-//! native app ids must never get Yuki's titlebar, while a foreign app still
+//! native app ids must never get MalaysiaDreams's titlebar, while a foreign app still
 //! does.
 //!
 //! - `a`: a native app asking for server-side.
@@ -43,12 +43,12 @@ use smithay_client_toolkit::{
 
 /// The native app-id prefix from `vow_design`.
 const NATIVE_PREFIX: &str = "io.github.hblanqueto.malaysia.";
-/// The titlebar inset Yuki reserves for foreign SSD windows.
+/// The titlebar inset MalaysiaDreams reserves for foreign SSD windows.
 const TITLEBAR: i32 = 32;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
-    let scenario = std::env::var("YUKI_NATIVE_SCENARIO").unwrap_or_default();
+    let scenario = std::env::var("MALAYSIA_NATIVE_SCENARIO").unwrap_or_default();
     let (mut event_loop, globals, qh) = sctk_probe::init_connection::<App>();
 
     let compositor = CompositorState::bind(&globals, &qh).expect("no wl_compositor");

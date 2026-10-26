@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Medida de resize interactivo con YUKI_TEST_INPUT.
+# Medida de resize interactivo con MALAYSIA_TEST_INPUT.
 #
 # Arrastra la esquina inferior derecha de window_csd y de foot desde 640x420
 # hasta 1100x700 en 60 pasos, y reporta configures enviados, commits recibidos
@@ -8,7 +8,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [ "${YUKI_DEV_SHELL:-}" != "1" ]; then
+if [ "${MALAYSIA_DEV_SHELL:-}" != "1" ]; then
     echo "scripts/resize-measure.sh: not inside the dev shell; run nix develop first" >&2
     exit 7
 fi
@@ -17,17 +17,17 @@ require() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1;
 require cargo
 require foot
 
-runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/yuki-measure"
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/malaysia-measure"
 mkdir -p "$runtime_dir"
-pidfile="$runtime_dir/yuki.pid"
-logfile="$runtime_dir/yuki.log"
+pidfile="$runtime_dir/malaysia-compositor.pid"
+logfile="$runtime_dir/malaysia.log"
 
-start_yuki() {
+start_malaysia() {
     local input="${1:-}"
     : >"$logfile"
     setsid env \
-        ${input:+YUKI_TEST_INPUT="$input"} \
-        "$repo_root/target/debug/yuki" --log-level=debug >>"$logfile" 2>&1 &
+        ${input:+MALAYSIA_TEST_INPUT="$input"} \
+        "$repo_root/target/debug/malaysia-compositor" --log-level=debug >>"$logfile" 2>&1 &
     echo $! >"$pidfile"
     local waited=0
     while [ "$waited" -lt 100 ]; do
@@ -37,14 +37,14 @@ start_yuki() {
         waited=$((waited + 1))
     done
     if [ -z "${socket:-}" ]; then
-        echo "yuki never opened a socket" >&2
+        echo "malaysia-compositor never opened a socket" >&2
         cat "$logfile" >&2
         exit 1
     fi
     echo "$socket"
 }
 
-stop_yuki() {
+stop_malaysia() {
     if [ -f "$pidfile" ]; then
         pid=$(cat "$pidfile" 2>/dev/null || true)
         if [ -n "${pid:-}" ]; then
@@ -88,8 +88,8 @@ measure_client() {
 
     echo "--- $name ---"
 
-    stop_yuki
-    socket=$(start_yuki "")
+    stop_malaysia
+    socket=$(start_malaysia "")
 
     eval "$launch"
     client_pid=$!
@@ -118,11 +118,11 @@ measure_client() {
     input="$input;release;wait:500"
 
     kill "$client_pid" 2>/dev/null || true
-    stop_yuki
+    stop_malaysia
 
     # Second run with the scripted drag.
     : >"$logfile"
-    socket=$(start_yuki "$input")
+    socket=$(start_malaysia "$input")
     eval "$launch"
     client_pid=$!
 
@@ -130,7 +130,7 @@ measure_client() {
     sleep 1.5
 
     kill "$client_pid" 2>/dev/null || true
-    stop_yuki
+    stop_malaysia
 
     configures=$(grep -c 'send_configure' "$logfile" || true)
     commits=$(grep -c 'commit resized window' "$logfile" || true)
@@ -173,10 +173,10 @@ print(f"  frame time avg/max: {avg:.1f} / {mx:.1f} us")
 PY
 }
 
-cargo build -p yuki -p celestial-kit --examples || exit 1
+cargo build -p malaysia-compositor -p barrier-kit --examples || exit 1
 
 cd "$repo_root"
-measure_client "window_csd" "org.yuki.demo.csd" \
+measure_client "window_csd" "org.malaysia.demo.csd" \
     'env -u DISPLAY WAYLAND_DISPLAY="$socket" XDG_SESSION_TYPE=wayland "$repo_root/target/debug/examples/window_csd" &'
 measure_client "foot" "foot" \
     'env -u DISPLAY WAYLAND_DISPLAY="$socket" XDG_SESSION_TYPE=wayland foot -T foot &'

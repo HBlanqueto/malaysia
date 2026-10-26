@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifies Yuki debug captures against expected values/regions (Bloque 7.3, 3c).
+"""Verifies MalaysiaDreams debug captures against expected values/regions (Bloque 7.3, 3c).
 
 Every check compares pixels to an expected colour in an expected region — never
 "there are some non-black pixels". A capture that does not decode, or whose
@@ -23,7 +23,7 @@ Criteria:
 import subprocess
 import sys
 
-# The default wallpaper (yuki_design::WALLPAPER). A session whose
+# The default wallpaper (vow_design::WALLPAPER). A session whose
 # wallpaper.domain selects another image will not match.
 WALLPAPER = (65, 105, 170)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Validate a Yuki debug capture against an expected colour.
+# Validate a MalaysiaDreams debug capture against an expected colour.
 #
 # Usage:
 #   capture-validate.sh <compositor-pid> [expected-rgb]
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 EXPECTED="${2:-65 105 170}"
-RUN_DIR="${XDG_RUNTIME_DIR:-/tmp}/yuki"
+RUN_DIR="${XDG_RUNTIME_DIR:-/tmp}/malaysia"
 
 if [ -f "$1" ]; then
   CAP="$1"

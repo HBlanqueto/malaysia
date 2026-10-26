@@ -1,5 +1,5 @@
 {
-  description = "Yuki, a fixed Wayland compositor built on Smithay.";
+  description = "MalaysiaDreams, a fixed Wayland compositor built on Smithay.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -48,11 +48,11 @@
         };
         skia = pkgs.callPackage ./nix/skia.nix { };
         # Skia only enters the build when the workspace actually pulls
-        # freya-skia-bindings (CelestialKit on Freya). Until then the package
+        # freya-skia-bindings (BarrierKit on Freya). Until then the package
         # and the dev shell must not advertise a prebuild that nothing uses.
         hasFreyaSkia = lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         commonArgs = {
-          pname = "yuki";
+          pname = "malaysia";
           version = "0.1.0";
           inherit src;
           strictDeps = true;
@@ -66,7 +66,7 @@
           # The per-crate build script refuses to compile without this marker
           # (ADR 0007). The package build is a sanctioned, hermetic build path.
           env = {
-            YUKI_DEV_SHELL = "1";
+            MALAYSIA_DEV_SHELL = "1";
           }
           // lib.optionalAttrs hasFreyaSkia {
             SKIA_BINARIES_URL = "file://${skia}/skia-binaries.tar.gz";
@@ -106,24 +106,24 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-        yuki = craneLib.buildPackage (commonArgs // {
+        malaysia = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
           postInstall = ''
-            install -Dm644 share/wayland-sessions/yuki.desktop \
-              $out/share/wayland-sessions/yuki.desktop
-            # The session file names the wrapped binary, not whatever `yuki`
+            install -Dm644 share/wayland-sessions/malaysia.desktop \
+              $out/share/wayland-sessions/malaysia.desktop
+            # The session file names the wrapped binary, not whatever `malaysia-compositor`
             # PATH happens to resolve to.
-            sed -i "s|@out@|$out|g" $out/share/wayland-sessions/yuki.desktop
+            sed -i "s|@out@|$out|g" $out/share/wayland-sessions/malaysia.desktop
 
             # The binary must start outside `nix develop`. The RUNPATH covers
             # the shared libraries, but libglvnd/Mesa also read these three
             # environment variables, so bake the flake's Mesa into a wrapper.
-            for program in yuki yuki-shell yuki-settings; do
+            for program in malaysia-compositor malaysia-shell malaysia-settings; do
               wrapProgram "$out/bin/$program" \
-                --run 'export YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS="''${YUKI_ORIG___EGL_VENDOR_LIBRARY_DIRS-''${__EGL_VENDOR_LIBRARY_DIRS-}}"' \
-                --run 'export YUKI_ORIG_LIBGL_DRIVERS_PATH="''${YUKI_ORIG_LIBGL_DRIVERS_PATH-''${LIBGL_DRIVERS_PATH-}}"' \
-                --run 'export YUKI_ORIG_GBM_BACKENDS_PATH="''${YUKI_ORIG_GBM_BACKENDS_PATH-''${GBM_BACKENDS_PATH-}}"' \
-                --run 'export YUKI_ORIG_LD_LIBRARY_PATH="''${YUKI_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
+                --run 'export MALAYSIA_ORIG___EGL_VENDOR_LIBRARY_DIRS="''${MALAYSIA_ORIG___EGL_VENDOR_LIBRARY_DIRS-''${__EGL_VENDOR_LIBRARY_DIRS-}}"' \
+                --run 'export MALAYSIA_ORIG_LIBGL_DRIVERS_PATH="''${MALAYSIA_ORIG_LIBGL_DRIVERS_PATH-''${LIBGL_DRIVERS_PATH-}}"' \
+                --run 'export MALAYSIA_ORIG_GBM_BACKENDS_PATH="''${MALAYSIA_ORIG_GBM_BACKENDS_PATH-''${GBM_BACKENDS_PATH-}}"' \
+                --run 'export MALAYSIA_ORIG_LD_LIBRARY_PATH="''${MALAYSIA_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
                 --set __EGL_VENDOR_LIBRARY_DIRS "${pkgs.mesa}/share/glvnd/egl_vendor.d" \
                 --set LIBGL_DRIVERS_PATH "${pkgs.mesa}/lib/dri" \
                 --set GBM_BACKENDS_PATH "${pkgs.mesa}/lib/gbm" \
@@ -131,36 +131,36 @@
             done
             # The portal backend (ADR 0031), its portal registration and its
             # D-Bus activation file. `xdg-desktop-portal` starts it on demand.
-            install -Dm644 share/xdg-desktop-portal/portals/yuki.portal \
-              $out/share/xdg-desktop-portal/portals/yuki.portal
+            install -Dm644 share/xdg-desktop-portal/portals/malaysia.portal \
+              $out/share/xdg-desktop-portal/portals/malaysia.portal
             mkdir -p $out/share/dbus-1/services
             sed "s|@out@|$out|g" \
-              share/dbus-1/services/org.freedesktop.impl.portal.desktop.yuki.service \
-              > $out/share/dbus-1/services/org.freedesktop.impl.portal.desktop.yuki.service
+              share/dbus-1/services/org.freedesktop.impl.portal.desktop.malaysia.service \
+              > $out/share/dbus-1/services/org.freedesktop.impl.portal.desktop.malaysia.service
 
             # Ship the system wallpapers, like GNOME installs its own to
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
             # The Settings app launcher entry.
-            install -Dm644 share/applications/io.github.hblanqueto.yuki.settings.desktop \
-              $out/share/applications/io.github.hblanqueto.yuki.settings.desktop
+            install -Dm644 share/applications/io.github.hblanqueto.malaysia.settings.desktop \
+              $out/share/applications/io.github.hblanqueto.malaysia.settings.desktop
             # Ship the systemd user units that supervise the shell components
             # (ADR 0023), with the package's binary path substituted in.
             mkdir -p $out/lib/systemd/user
-            for unit in yuki-shell@.service yuki-session.target; do
+            for unit in malaysia-shell@.service malaysia-session.target; do
               sed "s|@out@|$out|g" "share/systemd/user/$unit" \
                 > "$out/lib/systemd/user/$unit"
             done
           '';
           passthru = {
-            providedSessions = [ "yuki" ];
+            providedSessions = [ "malaysia" ];
             skiaBinaries = skia;
           };
         });
       in {
-        default = yuki;
-        "yuki-shell" = yuki;
+        default = malaysia;
+        "malaysia-shell" = malaysia;
         skia-binaries = skia;
       });
 
@@ -174,21 +174,21 @@
       in {
         # The vendored Neptunia outputs must match default.nix.
         neptunia-generated = let
-          neptunia = import ./crates/yuki-design/neptunia;
+          neptunia = import ./crates/vow-design/neptunia;
         in pkgs.runCommand "check-neptunia-generated" {
           nativeBuildInputs = with pkgs; [ diffutils ];
         } ''
           cd ${checkSrc}
-          diff -u crates/yuki-design/neptunia/generated/neptunia.slint \
+          diff -u crates/vow-design/neptunia/generated/neptunia.slint \
             ${pkgs.writeText "neptunia.slint" neptunia.slint}
-          diff -u crates/yuki-design/neptunia/generated/neptunia.css \
+          diff -u crates/vow-design/neptunia/generated/neptunia.css \
             ${pkgs.writeText "neptunia.css" neptunia.css}
-          diff -u crates/yuki-design/neptunia/generated/Neptunia.qml \
+          diff -u crates/vow-design/neptunia/generated/Neptunia.qml \
             ${pkgs.writeText "Neptunia.qml" neptunia.qml}
           touch $out
         '';
 
-        # No colour or UI measurement may live outside yuki-design.
+        # No colour or UI measurement may live outside vow-design.
         design-tokens = pkgs.runCommand "check-design-tokens" {
           nativeBuildInputs = with pkgs; [ bash coreutils findutils gawk gnugrep ];
         } ''
@@ -199,7 +199,7 @@
       });
 
       nixosModules = {
-        default = import ./nix/yuki.nix { inherit self; };
+        default = import ./nix/malaysia.nix { inherit self; };
       };
 
       devShells = forAllSystems (system: let
@@ -209,8 +209,8 @@
         hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         # weston with its simple test clients enabled. nixpkgs builds weston
         # with `-Dsimple-clients=`, so `weston-simple-egl`, `weston-simple-shm`
-        # and `weston-simple-dmabuf-feedback` do not exist; Bloque 7 drives
-        # Yuki's dmabuf/EGL path with them, so this override turns them on.
+          # and `weston-simple-dmabuf-feedback` do not exist; Bloque 7 drives
+          # MalaysiaDreams's dmabuf/EGL path with them, so this override turns them on.
         weston = pkgs.weston.overrideAttrs (final: prev: {
           mesonFlags =
             builtins.filter
@@ -226,7 +226,7 @@
         # Fontconfig only sees a dev shell's fonts when FONTCONFIG_FILE is
         # explicit. Include the host config so the nested session keeps its
         # system fonts, then add Geist and the shortcut symbol fallback.
-        fontsConf = pkgs.writeText "yuki-fonts.conf" ''
+        fontsConf = pkgs.writeText "malaysia-fonts.conf" ''
           <?xml version="1.0"?>
           <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
           <fontconfig>
@@ -236,7 +236,7 @@
           </fontconfig>
         '';
         # Optional apps for `./dev.sh lab` (manual testing). They are not
-        # required to build or run Yuki; the lab script skips any that are
+        # required to build or run MalaysiaDreams; the lab script skips any that are
         # missing. Keep this list short so it does not bloat devShell entry.
         labApps = with pkgs; [
           dbus
@@ -258,9 +258,9 @@
             # acceptance uses the host's wezterm, which does not.
             foot
             wayland-utils
-            # Test tools for the GPU-acceleration blocks (Bloque 7): the weston
-            # simple clients drive dmabuf/EGL against Yuki, and amdgpu_top
-            # watches VRAM on the Vega iGPU. They are shell-only; they are never
+          # Test tools for the GPU-acceleration blocks (Bloque 7): the weston
+          # simple clients drive dmabuf/EGL against MalaysiaDreams, and amdgpu_top
+          # watches VRAM on the Vega iGPU. They are shell-only; they are never
             # installed on the system.
             weston
             amdgpu_top
@@ -294,7 +294,7 @@
           # Explicit marker so dev.sh can refuse to build outside this shell,
           # where the linker flag above would be missing and the binary would
           # be linked differently (ADR 0007).
-          YUKI_DEV_SHELL = "1";
+          MALAYSIA_DEV_SHELL = "1";
 
           # Make the runtime libraries (wayland, xkbcommon, mesa/EGL, ...)
           # findable by the built binary when run from the dev shell.

@@ -1,6 +1,6 @@
 //! Asserts that an active pointer lock reaches the client.
 //!
-//! With `YUKI_TEST_INPUT=1` the compositor hovers the pointer over the first
+//! With `MALAYSIA_TEST_INPUT=1` the compositor hovers the pointer over the first
 //! mapped window and presses, so this client gets a `wl_pointer.enter`. It then
 //! asks `zwp_pointer_constraints_v1` to lock the pointer to its surface
 //! (`Persistent`, no region) and waits for the `locked` event, which the
@@ -12,7 +12,7 @@
 //! would send `locked` before this client asked, which this client does not
 //! send a lock for.
 //!
-//! Run against a compositor started with `YUKI_TEST_INPUT=1`, or
+//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`, or
 //! `./dev.sh pointer-lock` once the helper exists.
 
 use std::time::Duration;

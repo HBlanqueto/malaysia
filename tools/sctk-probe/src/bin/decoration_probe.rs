@@ -1,20 +1,20 @@
 //! Phase 6 acceptance harness: real applications under Malaysia.
 //!
 //! For each application in the table below it launches the application inside a
-//! fresh Yuki, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
+//! fresh MalaysiaDreams, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
 //! and asserts what the client negotiated:
 //!
 //! - which decoration protocol it bound (xdg-decoration, the KDE one, or none);
 //! - the mode Malaysia configured (server-side or client-side);
 //! - whether the client surface was inset by the titlebar: the xdg configure
-//!   width drops by the titlebar thickness exactly when Yuki reserves chrome.
+//!   width drops by the titlebar thickness exactly when MalaysiaDreams reserves chrome.
 //!
 //! The expectations are derived from the toolkits' sources (ADR 0019): Qt
 //! defers to the compositor, GTK3/GTK4 ask through the KDE protocol and keep
 //! their own chrome when they have a headerbar, libadwaita windows always have
 //! one, and a client that never negotiates is left alone.
 //!
-//! Applications are located through `YUKI_APP_<NAME>` environment variables
+//! Applications are located through `MALAYSIA_APP_<NAME>` environment variables
 //! (see the crate README); a name with no binary is reported UNVERIFIED rather
 //! than skipped silently. Whether two titlebars are *visible* is not machine
 //! checkable here: it needs a pixel comparison against the decoration region,
@@ -34,7 +34,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long each application gets to start, negotiate and be killed.
 const APP_TIMEOUT: Duration = Duration::from_secs(6);
-/// The titlebar thickness Yuki reserves, in logical pixels
+/// The titlebar thickness MalaysiaDreams reserves, in logical pixels
 /// (`vow_design::TITLEBAR.thickness`).
 const TITLEBAR: i32 = 32;
 
@@ -62,7 +62,7 @@ enum Protocol {
     None,
 }
 
-/// The mode Yuki is expected to end up configuring.
+/// The mode MalaysiaDreams is expected to end up configuring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Client,
@@ -77,7 +77,7 @@ struct Expectation {
     /// The final decoration mode, or `None` when no mode is negotiated.
     mode: Option<Mode>,
     /// How much the xdg configure width should shrink below its maximum: the
-    /// titlebar thickness when Yuki reserves chrome, zero when it does not.
+    /// titlebar thickness when MalaysiaDreams reserves chrome, zero when it does not.
     inset: i32,
 }
 
@@ -85,7 +85,7 @@ struct Expectation {
 struct Case {
     /// The name in the report.
     name: &'static str,
-    /// The `YUKI_APP_<NAME>` variable that points at the binary.
+    /// The `MALAYSIA_APP_<NAME>` variable that points at the binary.
     variable: &'static str,
     /// A command to fall back to when the variable is unset.
     fallback: &'static str,
@@ -277,13 +277,13 @@ fn nth_integer(body: &str, n: usize) -> Option<i32> {
         .nth(n)
 }
 
-/// Runs every case against one Yuki.
+/// Runs every case against one MalaysiaDreams.
 fn run() -> Result<(), String> {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("YUKI_BIN")
+    let binary = std::env::var_os("MALAYSIA_BIN")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo.join("target/debug/malaysia-compositor"));
     if !binary.is_file() {
@@ -317,7 +317,7 @@ fn run() -> Result<(), String> {
         // Apps such as Nautilus are single-instance over the session bus: a
         // plain launch would activate the instance already running in the host
         // GNOME session instead of creating a window here. A private bus makes
-        // the app a new process that connects to this Yuki.
+        // the app a new process that connects to this MalaysiaDreams.
         let mut command = Command::new("dbus-run-session");
         command
             .arg("--")
@@ -328,7 +328,7 @@ fn run() -> Result<(), String> {
             .env("WAYLAND_DEBUG", "1")
             .env("GDK_BACKEND", "wayland")
             .env("QT_QPA_PLATFORM", "wayland")
-            // Clients under test must reach this Yuki, not the host session.
+            // Clients under test must reach this MalaysiaDreams, not the host session.
             .env_remove("DISPLAY")
             .stdin(Stdio::null());
         for (key, value) in &case.env {
@@ -409,7 +409,7 @@ fn run() -> Result<(), String> {
 /// be reconfigured with the new mode and the new usable size, leaving no stale
 /// titlebar (ADR 0019, rule 4).
 fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> {
-    let client = std::env::var_os("YUKI_DECORATION_CLIENT")
+    let client = std::env::var_os("MALAYSIA_DECORATION_CLIENT")
         .map(PathBuf::from)
         .or_else(|| {
             std::env::current_exe()
@@ -465,7 +465,7 @@ fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> 
 /// `force_server`, so the only reason a native app can lack a titlebar is the
 /// app-id prefix.
 fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, String> {
-    let client = std::env::var_os("YUKI_NATIVE_DECORATION")
+    let client = std::env::var_os("MALAYSIA_NATIVE_DECORATION")
         .map(PathBuf::from)
         .or_else(|| {
             std::env::current_exe()
@@ -477,7 +477,7 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
             "native_decoration not found next to the probe; run `cargo build -p sctk-probe` first"
                 .to_string()
         })?;
-    let binary = std::env::var_os("YUKI_BIN")
+    let binary = std::env::var_os("MALAYSIA_BIN")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("malaysia-compositor"));
     if !binary.is_file() {
@@ -505,7 +505,7 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
             Command::new(&binary)
                 .arg("--log-level=info")
                 .env("XDG_RUNTIME_DIR", runtime.path())
-                .env("YUKI_CONFIG_DIR", &config),
+                .env("MALAYSIA_CONFIG_DIR", &config),
             host_display,
         )?;
         let compositor_log = compositor.capture()?;
@@ -516,7 +516,7 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
                 Command::new(&client)
                     .env("XDG_RUNTIME_DIR", runtime.path())
                     .env("WAYLAND_DISPLAY", &socket)
-                    .env("YUKI_NATIVE_SCENARIO", scenario)
+                    .env("MALAYSIA_NATIVE_SCENARIO", scenario)
                     .stdin(Stdio::null()),
                 None,
             )?;
@@ -622,14 +622,14 @@ fn cases(runtime: &Path) -> Vec<Case> {
     );
     let mut qt6 = vec![(
         "QML_IMPORT_PATH".to_string(),
-        std::env::var("YUKI_APP_QT6_QML_IMPORT_PATH").unwrap_or_default(),
+        std::env::var("MALAYSIA_APP_QT6_QML_IMPORT_PATH").unwrap_or_default(),
     )];
     qt6.retain(|(_, value)| !value.is_empty());
 
     vec![
         Case {
             name: "nautilus",
-            variable: "YUKI_APP_NAUTILUS",
+            variable: "MALAYSIA_APP_NAUTILUS",
             fallback: "nautilus",
             args: vec!["--no-desktop".to_string()],
             env: Vec::new(),
@@ -646,7 +646,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-demo",
-            variable: "YUKI_APP_GTK3_DEMO",
+            variable: "MALAYSIA_APP_GTK3_DEMO",
             fallback: "gtk3-demo",
             args: Vec::new(),
             env: Vec::new(),
@@ -659,7 +659,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-widget-factory",
-            variable: "YUKI_APP_GTK3_WIDGET_FACTORY",
+            variable: "MALAYSIA_APP_GTK3_WIDGET_FACTORY",
             fallback: "gtk3-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
@@ -672,12 +672,12 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk3-plain",
-            variable: "YUKI_APP_GTK3_PLAIN",
+            variable: "MALAYSIA_APP_GTK3_PLAIN",
             fallback: "gtk3_plain",
             args: Vec::new(),
             env: Vec::new(),
             // A plain GtkWindow with no headerbar: GTK3 requests server-side
-            // through the KDE protocol and Yuki insets the surface.
+            // through the KDE protocol and MalaysiaDreams insets the surface.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Server),
@@ -686,7 +686,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-demo",
-            variable: "YUKI_APP_GTK4_DEMO",
+            variable: "MALAYSIA_APP_GTK4_DEMO",
             fallback: "gtk4-demo",
             args: Vec::new(),
             env: Vec::new(),
@@ -700,7 +700,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-widget-factory",
-            variable: "YUKI_APP_GTK4_WIDGET_FACTORY",
+            variable: "MALAYSIA_APP_GTK4_WIDGET_FACTORY",
             fallback: "gtk4-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
@@ -713,7 +713,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "gtk4-plain",
-            variable: "YUKI_APP_GTK4_PLAIN",
+            variable: "MALAYSIA_APP_GTK4_PLAIN",
             fallback: "gtk4_plain",
             args: Vec::new(),
             env: Vec::new(),
@@ -727,12 +727,12 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "qt6",
-            variable: "YUKI_APP_QT6",
+            variable: "MALAYSIA_APP_QT6",
             fallback: "qml",
             args: vec![qml.to_string_lossy().into_owned()],
             env: qt6,
             // Qt creates the xdg-decoration object, unset_mode, and defers to
-            // the compositor: Yuki chooses server-side.
+            // the compositor: MalaysiaDreams chooses server-side.
             expectation: Expectation {
                 protocol: Protocol::Xdg,
                 mode: Some(Mode::Server),
@@ -741,7 +741,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "qt5",
-            variable: "YUKI_APP_QT5",
+            variable: "MALAYSIA_APP_QT5",
             fallback: "qmlscene",
             args: vec![qml.to_string_lossy().into_owned()],
             env: Vec::new(),
@@ -754,7 +754,7 @@ fn cases(runtime: &Path) -> Vec<Case> {
         },
         Case {
             name: "onlyoffice",
-            variable: "YUKI_APP_ONLYOFFICE",
+            variable: "MALAYSIA_APP_ONLYOFFICE",
             fallback: "onlyoffice-desktopeditors",
             args: Vec::new(),
             env: Vec::new(),

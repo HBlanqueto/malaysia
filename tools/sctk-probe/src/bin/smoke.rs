@@ -27,8 +27,8 @@
 //! cargo run -p sctk-probe --bin smoke
 //! ```
 //!
-//! Environment overrides: `YUKI_BIN` (path to the compositor binary) and
-//! `YUKI_SMOKE_CLIENT` (the client to drive; defaults to `foot`).
+//! Environment overrides: `MALAYSIA_BIN` (path to the compositor binary) and
+//! `MALAYSIA_SMOKE_CLIENT` (the client to drive; defaults to `foot`).
 
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
@@ -71,7 +71,7 @@ fn run() -> Result<(), String> {
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| "cannot locate the repository root from the probe manifest".to_string())?;
-    let binary = std::env::var_os("YUKI_BIN")
+    let binary = std::env::var_os("MALAYSIA_BIN")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo.join("target/debug/malaysia-compositor"));
     if !binary.is_file() {
@@ -80,7 +80,7 @@ fn run() -> Result<(), String> {
             binary.display()
         ));
     }
-    let client = std::env::var("YUKI_SMOKE_CLIENT").unwrap_or_else(|_| "foot".to_string());
+    let client = std::env::var("MALAYSIA_SMOKE_CLIENT").unwrap_or_else(|_| "foot".to_string());
 
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
