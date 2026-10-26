@@ -4,11 +4,19 @@
 //! resolved Neptunia palette, so the compositor, the shell and the apps keep
 //! sharing one source.
 
+use std::sync::{Mutex, OnceLock};
+
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::Color;
 use vow_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
 use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
+
+static RESOLVED: OnceLock<Mutex<Resolved>> = OnceLock::new();
+
+fn load_resolved() -> Resolved {
+    resolve(&load_appearance(), load_dominant())
+}
 
 fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
@@ -55,8 +63,27 @@ fn sheet(background: Rgba, surface: Rgba, text: Rgba, accent: Rgba, border: Rgba
 }
 
 /// Resolves the current appearance and its shell palette.
+///
+/// The first call loads and caches the value; later calls return the cached
+/// value until [`refresh`] updates it.
 pub fn resolved() -> Resolved {
-    resolve(&load_appearance(), load_dominant())
+    *RESOLVED
+        .get_or_init(|| Mutex::new(load_resolved()))
+        .lock()
+        .expect("theme cache is not poisoned")
+}
+
+/// Reloads the appearance from disk and updates the cache. Returns `true` when
+/// the resolved values changed.
+pub fn refresh() -> bool {
+    let resolved = load_resolved();
+    let cache = RESOLVED.get_or_init(|| Mutex::new(resolved));
+    let mut guard = cache.lock().expect("theme cache is not poisoned");
+    let changed = *guard != resolved;
+    if changed {
+        *guard = resolved;
+    }
+    changed
 }
 
 /// The shell palette for the current appearance (respects the desktop tint).

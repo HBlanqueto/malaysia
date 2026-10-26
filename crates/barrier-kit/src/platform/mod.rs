@@ -17,6 +17,7 @@ use std::{
     borrow::Cow,
     cell::{Cell, RefCell},
     ffi::c_void,
+    os::fd::AsFd,
     pin::pin,
     rc::Rc,
     sync::Arc,
@@ -51,7 +52,8 @@ use sctk::{
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::{
-            self, EventLoop, LoopHandle, LoopSignal,
+            self, EventLoop, Interest, LoopHandle, LoopSignal, Mode, PostAction,
+            generic::Generic,
             ping::{Ping, PingSource},
             timer::{TimeoutAction, Timer},
         },
@@ -121,6 +123,7 @@ use wayland_protocols_plasma::appmenu::client::{
     org_kde_kwin_appmenu::{self, OrgKdeKwinAppmenu},
     org_kde_kwin_appmenu_manager::{self, OrgKdeKwinAppmenuManager},
 };
+use vow_appearance::watch::AppearanceWatch;
 
 pub use infinity::{
     InfinityWindowManagerV1, Layout as InfinityLayout, PairLayout as InfinityPairLayout,
@@ -1582,6 +1585,7 @@ struct Shell {
     window_contexts: Vec<WindowContext>,
     decoration_manager: bool,
     decoration_warned: bool,
+    appearance_watch: Option<AppearanceWatch>,
 }
 
 #[derive(Clone)]
@@ -1932,6 +1936,36 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
             shell.redraw_all();
         })
         .map_err(|_| RunError::Egl("inserting the wake ping source"))?;
+
+    // Watch appearance.domain and wallpaper.state; when they change, refresh
+    // the cached theme and request a redraw so every surface picks it up.
+    let watch = AppearanceWatch::new().map_err(|error| {
+        RunError::Io(std::io::Error::other(format!(
+            "creating the appearance watcher: {error}"
+        )))
+    })?;
+    let watch_fd = watch
+        .as_fd()
+        .try_clone_to_owned()
+        .map_err(RunError::Io)?;
+    shell.appearance_watch = Some(watch);
+    event_loop
+        .handle()
+        .insert_source(
+            Generic::new(watch_fd, Interest::READ, Mode::Level),
+            |_, _, shell: &mut Shell| {
+                if let Some(watch) = shell.appearance_watch.as_ref()
+                    && let Ok(events) = watch.drain()
+                    && !events.is_empty()
+                    && crate::theme::refresh()
+                {
+                    shell.request_redraw_all = true;
+                    shell.ping.ping();
+                }
+                Ok(PostAction::Continue)
+            },
+        )
+        .map_err(|_| RunError::Egl("inserting the appearance watch source"))?;
     Ok(())
 }
 
@@ -2137,6 +2171,7 @@ impl Shell {
                     .any(|global| global.interface == "zxdg_decoration_manager_v1")
             }),
             decoration_warned: false,
+            appearance_watch: None,
         };
         Ok((conn, event_queue, qh, shell))
     }

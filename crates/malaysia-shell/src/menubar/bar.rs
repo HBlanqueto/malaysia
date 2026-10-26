@@ -18,7 +18,7 @@ use barrier_kit::platform::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_appearance::{Resolved, config_dir, data_dir};
+use vow_appearance::{config_dir, data_dir};
 use vow_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
 
 use crate::desktop::DesktopEntry;
@@ -43,7 +43,6 @@ pub struct RemoteMenu {
 pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
-    pub appearance: State<Option<Resolved>>,
     pub app_menus: State<bool>,
     pub window_store: PathBuf,
     pub menubar_store: PathBuf,
@@ -65,13 +64,10 @@ impl App for BarApp {
         use_hook(move || schedule_active_poll(timers, poll_store, active_app));
 
         let timers = Timers::get();
-        let appearance = self.appearance;
         let app_menus = self.app_menus;
         let dbus = self.dbus.clone();
         let menubar_store = self.menubar_store.clone();
-        use_hook(move || {
-            schedule_appearance_poll(timers, appearance, app_menus, dbus, menubar_store)
-        });
+        use_hook(move || schedule_menubar_poll(timers, app_menus, dbus, menubar_store));
 
         let generation = use_hook(|| Rc::new(Cell::new(0u64)));
         let open_started = use_hook(|| Rc::new(Cell::new(None::<std::time::Instant>)));
@@ -89,7 +85,7 @@ impl App for BarApp {
                 open_started_for_drain,
             )
         });
-        let resolved = (*self.appearance.read()).unwrap_or_else(barrier_kit::theme::resolved);
+        let resolved = barrier_kit::theme::resolved();
 
         let now = self.clock.read().clone();
         let app_id = self.active_app.read().clone();
@@ -570,33 +566,21 @@ fn load_app_menus(path: &Path) -> bool {
         .unwrap_or(true)
 }
 
-fn schedule_appearance_poll(
+fn schedule_menubar_poll(
     timers: Timers,
-    appearance: State<Option<Resolved>>,
     app_menus: State<bool>,
     dbus: MenuClient,
     menubar_store: PathBuf,
 ) {
     let retry = timers.clone();
     timers.after(std::time::Duration::from_millis(500), move || {
-        let resolved = barrier_kit::theme::resolved();
-        let mut appearance = appearance;
-        if appearance.peek().as_ref() != Some(&resolved) {
-            appearance.set(Some(resolved));
-        }
         let enabled = load_app_menus(&menubar_store);
         let mut app_menus = app_menus;
         if *app_menus.peek() != enabled {
             app_menus.set(enabled);
             dbus.set_app_menus(enabled);
         }
-        schedule_appearance_poll(
-            retry.clone(),
-            appearance,
-            app_menus,
-            dbus.clone(),
-            menubar_store.clone(),
-        );
+        schedule_menubar_poll(retry.clone(), app_menus, dbus.clone(), menubar_store.clone());
     });
 }
 
@@ -644,14 +628,12 @@ pub fn run() -> anyhow::Result<()> {
     let entries = crate::desktop::read_entries();
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
-    let appearance = State::create_global(Some(barrier_kit::theme::resolved()));
     let app_menus = State::create_global(load_app_menus(&menubar_store));
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
     let dbus = dbusmenu::start(*app_menus.peek());
     let app = AppComponent::new(BarApp {
         clock,
         active_app,
-        appearance,
         app_menus,
         window_store,
         menubar_store,
