@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use freya_animation::prelude::{AnimConfiguration, AnimNum, OnChange, use_animation};
+use freya_animation::prelude::{AnimNum, use_animation_transition};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
@@ -134,12 +134,16 @@ impl Component for Sidebar {
             .children(self.children.iter().cloned());
 
         if island {
-            sidebar_root = sidebar_root.corner_radius(radius).border(
-                Border::new()
-                    .width(SIDEBAR.rim_width)
-                    .alignment(BorderAlignment::Inner)
-                    .fill(rgba(surface.rim)),
-            );
+            sidebar_root = sidebar_root.corner_radius(radius);
+
+            if surface.rim.a > 0.0 {
+                sidebar_root = sidebar_root.border(
+                    Border::new()
+                        .width(SIDEBAR.rim_width)
+                        .alignment(BorderAlignment::Inner)
+                        .fill(rgba(surface.rim)),
+                );
+            }
 
             if surface.inner.a > 0.0 {
                 sidebar_root = sidebar_root.child(
@@ -163,13 +167,31 @@ impl Component for Sidebar {
             }
 
             let ambient = &surface.shadow[0];
-            sidebar_root = sidebar_root.shadow(
-                Shadow::new()
-                    .x(0.0)
-                    .y(ambient.y_offset as f32)
-                    .blur(ambient.blur as f32)
-                    .color(rgba(ambient.color)),
-            );
+            let contact = &surface.shadow[1];
+            if ambient.opacity > 0.0 {
+                sidebar_root = sidebar_root.shadow(
+                    Shadow::new()
+                        .x(0.0)
+                        .y(ambient.y_offset as f32)
+                        .blur(ambient.blur as f32)
+                        .color(rgba(ambient.color)),
+                );
+            }
+
+            if contact.opacity > 0.0 {
+                return rect()
+                    .width(Size::fill())
+                    .height(Size::fill())
+                    .shadow(
+                        Shadow::new()
+                            .x(0.0)
+                            .y(contact.y_offset as f32)
+                            .blur(contact.blur as f32)
+                            .color(rgba(contact.color)),
+                    )
+                    .child(sidebar_root)
+                    .into_element();
+            }
         } else {
             sidebar_root = sidebar_root
                 .padding(Gaps::new(top_height as f32, padding_x, 0.0, padding_x))
@@ -214,23 +236,7 @@ impl Component for Sidebar {
                 );
         }
 
-        if island {
-            let contact = &surface.shadow[1];
-            rect()
-                .width(Size::fill())
-                .height(Size::fill())
-                .shadow(
-                    Shadow::new()
-                        .x(0.0)
-                        .y(contact.y_offset as f32)
-                        .blur(contact.blur as f32)
-                        .color(rgba(contact.color)),
-                )
-                .child(sidebar_root)
-                .into_element()
-        } else {
-            sidebar_root.into_element()
-        }
+        sidebar_root.into_element()
     }
 }
 
@@ -358,7 +364,16 @@ impl Component for SidebarItem {
                     .corner_radius(SIDEBAR.item_radius as f32)
                     .background(rgba(bg_color))
                     .center()
-                    .child(svg_viewer(svg, Rgba::rgb8(255, 255, 255), SIDEBAR.app_icon)),
+                    .child(svg_viewer(
+                        svg,
+                        Rgba {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 1.0,
+                            a: 1.0,
+                        },
+                        SIDEBAR.app_icon,
+                    )),
             );
         } else if let Some(svg) = self.icon {
             row = row.child(svg_viewer(svg, palette.item_icon, SIDEBAR.item_icon));
@@ -457,7 +472,7 @@ impl Component for SidebarSection {
         let a11y_id = use_a11y();
         let focus = use_focus(a11y_id);
         let keyboard_focused = matches!(*focus.read(), Focus::Keyboard);
-        let show_chevron = *hovered.read() || keyboard_focused || *expanded.read();
+        let show_chevron = *hovered.read() || keyboard_focused;
 
         let on_toggle = self.on_toggle.clone();
         let toggle = {
@@ -488,14 +503,15 @@ impl Component for SidebarSection {
         };
 
         let full_height = self.children.len() as f32 * SIDEBAR.item_height as f32;
-        let animation = use_animation(move |conf: &mut AnimConfiguration| {
-            if resolved.reduced_motion {
-                conf.on_change(OnChange::Finish);
+        let reduced_motion = resolved.reduced_motion;
+        let target = move |expanded: bool| if expanded { full_height } else { 0.0 };
+        let animation = use_animation_transition(expanded, move |from, to| {
+            let duration = if reduced_motion {
+                0
             } else {
-                conf.on_change(OnChange::Rerun);
-            }
-            let target = if *expanded.read() { full_height } else { 0.0 };
-            AnimNum::new(0.0, target).time(Duration::from_millis(DURATION_BASE).as_millis() as u64)
+                Duration::from_millis(DURATION_BASE).as_millis() as u64
+            };
+            AnimNum::new(target(from), target(to)).time(duration)
         });
         let height = animation.get().value();
 

@@ -4,7 +4,8 @@ use std::env;
 use std::fs;
 use std::sync::{Arc, Mutex};
 
-use celestial_kit::controls::ToolGroup;
+use accesskit::Role;
+use celestial_kit::controls::{ToolButton, ToolGroup};
 use celestial_kit::platform::{DecorationResponse, WindowStatus};
 use celestial_kit::sidebar::{Sidebar, SidebarItem, SidebarLayout, SidebarSection};
 use celestial_kit::theme;
@@ -16,7 +17,7 @@ use freya_core::prelude::*;
 use freya_testing::TestingRunner;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Size, Size2D};
-use yuki_design::{SIDEBAR, TITLEBAR_CLIENT_HEIGHT};
+use yuki_design::{SIDEBAR, TITLEBAR_CLIENT_HEIGHT, TOOLGROUP};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -277,4 +278,117 @@ fn sidebar_item_uses_design_padding_and_gap() {
     test.sync_and_update();
     let png = test.render();
     assert!(!png.as_ref().is_empty());
+}
+
+struct ExpandedSectionCase;
+
+impl App for ExpandedSectionCase {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(|| theme::for_scheme(false));
+        Sidebar::new().child(
+            SidebarSection::new("Favoritos")
+                .expanded(true)
+                .child(SidebarItem::new("Uno")),
+        )
+    }
+}
+
+#[test]
+fn sidebar_section_hides_chevron_without_hover_or_focus() {
+    let app = AppComponent::new(ExpandedSectionCase);
+    let (test, _) = TestingRunner::new(app, Size2D::new(300.0, 300.0), |_| {}, 1.0);
+    let headers = test.find_many(|node, el| {
+        if el.accessibility().builder.role() == Role::Button {
+            Some(node)
+        } else {
+            None
+        }
+    });
+    assert_eq!(headers.len(), 1, "there must be exactly one section header");
+    assert_eq!(
+        headers[0].children().len(),
+        1,
+        "expanded section header must contain only the label when not hovered or focused"
+    );
+}
+
+struct ToolGroupFlatCase;
+
+impl App for ToolGroupFlatCase {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(|| theme::for_scheme(false));
+        ToolGroup::new()
+            .flat()
+            .child(Button::new().child("A"))
+            .child(Button::new().child("B"))
+    }
+}
+
+#[test]
+fn flat_toolgroup_has_no_separators() {
+    let app = AppComponent::new(ToolGroupFlatCase);
+    let (test, _) = TestingRunner::new(app, Size2D::new(300.0, 80.0), |_| {}, 1.0);
+    let separators = test.find_many(|node, _el| {
+        let size = node.layout().area.size;
+        let expected_w = TOOLGROUP.separator_w as f32;
+        let expected_h = TOOLGROUP.separator_h as f32;
+        if (size.width - expected_w).abs() < 0.5 && (size.height - expected_h).abs() < 0.5 {
+            Some(())
+        } else {
+            None
+        }
+    });
+    assert!(
+        separators.is_empty(),
+        "flat ToolGroup must not draw vertical separators"
+    );
+}
+
+const PLUS_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"currentColor\"/></svg>";
+
+struct ToolButtonCase {
+    disabled: bool,
+}
+
+impl App for ToolButtonCase {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(|| theme::for_scheme(false));
+        let mut pressed = use_consume::<State<u32>>();
+        ToolButton::new("Añadir", PLUS_ICON)
+            .disabled(self.disabled)
+            .on_press(move |_| {
+                let current = *pressed.read();
+                pressed.set(current + 1);
+            })
+    }
+}
+
+#[test]
+fn disabled_toolbutton_does_not_fire_on_press() {
+    let app = AppComponent::new(ToolButtonCase { disabled: true });
+    let (mut test, pressed) = TestingRunner::new(
+        app,
+        Size2D::new(100.0, 80.0),
+        |runner| runner.provide_root_context(|| State::create(0u32)),
+        1.0,
+    );
+    test.click_cursor((15.0, 15.0));
+    assert_eq!(
+        *pressed.peek(),
+        0,
+        "disabled tool button must ignore presses"
+    );
+}
+
+#[test]
+fn enabled_toolbutton_fires_on_press() {
+    let app = AppComponent::new(ToolButtonCase { disabled: false });
+    let (mut test, pressed) = TestingRunner::new(
+        app,
+        Size2D::new(100.0, 80.0),
+        |runner| runner.provide_root_context(|| State::create(0u32)),
+        1.0,
+    );
+    test.click_cursor((15.0, 15.0));
+    assert_eq!(*pressed.peek(), 1, "enabled tool button must fire on_press");
 }

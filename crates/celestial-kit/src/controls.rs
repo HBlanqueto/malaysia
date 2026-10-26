@@ -11,9 +11,11 @@ pub use freya_components::segmented_button::SegmentedButton as SegmentedControl;
 pub use freya_components::slider::Slider;
 pub use freya_components::switch::Switch;
 
+use freya_components::svg_viewer::SvgViewer;
+
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use yuki_design::{TEXT, TEXT_LINE_HEIGHT, TOOLGROUP};
+use yuki_design::{Rgba, TEXT, TEXT_LINE_HEIGHT, TOOLGROUP};
 
 use crate::password::PasswordField;
 
@@ -211,11 +213,11 @@ impl Component for ToolGroup {
         let resolved = crate::theme::resolved();
         let palette = resolved.toolgroup.palette;
 
-        let mut items: Vec<Element> = Vec::with_capacity(self.children.len().saturating_mul(2));
+        let mut items: Vec<Element> = Vec::with_capacity(self.children.len());
         let last = self.children.len().saturating_sub(1);
         for (i, child) in self.children.iter().cloned().enumerate() {
             items.push(child);
-            if i != last {
+            if self.style == ToolGroupStyle::Island && i != last {
                 items.push(
                     rect()
                         .width(Size::px(TOOLGROUP.separator_w as f32))
@@ -267,6 +269,117 @@ impl Component for ToolGroup {
 
         root.into_element()
     }
+}
+
+/// A Neptunia toolbar icon button.
+#[derive(PartialEq)]
+pub struct ToolButton {
+    label: String,
+    icon: &'static str,
+    disabled: bool,
+    on_press: Option<Callback<(), ()>>,
+    key: DiffKey,
+}
+
+impl ToolButton {
+    /// Create a tool button with a mandatory accessibility label and an SVG icon.
+    pub fn new(label: impl Into<String>, icon: &'static str) -> Self {
+        Self {
+            label: label.into(),
+            icon,
+            disabled: false,
+            on_press: None,
+            key: DiffKey::None,
+        }
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn on_press(mut self, callback: impl Into<Callback<(), ()>>) -> Self {
+        self.on_press = Some(callback.into());
+        self
+    }
+
+    pub fn key(mut self, key: impl Into<DiffKey>) -> Self {
+        self.key = key.into();
+        self
+    }
+}
+
+impl KeyExt for ToolButton {
+    fn write_key(&mut self) -> &mut DiffKey {
+        &mut self.key
+    }
+}
+
+impl Component for ToolButton {
+    fn render(&self) -> impl IntoElement {
+        let resolved = crate::theme::resolved();
+        let palette = resolved.toolgroup.palette;
+        let mut hovered = use_state(|| false);
+
+        let island = resolved.sidebar.style == yuki_appearance::SidebarStyle::Island;
+        let (width, height, radius) = if island {
+            (
+                TOOLGROUP.button_w as f32,
+                TOOLGROUP.button_h as f32,
+                (TOOLGROUP.button_h as f32 / 2.0).max(1.0),
+            )
+        } else {
+            (
+                TOOLGROUP.flat_button_w as f32,
+                TOOLGROUP.flat_button_h as f32,
+                TOOLGROUP.flat_radius as f32,
+            )
+        };
+
+        let fg = if self.disabled {
+            palette.disabled_ink
+        } else {
+            palette.ink
+        };
+        let bg = if !self.disabled && *hovered.read() {
+            rgba(resolved.sidebar.palette.hover_bg)
+        } else {
+            Color::TRANSPARENT
+        };
+
+        let mut root = rect()
+            .width(Size::px(width))
+            .height(Size::px(height))
+            .corner_radius(radius)
+            .background(bg)
+            .cross_align(Alignment::Center)
+            .center()
+            .a11y_role(AccessibilityRole::Button)
+            .a11y_alt(self.label.clone())
+            .a11y_focusable(true)
+            .on_pointer_enter(move |_| hovered.set(true))
+            .on_pointer_leave(move |_| hovered.set(false))
+            .child(svg_viewer(self.icon, fg, TOOLGROUP.separator_h));
+
+        if !self.disabled
+            && let Some(callback) = self.on_press.clone()
+        {
+            root = root.on_press(move |_| callback.call(()));
+        }
+
+        root
+    }
+}
+
+fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {
+    let [r, g, b, _] = color.to_rgba8();
+    SvgViewer::new((
+        format!("toolbutton-icon-{}", template.len()),
+        Bytes::from(template.replace("currentColor", &format!("rgb({r},{g},{b})"))),
+    ))
+    .width(Size::px(size as f32))
+    .height(Size::px(size as f32))
+    .show_loader(false)
 }
 
 fn rgba(color: yuki_design::Rgba) -> Color {

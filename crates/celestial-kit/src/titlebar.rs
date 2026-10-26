@@ -174,28 +174,26 @@ impl Component for Titlebar {
             right_slot.on_mouse_down(window_drag_handler(fixed))
         };
 
+        let mut title_label = label()
+            .text(truncate(&title))
+            .font_size(if self.sidebar {
+                TITLE_2.size as f32
+            } else {
+                13.0
+            })
+            .color(rgba(title_color))
+            .max_lines(1);
+        if self.sidebar {
+            title_label = title_label.font_weight(FontWeight::from(TITLE_2.weight as i32));
+        }
+
         let mut title = rect()
             .width(Size::flex(1.0))
             .height(Size::fill())
             .cross_align(Alignment::Center)
             .a11y_alt("titlebar-title")
             .on_mouse_down(window_drag_handler(fixed))
-            .child(
-                label()
-                    .text(truncate(&title))
-                    .font_size(if self.sidebar {
-                        TITLE_2.size as f32
-                    } else {
-                        13.0
-                    })
-                    .font_weight(FontWeight::from(if self.sidebar {
-                        TITLE_2.weight as i32
-                    } else {
-                        500
-                    }))
-                    .color(rgba(title_color))
-                    .max_lines(1),
-            );
+            .child(title_label);
         if self.sidebar {
             title = title.main_align(Alignment::Start);
         } else {
