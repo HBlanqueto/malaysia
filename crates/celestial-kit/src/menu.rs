@@ -1575,8 +1575,10 @@ fn open_reveal_popup(
     let spec = PopupSpec {
         anchor_rect: (0, 0, 1, 1),
         anchor: PopupAnchor::TopLeft,
-        gravity: PopupGravity::TopRight,
-        offset: (0, 0),
+        // Grow left and keep the top edge aligned with the Help popup. The
+        // 8 px gap matches the compute above.
+        gravity: PopupGravity::BottomLeft,
+        offset: (-8, 0),
         size: (child_size.0 as u32, child_size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment::default(),
         // The preview must not take keyboard focus: the search field keeps
