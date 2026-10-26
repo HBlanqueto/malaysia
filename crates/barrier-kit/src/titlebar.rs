@@ -297,13 +297,19 @@ pub fn window_traffic_lights(
 
 /// Returns a mouse-down handler that drags the window and honours the double-click
 /// action configured in `window.domain`.
+///
+/// `fixed` is stored in a reactive cell so the handler keeps using the latest
+/// value when the window's fixed state or decoration changes between renders.
 pub fn window_drag_handler(fixed: bool) -> impl Fn(Event<MouseEventData>) {
     let last_click = use_hook(|| Rc::new(Cell::new(None::<(Instant, (f64, f64))>)));
     let double_done = use_hook(|| Rc::new(Cell::new(false)));
+    let fixed_cell = use_hook(|| Rc::new(Cell::new(fixed)));
+    fixed_cell.set(fixed);
     move |event: Event<MouseEventData>| {
         if event.button != Some(MouseButton::Left) {
             return;
         }
+        let fixed = fixed_cell.get();
         let controls = WindowControls::get();
         let behavior = *window_behavior();
         let now = Instant::now();
