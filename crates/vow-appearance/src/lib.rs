@@ -12,7 +12,11 @@ pub mod traffic;
 pub mod watch;
 
 use vow_design::{
-    DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_CONTROL, LIGHT, MENU_DARK,
+    BG_CONTROL_DARK, BG_CONTROL_DARK_TINT, BG_CONTROL_LIGHT, BG_HOVER_DARK, BG_HOVER_DARK_TINT,
+    BG_HOVER_LIGHT, BG_RAISED_DARK, BG_RAISED_DARK_TINT, BG_RAISED_LIGHT, BG_SUNKEN_DARK,
+    BG_SUNKEN_DARK_TINT, BG_SUNKEN_LIGHT, BG_SURFACE_DARK, BG_SURFACE_DARK_TINT, BG_SURFACE_LIGHT,
+    BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN,
+    LAYER_FACTOR_CONTROL, LAYER_FACTOR_LINE, LAYER_FACTOR_SURFACE, LIGHT, MENU_DARK,
     MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE, MENU_LIGHT, MENU_LIGHT_OPAQUE,
     MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SETTINGS, SHELL_DARK, SHELL_DARK_OPAQUE,
     SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE, SIDEBAR_DARK,
@@ -169,6 +173,25 @@ pub struct ToolgroupSurface {
     pub palette: ToolgroupPalette,
 }
 
+/// The resolved tinted surface stack shared by the compositor and the kit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Surfaces {
+    /// Window background (`bg-window`).
+    pub window: Rgba,
+    /// Sunken background (`bg-sunken`).
+    pub sunken: Rgba,
+    /// Surface background (`bg-surface`).
+    pub surface: Rgba,
+    /// Raised surface background (`bg-raised`).
+    pub raised: Rgba,
+    /// Control background (`bg-control`).
+    pub control: Rgba,
+    /// Hover background (`bg-hover`).
+    pub hover: Rgba,
+    /// Separator and outline colour (`line`).
+    pub line: Rgba,
+}
+
 /// The colours and tints resolved from one appearance + wallpaper state.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Resolved {
@@ -197,6 +220,8 @@ pub struct Resolved {
     pub sidebar: SidebarSurface,
     /// The kit toolbar capsule surface for this appearance.
     pub toolgroup: ToolgroupSurface,
+    /// The tinted surface stack for window backgrounds, controls and lines.
+    pub surfaces: Surfaces,
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -210,7 +235,7 @@ pub fn palette(scheme: ColorScheme) -> Palette {
 
 /// The shell, menu and sidebar surfaces for a concrete theme, choosing the
 /// opaque variants when transparency is reduced.
-fn surfaces(
+fn chrome_surfaces(
     scheme: ColorScheme,
     style: SidebarStyle,
     opaque: bool,
@@ -413,11 +438,12 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(normal_accent)),
     };
 
-    let (mut shell, menu, mut sidebar, mut toolgroup) = surfaces(
+    let (mut shell, menu, mut sidebar, mut toolgroup) = chrome_surfaces(
         scheme,
         appearance.sidebar_style,
         appearance.reduce_transparency,
     );
+    let surfaces = tinted_surfaces(scheme, window_tint, &base);
     if dark {
         // In dark modes the selected row blends the accent into the sidebar
         // background so it is readable on bg-sunken. The ink stays white.
@@ -447,6 +473,56 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         menu,
         sidebar,
         toolgroup,
+        surfaces,
+    }
+}
+
+/// Resolves the tinted surface stack for a concrete scheme.
+fn tinted_surfaces(
+    scheme: ColorScheme,
+    window_tint: Option<(Rgba, f32)>,
+    base: &Palette,
+) -> Surfaces {
+    let (window, sunken, surface, raised, control, hover) = match scheme {
+        ColorScheme::DarkTint => (
+            BG_WINDOW_DARK_TINT,
+            BG_SUNKEN_DARK_TINT,
+            BG_SURFACE_DARK_TINT,
+            BG_RAISED_DARK_TINT,
+            BG_CONTROL_DARK_TINT,
+            BG_HOVER_DARK_TINT,
+        ),
+        ColorScheme::Dark => (
+            BG_WINDOW_DARK,
+            BG_SUNKEN_DARK,
+            BG_SURFACE_DARK,
+            BG_RAISED_DARK,
+            BG_CONTROL_DARK,
+            BG_HOVER_DARK,
+        ),
+        _ => (
+            BG_WINDOW_LIGHT,
+            BG_SUNKEN_LIGHT,
+            BG_SURFACE_LIGHT,
+            BG_RAISED_LIGHT,
+            BG_CONTROL_LIGHT,
+            BG_HOVER_LIGHT,
+        ),
+    };
+    let line = base.line;
+    let mix = |color: Rgba, factor: f32| {
+        window_tint
+            .map(|(tint, tint_factor)| color.mix(tint, tint_factor * factor))
+            .unwrap_or(color)
+    };
+    Surfaces {
+        window: mix(window, 1.0),
+        sunken: mix(sunken, LAYER_FACTOR_BG_SUNKEN),
+        surface: mix(surface, LAYER_FACTOR_SURFACE),
+        raised: mix(raised, LAYER_FACTOR_SURFACE),
+        control: mix(control, LAYER_FACTOR_CONTROL),
+        hover: mix(hover, LAYER_FACTOR_CONTROL),
+        line: mix(line, LAYER_FACTOR_LINE),
     }
 }
 
@@ -1218,6 +1294,107 @@ sidebar_style = "flat"
 
         assert_eq!(neutral.sidebar.bg, SIDEBAR_ISLAND_LIGHT_OPAQUE);
         assert_eq!(neutral.toolgroup.bg, TOOLGROUP_BG_LIGHT_OPAQUE);
+    }
+
+    #[test]
+    fn neutral_surfaces_match_the_base_colours() {
+        for scheme in [ColorScheme::Light, ColorScheme::Dark, ColorScheme::DarkTint] {
+            let resolved = resolve(
+                &appearance(
+                    scheme,
+                    WindowColorMode::Neutral,
+                    WindowTintScope::Windows,
+                    TrafficLightStyle::Auto,
+                    None,
+                ),
+                None,
+            );
+            let expected = match scheme {
+                ColorScheme::DarkTint => (
+                    BG_WINDOW_DARK_TINT,
+                    BG_SUNKEN_DARK_TINT,
+                    BG_SURFACE_DARK_TINT,
+                    BG_RAISED_DARK_TINT,
+                    BG_CONTROL_DARK_TINT,
+                    BG_HOVER_DARK_TINT,
+                ),
+                ColorScheme::Dark => (
+                    BG_WINDOW_DARK,
+                    BG_SUNKEN_DARK,
+                    BG_SURFACE_DARK,
+                    BG_RAISED_DARK,
+                    BG_CONTROL_DARK,
+                    BG_HOVER_DARK,
+                ),
+                _ => (
+                    BG_WINDOW_LIGHT,
+                    BG_SUNKEN_LIGHT,
+                    BG_SURFACE_LIGHT,
+                    BG_RAISED_LIGHT,
+                    BG_CONTROL_LIGHT,
+                    BG_HOVER_LIGHT,
+                ),
+            };
+            assert_eq!(resolved.surfaces.window, expected.0, "{scheme:?} window");
+            assert_eq!(resolved.surfaces.sunken, expected.1, "{scheme:?} sunken");
+            assert_eq!(resolved.surfaces.surface, expected.2, "{scheme:?} surface");
+            assert_eq!(resolved.surfaces.raised, expected.3, "{scheme:?} raised");
+            assert_eq!(resolved.surfaces.control, expected.4, "{scheme:?} control");
+            assert_eq!(resolved.surfaces.hover, expected.5, "{scheme:?} hover");
+            assert_eq!(
+                resolved.surfaces.line,
+                palette(scheme).line,
+                "{scheme:?} line"
+            );
+        }
+    }
+
+    #[test]
+    fn accent_tints_each_surface_by_its_layer_factor() {
+        let purple = Rgba {
+            r: 0.557,
+            g: 0.357,
+            b: 0.847,
+            a: 1.0,
+        };
+        let resolved = resolve(
+            &appearance(
+                ColorScheme::Dark,
+                WindowColorMode::Accent,
+                WindowTintScope::Windows,
+                TrafficLightStyle::Auto,
+                Some([purple.r, purple.g, purple.b]),
+            ),
+            None,
+        );
+        let factor = WINDOW_TINT_ACCENT[1];
+        assert_eq!(resolved.surfaces.window, BG_WINDOW_DARK.mix(purple, factor));
+        assert_eq!(
+            resolved.surfaces.sunken,
+            BG_SUNKEN_DARK.mix(purple, factor * LAYER_FACTOR_BG_SUNKEN)
+        );
+        assert_eq!(
+            resolved.surfaces.surface,
+            BG_SURFACE_DARK.mix(purple, factor * LAYER_FACTOR_SURFACE)
+        );
+        assert_eq!(
+            resolved.surfaces.raised,
+            BG_RAISED_DARK.mix(purple, factor * LAYER_FACTOR_SURFACE)
+        );
+        assert_eq!(
+            resolved.surfaces.control,
+            BG_CONTROL_DARK.mix(purple, factor * LAYER_FACTOR_CONTROL)
+        );
+        assert_eq!(
+            resolved.surfaces.hover,
+            BG_HOVER_DARK.mix(purple, factor * LAYER_FACTOR_CONTROL)
+        );
+        assert_eq!(
+            resolved.surfaces.line,
+            palette(ColorScheme::Dark)
+                .line
+                .mix(purple, factor * LAYER_FACTOR_LINE)
+        );
     }
 
     #[test]
