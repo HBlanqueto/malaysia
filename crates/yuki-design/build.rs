@@ -39,6 +39,7 @@ fn main() {
     emit_sidebar(&mut out, &tokens, &components);
     emit_menu(&mut out, &tokens, &components);
     emit_metrics(&mut out, &tokens, &components);
+    emit_settings(&mut out, &tokens, &components);
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(out_dir.join("neptunia.rs"), out).expect("write neptunia.rs");
@@ -1855,4 +1856,91 @@ fn emit_metrics(out: &mut String, tokens: &Value, components: &Value) {
         "The dock bar height, in logical pixels.",
     );
     out.push_str(&format!(": i32 = {};\n\n", tilesize + padding * 2));
+}
+
+fn emit_settings(out: &mut String, _tokens: &Value, components: &Value) {
+    let window_width = integer(components, "components.settings.window.width", COMPONENTS) as u32;
+    let window_height = integer(components, "components.settings.window.height", COMPONENTS) as u32;
+    let window_min_height = integer(
+        components,
+        "components.settings.window.min-height",
+        COMPONENTS,
+    ) as u32;
+
+    let swatch_size = integer(components, "components.settings.swatch-size", COMPONENTS) as u32;
+    let swatch_gap = integer(components, "components.settings.swatch-gap", COMPONENTS) as u32;
+
+    let card_width = integer(components, "components.settings.card.width", COMPONENTS) as u32;
+    let card_height = integer(components, "components.settings.card.height", COMPONENTS) as u32;
+    let card_radius = metric(
+        _tokens,
+        components,
+        "components.settings.card.radius",
+        COMPONENTS,
+    ) as u32;
+    let card_gap = integer(components, "components.settings.card.gap", COMPONENTS) as u32;
+    let card_ring = integer(components, "components.settings.card.ring", COMPONENTS) as u32;
+    let card_ring_gap = integer(components, "components.settings.card.ring-gap", COMPONENTS) as u32;
+
+    let selected_dark_mix = number(
+        components,
+        "components.settings.selected-dark-mix",
+        COMPONENTS,
+    );
+
+    const_doc(out, "SETTINGS", "The System Settings window metrics.");
+    out.push_str(&format!(
+        ": SettingsMetrics = SettingsMetrics {{\n\
+         \x20   window_width: {window_width},\n\
+         \x20   window_height: {window_height},\n\
+         \x20   window_min_height: {window_min_height},\n\
+         \x20   swatch_size: {swatch_size},\n\
+         \x20   swatch_gap: {swatch_gap},\n\
+         \x20   card_width: {card_width},\n\
+         \x20   card_height: {card_height},\n\
+         \x20   card_radius: {card_radius},\n\
+         \x20   card_gap: {card_gap},\n\
+         \x20   card_ring: {card_ring},\n\
+         \x20   card_ring_gap: {card_ring_gap},\n\
+         \x20   selected_dark_mix: {},\n\
+         }};\n\n",
+        float(selected_dark_mix)
+    ));
+
+    let swatches = value(
+        components,
+        "components.settings.accent-swatches",
+        COMPONENTS,
+    )
+    .as_array()
+    .expect("accent-swatches must be an array");
+    let mut swatch_consts = Vec::with_capacity(swatches.len());
+    for swatch in swatches {
+        let name = swatch
+            .get("name")
+            .and_then(|v| v.as_str())
+            .expect("accent swatch must have a name");
+        let color = swatch
+            .get("color")
+            .and_then(|v| v.as_str())
+            .expect("accent swatch must have a color");
+        swatch_consts.push(format!(
+            "({name:?}, {})",
+            rgba(parse_color(
+                color,
+                "components.settings.accent-swatches",
+                COMPONENTS
+            ))
+        ));
+    }
+    const_doc(
+        out,
+        "ACCENT_SWATCHES",
+        "The accent colour swatches shown in System Settings.",
+    );
+    out.push_str(&format!(
+        ": [(&str, Rgba); {}] = [{}];\n\n",
+        swatch_consts.len(),
+        swatch_consts.join(", ")
+    ));
 }

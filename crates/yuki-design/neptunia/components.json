@@ -386,6 +386,34 @@
         "disabled-ink": "ink-faint"
       }
     },
+    "settings": {
+      "window": {
+        "width": 760,
+        "height": 620,
+        "min-height": 480
+      },
+      "accent-swatches": [
+        {"name": "Azul", "color": "#2f6fe4"},
+        {"name": "Morado", "color": "#8e5bd8"},
+        {"name": "Rosa", "color": "#e5458f"},
+        {"name": "Rojo", "color": "#ec4646"},
+        {"name": "Naranja", "color": "#f07c26"},
+        {"name": "Amarillo", "color": "#f5c02c"},
+        {"name": "Verde", "color": "#4fb848"},
+        {"name": "Gris", "color": "#8e8e93"}
+      ],
+      "swatch-size": 22,
+      "swatch-gap": 9,
+      "card": {
+        "width": 70,
+        "height": 46,
+        "radius": "radius.sm",
+        "gap": 10,
+        "ring": 2,
+        "ring-gap": 2
+      },
+      "selected-dark-mix": 0.5
+    },
     "dialog": {
       "radius": "radius.lg",
       "bg": "bg-raised",

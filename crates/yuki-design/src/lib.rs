@@ -251,6 +251,36 @@ pub struct ShadowLayer {
     pub color: Rgba,
 }
 
+/// Compile-time metrics for the System Settings window.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SettingsMetrics {
+    /// Default settings window width, in logical pixels.
+    pub window_width: u32,
+    /// Default settings window height, in logical pixels.
+    pub window_height: u32,
+    /// Minimum settings window height, in logical pixels.
+    pub window_min_height: u32,
+    /// Accent color swatch size, in logical pixels.
+    pub swatch_size: u32,
+    /// Gap between accent color swatches, in logical pixels.
+    pub swatch_gap: u32,
+    /// Accent preview card width, in logical pixels.
+    pub card_width: u32,
+    /// Accent preview card height, in logical pixels.
+    pub card_height: u32,
+    /// Accent preview card corner radius, in logical pixels.
+    pub card_radius: u32,
+    /// Gap between accent preview cards, in logical pixels.
+    pub card_gap: u32,
+    /// Selected accent card ring width, in logical pixels.
+    pub card_ring: u32,
+    /// Gap between the ring and the card it surrounds, in logical pixels.
+    pub card_ring_gap: u32,
+    /// How much the resolved accent is mixed with the dark sidebar background
+    /// for selected rows.
+    pub selected_dark_mix: f32,
+}
+
 /// Compile-time metrics for the Neptunia sidebar.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SidebarMetrics {
@@ -690,6 +720,23 @@ mod tests {
         assert_eq!(super::TOOLGROUP.flat_button_w, 30);
         assert_eq!(super::TOOLGROUP.flat_button_h, 28);
         assert_eq!(super::TOOLGROUP.flat_radius, 8);
+    }
+
+    #[test]
+    fn settings_metrics_and_swatches_match_components() {
+        assert_eq!(super::SETTINGS.window_width, 760);
+        assert_eq!(super::SETTINGS.window_height, 620);
+        assert_eq!(super::SETTINGS.window_min_height, 480);
+        assert_eq!(super::SETTINGS.swatch_size, 22);
+        assert_eq!(super::SETTINGS.card_width, 70);
+        assert_eq!(super::SETTINGS.card_radius, 8);
+        assert!((super::SETTINGS.selected_dark_mix - 0.5).abs() < 1e-6);
+        assert_eq!(super::ACCENT_SWATCHES.len(), 8);
+        assert_eq!(super::ACCENT_SWATCHES[0].0, "Azul");
+        assert_eq!(
+            super::ACCENT_SWATCHES[1].1,
+            super::Rgba::rgb8(0x8e, 0x5b, 0xd8)
+        );
     }
 
     #[test]
