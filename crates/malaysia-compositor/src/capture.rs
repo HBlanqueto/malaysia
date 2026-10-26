@@ -340,6 +340,92 @@ fn capture_into_dmabuf(
         .map_err(|error| format!("capture sync failed: {error}"))
 }
 
+/// Validates the client's SHM buffer against the capture size and returns the
+/// copy geometry: `(offset, stride, row_bytes, rows)`.
+///
+/// `shortcut: rejecting a size mismatch with CaptureFailureReason::Unknown;
+/// upgrade to BufferConstraints once the protocol needs to scale instead.`
+fn shm_layout(
+    pool_len: usize,
+    data_offset: i32,
+    data_width: i32,
+    data_height: i32,
+    data_stride: i32,
+    width: i32,
+    height: i32,
+) -> Result<(usize, usize, usize, usize), String> {
+    if width <= 0 || height <= 0 {
+        return Err(format!("invalid capture size {width}x{height}"));
+    }
+    if data_width != width || data_height != height {
+        return Err(format!(
+            "shm buffer is {data_width}x{data_height}, capture is {width}x{height}"
+        ));
+    }
+    let offset = usize::try_from(data_offset)
+        .map_err(|_| format!("negative shm buffer offset {data_offset}"))?;
+    let row_bytes = usize::try_from(width)
+        .ok()
+        .and_then(|width| width.checked_mul(4))
+        .ok_or_else(|| format!("invalid capture width {width}"))?;
+    let stride = usize::try_from(data_stride)
+        .map_err(|_| format!("negative shm buffer stride {data_stride}"))?;
+    if stride < row_bytes {
+        return Err(format!(
+            "shm buffer stride {data_stride} is smaller than a row ({row_bytes} bytes)"
+        ));
+    }
+    let rows = usize::try_from(height).map_err(|_| format!("invalid capture height {height}"))?;
+    let end = stride
+        .checked_mul(rows)
+        .and_then(|bytes| offset.checked_add(bytes))
+        .ok_or_else(|| "shm buffer size overflows usize".to_string())?;
+    if end > pool_len {
+        return Err(format!("shm buffer needs {end} bytes, pool has {pool_len}"));
+    }
+    Ok((offset, stride, row_bytes, rows))
+}
+
+/// Copies `height` rows of `width * 4` bytes from `src` into the client's SHM
+/// pool, honouring its offset and stride. Validates everything before writing.
+#[allow(clippy::too_many_arguments)]
+fn copy_into_shm_pool(
+    pool: &mut [u8],
+    data_offset: i32,
+    data_width: i32,
+    data_height: i32,
+    data_stride: i32,
+    src: &[u8],
+    width: i32,
+    height: i32,
+) -> Result<(), String> {
+    let (offset, stride, row_bytes, rows) = shm_layout(
+        pool.len(),
+        data_offset,
+        data_width,
+        data_height,
+        data_stride,
+        width,
+        height,
+    )?;
+    let src_len = row_bytes
+        .checked_mul(rows)
+        .ok_or_else(|| "rendered image size overflows usize".to_string())?;
+    if src.len() < src_len {
+        return Err(format!(
+            "rendered image has {} bytes, needs {src_len}",
+            src.len()
+        ));
+    }
+    for row in 0..rows {
+        let src_start = row * row_bytes;
+        let dst_start = offset + row * stride;
+        pool[dst_start..dst_start + row_bytes]
+            .copy_from_slice(&src[src_start..src_start + row_bytes]);
+    }
+    Ok(())
+}
+
 #[allow(unsafe_code)] // the SHM pool is the client's shared memory; Smithay only
 // exposes it as a raw pointer for exactly this reason.
 fn capture_into_shm(
@@ -350,12 +436,23 @@ fn capture_into_shm(
     clear: [f32; 4],
     buffer: &WlBuffer,
 ) -> Result<(), String> {
-    with_buffer_contents_mut(buffer, |ptr, _len, data| {
+    with_buffer_contents_mut(buffer, |ptr, len, data| {
         let fourcc = match data.format {
             wl_shm::Format::Xrgb8888 => Fourcc::Xrgb8888,
             wl_shm::Format::Argb8888 => Fourcc::Argb8888,
             _ => return Err("unsupported shm capture format".to_string()),
         };
+        // Reject an unusable buffer before spending GPU time on the render.
+        shm_layout(
+            len,
+            data.offset,
+            data.width,
+            data.height,
+            data.stride,
+            size.w,
+            size.h,
+        )
+        .map_err(|error| format!("invalid shm capture buffer: {error}"))?;
         let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
         let mut offscreen: GlesTexture = renderer
             .create_buffer(fourcc, size_buf)
@@ -380,19 +477,20 @@ fn capture_into_shm(
                 .map_texture(&mapping)
                 .map_err(|error| format!("map_texture failed: {error}"))?;
 
-            let src_stride = size.w as usize * 4;
-            let dst_stride = data.stride as usize;
-            let needed = dst_stride * data.height as usize;
-            // SAFETY: the pointer is valid for the duration of this closure and
-            // the pool is the buffer's own; only this client's memory is written.
-            let dst = unsafe { std::slice::from_raw_parts_mut(ptr, needed) };
-            for row in 0..size.h as usize {
-                let src = &bytes[row * src_stride..row * src_stride + src_stride];
-                let dst = &mut dst[row * dst_stride..row * dst_stride + src_stride];
-                dst.copy_from_slice(src);
-            }
+            // SAFETY: `ptr` and `len` are the client's whole SHM pool, as
+            // reported by Smithay, and the slice lives only for this closure.
+            let pool = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
+            copy_into_shm_pool(
+                pool,
+                data.offset,
+                data.width,
+                data.height,
+                data.stride,
+                bytes,
+                size.w,
+                size.h,
+            )
         }
-        Ok(())
     })
     .map_err(|error| format!("shm buffer access failed: {error}"))?
 }
@@ -403,4 +501,69 @@ fn capture_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new("/tmp").to_path_buf());
     base.join("malaysia-compositor")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::copy_into_shm_pool;
+
+    const UNTOUCHED: u8 = 0xaa;
+
+    fn src(bytes: usize) -> Vec<u8> {
+        (1..=bytes).map(|byte| byte as u8).collect()
+    }
+
+    #[test]
+    fn copy_respects_a_nonzero_offset() {
+        let mut pool = vec![UNTOUCHED; 24];
+        let image = src(16);
+
+        copy_into_shm_pool(&mut pool, 8, 2, 2, 8, &image, 2, 2).unwrap();
+
+        assert_eq!(pool[..8], [UNTOUCHED; 8]);
+        assert_eq!(pool[8..16], image[..8]);
+        assert_eq!(pool[16..24], image[8..]);
+    }
+
+    #[test]
+    fn copy_leaves_row_padding_intact() {
+        let mut pool = vec![UNTOUCHED; 24];
+        let image = src(16);
+
+        copy_into_shm_pool(&mut pool, 0, 2, 2, 12, &image, 2, 2).unwrap();
+
+        assert_eq!(pool[0..8], image[..8]);
+        assert_eq!(pool[8..12], [UNTOUCHED; 4]);
+        assert_eq!(pool[12..20], image[8..]);
+        assert_eq!(pool[20..24], [UNTOUCHED; 4]);
+    }
+
+    #[test]
+    fn short_buffer_height_fails_without_writing() {
+        let mut pool = vec![UNTOUCHED; 16];
+        let before = pool.clone();
+
+        let result = copy_into_shm_pool(&mut pool, 0, 2, 1, 8, &src(16), 2, 2);
+
+        assert!(result.is_err());
+        assert_eq!(pool, before);
+    }
+
+    #[test]
+    fn short_stride_fails() {
+        let result = copy_into_shm_pool(&mut [0; 16], 0, 2, 1, 4, &src(8), 2, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn buffer_larger_than_the_pool_fails() {
+        let result = copy_into_shm_pool(&mut [0; 16], 4, 2, 2, 8, &src(16), 2, 2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn negative_offset_fails() {
+        let result = copy_into_shm_pool(&mut [0; 16], -1, 2, 1, 8, &src(8), 2, 1);
+        assert!(result.is_err());
+    }
 }
