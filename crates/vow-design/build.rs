@@ -1712,6 +1712,22 @@ fn emit_metrics(out: &mut String, tokens: &Value, components: &Value) {
     );
     out.push_str(&format!(": u64 = {duration_base};\n\n"));
 
+    let duration_slow = integer(tokens, "duration.slow", TOKENS);
+    const_doc(
+        out,
+        "DURATION_SLOW_MS",
+        "The slow animation duration, in milliseconds (Neptunia `duration.slow`).",
+    );
+    out.push_str(&format!(": u64 = {duration_slow};\n\n"));
+
+    let theme_fade_wait = integer(tokens, "duration.wait-max", TOKENS);
+    const_doc(
+        out,
+        "THEME_FADE_WAIT_MS",
+        "Maximum time to wait for surface commits before starting an appearance fade, in milliseconds.",
+    );
+    out.push_str(&format!(": u64 = {theme_fade_wait};\n\n"));
+
     let metrics = [
         ("MENUBAR_HEIGHT", "i32", "components.shell.menubar.height"),
         (
