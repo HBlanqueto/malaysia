@@ -4303,8 +4303,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "nix",
- "serde",
- "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
  "vow-appearance",
