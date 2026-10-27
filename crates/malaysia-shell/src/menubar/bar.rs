@@ -145,7 +145,10 @@ impl App for BarApp {
         let text = rgba(palette.text);
         // Opaque by default; the blur for reduce_transparency = false will
         // arrive with the compositor's surface effects (ADR 0024).
-        let bar = rgba(palette.bar);
+        let bar = rgba(barrier_kit::theme::surface_background(
+            &resolved,
+            barrier_kit::theme::SurfaceKind::LayerShell,
+        ));
 
         let mut root = rect()
             .width(Size::fill())

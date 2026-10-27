@@ -197,6 +197,8 @@ pub struct Resolved {
     pub accent: Rgba,
     /// The titlebar tint, if any, and its Neptunia factor.
     pub window_tint: Option<(Rgba, f32)>,
+    /// How far the window tint reaches: only the windows or the desktop too.
+    pub window_tint_scope: WindowTintScope,
     /// The menubar/dock tint, only in wallpaper + desktop with a dominant.
     pub panel_tint: Option<(Rgba, f32)>,
     /// The three traffic lights.
@@ -433,6 +435,7 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         scheme,
         accent,
         window_tint,
+        window_tint_scope: appearance.window_tint_scope,
         panel_tint,
         lights,
         traffic_style: style,

@@ -7,7 +7,9 @@
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
 use freya_components::theming::themes::{dark_theme, light_theme};
 use freya_core::prelude::{Color, State, try_consume_root_context};
-use vow_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
+use vow_appearance::{
+    ColorScheme, Resolved, WindowTintScope, load_appearance, load_dominant, resolve,
+};
 use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
 
 pub(crate) fn color(c: Rgba) -> Color {
@@ -28,7 +30,17 @@ pub enum SurfaceKind {
 pub fn surface_background(resolved: &Resolved, kind: SurfaceKind) -> Rgba {
     match kind {
         SurfaceKind::Toplevel => resolved.surfaces.window,
-        SurfaceKind::LayerShell => resolved.shell.bar,
+        SurfaceKind::LayerShell => {
+            let mut bar = resolved.shell.bar;
+            // Wallpaper + desktop already mixed shell.bar with panel_tint in resolve().
+            if resolved.window_tint_scope == WindowTintScope::Desktop
+                && resolved.panel_tint.is_none()
+                && let Some((tint, factor)) = resolved.window_tint
+            {
+                bar = bar.mix(tint, factor);
+            }
+            bar
+        }
     }
 }
 
@@ -336,7 +348,7 @@ mod tests {
                 WindowColorMode::Accent,
                 WindowTintScope::Desktop,
                 BG_WINDOW_LIGHT.mix(accent, WINDOW_TINT_ACCENT[0]),
-                SHELL_LIGHT_OPAQUE.bar,
+                SHELL_LIGHT_OPAQUE.bar.mix(accent, WINDOW_TINT_ACCENT[0]),
             ),
             (
                 "wallpaper/windows",

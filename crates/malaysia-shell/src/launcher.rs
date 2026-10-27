@@ -209,8 +209,12 @@ impl App for LauncherApp {
             result_row(entry, index == selected, move || launch(clicked.clone()))
         });
 
-        let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
-        let background = rgba(palette.titlebar_bg.focused);
+        let resolved = barrier_kit::theme::resolved();
+        let palette = vow_appearance::palette(resolved.scheme);
+        let background = rgba(barrier_kit::theme::surface_background(
+            &resolved,
+            barrier_kit::theme::SurfaceKind::LayerShell,
+        ));
         let _text = rgba(palette.text.focused);
         let muted = rgba(palette.text.unfocused);
 
@@ -648,12 +652,24 @@ mod golden_tests {
         fn render(&self) -> impl IntoElement {
             let dark = self.dark;
             use_init_theme(|| barrier_kit::theme::for_scheme(dark));
-            let palette = vow_appearance::palette(if dark {
+            let scheme = if dark {
                 vow_appearance::ColorScheme::Dark
             } else {
                 vow_appearance::ColorScheme::Light
-            });
-            let background = rgba(palette.titlebar_bg.focused);
+            };
+            let resolved = vow_appearance::resolve(
+                &vow_appearance::AppearanceConfig {
+                    color_scheme: scheme,
+                    reduce_transparency: true,
+                    ..Default::default()
+                },
+                None,
+            );
+            let palette = vow_appearance::palette(scheme);
+            let background = rgba(barrier_kit::theme::surface_background(
+                &resolved,
+                barrier_kit::theme::SurfaceKind::LayerShell,
+            ));
             let text = rgba(palette.text.focused);
             let search = rgba(palette.titlebar_bg.unfocused);
             let mut selected = palette.accent;

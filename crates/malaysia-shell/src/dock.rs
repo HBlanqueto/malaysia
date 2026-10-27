@@ -27,7 +27,12 @@ impl App for DockApp {
         let toplevels = Toplevels::get();
         let entries = toplevels.list.read().clone();
         let active = load_active_title(&self.window_store).unwrap_or_default();
-        let palette = barrier_kit::theme::shell_palette(&barrier_kit::theme::resolved());
+        let resolved = barrier_kit::theme::resolved();
+        let palette = barrier_kit::theme::shell_palette(&resolved);
+        let background = rgba(barrier_kit::theme::surface_background(
+            &resolved,
+            barrier_kit::theme::SurfaceKind::LayerShell,
+        ));
         let tile = rgba(palette.tile);
         let active_tile = rgba(palette.tile_active);
         let text = rgba(palette.text);
@@ -61,7 +66,7 @@ impl App for DockApp {
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(rgba(palette.bar))
+            .background(background)
             .direction(Direction::Horizontal)
             .main_align(Alignment::Center)
             .cross_align(Alignment::Center)
