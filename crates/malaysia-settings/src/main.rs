@@ -446,21 +446,18 @@ mod tests {
                 "there must be at least 6 preview cards (3 theme + 3 window color), got {}",
                 cards.len()
             );
-            let selected_rings: Vec<_> = test.find_many(|node, _el| {
-                let area = node.layout().area;
-                if (area.size.width
-                    - (SETTINGS.card_width + SETTINGS.card_ring_gap * 2 + SETTINGS.card_ring * 2)
-                        as f32)
-                    .abs()
-                    < 1.0
-                {
-                    Some(node)
-                } else {
-                    None
-                }
+            let accent = rgba(vow_design::LIGHT.accent);
+            let selected_rings: Vec<_> = test.find_many(|_node, el| {
+                el.style()
+                    .borders
+                    .iter()
+                    .any(|border| {
+                        border.fill == accent && border.width.left == SETTINGS.card_ring as f32
+                    })
+                    .then_some(())
             });
             assert!(
-                !selected_rings.is_empty(),
+                selected_rings.len() >= 2,
                 "selected cards must show an accent ring"
             );
         });

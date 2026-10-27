@@ -17,7 +17,7 @@ use vow_appearance::SidebarStyle;
 use vow_appearance::palette;
 use vow_appearance::traffic::TrafficInput;
 use vow_design::NATIVE_APP_ID_PREFIX;
-use vow_design::{ButtonKind, Rgba, TITLE_2, TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK};
+use vow_design::{ButtonKind, Rgba, TITLEBAR, TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK};
 
 use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStatus};
 
@@ -147,18 +147,15 @@ impl Component for Titlebar {
             ))
         };
 
-        let mut title_label = label()
+        // Use the same titlebar font token as the compositor.
+        let title_font = TITLEBAR.font;
+        let title_label = label()
             .text(truncate(&title))
-            .font_size(if self.sidebar {
-                TITLE_2.size as f32
-            } else {
-                13.0
-            })
+            .font_family(title_font.family)
+            .font_size(title_font.size as f32)
+            .font_weight(FontWeight::from(title_font.weight as i32))
             .color(rgba(title_color))
             .max_lines(1);
-        if self.sidebar {
-            title_label = title_label.font_weight(FontWeight::from(TITLE_2.weight as i32));
-        }
 
         if self.sidebar {
             // Sidebar titlebars keep the toolbar on the left and place the

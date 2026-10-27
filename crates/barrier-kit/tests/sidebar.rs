@@ -250,6 +250,46 @@ fn titlebar_with_sidebar_uses_elastic_side_slots() {
 }
 
 #[test]
+fn titlebar_title_uses_the_titlebar_font() {
+    let app = AppComponent::new(TitlebarCase {
+        sidebar: false,
+        status: WindowStatus {
+            activated: true,
+            maximized: false,
+            decoration: DecorationResponse::Client,
+            fixed: false,
+        },
+    });
+    let (test, _) = TestingRunner::new(app, Size2D::new(300.0, 120.0), |_| {}, 1.0);
+    let style = test
+        .find_many(|_node, el| {
+            let label = Label::try_downcast(el)?;
+            (label.text == "Ventana").then(|| el.text_style().into_owned())
+        })
+        .into_iter()
+        .next()
+        .expect("the title label exists");
+
+    assert_eq!(
+        style.font_weight,
+        Some(FontWeight::from(TITLEBAR.font.weight as i32)),
+        "the title label must use the TITLEBAR font weight"
+    );
+    assert_eq!(
+        style.font_size.map(f32::from),
+        Some(TITLEBAR.font.size as f32),
+        "the title label must use the TITLEBAR font size"
+    );
+    assert!(
+        style
+            .font_families
+            .iter()
+            .any(|family| family.as_ref() == TITLEBAR.font.family),
+        "the title label must use the TITLEBAR font family"
+    );
+}
+
+#[test]
 fn titlebar_with_sidebar_hides_traffic_lights() {
     let plain = render_titlebar(false, DecorationResponse::Client);
     let with_sidebar = render_titlebar(true, DecorationResponse::Client);
