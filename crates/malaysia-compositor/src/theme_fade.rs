@@ -174,17 +174,16 @@ pub(crate) struct ThemeFade {
 impl ThemeFade {
     /// Creates a new fade from an already-rendered snapshot texture.
     ///
-    /// `texture_transform` compensates the backend's offscreen render flip so
-    /// the overlay is upright when composited. See `start_if_allowed`.
+    /// The texture is rendered upright by `take_snapshot`, so the overlay uses
+    /// `Transform::Normal` on both backends.
     pub(crate) fn new(
         renderer: &GlesRenderer,
         texture: GlesTexture,
-        texture_transform: Transform,
         pending_surfaces: HashSet<ObjectId>,
         now: Instant,
     ) -> Self {
         let texture_buffer =
-            TextureBuffer::from_texture(renderer, texture, 1, texture_transform, None);
+            TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
         Self {
             state: FadeState::new(pending_surfaces, now),
             texture_buffer,
@@ -306,7 +305,6 @@ pub(crate) fn take_snapshot(
 ///
 /// On failure to create the snapshot, logs once and returns `None` so the theme
 /// still changes immediately.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_if_allowed(
     state: &mut State,
     renderer: &mut GlesRenderer,
@@ -314,7 +312,6 @@ pub(crate) fn start_if_allowed(
     output_size: Size<i32, Physical>,
     scale: f64,
     transform: Transform,
-    texture_transform: Transform,
     now: Instant,
 ) -> Option<ThemeFade> {
     if state.config.appearance.reduced_motion || state.locked {
@@ -322,13 +319,7 @@ pub(crate) fn start_if_allowed(
     }
     let pending = pending_surfaces(state);
     let texture = take_snapshot(state, renderer, cursor, output_size, scale, transform)?;
-    Some(ThemeFade::new(
-        renderer,
-        texture,
-        texture_transform,
-        pending,
-        now,
-    ))
+    Some(ThemeFade::new(renderer, texture, pending, now))
 }
 
 /// Logs a snapshot failure once and tells the caller to fall back to an
@@ -504,19 +495,15 @@ mod tests {
         }
 
         let start = Instant::now();
-        let fade = ThemeFade::new(
-            &renderer,
-            snapshot_texture,
-            Transform::Normal,
-            HashSet::new(),
-            start,
-        );
+        let fade = ThemeFade::new(&renderer, snapshot_texture, HashSet::new(), start);
 
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create output texture");
         let mut target = renderer.bind(&mut output_texture).expect("bind output");
-        let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), render_transform);
+        // Compositing with Normal matches the DRM primary plane (and the winit
+        // output); the texture itself is already upright.
+        let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), Transform::Normal);
         tracker
             .render_output(
                 &mut renderer,
@@ -533,17 +520,25 @@ mod tests {
             .copy_framebuffer(&target, Rectangle::from_size(buffer_size), Fourcc::Abgr8888)
             .expect("copy framebuffer");
         let bytes = renderer.map_texture(&mapping).expect("map texture");
+
+        // Flip the GL bottom-up readback to top-down, matching capture.rs.
+        let mut flipped = vec![0u8; bytes.len()];
+        let stride = 64 * 4;
+        for row in 0..64 {
+            let src = (63 - row) * stride;
+            let dst = row * stride;
+            flipped[dst..dst + stride].copy_from_slice(&bytes[src..src + stride]);
+        }
         let pixel = |x: usize, y: usize| {
             let offset = (y * 64 + x) * 4;
             [
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
+                flipped[offset],
+                flipped[offset + 1],
+                flipped[offset + 2],
+                flipped[offset + 3],
             ]
         };
 
-        // GL readback is bottom-up; (8, 8) in the raw bytes is the visual top-left.
         assert_eq!(
             pixel(8, 8),
             [255, 0, 0, 255],
