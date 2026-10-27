@@ -262,15 +262,14 @@ pub(crate) fn pending_surfaces(state: &State) -> HashSet<ObjectId> {
 
 /// Renders the current output (without the cursor) into a fresh `GlesTexture`.
 ///
-/// The texture is in physical pixels and uses `transform` so it can be drawn
-/// 1:1 as a full-screen element in the next frame.
+/// The texture is in physical pixels and rendered with `Transform::Normal` so
+/// it can be sampled 1:1 with a `Transform::Normal` TextureBuffer.
 pub(crate) fn take_snapshot(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
     output_size: Size<i32, Physical>,
     scale: f64,
-    transform: Transform,
 ) -> Option<GlesTexture> {
     let start = Instant::now();
     let elements = crate::session::build_output_elements(state, renderer, cursor, false);
@@ -279,7 +278,8 @@ pub(crate) fn take_snapshot(
         Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, buffer_size).ok()?;
     {
         let mut framebuffer = renderer.bind(&mut texture).ok()?;
-        let mut tracker = OutputDamageTracker::new(output_size, Scale::from(scale), transform);
+        let mut tracker =
+            OutputDamageTracker::new(output_size, Scale::from(scale), Transform::Normal);
         let rendered = tracker.render_output(
             renderer,
             &mut framebuffer,
@@ -311,14 +311,13 @@ pub(crate) fn start_if_allowed(
     cursor: &Cursors,
     output_size: Size<i32, Physical>,
     scale: f64,
-    transform: Transform,
     now: Instant,
 ) -> Option<ThemeFade> {
     if state.config.appearance.reduced_motion || state.locked {
         return None;
     }
     let pending = pending_surfaces(state);
-    let texture = take_snapshot(state, renderer, cursor, output_size, scale, transform)?;
+    let texture = take_snapshot(state, renderer, cursor, output_size, scale)?;
     Some(ThemeFade::new(renderer, texture, pending, now))
 }
 
@@ -461,7 +460,6 @@ mod tests {
 
         let size = Size::<i32, Physical>::from((64, 64));
         let buffer_size = Size::<i32, BufferCoord>::from((64, 64));
-        let render_transform = Transform::Flipped180;
         let red = [1.0, 0.0, 0.0, 1.0];
         let blue = [0.0, 0.0, 1.0, 1.0];
         let top = SolidColorRenderElement::from_buffer(
@@ -480,15 +478,31 @@ mod tests {
         );
         let source_elements: Vec<super::OutputRenderElement> = vec![top.into(), bottom.into()];
 
+        // Texture A: the source scene rendered directly with Normal.
+        let mut direct_texture =
+            Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
+                .expect("create direct texture");
+        {
+            let mut target = renderer.bind(&mut direct_texture).expect("bind direct");
+            let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), Transform::Normal);
+            tracker
+                .render_output(&mut renderer, &mut target, 0, &source_elements, [0.0; 4])
+                .expect("render source scene")
+                .sync
+                .wait()
+                .expect("direct sync");
+        }
+
+        // Texture S: the snapshot path, identical to take_snapshot (Normal transform).
         let mut snapshot_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create snapshot texture");
         {
             let mut target = renderer.bind(&mut snapshot_texture).expect("bind snapshot");
-            let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), render_transform);
+            let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), Transform::Normal);
             tracker
                 .render_output(&mut renderer, &mut target, 0, &source_elements, [0.0; 4])
-                .expect("render source scene")
+                .expect("render snapshot")
                 .sync
                 .wait()
                 .expect("snapshot sync");
@@ -497,57 +511,66 @@ mod tests {
         let start = Instant::now();
         let fade = ThemeFade::new(&renderer, snapshot_texture, HashSet::new(), start);
 
+        // Texture B: the fade element composited with Normal.
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create output texture");
-        let mut target = renderer.bind(&mut output_texture).expect("bind output");
-        // Compositing with Normal matches the DRM primary plane (and the winit
-        // output); the texture itself is already upright.
-        let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), Transform::Normal);
-        tracker
-            .render_output(
-                &mut renderer,
-                &mut target,
-                0,
-                &[fade.element(1.0)],
-                [0.0; 4],
-            )
-            .expect("render fade element")
-            .sync
-            .wait()
-            .expect("output sync");
-        let mapping = renderer
-            .copy_framebuffer(&target, Rectangle::from_size(buffer_size), Fourcc::Abgr8888)
-            .expect("copy framebuffer");
-        let bytes = renderer.map_texture(&mapping).expect("map texture");
-
-        // Flip the GL bottom-up readback to top-down, matching capture.rs.
-        let mut flipped = vec![0u8; bytes.len()];
-        let stride = 64 * 4;
-        for row in 0..64 {
-            let src = (63 - row) * stride;
-            let dst = row * stride;
-            flipped[dst..dst + stride].copy_from_slice(&bytes[src..src + stride]);
+        {
+            let mut target = renderer.bind(&mut output_texture).expect("bind output");
+            let mut tracker = OutputDamageTracker::new(size, Scale::from(1.0), Transform::Normal);
+            tracker
+                .render_output(
+                    &mut renderer,
+                    &mut target,
+                    0,
+                    &[fade.element(1.0)],
+                    [0.0; 4],
+                )
+                .expect("render fade element")
+                .sync
+                .wait()
+                .expect("output sync");
         }
-        let pixel = |x: usize, y: usize| {
-            let offset = (y * 64 + x) * 4;
-            [
-                flipped[offset],
-                flipped[offset + 1],
-                flipped[offset + 2],
-                flipped[offset + 3],
-            ]
+
+        let mut read = |texture: &mut GlesTexture| {
+            let target = renderer.bind(texture).expect("bind for read");
+            let mapping = renderer
+                .copy_framebuffer(&target, Rectangle::from_size(buffer_size), Fourcc::Abgr8888)
+                .expect("copy framebuffer");
+            renderer
+                .map_texture(&mapping)
+                .expect("map texture")
+                .to_vec()
         };
 
+        let direct_bytes = read(&mut direct_texture);
+        let output_bytes = read(&mut output_texture);
+
+        // Guard against a flat image: direct render must have red top and blue bottom.
+        let pixel = |bytes: &[u8], x: usize, y: usize| {
+            let offset = (y * 64 + x) * 4;
+            [
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]
+        };
         assert_eq!(
-            pixel(8, 8),
+            pixel(&direct_bytes, 8, 8),
             [255, 0, 0, 255],
-            "visual top-left should be red"
+            "direct top-left should be red"
         );
         assert_eq!(
-            pixel(8, 56),
+            pixel(&direct_bytes, 8, 56),
             [0, 0, 255, 255],
-            "visual bottom-left should be blue"
+            "direct bottom-left should be blue"
+        );
+
+        // The fade must reproduce the source scene byte-for-byte.
+        assert_eq!(
+            direct_bytes, output_bytes,
+            "fade element must match the source scene exactly"
         );
     }
 }

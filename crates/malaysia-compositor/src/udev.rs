@@ -50,14 +50,12 @@ use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State};
 use vow_appearance::watch::AppearanceWatch;
 
-/// The render transform shared by DRM captures, screenshots and the theme fade
-/// snapshot. OpenGL's framebuffer origin is bottom-left; Smithay's y-down space
-/// arrives inverted unless the render transform flips it (see
-/// `session::winit_render_transform` for the winit equivalent).
+/// The render transform shared by DRM captures and screenshots.
 ///
-/// The offscreen snapshot is rendered with this flip, so the resulting texture
-/// is upright. The fade's TextureBuffer uses `Transform::Normal`, matching the
-/// winit backend and the DRM primary plane.
+/// OpenGL's framebuffer origin is bottom-left; Smithay's y-down space
+/// arrives inverted unless the render transform flips it. The theme fade
+/// snapshot uses `Transform::Normal` because it is an offscreen texture
+/// sampled 1:1, not the KMS primary plane.
 pub(crate) const fn render_transform() -> Transform {
     Transform::Flipped180
 }
@@ -317,7 +315,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
                         &data.cursor,
                         output_size,
                         scale,
-                        render_transform(),
                         now,
                     );
                     data.state.theme_fade = fade;
