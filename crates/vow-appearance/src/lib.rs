@@ -409,18 +409,24 @@ pub fn resolve(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Resolve
         TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(normal_accent)),
     };
 
-    let (mut shell, menu, mut sidebar, mut toolgroup) = chrome_surfaces(
+    let (mut shell, mut menu, mut sidebar, mut toolgroup) = chrome_surfaces(
         scheme,
         appearance.sidebar_style,
         appearance.reduce_transparency,
     );
     let surfaces = tinted_surfaces(scheme, window_tint, &base);
+    menu.hover_bg = accent;
+    menu.hover_fg = base.on_accent;
+    menu.search_ring = accent;
     if dark {
         // In dark modes the selected row blends the accent into the sidebar
         // background so it is readable on bg-sunken. The ink stays white.
         sidebar.palette.selected_bg = accent.mix(sidebar.bg, SETTINGS.selected_dark_mix);
-        sidebar.palette.selected_ink = base.on_accent;
+    } else {
+        sidebar.palette.selected_bg = accent;
     }
+    sidebar.palette.item_icon = accent;
+    sidebar.palette.selected_ink = base.on_accent;
     if let Some((tint, factor)) = panel_tint {
         shell.bar = shell.bar.mix(tint, factor);
         shell.tile = shell.tile.mix(tint, factor);
@@ -1402,6 +1408,10 @@ sidebar_style = "flat"
                 resolved.toolgroup.palette, expected_toolgroup,
                 "{scheme:?} toolgroup palette"
             );
+            assert_eq!(
+                resolved.sidebar.palette.item_icon, resolved.accent,
+                "{scheme:?} sidebar item icon"
+            );
 
             if matches!(scheme, ColorScheme::Dark | ColorScheme::DarkTint) {
                 // Dark modes blend the accent into the sidebar background for
@@ -1418,6 +1428,10 @@ sidebar_style = "flat"
                     "{scheme:?} selected_ink"
                 );
             } else {
+                let expected_sidebar = SidebarPalette {
+                    item_icon: resolved.accent,
+                    ..expected_sidebar
+                };
                 assert_eq!(resolved.sidebar.palette, expected_sidebar);
             }
         }

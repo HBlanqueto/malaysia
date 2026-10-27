@@ -384,16 +384,85 @@ mod tests {
     }
 
     #[test]
+    fn selection_colours_follow_the_accent() {
+        let orange = Rgba {
+            r: 0.95,
+            g: 0.5,
+            b: 0.1,
+            a: 1.0,
+        };
+        let config = |scheme| AppearanceConfig {
+            color_scheme: scheme,
+            accent_color: Some([orange.r, orange.g, orange.b]),
+            ..Default::default()
+        };
+
+        let light = resolve(&config(ColorScheme::Light), None);
+        assert_eq!(light.menu.hover_bg, orange, "light menu selection");
+        assert_eq!(light.menu.search_ring, orange, "light focus ring");
+        assert_eq!(
+            light.sidebar.palette.selected_bg, orange,
+            "light sidebar selection"
+        );
+        assert_eq!(
+            light.sidebar.palette.item_icon, orange,
+            "light sidebar icon"
+        );
+        assert_eq!(
+            light.sidebar.palette.selected_ink,
+            vow_design::LIGHT.on_accent
+        );
+        assert_eq!(
+            crate::sidebar::item_icon_color(true, light.sidebar.palette),
+            vow_design::LIGHT.on_accent,
+            "light selected sidebar icon"
+        );
+        assert_eq!(
+            crate::sidebar::item_icon_color(false, light.sidebar.palette),
+            orange,
+            "light unselected sidebar icon"
+        );
+        assert_ne!(light.menu.hover_bg, vow_design::LIGHT.accent);
+
+        let dark = resolve(&config(ColorScheme::Dark), None);
+        assert_eq!(dark.menu.hover_bg, orange, "dark menu selection");
+        assert_eq!(dark.menu.search_ring, orange, "dark focus ring");
+        assert_eq!(
+            dark.sidebar.palette.selected_bg,
+            orange.mix(dark.sidebar.bg, vow_design::SETTINGS.selected_dark_mix),
+            "dark sidebar selection"
+        );
+        assert_eq!(dark.sidebar.palette.item_icon, orange, "dark sidebar icon");
+        assert_eq!(
+            dark.sidebar.palette.selected_ink,
+            vow_design::DARK.on_accent
+        );
+        assert_eq!(
+            crate::sidebar::item_icon_color(true, dark.sidebar.palette),
+            vow_design::DARK.on_accent,
+            "dark selected sidebar icon"
+        );
+        assert_eq!(
+            crate::sidebar::item_icon_color(false, dark.sidebar.palette),
+            orange,
+            "dark unselected sidebar icon"
+        );
+    }
+
+    #[test]
     fn accent_state_recolors_sidebar_selection() {
         with_temp_dirs(|| {
-            let mut light_blue = AppearanceConfig {
+            let mut config = AppearanceConfig {
                 color_scheme: ColorScheme::Light,
+                accent_color: Some([0.95, 0.5, 0.1]),
                 ..Default::default()
             };
-            // The default accent is the first swatch (blue).
-            let blue = resolve(&light_blue, None);
-            light_blue.accent_color = Some([0.5, 0.0, 1.0]);
-            let purple = resolve(&light_blue, None);
+            let orange = resolve(&config, None);
+            config.accent_color = Some([0.5, 0.0, 1.0]);
+            let purple = resolve(&config, None);
+
+            assert_eq!(orange.sidebar.palette.selected_bg, orange.accent);
+            assert_eq!(purple.sidebar.palette.selected_bg, purple.accent);
 
             fn sidebar_selection_app() -> impl IntoElement {
                 let resolved = resolved();
@@ -407,14 +476,14 @@ mod tests {
             let (mut test, mut state) = TestingRunner::new(
                 sidebar_selection_app,
                 Size2D::new(64.0, 64.0),
-                |runner| runner.provide_root_context(|| State::create(blue)),
+                |runner| runner.provide_root_context(|| State::create(orange)),
                 1.0,
             );
             test.sync_and_update();
             let (w, h, data) = decode_png(&test.render());
             assert_eq!((w, h), (64, 64));
             let actual = pixel_at(&data, w, 32, 32);
-            let expected = over_white(blue.sidebar.palette.selected_bg.to_rgba8());
+            let expected = over_white(orange.sidebar.palette.selected_bg.to_rgba8());
             assert_eq!(actual, expected);
 
             state.set(purple);

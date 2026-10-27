@@ -11,7 +11,7 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use vow_appearance::SidebarStyle;
-use vow_design::{DURATION_BASE, Rgba, SIDEBAR, TITLEBAR};
+use vow_design::{DURATION_BASE, Rgba, SIDEBAR, SidebarPalette, TITLEBAR};
 
 use crate::platform::{DecorationResponse, WindowControls, WindowStatus};
 use crate::titlebar::{window_drag_handler, window_traffic_lights};
@@ -25,6 +25,14 @@ fn rgba(color: Rgba) -> Color {
 fn svg_with_color(template: &str, color: Rgba) -> String {
     let [r, g, b, _] = color.to_rgba8();
     template.replace("currentColor", &format!("rgb({r},{g},{b})"))
+}
+
+pub(crate) fn item_icon_color(selected: bool, palette: SidebarPalette) -> Rgba {
+    if selected {
+        palette.selected_ink
+    } else {
+        palette.item_icon
+    }
 }
 
 fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {
@@ -364,7 +372,11 @@ impl Component for SidebarItem {
                     )),
             );
         } else if let Some(svg) = self.icon {
-            row = row.child(svg_viewer(svg, palette.item_icon, SIDEBAR.item_icon));
+            row = row.child(svg_viewer(
+                svg,
+                item_icon_color(self.selected, palette),
+                SIDEBAR.item_icon,
+            ));
         }
 
         row = row.child(
