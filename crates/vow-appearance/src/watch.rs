@@ -58,7 +58,9 @@ impl AppearanceWatch {
     }
 
     fn flags() -> AddWatchFlags {
-        AddWatchFlags::IN_CLOSE_WRITE | AddWatchFlags::IN_MOVED_TO
+        // IN_DELETE covers clearing `wallpaper.state` (no dominant colour);
+        // IN_DELETE_SELF would only fire for the watched directory itself.
+        AddWatchFlags::IN_CLOSE_WRITE | AddWatchFlags::IN_MOVED_TO | AddWatchFlags::IN_DELETE
     }
 
     /// Drains every pending inotify event and returns the distinct appearance
@@ -228,6 +230,30 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(found, "wallpaper.state close_write was not detected");
+    }
+
+    #[test]
+    fn detects_wallpaper_state_delete() {
+        let (config_dir, data_dir) = tmp_dirs();
+        let watch = AppearanceWatch::new_for(config_dir, data_dir.clone()).unwrap();
+        let path = data_dir.join("wallpaper.state");
+
+        write(&path, "dominant = [0.8, 0.2, 0.1]\n");
+        // Drain the rename that created the state so only the delete is pending.
+        let _ = watch.drain();
+
+        std::fs::remove_file(&path).unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::Wallpaper)
+            {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("wallpaper.state delete was not detected");
     }
 
     #[test]
