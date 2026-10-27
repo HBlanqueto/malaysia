@@ -462,6 +462,16 @@ mod tests {
     }
 
     #[test]
+    fn ctrl_shift_z_uppercase_still_matches() {
+        // With the kit fix Shift+Z arrives as Character("Z"), not lowercased.
+        assert!(shortcut_matches(
+            "Ctrl+Shift+Z",
+            Modifiers::CONTROL | Modifiers::SHIFT,
+            &Key::Character("Z".into())
+        ));
+    }
+
+    #[test]
     fn disabled_action_does_not_fire() {
         let menu = AppMenu::new(vec![Menu::new(
             "Archivo",

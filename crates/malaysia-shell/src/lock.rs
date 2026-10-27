@@ -89,7 +89,6 @@ fn handle_key(
             None
         }
         // AltGr is Mod5/LevelThree and arrives with no flag here, so ALT can be rejected.
-        // shortcut: barrier-kit lowercases keys before this filter; uppercase needs the kit fix.
         Key::Character(_)
             if !modifiers.intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::META) =>
         {

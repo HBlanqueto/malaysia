@@ -2,6 +2,7 @@
 //! `winit_mappings.rs` but with the keys SCTK gives us.
 
 use freya_core::prelude::{Code, Key, MouseButton, NamedKey};
+use keyboard_types::Modifiers;
 use sctk::seat::keyboard::{Keysym, Modifiers as SctkModifiers};
 
 pub fn modifiers(m: SctkModifiers) -> keyboard_types::Modifiers {
@@ -95,28 +96,42 @@ fn code(keysym: Keysym) -> Code {
     }
 }
 
-pub fn key(keysym: Keysym, utf8: Option<String>) -> (Key, Code) {
+/// Returns the key value produced by `keysym` and the composed `utf8` text,
+/// taking into account the current modifier state. Modifiers travel separately
+/// in the platform event; this function only decides the character/text that a
+/// text input would receive.
+pub fn map_key(keysym: Keysym, utf8: Option<&str>, _modifiers: Modifiers) -> Key {
     if keysym == Keysym::space {
-        return (Key::Character(" ".into()), Code::Space);
+        return Key::Character(" ".into());
+    }
+    if let Some(name) = named(keysym) {
+        return Key::Named(name);
     }
     let raw = keysym.raw();
-    let mapped = match named(keysym) {
-        Some(name) => Key::Named(name),
-        None => match keysym.key_char() {
-            Some(ch) => Key::Character(ch.to_ascii_lowercase().to_string()),
-            None => {
-                if (0x20..=0x7e).contains(&raw) {
-                    Key::Character((raw as u8 as char).to_ascii_lowercase().to_string())
-                } else {
-                    match utf8.as_deref() {
-                        Some(text) if !text.is_empty() => Key::Character(text.to_string()),
-                        _ => Key::Named(NamedKey::Unidentified),
-                    }
-                }
-            }
-        },
+
+    // Prefer xkb's composed text when it exists and is not a control character.
+    // Ctrl+q produces utf8 "\x11", so we fall back to the keysym's own 'q' to
+    // keep accelerator matching working.
+    let character = if let Some(text) = utf8.filter(|t| !t.is_empty()) {
+        if text.len() == 1 && text.chars().next().unwrap().is_control() {
+            keysym.key_char().map(|c| c.to_string())
+        } else {
+            Some(text.to_string())
+        }
+    } else {
+        keysym.key_char().map(|c| c.to_string())
     };
-    (mapped, code(keysym))
+
+    match character {
+        Some(text) => Key::Character(text),
+        None if (0x20..=0x7e).contains(&raw) => Key::Character((raw as u8 as char).to_string()),
+        None => Key::Named(NamedKey::Unidentified),
+    }
+}
+
+pub fn key(keysym: Keysym, utf8: Option<String>) -> (Key, Code) {
+    let key = map_key(keysym, utf8.as_deref(), Modifiers::empty());
+    (key, code(keysym))
 }
 
 pub fn mouse_button(button: u32) -> MouseButton {
@@ -128,5 +143,43 @@ pub fn mouse_button(button: u32) -> MouseButton {
         BTN_BACK => MouseButton::Back,
         BTN_FORWARD => MouseButton::Forward,
         other => MouseButton::Other(other as u16),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use keyboard_types::{Key, Modifiers};
+
+    #[test]
+    fn shift_h_is_uppercase() {
+        assert_eq!(
+            map_key(Keysym::H, Some("H"), Modifiers::SHIFT),
+            Key::Character("H".into())
+        );
+    }
+
+    #[test]
+    fn caps_h_is_uppercase() {
+        assert_eq!(
+            map_key(Keysym::H, Some("H"), Modifiers::CAPS_LOCK),
+            Key::Character("H".into())
+        );
+    }
+
+    #[test]
+    fn altgr_two_produces_at() {
+        assert_eq!(
+            map_key(Keysym::_2, Some("@"), Modifiers::empty()),
+            Key::Character("@".into())
+        );
+    }
+
+    #[test]
+    fn ctrl_q_falls_back_to_keysym_char() {
+        assert_eq!(
+            map_key(Keysym::q, Some("\x11"), Modifiers::CONTROL),
+            Key::Character("q".into())
+        );
     }
 }
