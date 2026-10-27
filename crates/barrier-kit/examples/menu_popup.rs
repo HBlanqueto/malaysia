@@ -29,7 +29,10 @@ struct Demo {
 impl App for Demo {
     fn render(&self) -> impl IntoElement {
         let root_id = self.root_id.clone();
-        let palette = barrier_kit::theme::menu_palette(&barrier_kit::theme::resolved());
+        let palette = barrier_kit::theme::menu_palette(
+            &barrier_kit::theme::resolved(),
+            barrier_kit::theme::SurfaceKind::LayerShell,
+        );
         let show = std::env::var("MENU_POPUP_SHOW").ok();
 
         if std::env::var_os("MENU_POPUP_SELFTEST").is_some() {

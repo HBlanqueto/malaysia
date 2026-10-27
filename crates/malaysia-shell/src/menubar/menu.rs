@@ -107,7 +107,10 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     }
 
     let items = (spec.items)();
-    let palette = barrier_kit::theme::menu_palette(&barrier_kit::theme::resolved());
+    let palette = barrier_kit::theme::menu_palette(
+        &barrier_kit::theme::resolved(),
+        barrier_kit::theme::SurfaceKind::LayerShell,
+    );
     let size = MenuView::preferred_size(&items, palette);
     let (anchor_x, anchor_width) = spec.anchor.get();
     let label = spec.label.clone();
@@ -246,7 +249,8 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let is_open = state.open_label.borrow().read().as_deref() == Some(&label_text);
 
     let resolved = barrier_kit::theme::resolved();
-    let palette = barrier_kit::theme::menu_palette(&resolved);
+    let palette =
+        barrier_kit::theme::menu_palette(&resolved, barrier_kit::theme::SurfaceKind::LayerShell);
     let fg_rgba = barrier_kit::theme::shell_palette(&resolved).text;
     let fg = rgba(fg_rgba);
 

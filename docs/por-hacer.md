@@ -114,6 +114,7 @@ se revisará si el ThinkPad mide algo muy distinto.
 
 ## Deuda técnica
 
+- **L5 deriva de nombres**: los `celestial_kit` de `docs/bloques/14-menu-global.md` y otros documentos se actualizan en el lote L5; no tocar aquí.
 - **L3 arnés de test**: el compositor tiene 3 arneses de test locales
   (`session.rs:~3262`, `input.rs::test_state` — `Display` + `State` sin cliente —,
   `handlers.rs::capture_lock_tests`); unificar en uno y escribir con él el test

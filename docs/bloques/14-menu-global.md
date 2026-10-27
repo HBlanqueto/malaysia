@@ -62,7 +62,9 @@ let items = vec![
     MenuItem::Separator,
     MenuItem::Submenu { label: "Recent".to_string(), enabled: true, items: vec![], icon: None },
 ];
-let palette = theme::menu_palette(&theme::resolved());
+let resolved = theme::resolved();
+let palette = theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell);
+// Para un menú abierto desde una ventana: theme::SurfaceKind::Toplevel.
 let view = MenuView::new(
     items,
     |id| eprintln!("activated {id}"),

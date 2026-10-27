@@ -10,7 +10,10 @@ use freya_core::prelude::{Color, State, try_consume_root_context};
 use vow_appearance::{
     ColorScheme, Resolved, WindowTintScope, load_appearance, load_dominant, resolve,
 };
-use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
+use vow_design::{
+    BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, LockPalette, MenuPalette, Rgba,
+    SHELL_DARK_OPAQUE, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT_OPAQUE, ShellPalette,
+};
 
 pub(crate) fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
@@ -135,9 +138,43 @@ pub fn for_scheme(dark: bool) -> Theme {
     )
 }
 
-/// The menu palette for the current appearance.
-pub fn menu_palette(resolved: &Resolved) -> MenuPalette {
-    resolved.menu
+/// The neutral background a menu is raised above for `kind`.
+fn neutral_background(scheme: ColorScheme, kind: SurfaceKind) -> Rgba {
+    match (scheme, kind) {
+        (ColorScheme::Dark, SurfaceKind::Toplevel) => BG_WINDOW_DARK,
+        (ColorScheme::DarkTint, SurfaceKind::Toplevel) => BG_WINDOW_DARK_TINT,
+        (_, SurfaceKind::Toplevel) => BG_WINDOW_LIGHT,
+        (ColorScheme::Dark, SurfaceKind::LayerShell) => SHELL_DARK_OPAQUE.bar,
+        (ColorScheme::DarkTint, SurfaceKind::LayerShell) => SHELL_DARK_TINT_OPAQUE.bar,
+        (_, SurfaceKind::LayerShell) => SHELL_LIGHT_OPAQUE.bar,
+    }
+}
+
+/// The menu background over `kind`, keeping the menu's raised offset.
+fn menu_background(resolved: &Resolved, kind: SurfaceKind) -> Rgba {
+    let parent = surface_background(resolved, kind);
+    let neutral = neutral_background(resolved.scheme, kind);
+    let menu = resolved.menu.bg;
+    // With no tint, keep MENU_* exactly.
+    if parent.r == neutral.r && parent.g == neutral.g && parent.b == neutral.b {
+        return menu;
+    }
+    // MENU_* sits `menu - neutral` above its parent; shift by that same offset
+    // so the parent's tint survives and the menu stays raised.
+    let lift = |parent: f32, menu: f32, neutral: f32| (parent + menu - neutral).clamp(0.0, 1.0);
+    Rgba {
+        r: lift(parent.r, menu.r, neutral.r),
+        g: lift(parent.g, menu.g, neutral.g),
+        b: lift(parent.b, menu.b, neutral.b),
+        a: menu.a,
+    }
+}
+
+/// The menu palette for the current appearance and opening surface.
+pub fn menu_palette(resolved: &Resolved, kind: SurfaceKind) -> MenuPalette {
+    let mut palette = resolved.menu;
+    palette.bg = menu_background(resolved, kind);
+    palette
 }
 
 /// The theme for menubar/dock-style surfaces.
@@ -447,6 +484,119 @@ mod tests {
             orange,
             "dark unselected sidebar icon"
         );
+    }
+
+    #[test]
+    fn menu_background_follows_the_opening_surface() {
+        use vow_appearance::{WindowColorMode, WindowTintScope};
+
+        let accent = Rgba {
+            r: 0.9,
+            g: 0.1,
+            b: 0.1,
+            a: 1.0,
+        };
+        let config = |scheme, accent: Rgba, scope| AppearanceConfig {
+            color_scheme: scheme,
+            accent_color: Some([accent.r, accent.g, accent.b]),
+            reduce_transparency: true,
+            window_color: WindowColorMode::Accent,
+            window_tint_scope: scope,
+            ..Default::default()
+        };
+        let light = resolve(
+            &config(ColorScheme::Light, accent, WindowTintScope::Desktop),
+            None,
+        );
+        let windows = resolve(
+            &config(ColorScheme::Light, accent, WindowTintScope::Windows),
+            None,
+        );
+        let dark = resolve(
+            &config(ColorScheme::Dark, accent, WindowTintScope::Desktop),
+            None,
+        );
+        let dark_tint = resolve(
+            &config(ColorScheme::DarkTint, accent, WindowTintScope::Desktop),
+            None,
+        );
+
+        let expected = |resolved: &Resolved, kind: SurfaceKind, neutral: Rgba| {
+            let parent = surface_background(resolved, kind);
+            let menu = resolved.menu.bg;
+            let lift =
+                |parent: f32, menu: f32, neutral: f32| (parent + menu - neutral).clamp(0.0, 1.0);
+            Rgba {
+                r: lift(parent.r, menu.r, neutral.r),
+                g: lift(parent.g, menu.g, neutral.g),
+                b: lift(parent.b, menu.b, neutral.b),
+                a: menu.a,
+            }
+        };
+
+        for (name, resolved, kind, neutral) in [
+            (
+                "light/toplevel",
+                light,
+                SurfaceKind::Toplevel,
+                BG_WINDOW_LIGHT,
+            ),
+            (
+                "light/layer",
+                light,
+                SurfaceKind::LayerShell,
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            ("dark/toplevel", dark, SurfaceKind::Toplevel, BG_WINDOW_DARK),
+            (
+                "dark/layer",
+                dark,
+                SurfaceKind::LayerShell,
+                SHELL_DARK_OPAQUE.bar,
+            ),
+            (
+                "dark-tint/toplevel",
+                dark_tint,
+                SurfaceKind::Toplevel,
+                BG_WINDOW_DARK_TINT,
+            ),
+            (
+                "dark-tint/layer",
+                dark_tint,
+                SurfaceKind::LayerShell,
+                SHELL_DARK_TINT_OPAQUE.bar,
+            ),
+        ] {
+            assert_eq!(
+                menu_palette(&resolved, kind).bg,
+                expected(&resolved, kind, neutral),
+                "{name}: menu must keep its raised offset and inherit the tint"
+            );
+        }
+
+        assert_eq!(
+            menu_palette(&windows, SurfaceKind::LayerShell).bg,
+            windows.menu.bg,
+            "a layer-shell menu must stay neutral when only windows are tinted"
+        );
+
+        let white = Rgba {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
+        };
+        let pale = resolve(
+            &config(ColorScheme::Light, white, WindowTintScope::Desktop),
+            None,
+        );
+        let pale_menu = menu_palette(&pale, SurfaceKind::LayerShell).bg;
+        assert_eq!(
+            pale_menu,
+            expected(&pale, SurfaceKind::LayerShell, SHELL_LIGHT_OPAQUE.bar),
+            "a light accent must clamp every channel to 1"
+        );
+        assert!(pale_menu.r <= 1.0 && pale_menu.g <= 1.0 && pale_menu.b <= 1.0);
     }
 
     #[test]
