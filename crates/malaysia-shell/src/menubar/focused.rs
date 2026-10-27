@@ -693,6 +693,7 @@ mod tests {
             minimized,
             restorable,
             app_menu: None,
+            gtk_menus: None,
         }
     }
 

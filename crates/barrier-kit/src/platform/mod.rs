@@ -1119,6 +1119,19 @@ pub struct ToplevelInfo {
     pub restorable: bool,
     /// The app's dbusmenu address, when it announced one.
     pub app_menu: Option<AppMenuAddress>,
+    /// The GTK 3/4 D-Bus menu address, when announced via `gtk_shell1`.
+    pub gtk_menus: Option<GtkMenusAddress>,
+}
+
+/// D-Bus address of a GTK global menu (ADR 0045).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GtkMenusAddress {
+    pub unique_bus_name: String,
+    pub application_id: String,
+    pub menubar_path: String,
+    pub app_menu_path: String,
+    pub application_object_path: String,
+    pub window_object_path: String,
 }
 
 /// A change that only touches one toplevel's metadata. Kept pure so the
@@ -1133,6 +1146,7 @@ enum InfoEvent {
         minimized: bool,
     },
     AppMenu(Option<AppMenuAddress>),
+    GtkMenus(Option<GtkMenusAddress>),
     Closed,
 }
 
@@ -1153,6 +1167,7 @@ fn apply_info_event(infos: &mut Vec<ToplevelInfo>, index: usize, event: InfoEven
             info.minimized = minimized;
         }
         InfoEvent::AppMenu(app_menu) => info.app_menu = app_menu,
+        InfoEvent::GtkMenus(gtk_menus) => info.gtk_menus = gtk_menus,
         InfoEvent::Closed => {
             infos.remove(index);
         }
@@ -2101,7 +2116,7 @@ impl Shell {
             .bind::<ZwlrForeignToplevelManagerV1, _, _>(&qh, 3..=3, ())
             .ok();
         let infinity_manager_bound = globals
-            .bind::<InfinityWindowManagerV1, _, _>(&qh, 1..=2, ())
+            .bind::<InfinityWindowManagerV1, _, _>(&qh, 1..=3, ())
             .ok();
         *infinity_manager.borrow_mut() = infinity_manager_bound;
         let activation_global = globals.bind::<XdgActivationV1, _, _>(&qh, 1..=1, ()).ok();
@@ -3813,21 +3828,58 @@ impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
                 } else {
                     Some(AppMenuAddress { service, path })
                 };
-                let mut entries = state.toplevel_entries.borrow_mut();
-                if let Some(index) = entries.iter().position(|entry| {
-                    entry
-                        .mgmt
-                        .as_ref()
-                        .is_some_and(|mgmt| mgmt.id() == toplevel.id())
-                }) {
-                    let mut infos: Vec<ToplevelInfo> =
-                        entries.iter().map(|entry| entry.info.clone()).collect();
-                    apply_info_event(&mut infos, index, InfoEvent::AppMenu(address));
-                    entries[index].info = infos[index].clone();
-                }
+                update_toplevel_info(
+                    &mut state.toplevel_entries.borrow_mut(),
+                    &toplevel,
+                    InfoEvent::AppMenu(address),
+                );
+            }
+            Event::GtkMenus {
+                toplevel,
+                unique_bus_name,
+                application_id,
+                menubar_path,
+                app_menu_path,
+                application_object_path,
+                window_object_path,
+            } => {
+                let address = if unique_bus_name.is_empty() || menubar_path.is_empty() {
+                    None
+                } else {
+                    Some(GtkMenusAddress {
+                        unique_bus_name,
+                        application_id,
+                        menubar_path,
+                        app_menu_path,
+                        application_object_path,
+                        window_object_path,
+                    })
+                };
+                update_toplevel_info(
+                    &mut state.toplevel_entries.borrow_mut(),
+                    &toplevel,
+                    InfoEvent::GtkMenus(address),
+                );
             }
         }
         state.sync_toplevels();
+    }
+}
+
+fn update_toplevel_info(
+    entries: &mut [ToplevelEntry],
+    toplevel: &ZwlrForeignToplevelHandleV1,
+    event: InfoEvent,
+) {
+    if let Some(index) = entries.iter().position(|entry| {
+        entry
+            .mgmt
+            .as_ref()
+            .is_some_and(|mgmt| mgmt.id() == toplevel.id())
+    }) {
+        let mut infos: Vec<ToplevelInfo> = entries.iter().map(|entry| entry.info.clone()).collect();
+        apply_info_event(&mut infos, index, event);
+        entries[index].info = infos[index].clone();
     }
 }
 
@@ -4015,5 +4067,33 @@ mod tests {
 
         apply_info_event(&mut infos, 0, InfoEvent::AppMenu(None));
         assert!(infos[0].app_menu.is_none());
+    }
+
+    #[test]
+    fn gtk_menus_event_updates_only_its_toplevel() {
+        let mut infos = vec![ToplevelInfo::default(), ToplevelInfo::default()];
+        apply_info_event(
+            &mut infos,
+            0,
+            InfoEvent::GtkMenus(Some(GtkMenusAddress {
+                unique_bus_name: ":1.3".to_string(),
+                application_id: "org.gtk.Demo".to_string(),
+                menubar_path: "/menubar".to_string(),
+                app_menu_path: "/appmenu".to_string(),
+                application_object_path: "/application".to_string(),
+                window_object_path: "/window".to_string(),
+            })),
+        );
+        assert_eq!(
+            infos[0]
+                .gtk_menus
+                .as_ref()
+                .map(|a| a.unique_bus_name.as_str()),
+            Some(":1.3")
+        );
+        assert!(infos[1].gtk_menus.is_none());
+
+        apply_info_event(&mut infos, 0, InfoEvent::GtkMenus(None));
+        assert!(infos[0].gtk_menus.is_none());
     }
 }

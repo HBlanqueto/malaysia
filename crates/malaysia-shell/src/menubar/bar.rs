@@ -97,6 +97,11 @@ impl App for BarApp {
                 None::<(String, Option<barrier_kit::platform::AppMenuAddress>, bool)>,
             ))
         });
+        let last_gtk_menus = use_hook(|| {
+            Rc::new(RefCell::new(
+                None::<(String, Option<barrier_kit::platform::GtkMenusAddress>)>,
+            ))
+        });
         let toplevels = Toplevels::get().list.read().clone();
         let active_info = toplevels.iter().find(|window| window.active).or_else(|| {
             app_id
@@ -137,6 +142,28 @@ impl App for BarApp {
                         self.dbus.unfocus();
                     }
                     None => self.dbus.unfocus(),
+                }
+                *last = key;
+            }
+        }
+        {
+            let mut last = last_gtk_menus.borrow_mut();
+            let key = active_info.map(|info| (info.app_id.clone(), info.gtk_menus.clone()));
+            if *last != key {
+                match &key {
+                    Some((app_id, Some(menu))) => {
+                        tracing::info!(
+                            app_id = %app_id,
+                            bus = %menu.unique_bus_name,
+                            menubar = %menu.menubar_path,
+                            appmenu = %menu.app_menu_path,
+                            "menubar: gtk_menus"
+                        );
+                    }
+                    Some((app_id, None)) => {
+                        tracing::info!(app_id = %app_id, "menubar: gtk_menus none");
+                    }
+                    None => {}
                 }
                 *last = key;
             }

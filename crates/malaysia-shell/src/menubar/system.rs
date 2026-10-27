@@ -90,6 +90,7 @@ mod tests {
             minimized: false,
             restorable: false,
             app_menu: None,
+            gtk_menus: None,
         }
     }
 
