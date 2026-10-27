@@ -31,8 +31,9 @@ referencia**, así que el `NOTICE` no cambia en 14d.
    con `appmenu-gtk-module` y de apps XWayland futuras. La barra es dueña del
    nombre en la sesión y casa la ventana enfocada **por pid**, no por el id X11
    que trae el registro. Es la fase 14d-3.
-3. **`gtk_shell1` → `org.gtk.Menus`**, GTK 3/4 nativo por Wayland. Queda para
-   una fase posterior; no entra en 14d.
+3. **`gtk_shell1` → `org.gtk.Menus`**, GTK 3/4 nativo por Wayland. Diseño
+   cerrado en el [ADR 0045](0045-gtk-shell1-y-org-gtk-menus.md); implementación
+   en 14f.
 4. **Respaldo de 14c** (`focused.rs`), sin cambios: si no hay menú real, la
    consulta vence o el servicio desaparece, la barra sigue mostrando
    {App} · Ventana · Ayuda.

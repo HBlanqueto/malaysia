@@ -283,8 +283,11 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
     de Firefox viven en `~/nixdots`, nunca en el repo.
 - **14e — Apps de BarrierKit exportan dbusmenu.** Sin atajo privado por
   Infinity.
-- **Después:** `gtk_shell1`/`org.gtk.Menus`, HUD en el launcher y menú de atajos
-  por app.
+- **14f — GTK (`gtk_shell1` → `org.gtk.Menus`).**
+  - **14f-1:** compositor sirve `gtk_shell1` v5 y añade el evento `gtk_menus` a
+    Infinity v3; la barra solo loguea el evento.
+  - **14f-2:** cliente `org.gtk.Menus` en la barra y dibujo del menú GTK.
+- **Después:** HUD en el launcher y menú de atajos por app.
 
 Detalle del menú «MalaysiaDreams» y de las medidas de Neptunia en
 [`arquitectura/menubar.md`](arquitectura/menubar.md#menú-global-planeado-bloque-14).
