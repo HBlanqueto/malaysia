@@ -23,6 +23,7 @@ use smithay::reexports::wayland_server::protocol::wl_output::WlOutput;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{SERIAL_COUNTER, Size};
 use smithay::wayland::compositor::add_destruction_hook;
+use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::session_lock::{
     LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker,
 };
@@ -61,6 +62,15 @@ impl SessionLockHandler for State {
         self.arm_lock_recovery(LOCK_START_GRACE);
         self.clear_keyboard_focus();
         self.clear_chrome_pointer();
+        // Fail any capture frame that was already queued: the render path will
+        // not process normal content while locked.
+        for pending in std::mem::take(&mut self.pending_captures) {
+            pending.frame.fail(CaptureFailureReason::Unknown);
+        }
+        // Drop a pending screenshot and its interactive mode; cancel_screenshot
+        // clears the mode and the cursor, and clearing screenshot drops the request.
+        self.screenshot = None;
+        self.cancel_screenshot();
         self.request_redraw();
         // Confirm immediately: the next frame shows the locked session (a
         // solid color until the client's lock surfaces arrive), so no normal

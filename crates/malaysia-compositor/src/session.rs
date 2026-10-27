@@ -1465,6 +1465,13 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         // render does not leave the GL context without the window surface.
         let capture_scale = session.state.scale.fractional_scale();
         for pending in std::mem::take(&mut session.state.pending_captures) {
+            // The lock path already fails queued frames, and frame() rejects new
+            // ones while locked; guard the render-side path too so a window
+            // capture can never call build_window_elements on a locked session.
+            if session.state.locked {
+                pending.frame.fail(CaptureFailureReason::Unknown);
+                continue;
+            }
             let (size, window_elements) = match &pending.target {
                 crate::capture::CaptureTarget::Output { size } => (*size, None),
                 crate::capture::CaptureTarget::Window { id, size } => {

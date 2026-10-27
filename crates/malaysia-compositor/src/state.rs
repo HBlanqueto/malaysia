@@ -787,6 +787,11 @@ impl State {
     }
 
     fn finish_screenshot(&mut self, request: ScreenshotRequest) {
+        // Blocked while locked like request_screenshot: the lock surface is not
+        // something to save and a region selection must not survive the lock.
+        if self.locked {
+            return;
+        }
         self.screenshot = Some(request);
         self.screenshot_mode = None;
         self.cursor_status = CursorImageStatus::Named(CursorIcon::Default);
