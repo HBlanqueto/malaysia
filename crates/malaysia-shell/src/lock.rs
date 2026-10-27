@@ -77,7 +77,7 @@ fn handle_key(
     field: &mut PasswordField,
     key: &Key,
     text: Option<&str>,
-    modifiers_empty: bool,
+    modifiers: Modifiers,
 ) -> Option<Zeroizing<String>> {
     if matches!(field.state(), FieldState::Verifying) {
         return None;
@@ -88,7 +88,11 @@ fn handle_key(
             field.backspace();
             None
         }
-        Key::Character(_) if modifiers_empty => {
+        // AltGr is Mod5/LevelThree and arrives with no flag here, so ALT can be rejected.
+        // shortcut: barrier-kit lowercases keys before this filter; uppercase needs the kit fix.
+        Key::Character(_)
+            if !modifiers.intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::META) =>
+        {
             if let Some(text) = text {
                 for ch in text.chars() {
                     field.insert(ch);
@@ -201,7 +205,7 @@ impl App for LockApp {
                             Key::Character(text) => Some(text.as_str()),
                             _ => None,
                         },
-                        event.modifiers.is_empty(),
+                        event.modifiers,
                     )
                 };
                 model.set(next);
@@ -364,9 +368,53 @@ mod tests {
                     field,
                     &Key::Character(ch.to_string()),
                     Some(&ch.to_string()),
-                    true
+                    Modifiers::empty()
                 )
                 .is_none()
+            );
+        }
+    }
+
+    // The kit lowercases real keys before the lock sees them; this table covers
+    // the lock's flag filter, not the case the kit delivers.
+    #[test]
+    fn modifier_flags_table_decides_insertion() {
+        let cases = [
+            (Modifiers::empty(), "H", Some("H")),
+            (Modifiers::SHIFT, "H", Some("H")),
+            (Modifiers::CAPS_LOCK, "H", Some("H")),
+            (Modifiers::NUM_LOCK, "7", Some("7")),
+            (
+                Modifiers::SHIFT | Modifiers::CAPS_LOCK | Modifiers::NUM_LOCK,
+                "H",
+                Some("H"),
+            ),
+            (Modifiers::empty(), "@", Some("@")),
+            (Modifiers::CONTROL, "a", None),
+            (Modifiers::ALT, "a", None),
+            (Modifiers::META, "a", None),
+            (Modifiers::CONTROL | Modifiers::SHIFT, "a", None),
+            (Modifiers::ALT | Modifiers::SHIFT, "a", None),
+            (Modifiers::META | Modifiers::SHIFT, "a", None),
+        ];
+        for (modifiers, text, expected) in cases {
+            let mut model = model();
+            let mut field = PasswordField::default();
+            assert!(
+                handle_key(
+                    &mut model,
+                    &mut field,
+                    &Key::Character(text.to_string()),
+                    Some(text),
+                    modifiers,
+                )
+                .is_none(),
+                "{modifiers:?} must not submit"
+            );
+            assert_eq!(
+                field.take().as_deref().map(String::as_str),
+                expected,
+                "{modifiers:?} with {text:?}"
             );
         }
     }
@@ -399,7 +447,7 @@ mod tests {
             &mut field,
             &Key::Named(NamedKey::Enter),
             None,
-            true,
+            Modifiers::empty(),
         )
         .expect("submit a non-empty field");
         assert_eq!(secret.as_str(), "a");
@@ -410,7 +458,7 @@ mod tests {
                 &mut field,
                 &Key::Character("b".to_string()),
                 Some("b"),
-                true,
+                Modifiers::empty(),
             )
             .is_none()
         );
@@ -427,7 +475,7 @@ mod tests {
             &mut field,
             &Key::Named(NamedKey::Enter),
             None,
-            true,
+            Modifiers::empty(),
         );
         apply_pam_event(
             &mut model,
@@ -454,7 +502,7 @@ mod tests {
             &mut field,
             &Key::Named(NamedKey::Enter),
             None,
-            true,
+            Modifiers::empty(),
         );
         apply_pam_event(
             &mut model,
@@ -468,7 +516,7 @@ mod tests {
             &mut field,
             &Key::Named(NamedKey::Enter),
             None,
-            true,
+            Modifiers::empty(),
         )
         .expect("submit the second secret");
         assert_eq!(secret.as_str(), "new");
@@ -484,7 +532,7 @@ mod tests {
             &mut field,
             &Key::Named(NamedKey::Enter),
             None,
-            true,
+            Modifiers::empty(),
         );
         apply_pam_event(
             &mut model,
