@@ -128,6 +128,7 @@ fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignTo
     handle.done();
     state.foreign.management.handles.push((id, handle));
     state.send_app_menu_to_client(id, client.id());
+    state.send_gtk_menus_to_client(id, client.id());
 }
 
 impl smithay::reexports::wayland_server::GlobalDispatch<ZwlrForeignToplevelManagerV1, (), State>

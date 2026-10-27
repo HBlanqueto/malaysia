@@ -23,11 +23,11 @@
     DEALINGS IN THE SOFTWARE.
   </copyright>
 
-  <interface name="infinity_window_manager_v1" version="2">
+  <interface name="infinity_window_manager_v1" version="3">
     <description summary="private window geometry channel for malaysia-shell">
       This protocol is private to malaysia-shell. It lets the shell ask the
       compositor to place windows in halves, quarters, pairs and fullscreen
-      arrangements, and reports the D-Bus address of each window's global
+      arrangements, and reports the D-Bus addresses of each window's global
       menu.
 
       The shell identifies windows with the same zwlr_foreign_toplevel_handle_v1
@@ -116,7 +116,26 @@
            interface="zwlr_foreign_toplevel_handle_v1"/>
       <arg name="service" type="string"/>
       <arg name="path" type="string"/>
-  </event>
+    </event>
+
+    <event name="gtk_menus" since="3">
+      <description summary="D-Bus address of the window's GTK menu">
+        The D-Bus bus name and object paths exported by a GTK 3/4 application
+        for its global menubar and app menu. Empty values mean the window has
+        no GTK global menu.
+
+        Sent when the address changes, when the toplevel handle is created and
+        when the manager binds, never when focus changes.
+      </description>
+      <arg name="toplevel" type="object"
+           interface="zwlr_foreign_toplevel_handle_v1"/>
+      <arg name="unique_bus_name" type="string"/>
+      <arg name="application_id" type="string"/>
+      <arg name="menubar_path" type="string"/>
+      <arg name="app_menu_path" type="string"/>
+      <arg name="application_object_path" type="string"/>
+      <arg name="window_object_path" type="string"/>
+    </event>
 
   <request name="destroy" type="destructor">
       <description summary="destroy the manager object">

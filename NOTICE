@@ -1,3 +1,11 @@
+GTK Shell protocol
+LGPL-2.1-or-later
+
+The file `protocols/gtk-shell.xml` is copied without modification from the GTK
+repository at https://gitlab.gnome.org/GNOME/gtk, commit
+efcc16deb0e0373655e2e4aed139ff7de3096134.
+
+
 Yuki
 Copyright (c) 2026 H. Blanqueto
 

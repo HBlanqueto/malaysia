@@ -79,6 +79,7 @@ use malaysia_scene::scene::Decoration;
 use crate::capture::CaptureTarget;
 use crate::delegate_appmenu;
 use crate::delegate_foreign_management;
+use crate::delegate_gtk;
 use crate::state::{ClientState, State};
 
 /// How long a client-created activation token stays usable.
@@ -208,6 +209,7 @@ impl CompositorHandler for State {
 
     fn destroyed(&mut self, surface: &WlSurface) {
         self.clear_surface_appmenu(surface);
+        self.clear_surface_gtk_menus(surface);
     }
 }
 
@@ -1534,5 +1536,7 @@ mod capture_lock_tests {
         );
     }
 }
+
+delegate_gtk!(State);
 
 delegate_dispatch2!(State);

@@ -28,6 +28,7 @@ mod cursor;
 pub mod decoration;
 mod effects;
 mod foreign;
+mod gtk;
 mod handlers;
 mod idle;
 mod infinity;

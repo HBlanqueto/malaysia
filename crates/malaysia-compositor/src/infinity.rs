@@ -135,9 +135,6 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
             let client_id = client.id();
             let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
             for id in ids {
-                let Some(address) = state.appmenu_address(id) else {
-                    continue;
-                };
                 let Some(handle) = state
                     .foreign
                     .management
@@ -145,7 +142,21 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
                 else {
                     continue;
                 };
+                let address = state.appmenu_address(id).unwrap_or_default();
                 manager.app_menu(handle, address.service, address.path);
+
+                if manager.version() >= 3 {
+                    let gtk = state.gtk_menus_address(id).unwrap_or_default();
+                    manager.gtk_menus(
+                        handle,
+                        gtk.unique_bus_name,
+                        gtk.application_id,
+                        gtk.menubar_path,
+                        gtk.app_menu_path,
+                        gtk.application_object_path,
+                        gtk.window_object_path,
+                    );
+                }
             }
         }
         state.infinity_managers.push(manager);
@@ -392,13 +403,41 @@ impl State {
                 continue;
             };
             let handle = self.foreign.management.handle_for_client(id, client.id());
-            if !delivers_app_menu(manager.version(), handle.is_some()) {
+            if !delivers_event(manager.version(), 2, handle.is_some()) {
                 continue;
             }
             let Some(handle) = handle else {
                 continue;
             };
             manager.app_menu(handle, address.service.clone(), address.path.clone());
+        }
+    }
+
+    /// Sends the window's current GTK menu address (or empty strings when it
+    /// has none) to every Infinity v3 client that has a handle for it.
+    pub(crate) fn send_gtk_menus(&mut self, id: WindowId) {
+        let address = self.gtk_menus_address(id).unwrap_or_default();
+        self.infinity_managers.retain(|manager| manager.is_alive());
+        for manager in &self.infinity_managers {
+            let Some(client) = manager.client() else {
+                continue;
+            };
+            let handle = self.foreign.management.handle_for_client(id, client.id());
+            if !delivers_event(manager.version(), 3, handle.is_some()) {
+                continue;
+            }
+            let Some(handle) = handle else {
+                continue;
+            };
+            manager.gtk_menus(
+                handle,
+                address.unique_bus_name.clone(),
+                address.application_id.clone(),
+                address.menubar_path.clone(),
+                address.app_menu_path.clone(),
+                address.application_object_path.clone(),
+                address.window_object_path.clone(),
+            );
         }
     }
 
@@ -424,7 +463,7 @@ impl State {
                 .foreign
                 .management
                 .handle_for_client(id, client_id.clone());
-            if !delivers_app_menu(manager.version(), handle.is_some()) {
+            if !delivers_event(manager.version(), 2, handle.is_some()) {
                 continue;
             }
             let Some(handle) = handle else {
@@ -433,12 +472,52 @@ impl State {
             manager.app_menu(handle, address.service.clone(), address.path.clone());
         }
     }
+
+    /// Sends the window's GTK menu address to one client, when its wlr handle
+    /// is created. Used when a wlr handle is created.
+    pub(crate) fn send_gtk_menus_to_client(
+        &mut self,
+        id: WindowId,
+        client: smithay::reexports::wayland_server::backend::ClientId,
+    ) {
+        let Some(address) = self.gtk_menus_address(id) else {
+            return;
+        };
+        let client_id = client;
+        for manager in &self.infinity_managers {
+            let Some(owner) = manager.client() else {
+                continue;
+            };
+            if owner.id() != client_id {
+                continue;
+            }
+            let handle = self
+                .foreign
+                .management
+                .handle_for_client(id, client_id.clone());
+            if !delivers_event(manager.version(), 3, handle.is_some()) {
+                continue;
+            }
+            let Some(handle) = handle else {
+                continue;
+            };
+            manager.gtk_menus(
+                handle,
+                address.unique_bus_name.clone(),
+                address.application_id.clone(),
+                address.menubar_path.clone(),
+                address.app_menu_path.clone(),
+                address.application_object_path.clone(),
+                address.window_object_path.clone(),
+            );
+        }
+    }
 }
 
-/// Whether a manager receives the app_menu event. Pure so the two bind orders
-/// and the v1 rule can be tested without a protocol harness.
-fn delivers_app_menu(manager_version: u32, has_handle: bool) -> bool {
-    manager_version >= 2 && has_handle
+/// Whether a manager receives an event introduced in `since`.
+/// Pure so the bind-order and version rules can be tested without a protocol harness.
+fn delivers_event(manager_version: u32, since: u32, has_handle: bool) -> bool {
+    manager_version >= since && has_handle
 }
 
 /// Rounds a logical length to whole pixels.
@@ -574,7 +653,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        Layout, PairLayout, arranged_rect, available, delivers_app_menu, is_trusted_shell_exe,
+        Layout, PairLayout, arranged_rect, available, delivers_event, is_trusted_shell_exe,
         pair_rects, quarter_rects, trusted_shell_exes,
     };
     use malaysia_scene::scene::WindowId;
@@ -828,14 +907,21 @@ mod tests {
 
     #[test]
     fn a_v1_manager_never_gets_app_menu() {
-        assert!(!delivers_app_menu(1, true));
-        assert!(!delivers_app_menu(1, false));
+        assert!(!delivers_event(1, 2, true));
+        assert!(!delivers_event(1, 2, false));
     }
 
     #[test]
     fn a_v2_manager_needs_a_handle() {
-        assert!(delivers_app_menu(2, true));
-        assert!(!delivers_app_menu(2, false));
+        assert!(delivers_event(2, 2, true));
+        assert!(!delivers_event(2, 2, false));
+    }
+
+    #[test]
+    fn a_v3_manager_needs_a_handle_for_gtk_menus() {
+        assert!(delivers_event(3, 3, true));
+        assert!(!delivers_event(3, 3, false));
+        assert!(!delivers_event(2, 3, true));
     }
 
     #[test]
@@ -843,12 +929,12 @@ mod tests {
         // wlr manager first: the handle exists before Infinity binds.
         let manager = 2;
         let mut handle = true;
-        assert!(delivers_app_menu(manager, handle));
+        assert!(delivers_event(manager, 2, handle));
         // Infinity manager first: binding alone sends nothing; the handle
         // created later by the wlr side completes the delivery.
         handle = false;
-        assert!(!delivers_app_menu(manager, handle));
+        assert!(!delivers_event(manager, 2, handle));
         handle = true;
-        assert!(delivers_app_menu(manager, handle));
+        assert!(delivers_event(manager, 2, handle));
     }
 }

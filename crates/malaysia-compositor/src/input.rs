@@ -1008,23 +1008,8 @@ impl State {
             }
             // A double click on the bar, outside the lights, applies the
             // configured action. The second press must not start a move.
-            if let Some(action) = self.register_titlebar_click(id, local, time) {
-                match action {
-                    crate::config::DoubleClickAction::Zoom => {
-                        if self.windows.zoom_supported(id) {
-                            self.toggle_maximize(id);
-                        }
-                    }
-                    crate::config::DoubleClickAction::Fill => {
-                        // fill should occupy the menu-bar-to-dock workspace
-                        // without the maximized state; still pending.
-                        if self.windows.zoom_supported(id) {
-                            self.toggle_maximize(id);
-                        }
-                    }
-                    crate::config::DoubleClickAction::Minimize => self.set_minimized(id, true),
-                    crate::config::DoubleClickAction::None => {}
-                }
+            if self.register_titlebar_click(id, local, time).is_some() {
+                self.apply_titlebar_double_click(id);
                 return;
             }
         }

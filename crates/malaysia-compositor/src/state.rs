@@ -70,6 +70,7 @@ use smithay::wayland::shm::ShmState;
 use crate::appmenu::AppMenuState;
 use crate::config::Config;
 use crate::foreign::{ForeignState, ListHandles};
+use crate::gtk::GtkShellState;
 use crate::infinity::protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
 use crate::input::ShakeDetector;
 use crate::layers::Layers;
@@ -291,6 +292,8 @@ pub struct State {
     pub foreign: ForeignState,
     /// The global-menu addresses announced per surface (ADR 0040).
     pub(crate) appmenu: AppMenuState,
+    /// The `gtk_shell1` per-surface D-Bus properties (ADR 0045).
+    pub(crate) gtk: GtkShellState,
     /// The `ext-foreign-toplevel-list` handles, by window.
     pub list_handles: ListHandles,
     /// Windows minimized to the dock (kept out of the scene).
@@ -584,6 +587,7 @@ impl State {
             popups: Popups::new(),
             foreign: ForeignState::new(display_handle),
             appmenu: AppMenuState::new(display_handle),
+            gtk: GtkShellState::new(display_handle),
             list_handles: Vec::new(),
             infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
             minimized: std::collections::HashSet::new(),
@@ -694,6 +698,27 @@ impl State {
     /// (14d-4).
     pub(crate) fn focused_window(&self) -> Option<WindowId> {
         self.active_window.get()
+    }
+
+    /// Applies the configured titlebar double-click action to `id`. Shared by
+    /// pointer input and GTK's `titlebar_gesture(double_click)`.
+    pub(crate) fn apply_titlebar_double_click(&mut self, id: WindowId) {
+        match self.config.window.double_click_titlebar {
+            crate::config::DoubleClickAction::Zoom => {
+                if self.windows.zoom_supported(id) {
+                    self.toggle_maximize(id);
+                }
+            }
+            crate::config::DoubleClickAction::Fill => {
+                // Fill should occupy the menu-bar-to-dock workspace without the
+                // maximized state; still pending. For now mirror Zoom.
+                if self.windows.zoom_supported(id) {
+                    self.toggle_maximize(id);
+                }
+            }
+            crate::config::DoubleClickAction::Minimize => self.set_minimized(id, true),
+            crate::config::DoubleClickAction::None => {}
+        }
     }
 
     /// Shift+Super+4: start dragging a region.

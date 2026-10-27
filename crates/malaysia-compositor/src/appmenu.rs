@@ -29,14 +29,14 @@ pub struct AppMenuAddress {
     pub path: String,
 }
 
-/// Per-surface addresses, generic over the key so the state can be tested
-/// without a Wayland display.
+/// Per-surface values, generic over the key and value so the state can be
+/// tested without a Wayland display and reused by `gtk_shell1`.
 #[derive(Debug)]
-struct AddressStore<K> {
-    addresses: HashMap<K, AppMenuAddress>,
+pub(crate) struct AddressStore<K, V> {
+    addresses: HashMap<K, V>,
 }
 
-impl<K> Default for AddressStore<K> {
+impl<K, V> Default for AddressStore<K, V> {
     fn default() -> Self {
         Self {
             addresses: HashMap::new(),
@@ -44,16 +44,20 @@ impl<K> Default for AddressStore<K> {
     }
 }
 
-impl<K: Eq + Hash> AddressStore<K> {
-    fn set(&mut self, key: K, address: AppMenuAddress) {
-        self.addresses.insert(key, address);
+impl<K: Eq + Hash, V> AddressStore<K, V> {
+    pub(crate) fn set(&mut self, key: K, value: V) {
+        self.addresses.insert(key, value);
     }
 
-    fn get(&self, key: &K) -> Option<&AppMenuAddress> {
+    pub(crate) fn get(&self, key: &K) -> Option<&V> {
         self.addresses.get(key)
     }
 
-    fn clear(&mut self, key: &K) -> bool {
+    pub(crate) fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        self.addresses.get_mut(key)
+    }
+
+    pub(crate) fn clear(&mut self, key: &K) -> bool {
         self.addresses.remove(key).is_some()
     }
 }
@@ -61,7 +65,7 @@ impl<K: Eq + Hash> AddressStore<K> {
 /// The `org_kde_kwin_appmenu_manager` global and the live addresses.
 pub struct AppMenuState {
     _global: GlobalId,
-    addresses: AddressStore<ObjectId>,
+    addresses: AddressStore<ObjectId, AppMenuAddress>,
 }
 
 impl AppMenuState {
@@ -240,14 +244,14 @@ mod tests {
     fn set_before_map_is_kept_for_the_map() {
         // The surface is not a window yet: the state stores the pair and the
         // map path will read it by surface id.
-        let mut store = AddressStore::<u32>::default();
+        let mut store = AddressStore::<u32, AppMenuAddress>::default();
         store.set(7, address(":1.2", "/MenuBar/1"));
         assert_eq!(store.get(&7), Some(&address(":1.2", "/MenuBar/1")));
     }
 
     #[test]
     fn set_after_map_replaces_the_address() {
-        let mut store = AddressStore::<u32>::default();
+        let mut store = AddressStore::<u32, AppMenuAddress>::default();
         store.set(7, address(":1.2", "/MenuBar/1"));
         store.set(7, address(":1.3", "/MenuBar/2"));
         assert_eq!(store.get(&7), Some(&address(":1.3", "/MenuBar/2")));
@@ -255,7 +259,7 @@ mod tests {
 
     #[test]
     fn release_clears_the_address() {
-        let mut store = AddressStore::<u32>::default();
+        let mut store = AddressStore::<u32, AppMenuAddress>::default();
         store.set(7, address(":1.2", "/MenuBar/1"));
         assert!(store.clear(&7));
         assert_eq!(store.get(&7), None);
@@ -264,7 +268,7 @@ mod tests {
 
     #[test]
     fn surface_destruction_clears_the_address() {
-        let mut store = AddressStore::<u32>::default();
+        let mut store = AddressStore::<u32, AppMenuAddress>::default();
         store.set(9, address(":1.4", "/MenuBar/9"));
         assert!(store.clear(&9));
         assert_eq!(store.get(&9), None);
