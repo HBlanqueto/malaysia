@@ -447,6 +447,29 @@ impl State {
             .to_i32_round();
         Some(CaptureTarget::Window { id, size })
     }
+
+    /// Activates `surface` using a previously-created xdg-activation token,
+    /// enforcing token age and toplevel tracking. `source` names the caller for
+    /// the info log.
+    pub(crate) fn activate_with_token(
+        &mut self,
+        token: XdgActivationToken,
+        data: XdgActivationTokenData,
+        surface: WlSurface,
+        source: &str,
+    ) {
+        self.activation_state.remove_token(&token);
+        if data.timestamp.elapsed() > ACTIVATION_TOKEN_MAX_AGE {
+            tracing::info!("ignored an expired activation token");
+            return;
+        }
+        let Some(id) = self.windows.id_of(&surface) else {
+            tracing::info!("ignored activation: the surface is not a tracked toplevel");
+            return;
+        };
+        tracing::info!(window = id.get(), "activating a window through {source}");
+        self.activate_window(id);
+    }
 }
 
 impl PointerConstraintsHandler for State {
@@ -529,20 +552,7 @@ impl XdgActivationHandler for State {
         data: XdgActivationTokenData,
         surface: WlSurface,
     ) {
-        self.activation_state.remove_token(&token);
-        if data.timestamp.elapsed() > ACTIVATION_TOKEN_MAX_AGE {
-            tracing::info!("ignored an expired activation token");
-            return;
-        }
-        let Some(id) = self.windows.id_of(&surface) else {
-            tracing::info!("ignored activation: the surface is not a tracked toplevel");
-            return;
-        };
-        tracing::info!(
-            window = id.get(),
-            "activating a window through xdg-activation"
-        );
-        self.activate_window(id);
+        self.activate_with_token(token, data, surface, "xdg-activation");
     }
 }
 

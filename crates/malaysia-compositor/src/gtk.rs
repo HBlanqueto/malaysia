@@ -13,6 +13,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{
     Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource,
 };
+use smithay::wayland::xdg_activation::XdgActivationToken;
 use tracing::{debug, info, warn};
 
 use crate::appmenu::AddressStore;
@@ -243,17 +244,11 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
             }
             protocol::gtk_surface1::Request::Present { time } => {
                 debug!(time, "gtk_surface present");
-                if let Some(id) = state.windows.id_of(surface) {
-                    // Same activation path as xdg_activation_v1 (Block 11).
-                    state.activate_window(id);
-                }
+                state.handle_gtk_present(surface);
             }
             protocol::gtk_surface1::Request::RequestFocus { startup_id } => {
                 debug!(?startup_id, "gtk_surface request_focus");
-                if let Some(id) = state.windows.id_of(surface) {
-                    // Same activation path as xdg_activation_v1 (Block 11).
-                    state.activate_window(id);
-                }
+                state.handle_gtk_request_focus(surface, startup_id);
             }
             protocol::gtk_surface1::Request::Release => {
                 state.clear_surface_gtk_menus_by_owner(surface, &owner);
@@ -370,6 +365,46 @@ impl State {
         }
     }
 
+    /// Handles GTK's `gtk_surface1.present` request, activating the surface only
+    /// when its client already holds keyboard focus.
+    pub(crate) fn handle_gtk_present(&mut self, surface: &WlSurface) {
+        let focused = self
+            .seat
+            .get_keyboard()
+            .and_then(|keyboard| keyboard.current_focus());
+        let from_focused_client = focused
+            .as_ref()
+            .is_some_and(|focus| focus.id().same_client_as(&surface.id()));
+        if from_focused_client {
+            if let Some(id) = self.windows.id_of(surface) {
+                self.activate_window(id);
+            }
+        } else {
+            info!("ignored gtk present from a client that does not hold keyboard focus");
+            // shortcut: urgency/attention is not signalled; improve by adding an
+            // urgency hint or a visual attention request when the policy is defined.
+        }
+    }
+
+    /// Handles GTK's `gtk_surface1.request_focus` request, activating the surface
+    /// only when `startup_id` names a valid xdg-activation token.
+    pub(crate) fn handle_gtk_request_focus(
+        &mut self,
+        surface: &WlSurface,
+        startup_id: Option<String>,
+    ) {
+        let Some(startup_id) = startup_id else {
+            info!("ignored gtk request_focus without a valid activation token");
+            return;
+        };
+        let token = XdgActivationToken::from(startup_id);
+        let Some(data) = self.activation_state.data_for_token(&token).cloned() else {
+            info!("ignored gtk request_focus without a valid activation token");
+            return;
+        };
+        self.activate_with_token(token, data, surface.clone(), "gtk-request-focus");
+    }
+
     /// The stored GTK menu address for a tracked window, if any.
     pub(crate) fn gtk_menus_address(&self, id: WindowId) -> Option<GtkMenusAddress> {
         let surface = self.windows.surface_of(id)?;
@@ -418,7 +453,103 @@ macro_rules! delegate_gtk {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::net::UnixStream;
+    use std::sync::{Arc, mpsc};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use sctk::reexports::client::globals::{GlobalListContents, registry_queue_init};
+    use sctk::reexports::client::protocol::{wl_compositor, wl_registry, wl_surface};
+    use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+    use sctk::reexports::protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
+    use smithay::backend::allocator::{Format, Fourcc, Modifier};
+    use smithay::reexports::calloop::EventLoop;
+    use smithay::reexports::wayland_server::{Display, Resource};
+    use smithay::utils::{SERIAL_COUNTER, Size};
+    use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+    use smithay::wayland::xdg_activation::XdgActivationTokenData;
+
     use super::{Gesture, GtkDbusProperties, decode_gesture};
+
+    struct TestClient;
+
+    impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for TestClient {
+        fn event(
+            _: &mut Self,
+            _: &wl_registry::WlRegistry,
+            _: wl_registry::Event,
+            _: &GlobalListContents,
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
+
+    impl Dispatch<wl_compositor::WlCompositor, ()> for TestClient {
+        fn event(
+            _: &mut Self,
+            _: &wl_compositor::WlCompositor,
+            _: wl_compositor::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
+
+    impl Dispatch<xdg_wm_base::XdgWmBase, ()> for TestClient {
+        fn event(
+            _: &mut Self,
+            wm_base: &xdg_wm_base::XdgWmBase,
+            event: xdg_wm_base::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+            if let xdg_wm_base::Event::Ping { serial } = event {
+                wm_base.pong(serial);
+            }
+        }
+    }
+
+    impl Dispatch<xdg_surface::XdgSurface, ()> for TestClient {
+        fn event(
+            _: &mut Self,
+            surface: &xdg_surface::XdgSurface,
+            event: xdg_surface::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+            if let xdg_surface::Event::Configure { serial } = event {
+                surface.ack_configure(serial);
+            }
+        }
+    }
+
+    impl Dispatch<xdg_toplevel::XdgToplevel, ()> for TestClient {
+        fn event(
+            _: &mut Self,
+            _: &xdg_toplevel::XdgToplevel,
+            _: xdg_toplevel::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
+
+    impl Dispatch<wl_surface::WlSurface, ()> for TestClient {
+        fn event(
+            _: &mut Self,
+            _: &wl_surface::WlSurface,
+            _: wl_surface::Event,
+            _: &(),
+            _: &Connection,
+            _: &QueueHandle<Self>,
+        ) {
+        }
+    }
 
     fn props(bus: &str, menubar: &str, appmenu: &str) -> GtkDbusProperties {
         GtkDbusProperties {
@@ -427,6 +558,138 @@ mod tests {
             app_menu_path: appmenu.to_string(),
             ..Default::default()
         }
+    }
+
+    fn test_state() -> (
+        EventLoop<'static, crate::session::Session>,
+        Display<super::State>,
+        super::State,
+    ) {
+        let event_loop = EventLoop::<crate::session::Session>::try_new().expect("event loop");
+        let display = Display::<super::State>::new().expect("display");
+        let feedback = DmabufFeedbackBuilder::new(
+            0,
+            [Format {
+                code: Fourcc::Xrgb8888,
+                modifier: Modifier::Invalid,
+            }],
+        )
+        .build()
+        .expect("feedback");
+        let state = super::State::new(
+            event_loop.get_signal(),
+            &display.handle(),
+            Size::from((1280, 720)),
+            feedback,
+            None,
+            Box::new(event_loop.handle()),
+            Box::new(()),
+        )
+        .expect("state");
+        (event_loop, display, state)
+    }
+
+    fn insert_test_client(display: &Display<super::State>, server_side: UnixStream) {
+        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
+        let (disconnect_ping, _) = smithay::reexports::calloop::ping::make_ping().expect("ping");
+        display
+            .handle()
+            .insert_client(
+                server_side,
+                Arc::new(crate::state::ClientState::new(
+                    disconnect_queue,
+                    disconnect_ping,
+                    false,
+                )),
+            )
+            .expect("insert client");
+    }
+
+    /// Creates a client with one xdg toplevel and returns its wl_surface once
+    /// the compositor has tracked it, plus a channel to shut the client thread
+    /// down cleanly.
+    fn create_toplevel(
+        display: &mut Display<super::State>,
+        state: &mut super::State,
+    ) -> (
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+        mpsc::Sender<()>,
+    ) {
+        let before: Vec<_> = state.windows.surfaces().map(|s| s.id()).collect();
+        let (client_side, server_side) = UnixStream::pair().expect("socket pair");
+        insert_test_client(display, server_side);
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        thread::spawn(move || {
+            client_side
+                .set_read_timeout(Some(Duration::from_millis(100)))
+                .expect("read timeout");
+            let conn = Connection::from_socket(client_side).expect("connection");
+            let (globals, mut queue) = registry_queue_init::<TestClient>(&conn).expect("registry");
+            let qh = queue.handle();
+            let compositor = globals
+                .bind::<wl_compositor::WlCompositor, _, _>(&qh, 1..=5, ())
+                .expect("compositor");
+            let wm_base = globals
+                .bind::<xdg_wm_base::XdgWmBase, _, _>(&qh, 1..=6, ())
+                .expect("xdg_wm_base");
+            let surface = compositor.create_surface(&qh, ());
+            let xdg_surface = wm_base.get_xdg_surface(&surface, &qh, ());
+            let _toplevel = xdg_surface.get_toplevel(&qh, ());
+            surface.commit();
+            conn.flush().expect("flush");
+            loop {
+                if shutdown_rx.try_recv().is_ok() {
+                    return;
+                }
+                let _ = queue.blocking_dispatch(&mut TestClient);
+            }
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            display.dispatch_clients(state).expect("dispatch");
+            display.flush_clients().expect("flush");
+            if let Some(surface) = state
+                .windows
+                .surfaces()
+                .find(|s| !before.iter().any(|b| b == &s.id()))
+            {
+                return (surface.clone(), shutdown_tx);
+            }
+            assert!(Instant::now() < deadline, "toplevel was not created");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn make_token(
+        state: &mut super::State,
+        surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+        age: Duration,
+    ) -> String {
+        let (token, _) = state
+            .activation_state
+            .create_external_token(XdgActivationTokenData {
+                surface: Some(surface.clone()),
+                timestamp: Instant::now() - age,
+                ..Default::default()
+            });
+        token.to_string()
+    }
+
+    fn set_keyboard_focus(
+        state: &mut super::State,
+        surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    ) {
+        let serial = SERIAL_COUNTER.next_serial();
+        if let Some(keyboard) = state.seat.get_keyboard() {
+            keyboard.set_focus(state, Some(surface.clone()), serial);
+        }
+    }
+
+    fn window_id(
+        state: &super::State,
+        surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    ) -> malaysia_scene::scene::WindowId {
+        state.windows.id_of(surface).expect("tracked toplevel")
     }
 
     #[test]
@@ -452,5 +715,85 @@ mod tests {
         assert_eq!(decode_gesture(0), None);
         assert_eq!(decode_gesture(4), None);
         assert_eq!(decode_gesture(u32::MAX), None);
+    }
+
+    #[test]
+    fn gtk_request_focus_without_token_is_ignored() {
+        let (_loop, mut display, mut state) = test_state();
+        let (surface, shutdown) = create_toplevel(&mut display, &mut state);
+        let id = window_id(&state, &surface);
+        state.set_minimized(id, true);
+        state.handle_gtk_request_focus(&surface, None);
+        assert!(state.minimized.contains(&id));
+        let _ = shutdown.send(());
+    }
+
+    #[test]
+    fn gtk_request_focus_with_unknown_token_is_ignored() {
+        let (_loop, mut display, mut state) = test_state();
+        let (surface, shutdown) = create_toplevel(&mut display, &mut state);
+        let id = window_id(&state, &surface);
+        state.set_minimized(id, true);
+        state.handle_gtk_request_focus(&surface, Some("not-a-token".to_string()));
+        assert!(state.minimized.contains(&id));
+        let _ = shutdown.send(());
+    }
+
+    #[test]
+    fn gtk_request_focus_with_expired_token_is_ignored() {
+        let (_loop, mut display, mut state) = test_state();
+        let (surface, shutdown) = create_toplevel(&mut display, &mut state);
+        let id = window_id(&state, &surface);
+        state.set_minimized(id, true);
+        let token = make_token(&mut state, &surface, Duration::from_secs(60));
+        let token_key = token.clone().into();
+        assert!(state.activation_state.data_for_token(&token_key).is_some());
+        state.handle_gtk_request_focus(&surface, Some(token.clone()));
+        // The token is consumed by the activation path, which then rejects it for age.
+        assert!(state.activation_state.data_for_token(&token_key).is_none());
+        assert!(state.minimized.contains(&id));
+        let _ = shutdown.send(());
+    }
+
+    #[test]
+    fn gtk_request_focus_with_valid_token_activates() {
+        let (_loop, mut display, mut state) = test_state();
+        let (surface, shutdown) = create_toplevel(&mut display, &mut state);
+        let id = window_id(&state, &surface);
+        state.set_minimized(id, true);
+        let token = make_token(&mut state, &surface, Duration::ZERO);
+        let token_key = token.clone().into();
+        assert!(state.activation_state.data_for_token(&token_key).is_some());
+        state.handle_gtk_request_focus(&surface, Some(token));
+        // The activation path consumed the valid token and restored the window.
+        assert!(state.activation_state.data_for_token(&token_key).is_none());
+        assert!(!state.minimized.contains(&id));
+        let _ = shutdown.send(());
+    }
+
+    #[test]
+    fn gtk_present_from_focused_client_activates() {
+        let (_loop, mut display, mut state) = test_state();
+        let (surface, shutdown) = create_toplevel(&mut display, &mut state);
+        let id = window_id(&state, &surface);
+        state.set_minimized(id, true);
+        set_keyboard_focus(&mut state, &surface);
+        state.handle_gtk_present(&surface);
+        assert!(!state.minimized.contains(&id));
+        let _ = shutdown.send(());
+    }
+
+    #[test]
+    fn gtk_present_from_unfocused_client_is_ignored() {
+        let (_loop, mut display, mut state) = test_state();
+        let (focused_surface, shutdown_focused) = create_toplevel(&mut display, &mut state);
+        let (other_surface, shutdown_other) = create_toplevel(&mut display, &mut state);
+        let other_id = window_id(&state, &other_surface);
+        state.set_minimized(other_id, true);
+        set_keyboard_focus(&mut state, &focused_surface);
+        state.handle_gtk_present(&other_surface);
+        assert!(state.minimized.contains(&other_id));
+        let _ = shutdown_focused.send(());
+        let _ = shutdown_other.send(());
     }
 }
