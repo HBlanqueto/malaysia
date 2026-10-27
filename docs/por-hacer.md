@@ -114,6 +114,9 @@ se revisará si el ThinkPad mide algo muy distinto.
 
 ## Deuda técnica
 
+- `crates/barrier-kit/src/menu.rs:933` — Ctrl/Alt+Espacio activa el ítem
+  seleccionado; decidir si debe filtrarse con `inserts_text` (aparecido en
+  auditoría L1-lock).
 - `crates/vow-design/neptunia/default.nix` (generador de `neptunia.slint`)
   convierte duraciones, recuentos e intervalos en `px` porque Slint no tiene
   unidades para todo. Hay que separar esos tokens numéricos puros de las

@@ -26,6 +26,7 @@ type UseState<T> = State<T>;
 
 use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
+    inserts_text,
 };
 use vow_design::{MenuPalette, Rgba, SANS_FAMILIES};
 
@@ -953,7 +954,7 @@ impl App for MenuView {
                         );
                     }
                 }
-                Key::Character(ref ch) if has_search => {
+                Key::Character(ref ch) if has_search && inserts_text(event.modifiers) => {
                     let mut text = query_text;
                     if is_selected {
                         text.clear();

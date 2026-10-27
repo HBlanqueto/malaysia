@@ -18,6 +18,12 @@ use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_design::{Rgba, TEXT, TEXT_LINE_HEIGHT, TOOLGROUP};
 
 use crate::password::PasswordField;
+use crate::platform::inserts_text;
+
+/// True when a key event should be inserted into a [`SecureField`].
+fn secure_field_accepts_text(key: &Key, modifiers: Modifiers) -> bool {
+    matches!(key, Key::Character(_)) && inserts_text(modifiers)
+}
 
 /// A vertical list. The caller owns the children; `List` only fixes the
 /// direction and the spacing from the text token.
@@ -124,7 +130,9 @@ impl Component for SecureField {
                 let mut field = field.write();
                 match &event.key {
                     Key::Named(NamedKey::Backspace) => field.backspace(),
-                    Key::Character(text) if event.modifiers.is_empty() => {
+                    Key::Character(text)
+                        if secure_field_accepts_text(&event.key, event.modifiers) =>
+                    {
                         for ch in text.chars() {
                             field.insert(ch);
                         }
@@ -365,4 +373,26 @@ fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {
 fn rgba(color: vow_design::Rgba) -> Color {
     let [r, g, b, a] = color.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use keyboard_types::{Key, Modifiers};
+
+    #[test]
+    fn shift_h_is_accepted_as_secure_field_text() {
+        assert!(secure_field_accepts_text(
+            &Key::Character("H".into()),
+            Modifiers::SHIFT
+        ));
+    }
+
+    #[test]
+    fn ctrl_a_is_rejected_as_secure_field_text() {
+        assert!(!secure_field_accepts_text(
+            &Key::Character("a".into()),
+            Modifiers::CONTROL
+        ));
+    }
 }

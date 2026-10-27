@@ -13,6 +13,8 @@
 mod infinity;
 mod input;
 
+pub use input::inserts_text;
+
 use std::{
     borrow::Cow,
     cell::{Cell, RefCell},

@@ -16,7 +16,7 @@ use std::{
 };
 
 use barrier_kit::password::{PasswordField, State as FieldState};
-use barrier_kit::platform::{SessionUnlock, run_lock};
+use barrier_kit::platform::{SessionUnlock, inserts_text, run_lock};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Size};
@@ -88,10 +88,7 @@ fn handle_key(
             field.backspace();
             None
         }
-        // AltGr is Mod5/LevelThree and arrives with no flag here, so ALT can be rejected.
-        Key::Character(_)
-            if !modifiers.intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::META) =>
-        {
+        Key::Character(_) if inserts_text(modifiers) => {
             if let Some(text) = text {
                 for ch in text.chars() {
                     field.insert(ch);
@@ -374,48 +371,38 @@ mod tests {
         }
     }
 
-    // The kit lowercases real keys before the lock sees them; this table covers
-    // the lock's flag filter, not the case the kit delivers.
     #[test]
-    fn modifier_flags_table_decides_insertion() {
-        let cases = [
-            (Modifiers::empty(), "H", Some("H")),
-            (Modifiers::SHIFT, "H", Some("H")),
-            (Modifiers::CAPS_LOCK, "H", Some("H")),
-            (Modifiers::NUM_LOCK, "7", Some("7")),
-            (
-                Modifiers::SHIFT | Modifiers::CAPS_LOCK | Modifiers::NUM_LOCK,
-                "H",
+    fn shift_h_inserts_into_lock_field() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        assert!(
+            handle_key(
+                &mut model,
+                &mut field,
+                &Key::Character("H".to_string()),
                 Some("H"),
-            ),
-            (Modifiers::empty(), "@", Some("@")),
-            (Modifiers::CONTROL, "a", None),
-            (Modifiers::ALT, "a", None),
-            (Modifiers::META, "a", None),
-            (Modifiers::CONTROL | Modifiers::SHIFT, "a", None),
-            (Modifiers::ALT | Modifiers::SHIFT, "a", None),
-            (Modifiers::META | Modifiers::SHIFT, "a", None),
-        ];
-        for (modifiers, text, expected) in cases {
-            let mut model = model();
-            let mut field = PasswordField::default();
-            assert!(
-                handle_key(
-                    &mut model,
-                    &mut field,
-                    &Key::Character(text.to_string()),
-                    Some(text),
-                    modifiers,
-                )
-                .is_none(),
-                "{modifiers:?} must not submit"
-            );
-            assert_eq!(
-                field.take().as_deref().map(String::as_str),
-                expected,
-                "{modifiers:?} with {text:?}"
-            );
-        }
+                Modifiers::SHIFT,
+            )
+            .is_none()
+        );
+        assert_eq!(field.take().as_deref().map(String::as_str), Some("H"));
+    }
+
+    #[test]
+    fn ctrl_a_does_not_insert_into_lock_field() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        assert!(
+            handle_key(
+                &mut model,
+                &mut field,
+                &Key::Character("a".to_string()),
+                Some("a"),
+                Modifiers::CONTROL,
+            )
+            .is_none()
+        );
+        assert_eq!(field.take().as_deref().map(String::as_str), None);
     }
 
     #[test]

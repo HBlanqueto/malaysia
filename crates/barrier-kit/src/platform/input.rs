@@ -96,11 +96,19 @@ fn code(keysym: Keysym) -> Code {
     }
 }
 
-/// Returns the key value produced by `keysym` and the composed `utf8` text,
-/// taking into account the current modifier state. Modifiers travel separately
-/// in the platform event; this function only decides the character/text that a
-/// text input would receive.
-pub fn map_key(keysym: Keysym, utf8: Option<&str>, _modifiers: Modifiers) -> Key {
+/// True when a `Key::Character` event should be treated as typed text.
+/// Shift, Caps Lock and Num Lock are allowed; Control, Alt and Meta are
+/// rejected so that accelerators do not write into the field.
+/// AltGr/LevelThree arrives without the ALT flag here, so AltGr layouts
+/// keep working.
+pub fn inserts_text(modifiers: Modifiers) -> bool {
+    !modifiers.intersects(Modifiers::CONTROL | Modifiers::ALT | Modifiers::META)
+}
+
+/// Returns the key value produced by `keysym` and the composed `utf8` text.
+/// Modifiers travel separately in the platform event; this function only
+/// decides the character/text that a text input would receive.
+pub fn map_key(keysym: Keysym, utf8: Option<&str>) -> Key {
     if keysym == Keysym::space {
         return Key::Character(" ".into());
     }
@@ -130,7 +138,7 @@ pub fn map_key(keysym: Keysym, utf8: Option<&str>, _modifiers: Modifiers) -> Key
 }
 
 pub fn key(keysym: Keysym, utf8: Option<String>) -> (Key, Code) {
-    let key = map_key(keysym, utf8.as_deref(), Modifiers::empty());
+    let key = map_key(keysym, utf8.as_deref());
     (key, code(keysym))
 }
 
@@ -153,33 +161,48 @@ mod tests {
 
     #[test]
     fn shift_h_is_uppercase() {
-        assert_eq!(
-            map_key(Keysym::H, Some("H"), Modifiers::SHIFT),
-            Key::Character("H".into())
-        );
+        assert_eq!(map_key(Keysym::H, Some("H")), Key::Character("H".into()));
     }
 
     #[test]
     fn caps_h_is_uppercase() {
-        assert_eq!(
-            map_key(Keysym::H, Some("H"), Modifiers::CAPS_LOCK),
-            Key::Character("H".into())
-        );
+        assert_eq!(map_key(Keysym::H, Some("H")), Key::Character("H".into()));
     }
 
     #[test]
     fn altgr_two_produces_at() {
-        assert_eq!(
-            map_key(Keysym::_2, Some("@"), Modifiers::empty()),
-            Key::Character("@".into())
-        );
+        assert_eq!(map_key(Keysym::_2, Some("@")), Key::Character("@".into()));
     }
 
     #[test]
     fn ctrl_q_falls_back_to_keysym_char() {
-        assert_eq!(
-            map_key(Keysym::q, Some("\x11"), Modifiers::CONTROL),
-            Key::Character("q".into())
-        );
+        assert_eq!(map_key(Keysym::q, Some("\x11")), Key::Character("q".into()));
+    }
+
+    #[test]
+    fn inserts_text_allows_shift_caps_num_lock_but_rejects_ctrl_alt_meta() {
+        let cases = [
+            (Modifiers::empty(), true),
+            (Modifiers::SHIFT, true),
+            (Modifiers::CAPS_LOCK, true),
+            (Modifiers::NUM_LOCK, true),
+            (
+                Modifiers::SHIFT | Modifiers::CAPS_LOCK | Modifiers::NUM_LOCK,
+                true,
+            ),
+            (Modifiers::CONTROL, false),
+            (Modifiers::ALT, false),
+            (Modifiers::META, false),
+            (Modifiers::CONTROL | Modifiers::SHIFT, false),
+            (Modifiers::ALT | Modifiers::SHIFT, false),
+            (Modifiers::META | Modifiers::SHIFT, false),
+        ];
+        for (modifiers, expected) in cases {
+            assert_eq!(
+                inserts_text(modifiers),
+                expected,
+                "{modifiers:?} should be {expected}"
+            );
+        }
     }
 }
