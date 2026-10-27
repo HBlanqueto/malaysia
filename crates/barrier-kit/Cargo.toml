@@ -37,9 +37,7 @@ futures-util.workspace = true
 futures-channel.workspace = true
 async-channel.workspace = true
 async-io.workspace = true
-rustc-hash.workspace = true
 keyboard-types.workspace = true
-xkbcommon.workspace = true
 
 [dev-dependencies]
 freya-testing.workspace = true
