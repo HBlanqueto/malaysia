@@ -12,6 +12,7 @@ use crate::controls::{accent_swatch, radio, traffic_dropdown};
 use crate::state::{
     AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, WindowTintScope,
     card_background, load_appearance, matches_filter, palette, rgba, save_config,
+    tint_scope_disabled,
 };
 
 /// Contenido principal desplazable con los grupos filtrados por búsqueda.
@@ -318,7 +319,7 @@ fn color_group(
         true,
     );
 
-    let scope_disabled = !wallpaper_mode;
+    let scope_disabled = tint_scope_disabled(config.window_color);
     let scope_row = row_card(
         &resolved,
         "Aplicar el tinte a",

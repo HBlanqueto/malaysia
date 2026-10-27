@@ -563,6 +563,13 @@ mod tests {
     }
 
     #[test]
+    fn tint_scope_is_disabled_only_in_neutral_mode() {
+        assert!(state::tint_scope_disabled(WindowColorMode::Neutral));
+        assert!(!state::tint_scope_disabled(WindowColorMode::Accent));
+        assert!(!state::tint_scope_disabled(WindowColorMode::Wallpaper));
+    }
+
+    #[test]
     fn tint_scope_radios_are_disabled_in_neutral_mode() {
         with_temp_config(|dir| {
             let path = dir.join("appearance.domain");
@@ -586,25 +593,28 @@ mod tests {
     }
 
     #[test]
-    fn radios_are_enabled_in_wallpaper_mode() {
+    fn radios_are_enabled_in_tinted_modes() {
         with_temp_config(|dir| {
             let path = dir.join("appearance.domain");
-            let initial = AppearanceConfig {
-                window_color: WindowColorMode::Wallpaper,
-                window_tint_scope: WindowTintScope::Windows,
-                ..Default::default()
-            };
-            write_appearance(&path, &initial).unwrap();
+            for mode in [WindowColorMode::Accent, WindowColorMode::Wallpaper] {
+                let initial = AppearanceConfig {
+                    window_color: mode,
+                    window_tint_scope: WindowTintScope::Windows,
+                    ..Default::default()
+                };
+                write_appearance(&path, &initial).unwrap();
 
-            let mut test = run_app(initial, None);
-            let node = find_label(&test, "Todo el escritorio").expect("desktop radio label exists");
-            click_node(&mut test, node);
+                let mut test = run_app(initial, None);
+                let node =
+                    find_label(&test, "Todo el escritorio").expect("desktop radio label exists");
+                click_node(&mut test, node);
 
-            let text = fs::read_to_string(&path).unwrap();
-            assert!(
-                text.contains("window_tint_scope = \"desktop\""),
-                "clicking an enabled radio must change the scope: {text}"
-            );
+                let text = fs::read_to_string(&path).unwrap();
+                assert!(
+                    text.contains("window_tint_scope = \"desktop\""),
+                    "clicking an enabled radio must change the scope for {mode:?}: {text}"
+                );
+            }
         });
     }
 

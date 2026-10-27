@@ -82,3 +82,8 @@ fn normalize(s: &str) -> String {
 pub fn card_background(dominant: Option<Rgba>, accent: Rgba) -> Rgba {
     dominant.unwrap_or(accent)
 }
+
+/// "Aplicar el tinte a" only makes sense when the window colour is not neutral.
+pub fn tint_scope_disabled(window_color: WindowColorMode) -> bool {
+    window_color == WindowColorMode::Neutral
+}
