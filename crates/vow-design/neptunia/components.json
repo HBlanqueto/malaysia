@@ -345,7 +345,6 @@
           "rim-width": 1,
           "inner": "sidebar-island-inner",
           "inner-width": 1,
-          "shadow": "shadow.island",
           "blur": 30,
           "traffic-x": 18,
           "traffic-y": 16
@@ -394,7 +393,6 @@
         "separator-h": 16,
         "separator": "line",
         "bg": "toolbar-glass-bg",
-        "shadow": "shadow.glass",
         "flat-button-w": 30,
         "flat-button-h": 28,
         "flat-radius": "radius.sm",

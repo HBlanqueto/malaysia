@@ -929,17 +929,16 @@ mod tests {
 
     #[test]
     fn sidebar_island_light_has_no_rim_inner_or_shadow() {
-        // In light mode the island sits flush against the window; the rim,
-        // inner line and drop shadow are fully transparent.
+        // In light mode the island sits flush against the window; the rim and
+        // inner line are fully transparent and there is no drop shadow.
         assert_eq!(super::SIDEBAR_ISLAND_RIM_LIGHT.a, 0.0);
         assert_eq!(super::SIDEBAR_ISLAND_INNER_LIGHT.a, 0.0);
-        assert_eq!(super::SIDEBAR_ISLAND_SHADOW[0].opacity, 0.0);
-        assert_eq!(super::SIDEBAR_ISLAND_SHADOW[1].opacity, 0.0);
     }
 
     #[test]
     fn sidebar_island_dark_has_gray_rim() {
-        // In dark modes the island keeps a subtle gray rim (#ffffff21).
+        // In dark modes the island keeps a subtle gray rim (#ffffff21); the
+        // drop shadow was removed.
         assert_eq!(
             super::SIDEBAR_ISLAND_RIM_DARK.to_rgba8(),
             [0xff, 0xff, 0xff, 0x21]
@@ -948,7 +947,5 @@ mod tests {
             super::SIDEBAR_ISLAND_RIM_DARK_TINT.to_rgba8(),
             [0xff, 0xff, 0xff, 0x21]
         );
-        assert!(super::SIDEBAR_ISLAND_SHADOW_DARK[0].opacity > 0.0);
-        assert_eq!(super::SIDEBAR_ISLAND_SHADOW_DARK[1].opacity, 0.0);
     }
 }

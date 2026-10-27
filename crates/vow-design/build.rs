@@ -1102,25 +1102,6 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         out.push_str(&format!(": Rgba = {};\n\n", rgba(inner)));
     }
 
-    const_doc(
-        out,
-        "SIDEBAR_ISLAND_SHADOW",
-        "The island sidebar shadow in light mode.",
-    );
-    out.push_str(&format!(
-        ": [ShadowLayer; 2] = {};\n\n",
-        surface_shadow(tokens, "shadow.island", "light")
-    ));
-    const_doc(
-        out,
-        "SIDEBAR_ISLAND_SHADOW_DARK",
-        "The island sidebar shadow in dark and dark-tint modes.",
-    );
-    out.push_str(&format!(
-        ": [ShadowLayer; 2] = {};\n\n",
-        surface_shadow(tokens, "shadow.island", "dark")
-    ));
-
     for (name, theme) in [
         ("TOOLGROUP_BG_LIGHT", "light"),
         ("TOOLGROUP_BG_DARK", "dark"),
@@ -1144,25 +1125,6 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
             rgba(opaque_over(glass, bg_window))
         ));
     }
-
-    const_doc(
-        out,
-        "TOOLGROUP_SHADOW",
-        "The toolbar glass capsule shadow in light mode.",
-    );
-    out.push_str(&format!(
-        ": [ShadowLayer; 2] = {};\n\n",
-        surface_shadow(tokens, "shadow.glass", "light")
-    ));
-    const_doc(
-        out,
-        "TOOLGROUP_SHADOW_DARK",
-        "The toolbar glass capsule shadow in dark and dark-tint modes.",
-    );
-    out.push_str(&format!(
-        ": [ShadowLayer; 2] = {};\n\n",
-        surface_shadow(tokens, "shadow.glass", "dark")
-    ));
 
     fn sidebar_palette_value(tokens: &Value, components: &Value, theme: &str) -> String {
         let color_at = |path: &str| {
