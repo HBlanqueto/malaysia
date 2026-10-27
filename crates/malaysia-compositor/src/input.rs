@@ -11,6 +11,7 @@
 //! already passes through this module.
 
 use std::collections::VecDeque;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
@@ -1601,10 +1602,27 @@ impl State {
     }
 
     /// Publishes the active window (or its absence) to the shell's store.
-    fn publish_active(&self, id: Option<WindowId>) {
+    pub(crate) fn publish_active(&self, id: Option<WindowId>) {
         let info = id.and_then(|id| self.windows.active_info(id));
         let active = info.map(|(title, app_id)| crate::active::ActiveWindow { title, app_id });
         crate::active::publish(active.as_ref());
+    }
+
+    fn publish_active_to(&self, dir: &Path, id: Option<WindowId>) {
+        let info = id.and_then(|id| self.windows.active_info(id));
+        let active = info.map(|(title, app_id)| crate::active::ActiveWindow { title, app_id });
+        crate::active::publish_to(dir, active.as_ref());
+    }
+
+    /// Republishes the store when the window whose identity changed is the active one.
+    pub(crate) fn publish_active_if_focused(&self, id: WindowId) {
+        self.publish_active_if_focused_to(&vow_appearance::data_dir(), id);
+    }
+
+    fn publish_active_if_focused_to(&self, dir: &Path, id: WindowId) {
+        if self.focused_window() == Some(id) {
+            self.publish_active_to(dir, Some(id));
+        }
     }
 
     /// Removes every reference to a destroyed window and moves focus on.
@@ -2598,6 +2616,32 @@ mod tests {
         state.note_activation_serial(serial);
         assert!(state.activation_serial_is_recent(serial));
         assert!(!state.activation_serial_is_recent(other));
+    }
+
+    #[test]
+    fn an_identity_change_republishes_only_the_focused_window() {
+        let (_display, mut state) = test_state((1280, 720));
+        let dir =
+            std::env::temp_dir().join(format!("malaysia-active-focused-{}", std::process::id()));
+        let store = dir.join("window.domain");
+
+        let focused = WindowId::new(1);
+        let other = WindowId::new(2);
+        state.active_window.set(Some(focused));
+
+        state.publish_active_if_focused_to(&dir, other);
+        assert!(
+            !store.exists(),
+            "an inactive window's title or app_id must not rewrite the store"
+        );
+
+        state.publish_active_if_focused_to(&dir, focused);
+        assert!(
+            store.exists(),
+            "the focused window's title or app_id must rewrite the store"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

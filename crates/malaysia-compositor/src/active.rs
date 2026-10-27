@@ -10,7 +10,7 @@
 //! This is the first-version mechanism; a proper notification channel (the
 //! D-Bus surface of ADR 0021) will replace the file when it lands.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// The active window's identity, as the shell wants it.
 #[derive(Debug, Clone)]
@@ -21,29 +21,20 @@ pub struct ActiveWindow {
     pub app_id: String,
 }
 
-/// The state/data directory: `MALAYSIA_DATA_DIR`, else `$XDG_DATA_HOME/malaysia`
-/// (`~/.local/share/malaysia` by default) — the `~/Library/Application Support`
-/// equivalent.
-fn data_dir() -> PathBuf {
-    std::env::var_os("MALAYSIA_DATA_DIR").map_or_else(
-        || {
-            let base = std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("HOME")
-                        .map(PathBuf::from)
-                        .map(|h| h.join(".local/share"))
-                })
-                .unwrap_or_else(|| PathBuf::from(".local/share"));
-            base.join("malaysia-compositor")
-        },
-        PathBuf::from,
-    )
+#[derive(serde::Serialize)]
+struct Store<'a> {
+    active: StoredActive<'a>,
+}
+
+#[derive(serde::Serialize)]
+struct StoredActive<'a> {
+    title: &'a str,
+    app_id: &'a str,
 }
 
 /// Publishes the active window (or its absence) to the store.
 pub fn publish(active: Option<&ActiveWindow>) {
-    publish_to(&data_dir(), active);
+    publish_to(&vow_appearance::data_dir(), active);
 }
 
 /// Writes the store at an explicit directory (testable without touching env).
@@ -56,8 +47,12 @@ pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
         Some(window) => (window.title.as_str(), window.app_id.as_str()),
         None => ("", ""),
     };
-    let text = format!("[active]\ntitle = \"{}\"\napp_id = \"{}\"\n", title, app_id);
-    let _ = std::fs::write(&path, text);
+    let store = Store {
+        active: StoredActive { title, app_id },
+    };
+    if let Ok(text) = toml::to_string(&store) {
+        let _ = std::fs::write(&path, text);
+    }
 }
 
 #[cfg(test)]
@@ -79,6 +74,25 @@ mod tests {
         publish_to(&dir, None);
         let text = std::fs::read_to_string(dir.join("window.domain")).expect("store written");
         assert!(text.contains("title = \"\""));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn titles_with_quotes_and_newlines_round_trip() {
+        let dir =
+            std::env::temp_dir().join(format!("malaysia-active-escape-{}", std::process::id()));
+        let title = "He said \"hi\"\napp_id = \"injected\"";
+        publish_to(
+            &dir,
+            Some(&super::ActiveWindow {
+                title: title.into(),
+                app_id: "app".into(),
+            }),
+        );
+        let text = std::fs::read_to_string(dir.join("window.domain")).expect("store written");
+        let value: toml::Value = toml::from_str(&text).expect("the store is valid TOML");
+        assert_eq!(value["active"]["title"].as_str(), Some(title));
+        assert_eq!(value["active"]["app_id"].as_str(), Some("app"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
