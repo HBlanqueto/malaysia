@@ -437,6 +437,11 @@ fn scene_rect(rect: Rectangle<i32, Logical>) -> SceneRect<f64, SceneLogical> {
 }
 
 /// The compositor's logical rectangle from a scene rectangle.
+///
+/// This is protocol geometry: it reaches the client through
+/// `parent_geometry` → `xdg_popup.configure` (popup.rs:244-246 and 311-315),
+/// so it uses `round()`. ADR 0004's floor/ceil rule applies only to rectangles
+/// the compositor draws.
 fn smithay_rect(rect: SceneRect<f64, SceneLogical>) -> Rectangle<i32, Logical> {
     Rectangle::new(
         Point::from((rect.x().round() as i32, rect.y().round() as i32)),
@@ -446,7 +451,7 @@ fn smithay_rect(rect: SceneRect<f64, SceneLogical>) -> Rectangle<i32, Logical> {
 
 #[cfg(test)]
 mod tests {
-    use super::{popup_root, scene_rect};
+    use super::{popup_root, scene_rect, smithay_rect};
     use malaysia_scene::geometry::{Point as ScenePoint, Rect, Size as SceneSize};
     use malaysia_scene::scene::PopupId;
     use smithay::utils::{Point, Rectangle, Size};
@@ -467,5 +472,16 @@ mod tests {
         let ancestors = [PopupId::new(1), PopupId::new(0)];
         assert_eq!(popup_root(topmost, &ancestors), PopupId::new(0));
         assert_eq!(popup_root(topmost, &[]), topmost);
+    }
+
+    /// Protocol geometry rounds fractional logical values to the nearest
+    /// integer. ADR 0004's floor/ceil rule is for drawn rectangles, not for
+    /// values sent to the client via `xdg_popup.configure`.
+    #[test]
+    fn smithay_rect_rounds_fractional_protocol_geometry() {
+        let rect = Rect::new(ScenePoint::new(10.4, 20.6), SceneSize::new(100.4, 100.6));
+        let smithay = smithay_rect(rect);
+        assert_eq!(smithay.loc, Point::from((10, 21)));
+        assert_eq!(smithay.size, Size::from((100, 101)));
     }
 }

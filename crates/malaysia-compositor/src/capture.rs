@@ -179,6 +179,8 @@ fn crop_region(
     h: usize,
     rgba: &[u8],
 ) -> std::io::Result<(usize, usize, Vec<u8>)> {
+    // Round to the nearest physical pixel; the clamp below guarantees the
+    // crop never reads outside the output/window buffer.
     let x = (f64::from(region.loc.x) * scale).round() as i32;
     let y = (f64::from(region.loc.y) * scale).round() as i32;
     let width = (f64::from(region.size.w) * scale).round() as i32;
@@ -511,8 +513,9 @@ fn capture_dir() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{copy_into_shm_pool, group_modifiers};
+    use super::{copy_into_shm_pool, crop_region, group_modifiers};
     use smithay::backend::allocator::{Format, Fourcc, Modifier};
+    use smithay::utils::{Logical, Point, Rectangle, Size};
 
     const UNTOUCHED: u8 = 0xaa;
 
@@ -598,5 +601,29 @@ mod tests {
     fn negative_offset_fails() {
         let result = copy_into_shm_pool(&mut [0; 16], -1, 2, 1, 8, &src(8), 2, 1);
         assert!(result.is_err());
+    }
+
+    /// The cropped physical rectangle must fit inside the buffer and a tiny
+    /// logical selection must not collapse to empty. The clamp at
+    /// `capture.rs:189-192` provides the guarantee for regions that touch or
+    /// exceed the edge.
+    #[test]
+    fn crop_region_stays_inside_buffer_and_keeps_small_selections() {
+        let scale = 1.25;
+        let w = 200;
+        let h = 200;
+        let rgba = vec![0u8; w * h * 4];
+
+        // A region larger than the buffer is clamped to the buffer bounds.
+        let oversized = Rectangle::<i32, Logical>::new(Point::from((0, 0)), Size::from((200, 200)));
+        let (width, height, _) = crop_region(oversized, scale, w, h, &rgba).unwrap();
+        assert_eq!(width, w);
+        assert_eq!(height, h);
+
+        // A one-logical-pixel selection stays non-empty.
+        let tiny = Rectangle::<i32, Logical>::new(Point::from((1, 1)), Size::from((1, 1)));
+        let (width, height, _) = crop_region(tiny, scale, w, h, &rgba).unwrap();
+        assert_eq!(width, 1);
+        assert_eq!(height, 1);
     }
 }

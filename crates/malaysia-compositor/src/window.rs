@@ -976,10 +976,7 @@ impl Windows {
         let index = self.index(id)?;
         let decoration = self.decoration_of(id);
         let insets = self.windows[index].insets(decoration);
-        let location = Point::from((
-            (outer.x() + insets.left).round() as i32,
-            (outer.y() + insets.top).round() as i32,
-        ));
+        let location = usable_rect_location(outer, insets);
         let size = usable(self.windows[index].outer_size, insets);
         Some(Rectangle::new(location, size))
     }
@@ -1268,6 +1265,23 @@ impl Windows {
     }
 }
 
+/// The absolute top-left corner of a window's usable area.
+///
+/// Kept separate from [`Windows::usable_rect`] so the rounding can be tested
+/// without building a full [`Windows`] tracker. Uses `round` because the usable
+/// rectangle must fit inside the workspace: flooring the origin would push it
+/// toward the exclusive zones (e.g., the menubar), while ceiling it would push
+/// the opposite edge past the dock.
+fn usable_rect_location(
+    outer: SceneRect<f64, SceneLogical>,
+    insets: Insets,
+) -> Point<i32, Logical> {
+    Point::from((
+        (outer.x() + insets.left).round() as i32,
+        (outer.y() + insets.top).round() as i32,
+    ))
+}
+
 /// Maps an xdg resize edge to a scene edge, if it names one.
 pub(crate) fn from_xdg_resize_edge(edge: ResizeEdge) -> Option<Edge> {
     match edge {
@@ -1520,10 +1534,10 @@ mod tests {
 
     use super::{
         anchor_resize_origin, at_least_one_pixel, client_point, committed_outer, geometry_fits,
-        initial_placement, outer_size, usable,
+        initial_placement, outer_size, usable, usable_rect_location,
     };
     use crate::decoration::Insets;
-    use malaysia_scene::geometry::Size as SceneSize;
+    use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
     use malaysia_scene::scene::Edge;
 
     fn size(width: i32, height: i32) -> Size<i32, Logical> {
@@ -1736,5 +1750,28 @@ mod tests {
         let restored = hidden_rect.take().unwrap();
         assert_eq!(restored.x(), 123.0);
         assert_eq!(restored.y(), 456.0);
+    }
+
+    /// The usable rectangle must stay inside the workspace. A window whose
+    /// outer rectangle exactly fills the workspace below a 24-logical menubar
+    /// must not push its usable area past the bottom edge. Ceiling the origin
+    /// would add one logical pixel and overflow; flooring would shrink it and
+    /// is safe, but round is the smallest behaviour that matches the existing
+    /// `usable()` and `surface_location()` helpers.
+    #[test]
+    fn usable_rect_location_fits_inside_the_workspace() {
+        let workspace_height = 100.0;
+        let menubar = 24.0;
+        let outer = SceneRect::new(
+            ScenePoint::new(0.0, menubar + 0.4),
+            SceneSize::new(640.0, workspace_height - menubar),
+        );
+        let insets = titlebar();
+        let location = usable_rect_location(outer, insets);
+        let usable_height = usable(size(640, (workspace_height - menubar) as i32), insets).h;
+        assert!(
+            location.y + usable_height <= workspace_height as i32,
+            "usable rect must not extend below the workspace"
+        );
     }
 }

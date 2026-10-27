@@ -280,8 +280,10 @@ pub(crate) const fn winit_render_transform() -> Transform {
 }
 
 /// Converts a logical point to the physical pixel the renderer draws at.
+///
+/// The position is floored (ADR 0004).
 fn physical_point(point: Point<i32, Logical>, scale: f64) -> Point<i32, Physical> {
-    point.to_f64().to_physical(scale).to_i32_round()
+    point.to_f64().to_physical(scale).to_i32_floor()
 }
 
 /// The damage tracker mode source for the winit output.
@@ -1219,17 +1221,11 @@ fn frame_order<T>(outer: Option<T>, inner: Option<T>, content: Vec<T>, shadow: V
 }
 
 /// Converts a logical rectangle to a physical one at `scale`.
+///
+/// Uses Smithay's `Rectangle::to_physical_precise_up`, which floors the
+/// location and ceils the size (ADR 0004).
 fn physical_rect(rect: Rectangle<i32, Logical>, scale: f64) -> Rectangle<i32, Physical> {
-    Rectangle::new(
-        Point::from((
-            (f64::from(rect.loc.x) * scale).round() as i32,
-            (f64::from(rect.loc.y) * scale).round() as i32,
-        )),
-        Size::from((
-            (f64::from(rect.size.w) * scale).round() as i32,
-            (f64::from(rect.size.h) * scale).round() as i32,
-        )),
-    )
+    rect.to_f64().to_physical_precise_up(scale)
 }
 
 /// Builds one [`PixelShaderElement`] for an inner line or outer border ring.
@@ -2159,11 +2155,13 @@ mod tests {
     };
     use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
     use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
-    use smithay::utils::{Buffer as BufferCoord, Physical, Point, Rectangle, Size, Transform};
+    use smithay::utils::{
+        Buffer as BufferCoord, Logical, Physical, Point, Rectangle, Size, Transform,
+    };
 
     use super::{
         cursor_origin, describe_chain, frame_has_border, frame_order, frame_radius,
-        import_pending_dmabufs, winit_mode_source,
+        import_pending_dmabufs, physical_point, physical_rect, winit_mode_source,
     };
     use crate::cursor::OutputRenderElement;
     use crate::state::State;
@@ -2236,6 +2234,47 @@ mod tests {
             frame_radius(WindowState::Maximized, Role::Dialog),
             vow_design::DIALOG.corner_radius
         );
+    }
+
+    /// A logical point is floored when entering physical space.
+    ///
+    /// With `round()` a logical point at x=2 under scale 1.25 would become
+    /// physical 3 instead of 2, and a negative point at -2 would become -2
+    /// instead of -3, shifting drawn surfaces by one pixel.
+    #[test]
+    fn physical_point_floors_position() {
+        assert_eq!(
+            physical_point(Point::<i32, Logical>::from((2, 2)), 1.25),
+            Point::<i32, Physical>::from((2, 2))
+        );
+        assert_eq!(
+            physical_point(Point::<i32, Logical>::from((-2, -2)), 1.25),
+            Point::<i32, Physical>::from((-3, -3))
+        );
+    }
+
+    /// Two adjacent logical rectangles must share the physical boundary pixel.
+    ///
+    /// Rounding the position and size independently with `round()` can leave a
+    /// one-pixel gap (or a one-pixel overlap) under fractional scales; ADR 0004
+    /// requires flooring the position and ceiling the size so the edge is always
+    /// drawn by both rectangles.
+    #[test]
+    fn adjacent_logical_rectangles_share_physical_edge() {
+        for scale in [1.25, 1.5] {
+            let left = Rectangle::<i32, Logical>::new(Point::from((0, 0)), Size::from((101, 100)));
+            let right =
+                Rectangle::<i32, Logical>::new(Point::from((101, 0)), Size::from((100, 100)));
+            let left_physical = physical_rect(left, scale);
+            let right_physical = physical_rect(right, scale);
+            assert!(
+                left_physical.loc.x + left_physical.size.w > right_physical.loc.x,
+                "adjacent rectangles must share the physical boundary pixel at scale {scale}; \
+                 left ends at {}, right starts at {}",
+                left_physical.loc.x + left_physical.size.w,
+                right_physical.loc.x,
+            );
+        }
     }
 
     /// Red, in `Argb8888`'s in-memory byte order (B, G, R, A).

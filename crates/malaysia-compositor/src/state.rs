@@ -966,10 +966,9 @@ impl State {
     /// through `wp_fractional_scale_v1`; the integer part is what `wl_output`
     /// can advertise.
     pub fn logical_output_size(&self) -> Size<i32, Logical> {
-        self.output_size
-            .to_f64()
-            .to_logical(self.scale.fractional_scale())
-            .to_i32_round()
+        // Smithay's xdg-output implementation uses the same rounding
+        // (smithay-0.7.0/src/wayland/output/xdg.rs:128).
+        logical_output_size(self.output_size, self.scale.fractional_scale())
     }
 
     /// The workspace for windows: the output minus the layer-shell exclusive
@@ -983,6 +982,15 @@ impl State {
             Size::from((full.w, (full.h - top - bottom).max(0))),
         )
     }
+}
+
+/// The output size in logical coordinates.
+///
+/// Kept separate from [`State::logical_output_size`] so it can be unit-tested
+/// without building a full [`State`]. Uses the same rounding mode as Smithay's
+/// xdg-output implementation (smithay-0.7.0/src/wayland/output/xdg.rs:128).
+fn logical_output_size(output_size: Size<i32, Physical>, scale: f64) -> Size<i32, Logical> {
+    output_size.to_f64().to_logical(scale).to_i32_round()
 }
 
 /// The rectangle between two pointer points, clamped to the output.
@@ -1278,6 +1286,21 @@ mod tests {
         assert!(!boost_animation_active(Duration::from_millis(
             grow + shrink
         )));
+    }
+
+    #[test]
+    fn logical_output_size_fits_inside_the_physical_output() {
+        // 103 physical pixels at scale 1.25 is 82.4 logical. Rounding out
+        // (ceil) would advertise 83 logical, which scales back to 104 physical
+        // pixels and overflows the output.
+        let physical = Size::from((103, 100));
+        let logical = logical_output_size(physical, 1.25);
+        assert_eq!(logical, Size::from((82, 80)));
+        let back_to_physical_w = (logical.w as f64 * 1.25).ceil() as i32;
+        assert!(
+            back_to_physical_w <= physical.w,
+            "logical width must scale back to no more than the physical width"
+        );
     }
 
     #[test]
