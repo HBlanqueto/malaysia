@@ -94,7 +94,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   futura app de ajustes y el comando **`domain`** (sintaxis de `defaults`:
   `read`/`write`/`delete`/`find`; "domain" solo es una referencia a *Jujutsu
   Kaisen*) hablarán por D-Bus (`org.malaysia.Compositor1`) — ADR 0021. **Wallpaper**:
-  el dominio `wallpaper.domain` (en `.local/share/malaysia-compositor/`) lleva el catálogo y la
+  el dominio `wallpaper.domain` (en `.local/share/malaysia/`) lleva el catálogo y la
   selección actual en `[desktops]`, como `com.apple.wallpaper`; lo dibuja el
   componente nativo **`malaysia-shell wallpaper`** (ADR 0023/0024, render GLES de
   `barrier-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
