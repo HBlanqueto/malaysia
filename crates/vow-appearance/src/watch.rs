@@ -20,11 +20,14 @@ pub enum AppearanceEvent {
     Appearance,
     /// `wallpaper.state` changed.
     Wallpaper,
+    /// `wallpaper.domain` changed (the selected picture or scale).
+    WallpaperSelection,
     /// Accent colour inside `appearance.domain` changed.
     Accent,
 }
 
-/// A single inotify instance watching `appearance.domain` and `wallpaper.state`.
+/// A single inotify instance watching `appearance.domain`, `wallpaper.domain`
+/// and `wallpaper.state`.
 ///
 /// The raw fd stays valid for the lifetime of this struct. The type is
 /// `Send + Sync` so it can be moved into a calloop event source.
@@ -96,6 +99,8 @@ impl AppearanceWatch {
         if name_bytes == b"appearance.domain" {
             push_unique(out, AppearanceEvent::Appearance);
             push_unique(out, AppearanceEvent::Accent);
+        } else if name_bytes == b"wallpaper.domain" {
+            push_unique(out, AppearanceEvent::WallpaperSelection);
         } else if name_bytes == b"wallpaper.state" {
             push_unique(out, AppearanceEvent::Wallpaper);
         }
@@ -230,6 +235,26 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(found, "wallpaper.state close_write was not detected");
+    }
+
+    #[test]
+    fn detects_wallpaper_domain_rename() {
+        let (config_dir, data_dir) = tmp_dirs();
+        let watch = AppearanceWatch::new_for(config_dir, data_dir.clone()).unwrap();
+        let path = data_dir.join("wallpaper.domain");
+
+        write(&path, "[desktops]\ndefault = \"file:///Solid Gray.png\"\n");
+
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Ok(events) = watch.drain()
+                && events.contains(&AppearanceEvent::WallpaperSelection)
+            {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        panic!("wallpaper.domain rename was not detected");
     }
 
     #[test]

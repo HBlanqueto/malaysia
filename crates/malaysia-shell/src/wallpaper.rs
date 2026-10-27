@@ -5,9 +5,12 @@
 //! when it changes. The picture is drawn by BarrierKit on Freya (ADR 0034)
 //! as a Skia image scaled to cover the output (macOS default `fill`).
 
+use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 
-use barrier_kit::platform::{Anchors, KeyboardInteractivity, Layer, SurfaceSpec, run_layer};
+use barrier_kit::platform::{
+    Anchors, KeyboardInteractivity, Layer, SurfaceSpec, Timers, run_layer,
+};
 use freya_core::elements::image::ImageHandle;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -16,6 +19,7 @@ use torin::prelude::Size;
 use vow_design::Rgba;
 
 use vow_appearance::data_dir;
+use vow_appearance::watch::{AppearanceEvent, AppearanceWatch};
 
 /// The decoded wallpaper, ready to become a Freya image.
 #[derive(Clone, PartialEq)]
@@ -24,13 +28,27 @@ struct DecodedImage {
     rgba: Vec<u8>,
 }
 
-struct WallpaperApp {
+/// The image on screen and the store selection it was decoded from.
+#[derive(Clone, Default, PartialEq)]
+struct Wallpaper {
+    selection: Option<(PathBuf, String)>,
     image: Option<ImageHandle>,
+}
+
+struct WallpaperApp {
+    wallpaper: State<Wallpaper>,
+    store_path: PathBuf,
+    state_path: PathBuf,
 }
 
 impl App for WallpaperApp {
     fn render(&self) -> impl IntoElement {
-        let Some(handle) = self.image.clone() else {
+        let wallpaper = self.wallpaper;
+        let store_path = self.store_path.clone();
+        let state_path = self.state_path.clone();
+        use_hook(move || watch_wallpaper(wallpaper, store_path, state_path));
+
+        let Some(handle) = self.wallpaper.read().image.clone() else {
             return rect()
                 .width(Size::fill())
                 .height(Size::fill())
@@ -50,8 +68,12 @@ pub fn run() -> anyhow::Result<()> {
     let store_path = data_dir().join("wallpaper.domain");
     let state_path = data_dir().join("wallpaper.state");
 
-    let image = load_snapshot(&store_path, &state_path);
-    let app = AppComponent::new(WallpaperApp { image });
+    let wallpaper = State::create_global(load_snapshot(&store_path, &state_path));
+    let app = AppComponent::new(WallpaperApp {
+        wallpaper,
+        store_path,
+        state_path,
+    });
 
     run_layer(
         app,
@@ -67,40 +89,105 @@ pub fn run() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-/// Loads the selection, decodes it when it changed, and writes the dominant
-/// colour for the compositor and the portal.
-fn load_snapshot(store_path: &Path, state_path: &Path) -> Option<ImageHandle> {
-    match load_wallpaper(store_path) {
-        Ok(Some((path, scale))) => {
-            if !scale.is_empty() && scale != "fill" {
-                eprintln!("wallpaper: scale '{scale}' is not implemented yet; using 'fill'");
-            }
-            eprintln!("wallpaper: {path:?}");
-            match decode_image(&path) {
-                Ok(decoded) => {
-                    let dominant = dominant(&decoded);
-                    if let Err(error) = write_state(state_path, dominant) {
-                        eprintln!("wallpaper: failed to write the state: {error:#}");
-                    }
-                    ImageHandle::from_rgba(
-                        decoded.size.0,
-                        decoded.size.1,
-                        Bytes::from(decoded.rgba),
-                        AlphaType::Premul,
-                    )
-                }
-                Err(error) => {
-                    eprintln!("wallpaper: failed to decode {path:?}: {error:#}");
-                    None
-                }
-            }
-        }
-        Ok(_) => None,
+/// Loads the selection, decodes it, and writes the dominant colour for the
+/// compositor and the portal.
+fn load_snapshot(store_path: &Path, state_path: &Path) -> Wallpaper {
+    reload(&Wallpaper::default(), store_path, state_path)
+}
+
+/// Re-reads the store. Keeps `current` when the new selection cannot be read
+/// or decoded, so a bad path never leaves the screen black.
+fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wallpaper {
+    let selection = match load_wallpaper(store_path) {
+        Ok(selection) => selection,
         Err(error) => {
             eprintln!("wallpaper: {error:#}");
-            None
+            return current.clone();
         }
+    };
+    let Some((path, scale)) = selection else {
+        if let Err(error) = write_state(state_path, None) {
+            eprintln!("wallpaper: failed to write the state: {error:#}");
+        }
+        return Wallpaper::default();
+    };
+    if current
+        .selection
+        .as_ref()
+        .is_some_and(|(old_path, old_scale)| old_path == &path && old_scale == &scale)
+    {
+        return current.clone();
     }
+    if !scale.is_empty() && scale != "fill" {
+        eprintln!("wallpaper: scale '{scale}' is not implemented yet; using 'fill'");
+    }
+    eprintln!("wallpaper: {path:?}");
+    let decoded = match decode_image(&path) {
+        Ok(decoded) => decoded,
+        Err(error) => {
+            eprintln!("wallpaper: failed to decode {path:?}: {error:#}");
+            return current.clone();
+        }
+    };
+    let dominant = dominant(&decoded);
+    if let Err(error) = write_state(state_path, dominant) {
+        eprintln!("wallpaper: failed to write the state: {error:#}");
+    }
+    Wallpaper {
+        image: ImageHandle::from_rgba(
+            decoded.size.0,
+            decoded.size.1,
+            Bytes::from(decoded.rgba),
+            AlphaType::Unpremul,
+        ),
+        selection: Some((path, scale)),
+    }
+}
+
+/// Reloads the wallpaper when `wallpaper.domain` changes, without polling.
+/// The inotify thread only wakes the render thread, which owns the state.
+fn watch_wallpaper(wallpaper: State<Wallpaper>, store_path: PathBuf, state_path: PathBuf) {
+    let wake = Timers::get().wakeup(move || {
+        let current = wallpaper.peek().clone();
+        let next = reload(&current, &store_path, &state_path);
+        if next != current {
+            let mut wallpaper = wallpaper;
+            wallpaper.set(next);
+        }
+    });
+    let watch = match AppearanceWatch::new() {
+        Ok(watch) => watch,
+        Err(error) => {
+            eprintln!("wallpaper: cannot watch wallpaper.domain: {error}");
+            return;
+        }
+    };
+    let fd = match watch.as_fd().try_clone_to_owned() {
+        Ok(fd) => fd,
+        Err(error) => {
+            eprintln!("wallpaper: cannot duplicate the watcher fd: {error}");
+            return;
+        }
+    };
+    std::thread::spawn(move || {
+        let Ok(fd) = async_io::Async::new(fd) else {
+            eprintln!("wallpaper: cannot register the watcher fd");
+            return;
+        };
+        loop {
+            if futures_lite::future::block_on(fd.readable()).is_err() {
+                break;
+            }
+            match watch.drain() {
+                Ok(events) if events.contains(&AppearanceEvent::WallpaperSelection) => wake.wake(),
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("wallpaper: cannot drain the watcher: {error}");
+                    break;
+                }
+            }
+        }
+    });
 }
 
 // --- wallpaper store -------------------------------------------------------
@@ -489,11 +576,77 @@ mod tests {
         assert_eq!(path, black);
     }
 
-    fn fixture(name: &str) -> DecodedImage {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+    fn fixture_path(name: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures")
-            .join(name);
-        decode_image(&path).unwrap()
+            .join(name)
+    }
+
+    fn fixture(name: &str) -> DecodedImage {
+        decode_image(&fixture_path(name)).unwrap()
+    }
+
+    #[test]
+    fn editing_the_store_loads_the_new_selection() {
+        let dir = scratch("reload");
+        let store = dir.join("wallpaper.domain");
+        let state = dir.join("wallpaper.state");
+        let orange = fixture_path("orange.jpg");
+        std::fs::write(
+            &store,
+            format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
+        )
+        .unwrap();
+        let first = load_snapshot(&store, &state);
+        assert_eq!(
+            first.selection.as_ref().map(|(path, _)| path),
+            Some(&orange)
+        );
+        assert!(first.image.is_some());
+
+        let second = dir.join("second.png");
+        std::fs::copy(fixture_path("orange-16.png"), &second).unwrap();
+        std::fs::write(
+            &store,
+            format!(
+                "scale = \"fit\"\n[desktops]\ndefault = \"file://{}\"\n",
+                second.display()
+            ),
+        )
+        .unwrap();
+        let reloaded = reload(&first, &store, &state);
+        assert_eq!(
+            reloaded.selection.as_ref().map(|(path, _)| path),
+            Some(&second)
+        );
+        assert_eq!(
+            reloaded.selection.as_ref().map(|(_, scale)| scale.as_str()),
+            Some("fit")
+        );
+        assert!(reloaded.image.is_some());
+    }
+
+    #[test]
+    fn an_unreadable_wallpaper_keeps_the_previous_image() {
+        let dir = scratch("unreadable");
+        let store = dir.join("wallpaper.domain");
+        let state = dir.join("wallpaper.state");
+        let orange = fixture_path("orange.jpg");
+        std::fs::write(
+            &store,
+            format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
+        )
+        .unwrap();
+        let first = load_snapshot(&store, &state);
+        assert!(first.image.is_some());
+
+        let missing = dir.join("missing.png");
+        std::fs::write(
+            &store,
+            format!("[desktops]\ndefault = \"file://{}\"\n", missing.display()),
+        )
+        .unwrap();
+        assert!(reload(&first, &store, &state) == first);
     }
 
     fn assert_orange(color: Rgba) {
