@@ -2,6 +2,7 @@
 
 use std::env;
 use std::fs;
+use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 
 use accesskit::Role;
@@ -16,10 +17,16 @@ use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use freya_testing::TestingRunner;
 use keyboard_types::{Key, NamedKey};
-use torin::prelude::{Size, Size2D};
+use torin::prelude::{Alignment, Size, Size2D};
+use vow_appearance::{AppearanceConfig, ColorScheme, SidebarStyle, resolve};
 use vow_design::{SIDEBAR, TITLEBAR, TITLEBAR_CLIENT_HEIGHT, TOOLGROUP};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+fn color(c: vow_design::Rgba) -> Color {
+    let [r, g, b, a] = c.to_rgba8();
+    Color::from_argb(a, r, g, b)
+}
 
 type Capture = Arc<Mutex<Option<(f32, f32, f32, f32)>>>;
 
@@ -455,4 +462,115 @@ fn enabled_toolbutton_fires_on_press() {
     );
     test.click_cursor((15.0, 15.0));
     assert_eq!(*pressed.peek(), 1, "enabled tool button must fire on_press");
+}
+
+fn dark_resolved() -> vow_appearance::Resolved {
+    resolve(
+        &AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            sidebar_style: SidebarStyle::Island,
+            ..Default::default()
+        },
+        None,
+    )
+}
+
+fn decode_png(png: &[u8]) -> (usize, usize, Vec<u8>) {
+    let mut decoder = png::Decoder::new(Cursor::new(png));
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info().unwrap();
+    let mut buffer = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buffer).unwrap();
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => buffer[..info.buffer_size()].to_vec(),
+        png::ColorType::Rgb => buffer[..info.buffer_size()]
+            .chunks(3)
+            .flat_map(|px| [px[0], px[1], px[2], 255])
+            .collect(),
+        other => panic!("unexpected PNG colour type {other:?}"),
+    };
+    (info.width as usize, info.height as usize, rgba)
+}
+
+fn pixel(image: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {
+    let index = (y * width + x) * 4;
+    image[index..index + 4].try_into().unwrap()
+}
+
+struct IslandShadowCase;
+
+impl App for IslandShadowCase {
+    fn render(&self) -> impl IntoElement {
+        let resolved = dark_resolved();
+        use_init_theme(|| theme::for_scheme(true));
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(color(resolved.surfaces.window))
+            .child(SidebarLayout::new(Sidebar::new(), rect()))
+    }
+}
+
+struct ToolgroupShadowCase;
+
+impl App for ToolgroupShadowCase {
+    fn render(&self) -> impl IntoElement {
+        let resolved = dark_resolved();
+        use_init_theme(|| theme::for_scheme(true));
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(color(resolved.surfaces.window))
+            .main_align(Alignment::Center)
+            .cross_align(Alignment::Center)
+            .child(
+                ToolGroup::new()
+                    .child(Button::new().child("A"))
+                    .child(Button::new().child("B")),
+            )
+    }
+}
+
+#[test]
+fn island_and_toolgroup_cast_no_shadow() {
+    let resolved = dark_resolved();
+    let expected = resolved.surfaces.window.to_rgba8();
+
+    let app = AppComponent::new(IslandShadowCase);
+    let (mut test, _) = TestingRunner::new(
+        app,
+        Size2D::new(300.0, 300.0),
+        |runner| runner.provide_root_context(|| State::create(resolved)),
+        1.0,
+    );
+    test.sync_and_update();
+    let _ = test.render();
+    test.sync_and_update();
+    let (w, _h, image) = decode_png(test.render().as_bytes());
+    // The island body ends at height - inset; 4 px below must be window bg.
+    let island_bottom = 300.0 - SIDEBAR.inset as f32 + 4.0;
+    assert_eq!(
+        pixel(&image, w, 110, island_bottom as usize),
+        expected,
+        "pixel 4 px below the island must be the window background"
+    );
+
+    let app = AppComponent::new(ToolgroupShadowCase);
+    let (mut test, _) = TestingRunner::new(
+        app,
+        Size2D::new(300.0, 80.0),
+        |runner| runner.provide_root_context(|| State::create(resolved)),
+        1.0,
+    );
+    test.sync_and_update();
+    let _ = test.render();
+    test.sync_and_update();
+    let (w, _h, image) = decode_png(test.render().as_bytes());
+    // The capsule is centred vertically; 3 px below its bottom must be window bg.
+    let capsule_bottom = 40.0 + TOOLGROUP.height as f32 / 2.0 + 3.0;
+    assert_eq!(
+        pixel(&image, w, 150, capsule_bottom as usize),
+        expected,
+        "pixel 3 px below the toolgroup capsule must be the window background"
+    );
 }

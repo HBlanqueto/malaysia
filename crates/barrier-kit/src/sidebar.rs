@@ -167,17 +167,6 @@ impl Component for Sidebar {
                         ),
                 );
             }
-
-            let ambient = &surface.shadow[0];
-            if ambient.opacity > 0.0 {
-                sidebar_body = sidebar_body.shadow(
-                    Shadow::new()
-                        .x(0.0)
-                        .y(ambient.y_offset as f32)
-                        .blur(ambient.blur as f32)
-                        .color(rgba(ambient.color)),
-                );
-            }
         } else {
             sidebar_body = sidebar_body.child(
                 rect()
@@ -188,20 +177,10 @@ impl Component for Sidebar {
             );
         }
 
-        let mut root = rect().width(Size::fill()).height(Size::fill());
-        if island {
-            let contact = &surface.shadow[1];
-            if contact.opacity > 0.0 {
-                root = root.shadow(
-                    Shadow::new()
-                        .x(0.0)
-                        .y(contact.y_offset as f32)
-                        .blur(contact.blur as f32)
-                        .color(rgba(contact.color)),
-                );
-            }
-        }
-        root = root.child(sidebar_body);
+        let mut root = rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .child(sidebar_body);
 
         if self.traffic_lights {
             let (status, fixed) = try_consume_root_context::<WindowControls>()

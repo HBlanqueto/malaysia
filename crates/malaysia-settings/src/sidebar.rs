@@ -24,7 +24,6 @@ pub fn sidebar(
     let sidebar_palette = resolved.sidebar.palette;
     let island_bg = resolved.sidebar.bg;
     let rim = resolved.sidebar.rim;
-    let shadow = resolved.sidebar.shadow;
 
     let mut island = rect()
         .width(Size::fill())
@@ -52,16 +51,6 @@ pub fn sidebar(
                 .width(SIDEBAR.rim_width)
                 .alignment(BorderAlignment::Inner)
                 .fill(rgba(rim)),
-        );
-    }
-
-    if shadow[0].opacity > 0.0 {
-        island = island.shadow(
-            Shadow::new()
-                .x(0.0)
-                .y(shadow[0].y_offset as f32)
-                .blur(shadow[0].blur as f32)
-                .color(rgba(shadow[0].color)),
         );
     }
 

@@ -179,7 +179,7 @@ impl ToolGroup {
         self
     }
 
-    /// Use the island style (background capsule with shadow).
+    /// Use the island style (background capsule without shadow).
     pub fn island(mut self) -> Self {
         self.style = ToolGroupStyle::Island;
         self
@@ -228,7 +228,7 @@ impl Component for ToolGroup {
             }
         }
 
-        let mut root = rect()
+        let root = rect()
             .direction(Direction::Horizontal)
             .height(Size::px(TOOLGROUP.height as f32))
             .cross_align(Alignment::Center)
@@ -241,29 +241,9 @@ impl Component for ToolGroup {
             .children(items);
 
         if self.style == ToolGroupStyle::Island {
-            let shadow = resolved.toolgroup.shadow;
-            root = root
+            return root
                 .background(rgba(resolved.toolgroup.bg))
                 .corner_radius((TOOLGROUP.height as f32 / 2.0).max(1.0))
-                .shadow(
-                    Shadow::new()
-                        .x(0.0)
-                        .y(shadow[0].y_offset as f32)
-                        .blur(shadow[0].blur as f32)
-                        .color(rgba(shadow[0].color)),
-                );
-
-            return rect()
-                .width(Size::auto())
-                .height(Size::px(TOOLGROUP.height as f32))
-                .shadow(
-                    Shadow::new()
-                        .x(0.0)
-                        .y(shadow[1].y_offset as f32)
-                        .blur(shadow[1].blur as f32)
-                        .color(rgba(shadow[1].color)),
-                )
-                .child(root)
                 .into_element();
         }
 

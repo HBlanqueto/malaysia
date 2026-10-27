@@ -24,14 +24,13 @@ use vow_design::{
     SIDEBAR_ISLAND_DARK_OPAQUE, SIDEBAR_ISLAND_DARK_TINT, SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
     SIDEBAR_ISLAND_INNER_DARK, SIDEBAR_ISLAND_INNER_DARK_TINT, SIDEBAR_ISLAND_INNER_LIGHT,
     SIDEBAR_ISLAND_LIGHT, SIDEBAR_ISLAND_LIGHT_OPAQUE, SIDEBAR_ISLAND_RIM_DARK,
-    SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_ISLAND_SHADOW,
-    SIDEBAR_ISLAND_SHADOW_DARK, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE, SIDEBAR_PALETTE_DARK,
-    SIDEBAR_PALETTE_DARK_TINT, SIDEBAR_PALETTE_LIGHT, ShadowLayer, ShellPalette, SidebarPalette,
-    TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
+    SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE,
+    SIDEBAR_PALETTE_DARK, SIDEBAR_PALETTE_DARK_TINT, SIDEBAR_PALETTE_LIGHT, ShellPalette,
+    SidebarPalette, TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
     TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE,
-    TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT, TOOLGROUP_PALETTE_LIGHT, TOOLGROUP_SHADOW,
-    TOOLGROUP_SHADOW_DARK, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, ToolgroupPalette,
-    WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+    TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT, TOOLGROUP_PALETTE_LIGHT,
+    TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, ToolgroupPalette, WINDOW_TINT_ACCENT,
+    WINDOW_TINT_WALLPAPER,
 };
 
 /// The preferred appearance, published as `org.freedesktop.appearance`.
@@ -156,8 +155,6 @@ pub struct SidebarSurface {
     pub rim: Rgba,
     /// Inner highlight line (transparent in flat mode).
     pub inner: Rgba,
-    /// Drop shadow (zeroed in flat mode).
-    pub shadow: [ShadowLayer; 2],
     /// Item/section colours for this theme.
     pub palette: SidebarPalette,
 }
@@ -167,8 +164,6 @@ pub struct SidebarSurface {
 pub struct ToolgroupSurface {
     /// Capsule background fill.
     pub bg: Rgba,
-    /// Drop shadow.
-    pub shadow: [ShadowLayer; 2],
     /// Button and separator colours for this theme.
     pub palette: ToolgroupPalette,
 }
@@ -280,20 +275,6 @@ fn sidebar_surface(
     palette: SidebarPalette,
 ) -> SidebarSurface {
     let transparent = Rgba::rgba8(0, 0, 0, 0.0);
-    let zero_shadow = [
-        ShadowLayer {
-            blur: 0,
-            y_offset: 0,
-            opacity: 0.0,
-            color: Rgba::rgb8(0, 0, 0),
-        },
-        ShadowLayer {
-            blur: 0,
-            y_offset: 0,
-            opacity: 0.0,
-            color: Rgba::rgb8(0, 0, 0),
-        },
-    ];
 
     if style == SidebarStyle::Flat {
         let bg = match (scheme, opaque) {
@@ -309,47 +290,40 @@ fn sidebar_surface(
             bg,
             rim: transparent,
             inner: transparent,
-            shadow: zero_shadow,
             palette,
         };
     }
 
-    let (bg, rim, inner, shadow) = match (scheme, opaque) {
+    let (bg, rim, inner) = match (scheme, opaque) {
         (ColorScheme::Dark, false) => (
             SIDEBAR_ISLAND_DARK,
             SIDEBAR_ISLAND_RIM_DARK,
             SIDEBAR_ISLAND_INNER_DARK,
-            SIDEBAR_ISLAND_SHADOW_DARK,
         ),
         (ColorScheme::Dark, true) => (
             SIDEBAR_ISLAND_DARK_OPAQUE,
             SIDEBAR_ISLAND_RIM_DARK,
             SIDEBAR_ISLAND_INNER_DARK,
-            SIDEBAR_ISLAND_SHADOW_DARK,
         ),
         (ColorScheme::DarkTint, false) => (
             SIDEBAR_ISLAND_DARK_TINT,
             SIDEBAR_ISLAND_RIM_DARK_TINT,
             SIDEBAR_ISLAND_INNER_DARK_TINT,
-            SIDEBAR_ISLAND_SHADOW_DARK,
         ),
         (ColorScheme::DarkTint, true) => (
             SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
             SIDEBAR_ISLAND_RIM_DARK_TINT,
             SIDEBAR_ISLAND_INNER_DARK_TINT,
-            SIDEBAR_ISLAND_SHADOW_DARK,
         ),
         (_, false) => (
             SIDEBAR_ISLAND_LIGHT,
             SIDEBAR_ISLAND_RIM_LIGHT,
             SIDEBAR_ISLAND_INNER_LIGHT,
-            SIDEBAR_ISLAND_SHADOW,
         ),
         (_, true) => (
             SIDEBAR_ISLAND_LIGHT_OPAQUE,
             SIDEBAR_ISLAND_RIM_LIGHT,
             SIDEBAR_ISLAND_INNER_LIGHT,
-            SIDEBAR_ISLAND_SHADOW,
         ),
     };
     SidebarSurface {
@@ -357,7 +331,6 @@ fn sidebar_surface(
         bg,
         rim,
         inner,
-        shadow,
         palette,
     }
 }
@@ -368,19 +341,15 @@ fn toolgroup_surface(
     opaque: bool,
     palette: ToolgroupPalette,
 ) -> ToolgroupSurface {
-    let (bg, shadow) = match (scheme, opaque) {
-        (ColorScheme::Dark, false) => (TOOLGROUP_BG_DARK, TOOLGROUP_SHADOW_DARK),
-        (ColorScheme::Dark, true) => (TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_SHADOW_DARK),
-        (ColorScheme::DarkTint, false) => (TOOLGROUP_BG_DARK_TINT, TOOLGROUP_SHADOW_DARK),
-        (ColorScheme::DarkTint, true) => (TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_SHADOW_DARK),
-        (_, false) => (TOOLGROUP_BG_LIGHT, TOOLGROUP_SHADOW),
-        (_, true) => (TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_SHADOW),
+    let bg = match (scheme, opaque) {
+        (ColorScheme::Dark, false) => TOOLGROUP_BG_DARK,
+        (ColorScheme::Dark, true) => TOOLGROUP_BG_DARK_OPAQUE,
+        (ColorScheme::DarkTint, false) => TOOLGROUP_BG_DARK_TINT,
+        (ColorScheme::DarkTint, true) => TOOLGROUP_BG_DARK_TINT_OPAQUE,
+        (_, false) => TOOLGROUP_BG_LIGHT,
+        (_, true) => TOOLGROUP_BG_LIGHT_OPAQUE,
     };
-    ToolgroupSurface {
-        bg,
-        shadow,
-        palette,
-    }
+    ToolgroupSurface { bg, palette }
 }
 
 /// Resolves an appearance configuration with the current wallpaper dominant.
@@ -1240,8 +1209,6 @@ sidebar_style = "flat"
                 );
                 assert_eq!(resolved.sidebar.rim.a, 0.0);
                 assert_eq!(resolved.sidebar.inner.a, 0.0);
-                assert_eq!(resolved.sidebar.shadow[0].opacity, 0.0);
-                assert_eq!(resolved.sidebar.shadow[1].opacity, 0.0);
             }
         }
     }

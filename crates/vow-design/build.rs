@@ -770,22 +770,6 @@ fn shadow(tokens: &Value, theme: &str) -> String {
     )
 }
 
-fn surface_shadow(tokens: &Value, layer_path: &str, theme: &str) -> String {
-    let ambient = format!("{layer_path}.{theme}.ambient");
-    let contact = format!("{layer_path}.{theme}.contact");
-    format!(
-        "[ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}, ShadowLayer {{ blur: {}, y_offset: {}, opacity: {}, color: {} }}]",
-        integer(tokens, &format!("{ambient}.blur"), TOKENS),
-        integer(tokens, &format!("{ambient}.y-offset"), TOKENS),
-        float(number(tokens, &format!("{ambient}.opacity"), TOKENS)),
-        rgba(color(tokens, &format!("{ambient}.color"), TOKENS)),
-        integer(tokens, &format!("{contact}.blur"), TOKENS),
-        integer(tokens, &format!("{contact}.y-offset"), TOKENS),
-        float(number(tokens, &format!("{contact}.opacity"), TOKENS)),
-        rgba(color(tokens, &format!("{contact}.color"), TOKENS)),
-    )
-}
-
 fn emit_shadows(out: &mut String, tokens: &Value) {
     const_doc(out, "SHADOW", "The window shadow in light mode.");
     out.push_str(&format!(": ShadowStyle = {};\n\n", shadow(tokens, "light")));
