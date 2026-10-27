@@ -783,3 +783,46 @@ contador: action reset count=0
 
 `contador-claro.png`: ventana de Contador con el menú global abierto en tema
 claro; se ven Incrementar, Decrementar, Reiniciar, Paso y Permitir negativos.
+
+## 14f-1 — GTK (`gtk_shell1` → `org.gtk.Menus`)
+
+Aceptado el **2026-10-27** en sesión anidada clara. El compositor sirve
+`gtk_shell1` versión 5, recoge las propiedades D-Bus que GTK 3/4 anuncia por
+`gtk_surface1.set_dbus_properties`, y las reenvía a la barra a través del
+nuevo evento `gtk_menus` de Infinity v3. En 14f-1 la barra solo loguea la
+dirección:
+
+```text
+menubar: gtk_menus app_id="org.gtk.Demo" bus=":1.42" menubar="/org/gtk/Menus/..." appmenu="/org/gtk/Menus/..."
+menubar: gtk_menus app_id="org.gtk.Demo" ... none
+```
+
+### Aceptación manual
+
+```sh
+./dev.sh lab --light
+# dentro de la sesión anidada:
+gtk4-demo-application --display=$WAYLAND_DISPLAY &
+gtk3-demo-application --display=$WAYLAND_DISPLAY &
+```
+
+- `gtk4-demo-application` (paquete `gtk4`) y `gtk3-demo-application` (paquete
+  `gtk3`) arrancan y muestran su headerbar/menú interno, porque en 14f-1 el
+  compositor anuncia `capabilities(0)`.
+- Al cambiar el foco entre ventanas GTK el log de la barra muestra el evento
+  `gtk_menus` con `bus` y `menubar` no vacíos.
+- Al cerrar la ventana GTK el log cambia a `gtk_menus none` para esa app.
+- `titlebar_gesture(double_click)` maximiza/restaura la ventana con la misma
+  acción configurada para el doble clic de la titlebar.
+- `titlebar_gesture(right_click)` y `middle_click` solo se loguean, no abortan.
+- Un valor de gesto inválido produce el error de protocolo
+  `gtk_surface1.invalid_gesture`.
+
+### Notas
+
+- El protocolo `gtk-shell.xml` está copiado sin modificar del repositorio GTK en
+  el commit `efcc16deb0e0373655e2e4aed139ff7de3096134` (ver `NOTICE`).
+- `capabilities` usa 0 en 14f-1; 14f-2 lo subirá a 3 para que GTK oculte su
+  menú interno y la barra dibuje el árbol `org.gtk.Menus`.
+- La prioridad entre fuentes se mantiene como fija en el ADR 0045:
+  dbusmenu > `org.gtk.Menus` > respaldo de 14c.
