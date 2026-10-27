@@ -734,14 +734,12 @@ impl XdgShellHandler for State {
         let id = self.windows.id_of(surface.wl_surface());
         if let Some(id) = id {
             self.foreign_identity_changed(id);
-            self.publish_active_if_focused(id);
         }
     }
 
     fn title_changed(&mut self, surface: ToplevelSurface) {
         if let Some(id) = self.windows.id_of(surface.wl_surface()) {
             self.foreign_identity_changed(id);
-            self.publish_active_if_focused(id);
         }
     }
 

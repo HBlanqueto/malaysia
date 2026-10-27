@@ -309,6 +309,10 @@ impl State {
                 handle.done();
             }
         }
+        // shortcut: falta un test con ventana real que pruebe que un cambio de
+        // título de la ventana activa llega a window.domain — mejora: escribirlo
+        // cuando exista un arnés de cliente compartido (lote L3 "arnés de test único").
+        self.publish_active_if_focused(id);
     }
 
     fn foreign_states_for(&self, id: WindowId) -> Vec<u8> {

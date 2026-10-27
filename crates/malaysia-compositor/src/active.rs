@@ -32,11 +32,6 @@ struct StoredActive<'a> {
     app_id: &'a str,
 }
 
-/// Publishes the active window (or its absence) to the store.
-pub fn publish(active: Option<&ActiveWindow>) {
-    publish_to(&vow_appearance::data_dir(), active);
-}
-
 /// Writes the store at an explicit directory (testable without touching env).
 pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
     let path = dir.join("window.domain");

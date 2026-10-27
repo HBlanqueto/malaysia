@@ -1603,9 +1603,7 @@ impl State {
 
     /// Publishes the active window (or its absence) to the shell's store.
     pub(crate) fn publish_active(&self, id: Option<WindowId>) {
-        let info = id.and_then(|id| self.windows.active_info(id));
-        let active = info.map(|(title, app_id)| crate::active::ActiveWindow { title, app_id });
-        crate::active::publish(active.as_ref());
+        self.publish_active_to(&vow_appearance::data_dir(), id);
     }
 
     fn publish_active_to(&self, dir: &Path, id: Option<WindowId>) {

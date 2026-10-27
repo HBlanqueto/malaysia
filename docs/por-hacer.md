@@ -1,6 +1,6 @@
 # Por hacer — plan de trabajo
 
-Última actualización: 2026-10-25.
+Última actualización: 2026-10-27.
 
 Este documento es la lista corta de lo que toca ahora. El plan de bloques de
 largo plazo vive en [`roadmap.md`](roadmap.md); aquí solo se ordena la
@@ -114,6 +114,10 @@ se revisará si el ThinkPad mide algo muy distinto.
 
 ## Deuda técnica
 
+- **L3 arnés de test**: el compositor tiene 3 arneses de test locales
+  (`session.rs:~3262`, `input.rs::test_state` — `Display` + `State` sin cliente —,
+  `handlers.rs::capture_lock_tests`); unificar en uno y escribir con él el test
+  de PX-06 (título de la ventana activa → `window.domain`).
 - `crates/barrier-kit/src/menu.rs:933` — Ctrl/Alt+Espacio activa el ítem
   seleccionado; decidir si debe filtrarse con `inserts_text` (aparecido en
   auditoría L1-lock).
