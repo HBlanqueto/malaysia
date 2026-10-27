@@ -10,9 +10,26 @@ use freya_core::prelude::{Color, State, try_consume_root_context};
 use vow_appearance::{ColorScheme, Resolved, load_appearance, load_dominant, resolve};
 use vow_design::{LockPalette, MenuPalette, Rgba, ShellPalette};
 
-fn color(c: Rgba) -> Color {
+pub(crate) fn color(c: Rgba) -> Color {
     let [r, g, b, a] = c.to_rgba8();
     Color::from_argb(a, r, g, b)
+}
+
+/// What kind of surface the kit is painting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceKind {
+    /// A normal xdg_toplevel owned by a kit app.
+    Toplevel,
+    /// A shell layer surface (menubar, dock).
+    LayerShell,
+}
+
+/// The default background for `kind`, from the appearance the kit already watches.
+pub fn surface_background(resolved: &Resolved, kind: SurfaceKind) -> Rgba {
+    match kind {
+        SurfaceKind::Toplevel => resolved.surfaces.window,
+        SurfaceKind::LayerShell => resolved.shell.bar,
+    }
 }
 
 fn themed(name: &'static str, dark: bool, colors: ColorsSheet) -> Theme {
@@ -261,6 +278,97 @@ mod tests {
             let expected = over_white(shell_palette(&dark).bar.to_rgba8());
             assert_eq!(actual, expected);
         })
+    }
+
+    #[test]
+    fn surface_backgrounds_follow_the_window_colour_mode_and_scope() {
+        use vow_appearance::{WindowColorMode, WindowTintScope};
+        use vow_design::{
+            BG_WINDOW_LIGHT, PANEL_TINT_WALLPAPER, SHELL_LIGHT_OPAQUE, WINDOW_TINT_ACCENT,
+            WINDOW_TINT_WALLPAPER,
+        };
+
+        let accent = Rgba {
+            r: 0.2,
+            g: 0.4,
+            b: 0.9,
+            a: 1.0,
+        };
+        let dominant = Rgba {
+            r: 0.8,
+            g: 0.2,
+            b: 0.1,
+            a: 1.0,
+        };
+        let config = |window_color, window_tint_scope| AppearanceConfig {
+            color_scheme: ColorScheme::Light,
+            accent_color: Some([accent.r, accent.g, accent.b]),
+            reduce_transparency: true,
+            window_color,
+            window_tint_scope,
+            ..Default::default()
+        };
+
+        let cases: [(&str, WindowColorMode, WindowTintScope, Rgba, Rgba); 6] = [
+            (
+                "neutral/windows",
+                WindowColorMode::Neutral,
+                WindowTintScope::Windows,
+                BG_WINDOW_LIGHT,
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            (
+                "neutral/desktop",
+                WindowColorMode::Neutral,
+                WindowTintScope::Desktop,
+                BG_WINDOW_LIGHT,
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            (
+                "accent/windows",
+                WindowColorMode::Accent,
+                WindowTintScope::Windows,
+                BG_WINDOW_LIGHT.mix(accent, WINDOW_TINT_ACCENT[0]),
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            (
+                "accent/desktop",
+                WindowColorMode::Accent,
+                WindowTintScope::Desktop,
+                BG_WINDOW_LIGHT.mix(accent, WINDOW_TINT_ACCENT[0]),
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            (
+                "wallpaper/windows",
+                WindowColorMode::Wallpaper,
+                WindowTintScope::Windows,
+                BG_WINDOW_LIGHT.mix(dominant, WINDOW_TINT_WALLPAPER[0]),
+                SHELL_LIGHT_OPAQUE.bar,
+            ),
+            (
+                "wallpaper/desktop",
+                WindowColorMode::Wallpaper,
+                WindowTintScope::Desktop,
+                BG_WINDOW_LIGHT.mix(dominant, WINDOW_TINT_WALLPAPER[0]),
+                SHELL_LIGHT_OPAQUE
+                    .bar
+                    .mix(dominant, PANEL_TINT_WALLPAPER[0]),
+            ),
+        ];
+
+        for (name, window_color, window_tint_scope, toplevel, layer) in cases {
+            let resolved = resolve(&config(window_color, window_tint_scope), Some(dominant));
+            assert_eq!(
+                surface_background(&resolved, SurfaceKind::Toplevel),
+                toplevel,
+                "{name}: toplevel background"
+            );
+            assert_eq!(
+                surface_background(&resolved, SurfaceKind::LayerShell),
+                layer,
+                "{name}: layer-shell background"
+            );
+        }
     }
 
     #[test]

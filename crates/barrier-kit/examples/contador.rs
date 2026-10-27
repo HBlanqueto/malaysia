@@ -207,8 +207,6 @@ impl App for Contador {
 
         let palette = barrier_kit::theme::resolved();
         let colors = vow_appearance::palette(palette.scheme);
-        let [r, g, b, a] = colors.titlebar_bg.focused.to_rgba8();
-        let background = Color::from_argb(a, r, g, b);
         let [tr, tg, tb, ta] = colors.text.focused.to_rgba8();
         let text = Color::from_argb(ta, tr, tg, tb);
 
@@ -217,7 +215,6 @@ impl App for Contador {
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(background)
             .direction(Direction::Vertical)
             .child(Titlebar::new().on_close(|()| std::process::exit(0)))
             .child(

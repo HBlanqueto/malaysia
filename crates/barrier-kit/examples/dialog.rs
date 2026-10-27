@@ -14,13 +14,6 @@ fn theme_text() -> Color {
     Color::from_argb(a, r, g, b)
 }
 
-fn theme_background() -> Color {
-    let palette = barrier_kit::theme::resolved();
-    let colors = vow_appearance::palette(palette.scheme);
-    let [r, g, b, a] = colors.titlebar_bg.focused.to_rgba8();
-    Color::from_argb(a, r, g, b)
-}
-
 struct Parent {
     started: Instant,
 }
@@ -35,11 +28,9 @@ impl App for Parent {
         });
         let controls = WindowControls::get();
         let text = theme_text();
-        let background = theme_background();
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(background)
             .direction(Direction::Vertical)
             .child(Titlebar::new().on_close(|()| std::process::exit(0)))
             .child(
@@ -86,11 +77,9 @@ impl App for Dialog {
             }
         });
         let text = theme_text();
-        let background = theme_background();
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(background)
             .direction(Direction::Vertical)
             .child(
                 rect()

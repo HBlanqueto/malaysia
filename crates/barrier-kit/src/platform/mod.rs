@@ -912,6 +912,7 @@ struct AppInstance {
     waker: Waker,
     menu: Option<crate::app_menu::AppMenu>,
     on_menu_action: Option<MenuActionHandler>,
+    resolved: State<Resolved>,
 }
 
 impl AppInstance {
@@ -1004,6 +1005,7 @@ impl AppInstance {
             waker,
             menu,
             on_menu_action,
+            resolved,
         }
     }
 
@@ -1487,6 +1489,15 @@ impl SurfaceWindow {
             "BarrierKit: draw"
         );
         self.app.layout();
+        let background = if matches!(&self.role, SurfaceRole::Window(_)) {
+            let resolved = *self.app.resolved.read();
+            crate::theme::color(crate::theme::surface_background(
+                &resolved,
+                crate::theme::SurfaceKind::Toplevel,
+            ))
+        } else {
+            Color::TRANSPARENT
+        };
         {
             let Some(skia) = graphics.skia.as_mut() else {
                 return false;
@@ -1498,7 +1509,7 @@ impl SurfaceWindow {
                 canvas,
                 tree: &self.app.tree,
                 scale_factor: self.scale,
-                background: Color::TRANSPARENT,
+                background,
             }
             .render();
         }
@@ -1965,6 +1976,7 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
                     let resolved = resolve(&load_appearance(), load_dominant());
                     if *shell.resolved.peek() != resolved {
                         shell.resolved.set(resolved);
+                        shell.request_redraw_all = true;
                         shell.ping.ping();
                     }
                 }

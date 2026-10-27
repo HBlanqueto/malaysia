@@ -18,7 +18,7 @@ use freya_core::prelude::*;
 use freya_testing::TestingRunner;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Size, Size2D};
-use vow_appearance::{AppearanceConfig, ColorScheme, SidebarStyle, resolve};
+use vow_appearance::{AppearanceConfig, ColorScheme, SidebarStyle, WindowColorMode, resolve};
 use vow_design::{SIDEBAR, TITLEBAR, TITLEBAR_CLIENT_HEIGHT, TOOLGROUP};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -140,6 +140,62 @@ fn render_titlebar(sidebar: bool, decoration: DecorationResponse) -> Vec<u8> {
     let (mut test, _) = TestingRunner::new(app, Size2D::new(300.0, 120.0), |_| {}, 1.0);
     test.sync_and_update();
     test.render().as_ref().to_vec()
+}
+
+fn render_titlebar_pixels(
+    activated: bool,
+    resolved: vow_appearance::Resolved,
+) -> (usize, usize, Vec<u8>) {
+    let app = AppComponent::new(TitlebarCase {
+        sidebar: false,
+        status: WindowStatus {
+            activated,
+            maximized: false,
+            decoration: DecorationResponse::Client,
+            fixed: false,
+        },
+    });
+    let (mut test, _) = TestingRunner::new(
+        app,
+        Size2D::new(300.0, 120.0),
+        move |runner| runner.provide_root_context(move || State::create(resolved)),
+        1.0,
+    );
+    test.sync_and_update();
+    decode_png(test.render().as_bytes())
+}
+
+#[test]
+fn titlebar_background_follows_the_resolved_window_tint() {
+    let accent = vow_design::Rgba {
+        r: 0.2,
+        g: 0.4,
+        b: 0.9,
+        a: 1.0,
+    };
+    let resolved = resolve(
+        &AppearanceConfig {
+            color_scheme: ColorScheme::Light,
+            accent_color: Some([accent.r, accent.g, accent.b]),
+            window_color: WindowColorMode::Accent,
+            ..Default::default()
+        },
+        None,
+    );
+
+    let (width, _height, focused) = render_titlebar_pixels(true, resolved);
+    assert_eq!(
+        pixel(&focused, width, 260, 20),
+        resolved.surfaces.window.to_rgba8(),
+        "a focused kit titlebar must use the tinted window surface"
+    );
+
+    let (width, _height, unfocused) = render_titlebar_pixels(false, resolved);
+    assert_eq!(
+        pixel(&unfocused, width, 260, 20),
+        resolved.surfaces.sunken.to_rgba8(),
+        "an unfocused kit titlebar must use the tinted sunken surface"
+    );
 }
 
 fn titlebar_layout(sidebar: bool) -> Vec<(f32, f32, f32, f32)> {
