@@ -21,7 +21,6 @@ freya-core.workspace = true
 freya-components.workspace = true
 freya-engine.workspace = true
 torin.workspace = true
-keyboard-types.workspace = true
 
 [dev-dependencies]
 freya-testing.workspace = true

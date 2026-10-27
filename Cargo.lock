@@ -1730,7 +1730,6 @@ dependencies = [
  "freya-core",
  "freya-engine",
  "freya-testing",
- "keyboard-types",
  "libc",
  "png",
  "torin",
