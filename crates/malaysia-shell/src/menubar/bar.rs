@@ -34,10 +34,10 @@ use barrier_kit::platform::AppMenuAddress;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
 
-/// Firefox sets its dbusmenu 240.7–304.6 ms after the window maps in the lab,
-/// over five fresh temporary profiles; Kate sets it 37.5–58.8 ms before the
+/// Firefox sets its dbusmenu 249.3–299.0 ms after the window maps in the lab,
+/// over five fresh temporary profiles; Kate sets it 48.7–63.0 ms before the
 /// map. This wait is the Firefox maximum plus 100 ms.
-const MENU_GRACE: Duration = Duration::from_millis(405);
+const MENU_GRACE: Duration = Duration::from_millis(399);
 
 /// Top-level menu labels remembered per app while the real menu loads.
 #[derive(Default)]
