@@ -834,6 +834,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
          \x20   title: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   text: FocusPair {{ focused: {}, unfocused: {} }},\n\
          \x20   ink_strong: {},\n\
+         \x20   ink_faint: {},\n\
          \x20   line: {},\n\
          \x20   accent: {},\n\
          \x20   on_accent: {},\n\
@@ -849,6 +850,7 @@ fn palette(tokens: &Value, components: &Value, theme: &str) -> String {
         rgba(theme_color(tokens, theme, "ink")),
         rgba(theme_color(tokens, theme, "ink-muted")),
         rgba(theme_color(tokens, theme, "ink-strong")),
+        rgba(theme_color(tokens, theme, "ink-faint")),
         rgba(theme_color(tokens, theme, "line")),
         rgba(theme_color(tokens, theme, "accent")),
         rgba(theme_color(tokens, theme, "on-accent")),

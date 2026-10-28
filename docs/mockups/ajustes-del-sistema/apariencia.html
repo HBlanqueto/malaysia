@@ -157,7 +157,7 @@ html[data-no-results] .empty{display:flex}
 /* Menú del desplegable: es un popup (otra superficie), no parte de la ventana. */
 .popw{position:relative}
 /* Como un popup de macOS: el menú se abre encima del botón y la opción marcada cae justo sobre él (semáforos sobre semáforos, texto sobre texto). */
-.menu{position:absolute;left:calc(-1 * (var(--menu-popover-padding) + var(--menu-popover-item-padding-start) + var(--menu-popover-check) + var(--menu-popover-item-gap)));top:calc(-1 * var(--menu-popover-padding));min-width:var(--menu-popover-min-width);padding:var(--menu-popover-padding);border-radius:var(--menu-popover-radius);background:var(--menu-popover-bg);box-shadow:var(--shadow-float);display:none;flex-direction:column;z-index:10}
+.menu{position:absolute;left:calc(-1 * (var(--menu-popover-padding) + var(--menu-popover-item-padding-start) + var(--menu-popover-check) + var(--menu-popover-item-gap)));top:calc(-1 * var(--menu-popover-padding));min-width:var(--menu-popover-min-width);padding:var(--menu-popover-padding);border-radius:var(--menu-popover-radius);background:var(--bg-raised);box-shadow:var(--shadow-float);display:none;flex-direction:column;z-index:10}
 html[data-menu="semaforos"] .menu{display:flex}
 .mi{display:flex;align-items:center;gap:var(--menu-popover-item-gap);height:var(--menu-popover-item-height);padding:0 var(--menu-popover-item-padding-x) 0 var(--menu-popover-item-padding-start);border-radius:var(--menu-popover-item-radius);color:var(--ink-strong);white-space:nowrap}
 .mi[data-state~="hover"]{background:var(--accent);color:var(--on-accent)}

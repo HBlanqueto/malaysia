@@ -98,6 +98,7 @@ fn gradient_background(accent: Rgba) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::fill())
+        .corner_radius(SETTINGS.card_radius as f32)
         .background(gradient)
         .overflow(Overflow::Clip)
 }

@@ -258,6 +258,7 @@ fn appearance_group(
                 "group.apariencia.row",
                 "group.apariencia.label",
                 None,
+                false,
             )
             .into_element(),
         ],
@@ -279,7 +280,7 @@ fn color_group(
     let wallpaper_mode = config.window_color == WindowColorMode::Wallpaper;
     let card_bg = card_background(dominant, resolved.accent);
     let control_bg = resolved.surfaces.control;
-    let text_color = scheme_palette.text.focused;
+    let text_color = scheme_palette.ink_strong;
 
     let swatches =
         rect()
@@ -310,6 +311,7 @@ fn color_group(
         "group.color.acento",
         "group.color.acento.label",
         None,
+        false,
     );
     let selected_window_mode = config.window_color;
     let window_mode_row = row_card(
@@ -386,6 +388,7 @@ fn color_group(
         "group.color.ventanas",
         "group.color.ventanas.label",
         Some("group.color.ventanas.help"),
+        false,
     );
 
     let scope_disabled = tint_scope_disabled(config.window_color);
@@ -442,6 +445,7 @@ fn color_group(
         "group.color.alcance",
         "group.color.alcance.label",
         None,
+        true,
     )
     .height(Size::px(SETTINGS.group_row_min_height as f32));
 
@@ -507,6 +511,7 @@ fn windows_group(
                 "group.ventanas.semaforos",
                 "group.ventanas.semaforos.label",
                 None,
+                false,
             )
             .into_element(),
         ],
@@ -523,8 +528,14 @@ fn row_card(
     probe: &'static str,
     label_probe: &'static str,
     desc_probe: Option<&'static str>,
+    disabled: bool,
 ) -> Rect {
     let scheme_palette = palette(resolved.scheme);
+    let title_color = if disabled {
+        scheme_palette.ink_faint
+    } else {
+        scheme_palette.ink_strong
+    };
     let (title, desc) = label_text.split_once('\n').unwrap_or((label_text, ""));
 
     let text_height = TEXT.line_height as f32
@@ -544,7 +555,8 @@ fn row_card(
                 .width(Size::fill())
                 .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(TEXT.size as f32)
-                .color(rgba(scheme_palette.text.focused))
+                .font_weight(FontWeight::from(TEXT.weight as i32))
+                .color(rgba(title_color))
                 .a11y_builder(move |node| node.set_author_id(label_probe))
                 .max_lines(1),
         );
@@ -678,6 +690,8 @@ fn no_results(query: &str, palette: vow_design::SidebarPalette) -> Rect {
                 .text(format!("No hay ninguna opción que coincida con «{query}»."))
                 .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(TEXT.size as f32)
+                .font_weight(FontWeight::from(TEXT.weight as i32))
+                .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .color(rgba(palette.count_ink))
                 .a11y_builder(|node| node.set_author_id("empty.text"))
                 .max_lines(2),

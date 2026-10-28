@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use barrier_kit::ProbeExt;
 use barrier_kit::menu::{CheckState, MenuItem, MenuView};
-use barrier_kit::theme::{self, SurfaceKind};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
 };
+use barrier_kit::theme::{self, SurfaceKind};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -131,6 +131,7 @@ pub fn radio(
                 .text(label_text.to_string())
                 .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(TEXT.size as f32)
+                .font_weight(FontWeight::from(TEXT.weight as i32))
                 .color(rgba(text_color))
                 .max_lines(1),
         );

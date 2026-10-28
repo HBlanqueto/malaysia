@@ -77,6 +77,10 @@ semáforos de 12, tema claro por defecto.
 
 ## Shell sobre Freya — pendientes
 
+- **Captura con `MALAYSIA_TEST_INPUT`**: `Shift+Super+4` seguido de `Espacio` no
+  entra en el modo de selección de ventana con la secuencia guionizada.
+- **Ítem «Ajustes del sistema…» del menú ❄**: la entrada sintética no abre el
+  cliente en la sesión anidada; hay que abrirlo a mano.
 - [x] **Doble clic de la titlebar CSD**: lee `window.double_click_titlebar`
       de `~/.config/malaysia/window.domain` (y `window.green_button`), con los
       mismos defaults que el compositor.

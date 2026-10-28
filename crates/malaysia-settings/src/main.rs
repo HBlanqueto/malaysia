@@ -129,7 +129,7 @@ mod tests {
     use barrier_kit::titlebar::Titlebar;
     use freya_components::theming::hooks::use_init_theme;
     use freya_core::integration::AppComponent;
-    use freya_core::prelude::Label;
+    use freya_core::prelude::{Fill, Label, Rect as FreyaRect, State};
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
     use vow_appearance::{
@@ -198,8 +198,14 @@ mod tests {
     }
 
     fn run_app(config: AppearanceConfig, dominant: Option<vow_design::Rgba>) -> TestingRunner {
+        let resolved = resolve(&config, dominant);
         let app = AppComponent::new(FullApp { config, dominant });
-        let (mut test, _) = TestingRunner::new(app, Size2D::new(760.0, 620.0), |_| {}, 1.0);
+        let (mut test, _) = TestingRunner::new(
+            app,
+            Size2D::new(760.0, 620.0),
+            move |runner| runner.provide_root_context(|| State::create(resolved)),
+            1.0,
+        );
         install_geist(&mut test);
         test.sync_and_update();
         test
@@ -585,6 +591,14 @@ mod tests {
         text: Option<String>,
         #[serde(default)]
         layer: Option<String>,
+        #[serde(default)]
+        background: Option<String>,
+        #[serde(default)]
+        color: Option<String>,
+        #[serde(default)]
+        radius: Option<f32>,
+        #[serde(default)]
+        font: Option<[f32; 3]>,
     }
 
     fn mockup_layout() -> MockupLayout {
@@ -597,6 +611,97 @@ mod tests {
         })
         .into_iter()
         .next()
+    }
+
+    fn parse_color(value: &str) -> Option<[f32; 4]> {
+        let value = value.trim();
+        if let Some(rest) = value
+            .strip_prefix("rgba(")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let parts: Vec<f32> = rest
+                .split(',')
+                .map(|part| part.trim().parse())
+                .collect::<Result<_, _>>()
+                .ok()?;
+            return (parts.len() == 4).then_some([parts[0], parts[1], parts[2], parts[3]]);
+        }
+        if let Some(rest) = value.strip_prefix("rgb(").and_then(|s| s.strip_suffix(')')) {
+            let parts: Vec<f32> = rest
+                .split(',')
+                .map(|part| part.trim().parse())
+                .collect::<Result<_, _>>()
+                .ok()?;
+            return (parts.len() == 3).then_some([parts[0], parts[1], parts[2], 1.0]);
+        }
+        if let Some(rest) = value
+            .strip_prefix("color(srgb ")
+            .and_then(|s| s.strip_suffix(')'))
+        {
+            let parts: Vec<f32> = rest
+                .split_whitespace()
+                .map(|part| part.trim().parse())
+                .collect::<Result<_, _>>()
+                .ok()?;
+            if parts.len() == 3 {
+                return Some([parts[0] * 255.0, parts[1] * 255.0, parts[2] * 255.0, 1.0]);
+            }
+        }
+        None
+    }
+
+    fn fill_color(fill: Fill) -> Option<[f32; 4]> {
+        match fill {
+            Fill::Color(color) => Some([
+                color.r() as f32,
+                color.g() as f32,
+                color.b() as f32,
+                color.a() as f32 / 255.0,
+            ]),
+            _ => None,
+        }
+    }
+
+    fn background_of(el: &dyn freya_core::element::ElementExt) -> Option<[f32; 4]> {
+        let rect = FreyaRect::try_downcast(el)?;
+        fill_color(rect.style.background.clone())
+    }
+
+    fn text_color_of(el: &dyn freya_core::element::ElementExt) -> Option<[f32; 4]> {
+        if let Some(label) = Label::try_downcast(el) {
+            return label.text_style_data.color.and_then(fill_color);
+        }
+        let rect = FreyaRect::try_downcast(el)?;
+        rect.text_style_data.color.and_then(fill_color)
+    }
+
+    fn radius_of(el: &dyn freya_core::element::ElementExt) -> Option<f32> {
+        let rect = FreyaRect::try_downcast(el)?;
+        Some(rect.style.corner_radius.top_left)
+    }
+
+    fn font_of(el: &dyn freya_core::element::ElementExt) -> Option<[f32; 3]> {
+        if let Some(label) = Label::try_downcast(el) {
+            let size = *label.text_style_data.font_size? as f32;
+            let weight = i32::from(label.text_style_data.font_weight?) as f32;
+            let line_height = label.line_height? * size;
+            return Some([size, line_height, weight]);
+        }
+        let rect = FreyaRect::try_downcast(el)?;
+        let size = *rect.text_style_data.font_size? as f32;
+        let weight = i32::from(rect.text_style_data.font_weight?) as f32;
+        Some([size, size, weight])
+    }
+
+    fn close(a: f32, b: f32, tolerance: f32) -> bool {
+        (a - b).abs() <= tolerance
+    }
+
+    fn compare_color(actual: [f32; 4], expected: [f32; 4]) -> bool {
+        close(actual[0], expected[0], 8.0)
+            && close(actual[1], expected[1], 8.0)
+            && close(actual[2], expected[2], 8.0)
+            && close(actual[3], expected[3], 0.05)
     }
 
     fn type_query(test: &mut TestingRunner, query: &str) {
@@ -839,6 +944,67 @@ mod tests {
                     if !mismatches.is_empty() {
                         failures.push(format!("{variant} {}: {}", node.id, mismatches.join("; ")));
                     }
+
+                    let element = actual.element();
+                    let mut style = Vec::new();
+                    if let Some(expected) = node.background.as_deref().and_then(parse_color) {
+                        match background_of(element.as_ref()) {
+                            Some(got) if compare_color(got, expected) => {}
+                            Some(got) => style
+                                .push(format!("fondo: esperado {expected:?}, obtenido {got:?}")),
+                            None => style.push("fondo no expuesto".to_string()),
+                        }
+                    }
+                    // The search placeholder is drawn by the freya TextField;
+                    // its probe is only the text box and exposes no style.
+                    let text_style = node.id != "sidebar.search.text";
+                    if text_style
+                        && let Some(expected) = node.color.as_deref().and_then(parse_color)
+                    {
+                        let got = text_color_of(element.as_ref()).or_else(|| {
+                            node.text
+                                .as_ref()
+                                .and_then(|text| find_exact_label(&test, text))
+                                .and_then(|label| text_color_of(label.element().as_ref()))
+                        });
+                        match got {
+                            Some(got) if compare_color(got, expected) => {}
+                            Some(got) => style
+                                .push(format!("color: esperado {expected:?}, obtenido {got:?}")),
+                            None => style.push("color no expuesto".to_string()),
+                        }
+                    }
+                    if let Some(expected) = node.radius {
+                        let area = actual.layout().area;
+                        let half = area.size.width.min(area.size.height) / 2.0;
+                        let expected = expected.min(half);
+                        match radius_of(element.as_ref()) {
+                            Some(got) if close(got.min(half), expected, 0.5) => {}
+                            Some(got) => style
+                                .push(format!("radio: esperado {expected:.1}, obtenido {got:.1}")),
+                            None => style.push("radio no expuesto".to_string()),
+                        }
+                    }
+                    if text_style && let Some(expected) = node.font {
+                        let got = font_of(element.as_ref()).or_else(|| {
+                            node.text
+                                .as_ref()
+                                .and_then(|text| find_exact_label(&test, text))
+                                .and_then(|label| font_of(label.element().as_ref()))
+                        });
+                        match got {
+                            Some(got)
+                                if close(got[0], expected[0], 0.0)
+                                    && close(got[2], expected[2], 0.0)
+                                    && close(got[1], expected[1], 1.0) => {}
+                            Some(got) => style
+                                .push(format!("fuente: esperado {expected:?}, obtenido {got:?}")),
+                            None => style.push("fuente no expuesta".to_string()),
+                        }
+                    }
+                    if !style.is_empty() {
+                        failures.push(format!("{variant} {}: {}", node.id, style.join("; ")));
+                    }
                 }
 
                 let png = test.render();
@@ -901,13 +1067,6 @@ mod tests {
         );
         assert_eq!(crate::controls::traffic_menu_offset(), (-29, -5));
 
-        let resolved = resolve(
-            &AppearanceConfig {
-                color_scheme: ColorScheme::Light,
-                ..AppearanceConfig::default()
-            },
-            None,
-        );
         let app = freya_core::integration::AppComponent::new(
             MenuView::new(items, |_| {}, || {})
                 .with_surface(barrier_kit::theme::SurfaceKind::Toplevel)

@@ -8,7 +8,7 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use vow_design::{ButtonKind, CALLOUT, HEADLINE, SETTINGS, SIDEBAR, TEXT, TITLEBAR};
 
-use crate::state::{Resolved, Rgba, account_name, initials, load_appearance, palette, rgba};
+use crate::state::{Resolved, Rgba, account_name, initials, palette, rgba};
 
 const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M10 10l3.2 3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
 const CLEAR_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 4l8 8M12 4l-8 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
@@ -23,6 +23,7 @@ pub fn sidebar(
     on_maximize: Callback<(), ()>,
 ) -> freya_core::prelude::Rect {
     let sidebar_palette = resolved.sidebar.palette;
+    let scheme_palette = palette(resolved.scheme);
     let island_bg = resolved.sidebar.bg;
     let rim = resolved.sidebar.rim;
 
@@ -46,7 +47,7 @@ pub fn sidebar(
             resolved.surfaces.control,
         ))
         .child(spacer(SETTINGS.sidebar_search_gap))
-        .child(account_row(sidebar_palette))
+        .child(account_row(sidebar_palette, scheme_palette))
         .child(spacer(SETTINGS.section_gap))
         .child(sidebar_item("Apariencia", true, sidebar_palette));
 
@@ -159,9 +160,11 @@ fn search_field(
 }
 
 /// Fila de cuenta con avatar e iniciales.
-fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
+fn account_row(
+    sidebar_palette: vow_design::SidebarPalette,
+    scheme_palette: vow_design::Palette,
+) -> Rect {
     let name = account_name();
-    let scheme_palette = palette(load_appearance().color_scheme);
 
     rect()
         .width(Size::fill())
@@ -206,7 +209,7 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
                         .line_height(HEADLINE.line_height as f32 / HEADLINE.size as f32)
                         .font_size(HEADLINE.size as f32)
                         .font_weight(FontWeight::from(HEADLINE.weight as i32))
-                        .color(rgba(sidebar_palette.item_ink))
+                        .color(rgba(scheme_palette.ink_strong))
                         .a11y_builder(|node| node.set_author_id("sidebar.account.name"))
                         .max_lines(1),
                 )

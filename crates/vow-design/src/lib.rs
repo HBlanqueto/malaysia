@@ -576,6 +576,8 @@ pub struct Palette {
     pub text: FocusPair,
     /// Strong text colour (`ink-strong`).
     pub ink_strong: Rgba,
+    /// Disabled text colour (`ink-faint`).
+    pub ink_faint: Rgba,
     /// Separator and outline colour (`line`).
     pub line: Rgba,
     /// The accent color.
