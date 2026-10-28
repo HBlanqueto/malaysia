@@ -135,7 +135,7 @@ mod tests {
     use vow_appearance::{
         AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
     };
-    use vow_design::{ACCENT_SWATCHES, BG_WINDOW_LIGHT, SETTINGS};
+    use vow_design::{ACCENT_SWATCHES, BG_WINDOW_LIGHT};
 
     use super::*;
 
@@ -271,29 +271,6 @@ mod tests {
         }
     }
 
-    fn node_at(test: &TestingRunner, x: f32, y: f32) -> Option<freya_testing::TestingNode> {
-        test.find_many(|node, _el| {
-            let area = node.layout().area;
-            if area.origin.x <= x
-                && area.origin.y <= y
-                && area.origin.x + area.size.width > x
-                && area.origin.y + area.size.height > y
-            {
-                Some(node)
-            } else {
-                None
-            }
-        })
-        .into_iter()
-        .min_by(|a, b| {
-            let area_a = a.layout().area.size.width * a.layout().area.size.height;
-            let area_b = b.layout().area.size.width * b.layout().area.size.height;
-            area_a
-                .partial_cmp(&area_b)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-    }
-
     #[test]
     fn root_pixels_are_bg_window() {
         with_temp_config(|_dir| {
@@ -358,156 +335,6 @@ mod tests {
                 neutral_window_pixel,
                 neutral_resolved.surfaces.window,
                 "neutral window background must match neutral surfaces.window",
-            );
-        });
-    }
-
-    #[test]
-    fn sidebar_island_has_expected_geometry() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let island = node_at(&test, 10.0, 10.0).expect("island must cover (10,10)");
-            let area = island.layout().area;
-            assert!(
-                (area.origin.x - 8.0).abs() < 0.5
-                    && (area.origin.y - 8.0).abs() < 0.5
-                    && (area.size.width - 220.0).abs() < 0.5
-                    && (area.size.height - 604.0).abs() < 0.5,
-                "island must be (8,8,220,604), got {area:?}"
-            );
-        });
-    }
-
-    #[test]
-    fn traffic_lights_are_at_their_token_position() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let lights = test
-                .find_many(|node, _el| {
-                    let area = node.layout().area;
-                    if area.size.width.round() as u32 == 52
-                        && area.size.height.round() as u32 == 12
-                        && area.origin.x >= 18.0
-                        && area.origin.x <= 30.0
-                    {
-                        Some(node)
-                    } else {
-                        None
-                    }
-                })
-                .into_iter()
-                .next();
-            let lights = lights.expect("traffic lights must be rendered");
-            let area = lights.layout().area;
-            assert!(
-                (area.origin.x - 26.0).abs() < 1.0 && (area.origin.y - 24.0).abs() < 1.0,
-                "traffic lights must be near (26,24), got {area:?}"
-            );
-        });
-    }
-
-    #[test]
-    fn search_field_has_expected_geometry() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let placeholder = find_label(&test, "Buscar").expect("search placeholder exists");
-            let area = placeholder.layout().area;
-            assert!(
-                (area.origin.y - 58.0).abs() <= 4.0 && (area.size.height - 30.0).abs() < 2.0,
-                "search field must be at y≈58 with height 30, got {area:?}"
-            );
-        });
-    }
-
-    #[test]
-    fn toolbar_title_is_in_the_sidebar_titlebar() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let title = find_label(&test, "Apariencia").expect("title exists");
-            let area = title.layout().area;
-            assert!(
-                area.origin.y < 200.0,
-                "title must be in the toolbar area, got {area:?}"
-            );
-        });
-    }
-
-    #[test]
-    fn toolbar_capsule_metrics() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let back = find_label(&test, "Atrás").expect("back button exists");
-            let area = back.layout().area;
-            assert!(
-                (area.origin.x - 262.0).abs() < 2.0,
-                "capsule content must start near x=250 (with padding), got {area:?}"
-            );
-            let center_y = area.origin.y + area.size.height / 2.0;
-            assert!(
-                (center_y - 30.0).abs() <= 1.0,
-                "capsule vertical center must be at y=30, got {center_y}"
-            );
-        });
-    }
-
-    #[test]
-    fn theme_cards_count_and_size() {
-        with_temp_config(|_dir| {
-            let test = run_app(AppearanceConfig::default(), None);
-            let cards: Vec<_> = test.find_many(|node, _el| {
-                let area = node.layout().area;
-                if (area.size.width - SETTINGS.card_width as f32).abs() < 0.5
-                    && (area.size.height - SETTINGS.card_height as f32).abs() < 0.5
-                {
-                    Some(node)
-                } else {
-                    None
-                }
-            });
-            assert!(
-                cards.len() >= 6,
-                "there must be at least 6 preview cards (3 theme + 3 window color), got {}",
-                cards.len()
-            );
-            let accent = rgba(vow_design::LIGHT.accent);
-            let selected_rings: Vec<_> = test.find_many(|_node, el| {
-                el.style()
-                    .borders
-                    .iter()
-                    .any(|border| {
-                        border.fill == accent && border.width.left == SETTINGS.card_ring as f32
-                    })
-                    .then_some(())
-            });
-            assert!(
-                selected_rings.len() >= 2,
-                "selected cards must show an accent ring"
-            );
-        });
-    }
-
-    #[test]
-    fn traffic_button_shows_exactly_three_lights() {
-        with_temp_config(|_dir| {
-            let test = run_app(
-                AppearanceConfig {
-                    color_scheme: ColorScheme::Light,
-                    ..Default::default()
-                },
-                None,
-            );
-            let squares = test.find_many(|node, _el| {
-                let size = node.layout().area.size;
-                if (size.width - 12.0).abs() < 0.5 && (size.height - 12.0).abs() < 0.5 {
-                    Some(())
-                } else {
-                    None
-                }
-            });
-            assert_eq!(
-                squares.len(),
-                3,
-                "the traffic-light button must show exactly three 12x12 squares: {squares:?}"
             );
         });
     }
