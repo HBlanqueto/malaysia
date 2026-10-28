@@ -517,7 +517,7 @@ fn tinted_surfaces(
     }
 }
 
-fn derived_lights(source: Rgba) -> [Rgba; 3] {
+pub fn derived_lights(source: Rgba) -> [Rgba; 3] {
     [
         source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),
         source.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN),

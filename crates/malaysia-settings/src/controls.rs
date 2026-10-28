@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use barrier_kit::ProbeExt;
-use barrier_kit::menu::{CheckState, MenuItem, MenuView};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, MenuView};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
 };
@@ -15,7 +15,7 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Size};
 use vow_design::{CAPTION, MENU_POPOVER, SETTINGS, TEXT, TITLEBAR};
 
-use crate::state::{Rgba, TrafficLightStyle, rgba};
+use crate::state::{Rgba, TrafficLightStyle, load_dominant, rgba};
 
 /// Un círculo de acento con etiqueta solo cuando está elegido.
 pub fn accent_swatch(
@@ -232,29 +232,83 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
 /// Top-left of the popup relative to the dropdown: the checked row's traffic
 /// lights land exactly on the button's.
 pub(crate) fn traffic_menu_offset() -> (i32, i32) {
-    let x = MENU_POPOVER.padding
-        + MENU_POPOVER.item_padding_start
-        + MENU_POPOVER.check
-        + MENU_POPOVER.item_gap;
+    let x = MENU_POPOVER.padding + MENU_POPOVER.item_padding_start + MENU_POPOVER.check_column;
     (-(x.round() as i32), -(MENU_POPOVER.padding.round() as i32))
 }
 
-pub(crate) fn traffic_items(current: TrafficLightStyle) -> Vec<MenuItem> {
+pub(crate) fn traffic_items(
+    current: TrafficLightStyle,
+    resolved: &vow_appearance::Resolved,
+    dominant: Option<Rgba>,
+) -> Vec<MenuItem> {
     vec![
-        traffic_menu_item("auto", "Automático", current == TrafficLightStyle::Auto),
+        traffic_menu_item(
+            "auto",
+            "Automático",
+            current == TrafficLightStyle::Auto,
+            traffic_swatch_lights(TrafficLightStyle::Auto, resolved, dominant),
+        ),
         MenuItem::Separator,
         traffic_menu_item(
             "standard",
             "Clásico",
             current == TrafficLightStyle::Standard,
+            traffic_swatch_lights(TrafficLightStyle::Standard, resolved, dominant),
         ),
-        traffic_menu_item("accent", "Acento", current == TrafficLightStyle::Accent),
+        traffic_menu_item(
+            "accent",
+            "Acento",
+            current == TrafficLightStyle::Accent,
+            traffic_swatch_lights(TrafficLightStyle::Accent, resolved, dominant),
+        ),
         traffic_menu_item(
             "wallpaper",
             "Fondo",
             current == TrafficLightStyle::Wallpaper,
+            traffic_swatch_lights(TrafficLightStyle::Wallpaper, resolved, dominant),
         ),
     ]
+}
+
+fn traffic_swatch_lights(
+    style: TrafficLightStyle,
+    resolved: &vow_appearance::Resolved,
+    dominant: Option<Rgba>,
+) -> [Rgba; 3] {
+    match style {
+        TrafficLightStyle::Auto => resolved.lights,
+        TrafficLightStyle::Standard => [
+            TITLEBAR.buttons.order[0].color,
+            TITLEBAR.buttons.order[1].color,
+            TITLEBAR.buttons.order[2].color,
+        ],
+        TrafficLightStyle::Accent => vow_appearance::derived_lights(resolved.accent),
+        TrafficLightStyle::Wallpaper => {
+            vow_appearance::derived_lights(dominant.unwrap_or(resolved.accent))
+        }
+    }
+}
+
+fn swatch_grid_svg(lights: [Rgba; 3]) -> String {
+    let size = MENU_POPOVER.swatch_grid_size;
+    let dot = MENU_POPOVER.swatch_grid_dot;
+    let gap = MENU_POPOVER.swatch_grid_gap;
+    let step = dot + gap;
+    let radius = dot / 2.0;
+    let mut circles = String::new();
+    for row in 0..3 {
+        for col in 0..3 {
+            let cx = gap + col as f32 * step + radius;
+            let cy = gap + row as f32 * step + radius;
+            let [r, g, b, _] = lights[(row * 3 + col) % 3].to_rgba8();
+            circles.push_str(&format!(
+                r#"<circle cx="{cx}" cy="{cy}" r="{radius}" fill="rgb({r},{g},{b})"/>"#
+            ));
+        }
+    }
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{circles}</svg>"#
+    )
 }
 
 fn open_traffic_menu(
@@ -263,8 +317,10 @@ fn open_traffic_menu(
     on_change: Rc<RefCell<dyn FnMut(TrafficLightStyle)>>,
     anchor_width: f32,
 ) {
-    let palette = theme::popover_palette(&theme::resolved(), SurfaceKind::Toplevel);
-    let items = traffic_items(current);
+    let resolved = theme::resolved();
+    let dominant = load_dominant();
+    let palette = theme::popover_palette(&resolved, SurfaceKind::Toplevel);
+    let items = traffic_items(current, &resolved, dominant);
     let size = MenuView::preferred_size(&items, palette);
     let view = MenuView::new(
         items,
@@ -320,14 +376,19 @@ fn open_traffic_menu(
     Popups::get().open(spec, AppComponent::new(view));
 }
 
-fn traffic_menu_item(id: &'static str, label_text: &str, checked: bool) -> MenuItem {
+fn traffic_menu_item(
+    id: &'static str,
+    label_text: &str,
+    checked: bool,
+    lights: [Rgba; 3],
+) -> MenuItem {
     MenuItem::Action {
         id: id.to_string(),
         label: label_text.to_string(),
         shortcut: None,
         enabled: true,
         check: CheckState::Radio(checked),
-        icon: None,
+        icon: Some(MenuIcon::svg(swatch_grid_svg(lights))),
     }
 }
 

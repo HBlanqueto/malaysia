@@ -1044,7 +1044,9 @@ mod tests {
             })
             .collect();
 
-        let items = crate::controls::traffic_items(crate::state::TrafficLightStyle::Auto);
+        let resolved = vow_appearance::resolve(&vow_appearance::load_appearance(), None);
+        let items =
+            crate::controls::traffic_items(crate::state::TrafficLightStyle::Auto, &resolved, None);
         assert!(
             matches!(items.get(1), Some(MenuItem::Separator)),
             "the separator must follow Automático"
@@ -1053,10 +1055,17 @@ mod tests {
             items.iter().filter_map(MenuItem::label).collect::<Vec<_>>(),
             vec!["Automático", "Clásico", "Acento", "Fondo"]
         );
+        for item in &items {
+            if let MenuItem::Action { icon, .. } = item {
+                assert!(
+                    icon.is_some(),
+                    "every traffic item must carry a swatch icon"
+                );
+            }
+        }
         let expected_offset = -((vow_design::MENU_POPOVER.padding
             + vow_design::MENU_POPOVER.item_padding_start
-            + vow_design::MENU_POPOVER.check
-            + vow_design::MENU_POPOVER.item_gap)
+            + vow_design::MENU_POPOVER.check_column)
             .round() as i32);
         assert_eq!(
             crate::controls::traffic_menu_offset(),
@@ -1065,7 +1074,7 @@ mod tests {
                 -(vow_design::MENU_POPOVER.padding.round() as i32)
             )
         );
-        assert_eq!(crate::controls::traffic_menu_offset(), (-29, -5));
+        assert_eq!(crate::controls::traffic_menu_offset(), (-23, -5));
 
         let app = freya_core::integration::AppComponent::new(
             MenuView::new(items, |_| {}, || {})

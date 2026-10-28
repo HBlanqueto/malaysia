@@ -2,7 +2,7 @@
 
 pub use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightStyle, WindowColorMode, WindowTintScope,
-    load_appearance, palette, resolve, write_appearance,
+    load_appearance, load_dominant, palette, resolve, write_appearance,
 };
 pub use vow_design::Rgba;
 
