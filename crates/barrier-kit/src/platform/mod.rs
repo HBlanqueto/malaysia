@@ -951,6 +951,7 @@ struct AppInstance {
     on_menu_action: Option<MenuActionHandler>,
     resolved: State<Resolved>,
     accessibility: AccessibilityTree,
+    accessibility_initialized: bool,
     requested_focus: Option<AccessibilityFocusStrategy>,
 }
 
@@ -1022,12 +1023,12 @@ impl AppInstance {
         runner.provide_root_context(|| font_collection.clone());
 
         // Build the root node before the first layout pass: measuring an empty
-        // tree panics inside Torin.
+        // tree panics inside Torin. Accessibility is initialized only after the
+        // first layout, when every node already has a layout entry.
         let mutations = runner.sync_and_update();
         let _ = runner.run_in(|| tree.apply_mutations(mutations));
 
-        let mut accessibility = AccessibilityTree::default();
-        let _ = accessibility.init(&mut tree);
+        let accessibility = AccessibilityTree::default();
 
         Self {
             runner,
@@ -1049,6 +1050,7 @@ impl AppInstance {
             on_menu_action,
             resolved,
             accessibility,
+            accessibility_initialized: false,
             requested_focus: None,
         }
     }
@@ -1107,15 +1109,26 @@ impl AppInstance {
     }
 
     fn update(&mut self) -> bool {
-        if let Some(strategy) = self.requested_focus.take() {
-            self.tree.accessibility_diff.request_focus(strategy);
-        }
+        let requested_focus = self.requested_focus.take();
         let mutations = self.runner.sync_and_update();
         let result = self.runner.run_in(|| self.tree.apply_mutations(mutations));
         if result.needs_render {
             self.needs_layout = true;
         }
         self.layout();
+
+        // Initialize the accessibility tree once, after the first layout pass.
+        // `init()` needs every node to have a layout entry, so it must run
+        // strictly after `measure_layout`. Focus requests that arrived earlier
+        // are applied right after init so they take effect in the same frame.
+        if !self.accessibility_initialized {
+            let _ = self.accessibility.init(&mut self.tree);
+            self.accessibility_initialized = true;
+        }
+        if let Some(strategy) = requested_focus {
+            self.tree.accessibility_diff.request_focus(strategy);
+        }
+
         let accessibility_update = self
             .accessibility
             .process_updates(&mut self.tree, &self.events_sender);
