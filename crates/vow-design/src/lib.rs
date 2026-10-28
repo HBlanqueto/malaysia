@@ -334,6 +334,8 @@ pub struct SettingsMetrics {
     pub preview_tint_side_w: u32,
     /// Height of the panel strip in a theme preview.
     pub preview_panel_h: u32,
+    /// Width of each panel in the automatic theme preview.
+    pub preview_panel_w: u32,
     /// X offset of the menu in a theme preview.
     pub preview_menu_x: u32,
     /// Y offset of the menu in a theme preview.
@@ -342,6 +344,12 @@ pub struct SettingsMetrics {
     pub preview_menu_w: u32,
     /// Height of the menu in a theme preview.
     pub preview_menu_h: u32,
+    /// Padding inside the menu in a theme preview.
+    pub preview_menu_padding: u32,
+    /// Height of an unhighlighted menu line in a theme preview.
+    pub preview_menu_line_h: u32,
+    /// Corner radius of a menu line in a theme preview.
+    pub preview_menu_line_radius: u32,
     /// Width of the mini app in a theme preview.
     pub preview_app_w: u32,
     /// Height of the mini app in a theme preview.
@@ -350,6 +358,12 @@ pub struct SettingsMetrics {
     pub preview_app_inset: u32,
     /// Width of the mini app's sidebar.
     pub preview_app_side_w: u32,
+    /// Inset of the mini app's traffic lights.
+    pub preview_dots_inset: u32,
+    /// Gap between the mini app's traffic lights.
+    pub preview_dot_gap: u32,
+    /// Corner radius of a mini app traffic light.
+    pub preview_dot_radius: u32,
     /// Corner radius inside a theme preview.
     pub preview_radius: u32,
     /// Angle of the accent gradient behind a theme preview, in degrees.
@@ -947,14 +961,21 @@ mod tests {
         assert_eq!(super::SETTINGS.preview_tint_window_y, 9);
         assert_eq!(super::SETTINGS.preview_tint_side_w, 14);
         assert_eq!(super::SETTINGS.preview_panel_h, 4);
+        assert_eq!(super::SETTINGS.preview_panel_w, 35);
         assert_eq!(super::SETTINGS.preview_menu_x, 5);
         assert_eq!(super::SETTINGS.preview_menu_y, 6);
         assert_eq!(super::SETTINGS.preview_menu_w, 26);
         assert_eq!(super::SETTINGS.preview_menu_h, 20);
+        assert_eq!(super::SETTINGS.preview_menu_padding, 2);
+        assert_eq!(super::SETTINGS.preview_menu_line_h, 2);
+        assert_eq!(super::SETTINGS.preview_menu_line_radius, 1);
         assert_eq!(super::SETTINGS.preview_app_w, 32);
         assert_eq!(super::SETTINGS.preview_app_h, 21);
         assert_eq!(super::SETTINGS.preview_app_inset, 5);
         assert_eq!(super::SETTINGS.preview_app_side_w, 9);
+        assert_eq!(super::SETTINGS.preview_dots_inset, 2);
+        assert_eq!(super::SETTINGS.preview_dot_gap, 1);
+        assert_eq!(super::SETTINGS.preview_dot_radius, 1);
         assert_eq!(super::SETTINGS.preview_radius, 3);
         assert_eq!(super::SETTINGS.preview_wall_angle, 160);
         assert!((super::SETTINGS.preview_wall_light - 0.25).abs() < 1e-6);

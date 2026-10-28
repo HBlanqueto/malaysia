@@ -5,9 +5,7 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
 use vow_design::SETTINGS;
 
-use crate::state::{
-    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, load_appearance, resolve, rgba,
-};
+use crate::state::{AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, resolve, rgba};
 
 /// Resolves the preview for a theme card while keeping the rest of the
 /// current config (window colour mode, accent, etc.).
@@ -105,7 +103,7 @@ fn gradient_background(accent: Rgba) -> Rect {
 }
 
 fn preview_panel(resolved: &Resolved, align: Alignment) -> Rect {
-    let width = SETTINGS.card_width as f32 / 2.0;
+    let width = SETTINGS.preview_panel_w as f32;
     let left = if align == Alignment::End { width } else { 0.0 };
     rect()
         .position(Position::new_absolute().top(0.0).left(left))
@@ -115,7 +113,7 @@ fn preview_panel(resolved: &Resolved, align: Alignment) -> Rect {
 }
 
 fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
-    let padding = SETTINGS.preview_panel_h as f32 / 2.0;
+    let padding = SETTINGS.preview_menu_padding as f32;
     rect()
         .position(
             Position::new_absolute()
@@ -133,7 +131,7 @@ fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
             rect()
                 .width(Size::fill())
                 .height(Size::px(SETTINGS.preview_panel_h as f32))
-                .corner_radius(SETTINGS.preview_radius as f32 / 2.0)
+                .corner_radius(SETTINGS.preview_menu_line_radius as f32)
                 .background(rgba(accent)),
         )
         .child(preview_menu_line(resolved))
@@ -143,15 +141,15 @@ fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
 fn preview_menu_line(resolved: &Resolved) -> Rect {
     rect()
         .width(Size::fill())
-        .height(Size::px(SETTINGS.preview_panel_h as f32 / 2.0))
-        .corner_radius(SETTINGS.preview_radius as f32 / 3.0)
+        .height(Size::px(SETTINGS.preview_menu_line_h as f32))
+        .corner_radius(SETTINGS.preview_menu_line_radius as f32)
         .background(rgba(resolved.surfaces.control))
 }
 
 fn preview_app(resolved: &Resolved) -> Rect {
     let inset = SETTINGS.preview_app_inset as f32;
     let dot = SETTINGS.preview_light as f32;
-    let dot_gap = SETTINGS.preview_panel_h as f32 / 4.0;
+    let dot_gap = SETTINGS.preview_dot_gap as f32;
     rect()
         .position(Position::new_absolute().right(inset).bottom(inset))
         .width(Size::px(SETTINGS.preview_app_w as f32))
@@ -169,8 +167,8 @@ fn preview_app(resolved: &Resolved) -> Rect {
             rect()
                 .position(
                     Position::new_absolute()
-                        .left(SETTINGS.preview_panel_h as f32 / 2.0)
-                        .top(SETTINGS.preview_panel_h as f32 / 2.0),
+                        .left(SETTINGS.preview_dots_inset as f32)
+                        .top(SETTINGS.preview_dots_inset as f32),
                 )
                 .direction(Direction::Horizontal)
                 .spacing(dot_gap)
@@ -178,7 +176,7 @@ fn preview_app(resolved: &Resolved) -> Rect {
                     rect()
                         .width(Size::px(dot))
                         .height(Size::px(dot))
-                        .corner_radius(SETTINGS.preview_radius as f32 / 3.0)
+                        .corner_radius(SETTINGS.preview_dot_radius as f32)
                         .background(rgba(*color))
                         .into_element()
                 })),
@@ -192,16 +190,16 @@ pub fn window_color_card(
     mode: WindowColorMode,
     selected: WindowColorMode,
     card_bg: Rgba,
+    base_config: &AppearanceConfig,
     resolved: Resolved,
     dominant: Option<Rgba>,
     probe: &'static str,
     preview_probe: &'static str,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
-    let base_config = load_appearance();
     let test_config = AppearanceConfig {
         window_color: mode,
-        ..base_config
+        ..base_config.clone()
     };
     let preview_resolved = resolve(&test_config, dominant);
     let is_selected = selected == mode;
@@ -229,29 +227,22 @@ pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
     let y = SETTINGS.preview_tint_window_y as f32;
     let side_w = SETTINGS.preview_tint_side_w as f32;
     let padding = SETTINGS.preview_radius as f32;
-    let bottom = -(SETTINGS.preview_panel_h as f32);
+    let width = SETTINGS.card_width as f32 - 2.0 * x;
+    let height = SETTINGS.card_height as f32 - y + SETTINGS.preview_panel_h as f32;
 
     gradient_background(preview_resolved.accent).child(
         rect()
-            .position(
-                Position::new_absolute()
-                    .top(y)
-                    .left(x)
-                    .right(x)
-                    .bottom(bottom),
-            )
+            .position(Position::new_absolute().top(y).left(x))
+            .width(Size::px(width))
+            .height(Size::px(height))
             .corner_radius(SETTINGS.preview_window_radius as f32)
             .background(rgba(window_bg))
             .overflow(Overflow::Clip)
             .child(
                 rect()
-                    .position(
-                        Position::new_absolute()
-                            .top(padding)
-                            .left(padding)
-                            .bottom(padding),
-                    )
+                    .position(Position::new_absolute().top(padding).left(padding))
                     .width(Size::px(side_w))
+                    .height(Size::px(height - 2.0 * padding))
                     .corner_radius(SETTINGS.preview_radius as f32)
                     .background(rgba(sunken)),
             ),

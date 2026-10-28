@@ -2067,6 +2067,11 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.preview.panel-h",
         COMPONENTS,
     ) as u32;
+    let preview_panel_w = integer(
+        components,
+        "components.settings.preview.panel-w",
+        COMPONENTS,
+    ) as u32;
     let preview_menu_x =
         integer(components, "components.settings.preview.menu-x", COMPONENTS) as u32;
     let preview_menu_y =
@@ -2075,6 +2080,21 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         integer(components, "components.settings.preview.menu-w", COMPONENTS) as u32;
     let preview_menu_h =
         integer(components, "components.settings.preview.menu-h", COMPONENTS) as u32;
+    let preview_menu_padding = integer(
+        components,
+        "components.settings.preview.menu-padding",
+        COMPONENTS,
+    ) as u32;
+    let preview_menu_line_h = integer(
+        components,
+        "components.settings.preview.menu-line-h",
+        COMPONENTS,
+    ) as u32;
+    let preview_menu_line_radius = integer(
+        components,
+        "components.settings.preview.menu-line-radius",
+        COMPONENTS,
+    ) as u32;
     let preview_app_w = integer(components, "components.settings.preview.app-w", COMPONENTS) as u32;
     let preview_app_h = integer(components, "components.settings.preview.app-h", COMPONENTS) as u32;
     let preview_app_inset = integer(
@@ -2085,6 +2105,21 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
     let preview_app_side_w = integer(
         components,
         "components.settings.preview.app-side-w",
+        COMPONENTS,
+    ) as u32;
+    let preview_dots_inset = integer(
+        components,
+        "components.settings.preview.dots-inset",
+        COMPONENTS,
+    ) as u32;
+    let preview_dot_gap = integer(
+        components,
+        "components.settings.preview.dot-gap",
+        COMPONENTS,
+    ) as u32;
+    let preview_dot_radius = integer(
+        components,
+        "components.settings.preview.dot-radius",
         COMPONENTS,
     ) as u32;
     let preview_radius =
@@ -2274,14 +2309,21 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
          \x20   preview_tint_window_y: {preview_tint_window_y},\n\
          \x20   preview_tint_side_w: {preview_tint_side_w},\n\
          \x20   preview_panel_h: {preview_panel_h},\n\
+         \x20   preview_panel_w: {preview_panel_w},\n\
          \x20   preview_menu_x: {preview_menu_x},\n\
          \x20   preview_menu_y: {preview_menu_y},\n\
          \x20   preview_menu_w: {preview_menu_w},\n\
          \x20   preview_menu_h: {preview_menu_h},\n\
+         \x20   preview_menu_padding: {preview_menu_padding},\n\
+         \x20   preview_menu_line_h: {preview_menu_line_h},\n\
+         \x20   preview_menu_line_radius: {preview_menu_line_radius},\n\
          \x20   preview_app_w: {preview_app_w},\n\
          \x20   preview_app_h: {preview_app_h},\n\
          \x20   preview_app_inset: {preview_app_inset},\n\
          \x20   preview_app_side_w: {preview_app_side_w},\n\
+         \x20   preview_dots_inset: {preview_dots_inset},\n\
+         \x20   preview_dot_gap: {preview_dot_gap},\n\
+         \x20   preview_dot_radius: {preview_dot_radius},\n\
          \x20   preview_radius: {preview_radius},\n\
          \x20   preview_wall_angle: {preview_wall_angle},\n\
          \x20   preview_wall_light: {},\n\
