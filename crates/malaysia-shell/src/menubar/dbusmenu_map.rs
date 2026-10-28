@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
-use barrier_kit::menu::{CheckState, MenuItem};
+use barrier_kit::menu::{CheckState, MenuItem, normalize_separators};
 use zbus::zvariant::OwnedValue;
 
 use crate::menubar::dbusmenu::RawItem;
@@ -27,7 +27,10 @@ const KNOWN_PROPERTIES: &[&str] = &[
 
 /// Maps a dbusmenu child list to menu items, dropping invisible entries.
 pub fn menu_items(items: &[RawItem]) -> Vec<MenuItem> {
-    items.iter().filter_map(menu_item).collect()
+    let mut mapped: Vec<MenuItem> = items.iter().filter_map(menu_item).collect();
+    // 14f-2's org.gtk.Menus mapper must call this same function.
+    normalize_separators(&mut mapped);
+    mapped
 }
 
 fn menu_item(item: &RawItem) -> Option<MenuItem> {
@@ -176,9 +179,36 @@ mod tests {
     }
 
     #[test]
-    fn separators_are_kept_and_do_not_need_a_label() {
-        let items = menu_items(&[item(1, &[("type", text("separator"))], Vec::new())]);
-        assert!(matches!(items.as_slice(), [MenuItem::Separator]));
+    fn separators_between_actions_are_kept() {
+        let items = menu_items(&[
+            item(1, &[("label", text("A"))], Vec::new()),
+            item(2, &[("type", text("separator"))], Vec::new()),
+            item(3, &[("label", text("B"))], Vec::new()),
+        ]);
+        assert_eq!(items.len(), 3);
+        assert!(matches!(items[1], MenuItem::Separator));
+    }
+
+    #[test]
+    fn a_run_left_after_dropping_invisible_items_collapses() {
+        let hidden = item(
+            3,
+            &[
+                ("label", text("hidden")),
+                ("visible", OwnedValue::from(false)),
+            ],
+            Vec::new(),
+        );
+        let items = menu_items(&[
+            item(1, &[("label", text("A"))], Vec::new()),
+            item(2, &[("type", text("separator"))], Vec::new()),
+            hidden,
+            item(4, &[("type", text("separator"))], Vec::new()),
+            item(5, &[("label", text("B"))], Vec::new()),
+        ]);
+        assert_eq!(items.len(), 3);
+        assert!(matches!(items[1], MenuItem::Separator));
+        assert_eq!(items[2].label(), Some("B"));
     }
 
     #[test]

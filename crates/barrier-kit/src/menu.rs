@@ -332,6 +332,30 @@ impl MenuItem {
     }
 }
 
+/// Drops leading and trailing separators, collapses separator runs into one
+/// and applies the same rule inside every submenu.
+pub fn normalize_separators(items: &mut Vec<MenuItem>) {
+    for item in items.iter_mut() {
+        if let MenuItem::Submenu { items, .. } = item {
+            normalize_separators(items);
+        }
+    }
+    let mut after_separator = true;
+    items.retain(|item| {
+        if matches!(item, MenuItem::Separator) {
+            let keep = !after_separator;
+            after_separator = true;
+            keep
+        } else {
+            after_separator = false;
+            true
+        }
+    });
+    while matches!(items.last(), Some(MenuItem::Separator)) {
+        items.pop();
+    }
+}
+
 /// A Neptunia menu rendered inside a popup.
 pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
@@ -2386,6 +2410,83 @@ mod tests {
         assert_eq!(next_selectable(&items, Some(0), 1), Some(3));
         assert_eq!(next_selectable(&items, Some(3), 1), Some(0));
         assert_eq!(last_selectable(&items), Some(3));
+    }
+
+    fn action(label: &str) -> MenuItem {
+        MenuItem::Action {
+            id: format!("id:{label}"),
+            label: label.to_string(),
+            shortcut: None,
+            enabled: true,
+            check: CheckState::None,
+            icon: None,
+        }
+    }
+
+    #[test]
+    fn separators_at_the_start_and_end_are_dropped() {
+        let mut items = vec![
+            MenuItem::Separator,
+            action("A"),
+            MenuItem::Separator,
+            MenuItem::Separator,
+            action("B"),
+            MenuItem::Separator,
+        ];
+        normalize_separators(&mut items);
+        assert_eq!(
+            items.iter().filter_map(MenuItem::label).collect::<Vec<_>>(),
+            vec!["A", "B"]
+        );
+    }
+
+    #[test]
+    fn separator_runs_collapse_into_one() {
+        let mut items = vec![
+            action("A"),
+            MenuItem::Separator,
+            MenuItem::Separator,
+            MenuItem::Separator,
+            action("B"),
+        ];
+        normalize_separators(&mut items);
+        assert_eq!(items.len(), 3);
+        assert!(matches!(items[1], MenuItem::Separator));
+    }
+
+    #[test]
+    fn separators_are_normalized_inside_submenus() {
+        let mut items = vec![MenuItem::Submenu {
+            id: None,
+            label: "Sub".to_string(),
+            enabled: true,
+            items: vec![
+                MenuItem::Separator,
+                action("A"),
+                MenuItem::Separator,
+                MenuItem::Separator,
+            ],
+            icon: None,
+        }];
+        normalize_separators(&mut items);
+        let MenuItem::Submenu { items, .. } = &items[0] else {
+            panic!("the submenu survives");
+        };
+        assert_eq!(
+            items.iter().filter_map(MenuItem::label).collect::<Vec<_>>(),
+            vec!["A"]
+        );
+    }
+
+    #[test]
+    fn a_menu_of_only_separators_becomes_empty() {
+        let mut items = vec![
+            MenuItem::Separator,
+            MenuItem::Separator,
+            MenuItem::Separator,
+        ];
+        normalize_separators(&mut items);
+        assert!(items.is_empty());
     }
 
     #[test]
