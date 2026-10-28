@@ -260,7 +260,7 @@ impl InfinityGlobalData {
     /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         let data = InfinityGlobalData;
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(2, data)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(3, data)
     }
 }
 
