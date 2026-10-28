@@ -251,8 +251,8 @@ fn open_root(
         items,
         |id| eprintln!("menu example: activated {id}"),
         on_dismiss_all,
-        palette,
-    );
+    )
+    .with_fixed_palette(palette);
     Popups::get().open(
         PopupSpec {
             anchor_rect: (anchor_x, BAR_HEIGHT as i32, 1, 1),
@@ -403,8 +403,8 @@ fn open_show(
             items,
             |id| eprintln!("menu example: activated {id}"),
             move || on_dismiss_all(),
-            palette,
-        );
+        )
+        .with_fixed_palette(palette);
         AppComponent::new(view)
     };
     let id = popups.open(
@@ -531,12 +531,14 @@ impl App for NestedMenu {
                 );
             });
         });
-        AppComponent::new(MenuView::new(
-            self.items.clone(),
-            move |id| on_activate(id),
-            move || on_dismiss_all(),
-            palette,
-        ))
+        AppComponent::new(
+            MenuView::new(
+                self.items.clone(),
+                move |id| on_activate(id),
+                move || on_dismiss_all(),
+            )
+            .with_fixed_palette(palette),
+        )
     }
 }
 
@@ -788,7 +790,9 @@ impl App for MenuWithAutoChild {
                             grab: false,
                             on_dismissed: None,
                         },
-                        AppComponent::new(MenuView::new(child_items, |_| {}, || {}, palette)),
+                        AppComponent::new(
+                            MenuView::new(child_items, |_| {}, || {}).with_fixed_palette(palette),
+                        ),
                     );
                     let popups2 = popups.clone();
                     let timers2 = timers.clone();
@@ -805,12 +809,14 @@ impl App for MenuWithAutoChild {
         });
         let on_activate = self.on_activate.clone();
         let on_dismiss_all = self.on_dismiss_all.clone();
-        AppComponent::new(MenuView::new(
-            self.items.clone(),
-            move |id| on_activate(id),
-            move || on_dismiss_all(),
-            palette,
-        ))
+        AppComponent::new(
+            MenuView::new(
+                self.items.clone(),
+                move |id| on_activate(id),
+                move || on_dismiss_all(),
+            )
+            .with_fixed_palette(palette),
+        )
     }
 }
 

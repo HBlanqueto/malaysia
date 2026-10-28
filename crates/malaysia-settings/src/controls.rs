@@ -7,11 +7,12 @@ use barrier_kit::menu::{CheckState, MenuItem, MenuView};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
 };
+use barrier_kit::theme::SurfaceKind;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Size};
-use vow_design::{CAPTION, MenuPalette, SETTINGS, TEXT, TITLEBAR};
+use vow_design::{CAPTION, SETTINGS, TEXT, TITLEBAR};
 
 use crate::state::{Rgba, TrafficLightStyle, rgba};
 
@@ -144,7 +145,6 @@ pub fn traffic_dropdown(
     lights: [Rgba; 3],
     text_color: Rgba,
     bg_control: Rgba,
-    menu_palette: MenuPalette,
     on_change: impl FnMut(TrafficLightStyle) + 'static,
 ) -> freya_core::prelude::Rect {
     let light = SETTINGS.preview_light as f32;
@@ -177,7 +177,7 @@ pub fn traffic_dropdown(
         .on_press({
             let on_change = on_change.clone();
             move |_| {
-                open_traffic_menu(current, menu_palette, on_change.clone());
+                open_traffic_menu(current, on_change.clone());
             }
         })
 }
@@ -209,7 +209,6 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
 
 fn open_traffic_menu(
     current: TrafficLightStyle,
-    menu_palette: MenuPalette,
     on_change: Rc<RefCell<dyn FnMut(TrafficLightStyle)>>,
 ) {
     let items = vec![
@@ -238,8 +237,8 @@ fn open_traffic_menu(
         || {
             PopupHandle::get().close();
         },
-        menu_palette,
-    );
+    )
+    .with_surface(SurfaceKind::Toplevel);
 
     let spec = PopupSpec {
         anchor_rect: (0, 0, 1, 1),

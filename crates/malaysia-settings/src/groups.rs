@@ -1,7 +1,6 @@
 //! Grupos de Ajustes: títulos, filas, tarjetas y contenido desplazable.
 
 use barrier_kit::controls::ScrollView;
-use barrier_kit::theme::{SurfaceKind, menu_palette};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
@@ -403,7 +402,6 @@ fn windows_group(
         resolved.lights,
         text_color,
         control_bg,
-        menu_palette(&resolved, SurfaceKind::Toplevel),
         move |style| {
             let mut config = load_appearance();
             config.traffic_lights = style;

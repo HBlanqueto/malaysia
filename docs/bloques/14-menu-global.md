@@ -62,15 +62,13 @@ let items = vec![
     MenuItem::Separator,
     MenuItem::Submenu { label: "Recent".to_string(), enabled: true, items: vec![], icon: None },
 ];
-let resolved = theme::resolved();
-let palette = theme::menu_palette(&resolved, theme::SurfaceKind::LayerShell);
-// Para un menú abierto desde una ventana: theme::SurfaceKind::Toplevel.
+// Un menú abierto desde una ventana usa SurfaceKind::Toplevel.
 let view = MenuView::new(
     items,
     |id| eprintln!("activated {id}"),
     || { /* cerrar el popup raíz */ },
-    palette,
-);
+)
+.with_surface(theme::SurfaceKind::LayerShell);
 ```
 
 ## Ejemplo

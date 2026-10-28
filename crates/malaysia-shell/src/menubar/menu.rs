@@ -127,10 +127,11 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
     let on_activate = spec.on_activate.clone();
-    let mut view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all, palette)
-        .with_navigation(move |direction| {
+    let mut view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all).with_navigation(
+        move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
-        });
+        },
+    );
     if let Some(source) = &spec.live_items {
         let source = source.clone();
         view = view.with_items_source(move || source());

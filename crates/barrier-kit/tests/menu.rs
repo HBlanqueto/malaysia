@@ -6,10 +6,12 @@ use std::{
 };
 
 use barrier_kit::menu::{CheckState, MenuItem, MenuView};
+use barrier_kit::theme::{SurfaceKind, menu_palette};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use freya_testing::TestingRunner;
 use torin::prelude::{Size, Size2D};
+use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
 use vow_design::{MENU_DARK, MENU_LIGHT, MenuPalette};
 
 const WALLPAPER: (u8, u8, u8) = (65, 105, 170);
@@ -131,7 +133,7 @@ fn render(dark: bool) -> Vec<u8> {
     let palette = if dark { MENU_DARK } else { MENU_LIGHT };
     let items = menu_items();
     let size = MenuView::preferred_size(&items, palette);
-    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}, palette));
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}).with_fixed_palette(palette));
     let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
     test.sync_and_update();
     test.render().as_ref().to_vec()
@@ -141,7 +143,7 @@ fn render_accents(dark: bool) -> Vec<u8> {
     let palette = if dark { MENU_DARK } else { MENU_LIGHT };
     let items = accent_items();
     let size = MenuView::preferred_size(&items, palette);
-    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}, palette));
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}).with_fixed_palette(palette));
     let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
     test.sync_and_update();
     test.render().as_ref().to_vec()
@@ -158,12 +160,9 @@ impl App for MenuOnWallpaper {
             .width(Size::fill())
             .height(Size::fill())
             .background(Color::from(WALLPAPER))
-            .child(AppComponent::new(MenuView::new(
-                self.items.clone(),
-                |_| {},
-                || {},
-                self.palette,
-            )))
+            .child(AppComponent::new(
+                MenuView::new(self.items.clone(), |_| {}, || {}).with_fixed_palette(self.palette),
+            ))
     }
 }
 
@@ -415,7 +414,7 @@ fn render_long(dark: bool) -> Vec<u8> {
     let palette = if dark { MENU_DARK } else { MENU_LIGHT };
     let items = long_label_items();
     let size = MenuView::preferred_size(&items, palette);
-    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}, palette));
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}).with_fixed_palette(palette));
     let (mut test, _) = TestingRunner::new(app, Size2D::new(size.0, size.1), |_| {}, 1.0);
     test.sync_and_update();
     test.render().as_ref().to_vec()
@@ -436,4 +435,105 @@ fn a_120_character_label_is_truncated_in_the_middle_and_keeps_the_shortcut() {
         );
         assert_right_padding_is_background(&render_long(dark), palette, "long-label");
     }
+}
+
+fn action(label: &str) -> MenuItem {
+    MenuItem::Action {
+        id: format!("id:{label}"),
+        label: label.to_string(),
+        shortcut: None,
+        enabled: true,
+        check: CheckState::None,
+        icon: None,
+    }
+}
+
+fn appearance(scheme: ColorScheme, accent: [f32; 3]) -> Resolved {
+    resolve(
+        &AppearanceConfig {
+            color_scheme: scheme,
+            accent_color: Some(accent),
+            reduce_transparency: true,
+            ..Default::default()
+        },
+        None,
+    )
+}
+
+#[test]
+fn an_open_menu_recolors_when_the_accent_changes() {
+    let purple = appearance(ColorScheme::Dark, [0.5, 0.0, 1.0]);
+    let blue = appearance(ColorScheme::Dark, [0.0, 0.3, 1.0]);
+    let items = vec![action("Open")];
+    let palette = menu_palette(&purple, SurfaceKind::LayerShell);
+    let size = MenuView::preferred_size(&items, palette);
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}));
+    let (mut test, mut state) = TestingRunner::new(
+        app,
+        Size2D::new(size.0, size.1),
+        |runner| runner.provide_root_context(|| State::create(purple)),
+        1.0,
+    );
+    test.sync_and_update();
+
+    // The first row is highlighted; sample its left padding, away from the text.
+    let x = (palette.padding + palette.item_padding_x / 2.0) as u32;
+    let y = (palette.padding + palette.item_height / 2.0) as u32;
+    let (width, _, pixels) = decode_bytes(&test.render());
+    assert_eq!(
+        pixel_at(&pixels, width, x, y),
+        palette.hover_bg.to_rgba8(),
+        "the highlighted row must start with the purple accent"
+    );
+
+    state.set(blue);
+    test.sync_and_update();
+    let (width, _, pixels) = decode_bytes(&test.render());
+    let expected = menu_palette(&blue, SurfaceKind::LayerShell)
+        .hover_bg
+        .to_rgba8();
+    assert_ne!(expected, palette.hover_bg.to_rgba8());
+    assert_eq!(
+        pixel_at(&pixels, width, x, y),
+        expected,
+        "an open menu must follow the new accent"
+    );
+}
+
+#[test]
+fn an_open_menu_recolors_when_the_scheme_changes() {
+    let light = appearance(ColorScheme::Light, [0.5, 0.0, 1.0]);
+    let dark = appearance(ColorScheme::Dark, [0.5, 0.0, 1.0]);
+    let items = vec![action("Open")];
+    let palette = menu_palette(&light, SurfaceKind::LayerShell);
+    let size = MenuView::preferred_size(&items, palette);
+    let app = AppComponent::new(MenuView::new(items, |_| {}, || {}));
+    let (mut test, mut state) = TestingRunner::new(
+        app,
+        Size2D::new(size.0, size.1),
+        |runner| runner.provide_root_context(|| State::create(light)),
+        1.0,
+    );
+    test.sync_and_update();
+
+    // The panel background fills the padding band above the first row.
+    let x = (size.0 / 2.0) as u32;
+    let y = (palette.border_width + (palette.padding - palette.border_width) / 2.0) as u32;
+    let (width, _, pixels) = decode_bytes(&test.render());
+    assert_eq!(
+        pixel_at(&pixels, width, x, y),
+        palette.bg.to_rgba8(),
+        "the panel must start light"
+    );
+
+    state.set(dark);
+    test.sync_and_update();
+    let (width, _, pixels) = decode_bytes(&test.render());
+    let expected = menu_palette(&dark, SurfaceKind::LayerShell).bg.to_rgba8();
+    assert_ne!(expected, palette.bg.to_rgba8());
+    assert_eq!(
+        pixel_at(&pixels, width, x, y),
+        expected,
+        "an open menu must follow the new scheme"
+    );
 }

@@ -28,6 +28,7 @@ use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
     inserts_text,
 };
+use crate::theme::{SurfaceKind, menu_palette};
 use vow_design::{MenuPalette, Rgba, SANS_FAMILIES};
 
 /// Which pool a search result comes from.
@@ -377,6 +378,47 @@ fn with_empty_hint(items: Vec<MenuItem>) -> Vec<MenuItem> {
     }
 }
 
+/// Where the menu colours come from: the live appearance of the surface that
+/// opened it, or a fixed palette for tests and previews.
+#[derive(Clone, Copy)]
+struct PaletteSource {
+    surface: SurfaceKind,
+    fixed: Option<MenuPalette>,
+}
+
+impl PaletteSource {
+    /// Colours that follow the appearance of `surface`.
+    fn live(surface: SurfaceKind) -> Self {
+        Self {
+            surface,
+            fixed: None,
+        }
+    }
+
+    /// Colours pinned for tests and previews.
+    fn fixed(palette: MenuPalette) -> Self {
+        Self {
+            surface: SurfaceKind::LayerShell,
+            fixed: Some(palette),
+        }
+    }
+
+    /// Resolves the palette now, so a component that calls this re-executes
+    /// when the appearance changes.
+    fn current(self) -> MenuPalette {
+        self.fixed
+            .unwrap_or_else(|| menu_palette(&crate::theme::resolved(), self.surface))
+    }
+
+    /// A child menu keeps the same source as its parent.
+    fn inherit(self, view: MenuView) -> MenuView {
+        match self.fixed {
+            Some(palette) => view.with_fixed_palette(palette),
+            None => view.with_surface(self.surface),
+        }
+    }
+}
+
 /// A Neptunia menu rendered inside a popup.
 pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
@@ -390,7 +432,7 @@ pub struct MenuView {
     /// Resolves the live children of a remote submenu by id.
     submenu_source: Option<SubmenuSource>,
     on_navigation: Option<Rc<dyn Fn(MenuNavigation)>>,
-    palette: MenuPalette,
+    palette_source: PaletteSource,
     searchable: Option<SearchableSource>,
     help_search: Option<SearchableSource>,
     query_state: Option<Rc<RefCell<SearchQuery>>>,
@@ -412,7 +454,6 @@ impl MenuView {
         items: Vec<MenuItem>,
         on_activate: impl Fn(String) + 'static,
         on_dismiss_all: impl Fn() + 'static,
-        palette: MenuPalette,
     ) -> Self {
         Self {
             items: Rc::new(items),
@@ -422,7 +463,7 @@ impl MenuView {
             on_open_submenu: None,
             submenu_source: None,
             on_navigation: None,
-            palette,
+            palette_source: PaletteSource::live(SurfaceKind::LayerShell),
             searchable: None,
             help_search: None,
             query_state: None,
@@ -433,6 +474,20 @@ impl MenuView {
             focused_index: None,
             open_path: None,
         }
+    }
+
+    /// Sets the kind of surface the menu opens over, so it inherits that
+    /// surface's tint. Defaults to a layer shell.
+    pub fn with_surface(mut self, kind: SurfaceKind) -> Self {
+        self.palette_source = PaletteSource::live(kind);
+        self
+    }
+
+    /// Pins the colours instead of following the appearance. Only for tests and
+    /// previews.
+    pub fn with_fixed_palette(mut self, palette: MenuPalette) -> Self {
+        self.palette_source = PaletteSource::fixed(palette);
+        self
     }
 
     /// Stores the original popup geometry so the view can resize itself while
@@ -594,7 +649,7 @@ impl Clone for MenuView {
             on_open_submenu: self.on_open_submenu.clone(),
             submenu_source: self.submenu_source.clone(),
             on_navigation: self.on_navigation.clone(),
-            palette: self.palette,
+            palette_source: self.palette_source,
             searchable: self.searchable.clone(),
             help_search: self.help_search.clone(),
             query_state: self.query_state.clone(),
@@ -625,7 +680,8 @@ impl App for MenuView {
         let on_open_submenu = self.on_open_submenu.clone();
         let submenu_source = self.submenu_source.clone();
         let on_navigation = self.on_navigation.clone();
-        let m = self.palette;
+        let palette_source = self.palette_source;
+        let m = palette_source.current();
         // The popup may have grown or shrunk after a reposition, so the tree
         // follows the configured surface instead of the size at creation.
         let platform = Platform::get();
@@ -777,7 +833,7 @@ impl App for MenuView {
                         &loc,
                         popup,
                         size,
-                        m,
+                        palette_source,
                         on_activate.clone(),
                         on_dismiss_all.clone(),
                         reveal_child_id.clone(),
@@ -803,6 +859,7 @@ impl App for MenuView {
                     index,
                     is_focused,
                     m,
+                    palette_source,
                     popup.clone(),
                     opens_left,
                     on_activate.clone(),
@@ -971,7 +1028,7 @@ impl App for MenuView {
                             index,
                             popup.clone(),
                             size,
-                            m,
+                            palette_source,
                             on_activate.clone(),
                             on_dismiss_all.clone(),
                             on_open_submenu.clone(),
@@ -995,7 +1052,7 @@ impl App for MenuView {
                             index,
                             popup.clone(),
                             size,
-                            m,
+                            palette_source,
                             on_activate.clone(),
                             on_dismiss_all.clone(),
                             on_open_submenu.clone(),
@@ -1055,7 +1112,7 @@ impl App for MenuView {
                                 sub,
                                 popup,
                                 size,
-                                m,
+                                palette_source,
                                 on_activate.clone(),
                                 on_dismiss_all.clone(),
                                 on_open_submenu.clone(),
@@ -1171,7 +1228,7 @@ fn activate_or_open(
     index: usize,
     popup: Option<PopupHandle>,
     size: (f32, f32),
-    m: MenuPalette,
+    palette_source: PaletteSource,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
@@ -1192,7 +1249,7 @@ fn activate_or_open(
             sub,
             popup,
             size,
-            m,
+            palette_source,
             on_activate,
             on_dismiss_all,
             on_open_submenu,
@@ -1505,7 +1562,7 @@ fn open_child_popup(
     sub_items: &[MenuItem],
     popup: PopupHandle,
     parent_size: (f32, f32),
-    m: MenuPalette,
+    palette_source: PaletteSource,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     on_open_submenu: Option<Rc<dyn Fn(String)>>,
@@ -1520,6 +1577,7 @@ fn open_child_popup(
     }
     close_child(open_child_id.clone(), open_child_index.clone());
     announce_submenu(&on_open_submenu, id);
+    let m = palette_source.current();
     let initial_items = submenu_contents(id, sub_items);
     let child_size = MenuView::preferred_size(&initial_items, m);
     let on_dismiss_for_action = on_dismiss_all.clone();
@@ -1530,8 +1588,8 @@ fn open_child_popup(
             on_dismiss_for_action();
         },
         move || on_dismiss_all(),
-        m,
     );
+    child_view = palette_source.inherit(child_view);
     if let (Some(source), Some(id)) = (&submenu_source, id) {
         let source = source.clone();
         let id = id.to_string();
@@ -1585,7 +1643,7 @@ fn open_reveal_popup(
     location: &SearchLocation,
     popup: PopupHandle,
     parent_size: (f32, f32),
-    m: MenuPalette,
+    palette_source: PaletteSource,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
     reveal_child_id: Rc<Cell<Option<PopupId>>>,
@@ -1594,6 +1652,7 @@ fn open_reveal_popup(
     anchor_width: f32,
 ) -> Option<PopupId> {
     close_child(reveal_child_id.clone(), Rc::new(Cell::new(None)));
+    let m = palette_source.current();
     let child_size = MenuView::preferred_size(items, m);
     let parent_width = parent_size.0;
     // The parent popup's left edge depends on which side of the title it
@@ -1611,16 +1670,16 @@ fn open_reveal_popup(
     }
     let on_dismiss_for_action = on_dismiss_all.clone();
     let focused_index = location.indices.first().copied();
-    let child_view = MenuView::new(
+    let mut child_view = MenuView::new(
         items.to_vec(),
         move |id| {
             on_activate(id);
             on_dismiss_for_action();
         },
         move || on_dismiss_all(),
-        m,
-    )
-    .with_focused_index(focused_index);
+    );
+    child_view = palette_source.inherit(child_view);
+    let child_view = child_view.with_focused_index(focused_index);
     let reveal_child_id_set = reveal_child_id.clone();
     let on_dismissed = move || {
         reveal_child_id_set.set(None);
@@ -1650,6 +1709,7 @@ fn render_item(
     index: usize,
     is_focused: bool,
     m: MenuPalette,
+    palette_source: PaletteSource,
     popup: Option<PopupHandle>,
     opens_left: bool,
     on_activate: Rc<dyn Fn(String)>,
@@ -1854,7 +1914,7 @@ fn render_item(
                             &sub_items_enter,
                             popup,
                             size,
-                            m,
+                            palette_source,
                             on_activate_enter.clone(),
                             on_dismiss_enter.clone(),
                             on_open_submenu_enter.clone(),
@@ -1874,7 +1934,7 @@ fn render_item(
                             &sub_items_click,
                             popup,
                             size,
-                            m,
+                            palette_source,
                             on_activate_click.clone(),
                             on_dismiss_click.clone(),
                             on_open_submenu.clone(),
@@ -2402,7 +2462,7 @@ mod tests {
 
         // The popup was created at its natural 220 x 120 and the configure
         // after a reposition gave it 340 x 300.
-        let view = MenuView::new(items, |_| {}, || {}, MENU_LIGHT);
+        let view = MenuView::new(items, |_| {}, || {}).with_fixed_palette(MENU_LIGHT);
         let app = AppComponent::new(view);
         let (mut test, _) = TestingRunner::new(app, Size2D::new(340.0, 300.0), |_| {}, 1.0);
         test.sync_and_update();
