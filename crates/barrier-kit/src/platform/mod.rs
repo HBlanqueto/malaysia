@@ -910,13 +910,12 @@ impl Graphics {
 
 impl Drop for Graphics {
     fn drop(&mut self) {
-        // Flush and release the GPU work that belonged to this surface before
-        // its EGL window disappears. The shared context outlives the popup.
-        let mut gr = self.shared.gr.borrow_mut();
-        if let Some(mut skia) = self.skia.take() {
-            gr.flush_and_submit_surface(&mut skia, None);
-        }
-        gr.free_gpu_resources();
+        // shortcut: per-popup GPU cleanup is deferred to the shared context's
+        // abandon() at process exit. Flushing here requires borrowing the
+        // shared DirectContext, which panics if a frame is currently being
+        // rendered, and free_gpu_resources() would free textures that other
+        // surfaces still need. We only destroy the EGL surface so the
+        // compositor sees popup_destroyed before the wl_egl_window is gone.
         if let Some(surface) = self.surface.take() {
             let _ = self
                 .shared
