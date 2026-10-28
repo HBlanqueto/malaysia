@@ -1698,7 +1698,7 @@ struct Shell {
     last_key_serial: u32,
     last_input_serial: Rc<Cell<u32>>,
     last_pointer_serial: Cell<u32>,
-    touch_surfaces: std::collections::HashMap<i32, WlSurface>,
+    touch_surfaces: std::collections::HashMap<i32, ObjectId>,
     popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
     popup_next_id: Rc<Cell<u64>>,
     surface_count: Rc<Cell<usize>>,
@@ -3692,6 +3692,18 @@ impl Shell {
     }
 }
 
+/// Drain every active touch contact so `TouchHandler::cancel` can dispatch a
+/// `TouchPhase::Cancelled` event to each surface. Kept as a pure helper so the
+/// routing can be unit-tested without a live Wayland connection.
+fn dispatch_touch_cancels(
+    touch_surfaces: &mut std::collections::HashMap<i32, ObjectId>,
+    mut dispatch: impl FnMut(i32, ObjectId),
+) {
+    for (id, surface_id) in touch_surfaces.drain() {
+        dispatch(id, surface_id);
+    }
+}
+
 impl TouchHandler for Shell {
     fn down(
         &mut self,
@@ -3704,10 +3716,11 @@ impl TouchHandler for Shell {
         id: i32,
         position: (f64, f64),
     ) {
-        self.touch_surfaces.insert(id, surface.clone());
+        let surface_id = surface.id();
+        self.touch_surfaces.insert(id, surface_id.clone());
         self.touch_event(
             qh,
-            surface,
+            surface_id,
             id,
             position,
             freya_core::prelude::TouchPhase::Started,
@@ -3723,12 +3736,12 @@ impl TouchHandler for Shell {
         _: u32,
         id: i32,
     ) {
-        let Some(surface) = self.touch_surfaces.remove(&id) else {
+        let Some(surface_id) = self.touch_surfaces.remove(&id) else {
             return;
         };
         self.touch_event(
             qh,
-            surface,
+            surface_id,
             id,
             (0.0, 0.0),
             freya_core::prelude::TouchPhase::Ended,
@@ -3744,12 +3757,12 @@ impl TouchHandler for Shell {
         id: i32,
         position: (f64, f64),
     ) {
-        let Some(surface) = self.touch_surfaces.get(&id).cloned() else {
+        let Some(surface_id) = self.touch_surfaces.get(&id).cloned() else {
             return;
         };
         self.touch_event(
             qh,
-            surface,
+            surface_id,
             id,
             position,
             freya_core::prelude::TouchPhase::Moved,
@@ -3777,8 +3790,19 @@ impl TouchHandler for Shell {
     ) {
     }
 
-    fn cancel(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_touch::WlTouch) {
-        self.touch_surfaces.clear();
+    fn cancel(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_touch::WlTouch) {
+        // Move the active contacts out so the dispatch closure can borrow `self`
+        // to push the event.
+        let mut cancelled = std::mem::take(&mut self.touch_surfaces);
+        dispatch_touch_cancels(&mut cancelled, |id, surface_id| {
+            self.touch_event(
+                qh,
+                surface_id,
+                id,
+                (0.0, 0.0),
+                freya_core::prelude::TouchPhase::Cancelled,
+            );
+        });
     }
 }
 
@@ -3786,12 +3810,16 @@ impl Shell {
     fn touch_event(
         &mut self,
         qh: &QueueHandle<Self>,
-        surface: WlSurface,
+        surface_id: ObjectId,
         id: i32,
         position: (f64, f64),
         phase: freya_core::prelude::TouchPhase,
     ) {
-        let Some(index) = self.surface_for(&surface) else {
+        let Some(index) = self
+            .surfaces
+            .iter()
+            .position(|s| s.surface.id() == surface_id)
+        else {
             return;
         };
         let platform_event = PlatformEvent::Touch {
@@ -4391,5 +4419,31 @@ mod tests {
             cursor_shape_from_icon(CursorIcon::NsResize),
             CursorShape::NsResize
         );
+    }
+
+    #[test]
+    fn touch_cancel_dispatches_cancelled_for_every_active_contact() {
+        let mut touch_surfaces: std::collections::HashMap<i32, ObjectId> =
+            std::collections::HashMap::new();
+        let surface_a = ObjectId::null();
+        let surface_b = ObjectId::null();
+        // Simulate two fingers down on surface A and one on surface B.
+        touch_surfaces.insert(0, surface_a.clone());
+        touch_surfaces.insert(1, surface_a.clone());
+        touch_surfaces.insert(2, surface_b.clone());
+
+        let mut cancelled = Vec::new();
+        dispatch_touch_cancels(&mut touch_surfaces, |id, surface_id| {
+            cancelled.push((id, surface_id));
+        });
+
+        assert!(
+            touch_surfaces.is_empty(),
+            "touch_surfaces must be empty after cancel"
+        );
+        assert_eq!(cancelled.len(), 3);
+        assert!(cancelled.contains(&(0, surface_a.clone())));
+        assert!(cancelled.contains(&(1, surface_a.clone())));
+        assert!(cancelled.contains(&(2, surface_b.clone())));
     }
 }
