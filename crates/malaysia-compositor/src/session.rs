@@ -1168,6 +1168,7 @@ fn append_window_frame(
                 frame_rect_physical,
                 radius_physical,
                 exponent,
+                scale,
                 program.clone(),
             ) {
                 content.push(rounded.into());

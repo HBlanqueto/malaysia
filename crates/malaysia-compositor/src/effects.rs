@@ -89,6 +89,7 @@ impl RoundedTextureElement {
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
         exponent: f32,
+        scale: f64,
         program: GlesTexProgram,
     ) -> Option<Self> {
         let texture = match element.texture() {
@@ -102,7 +103,10 @@ impl RoundedTextureElement {
             texture,
             texture_size,
             src: element.src(),
-            dst: element.geometry(Scale::from(1.0)),
+            // `geometry(scale)` scales the surface's logical view to physical
+            // pixels; at 1.0 the content stays at its logical size inside a
+            // larger physical frame.
+            dst: element.geometry(Scale::from(scale)),
             transform: element.transform(),
             alpha: element.alpha(),
             kind: element.kind(),
@@ -235,9 +239,21 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as Wayla
 
 #[cfg(test)]
 mod tests {
-    use smithay::utils::{Physical, Point, Rectangle, Size};
+    use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Size};
 
     use super::{frame_to_texture_geometry, shader_area, texture_radius};
+
+    #[test]
+    fn surface_geometry_scales_the_logical_view_to_physical() {
+        // A surface whose logical view is 694x488 must be drawn at its logical
+        // size on a 1.0 output and at 868x610 on a 1.25 output, not at 694x488.
+        let view_dst = Size::<f64, Logical>::from((694.0, 488.0));
+        let at_one: Size<i32, Physical> = view_dst.to_physical(Scale::from(1.0)).to_i32_round();
+        let at_125: Size<i32, Physical> = view_dst.to_physical(Scale::from(1.25)).to_i32_round();
+        assert_eq!(at_one, Size::from((694, 488)));
+        assert_eq!(at_125, Size::from((868, 610)));
+        assert_ne!(at_one, at_125);
+    }
 
     #[test]
     fn texture_geometry_scales_the_frame_to_source_space() {
