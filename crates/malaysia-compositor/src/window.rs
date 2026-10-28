@@ -1234,11 +1234,7 @@ impl Windows {
         let id = self.windows[index].id;
         let decoration = self.decoration_of(id);
         let data = &mut self.windows[index];
-        let configured = if data.placed {
-            usable(data.outer_size, data.insets(decoration))
-        } else {
-            Size::from((0, 0))
-        };
+        let configured = configure_size(data.placed, data.outer_size, data.insets(decoration));
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
             state.size = Some(configured);
@@ -1251,6 +1247,7 @@ impl Windows {
             });
             apply_configure_states(
                 &mut state.states,
+                data.placed,
                 data.maximized,
                 data.fullscreen,
                 resizing,
@@ -1433,12 +1430,15 @@ fn committed_outer(committed: Option<Size<i32, Logical>>, insets: Insets) -> Siz
 
 /// Fills the xdg_toplevel states for a configure.
 ///
-/// Normal windows are advertised as tiled on all four sides: GTK/libadwaita and
-/// Firefox then drop their client-side rounded corners and resize margin, so
-/// the compositor's single shape is the one that shows. Maximized and
-/// fullscreen keep their existing state behaviour.
+/// A configure sent before the first buffer (the initial configure) carries no
+/// `Tiled*`: Firefox reads tiled on the initial 0×0 configure as a tiled
+/// request and opens at a tiny default size instead of its own. Once the window
+/// is placed, normal windows are advertised as tiled on all four sides so
+/// GTK/libadwaita and Firefox drop their client-side rounded corners and
+/// resize margin. Maximized and fullscreen keep their existing state behaviour.
 fn apply_configure_states(
     states: &mut ToplevelStateSet,
+    placed: bool,
     maximized: bool,
     fullscreen: bool,
     resizing: bool,
@@ -1464,7 +1464,7 @@ fn apply_configure_states(
     } else {
         states.unset(xdg_toplevel::State::Activated);
     }
-    let tiled = !fullscreen && !maximized;
+    let tiled = placed && !fullscreen && !maximized;
     for tile in [
         xdg_toplevel::State::TiledLeft,
         xdg_toplevel::State::TiledRight,
@@ -1498,6 +1498,16 @@ fn usable(window: Size<i32, Logical>, insets: Insets) -> Size<i32, Logical> {
     let width = (f64::from(window.w) - insets.horizontal()).max(1.0).round();
     let height = (f64::from(window.h) - insets.vertical()).max(1.0).round();
     Size::from((width as i32, height as i32))
+}
+
+/// The size a configure carries: 0×0 before the window is placed (the client
+/// chooses), then the committed window geometry.
+fn configure_size(placed: bool, outer: Size<i32, Logical>, insets: Insets) -> Size<i32, Logical> {
+    if placed {
+        usable(outer, insets)
+    } else {
+        Size::from((0, 0))
+    }
 }
 
 /// Rounds a logical length to whole pixels.
@@ -1625,7 +1635,7 @@ mod tests {
 
     use super::{
         anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
-        committed_outer, geometry_fits, initial_placement, outer_size, usable,
+        committed_outer, configure_size, geometry_fits, initial_placement, outer_size, usable,
         usable_rect_location,
     };
     use crate::decoration::Insets;
@@ -1706,9 +1716,35 @@ mod tests {
     }
 
     #[test]
+    fn the_initial_configure_is_not_tiled_and_the_next_one_is() {
+        // Firefox opens at 500×304 when the 0×0 initial configure says Tiled.
+        let mut initial = ToplevelStateSet::default();
+        apply_configure_states(&mut initial, false, false, false, false, false);
+        for state in tiled_states() {
+            assert!(!initial.contains(state), "unexpected {state:?}");
+        }
+        assert_eq!(
+            configure_size(false, size(1204, 804), titlebar()),
+            size(0, 0)
+        );
+
+        // The first configure after the first buffer carries the committed
+        // size, never 0×0.
+        let mut later = ToplevelStateSet::default();
+        apply_configure_states(&mut later, true, false, false, false, false);
+        for state in tiled_states() {
+            assert!(later.contains(state), "missing {state:?}");
+        }
+        assert_eq!(
+            configure_size(true, size(1204, 804), titlebar()),
+            size(1204, 772)
+        );
+    }
+
+    #[test]
     fn a_normal_toplevel_is_tiled_on_all_four_sides() {
         let mut states = ToplevelStateSet::default();
-        apply_configure_states(&mut states, false, false, false, true);
+        apply_configure_states(&mut states, true, false, false, false, true);
         for state in tiled_states() {
             assert!(states.contains(state), "missing {state:?}");
         }
@@ -1717,7 +1753,7 @@ mod tests {
     #[test]
     fn a_fullscreen_toplevel_keeps_its_tiled_edges_clear() {
         let mut states = ToplevelStateSet::default();
-        apply_configure_states(&mut states, false, true, false, true);
+        apply_configure_states(&mut states, true, false, true, false, true);
         assert!(states.contains(xdg_toplevel::State::Fullscreen));
         for state in tiled_states() {
             assert!(!states.contains(state), "unexpected {state:?}");
@@ -1727,7 +1763,7 @@ mod tests {
     #[test]
     fn a_maximized_toplevel_keeps_its_tiled_edges_clear() {
         let mut states = ToplevelStateSet::default();
-        apply_configure_states(&mut states, true, false, false, true);
+        apply_configure_states(&mut states, true, true, false, false, true);
         assert!(states.contains(xdg_toplevel::State::Maximized));
         for state in tiled_states() {
             assert!(!states.contains(state), "unexpected {state:?}");
