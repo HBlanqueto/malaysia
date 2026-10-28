@@ -1,5 +1,5 @@
 {
-  "name": "neptunia-components",
+  "name": "tengen-components",
   "description": "Medidas y estados de los componentes aprobados. Cada implementación (Slint, GTK, QML, web) debe respetar estos números; los colores son nombres de tokens de tokens.json.",
   "updated": "2026-10-24",
   "components": {
@@ -762,7 +762,7 @@
       "warning",
       "info"
     ],
-    "propagation": "regenerar Slint/CSS GTK/Kvantum/QML desde kits/neptunia y anunciarlo por portal o D-Bus para que las apps abiertas se actualicen",
+    "propagation": "regenerar Slint/CSS GTK/Kvantum/QML desde crates/vow-design/tengen y anunciarlo por portal o D-Bus para que las apps abiertas se actualicen",
     "mockup": "https://claude.ai/artifact/N1WN3NJJftGL2CGdaUvaHf"
   }
 }

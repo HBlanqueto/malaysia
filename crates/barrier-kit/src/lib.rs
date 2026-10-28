@@ -34,13 +34,13 @@ pub mod animation;
 /// The named controls the shell and apps use.
 pub mod controls;
 
-/// Neptunia menu popup control (global menus, context menus).
+/// Tengen menu popup control (global menus, context menus).
 pub mod menu;
 
 /// App-side global menu export (ADR 0040 §10).
 pub mod app_menu;
 
-/// Neptunia sidebar, sidebar items, collapsible sections and sidebar layout.
+/// Tengen sidebar, sidebar items, collapsible sections and sidebar layout.
 pub mod sidebar;
 
 use freya_core::prelude::{AccessibilityExt, Rect};

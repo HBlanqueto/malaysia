@@ -195,19 +195,19 @@
           fileset = lib.fileset.unions [ ./crates ./scripts ];
         };
       in {
-        # The vendored Neptunia outputs must match default.nix.
-        neptunia-generated = let
-          neptunia = import ./crates/vow-design/neptunia;
-        in pkgs.runCommand "check-neptunia-generated" {
+        # The vendored Tengen outputs must match default.nix.
+        tengen-generated = let
+          tengen = import ./crates/vow-design/tengen;
+        in pkgs.runCommand "check-tengen-generated" {
           nativeBuildInputs = with pkgs; [ diffutils ];
         } ''
           cd ${checkSrc}
-          diff -u crates/vow-design/neptunia/generated/neptunia.slint \
-            ${pkgs.writeText "neptunia.slint" neptunia.slint}
-          diff -u crates/vow-design/neptunia/generated/neptunia.css \
-            ${pkgs.writeText "neptunia.css" neptunia.css}
-          diff -u crates/vow-design/neptunia/generated/Neptunia.qml \
-            ${pkgs.writeText "Neptunia.qml" neptunia.qml}
+          diff -u crates/vow-design/tengen/generated/tengen.slint \
+            ${pkgs.writeText "tengen.slint" tengen.slint}
+          diff -u crates/vow-design/tengen/generated/tengen.css \
+            ${pkgs.writeText "tengen.css" tengen.css}
+          diff -u crates/vow-design/tengen/generated/Tengen.qml \
+            ${pkgs.writeText "Tengen.qml" tengen.qml}
           touch $out
         '';
 

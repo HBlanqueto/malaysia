@@ -1,90 +1,90 @@
-// Generado desde crates/vow-design/neptunia (tokens.json, components.json). No editar a mano:
-// cambia los JSON y regenera con `nix eval --raw -f crates/vow-design/neptunia slint`.
-export enum NeptuniaMode { light, dark, dark-tint }
+// Generado desde crates/vow-design/tengen (tokens.json, components.json). No editar a mano:
+// cambia los JSON y regenera con `nix eval --raw -f crates/vow-design/tengen slint`.
+export enum TengenMode { light, dark, dark-tint }
 
-export struct NeptuniaAccent {
+export struct TengenAccent {
     id: string,
     color: color,
     label: string,
 }
 
 export global Theme {
-    in-out property <NeptuniaMode> mode: NeptuniaMode.light;
+    in-out property <TengenMode> mode: TengenMode.light;
 
     // Colores (por tema)
-    out property <color> accent: mode == NeptuniaMode.dark ? #2f6fe4 : mode == NeptuniaMode.dark-tint ? #2f6fe4 : #2f6fe4;
-    out property <color> accent-hover: mode == NeptuniaMode.dark ? #2560cf : mode == NeptuniaMode.dark-tint ? #2560cf : #2560cf;
-    out property <color> accent-soft: mode == NeptuniaMode.dark ? #1f3358 : mode == NeptuniaMode.dark-tint ? #1f3358 : #1f3358;
-    out property <color> accent-strong: mode == NeptuniaMode.dark ? #6aa2ff : mode == NeptuniaMode.dark-tint ? #6aa2ff : #1f53bd;
-    out property <color> bg-control: mode == NeptuniaMode.dark ? #3a3a3a : mode == NeptuniaMode.dark-tint ? #38393d : #e3e8ef;
-    out property <color> bg-hover: mode == NeptuniaMode.dark ? #444444 : mode == NeptuniaMode.dark-tint ? #424448 : #dde3eb;
-    out property <color> bg-raised: mode == NeptuniaMode.dark ? #2b2b2b : mode == NeptuniaMode.dark-tint ? #2a2b2e : #ffffff;
-    out property <color> bg-sunken: mode == NeptuniaMode.dark ? #161616 : mode == NeptuniaMode.dark-tint ? #151617 : #e7ebf1;
-    out property <color> bg-surface: mode == NeptuniaMode.dark ? #262626 : mode == NeptuniaMode.dark-tint ? #252628 : #ffffff;
-    out property <color> bg-window: mode == NeptuniaMode.dark ? #1e1e1e : mode == NeptuniaMode.dark-tint ? #1d1e20 : #f2f4f7;
-    out property <color> cyan: mode == NeptuniaMode.dark ? #4fb6e3 : mode == NeptuniaMode.dark-tint ? #4fb6e3 : #0a6f9a;
-    out property <color> danger: mode == NeptuniaMode.dark ? #ff6b6b : mode == NeptuniaMode.dark-tint ? #ff6b6b : #cc2f35;
-    out property <color> danger-fill: mode == NeptuniaMode.dark ? #d6363b : mode == NeptuniaMode.dark-tint ? #d6363b : #d6363b;
-    out property <color> highlight-border: mode == NeptuniaMode.dark ? #ffffff24 : mode == NeptuniaMode.dark-tint ? #ffffff24 : #ffffff24;
-    out property <color> highlight-gloss: mode == NeptuniaMode.dark ? #ffffff38 : mode == NeptuniaMode.dark-tint ? #ffffff38 : #ffffff38;
-    out property <color> info: mode == NeptuniaMode.dark ? #b18cff : mode == NeptuniaMode.dark-tint ? #b18cff : #7a49c9;
-    out property <color> ink: mode == NeptuniaMode.dark ? #dcdcdc : mode == NeptuniaMode.dark-tint ? #dadcdf : #1b2330;
-    out property <color> ink-faint: mode == NeptuniaMode.dark ? #6b6b6b : mode == NeptuniaMode.dark-tint ? #696b70 : #8a96a8;
-    out property <color> ink-muted: mode == NeptuniaMode.dark ? #9b9b9b : mode == NeptuniaMode.dark-tint ? #999ca3 : #55657e;
-    out property <color> ink-strong: mode == NeptuniaMode.dark ? #f5f5f5 : mode == NeptuniaMode.dark-tint ? #f4f5f6 : #0d1219;
-    out property <color> knob-shadow: mode == NeptuniaMode.dark ? #0d12194d : mode == NeptuniaMode.dark-tint ? #0d12194d : #0d12194d;
-    out property <color> line: mode == NeptuniaMode.dark ? #333333 : mode == NeptuniaMode.dark-tint ? #323336 : #d6dce5;
-    out property <color> line-strong: mode == NeptuniaMode.dark ? #747474 : mode == NeptuniaMode.dark-tint ? #73767c : #848fa1;
-    out property <color> menubar-title-open: mode == NeptuniaMode.dark ? #ffffff2e : mode == NeptuniaMode.dark-tint ? #ffffff2e : #0d12191f;
-    out property <color> on-accent: mode == NeptuniaMode.dark ? #ffffff : mode == NeptuniaMode.dark-tint ? #ffffff : #ffffff;
-    out property <color> on-danger: mode == NeptuniaMode.dark ? #ffffff : mode == NeptuniaMode.dark-tint ? #ffffff : #ffffff;
-    out property <color> preview-dark-control: mode == NeptuniaMode.dark ? #3a3a3a : mode == NeptuniaMode.dark-tint ? #3a3a3a : #3a3a3a;
-    out property <color> preview-dark-sunken: mode == NeptuniaMode.dark ? #161616 : mode == NeptuniaMode.dark-tint ? #161616 : #161616;
-    out property <color> preview-dark-window: mode == NeptuniaMode.dark ? #1e1e1e : mode == NeptuniaMode.dark-tint ? #1e1e1e : #1e1e1e;
-    out property <color> preview-light-control: mode == NeptuniaMode.dark ? #d6dce5 : mode == NeptuniaMode.dark-tint ? #d6dce5 : #d6dce5;
-    out property <color> preview-light-sunken: mode == NeptuniaMode.dark ? #e7ebf1 : mode == NeptuniaMode.dark-tint ? #e7ebf1 : #e7ebf1;
-    out property <color> preview-light-window: mode == NeptuniaMode.dark ? #f2f4f7 : mode == NeptuniaMode.dark-tint ? #f2f4f7 : #f2f4f7;
-    out property <color> scrim: mode == NeptuniaMode.dark ? #00000080 : mode == NeptuniaMode.dark-tint ? #00000080 : #0d121947;
-    out property <color> shadow-float: mode == NeptuniaMode.dark ? #00000066 : mode == NeptuniaMode.dark-tint ? #00000066 : #00000066;
-    out property <color> shadow-soft: mode == NeptuniaMode.dark ? #0d12192e : mode == NeptuniaMode.dark-tint ? #0d12192e : #0d12192e;
-    out property <color> shell-bar: mode == NeptuniaMode.dark ? #1e1e1ee6 : mode == NeptuniaMode.dark-tint ? #1d1e20e6 : #f2f4f7e6;
-    out property <color> sidebar-flat-bg: mode == NeptuniaMode.dark ? #161616 : mode == NeptuniaMode.dark-tint ? #151617 : #e7ebf1;
-    out property <color> sidebar-island-bg: mode == NeptuniaMode.dark ? #161616 : mode == NeptuniaMode.dark-tint ? #151617 : #e7ebf1;
-    out property <color> sidebar-island-inner: mode == NeptuniaMode.dark ? #ffffff00 : mode == NeptuniaMode.dark-tint ? #ffffff00 : #ffffff00;
-    out property <color> sidebar-island-rim: mode == NeptuniaMode.dark ? #ffffff21 : mode == NeptuniaMode.dark-tint ? #ffffff21 : #0d121900;
-    out property <color> success: mode == NeptuniaMode.dark ? #5fcf7c : mode == NeptuniaMode.dark-tint ? #5fcf7c : #1a7f37;
-    out property <color> sys-blue: mode == NeptuniaMode.dark ? #2f6fe4 : mode == NeptuniaMode.dark-tint ? #2f6fe4 : #2f6fe4;
-    out property <color> sys-cyan: mode == NeptuniaMode.dark ? #0f86b8 : mode == NeptuniaMode.dark-tint ? #0f86b8 : #0f86b8;
-    out property <color> sys-gray: mode == NeptuniaMode.dark ? #7d828c : mode == NeptuniaMode.dark-tint ? #7d828c : #7d828c;
-    out property <color> sys-green: mode == NeptuniaMode.dark ? #28a046 : mode == NeptuniaMode.dark-tint ? #28a046 : #28a046;
-    out property <color> sys-orange: mode == NeptuniaMode.dark ? #e8780e : mode == NeptuniaMode.dark-tint ? #e8780e : #e8780e;
-    out property <color> sys-purple: mode == NeptuniaMode.dark ? #8e5bd8 : mode == NeptuniaMode.dark-tint ? #8e5bd8 : #8e5bd8;
-    out property <color> sys-red: mode == NeptuniaMode.dark ? #d6363b : mode == NeptuniaMode.dark-tint ? #d6363b : #d6363b;
-    out property <color> titlebar-bg: mode == NeptuniaMode.dark ? #1e1e1e : mode == NeptuniaMode.dark-tint ? #1d1e20 : #f2f4f7;
-    out property <color> titlebar-bg-inactive: mode == NeptuniaMode.dark ? #161616 : mode == NeptuniaMode.dark-tint ? #151617 : #e7ebf1;
-    out property <color> titlebar-line: mode == NeptuniaMode.dark ? #333333 : mode == NeptuniaMode.dark-tint ? #323336 : #d6dce5;
-    out property <color> titlebar-title: mode == NeptuniaMode.dark ? #f5f5f5 : mode == NeptuniaMode.dark-tint ? #f4f5f6 : #0d1219;
-    out property <color> titlebar-title-inactive: mode == NeptuniaMode.dark ? #9b9b9b : mode == NeptuniaMode.dark-tint ? #999ca3 : #55657e;
-    out property <color> toolbar-glass-bg: mode == NeptuniaMode.dark ? #3a3a3cd6 : mode == NeptuniaMode.dark-tint ? #393a3ed6 : #ffffffdb;
-    out property <color> traffic-close: mode == NeptuniaMode.dark ? #ff5f57 : mode == NeptuniaMode.dark-tint ? #ff5f57 : #ff5f57;
-    out property <color> traffic-inactive: mode == NeptuniaMode.dark ? #4e4e50 : mode == NeptuniaMode.dark-tint ? #4e4e50 : #d3d3d5;
-    out property <color> traffic-min: mode == NeptuniaMode.dark ? #febc2e : mode == NeptuniaMode.dark-tint ? #febc2e : #febc2e;
-    out property <color> traffic-rim: mode == NeptuniaMode.dark ? #00000033 : mode == NeptuniaMode.dark-tint ? #00000033 : #00000033;
-    out property <color> traffic-zoom: mode == NeptuniaMode.dark ? #28c840 : mode == NeptuniaMode.dark-tint ? #28c840 : #28c840;
-    out property <color> wallpaper-fallback: mode == NeptuniaMode.dark ? #2b3038 : mode == NeptuniaMode.dark-tint ? #2b3038 : #2b3038;
-    out property <color> wallpaper-glass: mode == NeptuniaMode.dark ? #ffffff3d : mode == NeptuniaMode.dark-tint ? #ffffff3d : #ffffff3d;
-    out property <color> wallpaper-glass-border: mode == NeptuniaMode.dark ? #ffffff29 : mode == NeptuniaMode.dark-tint ? #ffffff29 : #ffffff29;
-    out property <color> wallpaper-ink: mode == NeptuniaMode.dark ? #ffffff : mode == NeptuniaMode.dark-tint ? #ffffff : #ffffff;
-    out property <color> wallpaper-ink-faint: mode == NeptuniaMode.dark ? #ffffffb8 : mode == NeptuniaMode.dark-tint ? #ffffffb8 : #ffffffb8;
-    out property <color> wallpaper-ink-hint: mode == NeptuniaMode.dark ? #d7dce6 : mode == NeptuniaMode.dark-tint ? #d7dce6 : #d7dce6;
-    out property <color> wallpaper-ink-muted: mode == NeptuniaMode.dark ? #ffffffd6 : mode == NeptuniaMode.dark-tint ? #ffffffd6 : #ffffffd6;
-    out property <color> wallpaper-ink-soft: mode == NeptuniaMode.dark ? #f4f6fa : mode == NeptuniaMode.dark-tint ? #f4f6fa : #f4f6fa;
-    out property <color> wallpaper-panel: mode == NeptuniaMode.dark ? #0d12195c : mode == NeptuniaMode.dark-tint ? #0d12195c : #0d12195c;
-    out property <color> wallpaper-shadow: mode == NeptuniaMode.dark ? #0d121940 : mode == NeptuniaMode.dark-tint ? #0d121940 : #0d121940;
-    out property <color> wallpaper-veil: mode == NeptuniaMode.dark ? #0d121942 : mode == NeptuniaMode.dark-tint ? #0d121942 : #0d121942;
-    out property <color> warning: mode == NeptuniaMode.dark ? #f0a43a : mode == NeptuniaMode.dark-tint ? #f0a43a : #a15c00;
-    out property <color> window-inner: mode == NeptuniaMode.dark ? #ffffff24 : mode == NeptuniaMode.dark-tint ? #ffffff24 : #ffffff00;
-    out property <color> window-outer: mode == NeptuniaMode.dark ? #000000e6 : mode == NeptuniaMode.dark-tint ? #000000e6 : #0d12191f;
+    out property <color> accent: mode == TengenMode.dark ? #2f6fe4 : mode == TengenMode.dark-tint ? #2f6fe4 : #2f6fe4;
+    out property <color> accent-hover: mode == TengenMode.dark ? #2560cf : mode == TengenMode.dark-tint ? #2560cf : #2560cf;
+    out property <color> accent-soft: mode == TengenMode.dark ? #1f3358 : mode == TengenMode.dark-tint ? #1f3358 : #1f3358;
+    out property <color> accent-strong: mode == TengenMode.dark ? #6aa2ff : mode == TengenMode.dark-tint ? #6aa2ff : #1f53bd;
+    out property <color> bg-control: mode == TengenMode.dark ? #3a3a3a : mode == TengenMode.dark-tint ? #38393d : #e3e8ef;
+    out property <color> bg-hover: mode == TengenMode.dark ? #444444 : mode == TengenMode.dark-tint ? #424448 : #dde3eb;
+    out property <color> bg-raised: mode == TengenMode.dark ? #2b2b2b : mode == TengenMode.dark-tint ? #2a2b2e : #ffffff;
+    out property <color> bg-sunken: mode == TengenMode.dark ? #161616 : mode == TengenMode.dark-tint ? #151617 : #e7ebf1;
+    out property <color> bg-surface: mode == TengenMode.dark ? #262626 : mode == TengenMode.dark-tint ? #252628 : #ffffff;
+    out property <color> bg-window: mode == TengenMode.dark ? #1e1e1e : mode == TengenMode.dark-tint ? #1d1e20 : #f2f4f7;
+    out property <color> cyan: mode == TengenMode.dark ? #4fb6e3 : mode == TengenMode.dark-tint ? #4fb6e3 : #0a6f9a;
+    out property <color> danger: mode == TengenMode.dark ? #ff6b6b : mode == TengenMode.dark-tint ? #ff6b6b : #cc2f35;
+    out property <color> danger-fill: mode == TengenMode.dark ? #d6363b : mode == TengenMode.dark-tint ? #d6363b : #d6363b;
+    out property <color> highlight-border: mode == TengenMode.dark ? #ffffff24 : mode == TengenMode.dark-tint ? #ffffff24 : #ffffff24;
+    out property <color> highlight-gloss: mode == TengenMode.dark ? #ffffff38 : mode == TengenMode.dark-tint ? #ffffff38 : #ffffff38;
+    out property <color> info: mode == TengenMode.dark ? #b18cff : mode == TengenMode.dark-tint ? #b18cff : #7a49c9;
+    out property <color> ink: mode == TengenMode.dark ? #dcdcdc : mode == TengenMode.dark-tint ? #dadcdf : #1b2330;
+    out property <color> ink-faint: mode == TengenMode.dark ? #6b6b6b : mode == TengenMode.dark-tint ? #696b70 : #8a96a8;
+    out property <color> ink-muted: mode == TengenMode.dark ? #9b9b9b : mode == TengenMode.dark-tint ? #999ca3 : #55657e;
+    out property <color> ink-strong: mode == TengenMode.dark ? #f5f5f5 : mode == TengenMode.dark-tint ? #f4f5f6 : #0d1219;
+    out property <color> knob-shadow: mode == TengenMode.dark ? #0d12194d : mode == TengenMode.dark-tint ? #0d12194d : #0d12194d;
+    out property <color> line: mode == TengenMode.dark ? #333333 : mode == TengenMode.dark-tint ? #323336 : #d6dce5;
+    out property <color> line-strong: mode == TengenMode.dark ? #747474 : mode == TengenMode.dark-tint ? #73767c : #848fa1;
+    out property <color> menubar-title-open: mode == TengenMode.dark ? #ffffff2e : mode == TengenMode.dark-tint ? #ffffff2e : #0d12191f;
+    out property <color> on-accent: mode == TengenMode.dark ? #ffffff : mode == TengenMode.dark-tint ? #ffffff : #ffffff;
+    out property <color> on-danger: mode == TengenMode.dark ? #ffffff : mode == TengenMode.dark-tint ? #ffffff : #ffffff;
+    out property <color> preview-dark-control: mode == TengenMode.dark ? #3a3a3a : mode == TengenMode.dark-tint ? #3a3a3a : #3a3a3a;
+    out property <color> preview-dark-sunken: mode == TengenMode.dark ? #161616 : mode == TengenMode.dark-tint ? #161616 : #161616;
+    out property <color> preview-dark-window: mode == TengenMode.dark ? #1e1e1e : mode == TengenMode.dark-tint ? #1e1e1e : #1e1e1e;
+    out property <color> preview-light-control: mode == TengenMode.dark ? #d6dce5 : mode == TengenMode.dark-tint ? #d6dce5 : #d6dce5;
+    out property <color> preview-light-sunken: mode == TengenMode.dark ? #e7ebf1 : mode == TengenMode.dark-tint ? #e7ebf1 : #e7ebf1;
+    out property <color> preview-light-window: mode == TengenMode.dark ? #f2f4f7 : mode == TengenMode.dark-tint ? #f2f4f7 : #f2f4f7;
+    out property <color> scrim: mode == TengenMode.dark ? #00000080 : mode == TengenMode.dark-tint ? #00000080 : #0d121947;
+    out property <color> shadow-float: mode == TengenMode.dark ? #00000066 : mode == TengenMode.dark-tint ? #00000066 : #00000066;
+    out property <color> shadow-soft: mode == TengenMode.dark ? #0d12192e : mode == TengenMode.dark-tint ? #0d12192e : #0d12192e;
+    out property <color> shell-bar: mode == TengenMode.dark ? #1e1e1ee6 : mode == TengenMode.dark-tint ? #1d1e20e6 : #f2f4f7e6;
+    out property <color> sidebar-flat-bg: mode == TengenMode.dark ? #161616 : mode == TengenMode.dark-tint ? #151617 : #e7ebf1;
+    out property <color> sidebar-island-bg: mode == TengenMode.dark ? #161616 : mode == TengenMode.dark-tint ? #151617 : #e7ebf1;
+    out property <color> sidebar-island-inner: mode == TengenMode.dark ? #ffffff00 : mode == TengenMode.dark-tint ? #ffffff00 : #ffffff00;
+    out property <color> sidebar-island-rim: mode == TengenMode.dark ? #ffffff21 : mode == TengenMode.dark-tint ? #ffffff21 : #0d121900;
+    out property <color> success: mode == TengenMode.dark ? #5fcf7c : mode == TengenMode.dark-tint ? #5fcf7c : #1a7f37;
+    out property <color> sys-blue: mode == TengenMode.dark ? #2f6fe4 : mode == TengenMode.dark-tint ? #2f6fe4 : #2f6fe4;
+    out property <color> sys-cyan: mode == TengenMode.dark ? #0f86b8 : mode == TengenMode.dark-tint ? #0f86b8 : #0f86b8;
+    out property <color> sys-gray: mode == TengenMode.dark ? #7d828c : mode == TengenMode.dark-tint ? #7d828c : #7d828c;
+    out property <color> sys-green: mode == TengenMode.dark ? #28a046 : mode == TengenMode.dark-tint ? #28a046 : #28a046;
+    out property <color> sys-orange: mode == TengenMode.dark ? #e8780e : mode == TengenMode.dark-tint ? #e8780e : #e8780e;
+    out property <color> sys-purple: mode == TengenMode.dark ? #8e5bd8 : mode == TengenMode.dark-tint ? #8e5bd8 : #8e5bd8;
+    out property <color> sys-red: mode == TengenMode.dark ? #d6363b : mode == TengenMode.dark-tint ? #d6363b : #d6363b;
+    out property <color> titlebar-bg: mode == TengenMode.dark ? #1e1e1e : mode == TengenMode.dark-tint ? #1d1e20 : #f2f4f7;
+    out property <color> titlebar-bg-inactive: mode == TengenMode.dark ? #161616 : mode == TengenMode.dark-tint ? #151617 : #e7ebf1;
+    out property <color> titlebar-line: mode == TengenMode.dark ? #333333 : mode == TengenMode.dark-tint ? #323336 : #d6dce5;
+    out property <color> titlebar-title: mode == TengenMode.dark ? #f5f5f5 : mode == TengenMode.dark-tint ? #f4f5f6 : #0d1219;
+    out property <color> titlebar-title-inactive: mode == TengenMode.dark ? #9b9b9b : mode == TengenMode.dark-tint ? #999ca3 : #55657e;
+    out property <color> toolbar-glass-bg: mode == TengenMode.dark ? #3a3a3cd6 : mode == TengenMode.dark-tint ? #393a3ed6 : #ffffffdb;
+    out property <color> traffic-close: mode == TengenMode.dark ? #ff5f57 : mode == TengenMode.dark-tint ? #ff5f57 : #ff5f57;
+    out property <color> traffic-inactive: mode == TengenMode.dark ? #4e4e50 : mode == TengenMode.dark-tint ? #4e4e50 : #d3d3d5;
+    out property <color> traffic-min: mode == TengenMode.dark ? #febc2e : mode == TengenMode.dark-tint ? #febc2e : #febc2e;
+    out property <color> traffic-rim: mode == TengenMode.dark ? #00000033 : mode == TengenMode.dark-tint ? #00000033 : #00000033;
+    out property <color> traffic-zoom: mode == TengenMode.dark ? #28c840 : mode == TengenMode.dark-tint ? #28c840 : #28c840;
+    out property <color> wallpaper-fallback: mode == TengenMode.dark ? #2b3038 : mode == TengenMode.dark-tint ? #2b3038 : #2b3038;
+    out property <color> wallpaper-glass: mode == TengenMode.dark ? #ffffff3d : mode == TengenMode.dark-tint ? #ffffff3d : #ffffff3d;
+    out property <color> wallpaper-glass-border: mode == TengenMode.dark ? #ffffff29 : mode == TengenMode.dark-tint ? #ffffff29 : #ffffff29;
+    out property <color> wallpaper-ink: mode == TengenMode.dark ? #ffffff : mode == TengenMode.dark-tint ? #ffffff : #ffffff;
+    out property <color> wallpaper-ink-faint: mode == TengenMode.dark ? #ffffffb8 : mode == TengenMode.dark-tint ? #ffffffb8 : #ffffffb8;
+    out property <color> wallpaper-ink-hint: mode == TengenMode.dark ? #d7dce6 : mode == TengenMode.dark-tint ? #d7dce6 : #d7dce6;
+    out property <color> wallpaper-ink-muted: mode == TengenMode.dark ? #ffffffd6 : mode == TengenMode.dark-tint ? #ffffffd6 : #ffffffd6;
+    out property <color> wallpaper-ink-soft: mode == TengenMode.dark ? #f4f6fa : mode == TengenMode.dark-tint ? #f4f6fa : #f4f6fa;
+    out property <color> wallpaper-panel: mode == TengenMode.dark ? #0d12195c : mode == TengenMode.dark-tint ? #0d12195c : #0d12195c;
+    out property <color> wallpaper-shadow: mode == TengenMode.dark ? #0d121940 : mode == TengenMode.dark-tint ? #0d121940 : #0d121940;
+    out property <color> wallpaper-veil: mode == TengenMode.dark ? #0d121942 : mode == TengenMode.dark-tint ? #0d121942 : #0d121942;
+    out property <color> warning: mode == TengenMode.dark ? #f0a43a : mode == TengenMode.dark-tint ? #f0a43a : #a15c00;
+    out property <color> window-inner: mode == TengenMode.dark ? #ffffff24 : mode == TengenMode.dark-tint ? #ffffff24 : #ffffff00;
+    out property <color> window-outer: mode == TengenMode.dark ? #000000e6 : mode == TengenMode.dark-tint ? #000000e6 : #0d12191f;
 
     // Redondeo, espacio, tamaños y duraciones
     out property <length> radius-button: 8px;
@@ -139,16 +139,16 @@ export global Theme {
     // Sombras (Slint admite una por elemento)
     out property <length> shadow-window-offset-y: 18px;
     out property <length> shadow-window-blur: 48px;
-    out property <color> shadow-window-color: mode == NeptuniaMode.light ? #0d12192e : #0000008c;
+    out property <color> shadow-window-color: mode == TengenMode.light ? #0d12192e : #0000008c;
     out property <length> shadow-float-offset-y: 10px;
     out property <length> shadow-float-blur: 28px;
-    out property <color> shadow-float-color: mode == NeptuniaMode.light ? #0d121929 : #00000080;
+    out property <color> shadow-float-color: mode == TengenMode.light ? #0d121929 : #00000080;
     out property <length> shadow-knob-offset-y: 1px;
     out property <length> shadow-knob-blur: 3px;
     out property <color> shadow-knob-color: #0d12194d;
 
-    // Acentos de sistema (GNOME), seleccionables junto al de Neptunia.
-    out property <[NeptuniaAccent]> accents: [
+    // Acentos de sistema (GNOME), seleccionables junto al de Tengen.
+    out property <[TengenAccent]> accents: [
         { id: "blue", color: #3584e4, label: "Azul" },
         { id: "teal", color: #2190a4, label: "Verde azulado" },
         { id: "green", color: #3a944a, label: "Verde" },

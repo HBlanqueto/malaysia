@@ -2,7 +2,7 @@
 //!
 //! These are compile-time constants, not a theme system. There is exactly one
 //! look, in three modes ([`LIGHT`], [`DARK`] and [`DARK_TINT`]); the values are
-//! generated at build time from the vendored Neptunia JSON. Every other crate
+//! generated at build time from the vendored Tengen JSON. Every other crate
 //! reads design values through this module and must not define its own
 //! (ADR 0011).
 //!
@@ -15,7 +15,7 @@
 //!
 //! # Where the values come from
 //!
-//! The desktop design is **Neptunia** (`crates/vow-design/neptunia`): `tokens.json` holds colors, radii, spaces, typography and
+//! The desktop design is **Tengen** (`crates/vow-design/tengen`): `tokens.json` holds colors, radii, spaces, typography and
 //! shadows; `components.json` holds component metrics. Its window is a 44 px
 //! top titlebar with 12 px traffic lights and a 16 px corner radius; the
 //! server-side chrome uses its own 32 px bar. `build.rs` turns those JSON
@@ -446,7 +446,7 @@ pub struct SettingsMetrics {
     pub card_outline: Rgba,
 }
 
-/// Compile-time metrics for the Neptunia sidebar.
+/// Compile-time metrics for the Tengen sidebar.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SidebarMetrics {
     /// `true` for the island default, `false` for the flat source list.
@@ -586,7 +586,7 @@ pub struct Palette {
     pub on_accent: Rgba,
     /// Danger/error colour.
     pub danger: Rgba,
-    /// The traffic lights when the window does not have focus. Neptunia uses a
+    /// The traffic lights when the window does not have focus. Tengen uses a
     /// different grey per theme, so it belongs to the palette, not the bar.
     pub traffic_lights_inactive: Rgba,
 }
@@ -640,7 +640,7 @@ pub struct MenuPopoverMetrics {
     pub separator_margin: f32,
 }
 
-/// The colours and metrics of a Neptunia menu popup.
+/// The colours and metrics of a Tengen menu popup.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuPalette {
     /// Panel background (`bg-raised`).
@@ -735,7 +735,7 @@ pub struct MenuPalette {
     pub search_ring: Rgba,
 }
 
-/// The lock screen colours: Neptunia `bg-surface`, `ink`, `ink-muted`,
+/// The lock screen colours: Tengen `bg-surface`, `ink`, `ink-muted`,
 /// `danger` and `accent` for the focused field.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LockPalette {
@@ -751,7 +751,7 @@ pub struct LockPalette {
     pub accent: Rgba,
 }
 
-/// The colours of a Neptunia sidebar for one mode.
+/// The colours of a Tengen sidebar for one mode.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SidebarPalette {
     /// Item text colour (`ink`).
@@ -772,7 +772,7 @@ pub struct SidebarPalette {
     pub line: Rgba,
 }
 
-/// The colours of a Neptunia toolbar capsule for one mode.
+/// The colours of a Tengen toolbar capsule for one mode.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ToolgroupPalette {
     /// Enabled button icon/text colour (`ink-strong`).
@@ -825,7 +825,7 @@ pub const NATIVE_APP_ID_PREFIX: &str = "io.github.hblanqueto.malaysia.";
 /// [`WALLPAPER_DIR`] (or inside a custom `wallpaper.dir`).
 pub const WALLPAPER: &str = "Solid Aqua Blue.png";
 
-include!(concat!(env!("OUT_DIR"), "/neptunia.rs"));
+include!(concat!(env!("OUT_DIR"), "/tengen.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -839,9 +839,8 @@ mod tests {
 
     #[test]
     fn generated_shadows_match_the_tokens() {
-        let tokens: serde_json::Value =
-            serde_json::from_str(include_str!("../neptunia/tokens.json"))
-                .expect("tokens.json should parse");
+        let tokens: serde_json::Value = serde_json::from_str(include_str!("../tengen/tokens.json"))
+            .expect("tokens.json should parse");
 
         for (style, theme) in [(super::SHADOW, "light"), (super::SHADOW_DARK, "dark")] {
             for (layer, name) in [(style.ambient, "ambient"), (style.contact, "contact")] {

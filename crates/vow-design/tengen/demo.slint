@@ -1,8 +1,8 @@
-// Galería de Neptunia para ajustar a ojo, sin compilar Rust:
-//   slint-viewer --auto-reload kits/neptunia/demo.slint
+// Galería de Tengen para ajustar a ojo, sin compilar Rust:
+//   slint-viewer --auto-reload crates/vow-design/tengen/demo.slint
 // Los componentes de aquí son de referencia: la librería real (triton/) debe
 // copiar estas medidas, que salen de Metrics y Theme (generados desde los JSON).
-import { Theme, Metrics, NeptuniaMode } from "generated/neptunia.slint";
+import { Theme, Metrics, TengenMode } from "generated/tengen.slint";
 
 component Caption inherits Text {
     color: Theme.ink-muted;
@@ -208,7 +208,7 @@ export component NpSlider inherits Rectangle {
 }
 
 export component Demo inherits Window {
-    title: "Neptunia — galería";
+    title: "Tengen — galería";
     preferred-width: 720px;
     preferred-height: 560px;
     background: Theme.bg-sunken;
@@ -235,7 +235,7 @@ export component Demo inherits Window {
             HorizontalLayout {
                 spacing: Theme.space-3;
                 Text {
-                    text: "Neptunia";
+                    text: "Tengen";
                     color: Theme.ink-strong;
                     font-size: Theme.text-title-1-size;
                     font-weight: Theme.text-title-1-weight;
@@ -244,9 +244,9 @@ export component Demo inherits Window {
                 Rectangle { horizontal-stretch: 1; }
                 NpSegmented {
                     items: ["Claro", "Oscuro", "Tintado"];
-                    current: Theme.mode == NeptuniaMode.dark ? 1 : Theme.mode == NeptuniaMode.dark-tint ? 2 : 0;
+                    current: Theme.mode == TengenMode.dark ? 1 : Theme.mode == TengenMode.dark-tint ? 2 : 0;
                     changed(i) => {
-                        Theme.mode = i == 1 ? NeptuniaMode.dark : i == 2 ? NeptuniaMode.dark-tint : NeptuniaMode.light;
+                        Theme.mode = i == 1 ? TengenMode.dark : i == 2 ? TengenMode.dark-tint : TengenMode.light;
                     }
                 }
             }

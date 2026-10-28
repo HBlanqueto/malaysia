@@ -1,26 +1,26 @@
 #!/bin/sh
-# Bring a Neptunia folder into malaysia on purpose. Never run from the build or CI.
+# Bring a Tengen folder into malaysia on purpose. Never run from the build or CI.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-dest="$root/crates/vow-design/neptunia"
+dest="$root/crates/vow-design/tengen"
 
 if [ "$#" -ne 1 ]; then
-    printf 'usage: %s <neptunia-directory>\n' "$0" >&2
+    printf 'usage: %s <tengen-directory>\n' "$0" >&2
     exit 2
 fi
 
 src=$1
 if [ ! -d "$src" ]; then
-    printf 'sync-neptunia: %s is not a directory\n' "$src" >&2
+    printf 'sync-tengen: %s is not a directory\n' "$src" >&2
     exit 2
 fi
 src=$(CDPATH= cd -- "$src" && pwd)
 
-printf 'sync-neptunia: diff %s -> %s\n' "$src" "$dest" >&2
+printf 'sync-tengen: diff %s -> %s\n' "$src" "$dest" >&2
 diff -ru --exclude .git "$dest" "$src" || true
 
-printf 'sync-neptunia: copying\n' >&2
+printf 'sync-tengen: copying\n' >&2
 mkdir -p "$dest"
 cp -a "$src"/. "$dest"/
 
@@ -45,15 +45,15 @@ mano. Ni Cargo ni Nix leen \`~/dotfiles\` ni ningún otro repositorio.
 ## Regenerar \`generated/\`
 
 \`\`\`sh
-cd crates/vow-design/neptunia
-nix eval --raw -f . slint > generated/neptunia.slint
-nix eval --raw -f . css   > generated/neptunia.css
-nix eval --raw -f . qml   > generated/Neptunia.qml
+cd crates/vow-design/tengen
+nix eval --raw -f . slint > generated/tengen.slint
+nix eval --raw -f . css   > generated/tengen.css
+nix eval --raw -f . qml   > generated/Tengen.qml
 \`\`\`
 
 \`./dev.sh check\` comprueba que esos tres archivos coinciden con \`default.nix\`.
-El script \`tools/sync-neptunia.sh <ruta>\` trae cambios desde una copia externa
+El script \`tools/sync-tengen.sh <ruta>\` trae cambios desde una copia externa
 a propósito y actualiza este archivo; no se ejecuta en el build.
 SOURCE
 
-printf 'sync-neptunia: copied; review the diff and regenerate generated/\n' >&2
+printf 'sync-tengen: copied; review the diff and regenerate generated/\n' >&2

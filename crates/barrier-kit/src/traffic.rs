@@ -255,7 +255,7 @@ pub fn traffic_lights_view_with_fixed(
         .into_element()
 }
 
-/// The gap between two lights, from the Neptunia token
+/// The gap between two lights, from the Tengen token
 /// (`window-traffic-lights-gap`), shared with the compositor's chrome.
 fn light_gap() -> f64 {
     f64::from(TITLEBAR.buttons.spacing)

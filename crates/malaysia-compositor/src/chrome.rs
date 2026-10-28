@@ -1,4 +1,4 @@
-//! MalaysiaDreams's server-side window chrome: the Neptunia titlebar.
+//! MalaysiaDreams's server-side window chrome: the Tengen titlebar.
 //!
 //! Only windows that negotiated server-side decoration and reserve a titlebar
 //! inset get one. The bar is rasterized on the CPU into an RGBA buffer and
@@ -38,7 +38,7 @@ use crate::decoration::Insets;
 /// traffic-light colours selected by `appearance.domain`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
-    /// Resolved Neptunia palette for the current appearance.
+    /// Resolved Tengen palette for the current appearance.
     pub(crate) palette: Palette,
     scheme: ColorScheme,
     lights: [Rgba; 3],
@@ -1008,7 +1008,7 @@ mod tests {
     }
 
     #[test]
-    fn the_titlebar_uses_neptunia_metrics() {
+    fn the_titlebar_uses_tengen_metrics() {
         assert_eq!(TITLEBAR.position, TitlebarPosition::Top);
         assert_eq!(TITLEBAR.thickness, 32);
         assert_eq!(TITLEBAR.buttons.diameter, 12);
@@ -1030,7 +1030,7 @@ mod tests {
     }
 
     #[test]
-    fn the_three_buttons_are_in_neptunia_order() {
+    fn the_three_buttons_are_in_tengen_order() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
         let start = 100.0
             + f64::from(TITLEBAR.buttons.margin_start)

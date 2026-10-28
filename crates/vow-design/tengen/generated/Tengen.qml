@@ -1,4 +1,4 @@
-// Generado desde crates/vow-design/neptunia. No editar a mano.
+// Generado desde crates/vow-design/tengen. No editar a mano.
 pragma Singleton
 import QtQuick
 

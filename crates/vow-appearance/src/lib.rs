@@ -61,7 +61,7 @@ impl ColorScheme {
     }
 }
 
-/// Neptunia's "Color de las ventanas" (`neutral` / `accent` / `wallpaper`).
+/// Tengen's "Color de las ventanas" (`neutral` / `accent` / `wallpaper`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowColorMode {
@@ -96,7 +96,7 @@ pub enum SidebarStyle {
     Flat,
 }
 
-/// Neptunia's traffic-light styles.
+/// Tengen's traffic-light styles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrafficLightStyle {
@@ -195,7 +195,7 @@ pub struct Resolved {
     /// The accent after wallpaper mode: the dominant, or the normal accent
     /// when there is no dominant.
     pub accent: Rgba,
-    /// The titlebar tint, if any, and its Neptunia factor.
+    /// The titlebar tint, if any, and its Tengen factor.
     pub window_tint: Option<(Rgba, f32)>,
     /// How far the window tint reaches: only the windows or the desktop too.
     pub window_tint_scope: WindowTintScope,
@@ -234,7 +234,7 @@ impl Resolved {
     }
 }
 
-/// The Neptunia palette for a concrete scheme.
+/// The Tengen palette for a concrete scheme.
 pub fn palette(scheme: ColorScheme) -> Palette {
     match scheme.resolved() {
         ColorScheme::DarkTint => DARK_TINT,

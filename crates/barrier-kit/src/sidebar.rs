@@ -1,4 +1,4 @@
-//! Neptunia sidebar, sidebar items, collapsible sections and sidebar layout.
+//! Tengen sidebar, sidebar items, collapsible sections and sidebar layout.
 //!
 //! All colours and measurements come from `vow-design` and the resolved
 //! `appearance.domain`; there are no hardcoded design values.
@@ -59,7 +59,7 @@ fn chevron_svg(down: bool, stroke: f32, color: Rgba) -> String {
     )
 }
 
-/// A vertical Neptunia sidebar.
+/// A vertical Tengen sidebar.
 #[derive(PartialEq)]
 pub struct Sidebar {
     children: Vec<Element>,

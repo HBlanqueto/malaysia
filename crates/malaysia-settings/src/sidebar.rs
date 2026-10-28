@@ -185,7 +185,7 @@ fn account_row(
                 .width(Size::px(SETTINGS.account_avatar as f32))
                 .height(Size::px(SETTINGS.account_avatar as f32))
                 .corner_radius((SETTINGS.account_avatar as f32 / 2.0).max(0.0))
-                // sys-gray de Neptunia; el token no se exporta como const todavía.
+                // sys-gray de Tengen; el token no se exporta como const todavía.
                 .background(rgba(Rgba::rgb8(0x7d, 0x82, 0x8c)))
                 .center()
                 .child(

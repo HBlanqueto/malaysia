@@ -1,14 +1,14 @@
-# Neptunia: la única fuente de tema y diseño de Keel.
+# Tengen: la única fuente de tema y diseño de Keel.
 #
 # tokens.json y components.json son los datos (neutros, sin framework). Este
 # archivo los traduce a Slint, CSS y QML. Usa únicamente builtins, así que se
 # evalúa sin nixpkgs:
 #
-#   nix eval --raw -f crates/vow-design/neptunia slint > generated/neptunia.slint
-#   nix eval --raw -f crates/vow-design/neptunia css   > generated/neptunia.css
-#   nix eval --raw -f crates/vow-design/neptunia qml   > generated/Neptunia.qml
+#   nix eval --raw -f crates/vow-design/tengen slint > generated/tengen.slint
+#   nix eval --raw -f crates/vow-design/tengen css   > generated/tengen.css
+#   nix eval --raw -f crates/vow-design/tengen qml   > generated/Tengen.qml
 #
-# Desde un módulo: (import ./crates/vow-design/neptunia).slint, o `files pkgs` para una
+# Desde un módulo: (import ./crates/vow-design/tengen).slint, o `files pkgs` para una
 # derivación con los archivos generados.
 let
   tokens = builtins.fromJSON (builtins.readFile ./tokens.json);
@@ -201,23 +201,23 @@ let
   sh = tokens.shadow.slint;
 
   slint = ''
-    // Generado desde crates/vow-design/neptunia (tokens.json, components.json). No editar a mano:
-    // cambia los JSON y regenera con `nix eval --raw -f crates/vow-design/neptunia slint`.
-    export enum NeptuniaMode { light, dark, dark-tint }
+    // Generado desde crates/vow-design/tengen (tokens.json, components.json). No editar a mano:
+    // cambia los JSON y regenera con `nix eval --raw -f crates/vow-design/tengen slint`.
+    export enum TengenMode { light, dark, dark-tint }
 
-    export struct NeptuniaAccent {
+    export struct TengenAccent {
         id: string,
         color: color,
         label: string,
     }
 
     export global Theme {
-        in-out property <NeptuniaMode> mode: NeptuniaMode.light;
+        in-out property <TengenMode> mode: TengenMode.light;
 
         // Colores (por tema)
     ${lines (
       n:
-      "    out property <color> ${n}: mode == NeptuniaMode.dark ? ${tokens.themes.dark.${n}} : mode == NeptuniaMode.dark-tint ? ${tokens.themes."dark-tint".${n}} : ${tokens.themes.light.${n}};"
+      "    out property <color> ${n}: mode == TengenMode.dark ? ${tokens.themes.dark.${n}} : mode == TengenMode.dark-tint ? ${tokens.themes."dark-tint".${n}} : ${tokens.themes.light.${n}};"
     ) colorNames}
 
         // Redondeo, espacio, tamaños y duraciones
@@ -246,16 +246,16 @@ let
         // Sombras (Slint admite una por elemento)
         out property <length> shadow-window-offset-y: ${num sh.window."offset-y"}px;
         out property <length> shadow-window-blur: ${num sh.window.blur}px;
-        out property <color> shadow-window-color: mode == NeptuniaMode.light ? ${sh.window.color.light} : ${sh.window.color.dark};
+        out property <color> shadow-window-color: mode == TengenMode.light ? ${sh.window.color.light} : ${sh.window.color.dark};
         out property <length> shadow-float-offset-y: ${num sh.float."offset-y"}px;
         out property <length> shadow-float-blur: ${num sh.float.blur}px;
-        out property <color> shadow-float-color: mode == NeptuniaMode.light ? ${sh.float.color.light} : ${sh.float.color.dark};
+        out property <color> shadow-float-color: mode == TengenMode.light ? ${sh.float.color.light} : ${sh.float.color.dark};
         out property <length> shadow-knob-offset-y: ${num sh.knob."offset-y"}px;
         out property <length> shadow-knob-blur: ${num sh.knob.blur}px;
         out property <color> shadow-knob-color: ${sh.knob.color};
 
-        // Acentos de sistema (GNOME), seleccionables junto al de Neptunia.
-        out property <[NeptuniaAccent]> accents: [
+        // Acentos de sistema (GNOME), seleccionables junto al de Tengen.
+        out property <[TengenAccent]> accents: [
     ${lines (
       a: "        { id: \"${a.id}\", color: ${a.color}, label: \"${a.label}\" },"
     ) tokens.accents}
@@ -270,7 +270,7 @@ let
 
   cssVars = th: lines (n: "  --${n}: ${tokens.themes.${th}.${n}};") colorNames;
   css = ''
-    /* Generado desde crates/vow-design/neptunia. data-theme="dark" o "dark-tint" cambia el subárbol. */
+    /* Generado desde crates/vow-design/tengen. data-theme="dark" o "dark-tint" cambia el subárbol. */
     :root, [data-theme="light"] {
     ${cssVars "light"}
       --shadow-window: ${tokens.shadow.window.light};
@@ -303,7 +303,7 @@ let
   '';
 
   qml = ''
-    // Generado desde crates/vow-design/neptunia. No editar a mano.
+    // Generado desde crates/vow-design/tengen. No editar a mano.
     pragma Singleton
     import QtQuick
 
@@ -335,14 +335,14 @@ rec {
     ;
 
   # Derivación con los archivos generados, para home-manager o un paquete:
-  #   xdg.configFile."neptunia".source = (import ./crates/vow-design/neptunia).files pkgs;
+  #   xdg.configFile."tengen".source = (import ./crates/vow-design/tengen).files pkgs;
   files =
     pkgs:
-    pkgs.runCommand "neptunia-design" { } ''
+    pkgs.runCommand "tengen-design" { } ''
       mkdir -p $out
-      cp ${pkgs.writeText "neptunia.slint" slint} $out/neptunia.slint
-      cp ${pkgs.writeText "neptunia.css" css} $out/neptunia.css
-      cp ${pkgs.writeText "Neptunia.qml" qml} $out/Neptunia.qml
+      cp ${pkgs.writeText "tengen.slint" slint} $out/tengen.slint
+      cp ${pkgs.writeText "tengen.css" css} $out/tengen.css
+      cp ${pkgs.writeText "Tengen.qml" qml} $out/Tengen.qml
       cp ${./tokens.json} $out/tokens.json
       cp ${./components.json} $out/components.json
     '';

@@ -1,4 +1,4 @@
-//! Tests for the Neptunia sidebar, sidebar layout and titlebar-with-sidebar.
+//! Tests for the Tengen sidebar, sidebar layout and titlebar-with-sidebar.
 
 use std::env;
 use std::fs;

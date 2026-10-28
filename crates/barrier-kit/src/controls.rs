@@ -272,7 +272,7 @@ impl Component for ToolGroup {
     }
 }
 
-/// A Neptunia toolbar icon button.
+/// A Tengen toolbar icon button.
 #[derive(PartialEq)]
 pub struct ToolButton {
     label: String,

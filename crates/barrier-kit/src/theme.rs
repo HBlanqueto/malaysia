@@ -1,7 +1,7 @@
 //! The Freya theme built from `vow-design` and `vow-appearance` (ADR 0034).
 //!
 //! No colour or measurement is written here: the sheet is a projection of the
-//! resolved Neptunia palette, so the compositor, the shell and the apps keep
+//! resolved Tengen palette, so the compositor, the shell and the apps keep
 //! sharing one source.
 
 use freya_components::theming::component_themes::{ColorsSheet, Theme};
@@ -129,9 +129,9 @@ pub fn for_scheme(dark: bool) -> Theme {
     let border = if dark { palette.tile } else { palette.bar };
     themed(
         if dark {
-            "neptunia-shell-dark"
+            "tengen-shell-dark"
         } else {
-            "neptunia-shell-light"
+            "tengen-shell-light"
         },
         dark,
         sheet(palette.bar, palette.tile, text, palette.tile_active, border),
@@ -206,7 +206,7 @@ pub fn shell() -> Theme {
     let text = palette.text;
     let border = if dark { palette.tile } else { palette.bar };
     themed(
-        "neptunia-shell",
+        "tengen-shell",
         dark,
         sheet(palette.bar, palette.tile, text, palette.tile_active, border),
     )
@@ -217,7 +217,7 @@ pub fn lock() -> Theme {
     let resolved = resolved();
     let palette = lock_palette(&resolved);
     themed(
-        "neptunia-lock",
+        "tengen-lock",
         true,
         sheet(
             palette.bg_surface,

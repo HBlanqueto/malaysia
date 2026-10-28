@@ -327,7 +327,7 @@ pub struct State {
     pub(crate) leaked_window: Option<WindowId>,
     /// Cached titlebar textures for server-decorated windows.
     pub(crate) chrome: crate::chrome::ChromeCache,
-    /// The Neptunia tint and traffic-light colours, rebuilt when
+    /// The Tengen tint and traffic-light colours, rebuilt when
     /// `appearance.domain` or `wallpaper.state` changes.
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
     /// Crossfade state when the appearance theme changes.

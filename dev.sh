@@ -412,11 +412,11 @@ check() {
         mockup-extract "$_mockup" --check
     done
     "$script_dir/scripts/check-design-tokens.sh"
-    "$script_dir/scripts/check-neptunia-generated.sh"
+    "$script_dir/scripts/check-tengen-generated.sh"
     "$script_dir/scripts/check-client-only-deps.sh"
     if command -v slint-compiler >/dev/null 2>&1; then
         _slint_out=$(mktemp)
-        slint-compiler "$script_dir/crates/vow-design/neptunia/demo.slint" -o "$_slint_out"
+        slint-compiler "$script_dir/crates/vow-design/tengen/demo.slint" -o "$_slint_out"
         rm -f "$_slint_out"
     else
         printf 'dev.sh: slint-compiler not found; skipping demo.slint\n' >&2

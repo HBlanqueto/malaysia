@@ -1,4 +1,4 @@
-//! Neptunia menu control for BarrierKit popups.
+//! Tengen menu control for BarrierKit popups.
 //!
 //! Distinct from [`freya_components::menu::Menu`]. This one is designed for the
 //! shell's global menus and context menus: it opens submenus as child popups,
@@ -287,7 +287,7 @@ impl MenuIcon {
     }
 }
 
-/// One entry in a Neptunia menu.
+/// One entry in a Tengen menu.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuItem {
     /// An action the user can trigger.
@@ -473,7 +473,7 @@ impl PaletteSource {
     }
 }
 
-/// A Neptunia menu rendered inside a popup.
+/// A Tengen menu rendered inside a popup.
 pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
     /// Live item source, re-read on every render so remote menus can update

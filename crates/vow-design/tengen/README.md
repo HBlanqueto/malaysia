@@ -1,20 +1,20 @@
-# Neptunia: diseños guardados como datos
+# Tengen: diseños guardados como datos
 
 Esta carpeta es la única fuente del diseño de nixdots. Los lienzos de Claude
 son donde se diseña y se aprueba; aquí se guarda lo aprobado en un formato que
 cualquier proyecto puede leer, presente o futuro, sin depender de un framework.
 
 ```
-crates/vow-design/neptunia/
+crates/vow-design/tengen/
 ├── tokens.json        colores (claro, oscuro, oscuro tintado), radios, espacios, tamaños,
 │                      duraciones, tipografía y sombras
 ├── components.json    medidas y estados de cada componente aprobado (interruptor 32×18,
 │                      segmentado rectangular, pestañas de barra de herramientas…)
 ├── default.nix        traduce los JSON y compone el tema; solo builtins, sin nixpkgs
 ├── generated/         salidas ya generadas, para quien no use Nix (SlintPad, otro repo)
-│   ├── neptunia.slint   globals Theme y Metrics para Slint
-│   ├── neptunia.css     variables CSS (GTK4, web)
-│   └── Neptunia.qml     singleton QtQuick
+│   ├── tengen.slint   globals Theme y Metrics para Slint
+│   ├── tengen.css     variables CSS (GTK4, web)
+│   └── Tengen.qml     singleton QtQuick
 └── demo.slint         galería para ajustar a ojo con slint-viewer o SlintPad
 ```
 
@@ -24,10 +24,10 @@ Nadie escribe un color ni una medida a mano. Si cambia el diseño, cambia
 `tokens.json` o `components.json` y se regenera:
 
 ```sh
-cd crates/vow-design/neptunia
-nix eval --raw -f . slint > generated/neptunia.slint
-nix eval --raw -f . css   > generated/neptunia.css
-nix eval --raw -f . qml   > generated/Neptunia.qml
+cd crates/vow-design/tengen
+nix eval --raw -f . slint > generated/tengen.slint
+nix eval --raw -f . css   > generated/tengen.css
+nix eval --raw -f . qml   > generated/Tengen.qml
 ```
 
 ## Modos de color del escritorio
@@ -44,10 +44,10 @@ u oscurece cada capa.
 
 | Proyecto | Cómo se sincroniza |
 | --- | --- |
-| Psamathe y apps Triton (Slint) | `import { Theme, Metrics } from "…/neptunia.slint";`. Desde Nix: `(import ./crates/vow-design/neptunia).slint`; o copia `generated/neptunia.slint`. Cambiar de tema es `Theme.mode = NeptuniaMode.dark;`. |
-| GTK4 / web | `neptunia.css` con `data-theme="dark"` o `"dark-tint"` en la raíz. |
-| Home Manager | `xdg.configFile."neptunia".source = (import ./crates/vow-design/neptunia).files pkgs;` deja los archivos generados y los JSON en `~/.config/neptunia/`, y cualquier app los lee de ahí. |
-| Otro repo futuro | Como input del flake (`inputs.nixdots`) y `import "${inputs.nixdots}/kits/neptunia"`, o leyendo `tokens.json` directamente. Cada proyecto genera lo suyo a su manera; los datos son los mismos. |
+| Psamathe y apps Triton (Slint) | `import { Theme, Metrics } from "…/tengen.slint";`. Desde Nix: `(import ./crates/vow-design/tengen).slint`; o copia `generated/tengen.slint`. Cambiar de tema es `Theme.mode = TengenMode.dark;`. |
+| GTK4 / web | `tengen.css` con `data-theme="dark"` o `"dark-tint"` en la raíz. |
+| Home Manager | `xdg.configFile."tengen".source = (import ./crates/vow-design/tengen).files pkgs;` deja los archivos generados y los JSON en `~/.config/tengen/`, y cualquier app los lee de ahí. |
+| Otro repo futuro | Como input del flake (`inputs.nixdots`) y `import "${inputs.nixdots}/kits/tengen"`, o leyendo `tokens.json` directamente. Cada proyecto genera lo suyo a su manera; los datos son los mismos. |
 
 ## Ajustar una pantalla sin recompilar Rust
 
@@ -56,7 +56,7 @@ guardas. Es lo más rápido para ajustar una sola pantalla, por ejemplo «Tu
 cuenta», sin tocar el resto:
 
 ```sh
-slint-viewer --auto-reload crates/vow-design/neptunia/demo.slint
+slint-viewer --auto-reload crates/vow-design/tengen/demo.slint
 slint-viewer --auto-reload setup-gui/ui/cuenta.slint   # una pantalla concreta
 ```
 
@@ -68,10 +68,10 @@ en el `devShell`.
 ## SlintPad
 
 SlintPad (slintpad.com) es un editor en el navegador para probar un componente
-sin instalar nada. Como `demo.slint` importa `generated/neptunia.slint`, hay dos
+sin instalar nada. Como `demo.slint` importa `generated/tengen.slint`, hay dos
 formas de abrirlo:
 
-- Pega primero el contenido de `generated/neptunia.slint` y debajo el
+- Pega primero el contenido de `generated/tengen.slint` y debajo el
   componente que quieras probar, quitando la línea `import`.
 - O ábrelo desde GitHub con
   `https://slintpad.com/?load_url=<url raw de demo.slint>`. SlintPad suele
@@ -105,7 +105,7 @@ palabras y se queda como datos.
 
 ## De los lienzos de Claude a esta carpeta
 
-1. Se diseña y se aprueba en los lienzos (sistema de diseño Neptunia).
+1. Se diseña y se aprueba en los lienzos (sistema de diseño Tengen).
 2. Lo aprobado se vuelca a `tokens.json` y `components.json`. Pide a Claude
-   «actualiza crates/vow-design/neptunia» y lo hace desde el sistema de diseño.
+   «actualiza crates/vow-design/tengen» y lo hace desde el sistema de diseño.
 3. Se regeneran las salidas y cada app las toma en su siguiente build.
