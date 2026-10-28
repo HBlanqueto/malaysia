@@ -244,8 +244,22 @@ impl Scene {
         corner: f64,
         eligible: impl Fn(WindowId) -> bool,
     ) -> Option<(WindowId, Edge)> {
+        self.edge_at_with(point, |id| eligible(id).then_some((side, corner, false)))
+    }
+
+    /// Like [`Self::edge_at`], but each eligible window chooses its own band.
+    ///
+    /// `eligible` returns `(side, corner, exterior_only)`. An exterior-only
+    /// band never matches inside the window rectangle, so a client that owns
+    /// its interior keeps every click there.
+    pub fn edge_at_with(
+        &self,
+        point: Point<f64, Logical>,
+        eligible: impl Fn(WindowId) -> Option<(f64, f64, bool)>,
+    ) -> Option<(WindowId, Edge)> {
         for entry in self.windows.iter().rev() {
-            if eligible(entry.id)
+            if let Some((side, corner, exterior_only)) = eligible(entry.id)
+                && (!exterior_only || !entry.outer.contains(point))
                 && let Some(edge) = edge_in(entry.outer, point, side, corner)
             {
                 return Some((entry.id, edge));
@@ -429,6 +443,20 @@ fn edge_in(
     None
 }
 
+/// A resize edge strictly outside `outer`, never inside the client content.
+pub fn exterior_edge(
+    outer: Rect<f64, Logical>,
+    point: Point<f64, Logical>,
+    side: f64,
+    corner: f64,
+) -> Option<Edge> {
+    if outer.contains(point) {
+        None
+    } else {
+        edge_in(outer, point, side, corner)
+    }
+}
+
 /// The outer rectangle produced by dragging one edge or corner of `start`.
 ///
 /// `dx` and `dy` are the pointer's movement since the drag began, in logical
@@ -604,6 +632,25 @@ mod tests {
             scene.edge_at(point(306.0, 244.0), side, corner, |_| true),
             Some((window, Edge::BottomRight))
         );
+    }
+
+    #[test]
+    fn an_exterior_band_only_hits_outside_the_frame() {
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        scene.insert(window, rect(100.0, 100.0, 200.0, 150.0));
+        let band = |_| Some((6.0, 12.0, true));
+
+        assert_eq!(
+            scene.edge_at_with(point(303.0, 175.0), band),
+            Some((window, Edge::Right))
+        );
+        assert_eq!(
+            scene.edge_at_with(point(303.0, 253.0), band),
+            Some((window, Edge::BottomRight))
+        );
+        assert_eq!(scene.edge_at_with(point(310.0, 175.0), band), None);
+        assert_eq!(scene.edge_at_with(point(298.0, 175.0), band), None);
     }
 
     #[test]

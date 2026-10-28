@@ -33,7 +33,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::compositor::{SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{
-    Configure, SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData,
+    Configure, SurfaceCachedState, ToplevelStateSet, ToplevelSurface, XdgToplevelSurfaceData,
 };
 use vow_design::{NATIVE_APP_ID_PREFIX, TITLEBAR};
 
@@ -307,6 +307,13 @@ impl WindowData {
         })
     }
 }
+
+/// Resize band outside a client-decorated frame, in logical pixels.
+///
+/// The client owns the interior, so this band only counts outside the frame.
+const CLIENT_RESIZE_BORDER: f64 = 6.0;
+/// Corner square outside a client-decorated frame, in logical pixels.
+const CLIENT_RESIZE_CORNER: f64 = 12.0;
 
 /// The toplevels being tracked.
 #[derive(Default)]
@@ -737,9 +744,11 @@ impl Windows {
 
     /// The topmost visible window under `point` and its resize edge zone, if any.
     ///
-    /// Only server-decorated windows that are not maximized or fullscreen
-    /// offer compositor-side resize. Client-decorated windows own their edges
-    /// (ADR 0019), and a maximized/fullscreen window has no free edge to drag.
+    /// Server-decorated windows use the configured inside/outside band.
+    /// Client-decorated windows only get an exterior band: the client owns its
+    /// interior, but GTK and Firefox drop their own resize margin once the
+    /// configure marks them tiled, so the compositor must offer the outer grab.
+    /// A maximized/fullscreen window has no free edge to drag.
     pub fn edge_under(
         &self,
         point: Point<f64, Logical>,
@@ -747,15 +756,62 @@ impl Windows {
         corner: f64,
         minimized: &HashSet<WindowId>,
     ) -> Option<(WindowId, Edge)> {
-        self.scene.edge_at(scene_point(point), side, corner, |id| {
-            self.is_visible(id, minimized)
-                && self.index(id).is_some_and(|index| {
-                    let data = &self.windows[index];
-                    self.decoration_of(id) == Decoration::Server
-                        && !data.maximized
-                        && data.state() == WindowState::Normal
-                })
-        })
+        if let Some(hit) = self.scene.edge_at_with(scene_point(point), |id| {
+            if !self.is_visible(id, minimized) {
+                return None;
+            }
+            let index = self.index(id)?;
+            let data = &self.windows[index];
+            if data.maximized || data.state() != WindowState::Normal {
+                return None;
+            }
+            match self.decoration_of(id) {
+                Decoration::Server => Some((side, corner, false)),
+                Decoration::Client => None,
+            }
+        }) {
+            return Some(hit);
+        }
+
+        // A client-decorated GTK/Firefox window keeps an invisible shadow
+        // margin in its buffer, so the scene rectangle is larger than the
+        // visible frame. Hit-test the frame itself; its exterior band is the
+        // resize grab the client no longer draws.
+        for window in self.iter_visible(minimized).rev() {
+            let id = window.id();
+            let index = self.index(id)?;
+            let data = &self.windows[index];
+            if data.maximized || data.state() != WindowState::Normal {
+                continue;
+            }
+            if self.decoration_of(id) != Decoration::Client {
+                if window.contains(point) {
+                    return None;
+                }
+                continue;
+            }
+            let origin = window.location() + window.surface_location();
+            let geometry = window.window_geometry();
+            let frame = SceneRect::new(
+                ScenePoint::new(
+                    f64::from(origin.x + geometry.loc.x),
+                    f64::from(origin.y + geometry.loc.y),
+                ),
+                SceneSize::new(f64::from(geometry.size.w), f64::from(geometry.size.h)),
+            );
+            if let Some(edge) = malaysia_scene::scene::exterior_edge(
+                frame,
+                scene_point(point),
+                CLIENT_RESIZE_BORDER,
+                CLIENT_RESIZE_CORNER,
+            ) {
+                return Some((id, edge));
+            }
+            if frame.contains(scene_point(point)) {
+                return None;
+            }
+        }
+        None
     }
 
     /// The surface under a logical point, with the point in surface-local
@@ -1193,26 +1249,13 @@ impl Windows {
                 Decoration::Server => zxdg_toplevel_decoration_v1::Mode::ServerSide,
                 Decoration::Client => zxdg_toplevel_decoration_v1::Mode::ClientSide,
             });
-            if resizing {
-                state.states.set(xdg_toplevel::State::Resizing);
-            } else {
-                state.states.unset(xdg_toplevel::State::Resizing);
-            }
-            if data.maximized {
-                state.states.set(xdg_toplevel::State::Maximized);
-            } else {
-                state.states.unset(xdg_toplevel::State::Maximized);
-            }
-            if data.fullscreen {
-                state.states.set(xdg_toplevel::State::Fullscreen);
-            } else {
-                state.states.unset(xdg_toplevel::State::Fullscreen);
-            }
-            if data.activated {
-                state.states.set(xdg_toplevel::State::Activated);
-            } else {
-                state.states.unset(xdg_toplevel::State::Activated);
-            }
+            apply_configure_states(
+                &mut state.states,
+                data.maximized,
+                data.fullscreen,
+                resizing,
+                data.activated,
+            );
         });
         if data.maximized {
             tracing::info!(window = id.get(), ?configured, "configure with Maximized");
@@ -1388,6 +1431,54 @@ fn committed_outer(committed: Option<Size<i32, Logical>>, insets: Insets) -> Siz
     Size::from((round(outer.width), round(outer.height)))
 }
 
+/// Fills the xdg_toplevel states for a configure.
+///
+/// Normal windows are advertised as tiled on all four sides: GTK/libadwaita and
+/// Firefox then drop their client-side rounded corners and resize margin, so
+/// the compositor's single shape is the one that shows. Maximized and
+/// fullscreen keep their existing state behaviour.
+fn apply_configure_states(
+    states: &mut ToplevelStateSet,
+    maximized: bool,
+    fullscreen: bool,
+    resizing: bool,
+    activated: bool,
+) {
+    if resizing {
+        states.set(xdg_toplevel::State::Resizing);
+    } else {
+        states.unset(xdg_toplevel::State::Resizing);
+    }
+    if maximized {
+        states.set(xdg_toplevel::State::Maximized);
+    } else {
+        states.unset(xdg_toplevel::State::Maximized);
+    }
+    if fullscreen {
+        states.set(xdg_toplevel::State::Fullscreen);
+    } else {
+        states.unset(xdg_toplevel::State::Fullscreen);
+    }
+    if activated {
+        states.set(xdg_toplevel::State::Activated);
+    } else {
+        states.unset(xdg_toplevel::State::Activated);
+    }
+    let tiled = !fullscreen && !maximized;
+    for tile in [
+        xdg_toplevel::State::TiledLeft,
+        xdg_toplevel::State::TiledRight,
+        xdg_toplevel::State::TiledTop,
+        xdg_toplevel::State::TiledBottom,
+    ] {
+        if tiled {
+            states.set(tile);
+        } else {
+            states.unset(tile);
+        }
+    }
+}
+
 /// The client's committed geometry: the xdg window geometry when it set one,
 /// otherwise the committed buffer's logical size.
 fn committed_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
@@ -1533,12 +1624,15 @@ mod tests {
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        anchor_resize_origin, at_least_one_pixel, client_point, committed_outer, geometry_fits,
-        initial_placement, outer_size, usable, usable_rect_location,
+        anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
+        committed_outer, geometry_fits, initial_placement, outer_size, usable,
+        usable_rect_location,
     };
     use crate::decoration::Insets;
     use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
     use malaysia_scene::scene::Edge;
+    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+    use smithay::wayland::shell::xdg::ToplevelStateSet;
 
     fn size(width: i32, height: i32) -> Size<i32, Logical> {
         Size::from((width, height))
@@ -1600,6 +1694,44 @@ mod tests {
             outer_size(size(800, 600), titlebar()),
             SceneSize::new(800.0, 632.0)
         );
+    }
+
+    fn tiled_states() -> [xdg_toplevel::State; 4] {
+        [
+            xdg_toplevel::State::TiledLeft,
+            xdg_toplevel::State::TiledRight,
+            xdg_toplevel::State::TiledTop,
+            xdg_toplevel::State::TiledBottom,
+        ]
+    }
+
+    #[test]
+    fn a_normal_toplevel_is_tiled_on_all_four_sides() {
+        let mut states = ToplevelStateSet::default();
+        apply_configure_states(&mut states, false, false, false, true);
+        for state in tiled_states() {
+            assert!(states.contains(state), "missing {state:?}");
+        }
+    }
+
+    #[test]
+    fn a_fullscreen_toplevel_keeps_its_tiled_edges_clear() {
+        let mut states = ToplevelStateSet::default();
+        apply_configure_states(&mut states, false, true, false, true);
+        assert!(states.contains(xdg_toplevel::State::Fullscreen));
+        for state in tiled_states() {
+            assert!(!states.contains(state), "unexpected {state:?}");
+        }
+    }
+
+    #[test]
+    fn a_maximized_toplevel_keeps_its_tiled_edges_clear() {
+        let mut states = ToplevelStateSet::default();
+        apply_configure_states(&mut states, true, false, false, true);
+        assert!(states.contains(xdg_toplevel::State::Maximized));
+        for state in tiled_states() {
+            assert!(!states.contains(state), "unexpected {state:?}");
+        }
     }
 
     #[test]
