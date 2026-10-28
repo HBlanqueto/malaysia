@@ -1690,31 +1690,18 @@ fn emit_menu(out: &mut String, tokens: &Value, components: &Value) {
 }
 
 fn emit_menu_popover(out: &mut String, tokens: &Value, components: &Value) {
-    let theme = default_theme(tokens);
-    let color_at = |path: &str| {
-        color_ref(
-            tokens,
-            theme,
-            string(components, path, COMPONENTS),
-            path,
-            COMPONENTS,
-        )
-    };
     let number_at = |path: &str| number(components, path, COMPONENTS);
 
     const_doc(
         out,
         "MENU_POPOVER",
-        "The settings dropdown popover metrics and colours.",
+        "The settings dropdown popover metrics.",
     );
     out.push_str(&format!(
         ": MenuPopoverMetrics = MenuPopoverMetrics {{\n\
          \x20   radius: {},\n\
-         \x20   bg: {},\n\
          \x20   item_height: {},\n\
          \x20   item_radius: {},\n\
-         \x20   outer_border: {},\n\
-         \x20   inner_line: {},\n\
          \x20   padding: {},\n\
          \x20   min_width: {},\n\
          \x20   item_padding_start: {},\n\
@@ -1729,7 +1716,6 @@ fn emit_menu_popover(out: &mut String, tokens: &Value, components: &Value) {
             "components.menu-popover.radius",
             COMPONENTS
         )),
-        rgba(color_at("components.menu-popover.bg")),
         float(number_at("components.menu-popover.item-height")),
         float(metric(
             tokens,
@@ -1737,8 +1723,6 @@ fn emit_menu_popover(out: &mut String, tokens: &Value, components: &Value) {
             "components.menu-popover.item-radius",
             COMPONENTS
         )),
-        rgba(color_at("components.menu-popover.outer-border")),
-        rgba(color_at("components.menu-popover.inner-line")),
         float(number_at("components.menu-popover.padding")),
         float(number_at("components.menu-popover.min-width")),
         float(number_at("components.menu-popover.item-padding-start")),

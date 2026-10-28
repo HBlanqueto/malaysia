@@ -178,6 +178,25 @@ pub fn menu_palette(resolved: &Resolved, kind: SurfaceKind) -> MenuPalette {
     palette
 }
 
+/// Applies the settings popover metrics over `palette`; colours are untouched.
+pub fn apply_popover_metrics(mut palette: MenuPalette) -> MenuPalette {
+    palette.radius = vow_design::MENU_POPOVER.radius;
+    palette.padding = vow_design::MENU_POPOVER.padding;
+    palette.min_width = vow_design::MENU_POPOVER.min_width;
+    palette.item_height = vow_design::MENU_POPOVER.item_height;
+    palette.item_radius = vow_design::MENU_POPOVER.item_radius;
+    palette.item_padding_x = vow_design::MENU_POPOVER.item_padding_start;
+    palette.mark_width = vow_design::MENU_POPOVER.check;
+    palette.mark_check = vow_design::MENU_POPOVER.check;
+    palette.separator_margin_y = vow_design::MENU_POPOVER.separator_margin;
+    palette
+}
+
+/// The palette of a settings dropdown menu: live colours plus popover metrics.
+pub fn popover_palette(resolved: &Resolved, kind: SurfaceKind) -> MenuPalette {
+    apply_popover_metrics(menu_palette(resolved, kind))
+}
+
 /// The theme for menubar/dock-style surfaces.
 pub fn shell() -> Theme {
     let resolved = resolved();

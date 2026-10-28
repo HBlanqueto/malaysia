@@ -484,7 +484,6 @@ fn windows_group(
         resolved.lights,
         text_color,
         control_bg,
-        resolved.scheme,
         "group.ventanas.semaforos.dropdown",
         move |style| {
             let mut config = load_appearance();

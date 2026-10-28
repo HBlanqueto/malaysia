@@ -422,6 +422,7 @@ fn with_empty_hint(items: Vec<MenuItem>) -> Vec<MenuItem> {
 struct PaletteSource {
     surface: SurfaceKind,
     fixed: Option<MenuPalette>,
+    popover: bool,
 }
 
 impl PaletteSource {
@@ -430,6 +431,7 @@ impl PaletteSource {
         Self {
             surface,
             fixed: None,
+            popover: false,
         }
     }
 
@@ -438,22 +440,31 @@ impl PaletteSource {
         Self {
             surface: SurfaceKind::LayerShell,
             fixed: Some(palette),
+            popover: false,
         }
     }
 
     /// Resolves the palette now, so a component that calls this re-executes
     /// when the appearance changes.
     fn current(self) -> MenuPalette {
-        self.fixed
-            .unwrap_or_else(|| menu_palette(&crate::theme::resolved(), self.surface))
+        self.with_resolved(&crate::theme::resolved())
+    }
+
+    fn with_resolved(self, resolved: &vow_appearance::Resolved) -> MenuPalette {
+        let palette = self
+            .fixed
+            .unwrap_or_else(|| menu_palette(resolved, self.surface));
+        if self.popover {
+            crate::theme::apply_popover_metrics(palette)
+        } else {
+            palette
+        }
     }
 
     /// A child menu keeps the same source as its parent.
-    fn inherit(self, view: MenuView) -> MenuView {
-        match self.fixed {
-            Some(palette) => view.with_fixed_palette(palette),
-            None => view.with_surface(self.surface),
-        }
+    fn inherit(self, mut view: MenuView) -> MenuView {
+        view.palette_source = self;
+        view
     }
 }
 
@@ -527,6 +538,13 @@ impl MenuView {
     /// previews.
     pub fn with_fixed_palette(mut self, palette: MenuPalette) -> Self {
         self.palette_source = PaletteSource::fixed(palette);
+        self
+    }
+
+    /// Lays the menu out with the settings popover metrics while keeping the
+    /// live colours of its opening surface.
+    pub fn with_popover_metrics(mut self) -> Self {
+        self.palette_source.popover = true;
         self
     }
 
@@ -2586,6 +2604,51 @@ mod tests {
         let (w, h) = MenuView::preferred_size(&sample(), MENU_LIGHT);
         assert!(w > 0.0);
         assert!(h > 0.0);
+    }
+
+    #[test]
+    fn popover_metrics_keep_the_live_menu_colours() {
+        use vow_appearance::{
+            AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve,
+        };
+
+        let accent = Rgba {
+            r: 0.9,
+            g: 0.2,
+            b: 0.7,
+            a: 1.0,
+        };
+        let dark = resolve(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Dark,
+                reduce_transparency: true,
+                ..Default::default()
+            },
+            None,
+        );
+        let tinted = resolve(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Dark,
+                accent_color: Some([accent.r, accent.g, accent.b]),
+                reduce_transparency: true,
+                window_color: WindowColorMode::Accent,
+                window_tint_scope: WindowTintScope::Desktop,
+                ..Default::default()
+            },
+            None,
+        );
+
+        for resolved in [dark, tinted] {
+            let expected = menu_palette(&resolved, SurfaceKind::Toplevel);
+            let view = MenuView::new(sample(), |_| {}, || {})
+                .with_surface(SurfaceKind::Toplevel)
+                .with_popover_metrics();
+            let actual = view.palette_source.with_resolved(&resolved);
+            assert_eq!(actual.bg, expected.bg);
+            assert_eq!(actual.outer_border, expected.outer_border);
+            assert_eq!(actual.inner_line, expected.inner_line);
+            assert_eq!(actual.separator_color, expected.separator_color);
+        }
     }
 
     #[test]

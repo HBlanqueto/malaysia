@@ -901,9 +901,17 @@ mod tests {
         );
         assert_eq!(crate::controls::traffic_menu_offset(), (-29, -5));
 
-        let palette = crate::controls::traffic_menu_palette(ColorScheme::Light);
+        let resolved = resolve(
+            &AppearanceConfig {
+                color_scheme: ColorScheme::Light,
+                ..AppearanceConfig::default()
+            },
+            None,
+        );
         let app = freya_core::integration::AppComponent::new(
-            MenuView::new(items, |_| {}, || {}).with_fixed_palette(palette),
+            MenuView::new(items, |_| {}, || {})
+                .with_surface(barrier_kit::theme::SurfaceKind::Toplevel)
+                .with_popover_metrics(),
         );
         let (mut test, _) =
             TestingRunner::new(app, Size2D::new(menu.rect[2], menu.rect[3]), |_| {}, 1.0);

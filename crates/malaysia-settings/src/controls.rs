@@ -1,10 +1,11 @@
 //! Controles de Ajustes: muestras de acento, radios y menú de semáforos.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use barrier_kit::ProbeExt;
 use barrier_kit::menu::{CheckState, MenuItem, MenuView};
+use barrier_kit::theme::{self, SurfaceKind};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
 };
@@ -12,9 +13,9 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Size};
-use vow_design::{CAPTION, MENU_DARK, MENU_LIGHT, MENU_POPOVER, SETTINGS, TEXT, TITLEBAR};
+use vow_design::{CAPTION, MENU_POPOVER, SETTINGS, TEXT, TITLEBAR};
 
-use crate::state::{ColorScheme, Rgba, TrafficLightStyle, rgba};
+use crate::state::{Rgba, TrafficLightStyle, rgba};
 
 /// Un círculo de acento con etiqueta solo cuando está elegido.
 pub fn accent_swatch(
@@ -149,7 +150,6 @@ pub fn traffic_dropdown(
     lights: [Rgba; 3],
     text_color: Rgba,
     bg_control: Rgba,
-    scheme: ColorScheme,
     probe: &'static str,
     on_change: impl FnMut(TrafficLightStyle) + 'static,
 ) -> freya_core::prelude::Rect {
@@ -157,6 +157,7 @@ pub fn traffic_dropdown(
     let light_gap = SETTINGS.popup_light_gap as f32;
     let chevron = SETTINGS.popup_chevron as f32;
     let on_change = Rc::new(RefCell::new(on_change));
+    let size = use_hook(|| Rc::new(Cell::new((0.0f32, SETTINGS.popup_height as f32))));
 
     rect()
         .width(Size::auto())
@@ -187,10 +188,17 @@ pub fn traffic_dropdown(
                     SETTINGS.dropdown_chevron_glyph,
                 )),
         )
+        .on_sized({
+            let size = size.clone();
+            move |event: Event<SizedEventData>| {
+                size.set((event.area.size.width, event.area.size.height));
+            }
+        })
         .on_press({
             let on_change = on_change.clone();
+            let size = size.clone();
             move |event: Event<PressEventData>| {
-                open_traffic_menu(current, scheme, event, on_change.clone());
+                open_traffic_menu(current, event, on_change.clone(), size.get().0);
             }
         })
 }
@@ -217,28 +225,6 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
         TrafficLightStyle::Standard => "Clásico",
         TrafficLightStyle::Accent => "Acento",
         TrafficLightStyle::Wallpaper => "Fondo",
-    }
-}
-
-pub(crate) fn traffic_menu_palette(scheme: ColorScheme) -> vow_design::MenuPalette {
-    let base = match scheme {
-        ColorScheme::Dark | ColorScheme::DarkTint => MENU_DARK,
-        _ => MENU_LIGHT,
-    };
-    vow_design::MenuPalette {
-        bg: MENU_POPOVER.bg,
-        radius: MENU_POPOVER.radius,
-        padding: MENU_POPOVER.padding,
-        min_width: MENU_POPOVER.min_width,
-        item_height: MENU_POPOVER.item_height,
-        item_radius: MENU_POPOVER.item_radius,
-        item_padding_x: MENU_POPOVER.item_padding_start,
-        mark_width: MENU_POPOVER.check,
-        mark_check: MENU_POPOVER.check,
-        separator_margin_y: MENU_POPOVER.separator_margin,
-        outer_border: MENU_POPOVER.outer_border,
-        inner_line: MENU_POPOVER.inner_line,
-        ..base
     }
 }
 
@@ -272,12 +258,13 @@ pub(crate) fn traffic_items(current: TrafficLightStyle) -> Vec<MenuItem> {
 
 fn open_traffic_menu(
     current: TrafficLightStyle,
-    scheme: ColorScheme,
     event: Event<PressEventData>,
     on_change: Rc<RefCell<dyn FnMut(TrafficLightStyle)>>,
+    anchor_width: f32,
 ) {
-    let palette = traffic_menu_palette(scheme);
+    let palette = theme::popover_palette(&theme::resolved(), SurfaceKind::Toplevel);
     let items = traffic_items(current);
+    let size = MenuView::preferred_size(&items, palette);
     let view = MenuView::new(
         items,
         move |id| {
@@ -295,28 +282,31 @@ fn open_traffic_menu(
             PopupHandle::get().close();
         },
     )
-    .with_fixed_palette(palette);
+    .with_surface(SurfaceKind::Toplevel)
+    .with_popover_metrics();
 
     let (global, element) = match event.data() {
         PressEventData::Mouse(mouse) => (mouse.global_location, mouse.element_location),
         PressEventData::Touch(touch) => (touch.global_location, touch.element_location),
-        PressEventData::Keyboard(_) => return,
+        PressEventData::Keyboard(_) => {
+            // shortcut: el runner aún no enfoca controles; la mejora es
+            // anclar al rect del elemento.
+            return;
+        }
     };
     let origin = global - element;
     let (offset_x, offset_y) = traffic_menu_offset();
     let spec = PopupSpec {
-        anchor_rect: (origin.x.round() as i32, origin.y.round() as i32, 1, 1),
+        anchor_rect: (
+            origin.x.round() as i32,
+            origin.y.round() as i32,
+            anchor_width.round() as u32,
+            SETTINGS.popup_height,
+        ),
         anchor: PopupAnchor::TopLeft,
         gravity: PopupGravity::BottomRight,
         offset: (offset_x, offset_y),
-        size: (
-            MENU_POPOVER.min_width.round() as u32,
-            (2.0 * MENU_POPOVER.padding
-                + 4.0 * MENU_POPOVER.item_height
-                + 1.0
-                + 2.0 * MENU_POPOVER.separator_margin)
-                .round() as u32,
-        ),
+        size: (size.0.ceil() as u32, size.1.ceil() as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
             flip_y: true,

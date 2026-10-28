@@ -536,11 +536,8 @@
     },
     "menu-popover": {
       "radius": "radius.md",
-      "bg": "bg-raised",
       "item-height": 26,
       "item-radius": "radius.sm",
-      "outer-border": "window-outer",
-      "inner-line": "window-inner",
       "padding": 5,
       "min-width": 180,
       "item-padding-start": 6,

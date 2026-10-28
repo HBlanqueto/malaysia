@@ -589,21 +589,15 @@ pub struct ShellPalette {
     pub tile_text_active: Rgba,
 }
 
-/// Metrics and colours for the settings dropdown popover.
+/// Metrics for the settings dropdown popover.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuPopoverMetrics {
     /// Panel corner radius, in logical pixels.
     pub radius: f32,
-    /// Panel background.
-    pub bg: Rgba,
     /// Height of one item, in logical pixels.
     pub item_height: f32,
     /// Item corner radius, in logical pixels.
     pub item_radius: f32,
-    /// Outer border colour.
-    pub outer_border: Rgba,
-    /// Inner line colour.
-    pub inner_line: Rgba,
     /// Panel padding, in logical pixels.
     pub padding: f32,
     /// Minimum panel width, in logical pixels.
