@@ -1610,9 +1610,19 @@ fn open_child_popup(
     }
     let open_child_id_set = open_child_id.clone();
     let open_child_index_set = open_child_index.clone();
-    let on_dismissed = move || {
-        open_child_id_set.set(None);
-        open_child_index_set.set(None);
+    // The popup may be closed after a sibling submenu has already replaced it.
+    // Guard the clear so a stale `on_dismissed` does not orphan the new popup.
+    let dismissed_id = Rc::new(Cell::new(None::<PopupId>));
+    let on_dismissed = {
+        let dismissed_id = dismissed_id.clone();
+        move || {
+            let expected = dismissed_id.get();
+            let current = open_child_id_set.get();
+            if expected == current {
+                open_child_id_set.set(None);
+                open_child_index_set.set(None);
+            }
+        }
     };
     let inset = m.padding + m.border_width;
     let (anchor, gravity, dx) = submenu_positioner(opens_left);
@@ -1632,6 +1642,7 @@ fn open_child_popup(
     };
     child_view = child_view.with_popup_spec(spec.clone());
     let id = popup.open_child(spec, AppComponent::new(child_view));
+    dismissed_id.set(Some(id));
     open_child_id.set(Some(id));
     open_child_index.set(Some(index));
     Some(id)
@@ -2396,7 +2407,15 @@ fn chevron_element(color: Rgba, m: MenuPalette) -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use freya_core::integration::AppComponent;
+    use freya_testing::TestingRunner;
+    use torin::prelude::Size2D;
     use vow_design::{MENU_DARK, MENU_LIGHT};
+
+    use crate::platform::{ObjectId, PopupCommand, PopupHandle, PopupId, Popups};
 
     fn sample() -> Vec<MenuItem> {
         vec![
@@ -3071,5 +3090,117 @@ mod tests {
             })
             .count();
         assert_eq!(menu_result_count, MenuView::MAX_MENU_ROWS);
+    }
+
+    fn submenu_test(label: &str) -> MenuItem {
+        MenuItem::Submenu {
+            id: None,
+            label: label.to_string(),
+            enabled: true,
+            icon: None,
+            items: vec![MenuItem::Action {
+                id: format!("{label}-child"),
+                label: format!("{label} child"),
+                shortcut: None,
+                enabled: true,
+                check: CheckState::None,
+                icon: None,
+            }],
+        }
+    }
+
+    fn drain_commands(queue: &Rc<RefCell<Vec<PopupCommand>>>) -> Vec<PopupCommand> {
+        queue.borrow_mut().drain(..).collect()
+    }
+
+    type Opens = Vec<(PopupId, Option<Rc<dyn Fn()>>)>;
+
+    fn opens_and_dismissals(commands: &[PopupCommand]) -> (Opens, Vec<PopupId>) {
+        let mut opens = Opens::new();
+        let mut closes = Vec::new();
+        for cmd in commands {
+            match cmd {
+                PopupCommand::Open { id, spec, .. } => {
+                    opens.push((*id, spec.on_dismissed.clone()));
+                }
+                PopupCommand::Close { id } => closes.push(*id),
+                PopupCommand::Reposition { .. } => {}
+            }
+        }
+        (opens, closes)
+    }
+
+    fn make_runner(items: Vec<MenuItem>) -> (TestingRunner, Rc<RefCell<Vec<PopupCommand>>>) {
+        let palette = MENU_LIGHT;
+        let size = MenuView::preferred_size(&items, palette);
+        let app =
+            AppComponent::new(MenuView::new(items, |_| {}, || {}).with_fixed_palette(palette));
+        let owner = ObjectId::null();
+        let root_id = PopupId::test(0);
+        let (popups, queue) = Popups::for_test(owner, Some(root_id));
+        let (mut runner, _) = TestingRunner::new(
+            app,
+            Size2D::new(size.0, size.1),
+            |r| {
+                let popups = popups.clone();
+                let handle = PopupHandle::for_test(popups.clone(), root_id);
+                r.provide_root_context(move || popups.clone());
+                r.provide_root_context(move || handle.clone());
+            },
+            1.0,
+        );
+        runner.sync_and_update();
+        (runner, queue)
+    }
+
+    #[test]
+    fn stale_submenu_dismissal_does_not_orphan_sibling_child() {
+        let items = vec![submenu_test("A"), submenu_test("B")];
+        let (mut runner, queue) = make_runner(items);
+        let palette = MENU_LIGHT;
+        let size = MenuView::preferred_size(&[submenu_test("A"), submenu_test("B")], palette);
+        let x = size.0 / 2.0;
+        let row0_y = palette.padding + palette.item_height / 2.0;
+        let row1_y = palette.padding + palette.item_height + palette.item_height / 2.0;
+
+        // Hover the first submenu: it opens child 0.
+        runner.move_cursor([x as f64, row0_y as f64]);
+        runner.sync_and_update();
+        let mut commands = drain_commands(&queue);
+        let (mut opens, closes) = opens_and_dismissals(&commands);
+        assert!(closes.is_empty(), "first open should not close anything");
+        assert_eq!(opens.len(), 1, "first hover should open one child");
+        let (id0, dismiss0) = opens.remove(0);
+
+        // Hover the second submenu: it closes child 0 and opens child 1.
+        runner.move_cursor([x as f64, row1_y as f64]);
+        runner.sync_and_update();
+        commands = drain_commands(&queue);
+        let (opens, closes) = opens_and_dismissals(&commands);
+        assert!(
+            closes.contains(&id0),
+            "moving to sibling must close old child"
+        );
+        assert_eq!(opens.len(), 1, "second hover should open one child");
+        let (id1, _) = opens.into_iter().next().unwrap();
+        assert_ne!(id0, id1, "new child must have a different id");
+
+        // Simulate the compositor firing popup_done for the old child after the
+        // new child has already been recorded. A stale clear would lose track of
+        // child 1 and leave it on screen.
+        if let Some(dismiss) = dismiss0 {
+            dismiss();
+        }
+
+        // Hover back to the first submenu. If child 1 is still tracked it must
+        // be closed before opening child 2; if it was orphaned, no close appears.
+        runner.move_cursor([x as f64, row0_y as f64]);
+        runner.sync_and_update();
+        let commands = drain_commands(&queue);
+        let (_, closes) = opens_and_dismissals(&commands);
+        assert!(
+            closes.contains(&id1),
+            "stale dismissal must not orphan the sibling submenu"
+        );
     }
 }

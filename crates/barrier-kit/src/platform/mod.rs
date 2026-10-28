@@ -198,6 +198,11 @@ impl PopupId {
     pub fn get(&self) -> u64 {
         self.0
     }
+
+    #[cfg(test)]
+    pub(crate) fn test(id: u64) -> Self {
+        Self(id)
+    }
 }
 
 /// Which edge of the anchor rectangle a popup attaches to.
@@ -323,6 +328,35 @@ impl Popups {
     /// leak checks in tests and self-tests.
     pub fn surface_count(&self) -> usize {
         self.surface_count.get()
+    }
+}
+
+#[cfg(test)]
+impl Popups {
+    pub(crate) fn for_test(
+        owner: ObjectId,
+        current: Option<PopupId>,
+    ) -> (Self, Rc<RefCell<Vec<PopupCommand>>>) {
+        let queue = Rc::new(RefCell::new(Vec::new()));
+        let (ping, _) = calloop::ping::make_ping().expect("test ping");
+        let popups = Popups {
+            queue: queue.clone(),
+            ping,
+            next_id: Rc::new(Cell::new(0)),
+            last_serial: Rc::new(Cell::new(0)),
+            owner,
+            current,
+            surface_count: Rc::new(Cell::new(0)),
+            opens_left: Rc::new(Cell::new(false)),
+        };
+        (popups, queue)
+    }
+}
+
+#[cfg(test)]
+impl PopupHandle {
+    pub(crate) fn for_test(popups: Popups, id: PopupId) -> Self {
+        Self { id, popups }
     }
 }
 
@@ -1416,7 +1450,7 @@ struct PopupInfo {
     opens_left: Rc<Cell<bool>>,
 }
 
-enum PopupCommand {
+pub(crate) enum PopupCommand {
     Open {
         owner: ObjectId,
         parent: Option<PopupId>,
