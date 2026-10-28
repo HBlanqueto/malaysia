@@ -1034,7 +1034,9 @@ impl App for MenuView {
             let execute_target = execute_target.clone();
             Rc::new(move |index: usize, pos: CursorPoint| {
                 hover_state.borrow_mut().last = Some((Instant::now(), pos));
-                if let Some(pending) = hover_state.borrow().pending
+                // Read and release the borrow before execute_target borrows mutably.
+                let pending = hover_state.borrow().pending;
+                if let Some(pending) = pending
                     && pending.target_index == index
                     && !point_in_triangle(pos, pending.from, pending.to_top, pending.to_bottom)
                 {
