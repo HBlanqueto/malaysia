@@ -38,6 +38,7 @@ fn main() {
     emit_shell(&mut out, &tokens, &components);
     emit_sidebar(&mut out, &tokens, &components);
     emit_menu(&mut out, &tokens, &components);
+    emit_menu_popover(&mut out, &tokens, &components);
     emit_metrics(&mut out, &tokens, &components);
     emit_settings(&mut out, &tokens, &components);
 
@@ -1274,6 +1275,11 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
         "components.window.sidebar.item.count-size",
         COMPONENTS,
     ) as u32;
+    let selected_weight = integer(
+        components,
+        "components.window.sidebar.item.selected-weight",
+        COMPONENTS,
+    ) as u16;
     let item_icon = integer(
         components,
         "components.window.sidebar.item.icon",
@@ -1343,6 +1349,7 @@ fn emit_sidebar(out: &mut String, tokens: &Value, components: &Value) {
          \x20   item_padding_x: {item_padding_x},\n\
          \x20   item_gap: {item_gap},\n\
          \x20   item_text_size: {item_text_size},\n\
+         \x20   selected_weight: {selected_weight},\n\
          \x20   count_size: {count_size},\n\
          \x20   item_icon: {item_icon},\n\
          \x20   app_icon: {app_icon},\n\
@@ -1679,6 +1686,61 @@ fn emit_menu(out: &mut String, tokens: &Value, components: &Value) {
     }
 }
 
+fn emit_menu_popover(out: &mut String, tokens: &Value, components: &Value) {
+    let theme = default_theme(tokens);
+    let color_at = |path: &str| {
+        color_ref(
+            tokens,
+            theme,
+            string(components, path, COMPONENTS),
+            path,
+            COMPONENTS,
+        )
+    };
+    let number_at = |path: &str| number(components, path, COMPONENTS);
+
+    const_doc(
+        out,
+        "MENU_POPOVER",
+        "The settings dropdown popover metrics and colours.",
+    );
+    out.push_str(&format!(
+        ": MenuPopoverMetrics = MenuPopoverMetrics {{\n\
+         \x20   radius: {},\n\
+         \x20   bg: {},\n\
+         \x20   item_height: {},\n\
+         \x20   item_radius: {},\n\
+         \x20   outer_border: {},\n\
+         \x20   inner_line: {},\n\
+         \x20   padding: {},\n\
+         \x20   min_width: {},\n\
+         \x20   item_padding_start: {},\n\
+         \x20   item_padding_x: {},\n\
+         \x20   item_gap: {},\n\
+         \x20   check: {},\n\
+         \x20   separator_margin: {},\n\
+         }};\n\n",
+        float(metric(tokens, components, "components.menu-popover.radius", COMPONENTS)),
+        rgba(color_at("components.menu-popover.bg")),
+        float(number_at("components.menu-popover.item-height")),
+        float(metric(
+            tokens,
+            components,
+            "components.menu-popover.item-radius",
+            COMPONENTS
+        )),
+        rgba(color_at("components.menu-popover.outer-border")),
+        rgba(color_at("components.menu-popover.inner-line")),
+        float(number_at("components.menu-popover.padding")),
+        float(number_at("components.menu-popover.min-width")),
+        float(number_at("components.menu-popover.item-padding-start")),
+        float(number_at("components.menu-popover.item-padding-x")),
+        float(number_at("components.menu-popover.item-gap")),
+        float(number_at("components.menu-popover.check")),
+        float(number_at("components.menu-popover.separator-margin")),
+    ));
+}
+
 fn emit_metrics(out: &mut String, tokens: &Value, components: &Value) {
     let duration_base = integer(tokens, "duration.base", TOKENS);
     const_doc(
@@ -1986,34 +2048,12 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
     ) as u32;
     let card_caption_font = string(components, "components.settings.card.caption", COMPONENTS);
 
-    let preview_window_x = integer(
-        components,
-        "components.settings.preview.window-x",
-        COMPONENTS,
-    ) as u32;
-    let preview_window_y = integer(
-        components,
-        "components.settings.preview.window-y",
-        COMPONENTS,
-    ) as u32;
     let preview_window_radius = integer(
         components,
         "components.settings.preview.window-radius",
         COMPONENTS,
     ) as u32;
-    let preview_bar_w = integer(components, "components.settings.preview.bar-w", COMPONENTS) as u32;
-    let preview_bar_h = integer(components, "components.settings.preview.bar-h", COMPONENTS) as u32;
-    let preview_bar_inset = integer(
-        components,
-        "components.settings.preview.bar-inset",
-        COMPONENTS,
-    ) as u32;
     let preview_light = integer(components, "components.settings.preview.light", COMPONENTS) as u32;
-    let preview_light_gap = integer(
-        components,
-        "components.settings.preview.light-gap",
-        COMPONENTS,
-    ) as u32;
     let preview_tint_window_x = integer(
         components,
         "components.settings.preview.tint-window-x",
@@ -2029,6 +2069,24 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.preview.tint-side-w",
         COMPONENTS,
     ) as u32;
+
+    let preview_panel_h = integer(components, "components.settings.preview.panel-h", COMPONENTS) as u32;
+    let preview_menu_x = integer(components, "components.settings.preview.menu-x", COMPONENTS) as u32;
+    let preview_menu_y = integer(components, "components.settings.preview.menu-y", COMPONENTS) as u32;
+    let preview_menu_w = integer(components, "components.settings.preview.menu-w", COMPONENTS) as u32;
+    let preview_menu_h = integer(components, "components.settings.preview.menu-h", COMPONENTS) as u32;
+    let preview_app_w = integer(components, "components.settings.preview.app-w", COMPONENTS) as u32;
+    let preview_app_h = integer(components, "components.settings.preview.app-h", COMPONENTS) as u32;
+    let preview_app_inset =
+        integer(components, "components.settings.preview.app-inset", COMPONENTS) as u32;
+    let preview_app_side_w =
+        integer(components, "components.settings.preview.app-side-w", COMPONENTS) as u32;
+    let preview_radius = integer(components, "components.settings.preview.radius", COMPONENTS) as u32;
+    let preview_wall_angle =
+        integer(components, "components.settings.preview.wall-angle", COMPONENTS) as u32;
+    let preview_wall_light = number(components, "components.settings.preview.wall-light", COMPONENTS);
+    let preview_wall_dark = number(components, "components.settings.preview.wall-dark", COMPONENTS);
+    let preview_shadow = string(components, "components.settings.preview.shadow", COMPONENTS);
 
     let radio_size = integer(components, "components.settings.radio.size", COMPONENTS) as u32;
     let radio_dot = integer(components, "components.settings.radio.dot", COMPONENTS) as u32;
@@ -2066,8 +2124,52 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.sidebar.item-gap",
         COMPONENTS,
     ) as u32;
+    let sidebar_padding_top = integer(
+        components,
+        "components.settings.sidebar.padding-top",
+        COMPONENTS,
+    ) as u32;
+    let sidebar_padding_bottom = integer(
+        components,
+        "components.settings.sidebar.padding-bottom",
+        COMPONENTS,
+    ) as u32;
+    let sidebar_app_icon_glyph = integer(
+        components,
+        "components.settings.sidebar.app-icon-glyph",
+        COMPONENTS,
+    ) as u32;
+    let search_gap = integer(components, "components.settings.search.gap", COMPONENTS) as u32;
+    let account_height = integer(components, "components.settings.account.height", COMPONENTS) as u32;
+    let account_padding_x =
+        integer(components, "components.settings.account.padding-x", COMPONENTS) as u32;
+    let row_gap = integer(components, "components.settings.row-gap", COMPONENTS) as u32;
+    let dropdown_preview_light = integer(
+        components,
+        "components.settings.dropdown.preview-light",
+        COMPONENTS,
+    ) as u32;
+    let dropdown_chevron_glyph = integer(
+        components,
+        "components.settings.dropdown.chevron-glyph",
+        COMPONENTS,
+    ) as u32;
+    let empty_padding_y =
+        integer(components, "components.settings.empty.padding-y", COMPONENTS) as u32;
+    let empty_icon = integer(components, "components.settings.empty.icon", COMPONENTS) as u32;
+    let empty_gap = integer(components, "components.settings.empty.gap", COMPONENTS) as u32;
 
     let toolbar_gap = integer(components, "components.settings.toolbar.gap", COMPONENTS) as u32;
+    let toolbar_height =
+        integer(components, "components.settings.toolbar.height", COMPONENTS) as u32;
+    let toolbar_padding_top = metric(
+        tokens,
+        components,
+        "components.settings.toolbar.padding-top",
+        COMPONENTS,
+    ) as u32;
+    let toolbar_padding_x =
+        integer(components, "components.settings.toolbar.padding-x", COMPONENTS) as u32;
 
     let content_padding_top = integer(
         components,
@@ -2112,8 +2214,11 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
          \x20   search_height: {search_height},\n\
          \x20   search_padding_x: {search_padding_x},\n\
          \x20   search_icon: {search_icon},\n\
+         \x20   search_gap: {search_gap},\n\
          \x20   account_avatar: {account_avatar},\n\
          \x20   account_gap: {account_gap},\n\
+         \x20   account_height: {account_height},\n\
+         \x20   account_padding_x: {account_padding_x},\n\
          \x20   account_name_font: {},\n\
          \x20   account_detail_font: {},\n\
          \x20   section_gap: {section_gap},\n\
@@ -2135,17 +2240,25 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
          \x20   card_ring_gap: {card_ring_gap},\n\
          \x20   card_caption_gap: {card_caption_gap},\n\
          \x20   card_caption_font: {},\n\
-         \x20   preview_window_x: {preview_window_x},\n\
-         \x20   preview_window_y: {preview_window_y},\n\
          \x20   preview_window_radius: {preview_window_radius},\n\
-         \x20   preview_bar_w: {preview_bar_w},\n\
-         \x20   preview_bar_h: {preview_bar_h},\n\
-         \x20   preview_bar_inset: {preview_bar_inset},\n\
          \x20   preview_light: {preview_light},\n\
-         \x20   preview_light_gap: {preview_light_gap},\n\
          \x20   preview_tint_window_x: {preview_tint_window_x},\n\
          \x20   preview_tint_window_y: {preview_tint_window_y},\n\
          \x20   preview_tint_side_w: {preview_tint_side_w},\n\
+         \x20   preview_panel_h: {preview_panel_h},\n\
+         \x20   preview_menu_x: {preview_menu_x},\n\
+         \x20   preview_menu_y: {preview_menu_y},\n\
+         \x20   preview_menu_w: {preview_menu_w},\n\
+         \x20   preview_menu_h: {preview_menu_h},\n\
+         \x20   preview_app_w: {preview_app_w},\n\
+         \x20   preview_app_h: {preview_app_h},\n\
+         \x20   preview_app_inset: {preview_app_inset},\n\
+         \x20   preview_app_side_w: {preview_app_side_w},\n\
+         \x20   preview_radius: {preview_radius},\n\
+         \x20   preview_wall_angle: {preview_wall_angle},\n\
+         \x20   preview_wall_light: {},\n\
+         \x20   preview_wall_dark: {},\n\
+         \x20   preview_shadow: {preview_shadow:?},\n\
          \x20   radio_size: {radio_size},\n\
          \x20   radio_dot: {radio_dot},\n\
          \x20   radio_gap: {radio_gap},\n\
@@ -2158,7 +2271,19 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
          \x20   sidebar_lights_gap: {sidebar_lights_gap},\n\
          \x20   sidebar_search_gap: {sidebar_search_gap},\n\
          \x20   sidebar_item_gap: {sidebar_item_gap},\n\
+         \x20   sidebar_padding_top: {sidebar_padding_top},\n\
+         \x20   sidebar_padding_bottom: {sidebar_padding_bottom},\n\
+         \x20   sidebar_app_icon_glyph: {sidebar_app_icon_glyph},\n\
+         \x20   row_gap: {row_gap},\n\
+         \x20   dropdown_preview_light: {dropdown_preview_light},\n\
+         \x20   dropdown_chevron_glyph: {dropdown_chevron_glyph},\n\
+         \x20   empty_padding_y: {empty_padding_y},\n\
+         \x20   empty_icon: {empty_icon},\n\
+         \x20   empty_gap: {empty_gap},\n\
          \x20   toolbar_gap: {toolbar_gap},\n\
+         \x20   toolbar_height: {toolbar_height},\n\
+         \x20   toolbar_padding_top: {toolbar_padding_top},\n\
+         \x20   toolbar_padding_x: {toolbar_padding_x},\n\
          \x20   content_padding_top: {content_padding_top},\n\
          \x20   content_padding_bottom: {content_padding_bottom},\n\
          \x20   content_gap: {content_gap},\n\
@@ -2175,6 +2300,8 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         font(tokens, swatch_name_font),
         font(tokens, card_caption_font),
         float(selected_dark_mix),
+        float(preview_wall_light),
+        float(preview_wall_dark),
         rgba(card_outline)
     ));
 

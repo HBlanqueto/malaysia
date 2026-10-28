@@ -5,7 +5,7 @@ use barrier_kit::traffic::TrafficLights;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
-use vow_design::{ButtonKind, CALLOUT, HEADLINE, SETTINGS, SIDEBAR, TITLEBAR};
+use vow_design::{ButtonKind, CALLOUT, HEADLINE, SETTINGS, SIDEBAR, TEXT, TITLEBAR};
 
 use crate::state::{Resolved, Rgba, account_name, initials, load_appearance, palette, rgba};
 
@@ -32,9 +32,11 @@ pub fn sidebar(
         .background(rgba(island_bg))
         .direction(Direction::Vertical)
         .padding(Gaps::new(
-            (SIDEBAR.traffic_y + TITLEBAR.buttons.diameter + SETTINGS.sidebar_lights_gap) as f32,
+            (SETTINGS.sidebar_padding_top
+                + TITLEBAR.buttons.diameter
+                + SETTINGS.sidebar_lights_gap) as f32,
             SIDEBAR.padding_x as f32,
-            SIDEBAR.padding_x as f32,
+            SETTINGS.sidebar_padding_bottom as f32,
             SIDEBAR.padding_x as f32,
         ))
         .child(search_field(
@@ -103,7 +105,7 @@ fn search_field(
             0.0,
             SETTINGS.search_padding_x as f32,
         ))
-        .spacing(6.0)
+        .spacing(SETTINGS.search_gap as f32)
         .a11y_alt("Buscar")
         .child(svg_viewer(
             SEARCH_ICON,
@@ -135,12 +137,17 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
 
     rect()
         .width(Size::fill())
-        .height(Size::px(48.0))
+        .height(Size::px(SETTINGS.account_height as f32))
         .margin(Gaps::new(SETTINGS.sidebar_search_gap as f32, 0.0, 0.0, 0.0))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .spacing(SETTINGS.account_gap as f32)
-        .padding(Gaps::new(0.0, 6.0, 0.0, 6.0))
+        .padding(Gaps::new(
+            0.0,
+            SETTINGS.account_padding_x as f32,
+            0.0,
+            SETTINGS.account_padding_x as f32,
+        ))
         .child(
             rect()
                 .width(Size::px(SETTINGS.account_avatar as f32))
@@ -184,36 +191,53 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
 
 /// Elemento de la barra lateral.
 fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPalette) -> Rect {
-    let (bg, fg) = if selected {
-        (palette.selected_bg, palette.selected_ink)
+    let (bg, fg, weight) = if selected {
+        (
+            palette.selected_bg,
+            palette.selected_ink,
+            FontWeight::from(SIDEBAR.selected_weight as i32),
+        )
     } else {
-        (Rgba::rgba8(0, 0, 0, 0.0), palette.item_ink)
+        (
+            Rgba::rgba8(0, 0, 0, 0.0),
+            palette.item_ink,
+            FontWeight::from(TEXT.weight as i32),
+        )
     };
 
     rect()
         .width(Size::fill())
-        .height(Size::px(30.0))
+        .height(Size::px(SIDEBAR.item_height as f32))
         .margin(Gaps::new(SETTINGS.section_gap as f32, 0.0, 0.0, 0.0))
-        .corner_radius(8.0)
+        .corner_radius(SIDEBAR.item_radius as f32)
         .background(rgba(bg))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
-        .spacing(8.0)
-        .padding(Gaps::new(0.0, 6.0, 0.0, 6.0))
+        .spacing(SIDEBAR.item_gap as f32)
+        .padding(Gaps::new(
+            0.0,
+            SIDEBAR.item_padding_x as f32,
+            0.0,
+            SIDEBAR.item_padding_x as f32,
+        ))
         .child(
             rect()
-                .width(Size::px(22.0))
-                .height(Size::px(22.0))
-                .corner_radius(6.0)
+                .width(Size::px(SIDEBAR.app_icon as f32))
+                .height(Size::px(SIDEBAR.app_icon as f32))
+                .corner_radius(SIDEBAR.item_radius as f32)
                 .background(rgba(SETTINGS.section_icon_bg))
                 .center()
-                .child(svg_viewer(APPEARANCE_ICON, Rgba::rgb8(255, 255, 255), 22)),
+                .child(svg_viewer(
+                    APPEARANCE_ICON,
+                    Rgba::rgb8(255, 255, 255),
+                    SETTINGS.sidebar_app_icon_glyph,
+                )),
         )
         .child(
             label()
                 .text(label_text.to_string())
-                .font_size(13.0)
-                .font_weight(FontWeight::MEDIUM)
+                .font_size(SIDEBAR.item_text_size as f32)
+                .font_weight(weight)
                 .color(rgba(fg))
                 .max_lines(1),
         )

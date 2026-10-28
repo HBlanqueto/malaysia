@@ -268,10 +268,16 @@ pub struct SettingsMetrics {
     pub search_padding_x: u32,
     /// Search icon size, in logical pixels.
     pub search_icon: u32,
+    /// Gap between the search icon and its text, in logical pixels.
+    pub search_gap: u32,
     /// Account avatar size, in logical pixels.
     pub account_avatar: u32,
     /// Gap between the avatar and the account text, in logical pixels.
     pub account_gap: u32,
+    /// Account row height, in logical pixels.
+    pub account_height: u32,
+    /// Horizontal padding of the account row, in logical pixels.
+    pub account_padding_x: u32,
     /// Font for the account name.
     pub account_name_font: Font,
     /// Font for the account detail line.
@@ -314,28 +320,44 @@ pub struct SettingsMetrics {
     pub card_caption_gap: u32,
     /// Font used for card captions.
     pub card_caption_font: Font,
-    /// X offset of the theme preview window inside its card.
-    pub preview_window_x: u32,
-    /// Y offset of the theme preview window inside its card.
-    pub preview_window_y: u32,
     /// Corner radius of the theme preview window.
     pub preview_window_radius: u32,
-    /// Width of the accent bar in the theme preview.
-    pub preview_bar_w: u32,
-    /// Height of the accent bar in the theme preview.
-    pub preview_bar_h: u32,
-    /// Inset of the accent bar in the theme preview.
-    pub preview_bar_inset: u32,
     /// Size of each traffic light in the theme preview.
     pub preview_light: u32,
-    /// Gap between traffic lights in the theme preview.
-    pub preview_light_gap: u32,
     /// X offset of the window-colour preview window.
     pub preview_tint_window_x: u32,
     /// Y offset of the window-colour preview window.
     pub preview_tint_window_y: u32,
     /// Width of the tinted side strip in the window-colour preview.
     pub preview_tint_side_w: u32,
+    /// Height of the panel strip in a theme preview.
+    pub preview_panel_h: u32,
+    /// X offset of the menu in a theme preview.
+    pub preview_menu_x: u32,
+    /// Y offset of the menu in a theme preview.
+    pub preview_menu_y: u32,
+    /// Width of the menu in a theme preview.
+    pub preview_menu_w: u32,
+    /// Height of the menu in a theme preview.
+    pub preview_menu_h: u32,
+    /// Width of the mini app in a theme preview.
+    pub preview_app_w: u32,
+    /// Height of the mini app in a theme preview.
+    pub preview_app_h: u32,
+    /// Inset of the mini app from the preview corner.
+    pub preview_app_inset: u32,
+    /// Width of the mini app's sidebar.
+    pub preview_app_side_w: u32,
+    /// Corner radius inside a theme preview.
+    pub preview_radius: u32,
+    /// Angle of the accent gradient behind a theme preview, in degrees.
+    pub preview_wall_angle: u32,
+    /// How much the preview gradient lightens the accent, unitless.
+    pub preview_wall_light: f32,
+    /// How much the preview gradient darkens the accent, unitless.
+    pub preview_wall_dark: f32,
+    /// CSS shadow used by the menu and mini app in a theme preview.
+    pub preview_shadow: &'static str,
     /// Radio button outer size, in logical pixels.
     pub radio_size: u32,
     /// Radio button inner dot size, in logical pixels.
@@ -362,8 +384,32 @@ pub struct SettingsMetrics {
     /// Gap between the label and the accessory in a settings sidebar item, in
     /// logical pixels.
     pub sidebar_item_gap: u32,
+    /// Top padding of the settings sidebar, in logical pixels.
+    pub sidebar_padding_top: u32,
+    /// Bottom padding of the settings sidebar, in logical pixels.
+    pub sidebar_padding_bottom: u32,
+    /// Size of the glyph inside a sidebar app icon, in logical pixels.
+    pub sidebar_app_icon_glyph: u32,
+    /// Gap between a row's label column and its control, in logical pixels.
+    pub row_gap: u32,
+    /// Size of each traffic light in the traffic dropdown, in logical pixels.
+    pub dropdown_preview_light: u32,
+    /// Size of the chevron glyph in the traffic dropdown, in logical pixels.
+    pub dropdown_chevron_glyph: u32,
+    /// Vertical padding of the no-results state, in logical pixels.
+    pub empty_padding_y: u32,
+    /// Size of the no-results icon, in logical pixels.
+    pub empty_icon: u32,
+    /// Gap between the no-results icon, title and text, in logical pixels.
+    pub empty_gap: u32,
     /// Gap between the toolbar capsule and the section title, in logical pixels.
     pub toolbar_gap: u32,
+    /// Height of the toolbar strip, in logical pixels.
+    pub toolbar_height: u32,
+    /// Top padding of the toolbar strip, in logical pixels.
+    pub toolbar_padding_top: u32,
+    /// Horizontal padding of the toolbar strip, in logical pixels.
+    pub toolbar_padding_x: u32,
     /// Top padding of the settings content scroll view, in logical pixels.
     pub content_padding_top: u32,
     /// Bottom padding of the settings content scroll view, in logical pixels.
@@ -419,6 +465,8 @@ pub struct SidebarMetrics {
     pub item_text_size: u32,
     /// Counter text size, in points.
     pub count_size: u32,
+    /// Font weight of a selected item.
+    pub selected_weight: u16,
     /// Size of a regular stroke icon, in logical pixels.
     pub item_icon: u32,
     /// Size of an app icon, in logical pixels.
@@ -537,6 +585,37 @@ pub struct ShellPalette {
     pub tile_active: Rgba,
     /// Text on an active dock tile.
     pub tile_text_active: Rgba,
+}
+
+/// Metrics and colours for the settings dropdown popover.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MenuPopoverMetrics {
+    /// Panel corner radius, in logical pixels.
+    pub radius: f32,
+    /// Panel background.
+    pub bg: Rgba,
+    /// Height of one item, in logical pixels.
+    pub item_height: f32,
+    /// Item corner radius, in logical pixels.
+    pub item_radius: f32,
+    /// Outer border colour.
+    pub outer_border: Rgba,
+    /// Inner line colour.
+    pub inner_line: Rgba,
+    /// Panel padding, in logical pixels.
+    pub padding: f32,
+    /// Minimum panel width, in logical pixels.
+    pub min_width: f32,
+    /// Start padding of an item's mark column, in logical pixels.
+    pub item_padding_start: f32,
+    /// Horizontal padding of an item, in logical pixels.
+    pub item_padding_x: f32,
+    /// Gap between an item's mark and its content, in logical pixels.
+    pub item_gap: f32,
+    /// Size of the check mark, in logical pixels.
+    pub check: f32,
+    /// Vertical margin of a separator, in logical pixels.
+    pub separator_margin: f32,
 }
 
 /// The colours and metrics of a Neptunia menu popup.

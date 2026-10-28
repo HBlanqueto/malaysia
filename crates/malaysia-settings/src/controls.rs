@@ -7,14 +7,13 @@ use barrier_kit::menu::{CheckState, MenuItem, MenuView};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
 };
-use barrier_kit::theme::SurfaceKind;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Size};
-use vow_design::{CAPTION, SETTINGS, TEXT, TITLEBAR};
+use vow_design::{CAPTION, MENU_DARK, MENU_LIGHT, MENU_POPOVER, SETTINGS, TEXT, TITLEBAR};
 
-use crate::state::{Rgba, TrafficLightStyle, rgba};
+use crate::state::{ColorScheme, Rgba, TrafficLightStyle, rgba};
 
 /// Un círculo de acento con etiqueta solo cuando está elegido.
 pub fn accent_swatch(
@@ -145,10 +144,12 @@ pub fn traffic_dropdown(
     lights: [Rgba; 3],
     text_color: Rgba,
     bg_control: Rgba,
+    scheme: ColorScheme,
     on_change: impl FnMut(TrafficLightStyle) + 'static,
 ) -> freya_core::prelude::Rect {
-    let light = SETTINGS.preview_light as f32;
+    let light = SETTINGS.dropdown_preview_light as f32;
     let light_gap = SETTINGS.popup_light_gap as f32;
+    let chevron = SETTINGS.popup_chevron as f32;
     let on_change = Rc::new(RefCell::new(on_change));
 
     rect()
@@ -167,17 +168,21 @@ pub fn traffic_dropdown(
         )
         .child(
             rect()
-                .width(Size::px(18.0))
-                .height(Size::px(18.0))
-                .corner_radius(9.0)
+                .width(Size::px(chevron))
+                .height(Size::px(chevron))
+                .corner_radius(chevron / 2.0)
                 .background(rgba(bg_control))
                 .center()
-                .child(svg_viewer(CHEVRON_UP_DOWN_ICON, text_color, 10)),
+                .child(svg_viewer(
+                    CHEVRON_UP_DOWN_ICON,
+                    text_color,
+                    SETTINGS.dropdown_chevron_glyph,
+                )),
         )
         .on_press({
             let on_change = on_change.clone();
-            move |_| {
-                open_traffic_menu(current, on_change.clone());
+            move |event: Event<PressEventData>| {
+                open_traffic_menu(current, scheme, event, on_change.clone());
             }
         })
 }
@@ -201,26 +206,66 @@ fn traffic_squares(lights: [Rgba; 3], size: f32, gap: f32) -> freya_core::prelud
 fn traffic_label(style: TrafficLightStyle) -> &'static str {
     match style {
         TrafficLightStyle::Auto => "Automático",
-        TrafficLightStyle::Standard => "macOS",
+        TrafficLightStyle::Standard => "Clásico",
         TrafficLightStyle::Accent => "Acento",
-        TrafficLightStyle::Wallpaper => "Fondo de pantalla",
+        TrafficLightStyle::Wallpaper => "Fondo",
     }
+}
+
+fn traffic_menu_palette(scheme: ColorScheme) -> vow_design::MenuPalette {
+    let base = match scheme {
+        ColorScheme::Dark | ColorScheme::DarkTint => MENU_DARK,
+        _ => MENU_LIGHT,
+    };
+    vow_design::MenuPalette {
+        bg: MENU_POPOVER.bg,
+        radius: MENU_POPOVER.radius,
+        padding: MENU_POPOVER.padding,
+        min_width: MENU_POPOVER.min_width,
+        item_height: MENU_POPOVER.item_height,
+        item_radius: MENU_POPOVER.item_radius,
+        item_padding_x: MENU_POPOVER.item_padding_start,
+        mark_width: MENU_POPOVER.check,
+        mark_check: MENU_POPOVER.check,
+        separator_margin_y: MENU_POPOVER.separator_margin,
+        outer_border: MENU_POPOVER.outer_border,
+        inner_line: MENU_POPOVER.inner_line,
+        ..base
+    }
+}
+
+/// Top-left of the popup relative to the dropdown: the checked row's traffic
+/// lights land exactly on the button's.
+fn traffic_menu_offset() -> (i32, i32) {
+    let x = MENU_POPOVER.padding
+        + MENU_POPOVER.item_padding_start
+        + MENU_POPOVER.check
+        + MENU_POPOVER.item_gap;
+    (-(x.round() as i32), -(MENU_POPOVER.padding.round() as i32))
+}
+
+fn traffic_items(current: TrafficLightStyle) -> Vec<MenuItem> {
+    vec![
+        traffic_menu_item("auto", "Automático", current == TrafficLightStyle::Auto),
+        MenuItem::Separator,
+        traffic_menu_item("standard", "Clásico", current == TrafficLightStyle::Standard),
+        traffic_menu_item("accent", "Acento", current == TrafficLightStyle::Accent),
+        traffic_menu_item(
+            "wallpaper",
+            "Fondo",
+            current == TrafficLightStyle::Wallpaper,
+        ),
+    ]
 }
 
 fn open_traffic_menu(
     current: TrafficLightStyle,
+    scheme: ColorScheme,
+    event: Event<PressEventData>,
     on_change: Rc<RefCell<dyn FnMut(TrafficLightStyle)>>,
 ) {
-    let items = vec![
-        traffic_menu_item("auto", "Automático", current == TrafficLightStyle::Auto),
-        traffic_menu_item("standard", "macOS", current == TrafficLightStyle::Standard),
-        traffic_menu_item("accent", "Acento", current == TrafficLightStyle::Accent),
-        traffic_menu_item(
-            "wallpaper",
-            "Fondo de pantalla",
-            current == TrafficLightStyle::Wallpaper,
-        ),
-    ];
+    let palette = traffic_menu_palette(scheme);
+    let items = traffic_items(current);
     let view = MenuView::new(
         items,
         move |id| {
@@ -238,14 +283,33 @@ fn open_traffic_menu(
             PopupHandle::get().close();
         },
     )
-    .with_surface(SurfaceKind::Toplevel);
+    .with_fixed_palette(palette);
 
+    let (global, element) = match event.data() {
+        PressEventData::Mouse(mouse) => (mouse.global_location, mouse.element_location),
+        PressEventData::Touch(touch) => (touch.global_location, touch.element_location),
+        PressEventData::Keyboard(_) => return,
+    };
+    let origin = global - element;
+    let (offset_x, offset_y) = traffic_menu_offset();
     let spec = PopupSpec {
-        anchor_rect: (0, 0, 1, 1),
+        anchor_rect: (
+            origin.x.round() as i32,
+            origin.y.round() as i32,
+            SETTINGS.popup_height,
+            1,
+        ),
         anchor: PopupAnchor::TopLeft,
-        gravity: PopupGravity::BottomRight,
-        offset: (0, 0),
-        size: (200, 140),
+        gravity: PopupGravity::TopLeft,
+        offset: (offset_x, offset_y),
+        size: (
+            MENU_POPOVER.min_width.round() as u32,
+            (2.0 * MENU_POPOVER.padding
+                + 4.0 * MENU_POPOVER.item_height
+                + 1.0
+                + 2.0 * MENU_POPOVER.separator_margin)
+                .round() as u32,
+        ),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
             flip_y: true,

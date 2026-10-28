@@ -22,10 +22,15 @@ let
   inherit (builtins)
     attrNames
     concatStringsSep
+    elemAt
     isAttrs
-    isInt
     isFloat
+    isInt
+    isList
+    isString
     match
+    stringLength
+    substring
     toString
     ;
   colorNames = attrNames tokens.themes.light;
@@ -91,6 +96,106 @@ let
       "${num m.value}ms"
     else
       num m.value;
+
+  # Hojas de components.json para el CSS: nombre aplanado y valor crudo.
+  componentLeaves =
+    prefix: set:
+    builtins.concatLists (
+      map (
+        k:
+        let
+          v = set.${k};
+          name = if prefix == "" then k else "${prefix}-${k}";
+        in
+        if isAttrs v then
+          componentLeaves name v
+        else if isList v then
+          [ ]
+        else
+          [ { inherit name; value = v; } ]
+      ) (attrNames set)
+    );
+  leaves = componentLeaves "" components.components;
+
+  unbrace = s: if match "[{].*[}]" s != null then substring 1 (stringLength s - 2) s else s;
+
+  tokenRef =
+    v:
+    let
+      m = match "(radius|space|size|duration)\\.(.+)" v;
+    in
+    if m == null then
+      null
+    else
+      {
+        group = elemAt m 0;
+        key = elemAt m 1;
+      };
+
+  tokenVar =
+    group: key:
+    if group == "radius" then
+      "radius-${key}"
+    else if group == "space" then
+      "space-${key}"
+    else if group == "duration" then
+      "dur-${key}"
+    else
+      key;
+
+  isUnitless =
+    name: match ".*(weight|columns|opacity|scale|mix|darken|lighten|exponent)" name != null;
+
+  cssValue =
+    name: v:
+    if isInt v || isFloat v then
+      let
+        s = num v;
+      in
+      if match ".*-ms" name != null then
+        "${s}ms"
+      else if match ".*-angle" name != null then
+        "${s}deg"
+      else if match ".*wall-(light|dark)" name != null then
+        "${builtins.replaceStrings [ ".000000" ] [ "" ] (num (v * 100.0))}%"
+      else if isUnitless name then
+        s
+      else
+        "${s}px"
+    else if isString v then
+      let
+        ref = tokenRef v;
+        bare = unbrace v;
+        bareRef = tokenRef bare;
+      in
+      if ref != null then
+        "var(--${tokenVar ref.group ref.key})"
+      else if bareRef != null then
+        "var(--${tokenVar bareRef.group bareRef.key})"
+      else if builtins.elem bare colorNames then
+        "var(--${bare})"
+      else if match "#[0-9a-fA-F]{3,8}" v != null then
+        v
+      else if match ".*shadow" name != null then
+        v
+      else
+        null
+    else
+      null;
+
+  componentCss = lines (
+    leaf: "  --${leaf.name}: ${cssValue leaf.name leaf.value};"
+  ) (builtins.filter (leaf: cssValue leaf.name leaf.value != null) leaves);
+
+  typeCss = lines (
+    s:
+    let
+      st = tokens.font.styles.${s};
+    in
+    "  --type-${s}-size: ${num st.size}px; --type-${s}-line-height: ${num st.line-height}px; --type-${s}-weight: ${num st.weight}; --type-${s}-tracking: ${
+      if st ? letter-spacing-em then "${num st.letter-spacing-em}em" else "0em"
+    };"
+  ) styleNames;
 
   styleNames = attrNames tokens.font.styles;
   sh = tokens.shadow.slint;
@@ -192,6 +297,8 @@ let
       --font-sans: ${tokens.font.families.sans};
       --font-mono: ${tokens.font.families.mono};
       --font-script: ${tokens.font.families.script};
+    ${componentCss}
+    ${typeCss}
     }
   '';
 

@@ -371,7 +371,8 @@
           "selected-ink": "on-accent",
           "hover-bg": "bg-hover",
           "count-ink": "ink-muted",
-          "count-size": 11
+          "count-size": 11,
+          "selected-weight": 500
         },
         "section": {
           "height": 28,
@@ -409,23 +410,32 @@
       "search": {
         "height": "size.control-md",
         "padding-x": 10,
-        "icon": 16
+        "icon": 16,
+        "gap": 6
       },
       "account": {
         "avatar": 36,
         "gap": 10,
         "name": "headline",
-        "detail": "callout"
+        "detail": "callout",
+        "height": 48,
+        "padding-x": 6
       },
       "section-gap": 14,
       "section-icon-bg": "#2b2b2b",
       "sidebar": {
         "lights-gap": 18,
         "search-gap": 12,
-        "item-gap": 2
+        "item-gap": 2,
+        "padding-top": 16,
+        "padding-bottom": 10,
+        "app-icon-glyph": 14
       },
       "toolbar": {
-        "gap": 12
+        "gap": 12,
+        "height": 52,
+        "padding-top": "size.sidebar-inset",
+        "padding-x": 14
       },
       "content": {
         "padding-top": 4,
@@ -453,7 +463,7 @@
         {"name": "Verde", "color": "#4fb848"},
         {"name": "Gris", "color": "#8e8e93"}
       ],
-      "swatch-size": 22,
+      "swatch-size": 20,
       "swatch-gap": 9,
       "swatch": {
         "column": 24,
@@ -478,17 +488,25 @@
         "text-gap": 6
       },
       "preview": {
-        "window-x": 14,
-        "window-y": 12,
         "window-radius": 5,
-        "bar-w": 22,
-        "bar-h": 4,
-        "bar-inset": 5,
         "light": 5,
-        "light-gap": 3,
         "tint-window-x": 10,
         "tint-window-y": 9,
-        "tint-side-w": 14
+        "tint-side-w": 14,
+        "panel-h": 4,
+        "menu-x": 5,
+        "menu-y": 6,
+        "menu-w": 26,
+        "menu-h": 20,
+        "app-w": 32,
+        "app-h": 21,
+        "app-inset": 5,
+        "app-side-w": 9,
+        "radius": 3,
+        "wall-angle": 160,
+        "wall-light": 0.25,
+        "wall-dark": 0.4,
+        "shadow": "0 0 0 0.5px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.3)"
       },
       "radio": {
         "size": 16,
@@ -496,7 +514,17 @@
         "gap": 7,
         "spacing": 16
       },
-      "selected-dark-mix": 0.5
+      "selected-dark-mix": 0.5,
+      "row-gap": 12,
+      "dropdown": {
+        "preview-light": 12,
+        "chevron-glyph": 10
+      },
+      "empty": {
+        "padding-y": 48,
+        "icon": 28,
+        "gap": 6
+      }
     },
     "dialog": {
       "radius": "radius.lg",
@@ -512,7 +540,14 @@
       "item-height": 26,
       "item-radius": "radius.sm",
       "outer-border": "window-outer",
-      "inner-line": "window-inner"
+      "inner-line": "window-inner",
+      "padding": 5,
+      "min-width": 180,
+      "item-padding-start": 6,
+      "item-padding-x": 8,
+      "item-gap": 6,
+      "check": 12,
+      "separator-margin": 4
     },
     "progress": {
       "height": 6,

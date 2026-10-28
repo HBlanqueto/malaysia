@@ -50,77 +50,140 @@ pub fn theme_card(
     )
 }
 
-/// Miniatura de tema: ventana con barra de acento y semáforos.
+/// Miniatura de tema: degradado del acento con panel, menú y mini app.
 pub fn theme_preview(
     scheme: ColorScheme,
     base_config: &AppearanceConfig,
     dominant: Option<Rgba>,
     preview_resolved: &Resolved,
 ) -> Rect {
-    let window_bg = preview_resolved.surfaces.window;
     let accent = preview_resolved.accent;
-    let card_w = SETTINGS.card_width as f32;
-    let card_h = SETTINGS.card_height as f32;
-    let radius = SETTINGS.preview_window_radius as f32;
-    let x = SETTINGS.preview_window_x as f32;
-    let y = SETTINGS.preview_window_y as f32;
-    let bar_w = SETTINGS.preview_bar_w as f32;
-    let bar_h = SETTINGS.preview_bar_h as f32;
-    let inset = SETTINGS.preview_bar_inset as f32;
-    let light = SETTINGS.preview_light as f32;
-    let light_gap = SETTINGS.preview_light_gap as f32;
+    let light = preview_for_theme(base_config, ColorScheme::Light, dominant);
+    let dark = preview_for_theme(base_config, ColorScheme::Dark, dominant);
 
-    let mut window = rect()
-        .width(Size::px(card_w))
-        .height(Size::px(card_h))
-        .corner_radius(radius)
-        .background(rgba(window_bg))
-        .overflow(Overflow::Clip)
-        .position(Position::new_absolute().top(y).left(x));
-
-    if scheme == ColorScheme::Auto {
-        let light = preview_for_theme(base_config, ColorScheme::Light, dominant)
-            .surfaces
-            .window;
-        let dark = preview_for_theme(base_config, ColorScheme::Dark, dominant)
-            .surfaces
-            .window;
-        window = window
-            .child(
-                rect()
-                    .position(Position::new_absolute().top(0.0).left(0.0).bottom(0.0))
-                    .width(Size::px(card_w / 2.0))
-                    .background(rgba(light)),
-            )
-            .child(
-                rect()
-                    .position(Position::new_absolute().top(0.0).right(0.0).bottom(0.0))
-                    .width(Size::px(card_w / 2.0))
-                    .background(rgba(dark)),
-            );
+    let mut preview = gradient_background(accent);
+    match scheme {
+        ColorScheme::Auto => {
+            preview = preview
+                .child(preview_panel(&light, Alignment::Start))
+                .child(preview_panel(&dark, Alignment::End))
+                .child(preview_menu(&light, accent))
+                .child(preview_app(&dark));
+        }
+        ColorScheme::Light => {
+            preview = preview
+                .child(preview_panel(&light, Alignment::Start))
+                .child(preview_menu(&light, accent))
+                .child(preview_app(&light));
+        }
+        ColorScheme::Dark | ColorScheme::DarkTint => {
+            preview = preview
+                .child(preview_panel(&dark, Alignment::Start))
+                .child(preview_menu(&dark, accent))
+                .child(preview_app(&dark));
+        }
     }
+    preview
+}
 
-    window
+fn gradient_background(accent: Rgba) -> Rect {
+    let gradient = LinearGradient::new()
+        .angle(SETTINGS.preview_wall_angle as f32)
+        .stop((
+            rgba(accent.lighten(SETTINGS.preview_wall_light)),
+            0.0,
+        ))
+        .stop((rgba(accent), 50.0))
+        .stop((
+            rgba(accent.darken(SETTINGS.preview_wall_dark)),
+            100.0,
+        ));
+    rect()
+        .width(Size::fill())
+        .height(Size::fill())
+        .background(gradient)
+        .overflow(Overflow::Clip)
+}
+
+fn preview_panel(resolved: &Resolved, align: Alignment) -> Rect {
+    let width = SETTINGS.card_width as f32 / 2.0;
+    let left = if align == Alignment::End { width } else { 0.0 };
+    rect()
+        .position(Position::new_absolute().top(0.0).left(left))
+        .width(Size::px(width))
+        .height(Size::px(SETTINGS.preview_panel_h as f32))
+        .background(rgba(resolved.surfaces.window))
+}
+
+fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
+    let padding = SETTINGS.preview_panel_h as f32 / 2.0;
+    rect()
+        .position(
+            Position::new_absolute()
+                .left(SETTINGS.preview_menu_x as f32)
+                .top(SETTINGS.preview_menu_y as f32),
+        )
+        .width(Size::px(SETTINGS.preview_menu_w as f32))
+        .height(Size::px(SETTINGS.preview_menu_h as f32))
+        .padding(padding)
+        .spacing(padding)
+        .corner_radius(SETTINGS.preview_radius as f32)
+        .background(rgba(resolved.surfaces.window))
+        .direction(Direction::Vertical)
         .child(
             rect()
-                .position(Position::new_absolute().top(inset).left(inset))
-                .width(Size::px(bar_w))
-                .height(Size::px(bar_h))
-                .corner_radius((bar_h / 2.0).max(0.0))
+                .width(Size::fill())
+                .height(Size::px(SETTINGS.preview_panel_h as f32))
+                .corner_radius(SETTINGS.preview_radius as f32 / 2.0)
                 .background(rgba(accent)),
+        )
+        .child(preview_menu_line(resolved))
+        .child(preview_menu_line(resolved))
+}
+
+fn preview_menu_line(resolved: &Resolved) -> Rect {
+    rect()
+        .width(Size::fill())
+        .height(Size::px(SETTINGS.preview_panel_h as f32 / 2.0))
+        .corner_radius(SETTINGS.preview_radius as f32 / 3.0)
+        .background(rgba(resolved.surfaces.control))
+}
+
+fn preview_app(resolved: &Resolved) -> Rect {
+    let inset = SETTINGS.preview_app_inset as f32;
+    let dot = SETTINGS.preview_light as f32;
+    let dot_gap = SETTINGS.preview_panel_h as f32 / 4.0;
+    rect()
+        .position(
+            Position::new_absolute()
+                .right(inset)
+                .bottom(inset),
+        )
+        .width(Size::px(SETTINGS.preview_app_w as f32))
+        .height(Size::px(SETTINGS.preview_app_h as f32))
+        .corner_radius(SETTINGS.preview_radius as f32)
+        .background(rgba(resolved.surfaces.window))
+        .overflow(Overflow::Clip)
+        .child(
+            rect()
+                .position(Position::new_absolute().top(0.0).bottom(0.0).left(0.0))
+                .width(Size::px(SETTINGS.preview_app_side_w as f32))
+                .background(rgba(resolved.surfaces.sunken)),
         )
         .child(
             rect()
-                .position(Position::new_absolute().bottom(inset).left(inset))
-                .width(Size::auto())
-                .height(Size::px(light))
+                .position(
+                    Position::new_absolute()
+                        .left(SETTINGS.preview_panel_h as f32 / 2.0)
+                        .top(SETTINGS.preview_panel_h as f32 / 2.0),
+                )
                 .direction(Direction::Horizontal)
-                .spacing(light_gap)
-                .children(preview_resolved.lights.iter().map(|color| {
+                .spacing(dot_gap)
+                .children(resolved.lights.iter().map(|color| {
                     rect()
-                        .width(Size::px(light))
-                        .height(Size::px(light))
-                        .corner_radius((light / 2.0).max(0.0))
+                        .width(Size::px(dot))
+                        .height(Size::px(dot))
+                        .corner_radius(SETTINGS.preview_radius as f32 / 3.0)
                         .background(rgba(*color))
                         .into_element()
                 })),
@@ -158,49 +221,41 @@ pub fn window_color_card(
     )
 }
 
-/// Miniatura de color de ventanas.
+/// Miniatura de color de ventanas sobre el degradado del acento.
 pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
     let window_bg = preview_resolved.surfaces.window;
     let sunken = preview_resolved.surfaces.sunken;
     let x = SETTINGS.preview_tint_window_x as f32;
     let y = SETTINGS.preview_tint_window_y as f32;
     let side_w = SETTINGS.preview_tint_side_w as f32;
-    let card_w = SETTINGS.card_width as f32;
-    let card_h = SETTINGS.card_height as f32;
-    let radius = SETTINGS.preview_window_radius as f32;
-    let light = SETTINGS.preview_light as f32;
-    let light_gap = SETTINGS.preview_light_gap as f32;
-    let inset = SETTINGS.preview_bar_inset as f32;
+    let padding = SETTINGS.preview_radius as f32;
+    let bottom = -(SETTINGS.preview_panel_h as f32);
 
-    rect()
-        .width(Size::px(card_w))
-        .height(Size::px(card_h))
-        .corner_radius(radius)
-        .background(rgba(window_bg))
-        .overflow(Overflow::Clip)
-        .position(Position::new_absolute().top(y).left(x))
-        .child(
-            rect()
-                .position(Position::new_absolute().top(0.0).left(0.0).bottom(0.0))
-                .width(Size::px(side_w))
-                .background(rgba(sunken)),
-        )
-        .child(
-            rect()
-                .position(Position::new_absolute().top(inset).left(inset))
-                .width(Size::auto())
-                .height(Size::px(light))
-                .direction(Direction::Horizontal)
-                .spacing(light_gap)
-                .children(preview_resolved.lights.iter().map(|color| {
-                    rect()
-                        .width(Size::px(light))
-                        .height(Size::px(light))
-                        .corner_radius((light / 2.0).max(0.0))
-                        .background(rgba(*color))
-                        .into_element()
-                })),
-        )
+    gradient_background(preview_resolved.accent).child(
+        rect()
+            .position(
+                Position::new_absolute()
+                    .top(y)
+                    .left(x)
+                    .right(x)
+                    .bottom(bottom),
+            )
+            .corner_radius(SETTINGS.preview_window_radius as f32)
+            .background(rgba(window_bg))
+            .overflow(Overflow::Clip)
+            .child(
+                rect()
+                    .position(
+                        Position::new_absolute()
+                            .top(padding)
+                            .left(padding)
+                            .bottom(padding),
+                    )
+                    .width(Size::px(side_w))
+                    .corner_radius(SETTINGS.preview_radius as f32)
+                    .background(rgba(sunken)),
+            ),
+    )
 }
 
 /// Tarjeta seleccionable con miniatura, anillo de selección y pie.

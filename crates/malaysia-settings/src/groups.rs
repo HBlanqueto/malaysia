@@ -4,7 +4,7 @@ use barrier_kit::controls::ScrollView;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_design::{CALLOUT, HEADLINE, SETTINGS, TEXT, TITLE_2};
+use vow_design::{CALLOUT, HEADLINE, SETTINGS, TEXT};
 
 use crate::cards::{theme_card, window_color_card};
 use crate::controls::{accent_swatch, radio, traffic_dropdown};
@@ -60,9 +60,9 @@ pub fn content_scroll(
         .height(Size::fill())
         .padding(Gaps::new(
             SETTINGS.content_padding_top as f32,
-            16.0,
+            SETTINGS.group_content_padding_x as f32,
             SETTINGS.content_padding_bottom as f32,
-            16.0,
+            SETTINGS.group_content_padding_x as f32,
         ))
         .child(
             ScrollView::new()
@@ -132,6 +132,26 @@ fn appearance_group(
                     .a11y_alt("appearance-theme-row")
                     .spacing(SETTINGS.card_gap as f32)
                     .child(theme_card(
+                        "Automático",
+                        ColorScheme::Auto,
+                        selected,
+                        card_bg,
+                        dominant,
+                        resolved.accent,
+                        scheme_palette,
+                        config,
+                        {
+                            let mut error = error;
+                            move |_| {
+                                let mut config = load_appearance();
+                                config.color_scheme = ColorScheme::Auto;
+                                if let Some(msg) = save_config(&config) {
+                                    error.set(Some(msg));
+                                }
+                            }
+                        },
+                    ))
+                    .child(theme_card(
                         "Claro",
                         ColorScheme::Light,
                         selected,
@@ -175,28 +195,7 @@ fn appearance_group(
                             }
                         },
                     ))
-                    .child(theme_card(
-                        "Automático",
-                        ColorScheme::Auto,
-                        selected,
-                        card_bg,
-                        dominant,
-                        resolved.accent,
-                        scheme_palette,
-                        config,
-                        {
-                            let mut error = error;
-                            move |_| {
-                                let mut config = load_appearance();
-                                config.color_scheme = ColorScheme::Auto;
-                                if let Some(msg) = save_config(&config) {
-                                    error.set(Some(msg));
-                                }
-                            }
-                        },
-                    ))
                     .into_element(),
-                true,
             )
             .into_element(),
         ],
@@ -239,7 +238,7 @@ fn color_group(
                 },
             ));
 
-    let accent_row = row_card(&resolved, "Color de acento", swatches.into_element(), true);
+    let accent_row = row_card(&resolved, "Color de acento", swatches.into_element());
     let accent_note: Element = if wallpaper_mode {
         label()
             .text("Lo pone el fondo de pantalla.")
@@ -315,7 +314,6 @@ fn color_group(
                 },
             ))
             .into_element(),
-        true,
     );
 
     let scope_disabled = tint_scope_disabled(config.window_color);
@@ -369,7 +367,6 @@ fn color_group(
                 ))
                 .into_element(),
         ),
-        false,
     );
 
     card_container(
@@ -402,6 +399,7 @@ fn windows_group(
         resolved.lights,
         text_color,
         control_bg,
+        resolved.scheme,
         move |style| {
             let mut config = load_appearance();
             config.traffic_lights = style;
@@ -418,7 +416,6 @@ fn windows_group(
                 &resolved,
                 "Semáforos",
                 right_aligned(dropdown.into_element()),
-                false,
             )
             .into_element(),
         ],
@@ -437,7 +434,7 @@ fn right_aligned(control: Element) -> Element {
         .into_element()
 }
 
-fn row_card(resolved: &Resolved, label_text: &str, control: Element, label_top: bool) -> Rect {
+fn row_card(resolved: &Resolved, label_text: &str, control: Element) -> Rect {
     let scheme_palette = palette(resolved.scheme);
     let (title, desc) = label_text.split_once('\n').unwrap_or((label_text, ""));
 
@@ -470,18 +467,14 @@ fn row_card(resolved: &Resolved, label_text: &str, control: Element, label_top: 
         .height(Size::auto())
         .min_height(Size::px(SETTINGS.group_row_min_height as f32))
         .direction(Direction::Horizontal)
-        .cross_align(if label_top {
-            Alignment::Start
-        } else {
-            Alignment::Center
-        })
+        .cross_align(Alignment::Center)
         .padding(Gaps::new(
             SETTINGS.group_row_padding_y as f32,
             SETTINGS.group_row_padding_x as f32,
             SETTINGS.group_row_padding_y as f32,
             SETTINGS.group_row_padding_x as f32,
         ))
-        .spacing(SETTINGS.group_row_padding_x as f32)
+        .spacing(SETTINGS.row_gap as f32)
         .child(text_col)
         .child(right_aligned(control))
 }
@@ -548,16 +541,26 @@ fn no_results(query: &str, palette: vow_design::SidebarPalette) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::fill())
+        .padding(Gaps::new(
+            SETTINGS.empty_padding_y as f32,
+            0.0,
+            SETTINGS.empty_padding_y as f32,
+            0.0,
+        ))
         .direction(Direction::Vertical)
-        .spacing(SETTINGS.sidebar_item_gap as f32)
+        .spacing(SETTINGS.empty_gap as f32)
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
-        .child(svg_viewer(SEARCH_ICON, palette.item_ink, 28))
+        .child(svg_viewer(
+            SEARCH_ICON,
+            palette.item_ink,
+            SETTINGS.empty_icon,
+        ))
         .child(
             label()
                 .text("Sin resultados")
-                .font_size(TITLE_2.size as f32)
-                .font_weight(FontWeight::from(TITLE_2.weight as i32))
+                .font_size(HEADLINE.size as f32)
+                .font_weight(FontWeight::from(HEADLINE.weight as i32))
                 .color(rgba(palette.item_ink))
                 .max_lines(1),
         )

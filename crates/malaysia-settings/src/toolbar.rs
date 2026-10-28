@@ -23,7 +23,12 @@ pub fn toolbar(titlebar: Titlebar) -> freya_core::prelude::Rect {
 
     rect()
         .width(Size::fill())
-        .height(Size::px(60.0))
-        .padding(Gaps::new(14.0, 14.0, 0.0, 14.0))
+        .height(Size::px(SETTINGS.toolbar_height as f32))
+        .padding(Gaps::new(
+            SETTINGS.toolbar_padding_top as f32,
+            SETTINGS.toolbar_padding_x as f32,
+            0.0,
+            SETTINGS.toolbar_padding_x as f32,
+        ))
         .child(titlebar.left(capsule).title("Apariencia"))
 }
