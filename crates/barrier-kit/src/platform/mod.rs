@@ -1650,6 +1650,18 @@ fn stop_repeat(repeat: &mut Option<RepeatState>, generation: &mut u64) {
     *generation = generation.wrapping_add(1);
 }
 
+/// Returns true if the pressed key should start the auto-repeat timer.
+fn should_repeat_key(event: &KeyEvent) -> bool {
+    !event.keysym.is_modifier_key()
+}
+
+/// Returns true if the released key is the one currently being repeated.
+fn released_repeated_key(repeat: &Option<RepeatState>, event: &KeyEvent) -> bool {
+    repeat
+        .as_ref()
+        .is_some_and(|state| state.event.keysym == event.keysym)
+}
+
 struct Shell {
     registry: RegistryState,
     compositor: CompositorState,
@@ -3537,7 +3549,7 @@ impl KeyboardHandler for Shell {
         // focused surface; keeping our own timer is the smaller change.
         // shortcut: keys other than modifiers that xkb marks non-repeating
         // are still repeated because KeyboardHandler does not expose that bit.
-        if !event.keysym.is_modifier_key() {
+        if should_repeat_key(&event) {
             let (delay, rate) = self.repeat_timing();
             self.repeat_generation = self.repeat_generation.wrapping_add(1);
             self.repeat = Some(RepeatState {
@@ -3564,11 +3576,7 @@ impl KeyboardHandler for Shell {
         // Only stop repeating if the released key is the one currently being
         // repeated. This keeps B repeating after A is released when A and B
         // were both pressed.
-        if self
-            .repeat
-            .as_ref()
-            .is_some_and(|state| state.event.keysym == event.keysym)
-        {
+        if released_repeated_key(&self.repeat, &event) {
             stop_repeat(&mut self.repeat, &mut self.repeat_generation);
         }
     }
@@ -4219,6 +4227,121 @@ mod tests {
         stop_repeat(&mut repeat, &mut generation);
         assert!(repeat.is_none());
         assert_eq!(generation, 8);
+    }
+
+    #[test]
+    fn modifier_keys_do_not_start_repeat() {
+        let shift = KeyEvent {
+            time: 0,
+            raw_code: 50,
+            keysym: Keysym::Shift_L,
+            utf8: None,
+        };
+        assert!(!should_repeat_key(&shift));
+    }
+
+    #[test]
+    fn regular_keys_start_repeat() {
+        let a = KeyEvent {
+            time: 0,
+            raw_code: 38,
+            keysym: Keysym::a,
+            utf8: Some("a".into()),
+        };
+        assert!(should_repeat_key(&a));
+    }
+
+    #[test]
+    fn releasing_repeated_key_stops_repeat() {
+        let a = KeyEvent {
+            time: 0,
+            raw_code: 38,
+            keysym: Keysym::a,
+            utf8: Some("a".into()),
+        };
+        let repeat = Some(RepeatState {
+            event: a.clone(),
+            delay: Duration::from_millis(200),
+            rate: Duration::from_millis(40),
+            first: true,
+            pending: false,
+            generation: 1,
+        });
+        assert!(released_repeated_key(&repeat, &a));
+    }
+
+    #[test]
+    fn releasing_a_different_key_keeps_repeat_running() {
+        let a = KeyEvent {
+            time: 0,
+            raw_code: 38,
+            keysym: Keysym::a,
+            utf8: Some("a".into()),
+        };
+        let b = KeyEvent {
+            time: 0,
+            raw_code: 56,
+            keysym: Keysym::b,
+            utf8: Some("b".into()),
+        };
+        let repeat = Some(RepeatState {
+            event: b,
+            delay: Duration::from_millis(200),
+            rate: Duration::from_millis(40),
+            first: true,
+            pending: false,
+            generation: 1,
+        });
+        assert!(!released_repeated_key(&repeat, &a));
+    }
+
+    #[test]
+    fn pressing_b_then_releasing_a_keeps_b_repeating() {
+        let a = KeyEvent {
+            time: 0,
+            raw_code: 38,
+            keysym: Keysym::a,
+            utf8: Some("a".into()),
+        };
+        let b = KeyEvent {
+            time: 0,
+            raw_code: 56,
+            keysym: Keysym::b,
+            utf8: Some("b".into()),
+        };
+
+        // Press A: it starts repeating.
+        let mut repeat: Option<RepeatState> = None;
+        if should_repeat_key(&a) {
+            repeat = Some(RepeatState {
+                event: a.clone(),
+                delay: Duration::from_millis(200),
+                rate: Duration::from_millis(40),
+                first: true,
+                pending: false,
+                generation: 1,
+            });
+        }
+
+        // Press B while A is held: B becomes the repeated key.
+        if should_repeat_key(&b) {
+            repeat = Some(RepeatState {
+                event: b.clone(),
+                delay: Duration::from_millis(200),
+                rate: Duration::from_millis(40),
+                first: true,
+                pending: false,
+                generation: 2,
+            });
+        }
+
+        // Release A: repeat must stay alive because B is the repeated key.
+        assert!(!released_repeated_key(&repeat, &a));
+        assert!(
+            repeat
+                .as_ref()
+                .is_some_and(|state| state.event.keysym == b.keysym)
+        );
     }
 
     #[test]
