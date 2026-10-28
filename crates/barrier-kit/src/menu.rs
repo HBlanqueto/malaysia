@@ -258,8 +258,8 @@ pub enum MenuNavigation {
 /// Leading icon of a menu row.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuIcon {
-    /// The bar's own static SVG set, tinted with the row colour.
-    Svg(&'static str),
+    /// SVG path data, tinted with the row colour.
+    Svg(Arc<str>),
     /// An encoded PNG (dbusmenu `icon-data`), drawn as-is.
     Image(Arc<[u8]>),
 }
@@ -267,6 +267,11 @@ pub enum MenuIcon {
 impl MenuIcon {
     /// Largest PNG accepted from dbusmenu, in bytes.
     pub const MAX_IMAGE_BYTES: usize = 64 * 1024;
+
+    /// Wraps an SVG string.
+    pub fn svg(s: impl Into<Arc<str>>) -> Self {
+        Self::Svg(s.into())
+    }
 
     /// Wraps an encoded PNG, dropping anything above [`Self::MAX_IMAGE_BYTES`].
     pub fn image(bytes: impl Into<Arc<[u8]>>) -> Option<Self> {
@@ -682,7 +687,8 @@ impl MenuView {
             } else {
                 0.0
             };
-            let fixed = m.item_padding_x * 2.0 + m.mark_width + MARK_TEXT_GAP + trailing;
+            let fixed =
+                m.item_padding_x * 2.0 + m.mark_width + m.icon_width + MARK_TEXT_GAP + trailing;
             let max_label_w = (max_content_width - fixed).max(0.0);
             let label = truncate_middle(label, max_label_w, m.font_size);
             let label_w = measure_text(&label, m.font_size);
@@ -1984,6 +1990,7 @@ fn render_item(
                 - inset * 2.0
                 - m.item_padding_x * 2.0
                 - m.mark_width
+                - m.icon_width
                 - MARK_TEXT_GAP
                 - if shortcut_w > 0.0 {
                     m.shortcut_gap + shortcut_w
@@ -2035,7 +2042,7 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
-                    icon.as_ref(),
+                    icon.clone(),
                     check,
                     fg,
                     shortcut_fg(enabled, is_focused, m),
@@ -2111,7 +2118,7 @@ fn render_item(
                 .cross_align(Alignment::Center)
                 .spacing(MARK_TEXT_GAP)
                 .child(mark_slot(
-                    icon.as_ref(),
+                    icon.clone(),
                     CheckState::None,
                     fg,
                     shortcut_fg(enabled, is_focused, m),
@@ -2420,23 +2427,21 @@ fn search_icon_element(
 }
 
 fn mark_slot(
-    icon: Option<&MenuIcon>,
+    icon: Option<MenuIcon>,
     check: CheckState,
     fg: Rgba,
     icon_fg: Rgba,
     m: MenuPalette,
 ) -> Element {
-    let Some(icon) = icon else {
-        return mark_element(check, fg, m);
-    };
-    let child = match icon {
-        MenuIcon::Svg(svg) => SvgViewer::new(svg.as_bytes())
+    let check_elem = mark_element(check, fg, m);
+    let icon_elem = match icon {
+        Some(MenuIcon::Svg(svg)) => SvgViewer::new(Bytes::from(svg.as_bytes().to_vec()))
             .width(Size::px(m.icon_size))
             .height(Size::px(m.icon_size))
             .color(rgba(icon_fg))
             .show_loader(false)
             .into_element(),
-        MenuIcon::Image(bytes) => icon_image(bytes, m.icon_size).map_or_else(
+        Some(MenuIcon::Image(bytes)) => icon_image(&bytes, m.icon_size).map_or_else(
             || {
                 rect()
                     .width(Size::px(m.icon_size))
@@ -2450,12 +2455,22 @@ fn mark_slot(
                     .into_element()
             },
         ),
+        None => rect()
+            .width(Size::px(m.icon_size))
+            .height(Size::px(m.icon_size))
+            .into_element(),
     };
     rect()
-        .width(Size::px(m.mark_width))
         .direction(Direction::Horizontal)
-        .main_align(Alignment::Center)
-        .child(child)
+        .cross_align(Alignment::Center)
+        .child(check_elem)
+        .child(
+            rect()
+                .width(Size::px(m.icon_width))
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::Center)
+                .child(icon_elem),
+        )
         .into_element()
 }
 
@@ -2942,7 +2957,7 @@ mod tests {
             ]
         };
         let plain = MenuView::preferred_size(&built(None), MENU_LIGHT);
-        let with_icons = MenuView::preferred_size(&built(Some(MenuIcon::Svg("x"))), MENU_LIGHT);
+        let with_icons = MenuView::preferred_size(&built(Some(MenuIcon::svg("x"))), MENU_LIGHT);
         assert_eq!(plain, with_icons);
     }
 
@@ -3126,6 +3141,7 @@ mod tests {
         let shortcut_w = measure_text(&format_shortcut("Ctrl+Shift+G"), m.font_size);
         let expected_min = m.item_padding_x * 2.0
             + m.mark_width
+            + m.icon_width
             + MARK_TEXT_GAP
             + label_w
             + m.shortcut_gap
