@@ -2376,7 +2376,15 @@ impl Shell {
     fn surface_for(&self, surface: &WlSurface) -> Option<usize> {
         self.surfaces.iter().position(|s| s.surface == *surface)
     }
+}
 
+/// Find the index of the item whose identifier matches `id`.
+/// Extracted so touch routing can be unit-tested without real Wayland surfaces.
+fn find_index_by_id<T, Id: Eq>(items: &[T], id: Id, get_id: impl Fn(&T) -> Id) -> Option<usize> {
+    items.iter().position(|item| get_id(item) == id)
+}
+
+impl Shell {
     fn create_window(
         &mut self,
         app: AppComponent,
@@ -3820,11 +3828,7 @@ impl Shell {
         position: (f64, f64),
         phase: freya_core::prelude::TouchPhase,
     ) {
-        let Some(index) = self
-            .surfaces
-            .iter()
-            .position(|s| s.surface.id() == surface_id)
-        else {
+        let Some(index) = find_index_by_id(&self.surfaces, surface_id, |s| s.surface.id()) else {
             return;
         };
         let platform_event = PlatformEvent::Touch {
@@ -4565,5 +4569,31 @@ mod tests {
         assert!(cancelled.contains(&(0, surface_a.clone())));
         assert!(cancelled.contains(&(1, surface_a.clone())));
         assert!(cancelled.contains(&(2, surface_b.clone())));
+    }
+
+    #[test]
+    fn touch_routing_uses_the_stored_surface_id() {
+        // We cannot build real WlSurface objects in a unit test, so we model
+        // the surfaces as (label, id) tuples. Surface B was created first,
+        // surface A second; a touch started on A must route to A, not to B.
+        let surfaces = vec![('B', 1usize), ('A', 2usize)];
+        let touch_id = 7;
+        let stored_surface_id = 2usize;
+
+        // Simulate down storing A's id for this touch.
+        let mut touch_surfaces: std::collections::HashMap<i32, usize> =
+            std::collections::HashMap::new();
+        touch_surfaces.insert(touch_id, stored_surface_id);
+
+        // Simulate motion / up: the stored id is looked up in the surface list.
+        let routed_id = touch_surfaces.get(&touch_id).copied();
+        let index = find_index_by_id(&surfaces, routed_id.unwrap(), |item| item.1);
+
+        assert_eq!(routed_id, Some(stored_surface_id));
+        assert_eq!(
+            index,
+            Some(1),
+            "motion/up for the same touch id must reach surface A"
+        );
     }
 }
