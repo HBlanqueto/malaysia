@@ -2343,9 +2343,9 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         rgba(section_icon_bg),
         font(tokens, swatch_name_font),
         font(tokens, card_caption_font),
-        float(selected_dark_mix),
         float(preview_wall_light),
         float(preview_wall_dark),
+        float(selected_dark_mix),
         rgba(card_outline)
     ));
 
