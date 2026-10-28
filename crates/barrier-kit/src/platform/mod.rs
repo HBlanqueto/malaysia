@@ -2004,7 +2004,7 @@ pub fn run_window(app: AppComponent, options: WindowOptions) -> Result<(), RunEr
         Shell::connect(app.clone(), SurfaceSpec::Window(options.clone()))?;
     shell.qh = qh.clone();
     shell
-        .create_window(app, options, None)
+        .create_window(app, options)
         .ok_or(RunError::MissingGlobal("xdg_wm_base"))?;
 
     let mut event_loop: EventLoop<Shell> =
@@ -2389,7 +2389,6 @@ impl Shell {
         &mut self,
         app: AppComponent,
         options: WindowOptions,
-        parent: Option<ObjectId>,
     ) -> Option<WindowControls> {
         let xdg_shell = self.xdg_shell.as_ref()?;
         let qh = &self.qh;
@@ -2417,7 +2416,7 @@ impl Shell {
                 clamp_toplevel_size_dimension(max.1),
             )));
         }
-        if let Some(parent_id) = parent
+        if let Some(parent_id) = options.parent.clone()
             && let Some(parent_window) = self.surfaces.iter().find_map(|s| {
                 if s.surface.id() == parent_id
                     && let SurfaceRole::Window(parent) = &s.role
@@ -2635,8 +2634,7 @@ impl Shell {
             let commands = std::mem::take(&mut *context.queue.borrow_mut());
             for command in commands {
                 if let WindowCommand::Open(app, options) = command {
-                    let parent = options.parent.clone();
-                    self.create_window(app, options, parent);
+                    self.create_window(app, options);
                     continue;
                 }
                 let Some(index) = self.surfaces.iter().position(|surface| {
