@@ -18,19 +18,19 @@ use vow_design::{
     BG_WINDOW_DARK, BG_WINDOW_DARK_TINT, BG_WINDOW_LIGHT, DARK, DARK_TINT, LAYER_FACTOR_BG_SUNKEN,
     LAYER_FACTOR_CONTROL, LAYER_FACTOR_LINE, LAYER_FACTOR_SURFACE, LIGHT, MENU_DARK,
     MENU_DARK_OPAQUE, MENU_DARK_TINT, MENU_DARK_TINT_OPAQUE, MENU_LIGHT, MENU_LIGHT_OPAQUE,
-    MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SETTINGS, SHELL_DARK, SHELL_DARK_OPAQUE,
-    SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE, SIDEBAR_DARK,
-    SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE, SIDEBAR_ISLAND_DARK,
-    SIDEBAR_ISLAND_DARK_OPAQUE, SIDEBAR_ISLAND_DARK_TINT, SIDEBAR_ISLAND_DARK_TINT_OPAQUE,
-    SIDEBAR_ISLAND_INNER_DARK, SIDEBAR_ISLAND_INNER_DARK_TINT, SIDEBAR_ISLAND_INNER_LIGHT,
-    SIDEBAR_ISLAND_LIGHT, SIDEBAR_ISLAND_LIGHT_OPAQUE, SIDEBAR_ISLAND_RIM_DARK,
-    SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_LIGHT, SIDEBAR_LIGHT_OPAQUE,
-    SIDEBAR_PALETTE_DARK, SIDEBAR_PALETTE_DARK_TINT, SIDEBAR_PALETTE_LIGHT, ShellPalette,
-    SidebarPalette, TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE, TOOLGROUP_BG_DARK_TINT,
-    TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT, TOOLGROUP_BG_LIGHT_OPAQUE,
-    TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT, TOOLGROUP_PALETTE_LIGHT,
-    TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, ToolgroupPalette, WINDOW_TINT_ACCENT,
-    WINDOW_TINT_WALLPAPER,
+    MENU_SEPARATOR_INK_MIX, MenuPalette, PANEL_TINT_WALLPAPER, Palette, Rgba, SETTINGS, SHELL_DARK,
+    SHELL_DARK_OPAQUE, SHELL_DARK_TINT, SHELL_DARK_TINT_OPAQUE, SHELL_LIGHT, SHELL_LIGHT_OPAQUE,
+    SIDEBAR_DARK, SIDEBAR_DARK_OPAQUE, SIDEBAR_DARK_TINT, SIDEBAR_DARK_TINT_OPAQUE,
+    SIDEBAR_ISLAND_DARK, SIDEBAR_ISLAND_DARK_OPAQUE, SIDEBAR_ISLAND_DARK_TINT,
+    SIDEBAR_ISLAND_DARK_TINT_OPAQUE, SIDEBAR_ISLAND_INNER_DARK, SIDEBAR_ISLAND_INNER_DARK_TINT,
+    SIDEBAR_ISLAND_INNER_LIGHT, SIDEBAR_ISLAND_LIGHT, SIDEBAR_ISLAND_LIGHT_OPAQUE,
+    SIDEBAR_ISLAND_RIM_DARK, SIDEBAR_ISLAND_RIM_DARK_TINT, SIDEBAR_ISLAND_RIM_LIGHT, SIDEBAR_LIGHT,
+    SIDEBAR_LIGHT_OPAQUE, SIDEBAR_PALETTE_DARK, SIDEBAR_PALETTE_DARK_TINT, SIDEBAR_PALETTE_LIGHT,
+    ShellPalette, SidebarPalette, TITLEBAR, TOOLGROUP_BG_DARK, TOOLGROUP_BG_DARK_OPAQUE,
+    TOOLGROUP_BG_DARK_TINT, TOOLGROUP_BG_DARK_TINT_OPAQUE, TOOLGROUP_BG_LIGHT,
+    TOOLGROUP_BG_LIGHT_OPAQUE, TOOLGROUP_PALETTE_DARK, TOOLGROUP_PALETTE_DARK_TINT,
+    TOOLGROUP_PALETTE_LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_ZOOM_LIGHTEN, ToolgroupPalette,
+    WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
 };
 
 /// The preferred appearance, published as `org.freedesktop.appearance`.
@@ -219,6 +219,19 @@ pub struct Resolved {
     pub toolgroup: ToolgroupSurface,
     /// The tinted surface stack for window backgrounds, controls and lines.
     pub surfaces: Surfaces,
+}
+
+impl Resolved {
+    /// The separator colour for a menu panel with the already-resolved
+    /// background. A tinted panel moves the separator with it; an untinted one
+    /// keeps the theme's `line` exactly.
+    pub fn menu_separator(&self, panel_bg: Rgba) -> Rgba {
+        if self.window_tint.is_none() || panel_bg == self.menu.bg {
+            self.menu.separator_color
+        } else {
+            panel_bg.mix(self.menu.fg, MENU_SEPARATOR_INK_MIX)
+        }
+    }
 }
 
 /// The Neptunia palette for a concrete scheme.
@@ -1323,6 +1336,49 @@ sidebar_style = "flat"
                 resolved.surfaces.line,
                 palette(scheme).line,
                 "{scheme:?} line"
+            );
+        }
+    }
+
+    #[test]
+    fn menu_separator_follows_the_tinted_panel_but_not_the_neutral_one() {
+        let tinted_panel = Rgba::rgb8(0x3b, 0x2e, 0x2e);
+        for scheme in [ColorScheme::Light, ColorScheme::Dark, ColorScheme::DarkTint] {
+            let neutral = resolve(
+                &appearance(
+                    scheme,
+                    WindowColorMode::Neutral,
+                    WindowTintScope::Desktop,
+                    TrafficLightStyle::Auto,
+                    None,
+                ),
+                None,
+            );
+            assert_eq!(
+                neutral.menu_separator(tinted_panel),
+                neutral.menu.separator_color,
+                "{scheme:?}: neutral keeps the theme line"
+            );
+
+            let tinted = resolve(
+                &appearance(
+                    scheme,
+                    WindowColorMode::Accent,
+                    WindowTintScope::Desktop,
+                    TrafficLightStyle::Auto,
+                    Some([0.93, 0.27, 0.27]),
+                ),
+                None,
+            );
+            assert_eq!(
+                tinted.menu_separator(tinted_panel),
+                tinted_panel.mix(tinted.menu.fg, MENU_SEPARATOR_INK_MIX),
+                "{scheme:?}: the separator follows the tinted panel"
+            );
+            assert_eq!(
+                tinted.menu_separator(tinted.menu.bg),
+                tinted.menu.separator_color,
+                "{scheme:?}: an untinted panel keeps the theme line"
             );
         }
     }

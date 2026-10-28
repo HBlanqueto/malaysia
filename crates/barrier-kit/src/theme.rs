@@ -174,6 +174,7 @@ fn menu_background(resolved: &Resolved, kind: SurfaceKind) -> Rgba {
 pub fn menu_palette(resolved: &Resolved, kind: SurfaceKind) -> MenuPalette {
     let mut palette = resolved.menu;
     palette.bg = menu_background(resolved, kind);
+    palette.separator_color = resolved.menu_separator(palette.bg);
     palette
 }
 
@@ -597,6 +598,88 @@ mod tests {
             "a light accent must clamp every channel to 1"
         );
         assert!(pale_menu.r <= 1.0 && pale_menu.g <= 1.0 && pale_menu.b <= 1.0);
+    }
+
+    #[test]
+    fn tinted_menu_separators_stay_visible() {
+        use vow_appearance::WindowColorMode;
+        use vow_design::ACCENT_SWATCHES;
+
+        fn linear(channel: f32) -> f32 {
+            if channel <= 0.03928 {
+                channel / 12.92
+            } else {
+                ((channel + 0.055) / 1.055).powf(2.4)
+            }
+        }
+
+        fn luminance(color: Rgba) -> f32 {
+            0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+        }
+
+        fn contrast(a: Rgba, b: Rgba) -> f32 {
+            let (a, b) = (luminance(a), luminance(b));
+            (a.max(b) + 0.05) / (a.min(b) + 0.05)
+        }
+
+        let wallpapers = [
+            ("dark", Rgba::rgb8(13, 13, 13)),
+            ("mid", Rgba::rgb8(128, 115, 102)),
+            ("light", Rgba::rgb8(235, 230, 219)),
+        ];
+        let config = |scheme, mode, accent: Option<[f32; 3]>| AppearanceConfig {
+            color_scheme: scheme,
+            accent_color: accent,
+            reduce_transparency: true,
+            window_color: mode,
+            window_tint_scope: WindowTintScope::Desktop,
+            ..Default::default()
+        };
+
+        for scheme in [ColorScheme::Light, ColorScheme::Dark, ColorScheme::DarkTint] {
+            for (name, accent) in ACCENT_SWATCHES {
+                let resolved = resolve(
+                    &config(
+                        scheme,
+                        WindowColorMode::Accent,
+                        Some([accent.r, accent.g, accent.b]),
+                    ),
+                    None,
+                );
+                for kind in [SurfaceKind::Toplevel, SurfaceKind::LayerShell] {
+                    let palette = menu_palette(&resolved, kind);
+                    let ratio = contrast(palette.separator_color, palette.bg);
+                    assert!(
+                        ratio >= 1.25,
+                        "{scheme:?}/acento {name}/{kind:?}: {ratio:.3}:1"
+                    );
+                }
+            }
+
+            for (name, tint) in wallpapers {
+                let resolved = resolve(
+                    &config(scheme, WindowColorMode::Wallpaper, None),
+                    Some(tint),
+                );
+                for kind in [SurfaceKind::Toplevel, SurfaceKind::LayerShell] {
+                    let palette = menu_palette(&resolved, kind);
+                    let ratio = contrast(palette.separator_color, palette.bg);
+                    assert!(
+                        ratio >= 1.25,
+                        "{scheme:?}/fondo {name}/{kind:?}: {ratio:.3}:1"
+                    );
+                }
+            }
+
+            let neutral = resolve(&config(scheme, WindowColorMode::Neutral, None), None);
+            for kind in [SurfaceKind::Toplevel, SurfaceKind::LayerShell] {
+                assert_eq!(
+                    menu_palette(&neutral, kind).separator_color,
+                    neutral.menu.separator_color,
+                    "{scheme:?}/{kind:?}: neutro keeps today's colour"
+                );
+            }
+        }
     }
 
     #[test]

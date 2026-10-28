@@ -429,6 +429,18 @@ fn emit_tints(out: &mut String, tokens: &Value, components: &Value) {
         ));
     }
 
+    let separator_ink_mix = number(
+        components,
+        "components.shell.menu.separator.tint-ink-mix",
+        COMPONENTS,
+    );
+    const_doc(
+        out,
+        "MENU_SEPARATOR_INK_MIX",
+        "How far a tinted menu separator moves from its panel toward the ink.",
+    );
+    out.push_str(&format!(": f32 = {};\n\n", float(separator_ink_mix)));
+
     for (name, doc, key) in [
         (
             "LAYER_FACTOR_BG_SUNKEN",

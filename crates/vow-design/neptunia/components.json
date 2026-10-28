@@ -628,7 +628,8 @@
           "height": 1,
           "margin-x": 10,
           "margin-y": 5,
-          "color": "line"
+          "color": "line",
+          "tint-ink-mix": 0.14
         },
         "mark": {
           "width": 16,
