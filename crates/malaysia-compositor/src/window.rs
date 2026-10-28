@@ -318,17 +318,19 @@ const CLIENT_RESIZE_CORNER: f64 = 12.0;
 /// One window in the top-to-bottom resize hit test.
 struct EdgeTarget {
     id: WindowId,
-    /// The scene rectangle, including any invisible client margin.
-    outer: SceneRect<f64, SceneLogical>,
-    /// The visible client frame of a CSD; `None` for an SSD.
-    frame: Option<SceneRect<f64, SceneLogical>>,
+    /// The resize band: the scene outer for an SSD, the visible frame for a CSD.
+    band: SceneRect<f64, SceneLogical>,
+    /// The rectangle that stops the search, including a CSD's invisible margin.
+    blocking: SceneRect<f64, SceneLogical>,
+    /// Whether the band only counts outside `band` (a CSD owns its interior).
+    exterior: bool,
     /// Whether the window may start a resize.
     resizable: bool,
 }
 
 /// The first resize edge under `point`, searching top to bottom.
 ///
-/// A point inside a higher window's outer rectangle never reaches a lower
+/// A point inside a higher window's blocking rectangle never reaches a lower
 /// window's band, so a CSD's invisible margin blocks the window below it.
 fn edge_hit(
     targets: impl Iterator<Item = EdgeTarget>,
@@ -338,21 +340,23 @@ fn edge_hit(
 ) -> Option<(WindowId, Edge)> {
     for target in targets {
         if target.resizable {
-            let edge = match target.frame {
-                Some(frame) if !frame.contains(point) => malaysia_scene::scene::edge_at(
-                    frame,
+            let edge = if target.exterior && target.band.contains(point) {
+                None
+            } else if target.exterior {
+                malaysia_scene::scene::edge_at(
+                    target.band,
                     point,
                     CLIENT_RESIZE_BORDER,
                     CLIENT_RESIZE_CORNER,
-                ),
-                Some(_) => None,
-                None => malaysia_scene::scene::edge_at(target.outer, point, side, corner),
+                )
+            } else {
+                malaysia_scene::scene::edge_at(target.band, point, side, corner)
             };
             if let Some(edge) = edge {
                 return Some((target.id, edge));
             }
         }
-        if target.outer.contains(point) {
+        if target.blocking.contains(point) {
             return None;
         }
     }
@@ -742,6 +746,11 @@ impl Windows {
         Some(info)
     }
 
+    /// Whether the client draws its own chrome (CSD).
+    pub fn is_client_decorated(&self, id: WindowId) -> bool {
+        self.decoration_of(id) == Decoration::Client
+    }
+
     /// Whether the window is currently visible.
     ///
     /// A window is visible when it is mapped, not hidden, not in the minimized
@@ -805,21 +814,31 @@ impl Windows {
         let targets = self.iter_visible(minimized).rev().map(|window| {
             let id = window.id();
             let resizable = !window.data.maximized && window.data.state() == WindowState::Normal;
-            let frame = (self.decoration_of(id) == Decoration::Client).then(|| {
-                let origin = window.location() + window.surface_location();
-                let geometry = window.window_geometry();
-                SceneRect::new(
-                    ScenePoint::new(
-                        f64::from(origin.x + geometry.loc.x),
-                        f64::from(origin.y + geometry.loc.y),
-                    ),
-                    SceneSize::new(f64::from(geometry.size.w), f64::from(geometry.size.h)),
-                )
-            });
+            let (band, blocking, exterior) = match self.decoration_of(id) {
+                Decoration::Server => (window.outer(), window.outer(), false),
+                Decoration::Client => {
+                    let origin = window.location() + window.surface_location();
+                    let geometry = window.window_geometry();
+                    let frame = SceneRect::new(
+                        ScenePoint::new(
+                            f64::from(origin.x + geometry.loc.x),
+                            f64::from(origin.y + geometry.loc.y),
+                        ),
+                        SceneSize::new(f64::from(geometry.size.w), f64::from(geometry.size.h)),
+                    );
+                    let buffer = buffer_size(window.surface()).unwrap_or(geometry.size);
+                    let blocking = SceneRect::new(
+                        ScenePoint::new(f64::from(origin.x), f64::from(origin.y)),
+                        SceneSize::new(f64::from(buffer.w), f64::from(buffer.h)),
+                    );
+                    (frame, blocking, true)
+                }
+            };
             EdgeTarget {
                 id,
-                outer: window.outer(),
-                frame,
+                band,
+                blocking,
+                exterior,
                 resizable,
             }
         });
@@ -1786,13 +1805,14 @@ mod tests {
 
     fn csd(
         id: WindowId,
-        outer: SceneRect<f64, SceneLogical>,
+        blocking: SceneRect<f64, SceneLogical>,
         frame: SceneRect<f64, SceneLogical>,
     ) -> EdgeTarget {
         EdgeTarget {
             id,
-            outer,
-            frame: Some(frame),
+            band: frame,
+            blocking,
+            exterior: true,
             resizable: true,
         }
     }

@@ -953,7 +953,7 @@ impl State {
         // handled before `window_under`. If the band belongs to a window above
         // the content under the pointer, the top window wins.
         if let Some((edge_id, edge)) = edge
-            && under != Some(edge_id)
+            && (under != Some(edge_id) || self.windows.is_client_decorated(edge_id))
         {
             tracing::info!(?location, edge = ?edge, "press started a resize on the edge band");
             self.raise_and_focus(edge_id);
