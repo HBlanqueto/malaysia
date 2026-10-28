@@ -356,6 +356,27 @@ pub fn normalize_separators(items: &mut Vec<MenuItem>) {
     }
 }
 
+/// The single row an empty menu shows instead of an empty panel.
+fn empty_hint() -> MenuItem {
+    MenuItem::Action {
+        id: String::new(),
+        label: "Sin elementos".to_string(),
+        shortcut: None,
+        enabled: false,
+        check: CheckState::None,
+        icon: None,
+    }
+}
+
+/// Adds the empty-menu hint when the list has no items.
+fn with_empty_hint(items: Vec<MenuItem>) -> Vec<MenuItem> {
+    if items.is_empty() {
+        vec![empty_hint()]
+    } else {
+        items
+    }
+}
+
 /// A Neptunia menu rendered inside a popup.
 pub struct MenuView {
     items: Rc<Vec<MenuItem>>,
@@ -518,6 +539,13 @@ impl MenuView {
     /// they would exceed `panel.max_width`. Shortcuts and chevrons always stay
     /// visible and are never wrapped.
     pub fn preferred_size(items: &[MenuItem], m: MenuPalette) -> (f32, f32) {
+        let hint;
+        let items = if items.is_empty() {
+            hint = [empty_hint()];
+            hint.as_slice()
+        } else {
+            items
+        };
         let inset = 2.0 * m.border_width + m.padding;
         let content_height: f32 = items.iter().map(|item| item.height(m)).sum();
         let min_width = m.min_width.max(1.0);
@@ -664,7 +692,7 @@ impl App for MenuView {
         }
 
         let visible = if query_text.is_empty() {
-            (*items).clone()
+            with_empty_hint((*items).clone())
         } else {
             visible_items(
                 &items,
@@ -2487,6 +2515,55 @@ mod tests {
         ];
         normalize_separators(&mut items);
         assert!(items.is_empty());
+    }
+
+    #[test]
+    fn an_empty_menu_shows_the_placeholder() {
+        let rows = with_empty_hint(Vec::new());
+        assert!(matches!(
+            rows.as_slice(),
+            [MenuItem::Action {
+                label,
+                enabled: false,
+                ..
+            }] if label == "Sin elementos"
+        ));
+        assert_eq!(
+            MenuView::preferred_size(&[], MENU_LIGHT),
+            MenuView::preferred_size(&rows, MENU_LIGHT)
+        );
+    }
+
+    #[test]
+    fn the_placeholder_is_not_selectable_or_activatable() {
+        let rows = with_empty_hint(Vec::new());
+        assert!(!rows[0].selectable());
+        assert_eq!(first_selectable(&rows), None);
+        assert_eq!(next_selectable(&rows, None, 1), None);
+        assert_eq!(last_selectable(&rows), None);
+        assert_eq!(activate_at(&rows, 0), None);
+    }
+
+    #[test]
+    fn the_placeholder_is_not_in_the_search_results() {
+        let searched = visible_items(&[], &[], &[], 0, 0);
+        assert!(
+            !searched
+                .iter()
+                .any(|item| item.label() == Some("Sin elementos"))
+        );
+    }
+
+    #[test]
+    fn live_items_replace_the_placeholder() {
+        assert_eq!(
+            with_empty_hint(Vec::new())[0].label(),
+            Some("Sin elementos")
+        );
+        assert_eq!(
+            with_empty_hint(vec![action("Guardar")])[0].label(),
+            Some("Guardar")
+        );
     }
 
     #[test]
