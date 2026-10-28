@@ -31,8 +31,9 @@ use accesskit::Role;
 use freya_clipboard::copypasta::ClipboardProvider;
 use freya_components::{cache::AssetCacher, integration::integration};
 use freya_core::{
+    accessibility::tree::{ACCESSIBILITY_ROOT_ID, AccessibilityTree},
     integration::*,
-    prelude::{Color, State},
+    prelude::{AccessibilityFocusStrategy, Color, CursorIcon, State},
 };
 use freya_engine::prelude::{
     ColorType, DirectContext, FontCollection, FontMgr, Format, FramebufferInfo, Interface,
@@ -679,9 +680,12 @@ unsafe impl Send for GraphicsShared {}
 
 impl GraphicsShared {
     fn new(display_ptr: *mut c_void) -> Result<Self, RunError> {
-        // Safety: the caller passes the live `wl_display*` of the connection.
+        // SAFETY: called once on the calloop thread; libEGL is present because
+        // the compositor already initialized EGL. `load_required` validates the
+        // minimum version (EGL 1.5) before returning.
         let egl = unsafe { DynamicInstance::<egl::EGL1_5>::load_required() }
             .map_err(|_| RunError::Egl("libEGL could not be loaded"))?;
+        // Safety: the caller passes the live `wl_display*` of the connection.
         let display = unsafe {
             egl.get_platform_display(
                 EGL_PLATFORM_WAYLAND,
@@ -946,6 +950,8 @@ struct AppInstance {
     menu: Option<crate::app_menu::AppMenu>,
     on_menu_action: Option<MenuActionHandler>,
     resolved: State<Resolved>,
+    accessibility: AccessibilityTree,
+    requested_focus: Option<AccessibilityFocusStrategy>,
 }
 
 impl AppInstance {
@@ -1020,6 +1026,9 @@ impl AppInstance {
         let mutations = runner.sync_and_update();
         let _ = runner.run_in(|| tree.apply_mutations(mutations));
 
+        let mut accessibility = AccessibilityTree::default();
+        let _ = accessibility.init(&mut tree);
+
         Self {
             runner,
             tree,
@@ -1039,6 +1048,8 @@ impl AppInstance {
             menu,
             on_menu_action,
             resolved,
+            accessibility,
+            requested_focus: None,
         }
     }
 
@@ -1096,10 +1107,27 @@ impl AppInstance {
     }
 
     fn update(&mut self) -> bool {
+        if let Some(strategy) = self.requested_focus.take() {
+            self.tree.accessibility_diff.request_focus(strategy);
+        }
         let mutations = self.runner.sync_and_update();
         let result = self.runner.run_in(|| self.tree.apply_mutations(mutations));
         if result.needs_render {
             self.needs_layout = true;
+        }
+        self.layout();
+        let accessibility_update = self
+            .accessibility
+            .process_updates(&mut self.tree, &self.events_sender);
+        self.platform
+            .focused_accessibility_id
+            .set_if_modified(accessibility_update.focus);
+        if let Some(node_id) = self.accessibility.focused_node_id()
+            && let Some(layout_node) = self.tree.layout.get(&node_id)
+        {
+            self.platform.focused_accessibility_node.set_if_modified(
+                AccessibilityTree::create_node(node_id, layout_node, &self.tree),
+            );
         }
         result.needs_render
     }
@@ -1533,9 +1561,11 @@ impl SurfaceWindow {
         };
         if let Err(error) = graphics.configure(&self.surface, buffer_size, scale) {
             tracing::error!("BarrierKit: {error}");
-            // Keep the previous size coherent: app.resize and hit-test use the
-            // same size as the buffer that is actually committed.
-            self.app.resize(self.buffer_size, self.scale);
+            // Keep the previous size coherent, but do not push a 0×0 size into
+            // the app on the first configure; that panics inside Torin.
+            if self.buffer_size.0 > 0 && self.buffer_size.1 > 0 {
+                self.app.resize(self.buffer_size, self.scale);
+            }
             self.needs_redraw = true;
             return;
         }
@@ -1646,7 +1676,7 @@ struct Shell {
     spec: SurfaceSpec,
     needs_exit: bool,
     request_redraw_all: bool,
-    queue: Rc<RefCell<Vec<UserEvent>>>,
+    queue: Rc<RefCell<Vec<(ObjectId, UserEvent)>>>,
     ping: Ping,
     ping_source: Option<PingSource>,
     wake: Wake,
@@ -1667,6 +1697,8 @@ struct Shell {
     activation_seat: Option<wl_seat::WlSeat>,
     last_key_serial: u32,
     last_input_serial: Rc<Cell<u32>>,
+    last_pointer_serial: Cell<u32>,
+    touch_surfaces: std::collections::HashMap<i32, WlSurface>,
     popup_commands: Rc<RefCell<Vec<PopupCommand>>>,
     popup_next_id: Rc<Cell<u64>>,
     surface_count: Rc<Cell<usize>>,
@@ -1683,9 +1715,13 @@ struct WindowContext {
     queue: Rc<RefCell<Vec<WindowCommand>>>,
 }
 
-fn make_sender(queue: Rc<RefCell<Vec<UserEvent>>>, ping: Ping) -> Rc<dyn Fn(UserEvent)> {
+fn make_sender(
+    queue: Rc<RefCell<Vec<(ObjectId, UserEvent)>>>,
+    ping: Ping,
+    owner: ObjectId,
+) -> Rc<dyn Fn(UserEvent)> {
     Rc::new(move |event| {
-        queue.borrow_mut().push(event);
+        queue.borrow_mut().push((owner.clone(), event));
         ping.ping();
     })
 }
@@ -1763,8 +1799,53 @@ fn constraint_to_sctk(c: PopupConstraintAdjustment) -> SctkConstraint {
     out
 }
 
-fn drain_user_events(events: &Rc<RefCell<Vec<UserEvent>>>) -> Vec<UserEvent> {
+fn drain_user_events(
+    events: &Rc<RefCell<Vec<(ObjectId, UserEvent)>>>,
+) -> Vec<(ObjectId, UserEvent)> {
     std::mem::take(&mut *events.borrow_mut())
+}
+
+fn cursor_shape_from_icon(icon: CursorIcon) -> CursorShape {
+    match icon {
+        CursorIcon::Text => CursorShape::Text,
+        CursorIcon::Pointer => CursorShape::Pointer,
+        CursorIcon::Grab => CursorShape::Grab,
+        CursorIcon::Grabbing => CursorShape::Grabbing,
+        CursorIcon::NotAllowed => CursorShape::NotAllowed,
+        CursorIcon::NResize => CursorShape::NResize,
+        CursorIcon::EResize => CursorShape::EResize,
+        CursorIcon::SResize => CursorShape::SResize,
+        CursorIcon::WResize => CursorShape::WResize,
+        CursorIcon::NeResize => CursorShape::NeResize,
+        CursorIcon::NwResize => CursorShape::NwResize,
+        CursorIcon::SeResize => CursorShape::SeResize,
+        CursorIcon::SwResize => CursorShape::SwResize,
+        CursorIcon::EwResize => CursorShape::EwResize,
+        CursorIcon::NsResize => CursorShape::NsResize,
+        CursorIcon::NeswResize => CursorShape::NeswResize,
+        CursorIcon::NwseResize => CursorShape::NwseResize,
+        CursorIcon::ColResize => CursorShape::ColResize,
+        CursorIcon::RowResize => CursorShape::RowResize,
+        CursorIcon::Move => CursorShape::Move,
+        CursorIcon::Copy => CursorShape::Copy,
+        CursorIcon::Alias => CursorShape::Alias,
+        CursorIcon::NoDrop => CursorShape::NoDrop,
+        CursorIcon::ContextMenu => CursorShape::ContextMenu,
+        CursorIcon::Help => CursorShape::Help,
+        CursorIcon::Progress => CursorShape::Progress,
+        CursorIcon::Wait => CursorShape::Wait,
+        CursorIcon::Cell => CursorShape::Cell,
+        CursorIcon::Crosshair => CursorShape::Crosshair,
+        CursorIcon::VerticalText => CursorShape::VerticalText,
+        CursorIcon::AllScroll => CursorShape::AllScroll,
+        CursorIcon::ZoomIn => CursorShape::ZoomIn,
+        CursorIcon::ZoomOut => CursorShape::ZoomOut,
+        CursorIcon::DndAsk => CursorShape::DndAsk,
+        CursorIcon::AllResize => CursorShape::AllResize,
+        CursorIcon::Default => CursorShape::Default,
+        // cursor-icon is non-exhaustive; unknown icons fall back to the arrow.
+        _ => CursorShape::Default,
+    }
 }
 
 /// Runs a layer-shell surface with a Freya app until the compositor closes it.
@@ -1823,7 +1904,7 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     surface.commit();
 
     let waker = futures_util::task::waker(Arc::new(PingWake(shell.ping.clone())));
-    let sender = make_sender(shell.queue.clone(), shell.ping.clone());
+    let sender = make_sender(shell.queue.clone(), shell.ping.clone(), surface.id());
     let popups = Popups {
         queue: shell.popup_commands.clone(),
         ping: shell.ping.clone(),
@@ -1882,21 +1963,11 @@ pub fn run_layer(app: AppComponent, spec: SurfaceSpec) -> Result<(), RunError> {
     let mut event_loop: EventLoop<Shell> =
         EventLoop::try_new().map_err(|_| RunError::Egl("calloop EventLoop::try_new failed"))?;
     insert_ping(&mut event_loop, &mut shell)?;
-    let flush_conn = conn.clone();
     WaylandSource::new(conn, event_queue)
         .insert(event_loop.handle())
         .map_err(|_| RunError::Egl("inserting the Wayland source"))?;
     let signal = event_loop.get_signal();
     shell.loop_signal = Some(signal.clone());
-    if let Some(lock) = shell.active_lock.clone() {
-        shell.session_unlock = Some(SessionUnlock {
-            unlock: Rc::new(move || {
-                lock.unlock();
-                let _ = flush_conn.flush();
-                signal.stop();
-            }),
-        });
-    }
     event_loop
         .run(None, &mut shell, |shell| {
             if shell.needs_exit
@@ -1997,9 +2068,30 @@ fn insert_ping(event_loop: &mut EventLoop<Shell>, shell: &mut Shell) -> Result<(
     event_loop
         .handle()
         .insert_source(source, move |_, _, shell: &mut Shell| {
-            for event in drain_user_events(&shell.queue) {
-                if matches!(event, UserEvent::RequestRedraw) {
-                    shell.request_redraw_all = true;
+            for (surface_id, event) in drain_user_events(&shell.queue) {
+                match event {
+                    UserEvent::RequestRedraw => {
+                        shell.request_redraw_all = true;
+                    }
+                    UserEvent::SetCursorIcon(icon) => {
+                        if let Some(device) = &shell.cursor_shape_device {
+                            device.set_shape(
+                                shell.last_pointer_serial.get(),
+                                cursor_shape_from_icon(icon),
+                            );
+                        }
+                    }
+                    UserEvent::FocusAccessibilityNode(strategy) => {
+                        if let Some(index) = shell
+                            .surfaces
+                            .iter()
+                            .position(|s| s.surface.id() == surface_id)
+                        {
+                            shell.surfaces[index].app.requested_focus = Some(strategy);
+                            shell.surfaces[index].needs_redraw = true;
+                        }
+                    }
+                    UserEvent::Erased(_) => {}
                 }
             }
             shell.poll_all();
@@ -2076,7 +2168,7 @@ impl Shell {
         let conn = Connection::connect_to_env().map_err(|_| RunError::NoDisplay)?;
         let (globals, event_queue) = registry_queue_init::<Shell>(&conn)?;
         let qh = event_queue.handle();
-        let queue: Rc<RefCell<Vec<UserEvent>>> = Rc::new(RefCell::new(Vec::new()));
+        let queue: Rc<RefCell<Vec<(ObjectId, UserEvent)>>> = Rc::new(RefCell::new(Vec::new()));
         let (ping, ping_source) =
             calloop::ping::make_ping().map_err(|_| RunError::Egl("calloop ping failed"))?;
         let (wake_ping, wake_source) =
@@ -2254,6 +2346,8 @@ impl Shell {
             activation_seat,
             last_key_serial: 0,
             last_input_serial: Rc::new(Cell::new(0)),
+            last_pointer_serial: Cell::new(0),
+            touch_surfaces: std::collections::HashMap::new(),
             popup_commands: Rc::new(RefCell::new(Vec::new())),
             popup_next_id: Rc::new(Cell::new(1)),
             surface_count: Rc::new(Cell::new(0)),
@@ -2373,7 +2467,7 @@ impl Shell {
         });
 
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
-        let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let sender = make_sender(self.queue.clone(), self.ping.clone(), surface.id());
         let popups = Popups {
             queue: self.popup_commands.clone(),
             ping: self.ping.clone(),
@@ -2443,7 +2537,7 @@ impl Shell {
         let surface = self.compositor.create_surface(qh);
         let lock_surface = lock.create_lock_surface(surface.clone(), output, qh);
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
-        let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let sender = make_sender(self.queue.clone(), self.ping.clone(), surface.id());
         let popups = Popups {
             queue: self.popup_commands.clone(),
             ping: self.ping.clone(),
@@ -2523,7 +2617,8 @@ impl Shell {
             let commands = std::mem::take(&mut *context.queue.borrow_mut());
             for command in commands {
                 if let WindowCommand::Open(app, options) = command {
-                    self.create_window(app, options, None);
+                    let parent = options.parent.clone();
+                    self.create_window(app, options, parent);
                     continue;
                 }
                 let Some(index) = self.surfaces.iter().position(|surface| {
@@ -2684,7 +2779,7 @@ impl Shell {
         wl_surface.commit();
 
         let waker = futures_util::task::waker(Arc::new(PingWake(self.ping.clone())));
-        let sender = make_sender(self.queue.clone(), self.ping.clone());
+        let sender = make_sender(self.queue.clone(), self.ping.clone(), wl_surface.id());
         let opens_left = Rc::new(Cell::new(false));
         let popups = Popups {
             queue: self.popup_commands.clone(),
@@ -2836,14 +2931,15 @@ impl Shell {
                 callback(None);
                 continue;
             };
-            if self.last_key_serial == 0 {
+            let serial = self.last_input_serial.get();
+            if serial == 0 {
                 callback(None);
                 continue;
             }
             let id = self.activation_callbacks.len();
             self.activation_callbacks.push(Some(callback));
             let token = global.get_activation_token(&self.qh, id);
-            token.set_serial(self.last_key_serial, seat);
+            token.set_serial(serial, seat);
             token.set_surface(&window.surface);
             token.commit();
         }
@@ -2928,9 +3024,12 @@ impl CompositorHandler for Shell {
         };
         let scale = scale_factor.max(1) as f64;
         let window = &mut self.surfaces[index];
-        if window.scale != scale && window.logical_size.0 > 0 {
-            let size = window.logical_size;
-            window.configure(size, scale);
+        if window.scale != scale {
+            window.scale = scale;
+            if window.logical_size.0 > 0 {
+                let size = window.logical_size;
+                window.configure(size, scale);
+            }
         }
     }
 
@@ -3330,10 +3429,11 @@ impl PointerHandler for Shell {
             let Some(index) = self.surface_for(&event.surface) else {
                 continue;
             };
-            if let sctk::seat::pointer::PointerEventKind::Enter { serial } = event.kind
-                && let Some(device) = &self.cursor_shape_device
-            {
-                device.set_shape(serial, CursorShape::Default);
+            if let sctk::seat::pointer::PointerEventKind::Enter { serial } = event.kind {
+                self.last_pointer_serial.set(serial);
+                if let Some(device) = &self.cursor_shape_device {
+                    device.set_shape(serial, CursorShape::Default);
+                }
             }
             let position = physical_point(event.position, self.surfaces[index].scale);
             use sctk::seat::pointer::PointerEventKind;
@@ -3433,16 +3533,25 @@ impl KeyboardHandler for Shell {
         self.last_key_serial = serial;
         self.last_input_serial.set(serial);
         self.key_event(qh, event.clone(), KeyboardEventName::KeyDown);
-        let (delay, rate) = self.repeat_timing();
-        self.repeat_generation = self.repeat_generation.wrapping_add(1);
-        self.repeat = Some(RepeatState {
-            event,
-            delay,
-            rate,
-            first: true,
-            pending: false,
-            generation: self.repeat_generation,
-        });
+        // Modifier keys and keys that xkb marks non-repeating should not
+        // produce repeated KeyDown events. SCTK 0.19.2 can repeat keys itself
+        // via SeatState::get_keyboard_with_repeat, but that requires a loop
+        // handle at keyboard creation time and a callback that knows the
+        // focused surface; keeping our own timer is the smaller change.
+        // shortcut: keys other than modifiers that xkb marks non-repeating
+        // are still repeated because KeyboardHandler does not expose that bit.
+        if !event.keysym.is_modifier_key() {
+            let (delay, rate) = self.repeat_timing();
+            self.repeat_generation = self.repeat_generation.wrapping_add(1);
+            self.repeat = Some(RepeatState {
+                event,
+                delay,
+                rate,
+                first: true,
+                pending: false,
+                generation: self.repeat_generation,
+            });
+        }
         self.ping.ping();
     }
 
@@ -3454,8 +3563,17 @@ impl KeyboardHandler for Shell {
         _: u32,
         event: KeyEvent,
     ) {
-        self.key_event(qh, event, KeyboardEventName::KeyUp);
-        stop_repeat(&mut self.repeat, &mut self.repeat_generation);
+        self.key_event(qh, event.clone(), KeyboardEventName::KeyUp);
+        // Only stop repeating if the released key is the one currently being
+        // repeated. This keeps B repeating after A is released when A and B
+        // were both pressed.
+        if self
+            .repeat
+            .as_ref()
+            .is_some_and(|state| state.event.keysym == event.keysym)
+        {
+            stop_repeat(&mut self.repeat, &mut self.repeat_generation);
+        }
     }
 
     fn update_modifiers(
@@ -3586,6 +3704,7 @@ impl TouchHandler for Shell {
         id: i32,
         position: (f64, f64),
     ) {
+        self.touch_surfaces.insert(id, surface.clone());
         self.touch_event(
             qh,
             surface,
@@ -3604,7 +3723,7 @@ impl TouchHandler for Shell {
         _: u32,
         id: i32,
     ) {
-        let Some(surface) = self.surfaces.first().map(|s| s.surface.clone()) else {
+        let Some(surface) = self.touch_surfaces.remove(&id) else {
             return;
         };
         self.touch_event(
@@ -3625,7 +3744,7 @@ impl TouchHandler for Shell {
         id: i32,
         position: (f64, f64),
     ) {
-        let Some(surface) = self.surfaces.first().map(|s| s.surface.clone()) else {
+        let Some(surface) = self.touch_surfaces.get(&id).cloned() else {
             return;
         };
         self.touch_event(
@@ -3658,7 +3777,9 @@ impl TouchHandler for Shell {
     ) {
     }
 
-    fn cancel(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_touch::WlTouch) {}
+    fn cancel(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_touch::WlTouch) {
+        self.touch_surfaces.clear();
+    }
 }
 
 impl Shell {
@@ -4219,6 +4340,56 @@ mod tests {
                 "".to_string(),
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn sender_tags_user_events_with_surface_id() {
+        let (ping, _) = calloop::ping::make_ping().unwrap();
+        let queue: Rc<RefCell<Vec<(ObjectId, UserEvent)>>> = Rc::new(RefCell::new(Vec::new()));
+        let owner = ObjectId::null();
+        let sender = make_sender(queue.clone(), ping, owner.clone());
+        sender(UserEvent::RequestRedraw);
+        let events = drain_user_events(&queue);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, owner);
+    }
+
+    #[test]
+    fn cursor_icon_maps_to_wayland_shape() {
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::Default),
+            CursorShape::Default
+        );
+        assert_eq!(cursor_shape_from_icon(CursorIcon::Text), CursorShape::Text);
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::Pointer),
+            CursorShape::Pointer
+        );
+        assert_eq!(cursor_shape_from_icon(CursorIcon::Grab), CursorShape::Grab);
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::Grabbing),
+            CursorShape::Grabbing
+        );
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::NotAllowed),
+            CursorShape::NotAllowed
+        );
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::NResize),
+            CursorShape::NResize
+        );
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::EResize),
+            CursorShape::EResize
+        );
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::EwResize),
+            CursorShape::EwResize
+        );
+        assert_eq!(
+            cursor_shape_from_icon(CursorIcon::NsResize),
+            CursorShape::NsResize
         );
     }
 }
