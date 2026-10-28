@@ -6,9 +6,11 @@
 //! at a time.
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use barrier_kit::menu::MenuItem;
 use barrier_kit::platform::{
@@ -31,6 +33,119 @@ use barrier_kit::menu::SearchQuery;
 use barrier_kit::platform::AppMenuAddress;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
+
+/// Firefox sets its dbusmenu 240.7–304.6 ms after the window maps in the lab,
+/// over five fresh temporary profiles; Kate sets it 37.5–58.8 ms before the
+/// map. This wait is the Firefox maximum plus 100 ms.
+const MENU_GRACE: Duration = Duration::from_millis(405);
+
+/// Top-level menu labels remembered per app while the real menu loads.
+#[derive(Default)]
+struct MenuMemory {
+    titles: HashMap<String, Vec<String>>,
+    grace: Option<Grace>,
+}
+
+#[derive(Clone, Debug)]
+struct Grace {
+    app_id: String,
+    deadline: Instant,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum MenuChoice {
+    Remembered(Vec<String>),
+    Fallback,
+}
+
+struct Decision {
+    choice: MenuChoice,
+    /// Set when this decision starts the grace and the caller must wake at it.
+    started: Option<Instant>,
+}
+
+impl MenuMemory {
+    /// Replaces the remembered labels; returns whether they changed.
+    fn remember(&mut self, app_id: &str, labels: Vec<String>) -> bool {
+        let changed = self.titles.get(app_id) != Some(&labels);
+        self.titles.insert(app_id.to_string(), labels);
+        if self
+            .grace
+            .as_ref()
+            .is_some_and(|grace| grace.app_id == app_id)
+        {
+            self.grace = None;
+        }
+        changed
+    }
+
+    fn forget(&mut self, app_id: &str) {
+        self.titles.remove(app_id);
+        if self
+            .grace
+            .as_ref()
+            .is_some_and(|grace| grace.app_id == app_id)
+        {
+            self.grace = None;
+        }
+    }
+
+    /// What the bar shows for a focused window whose menu snapshot is not in
+    /// yet.
+    fn decide(&mut self, app_id: &str, now: Instant) -> Decision {
+        if let Some(grace) = &self.grace
+            && grace.app_id == app_id
+        {
+            if now < grace.deadline {
+                return Decision {
+                    choice: MenuChoice::Remembered(
+                        self.titles.get(app_id).cloned().unwrap_or_default(),
+                    ),
+                    started: None,
+                };
+            }
+            self.grace = None;
+            self.titles.remove(app_id);
+        }
+        if let Some(titles) = self.titles.get(app_id) {
+            let deadline = now + MENU_GRACE;
+            self.grace = Some(Grace {
+                app_id: app_id.to_string(),
+                deadline,
+            });
+            return Decision {
+                choice: MenuChoice::Remembered(titles.clone()),
+                started: Some(deadline),
+            };
+        }
+        Decision {
+            choice: MenuChoice::Fallback,
+            started: None,
+        }
+    }
+
+    /// Drops the remembered labels when the grace expires without an address.
+    fn expire(&mut self, now: Instant) {
+        if let Some(grace) = &self.grace
+            && now >= grace.deadline
+        {
+            self.titles.remove(&grace.app_id);
+            self.grace = None;
+        }
+    }
+}
+
+/// Labels of the root dbusmenu items, as composed titles mirror them.
+fn title_labels(items: &[MenuItem]) -> Vec<String> {
+    items
+        .iter()
+        .filter_map(|item| match item {
+            MenuItem::Submenu { label, .. } | MenuItem::Action { label, .. } => Some(label.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
 /// The mapped menu of the focused window, kept only while its generation is
 /// current.
 #[derive(Clone, Debug, PartialEq)]
@@ -102,6 +217,9 @@ impl App for BarApp {
                 None::<(String, Option<barrier_kit::platform::GtkMenusAddress>)>,
             ))
         });
+        let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
+        let menu_tick = use_state(|| 0u64);
+        let _ = *menu_tick.read();
         let toplevels = Toplevels::get().list.read().clone();
         let active_info = toplevels.iter().find(|window| window.active).or_else(|| {
             app_id
@@ -122,6 +240,14 @@ impl App for BarApp {
                 let next_generation = generation.get() + 1;
                 generation.set(next_generation);
                 snapshot_state.set(None);
+                if let (Some((old_app, Some(_), _)), Some((new_app, None, _))) = (&*last, &key)
+                    && old_app == new_app
+                {
+                    // shortcut: only the focused window's address is visible,
+                    // so focusing another window of the same app can look like
+                    // the app dropping its menu.
+                    memory.borrow_mut().forget(new_app);
+                }
                 match &key {
                     Some((app_id, Some(menu), true)) => {
                         tracing::info!(
@@ -168,6 +294,37 @@ impl App for BarApp {
                 *last = key;
             }
         }
+        let remote_menu = self.menu_snapshot.read().as_ref().cloned();
+        let choice = if focused && app_menus_enabled {
+            let app_id = app_id.clone().unwrap_or_default();
+            let mut stored = memory.borrow_mut();
+            if let Some(menu) = &remote_menu {
+                stored.remember(&app_id, title_labels(&menu.items));
+            }
+            let decision = if remote_menu.is_some() {
+                Decision {
+                    choice: MenuChoice::Fallback,
+                    started: None,
+                }
+            } else {
+                stored.decide(&app_id, Instant::now())
+            };
+            drop(stored);
+            if let Some(deadline) = decision.started {
+                let memory = memory.clone();
+                let tick = menu_tick;
+                let delay =
+                    deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1);
+                Timers::get().after(delay, move || {
+                    memory.borrow_mut().expire(Instant::now());
+                    let mut tick = tick;
+                    tick.set(*tick.peek() + 1);
+                });
+            }
+            Some(decision.choice)
+        } else {
+            None
+        };
         let palette = barrier_kit::theme::shell_palette(&resolved);
         let text = rgba(palette.text);
         // Opaque by default; the blur for reduce_transparency = false will
@@ -258,7 +415,6 @@ impl App for BarApp {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
-            let remote_menu = self.menu_snapshot.read().as_ref().cloned();
             if let Some(remote_menu) = remote_menu {
                 let sources = remote::MenuSources {
                     app_name: app_name.clone(),
@@ -386,6 +542,49 @@ impl App for BarApp {
                         enabled: title.enabled,
                         query_state: is_help.then(|| help_query.clone()),
                         reveal_roots: is_help.then(|| reveal_roots.clone()),
+                    });
+                }
+            } else if let Some(MenuChoice::Remembered(labels)) = choice.as_ref() {
+                // shortcut: remembered titles show «Cargando…» and leave the
+                // Help search unwired until the real snapshot arrives.
+                let sources = remote::MenuSources {
+                    app_name: app_name.clone(),
+                    app_items: app_items.clone(),
+                    window_items: window_items.clone(),
+                    help_items: help_items.clone(),
+                };
+                let remote_items: Vec<MenuItem> = labels
+                    .iter()
+                    .map(|label| MenuItem::Submenu {
+                        id: Some("0".to_string()),
+                        label: label.clone(),
+                        enabled: true,
+                        items: Vec::new(),
+                        icon: None,
+                    })
+                    .collect();
+                let titles = sources.compose(&remote_items);
+                for (index, title) in titles.iter().enumerate() {
+                    let items: MenuItems = {
+                        let items = title.visible_items();
+                        Rc::new(move || items.clone())
+                    };
+                    specs.push(MenuTitleSpec {
+                        label: title.label.clone(),
+                        glyph: None,
+                        bold: title.bold,
+                        items,
+                        searchable: None,
+                        on_activate: Rc::new(focused::on_action),
+                        live_items: None,
+                        on_open: None,
+                        on_hover_title: None,
+                        on_open_submenu: None,
+                        submenu_source: None,
+                        anchor: title_anchor(index + 1),
+                        enabled: title.enabled,
+                        query_state: None,
+                        reveal_roots: None,
                     });
                 }
             } else {
@@ -719,5 +918,61 @@ mod tests {
             }
             _ => panic!("the menubar is a layer surface"),
         }
+    }
+
+    #[test]
+    fn remembered_titles_are_shown_then_replaced() {
+        let mut memory = MenuMemory::default();
+        let now = Instant::now();
+        assert!(memory.remember("firefox", vec!["File".into(), "Edit".into()]));
+        let shown = memory.decide("firefox", now);
+        assert_eq!(
+            shown.choice,
+            MenuChoice::Remembered(vec!["File".into(), "Edit".into()])
+        );
+        assert!(shown.started.is_some());
+
+        assert!(memory.remember("firefox", vec!["File".into(), "Edit".into(), "View".into()]));
+        let replaced = memory.decide("firefox", now);
+        assert_eq!(
+            replaced.choice,
+            MenuChoice::Remembered(vec!["File".into(), "Edit".into(), "View".into()])
+        );
+    }
+
+    #[test]
+    fn equal_titles_do_not_change_the_remembered_set() {
+        let mut memory = MenuMemory::default();
+        let labels = vec!["File".to_string(), "Edit".to_string()];
+        assert!(memory.remember("firefox", labels.clone()));
+        assert!(!memory.remember("firefox", labels.clone()));
+        let decision = memory.decide("firefox", Instant::now());
+        assert_eq!(decision.choice, MenuChoice::Remembered(labels));
+    }
+
+    #[test]
+    fn grace_expiry_falls_back_and_drops_the_titles() {
+        let mut memory = MenuMemory::default();
+        let now = Instant::now();
+        memory.remember("firefox", vec!["File".into()]);
+        assert!(matches!(
+            memory.decide("firefox", now).choice,
+            MenuChoice::Remembered(_)
+        ));
+        let expired = memory.decide("firefox", now + MENU_GRACE);
+        assert_eq!(expired.choice, MenuChoice::Fallback);
+        assert!(!memory.titles.contains_key("firefox"));
+    }
+
+    #[test]
+    fn an_empty_address_forgets_the_titles() {
+        let mut memory = MenuMemory::default();
+        memory.remember("firefox", vec!["File".into()]);
+        memory.forget("firefox");
+        assert!(!memory.titles.contains_key("firefox"));
+        assert_eq!(
+            memory.decide("firefox", Instant::now()).choice,
+            MenuChoice::Fallback
+        );
     }
 }
