@@ -86,7 +86,7 @@ vibrancy, borde y sombra) o `"flat"` (lista plana integrada en el fondo de la
 ventana). Con `reduce_transparency = true` la isla sigue opaca, pero conserva
 su radio, contorno y sombra.
 
-`window_color` es la idea de Neptunia "Ajustes › Apariencia › Color de las
+`window_color` es la idea de Tengen "Ajustes › Apariencia › Color de las
 ventanas": `neutral` no tiñe, `accent` mezcla el acento con el fondo de la
 titlebar (6 % en claro, 8 % en oscuro) y `wallpaper` usa el color dominante del
 wallpaper (7 % / 9 %). Los semáforos en `auto` siguen el modo (estándar en neutral,

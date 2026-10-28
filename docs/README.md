@@ -34,7 +34,7 @@ docs/
 │   └── README.md      índice de ADRs y decisiones abiertas
 ├── arquitectura/
 │   ├── interfaz.md             mapa completo de la UI (diseño, shell, ventanas, capas)
-│   ├── neptunia.md             Neptunia vendorizado, build.rs y comprobaciones
+│   ├── tengen.md             Tengen vendorizado, build.rs y comprobaciones
 │   ├── malaysia-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
 │   ├── malaysia-y-shell.svg       diagrama de la división de trabajo
 │   ├── modelo-de-procesos.md  distribución de procesos del shell (ADR 0023)
@@ -42,7 +42,7 @@ docs/
 │   ├── menubar.md             la menubar nativa (app activa + reloj)
 │   ├── dock.md                el dock nativo (lista de apps + activar al clic)
 │   ├── lock.md                el lock nativo (ext-session-lock-v1)
-│   ├── ventanas.md            la titlebar Neptunia del compositor
+│   ├── ventanas.md            la titlebar Tengen del compositor
 │   └── capturas.md            capturas macOS: atajos, overlay, guardado y opciones
 ├── configuracion/
 │   └── opciones.md    catálogo canónico de opciones del compositor (ADR 0021)
@@ -75,7 +75,7 @@ nix develop
 ./dev.sh run              # compositor anidado
 ./dev.sh demo             # sesión anidada con shell y ventanas de prueba
 ./dev.sh lab              # sesión anidada con apps reales para pruebas manuales
-./dev.sh check            # fmt + clippy + tests + checks de diseño/Neptunia
+./dev.sh check            # fmt + clippy + tests + checks de diseño/Tengen
 nix build .#default       # paquete instalable (perfil dist)
 ```
 
@@ -96,7 +96,7 @@ Tiempos medidos en esta máquina (Ryzen 5 PRO 5650U, x86_64-linux):
 
 El primer `nix build .#default` puede tardar más porque construye Skia una vez;
 después Skia y las dependencias salen de la caché de Nix. Los checks del flake
-(`design-tokens`, `neptunia-generated`) usan un `lib.fileset` reducido, no el
+(`design-tokens`, `tengen-generated`) usan un `lib.fileset` reducido, no el
 árbol entero.
 
 ### Regenerar Skia al cambiar de versión de Freya
@@ -136,9 +136,9 @@ Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
    implementación (ADR 0001–0036, índice en [`decisiones/README.md`](decisiones/README.md),
    que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
 7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
-   de la interfaz: Neptunia, capas, shell, ventanas, capturas, cursor y
+   de la interfaz: Tengen, capas, shell, ventanas, capturas, cursor y
    configuración. Empieza aquí si vas a tocar algo visual. El detalle del
-   [Neptunia vendorizado](arquitectura/neptunia.md), su `build.rs` y sus
+   [Tengen vendorizado](arquitectura/tengen.md), su `build.rs` y sus
    comprobaciones está en su propia página.
 8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo MalaysiaDreams
    (compositor) y la shell nativa (`malaysia-shell`, ADR 0025): documento + diagrama
@@ -199,9 +199,9 @@ o el portapapeles) con su dominio `screenshot.domain`. El **Bloque 12a** está
 empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
 `appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
 ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
-la titlebar Neptunia arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
-launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Neptunia (`crates/vow-design/neptunia`) es la fuente de diseño
-(ADR 0032); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
+la titlebar Tengen arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
+launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Tengen (`crates/vow-design/tengen`) es la fuente de diseño
+(ADR 0032, renombrado en ADR 0046); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
 polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
 (`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
 nativa (`malaysia-shell`, ADR 0025): **wallpaper**, **menubar**, **dock**,

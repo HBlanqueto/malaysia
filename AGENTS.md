@@ -100,14 +100,14 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `barrier-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
 - **Investigación**: `docs/investigacion/` — cómo renderiza macOS y comparación
   con Wayland (contexto de diseño).
-- **Interfaz**: `docs/arquitectura/interfaz.md` reúne todo lo visual (Neptunia,
+- **Interfaz**: `docs/arquitectura/interfaz.md` reúne todo lo visual (Tengen,
   capas, shell, ventanas, capturas, cursor y opciones). Léelo antes de tocar UI.
 - **Arquitectura**: `docs/arquitectura/malaysia-y-shell.md` (+ `malaysia-y-shell.svg`)
   — **quién decide cada cosa entre MalaysiaDreams (compositor) y la shell (`malaysia-shell`)**:
   la shell dibuja el contenido, MalaysiaDreams coloca/compone/regula. Léelo antes de tocar
   la integración de la shell. Componentes: `wallpaper.md`, `menubar.md`,
   `dock.md`, `lock.md`, `capturas.md` (capturas: capacidad del compositor, no
-  proceso de shell), `ventanas.md` (titlebar Neptunia) e
+  proceso de shell), `ventanas.md` (titlebar Tengen) e
   `interfaz.md` (el mapa completo).
 
 ## Estado actual
@@ -158,7 +158,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   Escritorio XDG) hechas. Opciones en `screenshot.domain` (defaults macOS;
   `show_pointer` activo, el resto reservadas). Ver
   `docs/bloques/11-protocolos-de-uso-diario.md`.
-- **Bloque 13 adelantado:** titlebar Neptunia con botones (cerrar, minimizar,
+- **Bloque 13 adelantado:** titlebar Tengen con botones (cerrar, minimizar,
   maximizar), menubar/dock en paleta clara; el launcher es lo siguiente. Los
   portales quedan después.
 - **Bloque 12a empezado:** backend `xdg-desktop-portal-malaysia` con `Settings`
@@ -166,12 +166,12 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   `UseIn=Malaysia` y `xdg.portal.config.malaysia` con GTK de fallback). Siguen
   `Screenshot`/`ScreenCast` y el Bloque 12b (notificaciones, polkit, keyring,
   AT-SPI). Ver `docs/bloques/12-portales-y-servicios.md`.
-- **Diseño:** **Neptunia** vive en `crates/vow-design/neptunia/`
+- **Diseño:** **Tengen** vive en `crates/vow-design/tengen/`
   (`tokens.json` + `components.json`) y es la fuente por defecto del escritorio
   (ADR 0032): titlebar **arriba** de 32 px para ventanas SSD, semáforos de 12,
   radio 16, tema claro, y modos de color `neutral`/`accent`/`wallpaper` (tinte
   de la titlebar y semáforos). `build.rs` genera las constantes; **para cambiar
-  un valor de diseño, edita `neptunia/*.json`, nunca `src/`**. No inventes
+  un valor de diseño, edita `tengen/*.json`, nunca `src/`**. No inventes
   colores/medidas. Ver `docs/arquitectura/ventanas.md`.
 - **Bloque 9 cerrado:** `State::scale`, `display.scale` persistente y el
   redondeo floor/ceil (ADR 0004), aceptados en panel real a 1.0/1.25/1.5.

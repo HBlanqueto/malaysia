@@ -7,11 +7,11 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
 
 ## Principios
 
-1. **Neptunia es el diseño** (ADR 0032). Los colores, radios, espacios,
+1. **Tengen es el diseño** (ADR 0032). Los colores, radios, espacios,
    tipografía, sombras y medidas de componentes salen de
-   `crates/vow-design/neptunia/` (`tokens.json` + `components.json`);
+   `crates/vow-design/tengen/` (`tokens.json` + `components.json`);
    `build.rs` genera las constantes de `vow-design`. Nadie inventa un color o
-   una medida en el código. Detalle en [`neptunia.md`](neptunia.md).
+   una medida en el código. Detalle en [`tengen.md`](tengen.md).
 2. **Chrome separado, efectos para todos** (ADR 0020). GTK/Libadwaita conservan
    su headerbar; el resto de apps reciben el chrome del compositor. Los
    efectos de superficie (borde interior, sombra, blur) son del compositor y
@@ -23,9 +23,9 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
    `grade-graphics` y `cosmic-text`, y nunca enlaza Skia ni `freya-*`.
 5. **macOS como referencia de UX**, no de código. Otto se lee como ideas; si se
    copia código MIT suyo, se actualiza `NOTICE`.
-6. **El diseño se aprueba en Neptunia y se implementa en MalaysiaDreams.** Los cambios
+6. **El diseño se aprueba en Tengen y se implementa en MalaysiaDreams.** Los cambios
    visuales se prueban en `demo.slint`/`slint-viewer` (o en los lienzos de
-   Neptunia) y se vuelcan a los JSON; después se portan a `vow-design` y al
+   Tengen) y se vuelcan a los JSON; después se portan a `vow-design` y al
    toolkit. No se inventan pantallas directamente en Rust.
 
 ## Reparto de dibujo
@@ -68,17 +68,17 @@ Las zonas exclusivas de la menubar y el dock recortan el **workspace** donde se
 colocan y maximizan las ventanas. El lock, cuando está activo, sustituye todo:
 solo se dibujan sus superficies (y el cursor).
 
-## Sistema de diseño: Neptunia
+## Sistema de diseño: Tengen
 
 - **Temas**: `light` (por defecto), `dark` y `dark-tint` en los tokens.
   `vow-design` implementa `LIGHT`, `DARK` y `DARK_TINT`; el valor
   `appearance.color_scheme = "dark_tint"` selecciona el último.
 - **Forma**: radio de ventana 16, semáforos de 12 con radio 4, titlebar de
   cliente **32 px** arriba. Los 44 px de `components.window` son la ventana de
-  las apps propias de Neptunia, no el chrome de terceros.
+  las apps propias de Tengen, no el chrome de terceros.
 - **Tipografía**: Geist; el título usa la escala `headline` (13/600) y el
   cuerpo de la shell es `body` (13 px, 400), 11–13 px según el componente.
-- **Sombras**: los valores de Neptunia están en `SHADOW` (claro) y
+- **Sombras**: los valores de Tengen están en `SHADOW` (claro) y
   `SHADOW_DARK` (oscuro); el compositor las dibuja con shader detrás de cada
   ventana y recorta todas las superficies (SSD, CSD y subsuperficies) con el
   radio 16.
@@ -96,7 +96,7 @@ solo se dibujan sus superficies (y el cursor).
 | Componente | Proceso | Capa | Estado |
 |---|---|---|---|
 | Wallpaper | `malaysia-shell wallpaper` | Background | hecho; EGL/dmabuf, vigila el store |
-| Menubar | `malaysia-shell menubar` | Top, 28 px | hecho; app activa + reloj, paleta clara Neptunia |
+| Menubar | `malaysia-shell menubar` | Top, 28 px | hecho; app activa + reloj, paleta clara Tengen |
 | Dock | `malaysia-shell dock` | Top, abajo | hecho; lista de ventanas, tiles y activar |
 | Lock | `malaysia-shell lock` | lock surfaces | hecho; PAM, auto-lock, recuperación |
 | Launcher | `malaysia-shell launcher` | Overlay | hecho; búsqueda, ranking, iconos y activación |
@@ -104,7 +104,7 @@ solo se dibujan sus superficies (y el cursor).
 
 Los componentes leen preferencias de `~/.config/malaysia/` y estado de
 `~/.local/share/malaysia/`; no escriben su propia configuración. La menubar y el
-dock comparten la `ShellPalette` de Neptunia (`SHELL_LIGHT`, `SHELL_DARK`,
+dock comparten la `ShellPalette` de Tengen (`SHELL_LIGHT`, `SHELL_DARK`,
 `SHELL_DARK_TINT`), elegida por `appearance.color_scheme`. Ver
 [`malaysia-y-shell.md`](malaysia-y-shell.md), [`modelo-de-procesos.md`](modelo-de-procesos.md),
 [`wallpaper.md`](wallpaper.md), [`menubar.md`](menubar.md), [`dock.md`](dock.md)

@@ -1,9 +1,9 @@
-# Ventanas y titlebar (Neptunia)
+# Ventanas y titlebar (Tengen)
 
 > Mapa general de la interfaz: [`interfaz.md`](interfaz.md).
 
 La titlebar de MalaysiaDreams es **compositor-side** (ADR 0020) y usa el diseño de
-**Neptunia** (ADR 0032): barra **arriba** de **32 px lógicos** para las ventanas
+**Tengen** (ADR 0032): barra **arriba** de **32 px lógicos** para las ventanas
 SSD de terceros, semáforos de 12 px
 (**cuadrados redondeados** de radio 4) con 8 px de separación y radio de
 ventana de 16 px.
@@ -94,10 +94,10 @@ WindowMap::iter (topmost → bottom)
 - La ventana se eleva al recibir foco; el foco y el orden de apilado no se
   separan.
 
-## Color de las ventanas (Neptunia)
+## Color de las ventanas (Tengen)
 
 `appearance.window_color` elige qué tiñe la titlebar, con los factores de
-Neptunia:
+Tengen:
 
 | Modo | Tinte | Semáforos en `auto` |
 |---|---|---|

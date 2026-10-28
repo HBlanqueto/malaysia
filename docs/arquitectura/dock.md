@@ -29,7 +29,7 @@ window.domain ──► app activa (resaltada)
    foco de puntero a las capas `Top`/`Overlay` con interactividad).
 2. **La lista de ventanas**: `ext-foreign-toplevel-list-v1` (el compositor lo
    sirve con el módulo de smithay). Cada ventana mapeada → un tile; cada tile
-   muestra el título de la app sobre la `ShellPalette` de Neptunia
+   muestra el título de la app sobre la `ShellPalette` de Tengen
    (`tile`, activo `tile_active`), elegida por `appearance.color_scheme`.
 3. **Activar al clic**: `zwlr_foreign_toplevel_management_v1` (el compositor lo
    sirve manualmente — smithay 0.7 no lo trae). Un clic en un tile envía
@@ -83,7 +83,7 @@ window.domain ──► app activa (resaltada)
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
 - ADR 0023 (procesos y protocolos), ADR 0034 (BarrierKit sobre Freya),
-  ADR 0032 (Neptunia).
+  ADR 0032 (Tengen).
 - `menubar.md` / `wallpaper.md` — componentes hermanos (presentación EGL,
   ADR 0027).
 - `configuracion/opciones.md` — `dock.*` (catálogo; `tilesize` en uso).

@@ -24,7 +24,7 @@ window.domain ──► app_id de la app activa (el compositor lo publica)
    **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
    debajo de la barra.
 2. **El render** es CPU: `barrier-kit::text` (cosmic-text + swash) compone el
-   texto en un frame RGBA sobre la `ShellPalette` de Neptunia (barra
+   texto en un frame RGBA sobre la `ShellPalette` de Tengen (barra
    translúcida, `#f2f4f7e6` en claro) y la textura se presenta
    por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
    dmabuf que el compositor texturiza directo. La subida a la textura es
@@ -96,7 +96,7 @@ el área útil).
 - `kill -9` al proceso: el compositor y los demás componentes siguen; el
   supervisor lo relanza.
 - El texto se rasteriza (el bug de `layout_runs` vacío se corrigió en 7.1);
-  la menubar muestra la app activa y el reloj sobre la paleta clara de Neptunia.
+  la menubar muestra la app activa y el reloj sobre la paleta clara de Tengen.
 - Todo verde: clippy `-D warnings`, fmt y tests.
 
 ## Menú global (Bloque 14)
@@ -163,7 +163,7 @@ todo, Mostrar escritorio y la lista de ventanas; Bloquear pantalla; y Ajustes
 del sistema (lanza `malaysia-settings`). El resto se ve deshabilitado.
 `zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y activar la lista.
 
-### Medidas de Neptunia
+### Medidas de Tengen
 
 Menubar 28 px, menús con radio 12, elementos de menú de 24 px con radio 8 y
 texto 13. Se dibujaron como maquetas en el lienzo de diseño «MalaysiaDreams — Global
@@ -180,7 +180,7 @@ mano. Ejemplos: `Ctrl+Shift+G` → `⌃⇧G`, `Alt+Inicio` → `⌥Inicio`,
 
 ### Decisiones abiertas
 
-- Menús sólidos o translúcidos (Neptunia reserva el cristal para el primer
+- Menús sólidos o translúcidos (Tengen reserva el cristal para el primer
   arranque).
 - Desbordamiento de la barra, navegación con teclado (F10/Alt) y comportamiento
   con una app sin respuesta.
@@ -189,7 +189,7 @@ mano. Ejemplos: `Ctrl+Shift+G` → `⌃⇧G`, `Alt+Inicio` → `⌥Inicio`,
 
 - [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
 - ADR 0023 (procesos), ADR 0034 (BarrierKit sobre Freya), ADR 0032
-  (Neptunia).
+  (Tengen).
 - `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
 - `modelo-de-procesos.md` — la distribución de procesos.
 - `configuracion/opciones.md` — `menubar.autohide` (catálogo).

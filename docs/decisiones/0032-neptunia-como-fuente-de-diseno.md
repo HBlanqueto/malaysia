@@ -2,6 +2,8 @@
 
 Estado: **aceptado** (2026-10-22).
 
+Renombrado a Tengen en la ADR 0046.
+
 ## Contexto
 
 El diseño del escritorio vive en `crates/yuki-design/neptunia`

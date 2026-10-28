@@ -220,9 +220,9 @@ Se divide en dos entregas. Depende de la captura del Bloque 11.
 ## Bloque 13 — Chrome y launcher (adelantado)
 
 Antes de seguir con los portales, el escritorio necesita chrome y una forma de
-abrir apps. El diseño es **Neptunia** (ADR 0032).
+abrir apps. El diseño es **Tengen** (ADR 0032, renombrado en ADR 0046).
 
-- **Titlebar Neptunia — hecha.** Barra superior de 32 px para ventanas SSD,
+- **Titlebar Tengen — hecha.** Barra superior de 32 px para ventanas SSD,
   semáforos de 12 px,
   título centrado con `cosmic-text`, caché por ventana y botones de cerrar,
   minimizar y maximizar; modos de color `neutral`/`accent`/`wallpaper` con
@@ -297,7 +297,7 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
   - **14f-2:** cliente `org.gtk.Menus` en la barra y dibujo del menú GTK.
 - **Después:** HUD en el launcher y menú de atajos por app.
 
-Detalle del menú «MalaysiaDreams» y de las medidas de Neptunia en
+Detalle del menú «MalaysiaDreams» y de las medidas de Tengen en
 [`arquitectura/menubar.md`](arquitectura/menubar.md#menú-global-planeado-bloque-14).
 
 ## Transversal — NixOS

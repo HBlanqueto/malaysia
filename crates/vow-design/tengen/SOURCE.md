@@ -6,7 +6,7 @@
 
 Esta carpeta es una **copia real** dentro de malaysia, no un enlace ni una
 dependencia del build. Se han quitado los archivos que malaysia no usa
-(`vscode.nix`, `filecolors.nix`, `palette.nix`, `neptunia.nix` y
+(`vscode.nix`, `filecolors.nix`, `palette.nix`, `tengen.nix` y
 `generated/kmscon-palette`); la paleta de terminal y el tema de VS Code no
 forman parte del escritorio.
 
@@ -30,6 +30,6 @@ El script `tools/sync-tengen.sh <ruta>` trae cambios desde una copia externa
 a propósito y actualiza este archivo; no se ejecuta en el build.
 
 26 oct 2026: tokens de la barra lateral en isla añadidos aquí, siguiendo el
-sistema de diseño Neptunia.
+sistema de diseño Tengen.
 
 28 oct 2026: renombrado a Tengen (ADR 0046).

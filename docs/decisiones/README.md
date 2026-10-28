@@ -51,6 +51,7 @@ continua.
 | 0042 | Ajustes del sistema (`yuki-settings`) | aceptado |
 | 0043 | Rebranding a Malaysia | aceptado |
 | 0045 | GTK `gtk_shell1` y `org.gtk.Menus` | aceptado |
+| 0046 | Tengen: renombrado del lenguaje visual | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.

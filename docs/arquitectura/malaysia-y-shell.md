@@ -36,7 +36,7 @@ portapapeles). La shell no participa. Ver
 ## Chrome de ventana
 
 La titlebar de las ventanas server-side la dibuja **MalaysiaDreams**, no la shell:
-Neptunia arriba (32 px para ventanas SSD), semáforos de 12 y botones de cerrar/minimizar/
+Tengen arriba (32 px para ventanas SSD), semáforos de 12 y botones de cerrar/minimizar/
 maximizar. Ver [`ventanas.md`](ventanas.md). La shell no participa en el chrome
 de las apps.
 

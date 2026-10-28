@@ -48,7 +48,7 @@ shell; ver `bloques/09-escala-fraccional.md`.
 
 Mapa completo de la UI: [`arquitectura/interfaz.md`](arquitectura/interfaz.md).
 
-El diseño es **Neptunia** (ADR 0032): titlebar arriba de 32 px para ventanas SSD, radio 16,
+El diseño es **Tengen** (ADR 0032, renombrado en ADR 0046): titlebar arriba de 32 px para ventanas SSD, radio 16,
 semáforos de 12, tema claro por defecto.
 
 - [x] Titlebar en el compositor: fondo, semáforos redondeados, título centrado,
@@ -56,7 +56,7 @@ semáforos de 12, tema claro por defecto.
       `arquitectura/ventanas.md`.
 - [x] Foco de puntero limitado al rectángulo del cliente (la titlebar no se
       trata como superficie del cliente).
-- [x] Menubar y dock con la paleta clara de Neptunia.
+- [x] Menubar y dock con la paleta clara de Tengen.
 - [x] `appearance.window_color` (`neutral`/`accent`/`wallpaper`) y
       `traffic_lights` en la titlebar; el color dominante del wallpaper lo
       calcula la shell y `window_tint_scope = "desktop"` tiñe menubar y dock.
@@ -72,7 +72,7 @@ semáforos de 12, tema claro por defecto.
       cuando exista tiling. Ver
       [`investigacion/resize-bordes-y-cursores.md`](investigacion/resize-bordes-y-cursores.md)
       (incluye el traspaso y los siguientes pasos).
-- [ ] Documentar/portar el resto de tokens de Neptunia y, si se puede, generar
+- [ ] Documentar/portar el resto de tokens de Tengen y, si se puede, generar
       `vow-design` desde sus JSON.
 
 ## Shell sobre Freya — pendientes
@@ -126,7 +126,7 @@ se revisará si el ThinkPad mide algo muy distinto.
 - `crates/barrier-kit/src/menu.rs:933` — Ctrl/Alt+Espacio activa el ítem
   seleccionado; decidir si debe filtrarse con `inserts_text` (aparecido en
   auditoría L1-lock).
-- `crates/vow-design/neptunia/default.nix` (generador de `neptunia.slint`)
+- `crates/vow-design/tengen/default.nix` (generador de `tengen.slint`)
   convierte duraciones, recuentos e intervalos en `px` porque Slint no tiene
   unidades para todo. Hay que separar esos tokens numéricos puros de las
   longitudes con unidad para no mentir en los outputs de otros toolkits.

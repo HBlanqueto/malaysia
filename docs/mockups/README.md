@@ -12,11 +12,11 @@ que la app tiene que cumplir, y un test lo comprueba. Cada pantalla tiene:
 ## Reglas del HTML
 
 - Colores, radios, medidas y tipografía salen de
-  `crates/vow-design/neptunia/generated/neptunia.css`. Las variables de
+  `crates/vow-design/tengen/generated/tengen.css`. Las variables de
   componentes (`--settings-card-width`, `--window-sidebar-island-traffic-x`…)
   se nombran con la ruta de `components.json` sin `components.` y con guiones;
   los estilos de texto, `--type-<estilo>-size|line-height|weight|tracking`.
-- `_provisional-tokens.css` cubre lo que `neptunia.css` todavía no exporta.
+- `_provisional-tokens.css` cubre lo que `tengen.css` todavía no exporta.
   Desaparece cuando lo exporte `default.nix`.
 - La ventana empieza en (0, 0) y mide lo que diga `components.json`. La app
   dibuja un rectángulo cuadrado: esquinas, sombra, borde exterior e inner
