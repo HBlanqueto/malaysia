@@ -308,11 +308,11 @@ fn open_traffic_menu(
         anchor_rect: (
             origin.x.round() as i32,
             origin.y.round() as i32,
-            SETTINGS.popup_height,
+            1,
             1,
         ),
         anchor: PopupAnchor::TopLeft,
-        gravity: PopupGravity::TopLeft,
+        gravity: PopupGravity::BottomRight,
         offset: (offset_x, offset_y),
         size: (
             MENU_POPOVER.min_width.round() as u32,
