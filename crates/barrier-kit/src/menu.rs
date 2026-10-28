@@ -9,6 +9,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::elements::image::ImageHandle;
@@ -19,14 +20,50 @@ use freya_engine::prelude::{
     TextStyle,
 };
 use keyboard_types::{Key, NamedKey};
+use ragnarok::CursorPoint;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 
 // Freya re-exports `State` as the reactive handle returned by `use_state`.
 type UseState<T> = State<T>;
 
+/// Time the menu waits while the pointer travels diagonally toward an already
+/// open submenu before closing that submenu and highlighting the new row.
+const SUBMENU_INTENT_DELAY: Duration = Duration::from_millis(300);
+
+/// Pointer state shared across menu rows so diagonal moves toward an open
+/// submenu can delay closing it.
+#[derive(Default)]
+struct HoverState {
+    last: Option<(Instant, CursorPoint)>,
+    pending: Option<HoverPending>,
+    generation: u64,
+}
+
+#[derive(Clone, Copy)]
+struct HoverPending {
+    generation: u64,
+    target_index: usize,
+    from: CursorPoint,
+    to_top: CursorPoint,
+    to_bottom: CursorPoint,
+}
+
+/// True when `p` lies inside the triangle with vertices `a`, `b`, `c`.
+fn point_in_triangle(p: CursorPoint, a: CursorPoint, b: CursorPoint, c: CursorPoint) -> bool {
+    let sign = |p1: CursorPoint, p2: CursorPoint, p3: CursorPoint| {
+        (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+    };
+    let d1 = sign(p, a, b);
+    let d2 = sign(p, b, c);
+    let d3 = sign(p, c, a);
+    let has_neg = d1 < 0.0 || d2 < 0.0 || d3 < 0.0;
+    let has_pos = d1 > 0.0 || d2 > 0.0 || d3 > 0.0;
+    !(has_neg && has_pos)
+}
+
 use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
-    inserts_text,
+    Timers, inserts_text,
 };
 use crate::theme::{SurfaceKind, menu_palette};
 use vow_design::{MenuPalette, Rgba, SANS_FAMILIES};
@@ -702,6 +739,8 @@ impl App for MenuView {
             use_state(move || initial_focused.or_else(|| first_selectable(&items_for_focus)));
         let open_child_id = use_hook(|| Rc::new(Cell::new(None)));
         let open_child_index = use_hook(|| Rc::new(Cell::new(None::<usize>)));
+        let hover_state = use_hook(|| Rc::new(RefCell::new(HoverState::default())));
+        let timers: Option<Timers> = try_consume_root_context();
         let query_state = self.query_state.clone();
         let initial = query_state
             .as_ref()
@@ -845,6 +884,130 @@ impl App for MenuView {
             }
         }
 
+        let visible_rc = Rc::new(visible.clone());
+
+        let execute_target: Rc<dyn Fn(usize)> = {
+            let focused = Cell::new(focused);
+            let open_child_id = open_child_id.clone();
+            let open_child_index = open_child_index.clone();
+            let hover_state = hover_state.clone();
+            let popup = popup.clone();
+            let items = visible_rc.clone();
+            let on_activate = on_activate.clone();
+            let on_dismiss_all = on_dismiss_all.clone();
+            let on_open_submenu = on_open_submenu.clone();
+            let submenu_source = submenu_source.clone();
+            Rc::new(move |index: usize| {
+                hover_state.borrow_mut().pending = None;
+                let mut focused = focused.get();
+                focused.set(Some(index));
+                if open_child_index.get() == Some(index) {
+                    return;
+                }
+                close_child(open_child_id.clone(), open_child_index.clone());
+                if let Some(MenuItem::Submenu { id, items: sub, .. }) = items.get(index)
+                    && let Some(popup) = popup.clone()
+                {
+                    open_child_popup(
+                        index,
+                        id.as_deref(),
+                        sub,
+                        popup,
+                        size,
+                        palette_source,
+                        on_activate.clone(),
+                        on_dismiss_all.clone(),
+                        on_open_submenu.clone(),
+                        submenu_source.clone(),
+                        open_child_id.clone(),
+                        open_child_index.clone(),
+                        items.clone(),
+                        opens_left,
+                    );
+                }
+            })
+        };
+
+        let start_delay = {
+            let hover_state = hover_state.clone();
+            let timers = timers.clone();
+            let execute_target = execute_target.clone();
+            move |target_index: usize,
+                  from: CursorPoint,
+                  to_top: CursorPoint,
+                  to_bottom: CursorPoint| {
+                let mut hs = hover_state.borrow_mut();
+                hs.generation += 1;
+                let generation = hs.generation;
+                hs.pending = Some(HoverPending {
+                    generation,
+                    target_index,
+                    from,
+                    to_top,
+                    to_bottom,
+                });
+                drop(hs);
+                if let Some(timers) = timers.clone() {
+                    let hover_state = hover_state.clone();
+                    let execute_target = execute_target.clone();
+                    timers.after(SUBMENU_INTENT_DELAY, move || {
+                        if hover_state
+                            .borrow()
+                            .pending
+                            .as_ref()
+                            .is_some_and(|p| p.generation == generation)
+                        {
+                            execute_target(target_index);
+                        }
+                    });
+                } else {
+                    execute_target(target_index);
+                }
+            }
+        };
+
+        let enter_row: Rc<dyn Fn(usize, CursorPoint)> = {
+            let hover_state = hover_state.clone();
+            let open_child_index = open_child_index.clone();
+            let items = visible_rc.clone();
+            let execute_target = execute_target.clone();
+            let start_delay = Rc::new(start_delay);
+            Rc::new(move |index: usize, pos: CursorPoint| {
+                let from = hover_state.borrow().last.map(|(_, p)| p).unwrap_or(pos);
+                hover_state.borrow_mut().last = Some((Instant::now(), pos));
+                hover_state.borrow_mut().pending = None;
+                if let Some(child_index) = open_child_index.get()
+                    && child_index != index
+                    && let Some(MenuItem::Submenu { .. }) = items.get(child_index)
+                {
+                    let row_top = m.padding + item_top(child_index, &items, m);
+                    let near_x = if opens_left { 0.0 } else { size.0 };
+                    let to_top = CursorPoint::new(near_x as f64, row_top as f64);
+                    let to_bottom =
+                        CursorPoint::new(near_x as f64, (row_top + m.item_height) as f64);
+                    if point_in_triangle(pos, from, to_top, to_bottom) {
+                        start_delay(index, from, to_top, to_bottom);
+                        return;
+                    }
+                }
+                execute_target(index);
+            })
+        };
+
+        let move_row: Rc<dyn Fn(usize, CursorPoint)> = {
+            let hover_state = hover_state.clone();
+            let execute_target = execute_target.clone();
+            Rc::new(move |index: usize, pos: CursorPoint| {
+                hover_state.borrow_mut().last = Some((Instant::now(), pos));
+                if let Some(pending) = hover_state.borrow().pending
+                    && pending.target_index == index
+                    && !point_in_triangle(pos, pending.from, pending.to_top, pending.to_bottom)
+                {
+                    execute_target(index);
+                }
+            })
+        };
+
         let rows: Vec<Element> = visible
             .iter()
             .enumerate()
@@ -864,7 +1027,7 @@ impl App for MenuView {
                     opens_left,
                     on_activate.clone(),
                     on_dismiss_all.clone(),
-                    Rc::new(visible.clone()),
+                    visible_rc.clone(),
                     focused,
                     open_child_id.clone(),
                     open_child_index.clone(),
@@ -876,6 +1039,9 @@ impl App for MenuView {
                     result_focused,
                     on_open_submenu.clone(),
                     submenu_source.clone(),
+                    enter_row.clone(),
+                    move_row.clone(),
+                    execute_target.clone(),
                 )
             })
             .collect();
@@ -923,8 +1089,16 @@ impl App for MenuView {
         for family in SANS_FAMILIES {
             root = root.font_family(family);
         }
+        let hover_state_leave = hover_state.clone();
+        root = root.on_pointer_leave(move |event: Event<PointerEventData>| {
+            let pos = event.global_location();
+            let mut hs = hover_state_leave.borrow_mut();
+            hs.last = Some((Instant::now(), pos));
+            hs.pending = None;
+        });
         let visible_for_keys = Rc::new(visible.clone());
         root.on_global_key_down(move |event: Event<KeyboardEventData>| {
+            hover_state.borrow_mut().pending = None;
             let mut focused = focused;
             let mut query = query;
             let mut result_focused = result_focused;
@@ -1720,23 +1894,26 @@ fn render_item(
     index: usize,
     is_focused: bool,
     m: MenuPalette,
-    palette_source: PaletteSource,
-    popup: Option<PopupHandle>,
-    opens_left: bool,
+    _palette_source: PaletteSource,
+    _popup: Option<PopupHandle>,
+    _opens_left: bool,
     on_activate: Rc<dyn Fn(String)>,
     on_dismiss_all: Rc<dyn Fn()>,
-    items: Rc<Vec<MenuItem>>,
-    focused: UseState<Option<usize>>,
-    open_child_id: Rc<Cell<Option<PopupId>>>,
-    open_child_index: Rc<Cell<Option<usize>>>,
+    _items: Rc<Vec<MenuItem>>,
+    _focused: UseState<Option<usize>>,
+    _open_child_id: Rc<Cell<Option<PopupId>>>,
+    _open_child_index: Rc<Cell<Option<usize>>>,
     size: (f32, f32),
     query: UseState<String>,
     selected: UseState<bool>,
     menu_search_icon: Option<&'static str>,
     help_search_icon: Option<&'static str>,
     result_focused: UseState<Option<usize>>,
-    on_open_submenu: Option<Rc<dyn Fn(String)>>,
-    submenu_source: Option<SubmenuSource>,
+    _on_open_submenu: Option<Rc<dyn Fn(String)>>,
+    _submenu_source: Option<SubmenuSource>,
+    on_row_enter: Rc<dyn Fn(usize, CursorPoint)>,
+    on_row_move: Rc<dyn Fn(usize, CursorPoint)>,
+    on_row_click: Rc<dyn Fn(usize)>,
 ) -> Element {
     match item {
         MenuItem::Separator => rect()
@@ -1764,9 +1941,8 @@ fn render_item(
             let enabled = *enabled;
             let check = *check;
             let icon = icon.clone();
-            let mut focused = focused;
-            let open_child_id_enter = open_child_id.clone();
-            let open_child_index_enter = open_child_index.clone();
+            let on_row_enter = on_row_enter.clone();
+            let on_row_move = on_row_move.clone();
             let shortcut_w = shortcut_text
                 .as_ref()
                 .map(|s| measure_text(s, m.font_size))
@@ -1803,30 +1979,14 @@ fn render_item(
                 .direction(Direction::Horizontal)
                 .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
-                .on_pointer_enter({
-                    let open_child_id_enter = open_child_id_enter.clone();
-                    let open_child_index_enter = open_child_index_enter.clone();
-                    move |_| {
-                        if enabled {
-                            focused.set(Some(index));
-                            close_child(
-                                open_child_id_enter.clone(),
-                                open_child_index_enter.clone(),
-                            );
-                        }
+                .on_pointer_enter(move |event: Event<PointerEventData>| {
+                    if enabled {
+                        on_row_enter(index, event.global_location());
                     }
                 })
-                .on_pointer_move({
-                    let open_child_id_enter = open_child_id_enter.clone();
-                    let open_child_index_enter = open_child_index_enter.clone();
-                    move |_| {
-                        if enabled {
-                            focused.set(Some(index));
-                            close_child(
-                                open_child_id_enter.clone(),
-                                open_child_index_enter.clone(),
-                            );
-                        }
+                .on_pointer_move(move |event: Event<PointerEventData>| {
+                    if enabled {
+                        on_row_move(index, event.global_location());
                     }
                 })
                 .on_mouse_down(move |_: Event<MouseEventData>| {
@@ -1868,19 +2028,16 @@ fn render_item(
                 .into_element()
         }
         MenuItem::Submenu {
-            id,
+            id: _id,
             label: label_text,
             enabled,
-            items: sub_items,
+            items: _sub_items,
             icon,
         } => {
-            let id = id.clone();
             let label_text = label_text.clone();
             let enabled = *enabled;
             let icon = icon.clone();
-            let mut focused = focused;
-            let sub_items_enter = sub_items.clone();
-            let sub_items_click = sub_items.clone();
+            let on_row_click = on_row_click.clone();
             let fg = if enabled {
                 if is_focused { m.hover_fg } else { m.fg }
             } else {
@@ -1891,21 +2048,6 @@ fn render_item(
             } else {
                 None
             };
-            let popup_enter = popup.clone();
-            let popup_click = popup.clone();
-            let on_activate_enter = on_activate.clone();
-            let on_activate_click = on_activate.clone();
-            let on_dismiss_enter = on_dismiss_all.clone();
-            let on_dismiss_click = on_dismiss_all.clone();
-            let items_enter = items.clone();
-            let items_click = items.clone();
-            let open_child_id_enter = open_child_id.clone();
-            let open_child_id_click = open_child_id.clone();
-            let open_child_index_enter = open_child_index.clone();
-            let open_child_index_click = open_child_index.clone();
-            let id_enter = id.clone();
-            let on_open_submenu_enter = on_open_submenu.clone();
-            let submenu_source_enter = submenu_source.clone();
             let mut row = rect()
                 .width(Size::fill())
                 .height(Size::px(m.item_height))
@@ -1914,47 +2056,19 @@ fn render_item(
                 .direction(Direction::Horizontal)
                 .main_align(Alignment::SpaceBetween)
                 .cross_align(Alignment::Center)
-                .on_pointer_enter(move |_| {
+                .on_pointer_enter(move |event: Event<PointerEventData>| {
                     if enabled {
-                        focused.set(Some(index));
+                        on_row_enter(index, event.global_location());
                     }
-                    if enabled && let Some(popup) = popup_enter.clone() {
-                        open_child_popup(
-                            index,
-                            id_enter.as_deref(),
-                            &sub_items_enter,
-                            popup,
-                            size,
-                            palette_source,
-                            on_activate_enter.clone(),
-                            on_dismiss_enter.clone(),
-                            on_open_submenu_enter.clone(),
-                            submenu_source_enter.clone(),
-                            open_child_id_enter.clone(),
-                            open_child_index_enter.clone(),
-                            items_enter.clone(),
-                            opens_left,
-                        );
+                })
+                .on_pointer_move(move |event: Event<PointerEventData>| {
+                    if enabled {
+                        on_row_move(index, event.global_location());
                     }
                 })
                 .on_mouse_down(move |_: Event<MouseEventData>| {
-                    if enabled && let Some(popup) = popup_click.clone() {
-                        open_child_popup(
-                            index,
-                            id.as_deref(),
-                            &sub_items_click,
-                            popup,
-                            size,
-                            palette_source,
-                            on_activate_click.clone(),
-                            on_dismiss_click.clone(),
-                            on_open_submenu.clone(),
-                            submenu_source.clone(),
-                            open_child_id_click.clone(),
-                            open_child_index_click.clone(),
-                            items_click.clone(),
-                            opens_left,
-                        );
+                    if enabled {
+                        on_row_click(index);
                     }
                 });
             if let Some(bg) = bg {
