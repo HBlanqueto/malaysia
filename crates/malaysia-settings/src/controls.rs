@@ -305,12 +305,7 @@ fn open_traffic_menu(
     let origin = global - element;
     let (offset_x, offset_y) = traffic_menu_offset();
     let spec = PopupSpec {
-        anchor_rect: (
-            origin.x.round() as i32,
-            origin.y.round() as i32,
-            1,
-            1,
-        ),
+        anchor_rect: (origin.x.round() as i32, origin.y.round() as i32, 1, 1),
         anchor: PopupAnchor::TopLeft,
         gravity: PopupGravity::BottomRight,
         offset: (offset_x, offset_y),
