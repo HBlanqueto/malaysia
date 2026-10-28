@@ -1134,6 +1134,31 @@ pub struct GtkMenusAddress {
     pub window_object_path: String,
 }
 
+impl GtkMenusAddress {
+    /// Returns a `GtkMenusAddress` only when `unique_bus_name` is non-empty and
+    /// at least one of `menubar_path` / `app_menu_path` is non-empty.
+    pub(crate) fn new(
+        unique_bus_name: String,
+        application_id: String,
+        menubar_path: String,
+        app_menu_path: String,
+        application_object_path: String,
+        window_object_path: String,
+    ) -> Option<Self> {
+        if unique_bus_name.is_empty() || (menubar_path.is_empty() && app_menu_path.is_empty()) {
+            return None;
+        }
+        Some(Self {
+            unique_bus_name,
+            application_id,
+            menubar_path,
+            app_menu_path,
+            application_object_path,
+            window_object_path,
+        })
+    }
+}
+
 /// A change that only touches one toplevel's metadata. Kept pure so the
 /// interleaved-event ordering can be tested without Wayland.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -3843,18 +3868,14 @@ impl Dispatch<InfinityWindowManagerV1, ()> for Shell {
                 application_object_path,
                 window_object_path,
             } => {
-                let address = if unique_bus_name.is_empty() || menubar_path.is_empty() {
-                    None
-                } else {
-                    Some(GtkMenusAddress {
-                        unique_bus_name,
-                        application_id,
-                        menubar_path,
-                        app_menu_path,
-                        application_object_path,
-                        window_object_path,
-                    })
-                };
+                let address = GtkMenusAddress::new(
+                    unique_bus_name,
+                    application_id,
+                    menubar_path,
+                    app_menu_path,
+                    application_object_path,
+                    window_object_path,
+                );
                 update_toplevel_info(
                     &mut state.toplevel_entries.borrow_mut(),
                     &toplevel,
@@ -4075,14 +4096,14 @@ mod tests {
         apply_info_event(
             &mut infos,
             0,
-            InfoEvent::GtkMenus(Some(GtkMenusAddress {
-                unique_bus_name: ":1.3".to_string(),
-                application_id: "org.gtk.Demo".to_string(),
-                menubar_path: "/menubar".to_string(),
-                app_menu_path: "/appmenu".to_string(),
-                application_object_path: "/application".to_string(),
-                window_object_path: "/window".to_string(),
-            })),
+            InfoEvent::GtkMenus(GtkMenusAddress::new(
+                ":1.3".to_string(),
+                "org.gtk.Demo".to_string(),
+                "/menubar".to_string(),
+                "/appmenu".to_string(),
+                "/application".to_string(),
+                "/window".to_string(),
+            )),
         );
         assert_eq!(
             infos[0]
@@ -4095,5 +4116,63 @@ mod tests {
 
         apply_info_event(&mut infos, 0, InfoEvent::GtkMenus(None));
         assert!(infos[0].gtk_menus.is_none());
+    }
+
+    #[test]
+    fn gtk_menus_address_needs_a_bus_name() {
+        assert!(
+            GtkMenusAddress::new(
+                "".to_string(),
+                "org.gtk.Demo".to_string(),
+                "/menubar".to_string(),
+                "".to_string(),
+                "".to_string(),
+                "".to_string(),
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn gtk_menus_address_accepts_app_menu_only() {
+        let address = GtkMenusAddress::new(
+            ":1.2".to_string(),
+            "org.gtk.Demo".to_string(),
+            "".to_string(),
+            "/appmenu".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        assert!(address.is_some());
+        assert_eq!(address.unwrap().app_menu_path, "/appmenu");
+    }
+
+    #[test]
+    fn gtk_menus_address_accepts_menubar_only() {
+        let address = GtkMenusAddress::new(
+            ":1.2".to_string(),
+            "org.gtk.Demo".to_string(),
+            "/menubar".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        );
+        assert!(address.is_some());
+        assert_eq!(address.unwrap().menubar_path, "/menubar");
+    }
+
+    #[test]
+    fn gtk_menus_address_rejects_both_paths_empty() {
+        assert!(
+            GtkMenusAddress::new(
+                ":1.2".to_string(),
+                "org.gtk.Demo".to_string(),
+                "".to_string(),
+                "".to_string(),
+                "".to_string(),
+                "".to_string(),
+            )
+            .is_none()
+        );
     }
 }

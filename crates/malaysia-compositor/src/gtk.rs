@@ -60,6 +60,24 @@ impl GtkDbusProperties {
             && self.application_object_path.is_empty()
             && self.unique_bus_name.is_empty()
     }
+
+    /// The GTK menu address represented by these properties, if the bus name is
+    /// present and at least one of the menu paths is present.
+    fn to_menus_address(&self) -> Option<GtkMenusAddress> {
+        if self.unique_bus_name.is_empty()
+            || (self.menubar_path.is_empty() && self.app_menu_path.is_empty())
+        {
+            return None;
+        }
+        Some(GtkMenusAddress {
+            unique_bus_name: self.unique_bus_name.clone(),
+            application_id: self.application_id.clone(),
+            menubar_path: self.menubar_path.clone(),
+            app_menu_path: self.app_menu_path.clone(),
+            window_object_path: self.window_object_path.clone(),
+            application_object_path: self.application_object_path.clone(),
+        })
+    }
 }
 
 /// Per-surface GTK state: the D-Bus properties and the modal flag.
@@ -409,17 +427,7 @@ impl State {
     pub(crate) fn gtk_menus_address(&self, id: WindowId) -> Option<GtkMenusAddress> {
         let surface = self.windows.surface_of(id)?;
         let props = self.gtk.props(surface)?;
-        if props.unique_bus_name.is_empty() || props.menubar_path.is_empty() {
-            return None;
-        }
-        Some(GtkMenusAddress {
-            unique_bus_name: props.unique_bus_name.clone(),
-            application_id: props.application_id.clone(),
-            menubar_path: props.menubar_path.clone(),
-            app_menu_path: props.app_menu_path.clone(),
-            window_object_path: props.window_object_path.clone(),
-            application_object_path: props.application_object_path.clone(),
-        })
+        props.to_menus_address()
     }
 }
 
@@ -715,6 +723,25 @@ mod tests {
         assert_eq!(decode_gesture(0), None);
         assert_eq!(decode_gesture(4), None);
         assert_eq!(decode_gesture(u32::MAX), None);
+    }
+
+    #[test]
+    fn app_menu_only_is_enough_for_gtk_menus_address() {
+        let address = props(":1.2", "", "/appmenu").to_menus_address();
+        assert!(address.is_some());
+        assert_eq!(address.unwrap().app_menu_path, "/appmenu");
+    }
+
+    #[test]
+    fn menubar_only_is_enough_for_gtk_menus_address() {
+        let address = props(":1.2", "/menubar", "").to_menus_address();
+        assert!(address.is_some());
+        assert_eq!(address.unwrap().menubar_path, "/menubar");
+    }
+
+    #[test]
+    fn no_menu_paths_means_no_gtk_menus_address() {
+        assert!(props(":1.2", "", "").to_menus_address().is_none());
     }
 
     #[test]
