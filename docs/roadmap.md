@@ -281,6 +281,14 @@ Documentado en los [ADR 0036](decisiones/0036-menu-global.md) y
     la barra desde 14d-2. GTK3 queda para `gtk_shell1`/`org.gtk.Menus`; el
     casado por pid del Registrar, pendiente de XWayland. Las dos preferencias
     de Firefox viven en `~/nixdots`, nunca en el repo.
+  - **14d-5:** **implementado y aceptado (anidado, 2026-10-27)**:
+    títulos recordados por app, espera corta antes del respaldo (`MENU_GRACE`
+    = 399 ms, máximo de Firefox + 100) y sin caer al respaldo cuando la
+    dirección ya se anunció. Ver `bloques/14-menu-global.md`.
+  - **14d-6:** **implementado y aceptado (anidado, 2026-10-27)**:
+    separadores sin duplicar ni en los bordes, «Sin elementos», menús abiertos
+    que siguen la apariencia y separadores visibles con el tinte (14 % hacia
+    `ink`, contraste ≥ 1.25:1). Ver `bloques/14-menu-global.md`.
 - **14e — Apps de BarrierKit exportan dbusmenu.** Sin atajo privado por
   Infinity.
 - **14f — GTK (`gtk_shell1` → `org.gtk.Menus`).**
@@ -406,8 +414,8 @@ Ver [`investigacion/escalado-macos.md`](investigacion/escalado-macos.md).
   polkit y una VM de prueba (sección Transversal).
 - **Bloque 12 — parcial.** 12a/Settings hecho; faltan Screenshot, ScreenCast,
   los diálogos de permiso y 12b (notificaciones, polkit, keyring, AT-SPI).
-- **Bloque 14 — 14a, 14b-1, 14c, 14d-2 y 14d-3 en anidado; 14b-2 y 14e
-  pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
+- **Bloque 14 — 14a, 14b-1, 14c, 14d-2, 14d-3, 14d-5 y 14d-6 en anidado;
+  14b-2 y 14e pendientes.** El menú global está decidido (`org_kde_kwin_appmenu` +
   `com.canonical.dbusmenu`, ADR 0036) y repartido en 14a–14e. 14a (popups en
   BarrierKit) aceptado en el ThinkPad el 2026-10-24 en sesión anidada. 14b-1
   (menú «MalaysiaDreams» de escritorio en `malaysia-shell menubar`) aceptado en anidado el

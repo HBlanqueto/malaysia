@@ -605,6 +605,103 @@ attribute … appmenu-gtk3-module`), así que no hubo prueba con `gtk3-demo`.
 - Con muchos títulos la barra recorta por la derecha (sin menú de
   desbordamiento), como ya fijó el ADR 0040 §6.
 
+### 14d-5 — Títulos recordados y espera antes del respaldo (implementado)
+
+Aceptado el **2026-10-27** en sesión anidada con Firefox 158.0, Kate 26.08.2,
+foot 1.28.0 y Contador, en oscuro con Acento rojo. La barra recuerda los
+títulos de primer nivel por `app_id`; al mapear una ventana nueva los pinta
+desde el primer frame mientras llega el `appmenu`, y espera `MENU_GRACE`
+antes de caer al respaldo de 14c. Una ventana sin dirección ni títulos se
+queda esperando; cuando el árbol real llega, reemplaza los títulos.
+
+**Medida de la espera.** La tabla por ejecución de 14d-5 no quedó en el
+repo, así que se repitió en esta aceptación con cinco perfiles temporales
+nuevos de Firefox y cinco lanzamientos de Kate (milisegundos desde el map
+hasta `appmenu set`; negativo = antes del map):
+
+| Ejecución | Firefox | Kate |
+|---|---:|---:|
+| 1 | 297.7 | −63.0 |
+| 2 | 249.3 | −53.1 |
+| 3 | 256.7 | −48.7 |
+| 4 | 256.2 | −55.0 |
+| 5 | 299.0 | −50.2 |
+
+La regla es el máximo de Firefox más 100 ms, con tope de 1500: 299.0 + 100 =
+399 ms. `MENU_GRACE` queda en **399 ms** (antes 405).
+
+**Observado.**
+
+Primer lanzamiento de Firefox (ventana 9):
+
+```text
+03:48:25.307551 window mapped window=9 app_id="firefox"
+03:48:25.309026 menubar: app_menu none app_id=firefox
+03:48:25.521951 appmenu set window=9 service=:1.5 path=/com/canonical/menu/0
+03:48:25.708369 menubar: dbusmenu root snapshot generation=10 titles=0 cached=false ms=135
+03:48:33.810690 menubar: dbusmenu root snapshot generation=10 titles=7 cached=false ms=1
+```
+
+La barra mostró ❄ · Firefox durante la espera y después el menú real; no
+apareció el respaldo Ventana/Ayuda.
+
+Segundo lanzamiento (ventana 10), mismo perfil:
+
+```text
+03:49:39.776931 window mapped window=10 app_id="firefox"
+03:49:39.778557 menubar: app_menu none app_id=firefox
+03:49:39.847574 appmenu set window=10 service=:1.38 path=/com/canonical/menu/0
+03:49:39.899590 menubar: dbusmenu root snapshot generation=20 titles=7 cached=false ms=1
+```
+
+File, Edit, View… aparecieron desde el primer frame (comprobado
+visualmente); el primer snapshot llegó 122.6 ms después del map.
+
+foot (ventana 0): `app_menu none` 4.7 ms después del map y nunca
+`appmenu set`; el respaldo apareció de inmediato.
+
+Kate (ventana 5, sin documento): `appmenu set` 62.3 ms antes del map; el
+primer nivel llegó 53 ms después (`titles=11`).
+
+### 14d-6 — Separadores, menú vacío y apariencia en vivo (implementado)
+
+Aceptado el **2026-10-27** en la misma sesión anidada (oscuro, Acento rojo).
+Incluye la normalización de separadores, el aviso «Sin elementos», los menús
+abiertos que siguen la apariencia y los separadores visibles con el tinte.
+
+**Separadores.** Kate sin documento envía cuatro separadores al principio
+del submenú Editar y solo dos acciones (`Buscar en archivos`, `Buscar
+variantes en archivos`); la barra recorta los separadores y pinta las dos
+acciones, nunca una caja vacía. Con documento, Archivo, Editar, Ver y
+Herramientas no muestran dos separadores seguidos ni uno en los bordes
+(comprobado visualmente). Un menú sin ítems pinta la fila «Sin elementos»
+(`an_empty_menu_shows_the_placeholder`).
+
+**Tinte y contraste.** Con Acento o Fondo el separador es el fondo resuelto
+del panel mezclado un 14 % hacia `ink`; con Neutro queda el `line` de siempre.
+Con Acento rojo (`#ec4646`) los tests miden:
+
+| Esquema | Contraste separador/fondo |
+|---|---:|
+| Claro | 1.315:1 |
+| Oscuro | 1.441:1 |
+| Dark tint | 1.440:1 |
+
+Los tests recorren los 8 acentos de Neptunia, tres tintes de fondo
+(oscuro, medio y claro) y los tres esquemas, con menú de barra y de ventana;
+el mínimo exigido es 1.25:1. La comprobación visual cubrió Acento rojo, azul
+y verde, Fondo y Neutro, en claro y en oscuro.
+
+**Apariencia en vivo.** Con ❄ › Ayuda abierto, cambiar `accent_color` y
+después `color_scheme` en `appearance.domain` recoloreó el menú abierto sin
+cerrarlo (comprobado visualmente).
+
+![Editar de Kate con Acento rojo en oscuro](img/14d/kate-editar-acento-rojo-oscuro.png)
+
+`kate-editar-acento-rojo-oscuro.png`: Kate con documento, Editar abierto,
+tema oscuro y Acento rojo; los separadores de los grupos se ven sobre el
+fondo tintado del panel.
+
 
 ## Aceptación de 14a
 
