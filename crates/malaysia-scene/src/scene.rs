@@ -226,51 +226,6 @@ impl Scene {
             .map(|entry| entry.id)
     }
 
-    /// The topmost window whose resize zone contains `point`, if any.
-    ///
-    /// `side` is the exterior band along each edge and `corner` is the length
-    /// of the exterior L at each corner, both in logical pixels. A point in a
-    /// corner L returns the corner, not one side.
-    ///
-    /// The search is top-to-bottom. A point inside a window's outer rectangle
-    /// but not in its 2 px corner inset is content: it stops the search, so the
-    /// exterior band of a lower window never steals input from the content of
-    /// one above. A point outside every outer rectangle may still hit the
-    /// exterior band of the topmost window whose band reaches it.
-    pub fn edge_at(
-        &self,
-        point: Point<f64, Logical>,
-        side: f64,
-        corner: f64,
-        eligible: impl Fn(WindowId) -> bool,
-    ) -> Option<(WindowId, Edge)> {
-        self.edge_at_with(point, |id| eligible(id).then_some((side, corner, false)))
-    }
-
-    /// Like [`Self::edge_at`], but each eligible window chooses its own band.
-    ///
-    /// `eligible` returns `(side, corner, exterior_only)`. An exterior-only
-    /// band never matches inside the window rectangle, so a client that owns
-    /// its interior keeps every click there.
-    pub fn edge_at_with(
-        &self,
-        point: Point<f64, Logical>,
-        eligible: impl Fn(WindowId) -> Option<(f64, f64, bool)>,
-    ) -> Option<(WindowId, Edge)> {
-        for entry in self.windows.iter().rev() {
-            if let Some((side, corner, exterior_only)) = eligible(entry.id)
-                && (!exterior_only || !entry.outer.contains(point))
-                && let Some(edge) = edge_in(entry.outer, point, side, corner)
-            {
-                return Some((entry.id, edge));
-            }
-            if entry.outer.contains(point) {
-                return None;
-            }
-        }
-        None
-    }
-
     /// The topmost window, if any.
     pub fn topmost(&self) -> Option<WindowId> {
         self.windows.last().map(|entry| entry.id)
@@ -391,7 +346,7 @@ const CORNER_INSET: f64 = 2.0;
 /// Sides are an exterior band of `side`; corners are an exterior L of length
 /// `corner` along each side, with a 2 px inward tolerance. There are no large
 /// squares inside the content: a point 30 px inside a corner is client area.
-fn edge_in(
+pub fn edge_at(
     outer: Rect<f64, Logical>,
     point: Point<f64, Logical>,
     side: f64,
@@ -441,20 +396,6 @@ fn edge_in(
         return Some(Edge::Right);
     }
     None
-}
-
-/// A resize edge strictly outside `outer`, never inside the client content.
-pub fn exterior_edge(
-    outer: Rect<f64, Logical>,
-    point: Point<f64, Logical>,
-    side: f64,
-    corner: f64,
-) -> Option<Edge> {
-    if outer.contains(point) {
-        None
-    } else {
-        edge_in(outer, point, side, corner)
-    }
 }
 
 /// The outer rectangle produced by dragging one edge or corner of `start`.
@@ -543,7 +484,7 @@ fn clamp_axis(
 mod tests {
     use crate::geometry::{Logical, Point, Rect, Size};
 
-    use super::{Decoration, Edge, PopupId, PopupParent, Scene, WindowId, resized};
+    use super::{Decoration, Edge, PopupId, PopupParent, Scene, WindowId, edge_at, resized};
 
     fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect<f64, Logical> {
         Rect::new(Point::new(x, y), Size::new(w, h))
@@ -588,151 +529,41 @@ mod tests {
 
     #[test]
     fn edge_zones_sit_outside_the_window() {
-        let mut scene = Scene::new();
-        let window = WindowId::new(1);
-        scene.insert(window, rect(100.0, 100.0, 200.0, 150.0));
+        let outer = rect(100.0, 100.0, 200.0, 150.0);
         let side = 10.0;
         let corner = 20.0;
 
         // The side band enters 2 px: one pixel inside is still Right.
         assert_eq!(
-            scene.edge_at(point(299.0, 150.0), side, corner, |_| true),
-            Some((window, Edge::Right))
+            edge_at(outer, point(299.0, 150.0), side, corner),
+            Some(Edge::Right)
         );
         // Three pixels inside is client area.
-        assert_eq!(
-            scene.edge_at(point(297.0, 150.0), side, corner, |_| true),
-            None
-        );
+        assert_eq!(edge_at(outer, point(297.0, 150.0), side, corner), None);
         // Six pixels outside the right edge: the right band.
         assert_eq!(
-            scene.edge_at(point(306.0, 150.0), side, corner, |_| true),
-            Some((window, Edge::Right))
+            edge_at(outer, point(306.0, 150.0), side, corner),
+            Some(Edge::Right)
         );
         // Six pixels outside diagonally from the top-left corner: the corner L.
         assert_eq!(
-            scene.edge_at(point(94.0, 94.0), side, corner, |_| true),
-            Some((window, Edge::TopLeft))
+            edge_at(outer, point(94.0, 94.0), side, corner),
+            Some(Edge::TopLeft)
         );
         // Thirty pixels inside a corner is content, not a 24 px square.
-        assert_eq!(
-            scene.edge_at(point(130.0, 130.0), side, corner, |_| true),
-            None
-        );
+        assert_eq!(edge_at(outer, point(130.0, 130.0), side, corner), None);
         // The sides still work away from the corners.
         assert_eq!(
-            scene.edge_at(point(150.0, 94.0), side, corner, |_| true),
-            Some((window, Edge::Top))
+            edge_at(outer, point(150.0, 94.0), side, corner),
+            Some(Edge::Top)
         );
         assert_eq!(
-            scene.edge_at(point(94.0, 150.0), side, corner, |_| true),
-            Some((window, Edge::Left))
+            edge_at(outer, point(94.0, 150.0), side, corner),
+            Some(Edge::Left)
         );
         assert_eq!(
-            scene.edge_at(point(306.0, 244.0), side, corner, |_| true),
-            Some((window, Edge::BottomRight))
-        );
-    }
-
-    #[test]
-    fn an_exterior_band_only_hits_outside_the_frame() {
-        let mut scene = Scene::new();
-        let window = WindowId::new(1);
-        scene.insert(window, rect(100.0, 100.0, 200.0, 150.0));
-        let band = |_| Some((6.0, 12.0, true));
-
-        assert_eq!(
-            scene.edge_at_with(point(303.0, 175.0), band),
-            Some((window, Edge::Right))
-        );
-        assert_eq!(
-            scene.edge_at_with(point(303.0, 253.0), band),
-            Some((window, Edge::BottomRight))
-        );
-        assert_eq!(scene.edge_at_with(point(310.0, 175.0), band), None);
-        assert_eq!(scene.edge_at_with(point(298.0, 175.0), band), None);
-    }
-
-    #[test]
-    fn content_of_a_window_above_blocks_the_band_of_one_below() {
-        let mut scene = Scene::new();
-        let below = WindowId::new(1);
-        let above = WindowId::new(2);
-        scene.insert(below, rect(100.0, 100.0, 200.0, 150.0));
-        scene.insert(above, rect(250.0, 100.0, 200.0, 150.0));
-
-        // The point is in the below window's right exterior band, but also in
-        // the above window's content. Content wins.
-        assert_eq!(
-            scene.edge_at(point(306.0, 150.0), 10.0, 20.0, |_| true),
-            None
-        );
-    }
-
-    #[test]
-    fn the_top_window_band_wins_over_lower_content() {
-        let mut scene = Scene::new();
-        let below = WindowId::new(1);
-        let above = WindowId::new(2);
-        scene.insert(below, rect(400.0, 100.0, 200.0, 150.0));
-        scene.insert(above, rect(250.0, 100.0, 200.0, 150.0));
-
-        // The point is in the above window's right exterior band and over the
-        // below window's content. The top window wins.
-        assert_eq!(
-            scene.edge_at(point(456.0, 150.0), 10.0, 20.0, |_| true),
-            Some((above, Edge::Right))
-        );
-    }
-
-    #[test]
-    fn an_exterior_band_outside_the_visible_rect_still_belongs_to_its_window() {
-        let mut scene = Scene::new();
-        let below = WindowId::new(1);
-        let above = WindowId::new(2);
-        // The above window sits completely inside the below one, but its left
-        // exterior band reaches outside the below window's visible rectangle.
-        scene.insert(below, rect(100.0, 100.0, 300.0, 200.0));
-        scene.insert(above, rect(200.0, 150.0, 100.0, 80.0));
-
-        // The point is outside the above window's rectangle, in its left band,
-        // and also outside the below window. It belongs to the above window.
-        assert_eq!(
-            scene.edge_at(point(194.0, 190.0), 10.0, 20.0, |_| true),
-            Some((above, Edge::Left))
-        );
-    }
-
-    #[test]
-    fn an_ineligible_band_does_not_count_but_its_content_still_blocks() {
-        let mut scene = Scene::new();
-        let lower = WindowId::new(1);
-        let upper = WindowId::new(2);
-        scene.insert(lower, rect(100.0, 100.0, 200.0, 150.0));
-        scene.insert(upper, rect(250.0, 100.0, 200.0, 150.0));
-
-        // The point is in the upper window's band and the lower window's
-        // content. If the upper window is ineligible, its content blocks the
-        // lower band; its own band is skipped.
-        assert_eq!(
-            scene.edge_at(point(306.0, 150.0), 10.0, 20.0, |id| id != upper),
-            None
-        );
-    }
-
-    #[test]
-    fn an_ineligible_window_still_blocks_a_lower_band_with_its_content() {
-        let mut scene = Scene::new();
-        let lower = WindowId::new(1);
-        let upper = WindowId::new(2);
-        scene.insert(lower, rect(400.0, 100.0, 200.0, 150.0));
-        scene.insert(upper, rect(250.0, 100.0, 200.0, 150.0));
-
-        // The upper window's right band is skipped, but its outer content
-        // still stops the search before the lower window.
-        assert_eq!(
-            scene.edge_at(point(456.0, 150.0), 10.0, 20.0, |id| id != upper),
-            None
+            edge_at(outer, point(306.0, 244.0), side, corner),
+            Some(Edge::BottomRight)
         );
     }
 

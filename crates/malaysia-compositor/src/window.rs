@@ -315,6 +315,50 @@ const CLIENT_RESIZE_BORDER: f64 = 6.0;
 /// Corner square outside a client-decorated frame, in logical pixels.
 const CLIENT_RESIZE_CORNER: f64 = 12.0;
 
+/// One window in the top-to-bottom resize hit test.
+struct EdgeTarget {
+    id: WindowId,
+    /// The scene rectangle, including any invisible client margin.
+    outer: SceneRect<f64, SceneLogical>,
+    /// The visible client frame of a CSD; `None` for an SSD.
+    frame: Option<SceneRect<f64, SceneLogical>>,
+    /// Whether the window may start a resize.
+    resizable: bool,
+}
+
+/// The first resize edge under `point`, searching top to bottom.
+///
+/// A point inside a higher window's outer rectangle never reaches a lower
+/// window's band, so a CSD's invisible margin blocks the window below it.
+fn edge_hit(
+    targets: impl Iterator<Item = EdgeTarget>,
+    point: ScenePoint<f64, SceneLogical>,
+    side: f64,
+    corner: f64,
+) -> Option<(WindowId, Edge)> {
+    for target in targets {
+        if target.resizable {
+            let edge = match target.frame {
+                Some(frame) if !frame.contains(point) => malaysia_scene::scene::edge_at(
+                    frame,
+                    point,
+                    CLIENT_RESIZE_BORDER,
+                    CLIENT_RESIZE_CORNER,
+                ),
+                Some(_) => None,
+                None => malaysia_scene::scene::edge_at(target.outer, point, side, corner),
+            };
+            if let Some(edge) = edge {
+                return Some((target.id, edge));
+            }
+        }
+        if target.outer.contains(point) {
+            return None;
+        }
+    }
+    None
+}
+
 /// The toplevels being tracked.
 #[derive(Default)]
 pub struct Windows {
@@ -744,11 +788,13 @@ impl Windows {
 
     /// The topmost visible window under `point` and its resize edge zone, if any.
     ///
-    /// Server-decorated windows use the configured inside/outside band.
-    /// Client-decorated windows only get an exterior band: the client owns its
-    /// interior, but GTK and Firefox drop their own resize margin once the
-    /// configure marks them tiled, so the compositor must offer the outer grab.
-    /// A maximized/fullscreen window has no free edge to drag.
+    /// One pass, top to bottom. Server-decorated windows use the configured
+    /// inside/outside band. Client-decorated windows only get an exterior band
+    /// measured against their visible frame (`window_geometry`), because the
+    /// client owns the interior and its buffer keeps an invisible shadow
+    /// margin. A point inside any higher window's outer rectangle never starts
+    /// a resize of a lower window. A maximized/fullscreen window offers no edge
+    /// but still blocks with its content.
     pub fn edge_under(
         &self,
         point: Point<f64, Logical>,
@@ -756,62 +802,28 @@ impl Windows {
         corner: f64,
         minimized: &HashSet<WindowId>,
     ) -> Option<(WindowId, Edge)> {
-        if let Some(hit) = self.scene.edge_at_with(scene_point(point), |id| {
-            if !self.is_visible(id, minimized) {
-                return None;
-            }
-            let index = self.index(id)?;
-            let data = &self.windows[index];
-            if data.maximized || data.state() != WindowState::Normal {
-                return None;
-            }
-            match self.decoration_of(id) {
-                Decoration::Server => Some((side, corner, false)),
-                Decoration::Client => None,
-            }
-        }) {
-            return Some(hit);
-        }
-
-        // A client-decorated GTK/Firefox window keeps an invisible shadow
-        // margin in its buffer, so the scene rectangle is larger than the
-        // visible frame. Hit-test the frame itself; its exterior band is the
-        // resize grab the client no longer draws.
-        for window in self.iter_visible(minimized).rev() {
+        let targets = self.iter_visible(minimized).rev().map(|window| {
             let id = window.id();
-            let index = self.index(id)?;
-            let data = &self.windows[index];
-            if data.maximized || data.state() != WindowState::Normal {
-                continue;
-            }
-            if self.decoration_of(id) != Decoration::Client {
-                if window.contains(point) {
-                    return None;
-                }
-                continue;
-            }
-            let origin = window.location() + window.surface_location();
-            let geometry = window.window_geometry();
-            let frame = SceneRect::new(
-                ScenePoint::new(
-                    f64::from(origin.x + geometry.loc.x),
-                    f64::from(origin.y + geometry.loc.y),
-                ),
-                SceneSize::new(f64::from(geometry.size.w), f64::from(geometry.size.h)),
-            );
-            if let Some(edge) = malaysia_scene::scene::exterior_edge(
+            let resizable = !window.data.maximized && window.data.state() == WindowState::Normal;
+            let frame = (self.decoration_of(id) == Decoration::Client).then(|| {
+                let origin = window.location() + window.surface_location();
+                let geometry = window.window_geometry();
+                SceneRect::new(
+                    ScenePoint::new(
+                        f64::from(origin.x + geometry.loc.x),
+                        f64::from(origin.y + geometry.loc.y),
+                    ),
+                    SceneSize::new(f64::from(geometry.size.w), f64::from(geometry.size.h)),
+                )
+            });
+            EdgeTarget {
+                id,
+                outer: window.outer(),
                 frame,
-                scene_point(point),
-                CLIENT_RESIZE_BORDER,
-                CLIENT_RESIZE_CORNER,
-            ) {
-                return Some((id, edge));
+                resizable,
             }
-            if frame.contains(scene_point(point)) {
-                return None;
-            }
-        }
-        None
+        });
+        edge_hit(targets, scene_point(point), side, corner)
     }
 
     /// The surface under a logical point, with the point in surface-local
@@ -1634,13 +1646,15 @@ mod tests {
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
-        committed_outer, configure_size, geometry_fits, initial_placement, outer_size, usable,
-        usable_rect_location,
+        EdgeTarget, anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
+        committed_outer, configure_size, edge_hit, geometry_fits, initial_placement, outer_size,
+        usable, usable_rect_location,
     };
     use crate::decoration::Insets;
-    use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
-    use malaysia_scene::scene::Edge;
+    use malaysia_scene::geometry::{
+        Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
+    };
+    use malaysia_scene::scene::{Edge, WindowId};
     use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
     use smithay::wayland::shell::xdg::ToplevelStateSet;
 
@@ -1768,6 +1782,69 @@ mod tests {
         for state in tiled_states() {
             assert!(!states.contains(state), "unexpected {state:?}");
         }
+    }
+
+    fn csd(
+        id: WindowId,
+        outer: SceneRect<f64, SceneLogical>,
+        frame: SceneRect<f64, SceneLogical>,
+    ) -> EdgeTarget {
+        EdgeTarget {
+            id,
+            outer,
+            frame: Some(frame),
+            resizable: true,
+        }
+    }
+
+    #[test]
+    fn a_csd_margin_blocks_the_band_of_the_window_below() {
+        let above = WindowId::new(1);
+        let below = WindowId::new(2);
+        let above_target = csd(
+            above,
+            SceneRect::new(ScenePoint::new(100.0, 100.0), SceneSize::new(300.0, 200.0)),
+            SceneRect::new(ScenePoint::new(120.0, 120.0), SceneSize::new(260.0, 160.0)),
+        );
+        let below_target = csd(
+            below,
+            SceneRect::new(ScenePoint::new(180.0, 130.0), SceneSize::new(226.0, 140.0)),
+            SceneRect::new(ScenePoint::new(200.0, 150.0), SceneSize::new(186.0, 100.0)),
+        );
+
+        // 10 px outside the above frame (past its 6 px band), inside its 20 px
+        // margin, and inside the below window's right band.
+        let point = ScenePoint::new(390.0, 200.0);
+        let targets = [above_target, below_target];
+        assert_eq!(edge_hit(targets.into_iter(), point, 6.0, 12.0), None);
+
+        // The same point does hit the below band when the above window is out
+        // of the way, so the block comes from the above margin.
+        let below_target = csd(
+            below,
+            SceneRect::new(ScenePoint::new(180.0, 130.0), SceneSize::new(226.0, 140.0)),
+            SceneRect::new(ScenePoint::new(200.0, 150.0), SceneSize::new(186.0, 100.0)),
+        );
+        assert_eq!(
+            edge_hit([below_target].into_iter(), point, 6.0, 12.0),
+            Some((below, Edge::Right))
+        );
+
+        // The above window's own band still wins.
+        let above_target = csd(
+            above,
+            SceneRect::new(ScenePoint::new(100.0, 100.0), SceneSize::new(300.0, 200.0)),
+            SceneRect::new(ScenePoint::new(120.0, 120.0), SceneSize::new(260.0, 160.0)),
+        );
+        assert_eq!(
+            edge_hit(
+                [above_target].into_iter(),
+                ScenePoint::new(383.0, 200.0),
+                6.0,
+                12.0
+            ),
+            Some((above, Edge::Right))
+        );
     }
 
     #[test]
