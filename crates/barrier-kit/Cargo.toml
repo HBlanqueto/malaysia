@@ -29,6 +29,7 @@ calloop.workspace = true
 wayland-client.workspace = true
 wayland-egl.workspace = true
 wayland-scanner.workspace = true
+# Lo exige el código generado por wayland-scanner en platform/infinity.rs.
 wayland-backend = "0.3"
 wayland-protocols-plasma = { workspace = true, features = ["client"] }
 zbus.workspace = true
