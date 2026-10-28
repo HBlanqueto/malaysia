@@ -383,7 +383,8 @@ impl App for BarApp {
                 Timers::get().after(delay, move || {
                     memory.borrow_mut().expire(Instant::now());
                     let mut tick = tick;
-                    tick.set(*tick.peek() + 1);
+                    let next = *tick.peek() + 1;
+                    tick.set(next);
                 });
             }
             Some(decision.choice)
