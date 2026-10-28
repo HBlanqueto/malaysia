@@ -786,40 +786,116 @@ claro; se ven Incrementar, Decrementar, Reiniciar, Paso y Permitir negativos.
 
 ## 14f-1 — GTK (`gtk_shell1` → `org.gtk.Menus`)
 
-Pendiente.
+**Aceptado en sesión anidada (ThinkPad, 2026-10-28).**
 
 El compositor sirve `gtk_shell1` versión 5, recoge las propiedades D-Bus que
 GTK 3/4 anuncia por `gtk_surface1.set_dbus_properties`, y las reenvía a la
-barra a través del nuevo evento `gtk_menus` de Infinity v3. En 14f-1 la barra
-solo loguea la dirección.
+barra a través del evento `gtk_menus` de Infinity v3. En 14f-1 el compositor
+anuncia `capabilities(0)`: GTK conserva su propio menú/headerbar y la barra
+solo registra la dirección para la siguiente fase.
 
-### Aceptación manual
+### Aceptación automática
+
+Entorno:
 
 ```sh
 ./dev.sh lab --light
-# dentro de la sesión anidada:
-gtk4-demo-application &
-gtk3-demo-application &
 ```
 
-- `gtk4-demo-application` (paquete `gtk4`) y `gtk3-demo-application` (paquete
-  `gtk3`) arrancan y muestran su headerbar/menú interno, porque en 14f-1 el
-  compositor anuncia `capabilities(0)` (no ejecutado).
-- Al cambiar el foco entre ventanas GTK el log de la barra muestra el evento
-  `gtk_menus` con `bus` y `menubar` no vacíos (no ejecutado).
-- Al cerrar la ventana GTK el log cambia a `gtk_menus none` para esa app
-  (no ejecutado).
-- `titlebar_gesture(double_click)` maximiza/restaura la ventana con la misma
-  acción configurada para el doble clic de la titlebar (no ejecutado).
-- `titlebar_gesture(right_click)` y `middle_click` solo se loguean, no abortan
-  (no ejecutado).
-- Un valor de gesto inválido produce el error de protocolo
-  `gtk_surface1.invalid_gesture` (no ejecutado).
+Apps lanzadas desde Nix:
+
+```sh
+nix shell nixpkgs#gtk4.dev --command gtk4-demo-application
+nix shell nixpkgs#gtk3.dev --command gtk3-demo-application
+nix shell nixpkgs#gnome-text-editor --command gnome-text-editor
+nix shell nixpkgs#gnome-calculator --command gnome-calculator
+nix shell nixpkgs#kdePackages.kate --command kate
+```
+
+| # | App | Nix attr | Observado |
+|---|-----|----------|-----------|
+| 1 | gtk4-demo-application | `gtk4.dev` | Crashea antes de mapear ventana (`DemoApplicationWindow.session-id`). No envía `set_dbus_properties`. |
+| 2 | gtk3-demo-application | `gtk3.dev` | Sí envía `set_dbus_properties` con rutas reales; `busctl` confirma `org.gtk.Menus`. |
+| 3 | gnome-text-editor | `gnome-text-editor` | Envía `set_dbus_properties` con `menubar` y `appmenu` vacíos. |
+| 4 | gnome-calculator | `gnome-calculator` | Envía `set_dbus_properties` con `menubar` y `appmenu` vacíos. |
+| 5 | LibreOffice Writer | `libreoffice` | No probado; la descarga desde `cache.nixos.org` se estancó en 449.8 MiB. |
+| 6 | foot | `foot` | No ofrece menú global; la barra loguea `app_menu none` y `gtk_menus none`. |
+| 7 | Kate | `kdePackages.kate` | Continúa usando dbusmenu; la barra loguea `app_menu` con `service`, `path` y `generation`. |
+
+Log del compositor (rutas D-Bus recogidas, `capabilities(0)`):
+
+```text
+gtk_menus set window=7 bus=:1.2 menubar= appmenu=          # nautilus (arrancado por ./dev.sh lab)
+gtk_menus set window=9 bus=:1.36 menubar=/org/gtk/Demo2/menus/menubar appmenu=/org/gtk/Demo2/menus/appmenu
+gtk_menus set window=10 bus=:1.37 menubar= appmenu=        # org.gnome.TextEditor
+gtk_menus set window=11 bus=:1.38 menubar= appmenu=        # org.gnome.Calculator
+```
+
+Verificación de `org.gtk.Menus` en gtk3-demo-application:
+
+```sh
+busctl --user introspect :1.36 /org/gtk/Demo2/menus/menubar
+busctl --user introspect :1.36 /org/gtk/Demo2/menus/appmenu
+busctl --user call :1.36 /org/gtk/Demo2/menus/menubar org.gtk.Menus Start au 1 0
+# a(uuaa{sv}) 1 0 0 2 2 "label" s "_Preferences" ":submenu" (uu) 1 0 ...
+busctl --user call :1.36 /org/gtk/Demo2/menus/appmenu org.gtk.Menus Start au 1 0
+# a(uuaa{sv}) 3 0 0 2 1 ":section" (uu) 0 1 ... "action" s "app.new" ...
+```
+
+Log de la barra (Infinity v3 `gtk_menus`):
+
+```text
+menubar: app_menu none app_id=gtk3-demo-application
+menubar: gtk_menus app_id=gtk3-demo-application bus=:1.36 menubar=/org/gtk/Demo2/menus/menubar appmenu=/org/gtk/Demo2/menus/appmenu
+menubar: app_menu none app_id=foot
+menubar: gtk_menus none app_id=foot
+menubar: app_menu app_id=org.kde.kate service=:1.39 path=/MenuBar/2 generation=14
+menubar: gtk_menus none app_id=org.kde.kate
+```
+
+### Aceptación manual
+
+Checklist visual:
+
+- [ ] `gtk4-demo-application`: no aplica (crashea; se reporta arriba).
+- [x] `gtk3-demo-application`: se abre, muestra su menú/headerbar nativo (cap 0), la barra refleja `gtk_menus` con `bus` y `menubar` no vacíos.
+- [x] `gnome-text-editor`: se abre, envía propiedades vacías; la barra loguea `gtk_menus none`.
+- [x] `gnome-calculator`: se abre, envía propiedades vacías; la barra loguea `gtk_menus none`.
+- [ ] `libreoffice --writer`: no probado por bloqueo de descarga.
+- [x] `foot`: no tiene menú global; `app_menu none` + `gtk_menus none`.
+- [x] `kate`: conserva dbusmenu; `app_menu` con service/path/generation.
+
+Gestos de titlebar (verificados sobre la ventana SSD de demo del propio repo,
+porque las apps GTK CSD no tienen titlebar del compositor):
+
+- [x] `titlebar_gesture(double_click)` maximiza/restaura la ventana con la
+  acción configurada para el doble clic de la titlebar.
+- [x] `titlebar_gesture(right_click)` y `middle_click` solo se loguean, no abortan.
+- [x] Un valor de gesto inválido produce el error de protocolo
+  `gtk_surface1.invalid_gesture`.
+
+### Capturas
+
+- `docs/bloques/img/14f/gtk3-demo.png` — `gtk3-demo-application` enfocado;
+  la barra muestra el menú global de GTK (aunque con `capabilities(0)` aún
+  se dibuja el menú interno de la app, la barra ya recibe la dirección).
+- `docs/bloques/img/14f/gnome-text-editor.png` — editor enfocado, barra visible.
+- `docs/bloques/img/14f/gnome-calculator.png` — calculadora enfocada, barra visible.
+- `docs/bloques/img/14f/kate.png` — Kate enfocada; la barra usa dbusmenu.
+- `docs/bloques/img/14f/gtk4-demo-crash.png` — estado del escritorio cuando
+  `gtk4-demo-application` crashea; no hay ventana GTK 4 que enfocar.
 
 ### Notas
 
 - El protocolo `gtk-shell.xml` está copiado sin modificar del repositorio GTK en
   el commit `efcc16deb0e0373655e2e4aed139ff7de3096134` (ver `NOTICE`).
+- Se corrigieron dos errores para llegar a la aceptación:
+  1. `infinity_window_manager_v1` se anunciaba como versión 2; debe ser
+     versión 3 para que la barra reciba el evento `gtk_menus`
+     (`fix(compositor): anunciar infinity_window_manager_v1 versión 3`).
+  2. `GtkMenusAddress` rechazaba direcciones con solo `app_menu_path`; ahora
+     acepta `menubar_path` o `app_menu_path`
+     (`refactor(compositor,kit): app_menu solo es suficiente para gtk_menus`).
 - `capabilities` usa 0 en 14f-1; 14f-2 lo subirá a 3 para que GTK oculte su
   menú interno y la barra dibuje el árbol `org.gtk.Menus`.
 - La prioridad entre fuentes se mantiene como fija en el ADR 0045:
