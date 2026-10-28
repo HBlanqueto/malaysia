@@ -119,49 +119,55 @@ impl MenuMemory {
             }
             let showing_titles = grace.showing_titles;
             self.grace = None;
-            if showing_titles {
+            // An address that arrived keeps the titles (or the bare app name)
+            // until the real snapshot replaces them; only a window that never
+            // announced a menu loses them.
+            if showing_titles && address.is_none() {
                 self.titles.remove(app_id);
             }
         }
         if let Some(titles) = self.titles.get(app_id) {
-            let deadline = now + MENU_GRACE;
-            self.grace = Some(Grace {
-                app_id: app_id.to_string(),
-                deadline,
-                showing_titles: true,
-            });
+            if address.is_none() {
+                let deadline = now + MENU_GRACE;
+                self.grace = Some(Grace {
+                    app_id: app_id.to_string(),
+                    deadline,
+                    showing_titles: true,
+                });
+                return Decision {
+                    choice: MenuChoice::Remembered(titles.clone()),
+                    started: Some(deadline),
+                };
+            }
             return Decision {
                 choice: MenuChoice::Remembered(titles.clone()),
-                started: Some(deadline),
+                started: None,
             };
         }
-        if address.is_none() && newly_mapped {
-            let deadline = now + MENU_GRACE;
-            self.grace = Some(Grace {
-                app_id: app_id.to_string(),
-                deadline,
-                showing_titles: false,
-            });
-            return Decision {
-                choice: MenuChoice::Waiting,
-                started: Some(deadline),
-            };
-        }
-        Decision {
-            choice: MenuChoice::Fallback,
-            started: None,
-        }
-    }
-
-    /// Drops the remembered labels when the grace expires without an address.
-    fn expire(&mut self, now: Instant) {
-        if let Some(grace) = &self.grace
-            && now >= grace.deadline
-        {
-            if grace.showing_titles {
-                self.titles.remove(&grace.app_id);
+        if address.is_none() {
+            if newly_mapped {
+                let deadline = now + MENU_GRACE;
+                self.grace = Some(Grace {
+                    app_id: app_id.to_string(),
+                    deadline,
+                    showing_titles: false,
+                });
+                return Decision {
+                    choice: MenuChoice::Waiting,
+                    started: Some(deadline),
+                };
             }
-            self.grace = None;
+            return Decision {
+                choice: MenuChoice::Fallback,
+                started: None,
+            };
+        }
+        // shortcut: an app that announces an address and never publishes a
+        // usable snapshot keeps the bare app name. Upgrade: carry the
+        // GetLayout failure in the snapshot to fall back.
+        Decision {
+            choice: MenuChoice::Waiting,
+            started: None,
         }
     }
 }
@@ -328,6 +334,9 @@ impl App for BarApp {
             }
         }
         let remote_menu = self.menu_snapshot.read().as_ref().cloned();
+        let menu_ready = remote_menu
+            .as_ref()
+            .is_some_and(|menu| !menu.items.is_empty());
         let choice = if focused && app_menus_enabled {
             let active_index = toplevels
                 .iter()
@@ -358,10 +367,10 @@ impl App for BarApp {
 
             let app_id = app_id.clone().unwrap_or_default();
             let mut stored = memory.borrow_mut();
-            if let Some(menu) = &remote_menu {
+            if menu_ready && let Some(menu) = &remote_menu {
                 stored.remember(&app_id, title_labels(&menu.items));
             }
-            let decision = if remote_menu.is_some() {
+            let decision = if menu_ready {
                 Decision {
                     choice: MenuChoice::Fallback,
                     started: None,
@@ -376,12 +385,10 @@ impl App for BarApp {
             };
             drop(stored);
             if let Some(deadline) = decision.started {
-                let memory = memory.clone();
                 let tick = menu_tick;
                 let delay =
                     deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1);
                 Timers::get().after(delay, move || {
-                    memory.borrow_mut().expire(Instant::now());
                     let mut tick = tick;
                     let next = *tick.peek() + 1;
                     tick.set(next);
@@ -481,7 +488,7 @@ impl App for BarApp {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
-            if let Some(remote_menu) = remote_menu {
+            if let Some(remote_menu) = remote_menu.filter(|menu| !menu.items.is_empty()) {
                 let sources = remote::MenuSources {
                     app_name: app_name.clone(),
                     app_items: app_items.clone(),
@@ -1078,6 +1085,36 @@ mod tests {
         let mut memory = MenuMemory::default();
         let decision = memory.decide("foot", None, false, Instant::now());
         assert_eq!(decision.choice, MenuChoice::Fallback);
+        assert!(decision.started.is_none());
+    }
+
+    fn address() -> AppMenuAddress {
+        AppMenuAddress {
+            service: ":1.6".to_string(),
+            path: "/com/canonical/menu/0".to_string(),
+        }
+    }
+
+    #[test]
+    fn an_address_keeps_remembered_titles_past_the_grace() {
+        let mut memory = MenuMemory::default();
+        let now = Instant::now();
+        memory.remember("firefox", vec!["File".into()]);
+        assert!(matches!(
+            memory.decide("firefox", None, true, now).choice,
+            MenuChoice::Remembered(_)
+        ));
+        let later = memory.decide("firefox", Some(&address()), false, now + MENU_GRACE);
+        assert_eq!(later.choice, MenuChoice::Remembered(vec!["File".into()]));
+        assert!(later.started.is_none());
+        assert!(memory.titles.contains_key("firefox"));
+    }
+
+    #[test]
+    fn an_address_without_a_snapshot_waits_instead_of_falling_back() {
+        let mut memory = MenuMemory::default();
+        let decision = memory.decide("firefox", Some(&address()), true, Instant::now());
+        assert_eq!(decision.choice, MenuChoice::Waiting);
         assert!(decision.started.is_none());
     }
 }
