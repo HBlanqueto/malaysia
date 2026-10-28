@@ -112,7 +112,7 @@ use sctk::{
             LayerSurfaceData,
         },
         xdg::{
-            XdgPositioner, XdgShell,
+            XdgPositioner, XdgShell, XdgSurface,
             popup::{Popup, PopupConfigure, PopupHandler},
             window::{DecorationMode, Window, WindowConfigure, WindowDecorations, WindowHandler},
         },
@@ -2603,17 +2603,30 @@ impl Shell {
         };
         let scale = self.surfaces[owner_index].scale;
 
-        let parent_xdg_surface = parent.and_then(|parent_id| {
-            self.surfaces.iter().find_map(|s| {
-                if let SurfaceRole::Popup(popup) = &s.role
-                    && s.popup.as_ref().is_some_and(|info| info.id == parent_id)
+        let parent_xdg_surface = parent
+            .and_then(|parent_id| {
+                self.surfaces.iter().find_map(|s| {
+                    if let SurfaceRole::Popup(popup) = &s.role
+                        && s.popup.as_ref().is_some_and(|info| info.id == parent_id)
+                    {
+                        Some(popup.xdg_surface().clone())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .or_else(|| {
+                // A toplevel parent must be passed as the xdg_surface parent,
+                // not left `None`: xdg_popup requires an xdg_surface parent.
+                // Layer-shell parents are set later with `get_popup`.
+                if parent.is_none()
+                    && let SurfaceRole::Window(window) = &self.surfaces[owner_index].role
                 {
-                    Some(popup.xdg_surface().clone())
+                    Some(window.xdg_surface().clone())
                 } else {
                     None
                 }
-            })
-        });
+            });
 
         let positioner = match XdgPositioner::new(xdg_shell) {
             Ok(positioner) => positioner,

@@ -95,7 +95,7 @@ fn search_field(
     palette: vow_design::SidebarPalette,
     search_bg: Rgba,
 ) -> Rect {
-    let mut search_mut = search;
+    let search_mut = search;
     let placeholder_color = palette.count_ink;
     let text_color = palette.item_ink;
 
@@ -122,27 +122,40 @@ fn search_field(
         ))
         .child(
             rect()
-                .width(Size::fill())
+                .position(
+                    Position::new_absolute()
+                        .top(((SETTINGS.search_height - TEXT.line_height) / 2) as f32)
+                        .left((SETTINGS.search_icon + SETTINGS.search_gap) as f32),
+                )
+                .width(Size::px(
+                    (SIDEBAR.width
+                        - 2 * SIDEBAR.padding_x
+                        - SETTINGS.search_padding_x
+                        - SETTINGS.search_icon
+                        - SETTINGS.search_gap
+                        - SETTINGS.search_padding_x) as f32,
+                ))
                 .height(Size::px(TEXT.line_height as f32))
-                .overflow(Overflow::Clip)
-                .probe("sidebar.search.text")
-                .child(
-                    TextField::new(search)
-                        .placeholder("Buscar")
-                        .width(Size::fill())
-                        .flat(),
-                ),
+                .probe("sidebar.search.text"),
         )
         .child(
-            rect()
-                .width(Size::px(16.0))
-                .height(Size::px(16.0))
-                .center()
-                .maybe(!search.read().is_empty(), |el| {
-                    el.child(svg_viewer(CLEAR_ICON, text_color, 14))
-                        .on_press(move |_| search_mut.set(String::new()))
-                }),
+            TextField::new(search)
+                .placeholder("Buscar")
+                .width(Size::fill())
+                .flat(),
         )
+        .maybe(!search.read().is_empty(), |el| {
+            let mut search = search_mut;
+            el.child(
+                rect()
+                    .position(Position::new_absolute().right(10.0).top(7.0))
+                    .width(Size::px(16.0))
+                    .height(Size::px(16.0))
+                    .center()
+                    .child(svg_viewer(CLEAR_ICON, text_color, 14))
+                    .on_press(move |_| search.set(String::new())),
+            )
+        })
 }
 
 /// Fila de cuenta con avatar e iniciales.
