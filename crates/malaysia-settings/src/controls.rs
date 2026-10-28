@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use barrier_kit::ProbeExt;
 use barrier_kit::menu::{CheckState, MenuItem, MenuView};
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupSpec, Popups,
@@ -21,6 +22,7 @@ pub fn accent_swatch(
     color: Rgba,
     selected: bool,
     disabled: bool,
+    probe: &'static str,
     on_press: impl FnMut(Event<PressEventData>) + 'static,
 ) -> freya_core::prelude::Rect {
     let swatch_size = SETTINGS.swatch_size as f32;
@@ -42,8 +44,7 @@ pub fn accent_swatch(
     let wrapper = rect()
         .width(Size::auto())
         .height(Size::auto())
-        .padding(2.0)
-        .corner_radius(((swatch_size + 4.0) / 2.0).max(0.0))
+        .corner_radius((swatch_size / 2.0).max(0.0))
         .border(
             Border::new()
                 .width(if selected { ring } else { 0.0 })
@@ -58,18 +59,18 @@ pub fn accent_swatch(
         .direction(Direction::Vertical)
         .spacing(SETTINGS.swatch_name_gap as f32)
         .cross_align(Alignment::Center)
+        .probe(probe)
         .child(wrapper);
 
-    if selected {
-        column = column.child(
-            label()
-                .text(name)
-                .font_size(CAPTION.size as f32)
-                .font_weight(FontWeight::from(CAPTION.weight as i32))
-                .color(rgba(ring_color))
-                .max_lines(1),
-        );
-    }
+    column = column.child(
+        label()
+            .text(if selected { name } else { "" })
+            .line_height(CAPTION.line_height as f32 / CAPTION.size as f32)
+            .font_size(CAPTION.size as f32)
+            .font_weight(FontWeight::from(CAPTION.weight as i32))
+            .color(rgba(ring_color))
+            .max_lines(1),
+    );
 
     if disabled {
         column.opacity(0.4)
@@ -86,6 +87,7 @@ pub fn radio(
     bg: Rgba,
     accent: Rgba,
     text_color: Rgba,
+    probe: &'static str,
     on_press: impl FnMut(Event<PressEventData>) + 'static,
 ) -> freya_core::prelude::Rect {
     let radio_size = SETTINGS.radio_size as f32;
@@ -120,10 +122,12 @@ pub fn radio(
         .direction(Direction::Horizontal)
         .spacing(SETTINGS.radio_gap as f32)
         .cross_align(Alignment::Center)
+        .probe(probe)
         .child(dot)
         .child(
             label()
                 .text(label_text.to_string())
+                .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(TEXT.size as f32)
                 .color(rgba(text_color))
                 .max_lines(1),
@@ -145,6 +149,7 @@ pub fn traffic_dropdown(
     text_color: Rgba,
     bg_control: Rgba,
     scheme: ColorScheme,
+    probe: &'static str,
     on_change: impl FnMut(TrafficLightStyle) + 'static,
 ) -> freya_core::prelude::Rect {
     let light = SETTINGS.dropdown_preview_light as f32;
@@ -158,10 +163,12 @@ pub fn traffic_dropdown(
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .spacing(SETTINGS.popup_text_gap as f32)
+        .probe(probe)
         .child(traffic_squares(lights, light, light_gap))
         .child(
             label()
                 .text(traffic_label(current))
+                .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(TEXT.size as f32)
                 .color(rgba(text_color))
                 .max_lines(1),
@@ -212,7 +219,7 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
     }
 }
 
-fn traffic_menu_palette(scheme: ColorScheme) -> vow_design::MenuPalette {
+pub(crate) fn traffic_menu_palette(scheme: ColorScheme) -> vow_design::MenuPalette {
     let base = match scheme {
         ColorScheme::Dark | ColorScheme::DarkTint => MENU_DARK,
         _ => MENU_LIGHT,
@@ -236,7 +243,7 @@ fn traffic_menu_palette(scheme: ColorScheme) -> vow_design::MenuPalette {
 
 /// Top-left of the popup relative to the dropdown: the checked row's traffic
 /// lights land exactly on the button's.
-fn traffic_menu_offset() -> (i32, i32) {
+pub(crate) fn traffic_menu_offset() -> (i32, i32) {
     let x = MENU_POPOVER.padding
         + MENU_POPOVER.item_padding_start
         + MENU_POPOVER.check
@@ -244,11 +251,15 @@ fn traffic_menu_offset() -> (i32, i32) {
     (-(x.round() as i32), -(MENU_POPOVER.padding.round() as i32))
 }
 
-fn traffic_items(current: TrafficLightStyle) -> Vec<MenuItem> {
+pub(crate) fn traffic_items(current: TrafficLightStyle) -> Vec<MenuItem> {
     vec![
         traffic_menu_item("auto", "Automático", current == TrafficLightStyle::Auto),
         MenuItem::Separator,
-        traffic_menu_item("standard", "Clásico", current == TrafficLightStyle::Standard),
+        traffic_menu_item(
+            "standard",
+            "Clásico",
+            current == TrafficLightStyle::Standard,
+        ),
         traffic_menu_item("accent", "Acento", current == TrafficLightStyle::Accent),
         traffic_menu_item(
             "wallpaper",

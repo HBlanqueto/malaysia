@@ -220,8 +220,11 @@ fn font(tokens: &Value, style: &str) -> String {
     let families = string(tokens, &format!("font.families.{family_key}"), TOKENS);
     let family = first_family(families);
     let size = integer(tokens, &format!("{path}.size"), TOKENS);
+    let line_height = integer(tokens, &format!("{path}.line-height"), TOKENS);
     let weight = integer(tokens, &format!("{path}.weight"), TOKENS);
-    format!("Font {{ family: {family:?}, size: {size}, weight: {weight} }}")
+    format!(
+        "Font {{ family: {family:?}, size: {size}, line_height: {line_height}, weight: {weight} }}"
+    )
 }
 
 fn const_doc(out: &mut String, name: &str, doc: &str) {
@@ -1720,7 +1723,12 @@ fn emit_menu_popover(out: &mut String, tokens: &Value, components: &Value) {
          \x20   check: {},\n\
          \x20   separator_margin: {},\n\
          }};\n\n",
-        float(metric(tokens, components, "components.menu-popover.radius", COMPONENTS)),
+        float(metric(
+            tokens,
+            components,
+            "components.menu-popover.radius",
+            COMPONENTS
+        )),
         rgba(color_at("components.menu-popover.bg")),
         float(number_at("components.menu-popover.item-height")),
         float(metric(
@@ -2070,22 +2078,48 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         COMPONENTS,
     ) as u32;
 
-    let preview_panel_h = integer(components, "components.settings.preview.panel-h", COMPONENTS) as u32;
-    let preview_menu_x = integer(components, "components.settings.preview.menu-x", COMPONENTS) as u32;
-    let preview_menu_y = integer(components, "components.settings.preview.menu-y", COMPONENTS) as u32;
-    let preview_menu_w = integer(components, "components.settings.preview.menu-w", COMPONENTS) as u32;
-    let preview_menu_h = integer(components, "components.settings.preview.menu-h", COMPONENTS) as u32;
+    let preview_panel_h = integer(
+        components,
+        "components.settings.preview.panel-h",
+        COMPONENTS,
+    ) as u32;
+    let preview_menu_x =
+        integer(components, "components.settings.preview.menu-x", COMPONENTS) as u32;
+    let preview_menu_y =
+        integer(components, "components.settings.preview.menu-y", COMPONENTS) as u32;
+    let preview_menu_w =
+        integer(components, "components.settings.preview.menu-w", COMPONENTS) as u32;
+    let preview_menu_h =
+        integer(components, "components.settings.preview.menu-h", COMPONENTS) as u32;
     let preview_app_w = integer(components, "components.settings.preview.app-w", COMPONENTS) as u32;
     let preview_app_h = integer(components, "components.settings.preview.app-h", COMPONENTS) as u32;
-    let preview_app_inset =
-        integer(components, "components.settings.preview.app-inset", COMPONENTS) as u32;
-    let preview_app_side_w =
-        integer(components, "components.settings.preview.app-side-w", COMPONENTS) as u32;
-    let preview_radius = integer(components, "components.settings.preview.radius", COMPONENTS) as u32;
-    let preview_wall_angle =
-        integer(components, "components.settings.preview.wall-angle", COMPONENTS) as u32;
-    let preview_wall_light = number(components, "components.settings.preview.wall-light", COMPONENTS);
-    let preview_wall_dark = number(components, "components.settings.preview.wall-dark", COMPONENTS);
+    let preview_app_inset = integer(
+        components,
+        "components.settings.preview.app-inset",
+        COMPONENTS,
+    ) as u32;
+    let preview_app_side_w = integer(
+        components,
+        "components.settings.preview.app-side-w",
+        COMPONENTS,
+    ) as u32;
+    let preview_radius =
+        integer(components, "components.settings.preview.radius", COMPONENTS) as u32;
+    let preview_wall_angle = integer(
+        components,
+        "components.settings.preview.wall-angle",
+        COMPONENTS,
+    ) as u32;
+    let preview_wall_light = number(
+        components,
+        "components.settings.preview.wall-light",
+        COMPONENTS,
+    );
+    let preview_wall_dark = number(
+        components,
+        "components.settings.preview.wall-dark",
+        COMPONENTS,
+    );
     let preview_shadow = string(components, "components.settings.preview.shadow", COMPONENTS);
 
     let radio_size = integer(components, "components.settings.radio.size", COMPONENTS) as u32;
@@ -2140,9 +2174,13 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         COMPONENTS,
     ) as u32;
     let search_gap = integer(components, "components.settings.search.gap", COMPONENTS) as u32;
-    let account_height = integer(components, "components.settings.account.height", COMPONENTS) as u32;
-    let account_padding_x =
-        integer(components, "components.settings.account.padding-x", COMPONENTS) as u32;
+    let account_height =
+        integer(components, "components.settings.account.height", COMPONENTS) as u32;
+    let account_padding_x = integer(
+        components,
+        "components.settings.account.padding-x",
+        COMPONENTS,
+    ) as u32;
     let row_gap = integer(components, "components.settings.row-gap", COMPONENTS) as u32;
     let dropdown_preview_light = integer(
         components,
@@ -2154,8 +2192,11 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.dropdown.chevron-glyph",
         COMPONENTS,
     ) as u32;
-    let empty_padding_y =
-        integer(components, "components.settings.empty.padding-y", COMPONENTS) as u32;
+    let empty_padding_y = integer(
+        components,
+        "components.settings.empty.padding-y",
+        COMPONENTS,
+    ) as u32;
     let empty_icon = integer(components, "components.settings.empty.icon", COMPONENTS) as u32;
     let empty_gap = integer(components, "components.settings.empty.gap", COMPONENTS) as u32;
 
@@ -2168,8 +2209,11 @@ fn emit_settings(out: &mut String, tokens: &Value, components: &Value) {
         "components.settings.toolbar.padding-top",
         COMPONENTS,
     ) as u32;
-    let toolbar_padding_x =
-        integer(components, "components.settings.toolbar.padding-x", COMPONENTS) as u32;
+    let toolbar_padding_x = integer(
+        components,
+        "components.settings.toolbar.padding-x",
+        COMPONENTS,
+    ) as u32;
 
     let content_padding_top = integer(
         components,

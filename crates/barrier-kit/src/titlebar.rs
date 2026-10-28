@@ -19,6 +19,7 @@ use vow_appearance::traffic::TrafficInput;
 use vow_design::NATIVE_APP_ID_PREFIX;
 use vow_design::{ButtonKind, Rgba, TITLEBAR, TITLEBAR_CLIENT_HEIGHT, TITLEBAR_DOUBLE_CLICK};
 
+use crate::ProbeExt;
 use crate::platform::{DecorationResponse, WindowControls, WindowEdge, WindowStatus};
 
 /// A client-side titlebar for a BarrierKit window.
@@ -30,6 +31,11 @@ pub struct Titlebar {
     sidebar: bool,
     left: Option<Element>,
     right: Option<Element>,
+    probe: Option<&'static str>,
+    spacing: f32,
+    padding_x: f32,
+    title_font: Option<vow_design::Font>,
+    title_line_height: Option<f32>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -55,6 +61,11 @@ impl Titlebar {
             sidebar: false,
             left: None,
             right: None,
+            probe: None,
+            spacing: 0.0,
+            padding_x: 10.0,
+            title_font: None,
+            title_line_height: None,
         }
     }
 
@@ -71,6 +82,11 @@ impl Titlebar {
             sidebar: false,
             left: None,
             right: None,
+            probe: None,
+            spacing: 0.0,
+            padding_x: 10.0,
+            title_font: None,
+            title_line_height: None,
         }
     }
 
@@ -103,6 +119,37 @@ impl Titlebar {
     /// Content for the right slot (next to the centred title).
     pub fn right(mut self, child: impl IntoElement) -> Self {
         self.right = Some(child.into_element());
+        self
+    }
+
+    /// Gap between the left slot and the title.
+    pub fn spacing(mut self, spacing: f32) -> Self {
+        self.spacing = spacing;
+        self
+    }
+
+    /// Horizontal padding of the sidebar titlebar.
+    pub fn padding_x(mut self, padding_x: f32) -> Self {
+        self.padding_x = padding_x;
+        self
+    }
+
+    /// Font used for the title; defaults to the window-title token.
+    pub fn title_font(mut self, font: vow_design::Font) -> Self {
+        self.title_font = Some(font);
+        self
+    }
+
+    /// Line height used for the title.
+    pub fn title_line_height(mut self, line_height: f32) -> Self {
+        self.title_line_height = Some(line_height);
+        self
+    }
+}
+
+impl ProbeExt for Titlebar {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
         self
     }
 }
@@ -147,15 +194,22 @@ impl Component for Titlebar {
             ))
         };
 
-        // Use the same titlebar font token as the compositor.
-        let title_font = TITLEBAR.font;
-        let title_label = label()
+        // Use the same titlebar font token as the compositor unless the app
+        // asks for another one (the Settings toolbar uses title-2).
+        let title_font = self.title_font.unwrap_or(TITLEBAR.font);
+        let mut title_label = label()
             .text(truncate(&title))
             .font_family(title_font.family)
             .font_size(title_font.size as f32)
             .font_weight(FontWeight::from(title_font.weight as i32))
             .color(rgba(title_color))
             .max_lines(1);
+        if let Some(line_height) = self.title_line_height {
+            title_label = title_label.line_height(line_height);
+        }
+        if let Some(id) = self.probe {
+            title_label = title_label.a11y_builder(move |node| node.set_author_id(id));
+        }
 
         if self.sidebar {
             // Sidebar titlebars keep the toolbar on the left and place the
@@ -164,6 +218,7 @@ impl Component for Titlebar {
                 .width(Size::auto())
                 .height(Size::fill())
                 .cross_align(Alignment::Center)
+                .main_align(Alignment::Center)
                 .a11y_alt("titlebar-left-slot")
                 .maybe(self.left.is_some(), |el| {
                     el.child(self.left.clone().unwrap())
@@ -173,6 +228,7 @@ impl Component for Titlebar {
                 .width(Size::auto())
                 .height(Size::fill())
                 .cross_align(Alignment::Center)
+                .main_align(Alignment::Center)
                 .a11y_alt("titlebar-title")
                 .on_mouse_down(window_drag_handler(fixed))
                 .child(title_label);
@@ -183,7 +239,8 @@ impl Component for Titlebar {
                 .background(rgba(background))
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+                .spacing(self.spacing)
+                .padding(Gaps::new(0.0, self.padding_x, 0.0, self.padding_x))
                 .child(left_slot)
                 .child(title);
 

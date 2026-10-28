@@ -135,6 +135,8 @@ pub struct Font {
     pub family: &'static str,
     /// Size in points.
     pub size: u32,
+    /// Line height in points.
+    pub line_height: u32,
     /// Numeric weight, as CSS/fontconfig: 400 regular, 500 medium, 600
     /// semibold, 650, 700 bold.
     pub weight: u16,

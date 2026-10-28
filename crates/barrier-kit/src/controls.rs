@@ -17,6 +17,7 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_design::{Rgba, TEXT, TEXT_LINE_HEIGHT, TOOLGROUP};
 
+use crate::ProbeExt;
 use crate::password::PasswordField;
 use crate::platform::inserts_text;
 
@@ -159,6 +160,7 @@ pub enum ToolGroupStyle {
 pub struct ToolGroup {
     children: Vec<Element>,
     style: ToolGroupStyle,
+    probe: Option<&'static str>,
     key: DiffKey,
 }
 
@@ -177,6 +179,7 @@ impl ToolGroup {
         Self {
             children: Vec::new(),
             style,
+            probe: None,
             key: DiffKey::None,
         }
     }
@@ -216,6 +219,13 @@ impl KeyExt for ToolGroup {
     }
 }
 
+impl ProbeExt for ToolGroup {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
+        self
+    }
+}
+
 impl Component for ToolGroup {
     fn render(&self) -> impl IntoElement {
         let resolved = crate::theme::resolved();
@@ -236,7 +246,7 @@ impl Component for ToolGroup {
             }
         }
 
-        let root = rect()
+        let mut root = rect()
             .direction(Direction::Horizontal)
             .height(Size::px(TOOLGROUP.height as f32))
             .cross_align(Alignment::Center)
@@ -247,6 +257,9 @@ impl Component for ToolGroup {
                 TOOLGROUP.padding_x as f32,
             ))
             .children(items);
+        if let Some(id) = self.probe {
+            root = root.a11y_builder(move |node| node.set_author_id(id));
+        }
 
         if self.style == ToolGroupStyle::Island {
             return root
@@ -266,6 +279,7 @@ pub struct ToolButton {
     icon: &'static str,
     disabled: bool,
     on_press: Option<Callback<(), ()>>,
+    probe: Option<&'static str>,
     key: DiffKey,
 }
 
@@ -277,6 +291,7 @@ impl ToolButton {
             icon,
             disabled: false,
             on_press: None,
+            probe: None,
             key: DiffKey::None,
         }
     }
@@ -300,6 +315,13 @@ impl ToolButton {
 impl KeyExt for ToolButton {
     fn write_key(&mut self) -> &mut DiffKey {
         &mut self.key
+    }
+}
+
+impl ProbeExt for ToolButton {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
+        self
     }
 }
 
@@ -353,6 +375,9 @@ impl Component for ToolButton {
             && let Some(callback) = self.on_press.clone()
         {
             root = root.on_press(move |_| callback.call(()));
+        }
+        if let Some(id) = self.probe {
+            root = root.a11y_builder(move |node| node.set_author_id(id));
         }
 
         root

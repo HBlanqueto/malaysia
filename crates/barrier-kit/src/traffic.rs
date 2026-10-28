@@ -11,6 +11,8 @@ use vow_appearance::traffic::{self, TrafficInput, TrafficPointer};
 use vow_appearance::{TrafficLightStyle, palette as base_palette};
 use vow_design::{ButtonKind, Rgba, TITLEBAR, TRAFFIC_GLYPHS, Triangle};
 
+use crate::ProbeExt;
+
 /// The three-client-side-traffic-lights component.
 #[derive(PartialEq)]
 pub struct TrafficLights {
@@ -19,6 +21,7 @@ pub struct TrafficLights {
     zoom_supported: bool,
     fixed_width: bool,
     on_action: Option<Callback<ButtonKind, ()>>,
+    probe: Option<&'static str>,
 }
 
 impl Default for TrafficLights {
@@ -36,6 +39,7 @@ impl TrafficLights {
             zoom_supported: true,
             fixed_width: false,
             on_action: None,
+            probe: None,
         }
     }
 
@@ -67,6 +71,13 @@ impl TrafficLights {
     /// Receives the button when a press and release land on it.
     pub fn on_action(mut self, callback: impl Into<Callback<ButtonKind, ()>>) -> Self {
         self.on_action = Some(callback.into());
+        self
+    }
+}
+
+impl ProbeExt for TrafficLights {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
         self
     }
 }
@@ -114,6 +125,11 @@ impl Component for TrafficLights {
             let mut leave = pointer;
             let action = action.clone();
             let clickable = zoom_supported || fixed_width || kind != ButtonKind::Maximize;
+            let child_probe = self.probe.map(|base| match kind {
+                ButtonKind::Close => format!("{base}.close").into_boxed_str(),
+                ButtonKind::Minimize => format!("{base}.minimize").into_boxed_str(),
+                ButtonKind::Maximize => format!("{base}.zoom").into_boxed_str(),
+            });
             rect()
                 .width(Size::px(diameter as f32))
                 .height(Size::px(diameter as f32))
@@ -162,10 +178,14 @@ impl Component for TrafficLights {
                             }
                         })
                 })
+                .maybe(child_probe.is_some(), |light| {
+                    let id = child_probe.unwrap();
+                    light.a11y_builder(move |node| node.set_author_id(id))
+                })
                 .into_element()
         });
 
-        rect()
+        let mut root = rect()
             .width(Size::px((traffic::group_rect().2) as f32))
             .height(Size::px(diameter as f32))
             .direction(Direction::Horizontal)
@@ -177,7 +197,11 @@ impl Component for TrafficLights {
                     pointer.set(p);
                 })
             })
-            .children(lights)
+            .children(lights);
+        if let Some(id) = self.probe {
+            root = root.a11y_builder(move |node| node.set_author_id(id));
+        }
+        root
     }
 }
 

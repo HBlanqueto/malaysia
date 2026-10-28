@@ -1,5 +1,6 @@
 //! Tarjetas de previsualización de Ajustes (tema y color de ventanas).
 
+use barrier_kit::ProbeExt;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
 use vow_design::SETTINGS;
@@ -33,6 +34,8 @@ pub fn theme_card(
     accent: Rgba,
     scheme_palette: vow_design::Palette,
     base_config: &AppearanceConfig,
+    probe: &'static str,
+    preview_probe: &'static str,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let is_selected = selected_scheme == scheme;
@@ -46,6 +49,8 @@ pub fn theme_card(
         accent,
         preview_resolved.surfaces.surface,
         scheme_palette,
+        probe,
+        preview_probe,
         on_select,
     )
 }
@@ -89,15 +94,9 @@ pub fn theme_preview(
 fn gradient_background(accent: Rgba) -> Rect {
     let gradient = LinearGradient::new()
         .angle(SETTINGS.preview_wall_angle as f32)
-        .stop((
-            rgba(accent.lighten(SETTINGS.preview_wall_light)),
-            0.0,
-        ))
+        .stop((rgba(accent.lighten(SETTINGS.preview_wall_light)), 0.0))
         .stop((rgba(accent), 50.0))
-        .stop((
-            rgba(accent.darken(SETTINGS.preview_wall_dark)),
-            100.0,
-        ));
+        .stop((rgba(accent.darken(SETTINGS.preview_wall_dark)), 100.0));
     rect()
         .width(Size::fill())
         .height(Size::fill())
@@ -154,11 +153,7 @@ fn preview_app(resolved: &Resolved) -> Rect {
     let dot = SETTINGS.preview_light as f32;
     let dot_gap = SETTINGS.preview_panel_h as f32 / 4.0;
     rect()
-        .position(
-            Position::new_absolute()
-                .right(inset)
-                .bottom(inset),
-        )
+        .position(Position::new_absolute().right(inset).bottom(inset))
         .width(Size::px(SETTINGS.preview_app_w as f32))
         .height(Size::px(SETTINGS.preview_app_h as f32))
         .corner_radius(SETTINGS.preview_radius as f32)
@@ -198,6 +193,8 @@ pub fn window_color_card(
     card_bg: Rgba,
     resolved: Resolved,
     dominant: Option<Rgba>,
+    probe: &'static str,
+    preview_probe: &'static str,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let base_config = load_appearance();
@@ -217,6 +214,8 @@ pub fn window_color_card(
         resolved.accent,
         resolved.surfaces.surface,
         scheme_palette,
+        probe,
+        preview_probe,
         on_select,
     )
 }
@@ -268,6 +267,8 @@ pub fn selectable_card(
     accent: Rgba,
     bg_surface: Rgba,
     scheme_palette: vow_design::Palette,
+    probe: &'static str,
+    preview_probe: &'static str,
     on_select: impl FnMut(Event<PressEventData>) + 'static,
 ) -> Element {
     let card = rect()
@@ -282,13 +283,12 @@ pub fn selectable_card(
                 .fill(rgba(SETTINGS.card_outline)),
         )
         .overflow(Overflow::Clip)
-        .child(preview);
+        .child(preview.probe(preview_probe));
 
     let wrapper = rect()
         .width(Size::auto())
         .height(Size::auto())
-        .padding(SETTINGS.card_ring_gap as f32)
-        .corner_radius((SETTINGS.card_radius + SETTINGS.card_ring_gap) as f32)
+        .corner_radius(SETTINGS.card_radius as f32)
         .background(rgba(bg_surface))
         .border(
             Border::new()
@@ -323,11 +323,16 @@ pub fn selectable_card(
         .child(
             label()
                 .text(caption)
+                .line_height(
+                    SETTINGS.card_caption_font.line_height as f32
+                        / SETTINGS.card_caption_font.size as f32,
+                )
                 .font_size(SETTINGS.card_caption_font.size as f32)
                 .font_weight(caption_weight)
                 .color(rgba(caption_color))
                 .max_lines(1),
         )
+        .probe(probe)
         .on_press(on_select)
         .into_element()
 }

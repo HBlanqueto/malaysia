@@ -42,3 +42,18 @@ pub mod app_menu;
 
 /// Neptunia sidebar, sidebar items, collapsible sections and sidebar layout.
 pub mod sidebar;
+
+use freya_core::prelude::{AccessibilityExt, Rect};
+
+/// Attaches a stable `data-id`-style identifier to a component's root, for
+/// contract tests that compare geometry against a mockup.
+pub trait ProbeExt: Sized {
+    /// Sets the accessibility author id of the root element.
+    fn probe(self, id: &'static str) -> Self;
+}
+
+impl ProbeExt for Rect {
+    fn probe(self, id: &'static str) -> Self {
+        self.a11y_builder(move |node| node.set_author_id(id))
+    }
+}

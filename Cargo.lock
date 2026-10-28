@@ -1732,6 +1732,8 @@ dependencies = [
  "freya-testing",
  "libc",
  "png",
+ "serde",
+ "serde_json",
  "torin",
  "vow-appearance",
  "vow-design",

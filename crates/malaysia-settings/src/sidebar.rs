@@ -1,5 +1,6 @@
 //! Isla lateral de Ajustes: semáforos, buscador, cuenta y sección.
 
+use barrier_kit::ProbeExt;
 use barrier_kit::controls::TextField;
 use barrier_kit::traffic::TrafficLights;
 use freya_components::svg_viewer::SvgViewer;
@@ -28,13 +29,13 @@ pub fn sidebar(
     let mut island = rect()
         .width(Size::fill())
         .height(Size::fill())
+        .probe("sidebar")
         .corner_radius(SIDEBAR.radius as f32)
         .background(rgba(island_bg))
         .direction(Direction::Vertical)
         .padding(Gaps::new(
-            (SETTINGS.sidebar_padding_top
-                + TITLEBAR.buttons.diameter
-                + SETTINGS.sidebar_lights_gap) as f32,
+            (SETTINGS.sidebar_padding_top + TITLEBAR.buttons.diameter + SETTINGS.sidebar_lights_gap)
+                as f32,
             SIDEBAR.padding_x as f32,
             SETTINGS.sidebar_padding_bottom as f32,
             SIDEBAR.padding_x as f32,
@@ -44,7 +45,9 @@ pub fn sidebar(
             sidebar_palette,
             resolved.surfaces.control,
         ))
+        .child(spacer(SETTINGS.sidebar_search_gap))
         .child(account_row(sidebar_palette))
+        .child(spacer(SETTINGS.section_gap))
         .child(sidebar_item("Apariencia", true, sidebar_palette));
 
     if rim.a > 0.0 {
@@ -82,6 +85,10 @@ pub fn sidebar(
         )
 }
 
+fn spacer(height: u32) -> Rect {
+    rect().width(Size::fill()).height(Size::px(height as f32))
+}
+
 /// Campo de búsqueda con lupa, texto y borrón.
 fn search_field(
     search: State<String>,
@@ -95,6 +102,7 @@ fn search_field(
     rect()
         .width(Size::px((SIDEBAR.width - 2 * SIDEBAR.padding_x) as f32))
         .height(Size::px(SETTINGS.search_height as f32))
+        .probe("sidebar.search")
         .corner_radius(999.0)
         .background(rgba(search_bg))
         .direction(Direction::Horizontal)
@@ -113,10 +121,17 @@ fn search_field(
             SETTINGS.search_icon,
         ))
         .child(
-            TextField::new(search)
-                .placeholder("Buscar")
+            rect()
                 .width(Size::fill())
-                .flat(),
+                .height(Size::px(TEXT.line_height as f32))
+                .overflow(Overflow::Clip)
+                .probe("sidebar.search.text")
+                .child(
+                    TextField::new(search)
+                        .placeholder("Buscar")
+                        .width(Size::fill())
+                        .flat(),
+                ),
         )
         .child(
             rect()
@@ -138,7 +153,6 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::px(SETTINGS.account_height as f32))
-        .margin(Gaps::new(SETTINGS.sidebar_search_gap as f32, 0.0, 0.0, 0.0))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .spacing(SETTINGS.account_gap as f32)
@@ -148,8 +162,10 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
             0.0,
             SETTINGS.account_padding_x as f32,
         ))
+        .probe("sidebar.account")
         .child(
             rect()
+                .probe("sidebar.account.avatar")
                 .width(Size::px(SETTINGS.account_avatar as f32))
                 .height(Size::px(SETTINGS.account_avatar as f32))
                 .corner_radius((SETTINGS.account_avatar as f32 / 2.0).max(0.0))
@@ -159,7 +175,8 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
                 .child(
                     label()
                         .text(initials(&name))
-                        .font_size(13.0)
+                        .line_height(HEADLINE.line_height as f32 / HEADLINE.size as f32)
+                        .font_size(HEADLINE.size as f32)
                         .font_weight(FontWeight::SEMI_BOLD)
                         .color(rgba(scheme_palette.on_accent))
                         .max_lines(1),
@@ -173,17 +190,21 @@ fn account_row(sidebar_palette: vow_design::SidebarPalette) -> Rect {
                 .child(
                     label()
                         .text(name)
+                        .line_height(HEADLINE.line_height as f32 / HEADLINE.size as f32)
                         .font_size(HEADLINE.size as f32)
                         .font_weight(FontWeight::from(HEADLINE.weight as i32))
                         .color(rgba(sidebar_palette.item_ink))
+                        .a11y_builder(|node| node.set_author_id("sidebar.account.name"))
                         .max_lines(1),
                 )
                 .child(
                     label()
                         .text("Cuenta local")
+                        .line_height(CALLOUT.line_height as f32 / CALLOUT.size as f32)
                         .font_size(CALLOUT.size as f32)
                         .font_weight(FontWeight::from(CALLOUT.weight as i32))
                         .color(rgba(sidebar_palette.count_ink))
+                        .a11y_builder(|node| node.set_author_id("sidebar.account.detail"))
                         .max_lines(1),
                 ),
         )
@@ -208,7 +229,7 @@ fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPa
     rect()
         .width(Size::fill())
         .height(Size::px(SIDEBAR.item_height as f32))
-        .margin(Gaps::new(SETTINGS.section_gap as f32, 0.0, 0.0, 0.0))
+        .probe("sidebar.item.apariencia")
         .corner_radius(SIDEBAR.item_radius as f32)
         .background(rgba(bg))
         .direction(Direction::Horizontal)
@@ -222,6 +243,7 @@ fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPa
         ))
         .child(
             rect()
+                .probe("sidebar.item.apariencia.icon")
                 .width(Size::px(SIDEBAR.app_icon as f32))
                 .height(Size::px(SIDEBAR.app_icon as f32))
                 .corner_radius(SIDEBAR.item_radius as f32)
@@ -236,9 +258,11 @@ fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPa
         .child(
             label()
                 .text(label_text.to_string())
+                .line_height(TEXT.line_height as f32 / TEXT.size as f32)
                 .font_size(SIDEBAR.item_text_size as f32)
                 .font_weight(weight)
                 .color(rgba(fg))
+                .a11y_builder(|node| node.set_author_id("sidebar.item.apariencia.label"))
                 .max_lines(1),
         )
 }
@@ -250,6 +274,7 @@ fn sidebar_traffic_lights(
     on_maximize: Callback<(), ()>,
 ) -> TrafficLights {
     TrafficLights::new()
+        .probe("sidebar.traffic")
         .focused(true)
         .zoom_supported(true)
         .fixed_width(true)

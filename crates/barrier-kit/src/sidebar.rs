@@ -13,6 +13,7 @@ use torin::prelude::{Alignment, Direction, Gaps, Position, Size};
 use vow_appearance::SidebarStyle;
 use vow_design::{DURATION_BASE, Rgba, SIDEBAR, SidebarPalette, TITLEBAR};
 
+use crate::ProbeExt;
 use crate::platform::{DecorationResponse, WindowControls, WindowStatus};
 use crate::titlebar::{window_drag_handler, window_traffic_lights};
 use freya_core::prelude::try_consume_root_context;
@@ -64,6 +65,7 @@ pub struct Sidebar {
     children: Vec<Element>,
     traffic_lights: bool,
     on_close: Option<Callback<(), ()>>,
+    probe: Option<&'static str>,
     key: DiffKey,
 }
 
@@ -73,12 +75,20 @@ impl Default for Sidebar {
     }
 }
 
+impl ProbeExt for Sidebar {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
+        self
+    }
+}
+
 impl Sidebar {
     pub fn new() -> Self {
         Self {
             children: Vec::new(),
             traffic_lights: false,
             on_close: None,
+            probe: None,
             key: DiffKey::None,
         }
     }
@@ -232,6 +242,9 @@ impl Component for Sidebar {
                 );
         }
 
+        if let Some(id) = self.probe {
+            root = root.a11y_builder(move |node| node.set_author_id(id));
+        }
         root.into_element()
     }
 }
@@ -245,7 +258,15 @@ pub struct SidebarItem {
     badge: Option<u32>,
     selected: bool,
     on_select: Option<Callback<(), ()>>,
+    probe: Option<&'static str>,
     key: DiffKey,
+}
+
+impl ProbeExt for SidebarItem {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
+        self
+    }
 }
 
 impl SidebarItem {
@@ -257,6 +278,7 @@ impl SidebarItem {
             badge: None,
             selected: false,
             on_select: None,
+            probe: None,
             key: DiffKey::None,
         }
     }
@@ -405,6 +427,9 @@ impl Component for SidebarItem {
             );
         }
 
+        if let Some(id) = self.probe {
+            row = row.a11y_builder(move |node| node.set_author_id(id));
+        }
         row
     }
 }

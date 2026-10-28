@@ -61,6 +61,7 @@ fn point_in_triangle(p: CursorPoint, a: CursorPoint, b: CursorPoint, c: CursorPo
     !(has_neg && has_pos)
 }
 
+use crate::ProbeExt;
 use crate::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupHandle, PopupId, PopupSpec, Popups,
     Timers, inserts_text,
@@ -482,6 +483,7 @@ pub struct MenuView {
     /// Path of submenu indices to open after mounting, used when revealing a
     /// nested search result.
     open_path: Option<Rc<Vec<usize>>>,
+    probe: Option<&'static str>,
 }
 
 impl MenuView {
@@ -510,6 +512,7 @@ impl MenuView {
             reveal_roots: None,
             focused_index: None,
             open_path: None,
+            probe: None,
         }
     }
 
@@ -696,7 +699,15 @@ impl Clone for MenuView {
             reveal_roots: self.reveal_roots.clone(),
             focused_index: self.focused_index,
             open_path: self.open_path.clone(),
+            probe: self.probe,
         }
+    }
+}
+
+impl ProbeExt for MenuView {
+    fn probe(mut self, id: &'static str) -> Self {
+        self.probe = Some(id);
+        self
     }
 }
 
@@ -1096,6 +1107,9 @@ impl App for MenuView {
             hs.last = Some((Instant::now(), pos));
             hs.pending = None;
         });
+        if let Some(id) = self.probe {
+            root = root.a11y_builder(move |node| node.set_author_id(id));
+        }
         let visible_for_keys = Rc::new(visible.clone());
         root.on_global_key_down(move |event: Event<KeyboardEventData>| {
             hover_state.borrow_mut().pending = None;
