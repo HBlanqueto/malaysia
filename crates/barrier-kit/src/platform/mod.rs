@@ -1695,7 +1695,6 @@ struct Shell {
     activation_global: Option<XdgActivationV1>,
     activation_callbacks: Vec<Option<ActivationCallback>>,
     activation_seat: Option<wl_seat::WlSeat>,
-    last_key_serial: u32,
     last_input_serial: Rc<Cell<u32>>,
     last_pointer_serial: Cell<u32>,
     touch_surfaces: std::collections::HashMap<i32, ObjectId>,
@@ -2344,7 +2343,6 @@ impl Shell {
             activation_global,
             activation_callbacks: Vec::new(),
             activation_seat,
-            last_key_serial: 0,
             last_input_serial: Rc::new(Cell::new(0)),
             last_pointer_serial: Cell::new(0),
             touch_surfaces: std::collections::HashMap::new(),
@@ -3530,7 +3528,6 @@ impl KeyboardHandler for Shell {
         serial: u32,
         event: KeyEvent,
     ) {
-        self.last_key_serial = serial;
         self.last_input_serial.set(serial);
         self.key_event(qh, event.clone(), KeyboardEventName::KeyDown);
         // Modifier keys and keys that xkb marks non-repeating should not
