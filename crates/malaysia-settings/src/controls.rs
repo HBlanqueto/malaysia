@@ -80,6 +80,7 @@ pub fn accent_swatch(
 }
 
 /// Botón radio con punto blanco cuando está elegido.
+#[allow(clippy::too_many_arguments)]
 pub fn radio(
     label_text: &str,
     selected: bool,

@@ -186,6 +186,7 @@ fn preview_app(resolved: &Resolved) -> Rect {
 }
 
 /// Tarjeta de color de ventanas (Neutro/Acento/Fondo).
+#[allow(clippy::too_many_arguments)]
 pub fn window_color_card(
     caption: &'static str,
     mode: WindowColorMode,
