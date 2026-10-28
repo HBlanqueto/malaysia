@@ -322,6 +322,8 @@
   --list-group-separator-color: var(--line);
   --list-group-separator-inset-left: 14px;
   --menu-popover-check: 12px;
+  --menu-popover-check-column: 12px;
+  --menu-popover-icon-column: 16px;
   --menu-popover-item-gap: 6px;
   --menu-popover-item-height: 26px;
   --menu-popover-item-padding-start: 6px;
@@ -331,6 +333,9 @@
   --menu-popover-padding: 5px;
   --menu-popover-radius: var(--radius-md);
   --menu-popover-separator-margin: 4px;
+  --menu-popover-swatch-grid-dot: 4px;
+  --menu-popover-swatch-grid-gap: 2px;
+  --menu-popover-swatch-grid-size: 16px;
   --progress-fill: var(--accent);
   --progress-height: 6px;
   --progress-radius: var(--radius-pill);

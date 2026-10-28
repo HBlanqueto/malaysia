@@ -551,6 +551,11 @@
       "item-padding-x": 8,
       "item-gap": 6,
       "check": 12,
+      "check-column": 12,
+      "icon-column": 16,
+      "swatch-grid-size": 16,
+      "swatch-grid-dot": 4,
+      "swatch-grid-gap": 2,
       "separator-margin": 4
     },
     "progress": {

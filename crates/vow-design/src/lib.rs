@@ -626,6 +626,16 @@ pub struct MenuPopoverMetrics {
     pub item_gap: f32,
     /// Size of the check mark, in logical pixels.
     pub check: f32,
+    /// Width reserved for the check/radio mark column, in logical pixels.
+    pub check_column: f32,
+    /// Width reserved for the leading icon column, in logical pixels.
+    pub icon_column: f32,
+    /// Size of the swatch grid icon, in logical pixels.
+    pub swatch_grid_size: f32,
+    /// Diameter of each dot in the swatch grid icon, in logical pixels.
+    pub swatch_grid_dot: f32,
+    /// Gap between dots in the swatch grid icon, in logical pixels.
+    pub swatch_grid_gap: f32,
     /// Vertical margin of a separator, in logical pixels.
     pub separator_margin: f32,
 }
@@ -693,6 +703,8 @@ pub struct MenuPalette {
     pub separator_margin_y: f32,
     /// Width reserved for the check/radio mark column.
     pub mark_width: f32,
+    /// Width reserved for the leading icon column.
+    pub icon_width: f32,
     /// Radio dot diameter.
     pub mark_dot: f32,
     /// Check glyph font size.
