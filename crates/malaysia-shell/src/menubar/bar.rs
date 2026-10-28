@@ -49,12 +49,16 @@ struct MenuMemory {
 #[derive(Clone, Debug)]
 struct Grace {
     app_id: String,
+    // shortcut: one grace slot; a second window mapping during the wait
+    // replaces it. Upgrade: a deadline per app_id.
     deadline: Instant,
+    showing_titles: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum MenuChoice {
     Remembered(Vec<String>),
+    Waiting,
     Fallback,
 }
 
@@ -91,30 +95,55 @@ impl MenuMemory {
     }
 
     /// What the bar shows for a focused window whose menu snapshot is not in
-    /// yet.
-    fn decide(&mut self, app_id: &str, now: Instant) -> Decision {
+    /// yet. `newly_mapped` only admits the bare app name, never the 14c menu.
+    fn decide(
+        &mut self,
+        app_id: &str,
+        address: Option<&AppMenuAddress>,
+        newly_mapped: bool,
+        now: Instant,
+    ) -> Decision {
         if let Some(grace) = &self.grace
             && grace.app_id == app_id
         {
             if now < grace.deadline {
+                let choice = if grace.showing_titles {
+                    MenuChoice::Remembered(self.titles.get(app_id).cloned().unwrap_or_default())
+                } else {
+                    MenuChoice::Waiting
+                };
                 return Decision {
-                    choice: MenuChoice::Remembered(
-                        self.titles.get(app_id).cloned().unwrap_or_default(),
-                    ),
+                    choice,
                     started: None,
                 };
             }
+            let showing_titles = grace.showing_titles;
             self.grace = None;
-            self.titles.remove(app_id);
+            if showing_titles {
+                self.titles.remove(app_id);
+            }
         }
         if let Some(titles) = self.titles.get(app_id) {
             let deadline = now + MENU_GRACE;
             self.grace = Some(Grace {
                 app_id: app_id.to_string(),
                 deadline,
+                showing_titles: true,
             });
             return Decision {
                 choice: MenuChoice::Remembered(titles.clone()),
+                started: Some(deadline),
+            };
+        }
+        if address.is_none() && newly_mapped {
+            let deadline = now + MENU_GRACE;
+            self.grace = Some(Grace {
+                app_id: app_id.to_string(),
+                deadline,
+                showing_titles: false,
+            });
+            return Decision {
+                choice: MenuChoice::Waiting,
                 started: Some(deadline),
             };
         }
@@ -129,7 +158,9 @@ impl MenuMemory {
         if let Some(grace) = &self.grace
             && now >= grace.deadline
         {
-            self.titles.remove(&grace.app_id);
+            if grace.showing_titles {
+                self.titles.remove(&grace.app_id);
+            }
             self.grace = None;
         }
     }
@@ -218,6 +249,8 @@ impl App for BarApp {
             ))
         });
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
+        let previous_len = use_hook(|| Rc::new(Cell::new(0usize)));
+        let pending_new = use_hook(|| Rc::new(Cell::new(None::<usize>)));
         let menu_tick = use_state(|| 0u64);
         let _ = *menu_tick.read();
         let toplevels = Toplevels::get().list.read().clone();
@@ -296,6 +329,33 @@ impl App for BarApp {
         }
         let remote_menu = self.menu_snapshot.read().as_ref().cloned();
         let choice = if focused && app_menus_enabled {
+            let active_index = toplevels
+                .iter()
+                .position(|window| window.active)
+                .or_else(|| {
+                    app_id
+                        .as_deref()
+                        .and_then(|id| toplevels.iter().position(|window| window.app_id == id))
+                });
+            // shortcut: a close and a map between two renders keep the
+            // length, so that new window misses the grace. Upgrade: expose a
+            // toplevel id instead of using positions.
+            let previous = previous_len.get();
+            let mut pending = pending_new.get();
+            if toplevels.len() > previous {
+                pending = Some(pending.map_or(previous, |from| from.min(previous)));
+            }
+            if pending.is_some_and(|from| toplevels.len() < from) {
+                pending = None;
+            }
+            let newly_mapped =
+                active_index.is_some_and(|index| pending.is_some_and(|from| index >= from));
+            if newly_mapped {
+                pending = None;
+            }
+            pending_new.set(pending);
+            previous_len.set(toplevels.len());
+
             let app_id = app_id.clone().unwrap_or_default();
             let mut stored = memory.borrow_mut();
             if let Some(menu) = &remote_menu {
@@ -307,7 +367,12 @@ impl App for BarApp {
                     started: None,
                 }
             } else {
-                stored.decide(&app_id, Instant::now())
+                stored.decide(
+                    &app_id,
+                    active_info.and_then(|info| info.app_menu.as_ref()),
+                    newly_mapped,
+                    Instant::now(),
+                )
             };
             drop(stored);
             if let Some(deadline) = decision.started {
@@ -587,6 +652,24 @@ impl App for BarApp {
                         reveal_roots: None,
                     });
                 }
+            } else if matches!(choice, Some(MenuChoice::Waiting)) {
+                specs.push(MenuTitleSpec {
+                    label: app_name.clone(),
+                    glyph: None,
+                    bold: true,
+                    items: app_items.clone(),
+                    searchable: None,
+                    on_activate: Rc::new(focused::on_action),
+                    live_items: None,
+                    on_open: None,
+                    on_hover_title: None,
+                    on_open_submenu: None,
+                    submenu_source: None,
+                    anchor: title_anchor(1),
+                    enabled: true,
+                    query_state: None,
+                    reveal_roots: None,
+                });
             } else {
                 let help_searchable: SearchableItems = {
                     let app_name = app_name.clone();
@@ -925,7 +1008,7 @@ mod tests {
         let mut memory = MenuMemory::default();
         let now = Instant::now();
         assert!(memory.remember("firefox", vec!["File".into(), "Edit".into()]));
-        let shown = memory.decide("firefox", now);
+        let shown = memory.decide("firefox", None, true, now);
         assert_eq!(
             shown.choice,
             MenuChoice::Remembered(vec!["File".into(), "Edit".into()])
@@ -933,7 +1016,7 @@ mod tests {
         assert!(shown.started.is_some());
 
         assert!(memory.remember("firefox", vec!["File".into(), "Edit".into(), "View".into()]));
-        let replaced = memory.decide("firefox", now);
+        let replaced = memory.decide("firefox", None, false, now);
         assert_eq!(
             replaced.choice,
             MenuChoice::Remembered(vec!["File".into(), "Edit".into(), "View".into()])
@@ -946,7 +1029,7 @@ mod tests {
         let labels = vec!["File".to_string(), "Edit".to_string()];
         assert!(memory.remember("firefox", labels.clone()));
         assert!(!memory.remember("firefox", labels.clone()));
-        let decision = memory.decide("firefox", Instant::now());
+        let decision = memory.decide("firefox", None, true, Instant::now());
         assert_eq!(decision.choice, MenuChoice::Remembered(labels));
     }
 
@@ -956,10 +1039,10 @@ mod tests {
         let now = Instant::now();
         memory.remember("firefox", vec!["File".into()]);
         assert!(matches!(
-            memory.decide("firefox", now).choice,
+            memory.decide("firefox", None, true, now).choice,
             MenuChoice::Remembered(_)
         ));
-        let expired = memory.decide("firefox", now + MENU_GRACE);
+        let expired = memory.decide("firefox", None, false, now + MENU_GRACE);
         assert_eq!(expired.choice, MenuChoice::Fallback);
         assert!(!memory.titles.contains_key("firefox"));
     }
@@ -971,8 +1054,29 @@ mod tests {
         memory.forget("firefox");
         assert!(!memory.titles.contains_key("firefox"));
         assert_eq!(
-            memory.decide("firefox", Instant::now()).choice,
+            memory.decide("firefox", None, false, Instant::now()).choice,
             MenuChoice::Fallback
         );
+    }
+
+    #[test]
+    fn a_new_window_without_titles_waits_then_falls_back() {
+        let mut memory = MenuMemory::default();
+        let now = Instant::now();
+        let waiting = memory.decide("foot", None, true, now);
+        assert_eq!(waiting.choice, MenuChoice::Waiting);
+        assert!(waiting.started.is_some());
+        assert_eq!(
+            memory.decide("foot", None, false, now + MENU_GRACE).choice,
+            MenuChoice::Fallback
+        );
+    }
+
+    #[test]
+    fn an_already_mapped_window_falls_back_at_once() {
+        let mut memory = MenuMemory::default();
+        let decision = memory.decide("foot", None, false, Instant::now());
+        assert_eq!(decision.choice, MenuChoice::Fallback);
+        assert!(decision.started.is_none());
     }
 }
