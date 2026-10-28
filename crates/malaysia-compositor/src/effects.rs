@@ -11,7 +11,9 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexProgram, GlesTexture, Uniform};
 use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
-use smithay::utils::{Buffer as BufferCoords, Physical, Rectangle, Scale, Size, Transform};
+use smithay::utils::{
+    Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
+};
 
 /// Map a physical frame rectangle into a source texture's coordinate space.
 fn frame_to_texture_geometry(
@@ -38,6 +40,23 @@ fn texture_radius(
     (f64::from(radius) * scale) as f32
 }
 
+/// The logical `PixelShaderElement` area that covers `frame` plus `margin`
+/// physical pixels on every side, and never rounds the frame out of it.
+pub(crate) fn shader_area(
+    frame: Rectangle<i32, Physical>,
+    margin: i32,
+    scale: f64,
+) -> Rectangle<i32, Logical> {
+    let left = (f64::from(frame.loc.x - margin) / scale).floor() as i32;
+    let top = (f64::from(frame.loc.y - margin) / scale).floor() as i32;
+    let right = (f64::from(frame.loc.x + frame.size.w + margin) / scale).ceil() as i32;
+    let bottom = (f64::from(frame.loc.y + frame.size.h + margin) / scale).ceil() as i32;
+    Rectangle::new(
+        Point::from((left, top)),
+        Size::from((right - left, bottom - top)),
+    )
+}
+
 /// A surface or memory texture drawn with a rounded-rectangle clip.
 ///
 /// This replaces the old CPU-banded `ClippedSurface`. One draw call per
@@ -58,6 +77,8 @@ pub(crate) struct RoundedTextureElement {
     frame_rect: Rectangle<i32, Physical>,
     /// Corner radius in physical pixels.
     radius: i32,
+    /// Superellipse exponent; `2.0` is a plain rounded corner.
+    exponent: f32,
     program: GlesTexProgram,
 }
 
@@ -67,6 +88,7 @@ impl RoundedTextureElement {
         element: &WaylandSurfaceRenderElement<GlesRenderer>,
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
+        exponent: f32,
         program: GlesTexProgram,
     ) -> Option<Self> {
         let texture = match element.texture() {
@@ -86,6 +108,7 @@ impl RoundedTextureElement {
             kind: element.kind(),
             frame_rect,
             radius,
+            exponent,
             program,
         })
     }
@@ -102,6 +125,7 @@ impl RoundedTextureElement {
         kind: Kind,
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
+        exponent: f32,
         program: GlesTexProgram,
     ) -> Self {
         let texture_size = texture.size();
@@ -117,6 +141,7 @@ impl RoundedTextureElement {
             kind,
             frame_rect,
             radius,
+            exponent,
             program,
         }
     }
@@ -189,6 +214,7 @@ impl RenderElement<GlesRenderer> for RoundedTextureElement {
             ),
             Uniform::new("geometry", self.texture_geometry()),
             Uniform::new("radius", self.rounded_radius()),
+            Uniform::new("exponent", self.exponent),
         ];
         frame.render_texture_from_to(
             &self.texture,
@@ -209,9 +235,9 @@ use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as Wayla
 
 #[cfg(test)]
 mod tests {
-    use smithay::utils::{Point, Rectangle, Size};
+    use smithay::utils::{Physical, Point, Rectangle, Size};
 
-    use super::{frame_to_texture_geometry, texture_radius};
+    use super::{frame_to_texture_geometry, shader_area, texture_radius};
 
     #[test]
     fn texture_geometry_scales_the_frame_to_source_space() {
@@ -234,6 +260,25 @@ mod tests {
         // Frame size 300x200 scaled by 2x -> 600x400.
         assert!((geo[2] - 600.0).abs() < 0.01);
         assert!((geo[3] - 400.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_shader_area_covers_the_frame_and_its_margin() {
+        for scale in [1.0_f64, 1.25] {
+            let frame = Rectangle::new(Point::from((10, 20)), Size::from((200, 100)));
+            let area = shader_area(frame, 2, scale);
+            let physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
+            assert!(physical.loc.x <= frame.loc.x - 2, "scale {scale}");
+            assert!(physical.loc.y <= frame.loc.y - 2, "scale {scale}");
+            assert!(
+                physical.loc.x + physical.size.w >= frame.loc.x + frame.size.w + 2,
+                "scale {scale}"
+            );
+            assert!(
+                physical.loc.y + physical.size.h >= frame.loc.y + frame.size.h + 2,
+                "scale {scale}"
+            );
+        }
     }
 
     #[test]

@@ -1038,6 +1038,14 @@ fn frame_radius(state: crate::decoration::WindowState, role: crate::decoration::
     }
 }
 
+/// The superellipse exponent of a window frame, from its design token.
+fn frame_exponent(role: crate::decoration::Role) -> f32 {
+    match role {
+        crate::decoration::Role::Dialog => vow_design::DIALOG.superellipse_exponent,
+        _ => vow_design::WINDOW.superellipse_exponent,
+    }
+}
+
 /// Whether the frame draws its outer border, inner line and clipped content.
 fn frame_has_border(state: crate::decoration::WindowState) -> bool {
     state != crate::decoration::WindowState::Fullscreen
@@ -1103,7 +1111,7 @@ fn append_window_frame(
     let frame_rect_physical = physical_rect(frame_rect_logical, scale);
     let radius_logical = frame_radius(data.state, data.role);
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
-    let radius = radius_logical;
+    let exponent = frame_exponent(data.role);
 
     // Content, clipped to the rounded frame.
     let rounded_program = state.rounded_clip.clone();
@@ -1134,6 +1142,7 @@ fn append_window_frame(
                 program,
                 frame_rect_physical,
                 radius_physical,
+                exponent,
             )
         {
             content.push(element.into());
@@ -1158,6 +1167,7 @@ fn append_window_frame(
                 &element,
                 frame_rect_physical,
                 radius_physical,
+                exponent,
                 program.clone(),
             ) {
                 content.push(rounded.into());
@@ -1180,16 +1190,24 @@ fn append_window_frame(
         let palette = &state.chrome_theme.palette;
         if let Some(program) = state.border.as_ref() {
             if let Some(color) = palette.inner_line
-                && let Some(element) =
-                    border_element(program, frame_rect_logical, radius, scale, false, color)
+                && let Some(element) = border_element(
+                    program,
+                    frame_rect_physical,
+                    radius_physical,
+                    scale,
+                    exponent,
+                    false,
+                    color,
+                )
             {
                 inner = Some(element.into());
             }
             if let Some(element) = border_element(
                 program,
-                frame_rect_logical,
-                radius,
+                frame_rect_physical,
+                radius_physical,
                 scale,
+                exponent,
                 true,
                 palette.outer_border,
             ) {
@@ -1199,7 +1217,10 @@ fn append_window_frame(
         if let Some(program) = state.shadow.as_ref() {
             shadow = state.chrome.shadow_element(
                 program,
-                frame_rect_logical,
+                frame_rect_physical,
+                radius_physical,
+                exponent,
+                scale,
                 &state.chrome_theme,
                 is_focused,
             );
@@ -1229,38 +1250,37 @@ fn physical_rect(rect: Rectangle<i32, Logical>, scale: f64) -> Rectangle<i32, Ph
 }
 
 /// Builds one [`PixelShaderElement`] for an inner line or outer border ring.
+///
+/// `frame_rect` and `radius` are the same physical pixels the clip uses; the
+/// ring width and antialiasing ramp are exactly one physical pixel.
+#[allow(clippy::too_many_arguments)]
 fn border_element(
     program: &smithay::backend::renderer::gles::GlesPixelProgram,
-    frame_rect: Rectangle<i32, Logical>,
-    radius: u32,
+    frame_rect: Rectangle<i32, Physical>,
+    radius: i32,
     scale: f64,
+    exponent: f32,
     outer: bool,
     color: vow_design::Rgba,
 ) -> Option<smithay::backend::renderer::gles::element::PixelShaderElement> {
     use smithay::backend::renderer::gles::Uniform;
     use smithay::backend::renderer::gles::element::PixelShaderElement;
-    // One physical pixel expressed in logical coordinates.
-    let width_logical = (1.0 / scale) as f32;
-    let margin = width_logical.ceil().max(1.0) as i32;
-    let area = Rectangle::new(
-        Point::from((frame_rect.loc.x - margin, frame_rect.loc.y - margin)),
-        Size::from((
-            frame_rect.size.w + margin * 2,
-            frame_rect.size.h + margin * 2,
-        )),
-    );
+    // One physical pixel of room for the ring and its AA ramp.
+    let area = crate::effects::shader_area(frame_rect, 1, scale);
+    let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
     let rect_local = [
-        (frame_rect.loc.x - area.loc.x) as f32,
-        (frame_rect.loc.y - area.loc.y) as f32,
+        (frame_rect.loc.x - area_physical.loc.x) as f32,
+        (frame_rect.loc.y - area_physical.loc.y) as f32,
         frame_rect.size.w as f32,
         frame_rect.size.h as f32,
     ];
     let uniforms = vec![
-        Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
         Uniform::new("rect", rect_local),
         Uniform::new("radius", radius as f32),
-        Uniform::new("width", width_logical),
+        Uniform::new("width", 1.0f32),
         Uniform::new("side", if outer { 1.0f32 } else { -1.0f32 }),
+        Uniform::new("scale", scale as f32),
+        Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
     ];
     Some(PixelShaderElement::new(
@@ -2092,6 +2112,7 @@ fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
             UniformName::new("texture_size", UniformType::_2f),
             UniformName::new("geometry", UniformType::_4f),
             UniformName::new("radius", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
         ],
     );
     match program {
@@ -2114,6 +2135,8 @@ fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
             UniformName::new("radius", UniformType::_1f),
             UniformName::new("blur", UniformType::_1f),
             UniformName::new("offset", UniformType::_2f),
+            UniformName::new("scale", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
             UniformName::new("color", UniformType::_4f),
         ],
     );
@@ -2136,6 +2159,8 @@ fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
             UniformName::new("radius", UniformType::_1f),
             UniformName::new("width", UniformType::_1f),
             UniformName::new("side", UniformType::_1f),
+            UniformName::new("scale", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
             UniformName::new("color", UniformType::_4f),
         ],
     );

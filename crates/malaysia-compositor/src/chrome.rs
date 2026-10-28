@@ -27,7 +27,7 @@ use vow_appearance::{
 };
 use vow_design::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
-    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition, WINDOW,
+    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition,
 };
 
 use crate::config::Config;
@@ -160,11 +160,16 @@ impl ChromeCache {
     /// The drop shadow behind a window, drawn with the GPU shadow shader.
     ///
     /// Returns one element per shadow layer (ambient + contact). If the shader
-    /// did not compile, no shadow is drawn. `window_rect` is in logical pixels.
+    /// did not compile, no shadow is drawn. `window_rect` and `radius` are in
+    /// physical pixels, the same ones the frame clip uses.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn shadow_element(
         &self,
         program: &GlesPixelProgram,
-        window_rect: Rectangle<i32, Logical>,
+        window_rect: Rectangle<i32, Physical>,
+        radius: i32,
+        exponent: f32,
+        scale: f64,
         theme: &ChromeTheme,
         focused: bool,
     ) -> Vec<OutputRenderElement> {
@@ -174,7 +179,9 @@ impl ChromeCache {
         };
         let mut elements = Vec::with_capacity(2);
         for layer in style.layers(focused) {
-            let Some(element) = shadow_layer_element(program, window_rect, layer) else {
+            let Some(element) =
+                shadow_layer_element(program, window_rect, radius, exponent, scale, layer)
+            else {
                 continue;
             };
             elements.push(element.into());
@@ -197,6 +204,7 @@ impl ChromeCache {
         program: smithay::backend::renderer::gles::GlesTexProgram,
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
+        exponent: f32,
     ) -> Option<crate::effects::RoundedTextureElement> {
         use smithay::backend::renderer::ImportMem;
         let key = Key {
@@ -240,6 +248,7 @@ impl ChromeCache {
             Kind::Unspecified,
             frame_rect,
             radius,
+            exponent,
             program,
         ))
     }
@@ -248,36 +257,36 @@ impl ChromeCache {
 /// Builds one [`PixelShaderElement`] for a single shadow layer.
 fn shadow_layer_element(
     program: &GlesPixelProgram,
-    window_rect: Rectangle<i32, Logical>,
+    window_rect: Rectangle<i32, Physical>,
+    radius: i32,
+    exponent: f32,
+    scale: f64,
     layer: vow_design::ShadowLayer,
 ) -> Option<PixelShaderElement> {
     // The shadow extends 3 sigma plus the offset on every side; with the CSS
-    // equivalence sigma = blur / 2 that is 1.5 * blur + |offset|.
-    let margin = shadow_margin(layer);
+    // equivalence sigma = blur / 2 that is 1.5 * blur + |offset|, plus one
+    // physical pixel so the antialiased edge is not clipped.
+    let margin = (f64::from(shadow_margin(layer)) * scale).ceil() as i32 + 1;
     if margin <= 0 {
         return None;
     }
-    let area = Rectangle::new(
-        Point::from((window_rect.loc.x - margin, window_rect.loc.y - margin)),
-        Size::from((
-            window_rect.size.w + margin * 2,
-            window_rect.size.h + margin * 2,
-        )),
-    );
-    let color = layer.color;
+    let area = crate::effects::shader_area(window_rect, margin, scale);
+    let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
     let rect = [
-        margin as f32,
-        margin as f32,
+        (window_rect.loc.x - area_physical.loc.x) as f32,
+        (window_rect.loc.y - area_physical.loc.y) as f32,
         window_rect.size.w as f32,
         window_rect.size.h as f32,
     ];
+    let color = layer.color;
     let uniforms = vec![
-        Uniform::new("size", [area.size.w as f32, area.size.h as f32]),
         Uniform::new("rect", rect),
         Uniform::new("window_rect", rect),
-        Uniform::new("radius", vow_design::WINDOW.corner_radius as f32),
-        Uniform::new("blur", layer.blur as f32),
-        Uniform::new("offset", [0.0f32, layer.y_offset as f32]),
+        Uniform::new("radius", radius as f32),
+        Uniform::new("blur", layer.blur as f32 * scale as f32),
+        Uniform::new("offset", [0.0f32, layer.y_offset as f32 * scale as f32]),
+        Uniform::new("scale", scale as f32),
+        Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
     ];
     Some(PixelShaderElement::new(
@@ -399,8 +408,8 @@ impl TextEngine {
         } else {
             palette.titlebar_bg.unfocused
         };
-        let radius = f64::from(WINDOW.corner_radius) * scale;
-        fill_top_rounded(&mut pixels, w, h, radius, background);
+        // Square: the rounded clip shader shapes the window corners.
+        fill_rect(&mut pixels, w, h, 0, 0, w, h, background);
 
         let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale)
             .round()
@@ -733,47 +742,6 @@ fn fill_rect(
             blend(&mut pixels[index..index + 4], color, 1.0);
         }
     }
-}
-
-/// Fills the whole bar but rounds its two top corners, with antialiased
-/// coverage.
-fn fill_top_rounded(
-    pixels: &mut [u8],
-    width: i32,
-    height: i32,
-    radius: f64,
-    color: vow_design::Rgba,
-) {
-    let radius = (radius as f32).min(width as f32 / 2.0).min(height as f32);
-    for row in 0..height {
-        for col in 0..width {
-            let coverage =
-                top_corner_coverage(col as f32 + 0.5, row as f32 + 0.5, width as f32, radius);
-            if coverage <= 0.0 {
-                continue;
-            }
-            let index = (row * width + col) as usize * 4;
-            blend(&mut pixels[index..index + 4], color, coverage);
-        }
-    }
-}
-
-/// Coverage of a pixel in the bar's top-left or top-right rounded corner.
-fn top_corner_coverage(px: f32, py: f32, width: f32, radius: f32) -> f32 {
-    if radius <= 0.0 || py > radius {
-        return 1.0;
-    }
-    let center_x = if px < radius {
-        radius
-    } else if px > width - radius {
-        width - radius
-    } else {
-        return 1.0;
-    };
-    let dx = px - center_x;
-    let dy = py - radius;
-    let distance = (dx * dx + dy * dy).sqrt() - radius;
-    (0.5 - distance).clamp(0.0, 1.0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1110,28 +1078,6 @@ mod tests {
             button_at(outer(), insets(), Point::from((500.0, 100.0))),
             None
         );
-    }
-
-    #[test]
-    fn the_bar_rounds_its_top_corners_and_keeps_real_alpha() {
-        let mut text = TextEngine::new();
-        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
-        let (pixels, w, h) = text.rasterize(
-            "",
-            false,
-            800,
-            1.0,
-            theme,
-            TrafficInput {
-                zoom_supported: true,
-                ..TrafficInput::default()
-            },
-        );
-        let alpha = |x: i32, y: i32| pixels[((y * w + x) * 4 + 3) as usize];
-        assert_eq!(alpha(0, 0), 0, "the top-left corner stays transparent");
-        assert_eq!(alpha(w - 1, 0), 0, "the top-right corner stays transparent");
-        assert_eq!(alpha(w / 2, 0), 255, "the top edge stays opaque");
-        assert_eq!(alpha(0, h - 1), 255, "the bottom corners stay square");
     }
 
     #[test]
