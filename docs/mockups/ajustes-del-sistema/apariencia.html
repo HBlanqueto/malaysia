@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=760">
+<title>Ajustes del sistema › Apariencia (mockup de contrato)</title>
+<!--
+  Mockup de contrato. Reglas (docs/mockups/README.md):
+  - Solo variables de neptunia.css y de los tokens de componentes; ningún color
+    ni medida suelta, salvo dentro de [data-diff="ignore"].
+  - data-id: identificador estable que el test de la app busca. Único.
+  - data-kit: componente de barrier-kit. data-app: función de malaysia-settings.
+  - data-state / data-variant: estado y variante que el nodo debe tener.
+  - data-layer="compositor": lo dibuja el compositor; la app dibuja cuadrado.
+  - data-diff="ignore": contenido que depende del sistema (fondo, usuario);
+    su geometría sí se compara, sus píxeles no.
+-->
+<link rel="stylesheet" href="../../../crates/vow-design/neptunia/generated/neptunia.css">
+<link rel="stylesheet" href="../_provisional-tokens.css">
+<script type="application/json" id="mockup-variants">
+{
+  "size": [760, 620],
+  "variants": {
+    "claro":           { "theme": "light", "query": "" },
+    "claro-morado":    { "theme": "light", "query": "", "accent": "morado" },
+    "oscuro":          { "theme": "dark",  "query": "" },
+    "busqueda-acento": { "theme": "light", "query": "acento" },
+    "sin-resultados":  { "theme": "light", "query": "zzz" },
+    "semaforos-menu":  { "theme": "light", "query": "", "menu": "semaforos" }
+  }
+}
+</script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:760px;height:620px;overflow:hidden;background:#808080}
+button{font:inherit;appearance:none;border:0;background:transparent;padding:0;margin:0;color:inherit}
+input{font:inherit}
+svg.ico{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+
+/* Tipografía: estilos de tokens.json › font.styles */
+.t-body{font-size:var(--type-body-size);line-height:var(--type-body-line-height);font-weight:var(--type-body-weight)}
+.t-headline{font-size:var(--type-headline-size);line-height:var(--type-headline-line-height);font-weight:var(--type-headline-weight)}
+.t-callout{font-size:var(--type-callout-size);line-height:var(--type-callout-line-height);font-weight:var(--type-callout-weight)}
+.t-caption{font-size:var(--type-caption-size);line-height:var(--type-caption-line-height);font-weight:var(--type-caption-weight);letter-spacing:var(--type-caption-tracking)}
+.t-title-2{font-size:var(--type-title-2-size);line-height:var(--type-title-2-line-height);font-weight:var(--type-title-2-weight)}
+
+/* Ventana: la app dibuja un rectángulo cuadrado de 760×620 */
+.win{position:relative;width:var(--settings-window-width);height:var(--settings-window-height);background:var(--bg-window);color:var(--ink);font-family:var(--font-sans);overflow:hidden}
+
+/* Capa del compositor: solo para previsualizar (?compositor=1). La extracción la oculta. */
+.comp{position:absolute;inset:0;pointer-events:none;border-radius:var(--window-radius);box-shadow:inset 0 0 0 1px var(--window-outer),inset 0 0 0 2px var(--window-inner);display:none}
+html[data-compositor] .comp{display:block}
+html[data-compositor] .win{border-radius:var(--window-radius)}
+
+/* Barra lateral en isla */
+.side{position:absolute;left:var(--window-sidebar-island-inset);top:var(--window-sidebar-island-inset);bottom:var(--window-sidebar-island-inset);width:var(--window-sidebar-width);
+  padding:var(--settings-sidebar-padding-top) var(--window-sidebar-island-padding-x) var(--settings-sidebar-padding-bottom);
+  border-radius:var(--window-sidebar-island-radius);background:var(--window-sidebar-island-bg);
+  box-shadow:inset 0 0 0 var(--window-sidebar-island-rim-width) var(--window-sidebar-island-rim);display:flex;flex-direction:column}
+.tl{display:flex;gap:var(--window-traffic-lights-gap);height:var(--window-traffic-lights-size);margin-left:calc(var(--window-sidebar-island-traffic-x) - var(--window-sidebar-island-padding-x));align-self:flex-start}
+.tl i{width:var(--window-traffic-lights-size);height:var(--window-traffic-lights-size);border-radius:var(--window-traffic-lights-radius);box-shadow:inset 0 0 0 0.5px var(--traffic-rim);display:block}
+.srch{display:flex;align-items:center;gap:var(--settings-search-gap);height:var(--settings-search-height);margin-top:var(--settings-sidebar-lights-gap);padding:0 var(--settings-search-padding-x);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-muted)}
+.srch .ico{width:var(--settings-search-icon);height:var(--settings-search-icon)}
+.srch span{flex:1;min-width:0;white-space:nowrap;overflow:hidden}
+.srch span.q{color:var(--ink-strong)}
+.acct{display:flex;align-items:center;gap:var(--settings-account-gap);height:var(--settings-account-height);margin-top:var(--settings-sidebar-search-gap);padding:0 var(--settings-account-padding-x)}
+.av{width:var(--settings-account-avatar);height:var(--settings-account-avatar);border-radius:var(--radius-pill);background:var(--sys-gray);color:var(--on-accent);display:grid;place-items:center;flex:none}
+.acct .who{display:flex;flex-direction:column}
+.acct .who b{color:var(--ink-strong)}
+.acct .who small{color:var(--ink-muted)}
+.items{display:flex;flex-direction:column;gap:var(--settings-sidebar-item-gap);margin-top:var(--settings-section-gap)}
+.it{display:flex;align-items:center;gap:var(--window-sidebar-item-gap);height:var(--window-sidebar-item-height);padding:0 var(--window-sidebar-item-padding-x);border-radius:var(--window-sidebar-item-radius);color:var(--ink-strong)}
+.it[data-state~="selected"]{background:var(--window-sidebar-item-selected-bg);color:var(--window-sidebar-item-selected-ink);font-weight:var(--window-sidebar-item-selected-weight)}
+html[data-theme="dark"] .it[data-state~="selected"]{background:color-mix(in srgb,var(--accent) calc(100% * (1 - var(--settings-selected-dark-mix))),var(--window-sidebar-island-bg))}
+.appico{width:var(--window-sidebar-item-app-icon);height:var(--window-sidebar-item-app-icon);border-radius:var(--radius-sm);background:var(--settings-section-icon-bg);color:var(--on-accent);display:grid;place-items:center;flex:none}
+.appico .ico{width:var(--settings-sidebar-app-icon-glyph);height:var(--settings-sidebar-app-icon-glyph)}
+
+/* Columna de contenido */
+.main{position:absolute;top:0;bottom:0;right:0;left:calc(var(--window-sidebar-island-inset) * 2 + var(--window-sidebar-width));display:flex;flex-direction:column}
+.tb{height:var(--settings-toolbar-height);flex:none;display:flex;align-items:center;gap:var(--settings-toolbar-gap);padding:var(--settings-toolbar-padding-top) var(--settings-toolbar-padding-x) 0}
+.grp{display:flex;align-items:center;height:var(--window-toolgroup-height);padding:0 var(--window-toolgroup-padding-x);border-radius:var(--radius-pill);background:var(--window-toolgroup-bg)}
+.tbb{width:var(--window-toolgroup-button-w);height:var(--window-toolgroup-button-h);border-radius:var(--radius-pill);display:grid;place-items:center;color:var(--window-toolgroup-ink)}
+.tbb[data-state~="disabled"]{color:var(--window-toolgroup-disabled-ink)}
+.tbb .ico{width:16px;height:16px}
+.gsep{width:var(--window-toolgroup-separator-w);height:var(--window-toolgroup-separator-h);background:var(--window-toolgroup-separator)}
+.ttl{color:var(--ink-strong);white-space:nowrap}
+.scroll{flex:1;min-height:0;overflow:hidden}
+.cont{padding:var(--settings-content-padding-top) var(--settings-group-content-padding-x) var(--settings-content-padding-bottom);display:flex;flex-direction:column;gap:var(--settings-content-gap)}
+.cap{color:var(--ink-strong);margin:calc(var(--settings-group-title-margin-top) - var(--settings-content-gap)) 0 calc(var(--settings-group-title-margin-bottom) - var(--settings-content-gap)) var(--settings-group-title-indent)}
+.grpc{background:var(--bg-surface);border-radius:var(--settings-group-radius);box-shadow:inset 0 0 0 1px var(--line)}
+.row{position:relative;display:flex;align-items:center;gap:var(--settings-row-gap);min-height:var(--settings-group-row-min-height);padding:var(--settings-group-row-padding-y) var(--settings-group-row-padding-x)}
+.row + .row::before{content:"";position:absolute;top:0;left:var(--settings-group-row-padding-x);right:var(--settings-group-row-padding-x);height:1px;background:var(--line)}
+.row .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--settings-group-desc-gap)}
+.row .tx b{font-weight:inherit;color:var(--ink-strong)}
+.row .tx small{color:var(--ink-muted)}
+.row[data-state~="disabled"] .tx b{color:var(--ink-faint)}
+.row[data-state~="disabled"] .radios{opacity:.4}
+
+/* Tarjetas con vista previa */
+.cards{display:flex;gap:var(--settings-card-gap)}
+.card{display:flex;flex-direction:column;align-items:center;gap:var(--settings-card-caption-gap);color:var(--ink-muted)}
+.card[data-state~="selected"] .capt{color:var(--ink-strong);font-weight:var(--type-headline-weight)}
+.pv{position:relative;display:block;width:var(--settings-card-width);height:var(--settings-card-height);border-radius:var(--settings-card-radius);overflow:hidden;box-shadow:0 0 0 1px var(--settings-card-outline)}
+.card[data-state~="selected"] .pv{box-shadow:0 0 0 var(--settings-card-ring-gap) var(--bg-surface),0 0 0 calc(var(--settings-card-ring-gap) + var(--settings-card-ring)) var(--accent)}
+/* Interior de las miniaturas: depende del fondo de pantalla real, no se compara por píxel. */
+/* Fondo de las miniaturas: degradado del acento, no el fondo de pantalla. */
+.pv .wall{position:absolute;inset:0;background:linear-gradient(var(--settings-preview-wall-angle),color-mix(in srgb,var(--accent),#ffffff var(--settings-preview-wall-light)),var(--accent),color-mix(in srgb,var(--accent),#000000 var(--settings-preview-wall-dark)))}
+.pv .sc{position:absolute;inset:0}
+.pv .sc.lt{--pv-window:var(--preview-light-window);--pv-sunken:var(--preview-light-sunken);--pv-line:var(--preview-light-control)}
+.pv .sc.dk{--pv-window:var(--preview-dark-window);--pv-sunken:var(--preview-dark-sunken);--pv-line:var(--preview-dark-control)}
+.pv .sc.half-r{clip-path:inset(0 0 0 50%)}
+.pv .pn{position:absolute;left:0;top:0;right:0;height:var(--settings-preview-panel-h);background:color-mix(in srgb,var(--pv-window) 88%,transparent)}
+.pv .mn{position:absolute;left:var(--settings-preview-menu-x);top:var(--settings-preview-menu-y);width:var(--settings-preview-menu-w);height:var(--settings-preview-menu-h);padding:2px;border-radius:var(--settings-preview-radius);background:var(--pv-window);box-shadow:var(--settings-preview-shadow);display:flex;flex-direction:column;gap:2px}
+.pv .mn i{display:block;height:2px;width:70%;margin-left:2px;border-radius:1px;background:var(--pv-line)}
+.pv .mn i.hl{height:4px;width:auto;margin:0;background:var(--accent)}
+.pv .ap{position:absolute;right:var(--settings-preview-app-inset);bottom:var(--settings-preview-app-inset);width:var(--settings-preview-app-w);height:var(--settings-preview-app-h);border-radius:var(--settings-preview-radius);background:var(--pv-window);box-shadow:var(--settings-preview-shadow);overflow:hidden}
+.pv .ap .sd{position:absolute;left:0;top:0;bottom:0;width:var(--settings-preview-app-side-w);background:var(--pv-sunken)}
+.pv .ap .dots{position:absolute;left:2px;top:2px;display:flex;gap:1px}
+.pv .ap .dots i{width:var(--settings-preview-light);height:var(--settings-preview-light);border-radius:1px;display:block}
+.pv .tw{position:absolute;left:var(--settings-preview-tint-window-x);top:var(--settings-preview-tint-window-y);right:var(--settings-preview-tint-window-x);bottom:-4px;border-radius:var(--settings-preview-window-radius) var(--settings-preview-window-radius) 0 0}
+.pv .tw i{position:absolute;left:3px;top:3px;bottom:3px;width:var(--settings-preview-tint-side-w);border-radius:3px}
+
+/* Acento */
+.sws{display:flex;gap:var(--settings-swatch-gap)}
+.swc{display:flex;flex-direction:column;align-items:center;gap:var(--settings-swatch-name-gap);width:var(--settings-swatch-column)}
+.sw{width:var(--settings-swatch-size);height:var(--settings-swatch-size);border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.swc[data-state~="selected"] .sw{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--ink-muted)}
+.swc small{color:var(--ink-muted);white-space:nowrap}
+
+/* Radios */
+.radios{display:flex;gap:var(--settings-radio-spacing)}
+.rd{display:inline-flex;align-items:center;gap:var(--settings-radio-gap);color:var(--ink-strong)}
+.rd i{width:var(--settings-radio-size);height:var(--settings-radio-size);border-radius:var(--radius-pill);background:var(--bg-control);box-shadow:inset 0 0 0 .5px var(--traffic-rim);display:grid;place-items:center}
+.rd[data-state~="selected"] i{background:var(--accent)}
+.rd[data-state~="selected"] i::after{content:"";width:var(--settings-radio-dot);height:var(--settings-radio-dot);border-radius:var(--radius-pill);background:var(--on-accent)}
+
+/* Desplegable de semáforos */
+.pop{display:inline-flex;align-items:center;gap:var(--settings-popup-text-gap);height:var(--settings-popup-height);color:var(--ink-strong)}
+.prev{display:inline-flex;gap:var(--settings-popup-light-gap)}
+.prev i{width:var(--settings-dropdown-preview-light);height:var(--settings-dropdown-preview-light);border-radius:var(--window-traffic-lights-radius);box-shadow:inset 0 0 0 .5px var(--traffic-rim);display:block}
+.chev{width:var(--settings-popup-chevron);height:var(--settings-popup-chevron);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-muted);display:grid;place-items:center}
+.chev .ico{width:var(--settings-dropdown-chevron-glyph);height:var(--settings-dropdown-chevron-glyph);stroke-width:1.8}
+
+/* Sin resultados */
+.empty{display:none;flex-direction:column;align-items:center;gap:var(--settings-empty-gap);padding:var(--settings-empty-padding-y) var(--space-4);color:var(--ink-muted);text-align:center}
+.empty .ico{width:var(--settings-empty-icon);height:var(--settings-empty-icon)}
+.empty b{color:var(--ink-strong)}
+html[data-no-results] .empty{display:flex}
+[hidden]{display:none!important}
+
+/* Colores de semáforo y muestras: tokens y components.json › settings.accent-swatches */
+.c-close{background:var(--traffic-close)} .c-min{background:var(--traffic-min)} .c-zoom{background:var(--traffic-zoom)}
+/* Estilo «Acento»: cerrar y minimizar = acento hacia negro; ampliar = acento hacia blanco. «Fondo»: la misma fórmula con el color del fondo. */
+.tl-accent{--tl-src:var(--accent)} .tl-wall{--tl-src:#4169aa}
+.tl-accent .c-close,.tl-accent .c-min,.tl-wall .c-close,.tl-wall .c-min{background:color-mix(in srgb,var(--tl-src),#000000 calc(var(--window-traffic-lights-styles-accent-close-minimize-darken) * 100%))}
+.tl-accent .c-zoom,.tl-wall .c-zoom{background:color-mix(in srgb,var(--tl-src),#ffffff calc(var(--window-traffic-lights-styles-accent-zoom-lighten) * 100%))}
+
+/* Menú del desplegable: es un popup (otra superficie), no parte de la ventana. */
+.popw{position:relative}
+/* Como un popup de macOS: el menú se abre encima del botón y la opción marcada cae justo sobre él (semáforos sobre semáforos, texto sobre texto). */
+.menu{position:absolute;left:calc(-1 * (var(--menu-popover-padding) + var(--menu-popover-item-padding-start) + var(--menu-popover-check) + var(--menu-popover-item-gap)));top:calc(-1 * var(--menu-popover-padding));min-width:var(--menu-popover-min-width);padding:var(--menu-popover-padding);border-radius:var(--menu-popover-radius);background:var(--menu-popover-bg);box-shadow:var(--shadow-float);display:none;flex-direction:column;z-index:10}
+html[data-menu="semaforos"] .menu{display:flex}
+.mi{display:flex;align-items:center;gap:var(--menu-popover-item-gap);height:var(--menu-popover-item-height);padding:0 var(--menu-popover-item-padding-x) 0 var(--menu-popover-item-padding-start);border-radius:var(--menu-popover-item-radius);color:var(--ink-strong);white-space:nowrap}
+.mi[data-state~="hover"]{background:var(--accent);color:var(--on-accent)}
+.mi .ck{width:var(--menu-popover-check);height:var(--menu-popover-check);stroke-width:2;visibility:hidden}
+.mi[data-state~="checked"] .ck{visibility:visible}
+.msep{height:1px;margin:var(--menu-popover-separator-margin) var(--menu-popover-item-padding-x);background:var(--line);flex:none}
+</style>
+</head>
+<body>
+<section class="win" data-id="window" data-kit="Window" data-variant="fixed-width">
+
+  <aside class="side" data-id="sidebar" data-kit="Sidebar" data-variant="island">
+    <div class="tl" data-id="sidebar.traffic" data-kit="TrafficLights" data-variant="standard fixed-width">
+      <i class="c-close" data-id="sidebar.traffic.close"></i>
+      <i class="c-min" data-id="sidebar.traffic.minimize"></i>
+      <i class="c-zoom" data-id="sidebar.traffic.zoom"></i>
+    </div>
+    <label class="srch t-body" data-id="sidebar.search" data-app="search_field">
+      <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+      <span data-id="sidebar.search.text">Buscar</span>
+    </label>
+    <div class="acct" data-id="sidebar.account" data-app="account_row" data-diff="ignore">
+      <span class="av t-headline" data-id="sidebar.account.avatar">HB</span>
+      <span class="who"><b class="t-headline" data-id="sidebar.account.name">Humberto Blanqueto</b><small class="t-callout" data-id="sidebar.account.detail">Cuenta local</small></span>
+    </div>
+    <nav class="items">
+      <a class="it t-body" data-id="sidebar.item.apariencia" data-kit="SidebarItem" data-app="sidebar_item" data-state="selected">
+        <span class="appico" data-id="sidebar.item.apariencia.icon"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" stroke="none"/></svg></span>
+        <span data-id="sidebar.item.apariencia.label">Apariencia</span>
+      </a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="tb" data-id="toolbar" data-app="toolbar">
+      <div class="grp" data-id="toolbar.nav" data-kit="ToolGroup" data-variant="island">
+        <button class="tbb" data-id="toolbar.nav.back" data-kit="ToolButton" data-state="disabled" aria-label="Atrás"><svg class="ico" viewBox="0 0 16 16"><path d="m10 3-5 5 5 5"/></svg></button>
+        <span class="gsep"></span>
+        <button class="tbb" data-id="toolbar.nav.forward" data-kit="ToolButton" data-state="disabled" aria-label="Adelante"><svg class="ico" viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+      </div>
+      <span class="ttl t-title-2" data-id="toolbar.title">Apariencia</span>
+    </header>
+
+    <div class="scroll" data-id="content" data-app="content_scroll">
+      <div class="cont">
+
+        <div class="grpc" data-id="group.apariencia" data-app="card_container" data-search="apariencia claro oscuro automatico tema modo">
+          <div class="row" data-id="group.apariencia.row" data-app="row_card">
+            <div class="tx"><b class="t-body" data-id="group.apariencia.label">Apariencia</b></div>
+            <div class="cards">
+              <button class="card" data-id="group.apariencia.card.automatico" data-app="theme_card">
+                <span class="pv" data-id="group.apariencia.card.automatico.preview"><i class="wall"></i><span class="sc lt"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span></span><span class="sc dk half-r"><i class="pn"></i></span><span class="sc dk"><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
+                <span class="capt t-callout">Automático</span>
+              </button>
+              <button class="card" data-id="group.apariencia.card.claro" data-app="theme_card" data-select-theme="light">
+                <span class="pv" data-id="group.apariencia.card.claro.preview"><i class="wall"></i><span class="sc lt"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
+                <span class="capt t-callout">Claro</span>
+              </button>
+              <button class="card" data-id="group.apariencia.card.oscuro" data-app="theme_card" data-select-theme="dark">
+                <span class="pv" data-id="group.apariencia.card.oscuro.preview"><i class="wall"></i><span class="sc dk"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
+                <span class="capt t-callout">Oscuro</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="t-headline cap" data-id="group.color.title" data-app="group_title" data-search-group="color">Color</div>
+        <div class="grpc" data-id="group.color" data-app="card_container" data-search-group="color">
+          <div class="row" data-id="group.color.acento" data-app="row_card" data-search="color de acento azul morado rosa rojo naranja amarillo verde gris">
+            <div class="tx"><b class="t-body" data-id="group.color.acento.label">Color de acento</b></div>
+            <div class="sws">
+              <span class="swc" data-id="group.color.swatch.azul" data-name="Azul" data-app="accent_swatch" data-state="selected"><i class="sw" style="background:#2f6fe4"></i><small class="t-caption">Azul</small></span>
+              <span class="swc" data-id="group.color.swatch.morado" data-name="Morado" data-app="accent_swatch"><i class="sw" style="background:#8e5bd8"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.rosa" data-name="Rosa" data-app="accent_swatch"><i class="sw" style="background:#e5458f"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.rojo" data-name="Rojo" data-app="accent_swatch"><i class="sw" style="background:#ec4646"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.naranja" data-name="Naranja" data-app="accent_swatch"><i class="sw" style="background:#f07c26"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.amarillo" data-name="Amarillo" data-app="accent_swatch"><i class="sw" style="background:#f5c02c"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.verde" data-name="Verde" data-app="accent_swatch"><i class="sw" style="background:#4fb848"></i><small class="t-caption"></small></span>
+              <span class="swc" data-id="group.color.swatch.gris" data-name="Gris" data-app="accent_swatch"><i class="sw" style="background:#8e8e93"></i><small class="t-caption"></small></span>
+            </div>
+          </div>
+          <div class="row" data-id="group.color.ventanas" data-app="row_card" data-search="color de las ventanas tinte neutro acento fondo de pantalla">
+            <div class="tx"><b class="t-body" data-id="group.color.ventanas.label">Color de las ventanas</b><small class="t-callout" data-id="group.color.ventanas.help">Grises sin tinte.</small></div>
+            <div class="cards">
+              <button class="card" data-id="group.color.ventanas.card.neutro" data-app="window_color_card" data-state="selected">
+                <span class="pv" data-id="group.color.ventanas.card.neutro.preview"><i class="wall"></i><span class="tw" style="background:var(--bg-window)"><i style="background:var(--bg-sunken)"></i></span></span>
+                <span class="capt t-callout">Neutro</span>
+              </button>
+              <button class="card" data-id="group.color.ventanas.card.acento" data-app="window_color_card">
+                <span class="pv" data-id="group.color.ventanas.card.acento.preview"><i class="wall"></i><span class="tw" style="background:color-mix(in srgb,var(--bg-window) 94%,var(--accent))"><i style="background:color-mix(in srgb,var(--bg-sunken) 91.6%,var(--accent))"></i></span></span>
+                <span class="capt t-callout">Acento</span>
+              </button>
+              <button class="card" data-id="group.color.ventanas.card.fondo" data-app="window_color_card">
+                <span class="pv" data-id="group.color.ventanas.card.fondo.preview" data-diff="ignore"><i class="wall"></i><span class="tw" style="background:color-mix(in srgb,var(--bg-window) 93%,#4169aa)"><i style="background:color-mix(in srgb,var(--bg-sunken) 90.2%,#4169aa)"></i></span></span>
+                <span class="capt t-callout">Fondo</span>
+              </button>
+            </div>
+          </div>
+          <div class="row" data-id="group.color.alcance" data-app="row_card" data-state="disabled" data-search="aplicar el tinte escritorio barra de menus dock fondo de pantalla">
+            <div class="tx"><b class="t-body" data-id="group.color.alcance.label">Aplicar el tinte a</b></div>
+            <div class="radios">
+              <span class="rd t-body" data-id="group.color.alcance.ventanas" data-app="radio" data-state="selected"><i></i>Solo las ventanas</span>
+              <span class="rd t-body" data-id="group.color.alcance.escritorio" data-app="radio"><i></i>Todo el escritorio</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="t-headline cap" data-id="group.ventanas.title" data-app="group_title" data-search-group="ventanas">Ventanas</div>
+        <div class="grpc" data-id="group.ventanas" data-app="card_container" data-search-group="ventanas">
+          <div class="row" data-id="group.ventanas.semaforos" data-app="row_card" data-search="ventanas semaforos botones cerrar minimizar ampliar clasico acento fondo">
+            <div class="tx"><b class="t-body" data-id="group.ventanas.semaforos.label">Semáforos</b></div>
+            <div class="popw">
+            <button class="pop t-body" data-id="group.ventanas.semaforos.dropdown" data-app="traffic_dropdown">
+              <span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span>
+              <span>Automático</span>
+              <span class="chev"><svg class="ico" viewBox="0 0 10 10"><path d="m3 4 2-2 2 2M3 6l2 2 2-2"/></svg></span>
+            </button>
+            <div class="menu" data-id="group.ventanas.semaforos.menu" data-kit="MenuView" data-layer="popup" role="menu"><div class="mi t-body" data-id="group.ventanas.semaforos.menu.automatico" data-state="checked"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Automático</span></div><i class="msep"></i><div class="mi t-body" data-id="group.ventanas.semaforos.menu.clasico"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Clásico</span></div><div class="mi t-body" data-id="group.ventanas.semaforos.menu.acento" data-state="hover"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev tl-accent"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Acento</span></div><div class="mi t-body" data-id="group.ventanas.semaforos.menu.fondo" data-diff="ignore"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev tl-wall"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Fondo</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty t-body" data-id="empty" data-app="no_results">
+          <svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
+          <b class="t-headline">Sin resultados</b>
+          <span data-id="empty.text">No hay ninguna opción que coincida con «<span class="q-echo"></span>».</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="comp" data-layer="compositor" aria-hidden="true"></div>
+</section>
+
+<script>
+// Única lógica del mockup: aplicar la variante (?v=nombre) y filtrar por búsqueda.
+(function () {
+  var spec = JSON.parse(document.getElementById('mockup-variants').textContent);
+  var params = new URLSearchParams(location.search);
+  // En un iframe sin query (el visor del artefacto) la variante llega por window.name.
+  var name = params.get('v') || window.name || 'claro';
+  var v = spec.variants[name];
+  if (!v) throw new Error('variante desconocida: ' + name);
+  var root = document.documentElement;
+  root.dataset.theme = v.theme;
+  root.dataset.variant = name;
+  if (v.menu) root.dataset.menu = v.menu;
+  if (params.get('compositor') === '1') root.dataset.compositor = '';
+
+  if (v.accent) {
+    var pick = document.querySelector('[data-id="group.color.swatch.' + v.accent + '"]');
+    document.querySelectorAll('[data-app="accent_swatch"]').forEach(function (sw) {
+      sw.removeAttribute('data-state');
+      sw.querySelector('small').textContent = '';
+    });
+    pick.dataset.state = 'selected';
+    pick.querySelector('small').textContent = pick.dataset.name;
+    root.style.setProperty('--accent', pick.querySelector('.sw').style.background);
+  }
+  document.querySelectorAll('[data-select-theme]').forEach(function (card) {
+    if (card.dataset.selectTheme === v.theme) card.dataset.state = 'selected';
+  });
+
+  var norm = function (s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+  var q = norm(v.query.trim());
+  if (q) {
+    var text = document.querySelector('[data-id="sidebar.search.text"]');
+    text.textContent = v.query;
+    text.classList.add('q');
+    var any = false;
+    document.querySelectorAll('[data-search]').forEach(function (row) {
+      var hit = norm(row.dataset.search).indexOf(q) >= 0;
+      row.hidden = !hit;
+      any = any || hit;
+    });
+    // Un grupo (y su título) solo se ve si le queda alguna fila visible.
+    document.querySelectorAll('.grpc[data-search-group]').forEach(function (group) {
+      var visible = group.querySelector('.row:not([hidden])') !== null;
+      document.querySelectorAll('[data-search-group="' + group.dataset.searchGroup + '"]').forEach(function (el) { el.hidden = !visible; });
+    });
+    if (!any) {
+      root.dataset.noResults = '';
+      document.querySelector('.q-echo').textContent = v.query;
+    }
+  }
+  root.dataset.ready = '';
+})();
+</script>
+</body>
+</html>

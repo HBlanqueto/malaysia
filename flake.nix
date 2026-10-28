@@ -26,8 +26,31 @@
         freetype
         fontconfig
       ];
+
+      # The mockup extractor is hermetic: Chromium and Python's Playwright come
+      # from the same nixpkgs as the flake, and fontconfig only sees Geist.
+      mockupExtract = pkgs: pkgs.writeShellApplication {
+        name = "mockup-extract";
+        text = ''
+          export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
+          export FONTCONFIG_FILE="${pkgs.makeFontsConf {
+            fontDirectories = [ pkgs.geist-font ];
+          }}"
+          exec ${pkgs.python3.withPackages (ps: [ ps.playwright ])}/bin/python3 \
+            ${./scripts/mockup-extract.py} "$@"
+        '';
+      };
     in
     {
+      apps = forAllSystems (system: let
+        pkgs = import nixpkgs { inherit system; };
+      in {
+        mockup-extract = {
+          type = "app";
+          program = "${mockupExtract pkgs}/bin/mockup-extract";
+        };
+      });
+
       packages = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
@@ -205,6 +228,7 @@
       devShells = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
+        mockup-extract = mockupExtract pkgs;
         skia = pkgs.callPackage ./nix/skia.nix { };
         hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         # weston with its simple test clients enabled. nixpkgs builds weston
@@ -264,6 +288,7 @@
             # installed on the system.
             weston
             amdgpu_top
+            mockup-extract
           ] ++ labApps;
 
           # `geist-font` is the UI typeface; `inter` is the fixed fallback for

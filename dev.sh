@@ -405,8 +405,12 @@ check() {
     require cargo
     require cargo-fmt
     require cargo-clippy
+    require mockup-extract
     check_display_env
     cargo fmt --all -- --check
+    find "$script_dir/docs/mockups" -name '*.html' | sort | while IFS= read -r _mockup; do
+        mockup-extract "$_mockup" --check
+    done
     "$script_dir/scripts/check-design-tokens.sh"
     "$script_dir/scripts/check-neptunia-generated.sh"
     "$script_dir/scripts/check-client-only-deps.sh"

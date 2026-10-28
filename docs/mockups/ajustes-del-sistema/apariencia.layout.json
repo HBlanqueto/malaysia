@@ -1,0 +1,3905 @@
+{
+ "mockup": "apariencia.html",
+ "size": [
+  760,
+  620
+ ],
+ "units": "px lógicos, origen en la esquina superior izquierda de la ventana",
+ "variants": {
+  "claro": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(231, 235, 241)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     222,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     500,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     500,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     580,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     580,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     660,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     660,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     190
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     197,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     475,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     508,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     541,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     574,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     607,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     640,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     673,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     706,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     263.5,
+     222,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     283.5,
+     222,
+     16
+    ],
+    "text": "Grises sin tinte.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     500,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     500,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     580,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     580,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     660,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     660,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     325,
+     492,
+     44
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     338,
+     184.5,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     462.5,
+     338,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     606,
+     338,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     385,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     419,
+     308,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     586,
+     415,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "claro-morado": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(231, 235, 241)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(142, 91, 216)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     222,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     500,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     500,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     580,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     580,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     660,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     660,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     190
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     197,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     475,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     508,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     541,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     574,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     607,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     640,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     673,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     706,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     263.5,
+     222,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     283.5,
+     222,
+     16
+    ],
+    "text": "Grises sin tinte.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     500,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     500,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     580,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     580,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     660,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     660,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     325,
+     492,
+     44
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     338,
+     184.5,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     462.5,
+     338,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     606,
+     338,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     385,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     419,
+     308,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     586,
+     415,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "oscuro": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(30, 30, 30)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(22, 22, 22)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(58, 58, 58)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "color(srgb 0.135294 0.260784 0.490196)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(58, 58, 60, 0.84)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "rgb(38, 38, 38)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     222,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     500,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     500,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     580,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     580,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     660,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     660,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     190
+    ],
+    "app": "card_container",
+    "background": "rgb(38, 38, 38)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     197,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     475,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     508,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     541,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     574,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     607,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     640,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     673,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     706,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     263.5,
+     222,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     283.5,
+     222,
+     16
+    ],
+    "text": "Grises sin tinte.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     500,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     500,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     580,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     580,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     660,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     660,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     325,
+     492,
+     44
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     338,
+     184.5,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     462.5,
+     338,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     606,
+     338,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     385,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(38, 38, 38)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     419,
+     308,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     586,
+     415,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "busqueda-acento": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(231, 235, 241)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     64,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     84,
+     492,
+     146
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     84,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     104.5,
+     197,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     475,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     508,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     541,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     574,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     607,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     640,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     673,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     706,
+     94,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     143,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     168.5,
+     222,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     188.5,
+     222,
+     16
+    ],
+    "text": "Grises sin tinte.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     500,
+     153,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     500,
+     153,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     580,
+     153,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     580,
+     153,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     660,
+     153,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     660,
+     153,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     246,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     266,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     266,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     280,
+     308,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     586,
+     276,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "sin-resultados": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(231, 235, 241)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "zzz",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "empty",
+    "rect": [
+     252,
+     56,
+     492,
+     172
+    ],
+    "app": "no_results"
+   },
+   {
+    "id": "empty.text",
+    "rect": [
+     358,
+     162,
+     279.5,
+     18
+    ],
+    "text": "No hay ninguna opción que coincida con « ».",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   }
+  ],
+  "semaforos-menu": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "rgb(231, 235, 241)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(255, 95, 87)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(254, 188, 46)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "rgb(40, 200, 64)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     236,
+     0,
+     524,
+     52
+    ],
+    "app": "toolbar"
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.title",
+    "rect": [
+     337,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     222,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     500,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     500,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     580,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     580,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     660,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     660,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     190
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     197,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     475,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     508,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     541,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     574,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     607,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     640,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     673,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     706,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     263.5,
+     222,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     283.5,
+     222,
+     16
+    ],
+    "text": "Grises sin tinte.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     500,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     500,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     580,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     580,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     660,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     660,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     325,
+     492,
+     44
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     338,
+     184.5,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     462.5,
+     338,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     606,
+     338,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     385,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     405,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     419,
+     308,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     586,
+     415,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   },
+   {
+    "id": "group.ventanas.semaforos.menu",
+    "rect": [
+     557,
+     410,
+     180,
+     123
+    ],
+    "kit": "MenuView",
+    "background": "rgb(255, 255, 255)",
+    "radius": 12
+   },
+   {
+    "id": "group.ventanas.semaforos.menu.automatico",
+    "rect": [
+     562,
+     415,
+     170,
+     26
+    ],
+    "state": "checked",
+    "radius": 8
+   },
+   {
+    "id": "group.ventanas.semaforos.menu.clasico",
+    "rect": [
+     562,
+     450,
+     170,
+     26
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.ventanas.semaforos.menu.acento",
+    "rect": [
+     562,
+     476,
+     170,
+     26
+    ],
+    "state": "hover",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "group.ventanas.semaforos.menu.fondo",
+    "rect": [
+     562,
+     502,
+     170,
+     26
+    ],
+    "diff": "ignore",
+    "radius": 8
+   }
+  ]
+ }
+}
