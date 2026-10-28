@@ -716,6 +716,45 @@ Aceptado el **2026-10-24** en el ThinkPad, en sesión anidada, con prueba manual
 - Al cerrar, el foco vuelve a `foot`.
 - `kill -9` del cliente no deja restos (ni popups huérfanos ni foco perdido).
 
+### Re-aceptación de 14a — submenús hermanos y retraso de intención
+
+Aceptado el **2026-10-28** en sesión anidada con `./dev.sh demo` y el ejemplo
+`menu_popup` de `barrier-kit` (la prueba con Kate se aplazó porque
+`nixpkgs#kdePackages.kate` se estancó descargando desde `cache.nixos.org`).
+
+- Se corrigió el bug huérfano: cuando el puntero pasa del submenú de una fila
+  al de otra, el callback `on_dismissed` del popup cerrado solo limpia
+  `open_child_id` si el id despedido coincide con el que está abierto.
+- Se añadió un retraso de intención de 300 ms: mientras el puntero se mueve
+  hacia el submenú ya abierto (dentro del triángulo de intención), el cierre
+  se retrasa; si entra al submenú se cancela, y si llega a otra fila se cierra
+  inmediatamente y se abre la nueva.
+
+Secuencia con `MALAYSIA_TEST_INPUT`:
+clic en **MalaysiaDreams** → hover en **Ir** (abre hijo) → 150 ms dentro del
+hijo → mover a **Editar** → mover dentro del hijo de **Editar**.
+
+Log del compositor:
+
+```text
+popup grab accepted popup=ObjectId(wl_surface@31[2], 50)
+popup mapped popup=0
+popup grab accepted popup=ObjectId(wl_surface@39[2], 70) parent=ObjectId(wl_surface@31[2], 50)
+popup mapped popup=1
+popup subtree removed root=1 subtree=[PopupId(1)]
+popup grab accepted popup=ObjectId(wl_surface@46[2], 95) parent=ObjectId(wl_surface@31[2], 50)
+popup mapped popup=2
+```
+
+El hijo de **Ir** se cierra (`popup subtree removed root=1`) antes de que se
+mapee el hijo de **Editar** (`popup mapped popup=2`). La captura posterior
+muestra solo el submenú de **Editar**; no queda ningún popup huérfano.
+
+![Submenús hermanos en menu_popup](img/14a/menu-popup-hermanos.png)
+
+`menu-popup-hermanos.png`: menú raíz de **MalaysiaDreams** con **Editar**
+resaltado y su submenú abierto; el submenú de **Ir** ya se cerró.
+
 ## Capturas
 
 ![Menubar con el nombre de la app en claro](img/14a/menubar-nombre-claro.png)
