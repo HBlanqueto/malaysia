@@ -12,6 +12,7 @@
 
 use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
@@ -41,8 +42,19 @@ use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 
 /// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
-/// The delay between two scripted pointer actions.
-const TEST_POINTER_STEP: Duration = Duration::from_millis(100);
+/// Default delay between two scripted pointer actions.
+const TEST_POINTER_STEP_DEFAULT: Duration = Duration::from_millis(100);
+/// Environment variable that overrides the delay between scripted pointer
+/// actions, in milliseconds. Allows measurements to run faster than the
+/// default 100 ms step.
+const TEST_POINTER_STEP_MS_VAR: &str = "MALAYSIA_TEST_POINTER_STEP_MS";
+/// Lazily-evaluated delay between scripted pointer actions.
+static TEST_POINTER_STEP: LazyLock<Duration> = LazyLock::new(|| {
+    parse_ms(
+        std::env::var(TEST_POINTER_STEP_MS_VAR).ok().as_deref(),
+        TEST_POINTER_STEP_DEFAULT,
+    )
+});
 /// How long a scripted click holds the button so a popup grab can use its
 /// serial before the release.
 const TEST_CLICK_HOLD: Duration = Duration::from_millis(150);
@@ -298,9 +310,21 @@ impl TestPointer {
     }
 }
 
+/// Parses a millisecond duration from an optional environment value.
+///
+/// Empty or invalid values fall back to `default`. A value of `0` is treated
+/// as 1 ms so the event loop is not starved by a zero-duration timer.
+fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
+    match value.and_then(|v| v.parse::<u64>().ok()) {
+        Some(0) => Duration::from_millis(1),
+        Some(ms) => Duration::from_millis(ms),
+        None => default,
+    }
+}
+
 /// The delay between two scripted pointer actions.
 pub(crate) fn test_pointer_delay() -> Duration {
-    TEST_POINTER_STEP
+    *TEST_POINTER_STEP
 }
 /// The number of motions the scripted input sends after its press.
 ///
@@ -1721,7 +1745,7 @@ impl State {
             // Keys must be released before the compositor's repeat delay,
             // even when a slow frame follows the press.
             TestPointerAction::KeyDown(_) | TestPointerAction::KeyUp(_) => Duration::ZERO,
-            _ => TEST_POINTER_STEP,
+            _ => *TEST_POINTER_STEP,
         };
         let time = InputTime::from_millis(0);
         match action {
@@ -2492,6 +2516,7 @@ fn parse_pair_value(value: &str) -> Option<(f64, f64)> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::time::Duration;
 
     use smithay::backend::input::ButtonState;
 
@@ -2506,9 +2531,10 @@ mod tests {
     use xkbcommon::xkb::{self, Keycode, keysyms};
 
     use super::{
-        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TEST_KEY_HOLD, TestKey,
-        TestPointer, TestPointerAction, activation_updates, clamp_pointer, compositor_shortcut,
-        desktop_click, double_click, edge_cursor, is_escape, pointer_focus_blocked,
+        BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TEST_KEY_HOLD,
+        TEST_POINTER_STEP_DEFAULT, TestKey, TestPointer, TestPointerAction, activation_updates,
+        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor, is_escape,
+        parse_ms, pointer_focus_blocked,
     };
     use crate::state::State;
     use malaysia_scene::scene::WindowId;
@@ -3303,6 +3329,42 @@ mod tests {
                 TestPointerAction::KeyUp(TestKey::Ctrl),
                 TestPointerAction::Wait(TEST_KEY_HOLD),
             ]
+        );
+    }
+
+    #[test]
+    fn parse_ms_returns_parsed_value() {
+        assert_eq!(
+            parse_ms(Some("8"), TEST_POINTER_STEP_DEFAULT),
+            Duration::from_millis(8)
+        );
+    }
+
+    #[test]
+    fn parse_ms_empty_uses_default() {
+        assert_eq!(
+            parse_ms(Some(""), TEST_POINTER_STEP_DEFAULT),
+            TEST_POINTER_STEP_DEFAULT
+        );
+        assert_eq!(
+            parse_ms(None, TEST_POINTER_STEP_DEFAULT),
+            TEST_POINTER_STEP_DEFAULT
+        );
+    }
+
+    #[test]
+    fn parse_ms_garbage_uses_default() {
+        assert_eq!(
+            parse_ms(Some("fast"), TEST_POINTER_STEP_DEFAULT),
+            TEST_POINTER_STEP_DEFAULT
+        );
+    }
+
+    #[test]
+    fn parse_ms_zero_uses_minimum() {
+        assert_eq!(
+            parse_ms(Some("0"), TEST_POINTER_STEP_DEFAULT),
+            Duration::from_millis(1)
         );
     }
 }

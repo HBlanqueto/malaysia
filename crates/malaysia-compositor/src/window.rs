@@ -17,6 +17,7 @@
 //!   be wrong from then on (ADR 0014).
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{
@@ -42,7 +43,32 @@ use crate::decoration::{Insets, Role, WindowState};
 /// How long the compositor waits for an app to ack a resize configure before
 /// sending the next pending size. This protects apps that never ack from
 /// freezing the resize forever.
-const RESIZE_CONFIGURE_TIMEOUT: Duration = Duration::from_millis(100);
+const RESIZE_CONFIGURE_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
+/// Environment variable that overrides [`RESIZE_CONFIGURE_TIMEOUT`] in
+/// milliseconds, so measurements can drive the pointer faster than the default
+/// 100 ms throttle without changing production behavior.
+const RESIZE_CONFIGURE_TIMEOUT_MS_VAR: &str = "MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS";
+/// Lazily-evaluated resize configure timeout.
+static RESIZE_CONFIGURE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
+    parse_resize_timeout(
+        std::env::var(RESIZE_CONFIGURE_TIMEOUT_MS_VAR)
+            .ok()
+            .as_deref(),
+        RESIZE_CONFIGURE_TIMEOUT_DEFAULT,
+    )
+});
+
+/// Parses a millisecond duration from an optional environment value.
+///
+/// Empty or invalid values fall back to `default`. A value of `0` is treated
+/// as 1 ms so the event loop is not starved by a zero-duration timer.
+fn parse_resize_timeout(value: Option<&str>, default: Duration) -> Duration {
+    match value.and_then(|v| v.parse::<u64>().ok()) {
+        Some(0) => Duration::from_millis(1),
+        Some(ms) => Duration::from_millis(ms),
+        None => default,
+    }
+}
 
 /// A read-only view of one tracked window.
 ///
@@ -897,7 +923,7 @@ impl Windows {
         let data = &mut self.windows[index];
         let can_send = data
             .resize_configure_sent
-            .is_none_or(|t| t.elapsed() >= RESIZE_CONFIGURE_TIMEOUT);
+            .is_none_or(|t| t.elapsed() >= *RESIZE_CONFIGURE_TIMEOUT);
         if can_send {
             data.resize_configure_sent = Some(Instant::now());
             data.resize_pending_outer = None;
@@ -1674,12 +1700,14 @@ fn client_point(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        EdgeTarget, anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
-        committed_outer, configure_size, edge_hit, geometry_fits, initial_placement, outer_size,
-        usable, usable_rect_location,
+        EdgeTarget, RESIZE_CONFIGURE_TIMEOUT_DEFAULT, anchor_resize_origin, apply_configure_states,
+        at_least_one_pixel, client_point, committed_outer, configure_size, edge_hit, geometry_fits,
+        initial_placement, outer_size, parse_resize_timeout, usable, usable_rect_location,
     };
     use crate::decoration::Insets;
     use malaysia_scene::geometry::{
@@ -2049,6 +2077,42 @@ mod tests {
         assert!(
             location.y + usable_height <= workspace_height as i32,
             "usable rect must not extend below the workspace"
+        );
+    }
+
+    #[test]
+    fn parse_resize_timeout_returns_parsed_value() {
+        assert_eq!(
+            parse_resize_timeout(Some("8"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
+            Duration::from_millis(8)
+        );
+    }
+
+    #[test]
+    fn parse_resize_timeout_empty_uses_default() {
+        assert_eq!(
+            parse_resize_timeout(Some(""), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
+            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
+        );
+        assert_eq!(
+            parse_resize_timeout(None, RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
+            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
+        );
+    }
+
+    #[test]
+    fn parse_resize_timeout_garbage_uses_default() {
+        assert_eq!(
+            parse_resize_timeout(Some("fast"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
+            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
+        );
+    }
+
+    #[test]
+    fn parse_resize_timeout_zero_uses_minimum() {
+        assert_eq!(
+            parse_resize_timeout(Some("0"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
+            Duration::from_millis(1)
         );
     }
 }
