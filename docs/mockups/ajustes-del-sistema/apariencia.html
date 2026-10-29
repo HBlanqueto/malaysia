@@ -82,7 +82,7 @@ html[data-theme="dark"] .it[data-state~="selected"]{background:color-mix(in srgb
 .tbb[data-state~="disabled"]{color:var(--window-toolgroup-disabled-ink)}
 .tbb .ico{width:16px;height:16px}
 .gsep{width:var(--window-toolgroup-separator-w);height:var(--window-toolgroup-separator-h);background:var(--window-toolgroup-separator)}
-.ttl{color:var(--ink-strong);white-space:nowrap}
+.ttl{color:var(--ink-strong);white-space:nowrap;margin-left:auto;margin-right:auto}
 .scroll{flex:1;min-height:0;overflow:hidden}
 .cont{padding:var(--settings-content-padding-top) var(--settings-group-content-padding-x) var(--settings-content-padding-bottom);display:flex;flex-direction:column;gap:var(--settings-content-gap)}
 .cap{color:var(--ink-strong);margin:calc(var(--settings-group-title-margin-top) - var(--settings-content-gap)) 0 calc(var(--settings-group-title-margin-bottom) - var(--settings-content-gap)) var(--settings-group-title-indent)}
@@ -192,13 +192,13 @@ html[data-menu="semaforos"] .menu{display:flex}
   </aside>
 
   <div class="main">
-    <header class="tb" data-id="toolbar" data-app="toolbar">
+    <header class="tb">
       <div class="grp" data-id="toolbar.nav" data-kit="ToolGroup" data-variant="island">
         <button class="tbb" data-id="toolbar.nav.back" data-kit="ToolButton" data-state="disabled" aria-label="Atrás"><svg class="ico" viewBox="0 0 16 16"><path d="m10 3-5 5 5 5"/></svg></button>
         <span class="gsep"></span>
         <button class="tbb" data-id="toolbar.nav.forward" data-kit="ToolButton" data-state="disabled" aria-label="Adelante"><svg class="ico" viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
       </div>
-      <span class="ttl t-title-2" data-id="toolbar.title">Apariencia</span>
+      <span class="ttl t-title-2" data-id="toolbar">Apariencia</span>
     </header>
 
     <div class="scroll" data-id="content" data-app="content_scroll">

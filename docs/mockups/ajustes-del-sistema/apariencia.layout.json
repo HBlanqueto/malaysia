@@ -207,16 +207,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -254,9 +244,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
@@ -947,16 +937,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -994,9 +974,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
@@ -1687,16 +1667,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -1734,9 +1704,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
@@ -2427,16 +2397,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -2474,9 +2434,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
@@ -3006,16 +2966,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -3053,9 +3003,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
@@ -3306,16 +3256,6 @@
     ]
    },
    {
-    "id": "toolbar",
-    "rect": [
-     236,
-     0,
-     524,
-     52
-    ],
-    "app": "toolbar"
-   },
-   {
     "id": "toolbar.nav",
     "rect": [
      250,
@@ -3353,9 +3293,9 @@
     "radius": 999
    },
    {
-    "id": "toolbar.title",
+    "id": "toolbar",
     "rect": [
-     337,
+     503,
      20,
      76.5,
      20
