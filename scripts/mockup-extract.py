@@ -65,8 +65,12 @@ COLLECT = r"""
   // las que usa el mockup y se exige que resuelvan en la raíz.
   const used = new Set();
   for (const sheet of document.styleSheets) {
-    for (const rule of sheet.cssRules) {
-      for (const m of rule.cssText.matchAll(/var\((--[\w-]+)/g)) used.add(m[1]);
+    try {
+      for (const rule of sheet.cssRules) {
+        for (const m of rule.cssText.matchAll(/var\((--[\w-]+)/g)) used.add(m[1]);
+      }
+    } catch {
+      errors.push(`hoja de estilo sin cargar: ${sheet.href}`);
     }
   }
   for (const el of document.querySelectorAll('[style]')) {
@@ -75,8 +79,12 @@ COLLECT = r"""
   // Las que el propio mockup declara en un subárbol (p. ej. --pv-window) cuentan como definidas.
   const declared = new Set();
   for (const sheet of document.styleSheets) {
-    for (const rule of sheet.cssRules) {
-      for (const m of rule.cssText.matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]);
+    try {
+      for (const rule of sheet.cssRules) {
+        for (const m of rule.cssText.matchAll(/(--[\w-]+)\s*:/g)) declared.add(m[1]);
+      }
+    } catch {
+      errors.push(`hoja de estilo sin cargar: ${sheet.href}`);
     }
   }
   const rootStyle = getComputedStyle(document.documentElement);

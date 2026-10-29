@@ -16,6 +16,9 @@ que la app tiene que cumplir, y un test lo comprueba. Cada pantalla tiene:
   componentes (`--settings-card-width`, `--window-sidebar-island-traffic-x`…)
   se nombran con la ruta de `components.json` sin `components.` y con guiones;
   los estilos de texto, `--type-<estilo>-size|line-height|weight|tracking`.
+- `./dev.sh check` copia `tengen.css` al lado de cada mockup desde el
+  `vow-design` que resuelve `cargo metadata`, así los mockups siempre usan
+  la versión que se compila (local con `kit-local` o remota con `kit-remote`).
 - `_provisional-tokens.css` cubre lo que `tengen.css` todavía no exporta.
   Desaparece cuando lo exporte `default.nix`.
 - La ventana empieza en (0, 0) y mide lo que diga `components.json`. La app

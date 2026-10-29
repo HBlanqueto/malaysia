@@ -5,6 +5,9 @@
 # Local barrierkit override created by `./dev.sh kit-local`.
 /.cargo/config.toml
 
+# Generated CSS for mockups: copied from the resolved vow-design crate.
+/docs/mockups/tengen.css
+
 # dev.sh writes its PID and log files under $XDG_RUNTIME_DIR/neptune or
 # /tmp/neptune-$(id -u), neither of which is inside the repository. These
 # patterns only guard against stray copies if that ever changes.

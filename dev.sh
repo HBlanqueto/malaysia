@@ -448,6 +448,14 @@ check() {
     require mockup-extract
     check_display_env
     cargo fmt --all -- --check
+    local _vow_design_manifest
+    _vow_design_manifest=$(cargo metadata --format-version 1 \
+        | jq -r '.packages[] | select(.name=="vow-design") | .manifest_path')
+    [ -n "$_vow_design_manifest" ] || fail "$EXIT_USAGE" "vow-design not found in cargo metadata"
+    local _vow_design_dir
+    _vow_design_dir=$(dirname "$_vow_design_manifest")
+    cp "$_vow_design_dir/tengen/generated/tengen.css" "$script_dir/docs/mockups/tengen.css" \
+        || fail "$EXIT_RUN_FAILED" "could not copy tengen.css from vow-design"
     find "$script_dir/docs/mockups" -name '*.html' | sort | while IFS= read -r _mockup; do
         mockup-extract "$_mockup" --check
     done
