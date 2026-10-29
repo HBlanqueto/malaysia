@@ -14,7 +14,9 @@ fail=0
 absent() {
   local package=$1
   shift
-  if cargo tree "$@" -i "$package" >/dev/null 2>&1; then
+  # `cargo tree -i pkg` now returns 0 with an empty "nothing to print" line when
+  # the package is only reachable for non-host targets; check actual output.
+  if cargo tree "$@" -i "$package" 2>/dev/null | grep -v '^warning:' | grep -q .; then
     echo "check-client-only-deps: $package must not be in the graph ($*)" >&2
     fail=1
   fi
