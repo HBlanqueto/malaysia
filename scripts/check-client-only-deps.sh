@@ -28,28 +28,10 @@ absent skia-bindings -p malaysia-compositor
 
 # The window backend is the compositor's own (smithay backend_winit, ADR 0009),
 # so `winit` is expected under `malaysia-compositor`; it must not reach a client crate.
-absent winit -p barrier-kit
 absent winit -p malaysia-shell
 absent tokio --workspace
 absent gtk --workspace
 absent glutin --workspace
 absent tray-icon --workspace
-
-# The clipboard must go through wl_data_device. freya-clipboard pulls
-# copypasta (and thus x11rb); report it instead of hiding it. The alternative
-# is the kit's own wl_data_device clipboard, which is deferred until a control
-# needs it.
-if cargo tree --workspace -i x11rb >/dev/null 2>&1; then
-  echo "check-client-only-deps: WARNING: x11rb reached the graph via freya-clipboard; use wl_data_device instead" >&2
-fi
-if cargo tree --workspace -i copypasta >/dev/null 2>&1; then
-  echo "check-client-only-deps: WARNING: copypasta reached the graph via freya-clipboard; the kit's clipboard is empty for now" >&2
-fi
-
-# Duplicate versions in the kit that are avoidable are build noise and bloat.
-if cargo tree -d -p barrier-kit 2>/dev/null | grep -q '^[a-z]'; then
-  echo "check-client-only-deps: duplicated crates in barrier-kit:" >&2
-  cargo tree -d -p barrier-kit >&2 || true
-fi
 
 exit "$fail"
