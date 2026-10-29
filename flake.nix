@@ -4,10 +4,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
+    barrierkit = {
+      url = "github:HBlanqueto/barrierkit/2c87f793282fb56a0ca1d9eddff885cdc7fe832a";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs, crane }:
+    { self, nixpkgs, crane, barrierkit }:
     let
       systems = [ "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -69,7 +73,7 @@
             ./share
           ];
         };
-        skia = pkgs.callPackage ./nix/skia.nix { };
+        skia = barrierkit.packages.${system}.skia-binaries;
         # Skia only enters the build when the workspace actually pulls
         # freya-skia-bindings (BarrierKit on Freya). Until then the package
         # and the dev shell must not advertise a prebuild that nothing uses.
@@ -84,6 +88,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=2c87f793282fb56a0ca1d9eddff885cdc7fe832a#2c87f793282fb56a0ca1d9eddff885cdc7fe832a" =
+              "sha256-nu8ArwEtD0zI9FOnaZkwogKcA7k7BmFlnVuLZnFQ7Yg=";
           };
 
           # The per-crate build script refuses to compile without this marker
@@ -195,23 +201,8 @@
           fileset = lib.fileset.unions [ ./crates ./scripts ];
         };
       in {
-        # The vendored Tengen outputs must match default.nix.
-        tengen-generated = let
-          tengen = import ./crates/vow-design/tengen;
-        in pkgs.runCommand "check-tengen-generated" {
-          nativeBuildInputs = with pkgs; [ diffutils ];
-        } ''
-          cd ${checkSrc}
-          diff -u crates/vow-design/tengen/generated/tengen.slint \
-            ${pkgs.writeText "tengen.slint" tengen.slint}
-          diff -u crates/vow-design/tengen/generated/tengen.css \
-            ${pkgs.writeText "tengen.css" tengen.css}
-          diff -u crates/vow-design/tengen/generated/Tengen.qml \
-            ${pkgs.writeText "Tengen.qml" tengen.qml}
-          touch $out
-        '';
-
-        # No colour or UI measurement may live outside vow-design.
+        # No colour or UI measurement may live outside vow-design in the
+        # desktop crates (the kit checks live in barrierkit).
         design-tokens = pkgs.runCommand "check-design-tokens" {
           nativeBuildInputs = with pkgs; [ bash coreutils findutils gawk gnugrep ];
         } ''
@@ -229,7 +220,7 @@
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
         mockup-extract = mockupExtract pkgs;
-        skia = pkgs.callPackage ./nix/skia.nix { };
+        skia = barrierkit.packages.${system}.skia-binaries;
         hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         # weston with its simple test clients enabled. nixpkgs builds weston
         # with `-Dsimple-clients=`, so `weston-simple-egl`, `weston-simple-shm`
