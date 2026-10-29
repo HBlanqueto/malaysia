@@ -33,6 +33,7 @@ grade-graphics.workspace = true
 vow-appearance.workspace = true
 vow-design.workspace = true
 malaysia-scene.workspace = true
+infinity-protocol = { workspace = true, features = ["server"] }
 
 [dev-dependencies]
 # The import-queue test drives a real Wayland client against a real compositor

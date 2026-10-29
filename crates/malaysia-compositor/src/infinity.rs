@@ -19,24 +19,9 @@ use malaysia_scene::scene::WindowId;
 
 use crate::state::{ClientState, State};
 
-/// Generated server-side bindings for the Infinity protocol.
+/// Re-export of the generated Infinity protocol server bindings.
 pub(crate) mod protocol {
-    #![allow(dead_code, non_camel_case_types, unused_unsafe, unused_variables)]
-    #![allow(non_upper_case_globals, non_snake_case, unused_imports)]
-    #![allow(missing_docs, clippy::all)]
-
-    use wayland_protocols_wlr::foreign_toplevel::v1::server::*;
-    use wayland_server;
-    use wayland_server::protocol::*;
-
-    pub mod __interfaces {
-        use wayland_protocols_wlr::foreign_toplevel::v1::server::__interfaces::*;
-        use wayland_server::protocol::__interfaces::*;
-        wayland_scanner::generate_interfaces!("../../protocols/infinity-window-manager-v1.xml");
-    }
-    use self::__interfaces::*;
-
-    wayland_scanner::generate_server_code!("../../protocols/infinity-window-manager-v1.xml");
+    pub use infinity_protocol::server::infinity_window_manager_v1::infinity_window_manager_v1;
 }
 
 use protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
@@ -210,6 +195,9 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
                 }
             }
             Request::Destroy => {}
+            // shortcut: future Infinity requests are ignored; handle them when
+            // the client starts sending them.
+            _ => {}
         }
     }
 
@@ -575,6 +563,14 @@ fn arranged_rect(
             half_w,
             half_h,
         ),
+        // shortcut: future Infinity layouts fall back to centered.
+        _ => {
+            let w = current_size.w.min(area.size.w);
+            let h = current_size.h.min(area.size.h);
+            let x = loc.x + (area.size.w - w) / 2;
+            let y = loc.y + (area.size.h - h) / 2;
+            rect(x, y, w, h)
+        }
     }
 }
 
@@ -612,6 +608,12 @@ fn pair_rects(
             } else {
                 [bottom, top]
             }
+        }
+        // shortcut: future Infinity pair layouts fall back to side-by-side.
+        _ => {
+            let left = rect(loc.x, loc.y, half_w, size.h);
+            let right = rect(loc.x + half_w + TILE_GAP, loc.y, half_w, size.h);
+            [left, right]
         }
     }
 }
