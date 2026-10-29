@@ -4,6 +4,12 @@ MalaysiaDreams es un compositor Wayland en Rust sobre Smithay. Si eres un agente
 humano) trabajando en este repo, **lee esto primero**. La documentación completa
 vive en `docs/` (índice: `docs/README.md`).
 
+> **Nota de repositorio (ADR 0048):** `barrier-kit`, `vow-design`,
+> `vow-appearance` e `infinity-protocol` viven en
+> [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
+> No los edites en este repo; edita el repo del toolkit y luego sube el `rev`
+> en `Cargo.toml`.
+
 ---
 
 ## ⚠️ POLÍTICA DE DISEÑO — OBLIGATORIA (ADR 0019 + ADR 0020 + ADR 0025)

@@ -2,6 +2,11 @@
 
 Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque.
 
+> **Nota de repositorio (ADR 0048):** el toolkit `barrier-kit`, los tokens
+> `vow-design`, `vow-appearance` y el protocolo `infinity-protocol` viven en
+> [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
+> Este repo contiene el compositor, la shell, Ajustes y los portales.
+
 > [!NOTE]
 > Este es un proyecto vibecoded, por gusto personal. No tiene más que uso diario como hobby.
 

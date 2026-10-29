@@ -4,6 +4,11 @@
 abiertas. Los ADRs son el registro de *por qué* se hizo cada cosa; la numeración es
 continua.
 
+> Los ADR del toolkit (BarrierKit, VowDesign, VowAppearance, Infinity) viven en
+> [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit)
+> a partir del ADR 0048. En este repo queda un archivo de una línea que remite
+> a la nueva ubicación.
+
 ## ADRs
 
 | ADR | Título | Estado |
@@ -18,7 +23,7 @@ continua.
 | 0008 | Los design tokens fluyen en una sola dirección, de Nix a Rust | aceptado |
 | 0009 | El backend anidado es winit con el renderizador GLES2 | aceptado |
 | 0010 | Smithay está anclado a la versión 0.7.0 publicada en crates.io | reemplazado por 0028 |
-| 0011 | Los valores de diseño son constantes Rust escritas a mano en `yuki-design` | aceptado |
+| 0011 | Los valores de diseño son constantes Rust escritas a mano en `vow-design` ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0012 | El backend vive junto al State del compositor | aceptado |
 | 0013 | El dispatch de clientes hace poll de un descriptor de archivo duplicado del display | aceptado |
 | 0014 | Los insets de decoración son una función del estado de la ventana | aceptado |
@@ -38,20 +43,22 @@ continua.
 | 0029 | El backend se elige con un flag explícito | aceptado |
 | 0030 | Direct Session 8a: un plano primario y una sola salida | aceptado |
 | 0031 | Portal backend propio (`xdg-desktop-portal-yuki`) | aceptado |
-| 0032 | Neptunia es la fuente de diseño del escritorio | aceptado |
-| 0033 | Skia en clientes y CelestialKit desde otto-kit | reemplazado por 0034 |
-| 0034 | CelestialKit sobre Freya | aceptado (reemplaza 0033; modifica 0024) |
-| 0035 | Identificación de apps propias y CSD | aceptado |
+| 0032 | Neptunia es la fuente de diseño del escritorio ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
+| 0033 | Skia en clientes y CelestialKit desde otto-kit ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | reemplazado por 0034 |
+| 0034 | CelestialKit sobre Freya ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado (reemplaza 0033; modifica 0024) |
+| 0035 | Identificación de apps propias y CSD ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0036 | Menú global (`org_kde_kwin_appmenu` + dbusmenu) | aceptado (Bloque 14 documentado, sin implementar) |
 | 0037 | Marco de ventanas dibujado por el compositor | aceptado |
 | 0038 | Reducir transparencia por defecto | aceptado |
-| 0039 | Infinity v1: gestión de ventanas para la shell | aceptado |
+| 0039 | Infinity v1: gestión de ventanas para la shell ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0040 | Menú global real: arquitectura propia | aceptado |
-| 0041 | Barra lateral en isla | aceptado |
-| 0042 | Ajustes del sistema (`yuki-settings`) | aceptado |
+| 0041 | Barra lateral en isla ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
+| 0042 | Ajustes del sistema (`malaysia-settings`) | aceptado |
 | 0043 | Rebranding a Malaysia | aceptado |
 | 0045 | GTK `gtk_shell1` y `org.gtk.Menus` | aceptado |
-| 0046 | Tengen: renombrado del lenguaje visual | aceptado |
+| 0046 | Tengen: renombrado del lenguaje visual ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
+| 0047 | BarrierKit en capas ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | propuesto |
+| 0048 | BarrierKit en su propio repositorio | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
