@@ -615,7 +615,7 @@ impl Windows {
             let id = data.id;
             self.scene.insert(id, outer);
             let app_id = self.app_id(surface);
-            tracing::info!(window = id.get(), app_id, ?origin, "window mapped");
+            tracing::info!(window = id.get(), app_id, ?origin, ?size, "window mapped");
             return Some(id);
         }
         None
@@ -637,6 +637,11 @@ impl Windows {
         if self.windows[index].pending_configure == Some(configure.serial) {
             self.windows[index].pending_configure = None;
             self.windows[index].acked = true;
+            tracing::debug!(
+                window = self.windows[index].id.get(),
+                serial = u32::from(configure.serial),
+                "ack_configure"
+            );
         } else {
             tracing::debug!("ignoring an ack for a configure no longer pending");
         }
@@ -1288,8 +1293,15 @@ impl Windows {
         if data.maximized {
             tracing::info!(window = id.get(), ?configured, "configure with Maximized");
         }
-        tracing::debug!(window = id.get(), ?configured, resizing, "send_configure");
-        data.pending_configure = Some(data.toplevel.send_configure());
+        let serial = data.toplevel.send_configure();
+        tracing::debug!(
+            window = id.get(),
+            ?configured,
+            resizing,
+            serial = u32::from(serial),
+            "send_configure"
+        );
+        data.pending_configure = Some(serial);
         data.configured = Some(configured);
     }
 
