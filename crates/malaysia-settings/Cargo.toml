@@ -12,9 +12,9 @@ name = "malaysia-settings"
 path = "src/main.rs"
 
 [dependencies]
-barrier-kit = { path = "../barrier-kit" }
-vow-appearance = { path = "../vow-appearance" }
-vow-design = { path = "../vow-design" }
+barrier-kit.workspace = true
+vow-appearance.workspace = true
+vow-design.workspace = true
 
 libc.workspace = true
 freya-core.workspace = true
