@@ -6,11 +6,8 @@
 resolver = "3"
 members = [
     "crates/malaysia-compositor",
-    "crates/vow-appearance",
-    "crates/vow-design",
     "crates/malaysia-scene",
     "crates/grade-graphics",
-    "crates/barrier-kit",
     "crates/malaysia-shell",
     "crates/malaysia-settings",
     "crates/xdg-desktop-portal-malaysia",
@@ -24,11 +21,8 @@ members = [
 # rustfmt-clean alongside the crates.
 default-members = [
     "crates/malaysia-compositor",
-    "crates/vow-appearance",
-    "crates/vow-design",
     "crates/malaysia-scene",
     "crates/grade-graphics",
-    "crates/barrier-kit",
     "crates/malaysia-shell",
     "crates/malaysia-settings",
     "crates/xdg-desktop-portal-malaysia",
@@ -87,10 +81,15 @@ chrono = "0.4"
 # Malaysia's own crates.
 grade-graphics = { path = "crates/grade-graphics" } # Shared GLSL shaders (compositor + shell).
 malaysia-compositor = { path = "crates/malaysia-compositor" }                 # The compositor library (config, xdg helpers).
-vow-appearance = { path = "crates/vow-appearance" } # Appearance rules shared by compositor, shell and portal.
-vow-design = { path = "crates/vow-design" }   # The one place every visual value lives.
 malaysia-scene = { path = "crates/malaysia-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
-barrier-kit = { path = "crates/barrier-kit" }    # The shell/apps toolkit, ≈ AppKit (glossary).
+
+# BarrierKit lives in its own repository (ADR 0048). The rev is updated when
+# the toolkit is pushed; until then `dev.sh kit-local` overrides these to the
+# sibling checkout at ../barrierkit.
+barrier-kit = { git = "https://github.com/HBlanqueto/barrierkit", rev = "2c87f793282fb56a0ca1d9eddff885cdc7fe832a" }
+vow-design = { git = "https://github.com/HBlanqueto/barrierkit", rev = "2c87f793282fb56a0ca1d9eddff885cdc7fe832a" }
+vow-appearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "2c87f793282fb56a0ca1d9eddff885cdc7fe832a" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "2c87f793282fb56a0ca1d9eddff885cdc7fe832a" }
 
 # Freya's core crates for BarrierKit (ADR 0034), pinned exact: the Nix Skia
 # derivation and the client-only guard are written against these versions.
