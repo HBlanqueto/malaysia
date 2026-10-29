@@ -153,7 +153,6 @@ mod tests {
     use barrier_kit::app_menu::{AppMenu, Menu, RawItem as KitRawItem};
     use barrier_kit::menu::{CheckState, MenuItem};
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
 
     fn text(value: &str) -> OwnedValue {
         OwnedValue::try_from(zbus::zvariant::Value::from(value)).unwrap()
@@ -548,13 +547,7 @@ mod tests {
                     }],
                 ),
             ]);
-            let clicked: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-            let clicked2 = clicked.clone();
-            let server = TestMenuServer::new(
-                menu,
-                "/TestMenu",
-                Arc::new(move |id| *clicked2.lock().unwrap() = Some(id.to_string())),
-            );
+            let server = TestMenuServer::new(menu, "/TestMenu");
             server.serve(&server_conn).await.unwrap();
 
             let proxy = zbus::Proxy::new(
@@ -593,7 +586,10 @@ mod tests {
                 .await
                 .unwrap();
             async_io::Timer::after(std::time::Duration::from_millis(10)).await;
-            assert_eq!(clicked.lock().unwrap().as_deref(), Some("new-window"));
+            assert_eq!(
+                server.handle().drain_actions(),
+                vec!["new-window".to_string()]
+            );
 
             let mut stream = proxy
                 .receive_signal("ItemsPropertiesUpdated")

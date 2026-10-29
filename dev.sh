@@ -50,6 +50,7 @@ Commands:
     clean               Remove build artifacts and runtime files
     check               Run formatting, clippy and tests
     kit-local           Use ../barrierkit as a path override for the kit crates
+                        (the rev in Cargo.toml must already be pushed; kit-local only swaps the source)
     kit-remote          Remove the ../barrierkit path override
     smoke [--release]   Build and run the toplevel mapping smoke test
     block4 [--release]  Build and run the 50-window open/close acceptance test
