@@ -49,6 +49,8 @@ Commands:
     log [-f]            Print the log, or follow it with -f
     clean               Remove build artifacts and runtime files
     check               Run formatting, clippy and tests
+    kit-local           Use ../barrierkit as a path override for the kit crates
+    kit-remote          Remove the ../barrierkit path override
     smoke [--release]   Build and run the toplevel mapping smoke test
     block4 [--release]  Build and run the 50-window open/close acceptance test
     move [--release]    Build and run the client-initiated move/resize probe
@@ -83,6 +85,20 @@ require() {
 require_devshell() {
     [ "${MALAYSIA_DEV_SHELL:-}" = "1" ] ||
         fail "$EXIT_NOT_DEVSHELL" "not inside the dev shell; run 'nix develop' first (see ADR 0007)"
+}
+
+# barrierkit_dir - print the absolute path to the sibling barrierkit checkout,
+# or empty if it does not exist.
+barrierkit_dir() {
+    _dir="$script_dir/../barrierkit"
+    if [ -d "$_dir/crates/barrier-kit" ]; then
+        CDPATH='' cd -- "$_dir" && pwd
+    fi
+}
+
+# kit_is_local - succeed when .cargo/config.toml patches the kit to ../barrierkit.
+kit_is_local() {
+    [ -f "$script_dir/.cargo/config.toml" ]
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -400,6 +416,30 @@ PROBE
     fi
 }
 
+kit_local() {
+    _dir=$(barrierkit_dir)
+    [ -n "$_dir" ] || fail "$EXIT_USAGE" "../barrierkit not found; clone it next to this repo"
+    mkdir -p "$script_dir/.cargo"
+    cat >"$script_dir/.cargo/config.toml" <<EOF
+[patch."https://github.com/HBlanqueto/barrierkit"]
+barrier-kit = { path = "$_dir/crates/barrier-kit" }
+vow-design = { path = "$_dir/crates/vow-design" }
+vow-appearance = { path = "$_dir/crates/vow-appearance" }
+infinity-protocol = { path = "$_dir/crates/infinity-protocol" }
+EOF
+    printf 'dev.sh: kit-local enabled: %s\n' "$_dir"
+}
+
+kit_remote() {
+    if [ -f "$script_dir/.cargo/config.toml" ]; then
+        rm -f "$script_dir/.cargo/config.toml"
+        rmdir "$script_dir/.cargo" 2>/dev/null || true
+        printf 'dev.sh: kit-remote enabled: removed local barrierkit override\n'
+    else
+        printf 'dev.sh: kit-remote: no local override to remove\n'
+    fi
+}
+
 check() {
     require_devshell
     require cargo
@@ -412,15 +452,7 @@ check() {
         mockup-extract "$_mockup" --check
     done
     "$script_dir/scripts/check-design-tokens.sh"
-    "$script_dir/scripts/check-tengen-generated.sh"
     "$script_dir/scripts/check-client-only-deps.sh"
-    if command -v slint-compiler >/dev/null 2>&1; then
-        _slint_out=$(mktemp)
-        slint-compiler "$script_dir/crates/vow-design/tengen/demo.slint" -o "$_slint_out"
-        rm -f "$_slint_out"
-    else
-        printf 'dev.sh: slint-compiler not found; skipping demo.slint\n' >&2
-    fi
     cargo clippy --workspace --all-targets -- -D warnings
     cargo build -p malaysia-compositor
     "$script_dir/scripts/check-client-dispatch.sh"
@@ -799,20 +831,30 @@ demo() {
         if [ ! -x "$script_dir/target/debug/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
             "$script_dir/dev.sh" build
         fi
-        if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/dialog" ]; then
-            cargo build -p barrier-kit --examples ||
-                fail "$EXIT_RUN_FAILED" "could not build the window examples"
+        _kit_dir=$(barrierkit_dir)
+        if kit_is_local && [ -n "$_kit_dir" ]; then
+            _example_dir="$_kit_dir/target/debug/examples"
+            if [ ! -x "$_example_dir/window_csd" ] ||
+                [ ! -x "$_example_dir/window_ssd" ] ||
+                [ ! -x "$_example_dir/dialog" ]; then
+                (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
+                    fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
+            fi
+            _window_csd="$_example_dir/window_csd"
+            _window_ssd="$_example_dir/window_ssd"
+            _dialog="$_example_dir/dialog"
+        else
+            printf 'demo: barrier-kit examples skipped (use kit-local to enable them)\n' >&2
+            _window_csd=
+            _window_ssd=
+            _dialog=
         fi
-        _window_csd="$script_dir/target/debug/examples/window_csd"
-        _window_ssd="$script_dir/target/debug/examples/window_ssd"
-        _dialog="$script_dir/target/debug/examples/dialog"
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
         if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
+        # Packaged examples live in the barrierkit package, not here.
         _window_csd="$script_dir/result/bin/window_csd"
         _window_ssd="$script_dir/result/bin/window_ssd"
         _dialog="$script_dir/result/bin/dialog"
@@ -959,21 +1001,29 @@ lab() {
         # Rebuild only the binaries the lab actually uses. Avoid the full
         # workspace build because auxiliary crates such as malaysia-settings may be
         # broken.
-        cargo build -p malaysia-compositor -p malaysia-shell -p barrier-kit ||
+        cargo build -p malaysia-compositor -p malaysia-shell ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-        cargo build -p barrier-kit --examples ||
-            fail "$EXIT_RUN_FAILED" "could not build the window examples"
-        if [ ! -x "$script_dir/target/debug/examples/window_csd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/window_ssd" ] ||
-            [ ! -x "$script_dir/target/debug/examples/dialog" ] ||
-            [ ! -x "$script_dir/target/debug/examples/contador" ]; then
-            cargo build -p barrier-kit --examples ||
-                fail "$EXIT_RUN_FAILED" "could not build the window examples"
+        _kit_dir=$(barrierkit_dir)
+        if kit_is_local && [ -n "$_kit_dir" ]; then
+            _example_dir="$_kit_dir/target/debug/examples"
+            if [ ! -x "$_example_dir/window_csd" ] ||
+                [ ! -x "$_example_dir/window_ssd" ] ||
+                [ ! -x "$_example_dir/dialog" ] ||
+                [ ! -x "$_example_dir/contador" ]; then
+                (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
+                    fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
+            fi
+            _window_csd="$_example_dir/window_csd"
+            _window_ssd="$_example_dir/window_ssd"
+            _dialog="$_example_dir/dialog"
+            _contador="$_example_dir/contador"
+        else
+            printf 'lab: barrier-kit examples skipped (use kit-local to enable them)\n' >&2
+            _window_csd=
+            _window_ssd=
+            _dialog=
+            _contador=
         fi
-        _window_csd="$script_dir/target/debug/examples/window_csd"
-        _window_ssd="$script_dir/target/debug/examples/window_ssd"
-        _dialog="$script_dir/target/debug/examples/dialog"
-        _contador="$script_dir/target/debug/examples/contador"
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
         if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
@@ -1196,9 +1246,13 @@ example() {
     [ -n "$_sock" ] ||
         fail "$EXIT_RUN_FAILED" "the demo has no Wayland socket yet; see: ./dev.sh log"
 
-    cargo build -p barrier-kit --example "$_name" ||
+    _kit_dir=$(barrierkit_dir)
+    if ! kit_is_local || [ -z "$_kit_dir" ]; then
+        fail "$EXIT_RUN_FAILED" "example requires kit-local with ../barrierkit"
+    fi
+    (cd "$_kit_dir" && cargo build -p barrier-kit --example "$_name") ||
         fail "$EXIT_RUN_FAILED" "could not build the example $_name"
-    _bin="$script_dir/target/debug/examples/$_name"
+    _bin="$_kit_dir/target/debug/examples/$_name"
     [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the example binary is missing: $_bin"
 
     if [ -n "$_sin_menubar" ]; then
@@ -1448,6 +1502,8 @@ case "$command_name" in
     log) show_log "$@" ;;
     clean) clean ;;
     check) check ;;
+    kit-local) kit_local ;;
+    kit-remote) kit_remote ;;
     smoke) smoke "$@" ;;
     block4) block4 "$@" ;;
     move) move "$@" ;;
