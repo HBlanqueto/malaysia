@@ -232,7 +232,7 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
 /// Top-left of the popup relative to the dropdown: the checked row's traffic
 /// lights land exactly on the button's.
 pub(crate) fn traffic_menu_offset() -> (i32, i32) {
-    let x = MENU_POPOVER.padding + MENU_POPOVER.item_padding_start + MENU_POPOVER.check_column;
+    let x = MENU_POPOVER.padding + MENU_POPOVER.item_padding_start + MENU_POPOVER.leading_column;
     (-(x.round() as i32), -(MENU_POPOVER.padding.round() as i32))
 }
 

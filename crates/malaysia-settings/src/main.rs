@@ -1065,7 +1065,7 @@ mod tests {
         }
         let expected_offset = -((vow_design::MENU_POPOVER.padding
             + vow_design::MENU_POPOVER.item_padding_start
-            + vow_design::MENU_POPOVER.check_column)
+            + vow_design::MENU_POPOVER.leading_column)
             .round() as i32);
         assert_eq!(
             crate::controls::traffic_menu_offset(),
@@ -1074,7 +1074,7 @@ mod tests {
                 -(vow_design::MENU_POPOVER.padding.round() as i32)
             )
         );
-        assert_eq!(crate::controls::traffic_menu_offset(), (-23, -5));
+        assert_eq!(crate::controls::traffic_menu_offset(), (-27, -5));
 
         let app = freya_core::integration::AppComponent::new(
             MenuView::new(items, |_| {}, || {})

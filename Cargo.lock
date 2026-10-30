@@ -242,7 +242,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "barrier-kit"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c0660ec30dc7883f918d8c02ec0120625ec480d4#c0660ec30dc7883f918d8c02ec0120625ec480d4"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=073a606#073a606f43627b570407f4e460f467add283eee8"
 dependencies = [
  "accesskit",
  "async-channel",
@@ -270,6 +270,7 @@ dependencies = [
  "vow-design",
  "wayland-client",
  "wayland-egl",
+ "wayland-protocols",
  "wayland-protocols-plasma",
  "wayland-scanner",
  "zbus",
@@ -1413,7 +1414,7 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c0660ec30dc7883f918d8c02ec0120625ec480d4#c0660ec30dc7883f918d8c02ec0120625ec480d4"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=073a606#073a606f43627b570407f4e460f467add283eee8"
 dependencies = [
  "wayland-backend",
  "wayland-client",
@@ -3421,9 +3422,18 @@ dependencies = [
 
 [[package]]
 name = "utf8_iter"
-version = "1.0.4"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+checksum = "af3bd9d3e571c26fcce9d033b87ea5ab061b8d2ffe9b7a5675d810d68f03edf0"
+dependencies = [
+ "utf_types",
+]
+
+[[package]]
+name = "utf_types"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "uuid"
@@ -3452,7 +3462,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vow-appearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c0660ec30dc7883f918d8c02ec0120625ec480d4#c0660ec30dc7883f918d8c02ec0120625ec480d4"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=073a606#073a606f43627b570407f4e460f467add283eee8"
 dependencies = [
  "nix",
  "serde",
@@ -3465,7 +3475,7 @@ dependencies = [
 [[package]]
 name = "vow-design"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=c0660ec30dc7883f918d8c02ec0120625ec480d4#c0660ec30dc7883f918d8c02ec0120625ec480d4"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=073a606#073a606f43627b570407f4e460f467add283eee8"
 dependencies = [
  "serde_json",
 ]
@@ -4477,9 +4487,9 @@ dependencies = [
 
 [[package]]
 name = "zcheapstr"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1afec51604565183aeb5c54c20aeab286120d4e4460f7f76e3e8bb8c0d99473"
+checksum = "939f186d9ecebe044315a5cb6d6f78568bbc21152adc954d5a0c2f58bdbc9920"
 dependencies = [
  "serde",
 ]

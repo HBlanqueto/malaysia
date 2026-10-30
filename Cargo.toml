@@ -86,10 +86,10 @@ malaysia-scene = { path = "crates/malaysia-scene" }     # Window layout: geometr
 # BarrierKit lives in its own repository (ADR 0048). The rev is updated when
 # the toolkit is pushed; until then `dev.sh kit-local` overrides these to the
 # sibling checkout at ../barrierkit.
-barrier-kit = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c0660ec30dc7883f918d8c02ec0120625ec480d4" }
-vow-design = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c0660ec30dc7883f918d8c02ec0120625ec480d4" }
-vow-appearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c0660ec30dc7883f918d8c02ec0120625ec480d4" }
-infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "c0660ec30dc7883f918d8c02ec0120625ec480d4" }
+barrier-kit = { git = "https://github.com/HBlanqueto/barrierkit", rev = "073a606" }
+vow-design = { git = "https://github.com/HBlanqueto/barrierkit", rev = "073a606" }
+vow-appearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "073a606" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "073a606" }
 
 # Freya's core crates for BarrierKit (ADR 0034), pinned exact: the Nix Skia
 # derivation and the client-only guard are written against these versions.
