@@ -49,7 +49,6 @@ start_malaysia() {
     : >"$logfile"
     setsid env \
         MALAYSIA_TEST_POINTER_STEP_MS=8 \
-        MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS=8 \
         ${input:+MALAYSIA_TEST_INPUT="$input"} \
         "$(compositor_bin)" --log-level=debug >>"$logfile" 2>&1 &
     echo $! >"$pidfile"

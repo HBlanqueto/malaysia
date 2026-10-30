@@ -407,6 +407,24 @@ pub struct Windows {
     next_id: u64,
 }
 
+/// Whether a commit should trigger a configure because the committed outer
+/// size no longer matches the last configured size.
+///
+/// During an interactive resize the configured size tracks the latest pointer
+/// request, not the committed size, so no extra configure is sent here.
+fn needs_configure_after_commit(
+    placed: bool,
+    resizing: bool,
+    outer_size: Size<i32, Logical>,
+    configured: Option<Size<i32, Logical>>,
+    insets: Insets,
+) -> bool {
+    if !placed || resizing {
+        return false;
+    }
+    configured != Some(usable(outer_size, insets))
+}
+
 impl Windows {
     /// Creates an empty set of tracked windows.
     pub fn new() -> Self {
@@ -595,14 +613,17 @@ impl Windows {
         // Before placement every configure is 0×0, so there is no usable size
         // to compare; sending one here would invalidate the ack the client is
         // about to make and leave the window unmapped.
-        if self.windows[index].placed {
-            let usable = usable(
-                self.windows[index].outer_size,
-                self.windows[index].insets(decoration),
-            );
-            if self.windows[index].configured != Some(usable) {
-                self.send_configure(index);
-            }
+        // During an interactive resize the configure must carry the latest
+        // requested size, never the committed size; the resize block above
+        // already handles that.
+        if needs_configure_after_commit(
+            self.windows[index].placed,
+            self.windows[index].resizing,
+            self.windows[index].outer_size,
+            self.windows[index].configured,
+            self.windows[index].insets(decoration),
+        ) {
+            self.send_configure(index);
         }
 
         let (damaged, geometry_fits, warned, mapped, acked) = {
@@ -1707,7 +1728,8 @@ mod tests {
     use super::{
         EdgeTarget, RESIZE_CONFIGURE_TIMEOUT_DEFAULT, anchor_resize_origin, apply_configure_states,
         at_least_one_pixel, client_point, committed_outer, configure_size, edge_hit, geometry_fits,
-        initial_placement, outer_size, parse_resize_timeout, usable, usable_rect_location,
+        initial_placement, needs_configure_after_commit, outer_size, parse_resize_timeout, usable,
+        usable_rect_location,
     };
     use crate::decoration::Insets;
     use malaysia_scene::geometry::{
@@ -2113,6 +2135,38 @@ mod tests {
         assert_eq!(
             parse_resize_timeout(Some("0"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
             Duration::from_millis(1)
+        );
+    }
+
+    #[test]
+    fn commit_does_not_reconfigure_with_committed_size_during_resize() {
+        let insets = Insets::ZERO;
+        let committed = size(640, 420);
+        let requested = size(800, 600);
+        assert!(
+            !needs_configure_after_commit(true, true, committed, Some(requested), insets),
+            "during resize the committed size must not trigger a reconfigure"
+        );
+    }
+
+    #[test]
+    fn commit_reconfigures_when_size_changes_outside_resize() {
+        let insets = Insets::ZERO;
+        let committed = size(640, 420);
+        let requested = size(800, 600);
+        assert!(
+            needs_configure_after_commit(true, false, committed, Some(requested), insets),
+            "outside resize a committed size different from configured must reconfigure"
+        );
+    }
+
+    #[test]
+    fn commit_does_not_reconfigure_when_size_matches() {
+        let insets = Insets::ZERO;
+        let committed = size(640, 420);
+        assert!(
+            !needs_configure_after_commit(true, false, committed, Some(committed), insets),
+            "no reconfigure when configured size already matches committed"
         );
     }
 }
