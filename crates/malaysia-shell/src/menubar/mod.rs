@@ -18,6 +18,7 @@ pub mod dbusmenu_map;
 pub mod focused;
 pub mod help_topics;
 pub mod icons;
+pub mod items;
 pub mod menu;
 pub mod remote;
 pub mod system;
@@ -41,10 +42,10 @@ use crate::desktop::DesktopEntry;
 ///    non-trivial segment), use that entry's `Name`.
 /// 3. Otherwise, use the last non-empty segment of the app id with an
 ///    initial capital.
-/// 4. With no app id, the desktop is «MalaysiaDreams».
+/// 4. With no app id, the desktop is «Escritorio».
 pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> String {
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return "MalaysiaDreams".to_string();
+        return "Escritorio".to_string();
     };
     if let Some(entry) = entries
         .iter()
@@ -468,10 +469,10 @@ mod tests {
     }
 
     #[test]
-    fn no_window_or_no_app_id_is_malaysia() {
+    fn no_window_or_no_app_id_is_escritorio() {
         let entries = Vec::new();
-        assert_eq!(resolve_app_name(None, &entries), "MalaysiaDreams");
-        assert_eq!(resolve_app_name(Some("   "), &entries), "MalaysiaDreams");
+        assert_eq!(resolve_app_name(None, &entries), "Escritorio");
+        assert_eq!(resolve_app_name(Some("   "), &entries), "Escritorio");
     }
 
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

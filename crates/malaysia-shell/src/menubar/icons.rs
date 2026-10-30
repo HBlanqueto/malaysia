@@ -63,6 +63,66 @@ pub const MENU_ITEM: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1
 /// Settings gear.
 pub const GEAR: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"4.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"8\" cy=\"8\" r=\"1.9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"><path d=\"M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M12.5 3.5l-1.3 1.3M4.8 11.2l-1.3 1.3\"/></g></svg>";
 
+/// Window frame with a title bar.
+pub const WINDOW: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"1.5\" y=\"2.5\" width=\"13\" height=\"11\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"1.5\" y1=\"5.5\" x2=\"14.5\" y2=\"5.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
+
+/// Magnifying glass.
+pub const SEARCH: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"9.9\" y1=\"9.9\" x2=\"13.5\" y2=\"13.5\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>";
+
+/// Trash can.
+pub const TRASH: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M3.5 4.5h9 M5.5 4.5V3.2h5v1.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><path d=\"M4.5 6v6a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1V6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"6.5\" y1=\"7.5\" x2=\"6.5\" y2=\"11\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"9.5\" y1=\"7.5\" x2=\"9.5\" y2=\"11\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
+
+/// Folder with a plus sign.
+pub const FOLDER_PLUS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"8\" y1=\"7.5\" x2=\"8\" y2=\"11.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"6\" y1=\"9.5\" x2=\"10\" y2=\"9.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
+
+/// Dock shown as a frame with a filled bottom bar.
+pub const DOCK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"1.5\" y=\"2\" width=\"13\" height=\"12\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"3\" y=\"10.5\" width=\"10\" height=\"2.5\" rx=\"1\" fill=\"currentColor\"/></svg>";
+
+/// Wallpaper: a picture frame with a sun and mountains.
+pub const WALLPAPER: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"1.5\" y=\"2.5\" width=\"13\" height=\"11\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"4.5\" cy=\"5.5\" r=\"1.2\" fill=\"currentColor\"/><path d=\"M2.5 11.5l3-3.5 2.5 2.5 3.5-4 3 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// House: a simple home shape.
+pub const HOUSE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M8 2.5L2.5 7.5h1.5v5.5h8V7.5h1.5z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/></svg>";
+
+/// Desktop: a monitor standing on a small foot.
+pub const DESKTOP: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2.5\" y=\"3\" width=\"11\" height=\"7.5\" rx=\"1.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"6.5\" y1=\"12.5\" x2=\"9.5\" y2=\"12.5\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><line x1=\"8\" y1=\"10.5\" x2=\"8\" y2=\"12.5\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// Documents folder with two lines inside.
+pub const DOCUMENTS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"5\" y1=\"8.5\" x2=\"11\" y2=\"8.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"5\" y1=\"10.5\" x2=\"9\" y2=\"10.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
+
+/// Downloads folder with a downward arrow.
+pub const DOWNLOADS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M8 7.5v3.5 M6 9.5l2 2 2-2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+
+/// Pictures folder with a tiny mountain scene.
+pub const PICTURES: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"5.5\" cy=\"7.5\" r=\"0.8\" fill=\"currentColor\"/><path d=\"M4 11.5l2-2.5 1.5 1.5 2.5-3 2.5 4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// Music folder with an eighth note.
+pub const MUSIC: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M6.5 11.5V8l3-0.8v2.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/><circle cx=\"5.8\" cy=\"11.5\" r=\"0.9\" fill=\"currentColor\"/><circle cx=\"8.8\" cy=\"10.7\" r=\"0.9\" fill=\"currentColor\"/></svg>";
+
+/// Videos folder with a play triangle.
+pub const VIDEOS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M6.5 8l3 1.5-3 1.5z\" fill=\"currentColor\"/></svg>";
+
+/// Go-to-folder: folder with a downward arrow.
+pub const FOLDER_GOTO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M6.5 9.5l2 2 2-2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+
+/// Undo: curved arrow pointing left.
+pub const UNDO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4.5 7.5a4.5 4.5 0 1 1 4 4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><path d=\"M3 7.5l2-2v4z\" fill=\"currentColor\"/></svg>";
+
+/// Redo: curved arrow pointing right.
+pub const REDO: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M11.5 7.5a4.5 4.5 0 1 0-4 4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><path d=\"M13 7.5l-2-2v4z\" fill=\"currentColor\"/></svg>";
+
+/// Cut: scissors.
+pub const CUT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"5\" cy=\"5\" r=\"1.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><circle cx=\"5\" cy=\"11\" r=\"1.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M6.2 5.5l6 5M6.2 10.5l6-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>";
+
+/// Copy: two overlapping rectangles.
+pub const COPY: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"4.5\" y=\"2.5\" width=\"8\" height=\"9\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"2.5\" y=\"5.5\" width=\"8\" height=\"9\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// Paste: clipboard with a document.
+pub const PASTE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4.5 3.5h7a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"6.5\" y1=\"3.5\" x2=\"9.5\" y2=\"3.5\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"6.5\" y1=\"7.5\" x2=\"9.5\" y2=\"7.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"6.5\" y1=\"9.5\" x2=\"9.5\" y2=\"9.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/></svg>";
+
+/// Select all: dashed rectangle.
+pub const SELECT_ALL: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2.5\" y=\"2.5\" width=\"11\" height=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-dasharray=\"2 1.5\"/></svg>";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,6 +198,26 @@ mod tests {
             INFO,
             GEAR,
             HELP,
+            WINDOW,
+            SEARCH,
+            TRASH,
+            FOLDER_PLUS,
+            DOCK,
+            WALLPAPER,
+            HOUSE,
+            DESKTOP,
+            DOCUMENTS,
+            DOWNLOADS,
+            PICTURES,
+            MUSIC,
+            VIDEOS,
+            FOLDER_GOTO,
+            UNDO,
+            REDO,
+            CUT,
+            COPY,
+            PASTE,
+            SELECT_ALL,
         ] {
             assert!(icon.starts_with("<svg"), "icon does not start with <svg>");
             assert!(icon.ends_with("</svg>"), "icon does not end with </svg>");
