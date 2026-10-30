@@ -519,7 +519,10 @@ pub fn on_action(id: String) {
     }
 }
 
-fn move_resize_items(active: Option<usize>, active_window: Option<&ToplevelInfo>) -> Vec<MenuItem> {
+pub(crate) fn move_resize_items(
+    active: Option<usize>,
+    active_window: Option<&ToplevelInfo>,
+) -> Vec<MenuItem> {
     let has_active = active_window.is_some();
     let can_restore = active_window.is_some_and(|window| window.restorable);
     vec![

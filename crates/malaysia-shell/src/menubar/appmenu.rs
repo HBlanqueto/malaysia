@@ -10,13 +10,13 @@ pub const TITLE: &str = "Escritorio";
 use std::env;
 use std::path::{Path, PathBuf};
 
-use barrier_kit::menu::{MenuIcon, MenuItem};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 use barrier_kit::platform::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::{
-    create_desktop_folder, focused, icons, items, resolve_app_name, spawn_component, system,
-    xdg_open, xdg_user_dir,
+    create_desktop_folder, focused, help_topics, icons, items, resolve_app_name, spawn_component,
+    system, xdg_open, xdg_user_dir,
 };
 
 /// The Escritorio menu (about, settings, empty trash, services, hide/show).
@@ -24,22 +24,24 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
+        // shortcut: falta diálogo Acerca de — mejora: añadir ventana modal.
         items::action(
             "malaysia-about",
             "Acerca de MalaysiaDreams",
             None,
             false,
-            Some(MenuIcon::svg(icons::INFO)),
+            None,
         ),
         items::separator(),
         items::action(
             "malaysia-settings",
             "Ajustes…",
-            Some("Super+,"),
-            false,
+            None,
+            true,
             Some(MenuIcon::svg(icons::GEAR)),
         ),
         items::separator(),
+        // shortcut: falta diálogo de confirmación en la shell.
         items::action(
             "malaysia-empty-trash",
             "Vaciar papelera…",
@@ -72,8 +74,15 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             ],
         ),
         items::separator(),
-        // shortcut: no global shortcut is wired yet; the action minimizes every
-        // window that is not already minimized.
+        // shortcut: Super+H no está cableado para el escritorio.
+        items::action(
+            "desktop-hide",
+            "Ocultar Escritorio",
+            Some("Super+H"),
+            false,
+            None,
+        ),
+        // shortcut: no hay atajo global cableado todavía.
         items::action(
             "desktop-hide-others",
             "Ocultar otros",
@@ -81,6 +90,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             other_unminimized,
             None,
         ),
+        // shortcut: no hay atajo global cableado todavía.
         items::action(
             "desktop-show-all",
             "Mostrar todo",
@@ -94,77 +104,159 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
 /// The Archivo menu.
 pub fn file_menu_items() -> Vec<MenuItem> {
     vec![
-        // shortcut: Super+N is not wired globally yet.
-        items::action(
-            "file-new-window",
-            "Nueva ventana",
-            None,
-            true,
-            Some(MenuIcon::svg(icons::WINDOW)),
-        ),
-        // shortcut: Shift+Super+N is not wired globally yet.
+        items::action("file-new-window", "Nueva ventana", None, true, None),
         items::action(
             "file-new-folder-desktop",
             "Nueva carpeta en el escritorio",
             None,
             true,
-            Some(MenuIcon::svg(icons::FOLDER_PLUS)),
-        ),
-        items::action(
-            "file-open",
-            "Abrir…",
-            Some("Super+O"),
-            false,
-            Some(MenuIcon::svg(icons::WINDOW)),
-        ),
-        // shortcut: Super+F is not wired globally yet; Super+Space opens the launcher.
-        items::action(
-            "file-search",
-            "Buscar",
             None,
-            true,
-            Some(MenuIcon::svg(icons::SEARCH)),
+        ),
+        // shortcut: Ctrl+Super+N no está cableado globalmente.
+        items::action(
+            "file-new-folder-selection",
+            "Nueva carpeta con la selección",
+            Some("Ctrl+Super+N"),
+            false,
+            None,
+        ),
+        // shortcut: Super+T no está cableado globalmente.
+        items::action(
+            "file-new-tab",
+            "Nueva pestaña",
+            Some("Super+T"),
+            false,
+            None,
+        ),
+        // shortcut: Super+O no está cableado globalmente.
+        items::action("file-open", "Abrir", Some("Super+O"), false, None),
+        // shortcut: falta selección y submenú de apps asociadas.
+        items::submenu(None, "Abrir con", false, None, Vec::new()),
+        // shortcut: Super+W no está cableado globalmente.
+        items::action(
+            "file-close-window",
+            "Cerrar ventana",
+            Some("Super+W"),
+            false,
+            None,
+        ),
+        items::separator(),
+        // shortcut: Super+I no está cableado globalmente.
+        items::action(
+            "file-get-info",
+            "Obtener información",
+            Some("Super+I"),
+            false,
+            None,
+        ),
+        // shortcut: falta selección y diálogo de renombre.
+        items::action("file-rename", "Renombrar", None, false, None),
+        // shortcut: falta selección y backend de compresión.
+        items::action("file-compress", "Comprimir", None, false, None),
+        // shortcut: Super+D no está cableado globalmente.
+        items::action("file-duplicate", "Duplicar", Some("Super+D"), false, None),
+        // shortcut: Ctrl+Super+A no está cableado globalmente.
+        items::action(
+            "file-make-alias",
+            "Crear enlace",
+            Some("Ctrl+Super+A"),
+            false,
+            None,
+        ),
+        // shortcut: Super+Y no está cableado globalmente.
+        items::action(
+            "file-quick-look",
+            "Vista rápida",
+            Some("Super+Y"),
+            false,
+            None,
+        ),
+        items::separator(),
+        // shortcut: falta backend de compartir.
+        items::action(
+            "file-share",
+            "Compartir…",
+            None,
+            false,
+            Some(MenuIcon::svg(icons::SHARE)),
+        ),
+        items::separator(),
+        // shortcut: Super+BackSpace no está cableado globalmente.
+        items::action(
+            "file-move-to-trash",
+            "Mover a la papelera",
+            Some("Super+BackSpace"),
+            false,
+            Some(MenuIcon::svg(icons::TRASH)),
+        ),
+        // shortcut: Super+E no está cableado globalmente.
+        items::action(
+            "file-eject",
+            "Expulsar",
+            Some("Super+E"),
+            false,
+            Some(MenuIcon::svg(icons::EJECT)),
+        ),
+        items::separator(),
+        // shortcut: Super+P no está cableado globalmente.
+        items::action(
+            "file-print",
+            "Imprimir",
+            Some("Super+P"),
+            false,
+            Some(MenuIcon::svg(icons::PRINTER)),
         ),
     ]
 }
 
-/// The Edición menu. Needs a selection, so every item is disabled for now.
+/// The Edición menu.
 pub fn edit_menu_items() -> Vec<MenuItem> {
     vec![
-        items::action(
-            "edit-undo",
-            "Deshacer",
-            Some("Super+Z"),
-            false,
-            Some(MenuIcon::svg(icons::UNDO)),
-        ),
-        items::action(
-            "edit-cut",
-            "Cortar",
-            Some("Super+X"),
-            false,
-            Some(MenuIcon::svg(icons::CUT)),
-        ),
-        items::action(
-            "edit-copy",
-            "Copiar",
-            Some("Super+C"),
-            false,
-            Some(MenuIcon::svg(icons::COPY)),
-        ),
-        items::action(
-            "edit-paste",
-            "Pegar",
-            Some("Super+V"),
-            false,
-            Some(MenuIcon::svg(icons::PASTE)),
-        ),
+        // shortcut: Super+Z no está cableado globalmente.
+        items::action("edit-undo", "Deshacer", Some("Super+Z"), false, None),
+        // shortcut: Shift+Super+Z no está cableado globalmente.
+        items::action("edit-redo", "Rehacer", Some("Shift+Super+Z"), false, None),
+        items::separator(),
+        // shortcut: Super+X no está cableado globalmente.
+        items::action("edit-cut", "Cortar", Some("Super+X"), false, None),
+        // shortcut: Super+C no está cableado globalmente.
+        items::action("edit-copy", "Copiar", Some("Super+C"), false, None),
+        // shortcut: Super+V no está cableado globalmente.
+        items::action("edit-paste", "Pegar", Some("Super+V"), false, None),
+        // shortcut: Super+A no está cableado globalmente.
         items::action(
             "edit-select-all",
             "Seleccionar todo",
             Some("Super+A"),
             false,
-            Some(MenuIcon::svg(icons::SELECT_ALL)),
+            None,
+        ),
+        items::separator(),
+        // shortcut: falta visor del portapapeles.
+        items::action(
+            "edit-show-clipboard",
+            "Mostrar portapapeles",
+            None,
+            false,
+            None,
+        ),
+        items::separator(),
+        // Super+Space abre el launcher en el compositor.
+        items::action(
+            "edit-search",
+            "Buscar",
+            Some("Super+Space"),
+            true,
+            Some(MenuIcon::svg(icons::SEARCH)),
+        ),
+        items::separator(),
+        // shortcut: falta panel de emojis y símbolos.
+        items::action(
+            "edit-emoji",
+            "Emojis y símbolos",
+            None,
+            false,
+            Some(MenuIcon::svg(icons::EMOJI)),
         ),
     ]
 }
@@ -172,20 +264,75 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
 /// The Visualización menu.
 pub fn view_menu_items() -> Vec<MenuItem> {
     vec![
-        // Disabled until the shell can signal the dock to show/hide.
+        // shortcut: Super+1 no está cableado globalmente.
+        // The check mark and the icon share the leading column, so this row
+        // keeps the mark and omits the icon.
+        MenuItem::Action {
+            id: "view-as-icons".to_string(),
+            label: "Como iconos".to_string(),
+            shortcut: Some("Super+1".to_string()),
+            enabled: false,
+            check: CheckState::Checkbox(true),
+            icon: None,
+        },
+        // shortcut: Super+2 no está cableado globalmente.
+        items::action(
+            "view-as-list",
+            "Como lista",
+            Some("Super+2"),
+            false,
+            Some(MenuIcon::svg(icons::VIEW_LIST)),
+        ),
+        // shortcut: Super+3 no está cableado globalmente.
+        items::action(
+            "view-as-columns",
+            "Como columnas",
+            Some("Super+3"),
+            false,
+            Some(MenuIcon::svg(icons::VIEW_COLUMNS)),
+        ),
+        // shortcut: Super+4 no está cableado globalmente.
+        items::action(
+            "view-as-gallery",
+            "Como galería",
+            Some("Super+4"),
+            false,
+            Some(MenuIcon::svg(icons::VIEW_GALLERY)),
+        ),
+        items::separator(),
+        // shortcut: falta señal al dock para mostrar/ocultar.
         items::action(
             "view-toggle-dock",
-            "Mostrar/ocultar dock",
+            "Mostrar/ocultar Dock",
             None,
             false,
-            Some(MenuIcon::svg(icons::DOCK)),
+            None,
         ),
+        items::separator(),
+        // shortcut: falta diálogo de fondo de pantalla.
         items::action(
             "view-change-wallpaper",
             "Cambiar fondo de pantalla…",
             None,
             false,
-            Some(MenuIcon::svg(icons::WALLPAPER)),
+            None,
+        ),
+        // shortcut: Super+J no está cableado globalmente.
+        items::action(
+            "view-show-view-options",
+            "Mostrar opciones de visualización",
+            Some("Super+J"),
+            false,
+            None,
+        ),
+        items::separator(),
+        // shortcut: Ctrl+Super+F no está cableado globalmente.
+        items::action(
+            "view-fullscreen",
+            "Ver en pantalla completa",
+            Some("Ctrl+Super+F"),
+            false,
+            None,
         ),
     ]
 }
@@ -193,29 +340,25 @@ pub fn view_menu_items() -> Vec<MenuItem> {
 /// The Ir menu: the XDG user folders and the trash.
 pub fn go_menu_items() -> Vec<MenuItem> {
     vec![
+        // shortcut: Super+[ no está cableado globalmente.
+        items::action("go-back", "Atrás", Some("Super+["), false, None),
+        // shortcut: Super+] no está cableado globalmente.
+        items::action("go-forward", "Adelante", Some("Super+]"), false, None),
+        // shortcut: Super+Up no está cableado globalmente.
         items::action(
-            "go-back",
-            "Atrás",
-            Some("Super+["),
+            "go-enclosing-folder",
+            "Carpeta contenedora",
+            Some("Super+Up"),
             false,
-            Some(MenuIcon::svg(icons::UNDO)),
-        ),
-        items::action(
-            "go-forward",
-            "Adelante",
-            Some("Super+]"),
-            false,
-            Some(MenuIcon::svg(icons::REDO)),
+            None,
         ),
         items::separator(),
-        // Shortcuts for the enabled folder items below are not wired globally yet,
-        // so they are omitted to keep the menu honest.
         items::action(
-            "go-home",
-            "Inicio",
+            "go-documents",
+            "Documentos",
             None,
             true,
-            Some(MenuIcon::svg(icons::HOUSE)),
+            Some(MenuIcon::svg(icons::DOCUMENTS)),
         ),
         items::action(
             "go-desktop",
@@ -225,18 +368,18 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::DESKTOP)),
         ),
         items::action(
-            "go-documents",
-            "Documentos",
-            None,
-            true,
-            Some(MenuIcon::svg(icons::DOCUMENTS)),
-        ),
-        items::action(
             "go-downloads",
             "Descargas",
             None,
             true,
             Some(MenuIcon::svg(icons::DOWNLOADS)),
+        ),
+        items::action(
+            "go-home",
+            "Inicio",
+            None,
+            true,
+            Some(MenuIcon::svg(icons::HOUSE)),
         ),
         items::action(
             "go-pictures",
@@ -259,7 +402,13 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             true,
             Some(MenuIcon::svg(icons::VIDEOS)),
         ),
-        items::separator(),
+        items::action(
+            "go-applications",
+            "Aplicaciones",
+            None,
+            true,
+            Some(MenuIcon::svg(icons::APPS)),
+        ),
         items::action(
             "go-trash",
             "Papelera",
@@ -268,21 +417,100 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::TRASH)),
         ),
         items::separator(),
+        // shortcut: falta historial de carpetas recientes.
+        items::submenu(None, "Carpetas recientes", false, None, Vec::new()),
+        items::separator(),
+        // shortcut: Shift+Super+G no está cableado globalmente.
         items::action(
             "go-to-folder",
             "Ir a la carpeta…",
             Some("Shift+Super+G"),
             false,
-            Some(MenuIcon::svg(icons::FOLDER_GOTO)),
+            None,
+        ),
+        // shortcut: Super+K no está cableado globalmente.
+        items::action(
+            "go-connect-to-server",
+            "Conectarse al servidor…",
+            Some("Super+K"),
+            false,
+            None,
         ),
     ]
 }
 
-/// The Ventana menu: minimize/show desktop and the open windows.
-pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
+/// The Ventana menu: window controls, layout submenus and the open windows.
+pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
+    let any_minimized = toplevels.iter().any(|window| window.minimized);
     let mut items = vec![
-        // shortcut: Alt+Super+M is not wired globally yet.
-        items::action("window-minimize-all", "Minimizar todo", None, true, None),
+        // shortcut: Super+M no está cableado globalmente.
+        items::action("window-minimize", "Minimizar", Some("Super+M"), false, None),
+        // shortcut: falta maximizar la ventana activa.
+        items::action("window-maximize", "Maximizar", None, false, None),
+        // shortcut: Ctrl+Super+Return no está cableado globalmente.
+        items::action(
+            "window-fill",
+            "Rellenar",
+            Some("Ctrl+Super+Return"),
+            false,
+            None,
+        ),
+        // shortcut: Ctrl+Super+C no está cableado globalmente.
+        items::action(
+            "window-center",
+            "Centrar",
+            Some("Ctrl+Super+C"),
+            false,
+            None,
+        ),
+        items::separator(),
+        items::submenu(
+            None,
+            "Trasladar y redimensionar",
+            true,
+            Some(MenuIcon::svg(icons::GRID)),
+            focused::move_resize_items(None, None),
+        ),
+        // shortcut: falta gestión de pantalla completa.
+        items::submenu(
+            None,
+            "Ventana a pantalla completa",
+            false,
+            Some(MenuIcon::svg(icons::SPLIT)),
+            vec![
+                items::action(
+                    "window-fullscreen-left",
+                    "Izquierda de la pantalla",
+                    None,
+                    false,
+                    None,
+                ),
+                items::action(
+                    "window-fullscreen-right",
+                    "Derecha de la pantalla",
+                    None,
+                    false,
+                    None,
+                ),
+                items::separator(),
+                // shortcut: Ctrl+Super+F no está cableado globalmente.
+                items::action(
+                    "window-fullscreen-toggle",
+                    "Activar pantalla completa",
+                    Some("Ctrl+Super+F"),
+                    false,
+                    None,
+                ),
+            ],
+        ),
+        items::separator(),
+        items::action(
+            "window-front-all",
+            "Traer todo al frente",
+            None,
+            any_minimized,
+            None,
+        ),
         items::action(
             "window-show-desktop",
             "Mostrar escritorio",
@@ -293,8 +521,7 @@ pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
         items::separator(),
     ];
 
-    let windows: Vec<ToplevelInfo> = Toplevels::get().list.read().clone();
-    if windows.is_empty() {
+    if toplevels.is_empty() {
         items.push(items::action(
             "window-none",
             "No hay ventanas abiertas",
@@ -303,7 +530,7 @@ pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
             None,
         ));
     } else {
-        for (index, window) in windows.iter().enumerate() {
+        for (index, window) in toplevels.iter().enumerate() {
             let name = resolve_app_name(Some(&window.app_id), entries);
             let label = if window.title.is_empty() || window.title == name {
                 name
@@ -326,29 +553,36 @@ pub fn window_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
 /// The Ayuda menu.
 pub fn help_menu_items() -> Vec<MenuItem> {
     vec![
-        items::action(
-            "help-search",
-            "Buscar en la ayuda",
-            None,
-            false,
-            Some(MenuIcon::svg(icons::SEARCH)),
-        ),
+        MenuItem::SearchField {
+            placeholder: "Buscar".to_string(),
+        },
+        help_topic_item("Documentación de MalaysiaDreams", icons::BOOK),
+        help_topic_item("Atajos de teclado", icons::KEYBOARD),
         items::separator(),
-        items::action(
-            "help-docs",
-            "Documentación de MalaysiaDreams",
-            None,
-            false,
-            Some(MenuIcon::svg(icons::HELP)),
-        ),
-        items::action(
-            "help-report",
-            "Informar de un problema…",
-            None,
-            true,
-            Some(MenuIcon::svg(icons::INFO)),
-        ),
+        items::action("help-report", "Informar de un problema…", None, true, None),
     ]
+}
+
+fn help_topic_item(title: &str, icon: &'static str) -> MenuItem {
+    help_topics::topics()
+        .iter()
+        .find(|topic| topic.title == title)
+        .map(|topic| MenuItem::Action {
+            id: format!("app-help-topic:{}", topic.url),
+            label: topic.title.to_string(),
+            shortcut: None,
+            enabled: true,
+            check: CheckState::None,
+            icon: Some(MenuIcon::svg(icon)),
+        })
+        .unwrap_or_else(|| MenuItem::Action {
+            id: String::new(),
+            label: title.to_string(),
+            shortcut: None,
+            enabled: false,
+            check: CheckState::None,
+            icon: Some(MenuIcon::svg(icon)),
+        })
 }
 
 /// Handles an action from any of the desktop menus.
@@ -408,8 +642,7 @@ pub fn on_action_with(
                 }
             }
         }
-        // Unminimize every minimized window. This used to call minimize_all(),
-        // which is the opposite of what "Mostrar todo" should do.
+        // Unminimize every minimized window.
         "desktop-show-all" | "window-front-all" => {
             for (index, window) in toplevels.iter().enumerate() {
                 if window.minimized {
@@ -458,16 +691,61 @@ mod tests {
     use super::*;
     use barrier_kit::menu::MenuItem;
 
-    fn labels(items: &[MenuItem]) -> Vec<&str> {
+    fn label(item: &MenuItem) -> Option<&str> {
+        match item {
+            MenuItem::Action { label, .. }
+            | MenuItem::Submenu { label, .. }
+            | MenuItem::Header { label, .. } => Some(label),
+            _ => None,
+        }
+    }
+
+    fn labels_with_separators(items: &[MenuItem]) -> Vec<String> {
+        items
+            .iter()
+            .map(|item| match item {
+                MenuItem::Action { label, .. }
+                | MenuItem::Submenu { label, .. }
+                | MenuItem::Header { label, .. } => label.clone(),
+                MenuItem::SearchField { placeholder } => placeholder.clone(),
+                MenuItem::Separator => "—".to_string(),
+                _ => String::new(),
+            })
+            .collect()
+    }
+
+    fn top_level_icon_labels(items: &[MenuItem]) -> Vec<String> {
         items
             .iter()
             .filter_map(|item| match item {
-                MenuItem::Action { label, .. }
-                | MenuItem::Submenu { label, .. }
-                | MenuItem::Header { label, .. } => Some(label.as_str()),
+                MenuItem::Action { label, icon, .. } | MenuItem::Submenu { label, icon, .. } => {
+                    icon.is_some().then(|| label.clone())
+                }
                 _ => None,
             })
             .collect()
+    }
+
+    fn is_enabled(item: &MenuItem) -> bool {
+        match item {
+            MenuItem::Action { enabled, .. } | MenuItem::Submenu { enabled, .. } => *enabled,
+            _ => false,
+        }
+    }
+
+    fn enabled(items: &[MenuItem], wanted: &str) -> bool {
+        items
+            .iter()
+            .find(|item| label(item) == Some(wanted))
+            .map(is_enabled)
+            .unwrap_or(false)
+    }
+
+    fn action_id(item: &MenuItem) -> Option<&str> {
+        match item {
+            MenuItem::Action { id, .. } => Some(id),
+            _ => None,
+        }
     }
 
     fn all_actions(items: &[MenuItem], out: &mut Vec<MenuItem>) {
@@ -480,19 +758,262 @@ mod tests {
         }
     }
 
+    fn toplevel(minimized: bool) -> ToplevelInfo {
+        ToplevelInfo {
+            title: String::new(),
+            app_id: "foot".to_string(),
+            active: false,
+            maximized: false,
+            minimized,
+            restorable: false,
+            app_menu: None,
+            gtk_menus: None,
+        }
+    }
+
     #[test]
     fn desktop_title_is_escritorio() {
         assert_eq!(TITLE, "Escritorio");
     }
 
     #[test]
+    fn escritorio_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&malaysia_menu_items(&[])),
+            vec![
+                "Acerca de MalaysiaDreams",
+                "—",
+                "Ajustes…",
+                "—",
+                "Vaciar papelera…",
+                "—",
+                "Servicios",
+                "—",
+                "Ocultar Escritorio",
+                "Ocultar otros",
+                "Mostrar todo",
+            ]
+        );
+    }
+
+    #[test]
+    fn escritorio_settings_is_enabled_and_has_no_shortcut() {
+        let items = malaysia_menu_items(&[]);
+        let settings = items
+            .iter()
+            .find(|item| label(item) == Some("Ajustes…"))
+            .expect("Ajustes… must exist");
+        assert!(is_enabled(settings));
+        assert!(
+            matches!(settings, MenuItem::Action { shortcut: None, .. }),
+            "Ajustes… must not show a shortcut"
+        );
+    }
+
+    #[test]
+    fn escritorio_show_and_hide_enabled_states_follow_toplevels() {
+        let not_minimized = vec![toplevel(false)];
+        assert!(enabled(
+            &malaysia_menu_items(&not_minimized),
+            "Ocultar otros"
+        ));
+        assert!(!enabled(
+            &malaysia_menu_items(&not_minimized),
+            "Mostrar todo"
+        ));
+
+        let minimized = vec![toplevel(true)];
+        assert!(!enabled(&malaysia_menu_items(&minimized), "Ocultar otros"));
+        assert!(enabled(&malaysia_menu_items(&minimized), "Mostrar todo"));
+    }
+
+    #[test]
+    fn archivo_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&file_menu_items()),
+            vec![
+                "Nueva ventana",
+                "Nueva carpeta en el escritorio",
+                "Nueva carpeta con la selección",
+                "Nueva pestaña",
+                "Abrir",
+                "Abrir con",
+                "Cerrar ventana",
+                "—",
+                "Obtener información",
+                "Renombrar",
+                "Comprimir",
+                "Duplicar",
+                "Crear enlace",
+                "Vista rápida",
+                "—",
+                "Compartir…",
+                "—",
+                "Mover a la papelera",
+                "Expulsar",
+                "—",
+                "Imprimir",
+            ]
+        );
+    }
+
+    #[test]
+    fn edicion_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&edit_menu_items()),
+            vec![
+                "Deshacer",
+                "Rehacer",
+                "—",
+                "Cortar",
+                "Copiar",
+                "Pegar",
+                "Seleccionar todo",
+                "—",
+                "Mostrar portapapeles",
+                "—",
+                "Buscar",
+                "—",
+                "Emojis y símbolos",
+            ]
+        );
+    }
+
+    #[test]
+    fn visualizacion_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&view_menu_items()),
+            vec![
+                "Como iconos",
+                "Como lista",
+                "Como columnas",
+                "Como galería",
+                "—",
+                "Mostrar/ocultar Dock",
+                "—",
+                "Cambiar fondo de pantalla…",
+                "Mostrar opciones de visualización",
+                "—",
+                "Ver en pantalla completa",
+            ]
+        );
+    }
+
+    #[test]
+    fn ir_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&go_menu_items()),
+            vec![
+                "Atrás",
+                "Adelante",
+                "Carpeta contenedora",
+                "—",
+                "Documentos",
+                "Escritorio",
+                "Descargas",
+                "Inicio",
+                "Imágenes",
+                "Música",
+                "Vídeos",
+                "Aplicaciones",
+                "Papelera",
+                "—",
+                "Carpetas recientes",
+                "—",
+                "Ir a la carpeta…",
+                "Conectarse al servidor…",
+            ]
+        );
+    }
+
+    #[test]
+    fn ventana_menu_labels_and_order_when_no_windows() {
+        assert_eq!(
+            labels_with_separators(&window_menu_items(&[], &[])),
+            vec![
+                "Minimizar",
+                "Maximizar",
+                "Rellenar",
+                "Centrar",
+                "—",
+                "Trasladar y redimensionar",
+                "Ventana a pantalla completa",
+                "—",
+                "Traer todo al frente",
+                "Mostrar escritorio",
+                "—",
+                "No hay ventanas abiertas",
+            ]
+        );
+    }
+
+    #[test]
+    fn ayuda_menu_labels_and_order() {
+        assert_eq!(
+            labels_with_separators(&help_menu_items()),
+            vec![
+                "Buscar",
+                "Documentación de MalaysiaDreams",
+                "Atajos de teclado",
+                "—",
+                "Informar de un problema…",
+            ]
+        );
+    }
+
+    #[test]
+    fn only_the_expected_rows_have_icons() {
+        assert_eq!(
+            top_level_icon_labels(&malaysia_menu_items(&[])),
+            vec!["Ajustes…", "Vaciar papelera…"]
+        );
+        assert_eq!(
+            top_level_icon_labels(&file_menu_items()),
+            vec!["Compartir…", "Mover a la papelera", "Expulsar", "Imprimir",]
+        );
+        assert_eq!(
+            top_level_icon_labels(&edit_menu_items()),
+            vec!["Buscar", "Emojis y símbolos"]
+        );
+        assert_eq!(
+            top_level_icon_labels(&view_menu_items()),
+            vec!["Como lista", "Como columnas", "Como galería"]
+        );
+        assert_eq!(
+            top_level_icon_labels(&go_menu_items()),
+            vec![
+                "Documentos",
+                "Escritorio",
+                "Descargas",
+                "Inicio",
+                "Imágenes",
+                "Música",
+                "Vídeos",
+                "Aplicaciones",
+                "Papelera",
+            ]
+        );
+        assert_eq!(
+            top_level_icon_labels(&window_menu_items(&[], &[])),
+            vec!["Trasladar y redimensionar", "Ventana a pantalla completa"]
+        );
+        assert_eq!(
+            top_level_icon_labels(&help_menu_items()),
+            vec!["Documentación de MalaysiaDreams", "Atajos de teclado"]
+        );
+    }
+
+    #[test]
     fn enabled_desktop_items_have_no_unwired_shortcut() {
+        const WIRED: &[&str] = &["Super+Space"];
+        let toplevels = vec![toplevel(false), toplevel(true)];
         let mut actions = Vec::new();
-        all_actions(&malaysia_menu_items(&[]), &mut actions);
+        all_actions(&malaysia_menu_items(&toplevels), &mut actions);
         all_actions(&file_menu_items(), &mut actions);
         all_actions(&edit_menu_items(), &mut actions);
         all_actions(&view_menu_items(), &mut actions);
         all_actions(&go_menu_items(), &mut actions);
+        all_actions(&window_menu_items(&[], &toplevels), &mut actions);
         all_actions(&help_menu_items(), &mut actions);
 
         for item in &actions {
@@ -506,8 +1027,11 @@ mod tests {
                 continue;
             };
             if *enabled {
+                let wired = shortcut
+                    .as_ref()
+                    .is_some_and(|s| WIRED.contains(&s.as_str()));
                 assert!(
-                    shortcut.is_none(),
+                    shortcut.is_none() || wired,
                     "enabled item «{label}» shows a shortcut that is not wired globally"
                 );
             }
@@ -584,6 +1108,60 @@ mod tests {
     }
 
     #[test]
+    fn window_front_all_unminimizes_minimized_windows() {
+        let toplevels = vec![
+            ToplevelInfo {
+                title: "A".into(),
+                app_id: "a".into(),
+                active: true,
+                maximized: false,
+                minimized: false,
+                restorable: false,
+                app_menu: None,
+                gtk_menus: None,
+            },
+            ToplevelInfo {
+                title: "B".into(),
+                app_id: "b".into(),
+                active: false,
+                maximized: false,
+                minimized: true,
+                restorable: false,
+                app_menu: None,
+                gtk_menus: None,
+            },
+        ];
+        let unminimized = Rc::new(RefCell::new(Vec::<usize>::new()));
+        let unmin = unminimized.clone();
+        on_action_with(
+            "window-front-all".to_string(),
+            &toplevels,
+            |_| {},
+            move |index| unmin.borrow_mut().push(index),
+            |_| {},
+            |_, _| {},
+            |_| {},
+            |_| {},
+        );
+        assert_eq!(*unminimized.borrow(), vec![1]);
+    }
+
+    #[test]
+    fn window_front_all_is_enabled_only_when_a_window_is_minimized() {
+        let not_minimized = vec![toplevel(false)];
+        assert!(!enabled(
+            &window_menu_items(&[], &not_minimized),
+            "Traer todo al frente"
+        ));
+
+        let minimized = vec![toplevel(true)];
+        assert!(enabled(
+            &window_menu_items(&[], &minimized),
+            "Traer todo al frente"
+        ));
+    }
+
+    #[test]
     fn on_action_with_ignores_malaysia_settings() {
         on_action_with(
             "malaysia-settings".to_string(),
@@ -598,26 +1176,53 @@ mod tests {
     }
 
     #[test]
-    fn help_menu_contains_search_and_report_issue() {
-        let items = help_menu_items();
-        let labels = labels(&items);
-        assert!(labels.contains(&"Buscar en la ayuda"), "{labels:?}");
-        assert!(labels.contains(&"Informar de un problema…"), "{labels:?}");
+    fn edit_search_and_go_applications_spawn_the_launcher() {
+        for id in ["edit-search", "go-applications"] {
+            let spawned = Rc::new(RefCell::new(String::new()));
+            let s = spawned.clone();
+            on_action_with(
+                id.to_string(),
+                &[],
+                |_| {},
+                |_| {},
+                |_| {},
+                move |binary, _args| *s.borrow_mut() = binary.to_string(),
+                |_| {},
+                |_| {},
+            );
+            assert_eq!(*spawned.borrow(), "launcher", "{id} should spawn launcher");
+        }
     }
 
     #[test]
-    fn file_edit_view_go_items_all_have_icons() {
-        let mut actions = Vec::new();
-        all_actions(&file_menu_items(), &mut actions);
-        all_actions(&edit_menu_items(), &mut actions);
-        all_actions(&view_menu_items(), &mut actions);
-        all_actions(&go_menu_items(), &mut actions);
+    fn help_topics_use_their_documentation_urls() {
+        let items = help_menu_items();
+        let docs = items
+            .iter()
+            .find(|item| label(item) == Some("Documentación de MalaysiaDreams"))
+            .expect("missing docs item");
+        let shortcuts = items
+            .iter()
+            .find(|item| label(item) == Some("Atajos de teclado"))
+            .expect("missing shortcuts item");
 
-        for item in actions {
-            let MenuItem::Action { icon, label, .. } = item else {
-                continue;
-            };
-            assert!(icon.is_some(), "«{label}» is missing its icon");
-        }
+        assert!(is_enabled(docs));
+        assert!(is_enabled(shortcuts));
+
+        let docs_url = help_topics::topics()
+            .iter()
+            .find(|topic| topic.title == "Documentación de MalaysiaDreams")
+            .map(|topic| topic.url)
+            .expect("docs topic missing");
+        let shortcuts_url = help_topics::topics()
+            .iter()
+            .find(|topic| topic.title == "Atajos de teclado")
+            .map(|topic| topic.url)
+            .expect("shortcuts topic missing");
+
+        let docs_id = action_id(docs).expect("docs must be an action");
+        let shortcuts_id = action_id(shortcuts).expect("shortcuts must be an action");
+        assert_eq!(docs_id, format!("app-help-topic:{docs_url}"));
+        assert_eq!(shortcuts_id, format!("app-help-topic:{shortcuts_url}"));
     }
 }

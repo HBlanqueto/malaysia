@@ -749,7 +749,12 @@ impl App for BarApp {
                 ("Ir", Rc::new(appmenu::go_menu_items)),
                 (
                     "Ventana",
-                    Rc::new(move || appmenu::window_menu_items(&entries_for_window)),
+                    Rc::new(move || {
+                        appmenu::window_menu_items(
+                            &entries_for_window,
+                            &Toplevels::get().list.read().clone(),
+                        )
+                    }),
                 ),
                 ("Ayuda", Rc::new(appmenu::help_menu_items)),
             ];
