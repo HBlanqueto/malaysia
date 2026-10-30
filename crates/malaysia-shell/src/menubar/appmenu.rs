@@ -8,18 +8,21 @@
 pub const TITLE: &str = "Escritorio";
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::platform::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::{
-    create_desktop_folder, icons, items, resolve_app_name, spawn_component, xdg_open, xdg_user_dir,
+    create_desktop_folder, focused, icons, items, resolve_app_name, spawn_component, system,
+    xdg_open, xdg_user_dir,
 };
 
 /// The Escritorio menu (about, settings, empty trash, services, hide/show).
-pub fn malaysia_menu_items() -> Vec<MenuItem> {
+pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
+    let any_minimized = toplevels.iter().any(|window| window.minimized);
+    let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
         items::action(
             "malaysia-about",
@@ -69,10 +72,22 @@ pub fn malaysia_menu_items() -> Vec<MenuItem> {
             ],
         ),
         items::separator(),
-        // shortcut: Alt+Super+H is not wired in the compositor for the desktop,
-        // so this enabled item shows no shortcut to stay honest.
-        items::action("desktop-hide-others", "Ocultar otros", None, true, None),
-        items::action("desktop-show-all", "Mostrar todo", None, true, None),
+        // shortcut: no global shortcut is wired yet; the action minimizes every
+        // window that is not already minimized.
+        items::action(
+            "desktop-hide-others",
+            "Ocultar otros",
+            None,
+            other_unminimized,
+            None,
+        ),
+        items::action(
+            "desktop-show-all",
+            "Mostrar todo",
+            None,
+            any_minimized,
+            None,
+        ),
     ]
 }
 
@@ -338,50 +353,108 @@ pub fn help_menu_items() -> Vec<MenuItem> {
 
 /// Handles an action from any of the desktop menus.
 pub fn on_action(id: String) {
+    let toplevels = Toplevels::get();
+    let list = toplevels.list.read().clone();
+    // Settings is handled by the existing system helper so it activates an
+    // existing settings window or launches the real malaysia-settings binary.
+    if id == "malaysia-settings" {
+        system::on_system_action("system-settings".into(), &list);
+        return;
+    }
+    on_action_with(
+        id,
+        &list,
+        |index| toplevels.minimize(index),
+        |index| toplevels.unset_minimized(index),
+        |index| toplevels.activate(index),
+        |binary, _args| spawn_component(binary),
+        |path| xdg_open(path),
+        focused::on_action,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+/// Injected version of [`on_action`]: decisions are pure and rely only on the
+/// supplied `toplevels` list and the caller-provided callbacks.
+pub fn on_action_with(
+    id: String,
+    toplevels: &[ToplevelInfo],
+    mut minimize: impl FnMut(usize),
+    mut unminimize: impl FnMut(usize),
+    mut activate: impl FnMut(usize),
+    mut spawn: impl FnMut(&str, &[&str]),
+    mut open: impl FnMut(&Path),
+    mut delegate: impl FnMut(String),
+) {
     match id.as_str() {
-        "go-home" => open_home(),
-        "go-desktop" => open_user_dir("DESKTOP", "Desktop"),
-        "go-documents" => open_user_dir("DOCUMENTS", "Documents"),
-        "go-downloads" => open_user_dir("DOWNLOAD", "Downloads"),
-        "go-pictures" => open_user_dir("PICTURES", "Pictures"),
-        "go-music" => open_user_dir("MUSIC", "Music"),
-        "go-videos" => open_user_dir("VIDEOS", "Videos"),
-        "go-trash" => xdg_open("trash:///"),
-        "file-new-window" => open_home(),
-        "file-search" => spawn_component("launcher"),
+        "go-home" => open_home(&mut open),
+        "go-desktop" => open_user_dir("DESKTOP", "Desktop", &mut open),
+        "go-documents" => open_user_dir("DOCUMENTS", "Documents", &mut open),
+        "go-downloads" => open_user_dir("DOWNLOAD", "Downloads", &mut open),
+        "go-pictures" => open_user_dir("PICTURES", "Pictures", &mut open),
+        "go-music" => open_user_dir("MUSIC", "Music", &mut open),
+        "go-videos" => open_user_dir("VIDEOS", "Videos", &mut open),
+        "go-applications" => spawn("launcher", &[]),
+        "go-trash" => open(Path::new("trash:///")),
+        "file-new-window" => open_home(&mut open),
+        "file-search" | "edit-search" => spawn("launcher", &[]),
         "file-new-folder-desktop" => create_desktop_folder(),
-        // The compositor only exposes minimize for now; both entries hide the
-        // windows, which is what show-desktop asks for.
-        "window-minimize-all" | "window-show-desktop" | "desktop-show-all" => {
-            Toplevels::get().minimize_all()
+        // Minimize every window that is not already minimized. Enabled only
+        // when at least one window is in that state.
+        "desktop-hide-others" => {
+            for (index, window) in toplevels.iter().enumerate() {
+                if !window.minimized {
+                    minimize(index);
+                }
+            }
         }
-        "desktop-hide-others" => Toplevels::get().minimize_all(),
-        "help-report" => xdg_open("https://github.com/HBlanqueto/malaysia/issues"),
+        // Unminimize every minimized window. This used to call minimize_all(),
+        // which is the opposite of what "Mostrar todo" should do.
+        "desktop-show-all" | "window-front-all" => {
+            for (index, window) in toplevels.iter().enumerate() {
+                if window.minimized {
+                    unminimize(index);
+                }
+            }
+        }
+        "window-minimize-all" | "window-show-desktop" => {
+            for index in 0..toplevels.len() {
+                minimize(index);
+            }
+        }
+        "help-report" => open(Path::new("https://github.com/HBlanqueto/malaysia/issues")),
         id if id.starts_with("window-activate-") => {
             if let Ok(index) = id["window-activate-".len()..].parse::<usize>() {
-                Toplevels::get().activate(index);
+                activate(index);
             }
+        }
+        id if id.starts_with("app-help-topic:") || id == "app-help-topics-index" => {
+            delegate(id.to_string());
         }
         _ => {}
     }
 }
 
-fn open_home() {
+fn open_home(open: &mut impl FnMut(&Path)) {
     if let Some(home) = env::var_os("HOME") {
-        xdg_open(PathBuf::from(home));
+        let home = PathBuf::from(home);
+        open(&home);
     }
 }
 
-fn open_user_dir(kind: &str, fallback: &str) {
+fn open_user_dir(kind: &str, fallback: &str, open: &mut impl FnMut(&Path)) {
     if let Some(path) = xdg_user_dir(kind)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
     {
-        xdg_open(path);
+        open(&path);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use super::*;
     use barrier_kit::menu::MenuItem;
 
@@ -415,7 +488,7 @@ mod tests {
     #[test]
     fn enabled_desktop_items_have_no_unwired_shortcut() {
         let mut actions = Vec::new();
-        all_actions(&malaysia_menu_items(), &mut actions);
+        all_actions(&malaysia_menu_items(&[]), &mut actions);
         all_actions(&file_menu_items(), &mut actions);
         all_actions(&edit_menu_items(), &mut actions);
         all_actions(&view_menu_items(), &mut actions);
@@ -439,6 +512,89 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn desktop_show_all_unminimizes_minimized_windows() {
+        let toplevels = vec![
+            ToplevelInfo {
+                title: "A".into(),
+                app_id: "a".into(),
+                active: true,
+                maximized: false,
+                minimized: false,
+                restorable: false,
+                app_menu: None,
+                gtk_menus: None,
+            },
+            ToplevelInfo {
+                title: "B".into(),
+                app_id: "b".into(),
+                active: false,
+                maximized: false,
+                minimized: true,
+                restorable: false,
+                app_menu: None,
+                gtk_menus: None,
+            },
+        ];
+        let minimized = Rc::new(RefCell::new(Vec::<usize>::new()));
+        let unminimized = Rc::new(RefCell::new(Vec::<usize>::new()));
+        let min = minimized.clone();
+        let unmin = unminimized.clone();
+        on_action_with(
+            "desktop-show-all".to_string(),
+            &toplevels,
+            move |index| min.borrow_mut().push(index),
+            move |index| unmin.borrow_mut().push(index),
+            |_| {},
+            |_, _| {},
+            |_| {},
+            |_| {},
+        );
+        assert_eq!(*unminimized.borrow(), vec![1]);
+        assert!(
+            minimized.borrow().is_empty(),
+            "desktop-show-all must not minimize windows"
+        );
+    }
+
+    #[test]
+    fn desktop_show_all_does_nothing_when_no_window_is_minimized() {
+        let toplevels = vec![ToplevelInfo {
+            title: "A".into(),
+            app_id: "a".into(),
+            active: true,
+            maximized: false,
+            minimized: false,
+            restorable: false,
+            app_menu: None,
+            gtk_menus: None,
+        }];
+        on_action_with(
+            "desktop-show-all".to_string(),
+            &toplevels,
+            |_| panic!("must not minimize"),
+            |_| panic!("must not unminimize"),
+            |_| panic!("must not activate"),
+            |_, _| panic!("must not spawn"),
+            |_| panic!("must not open"),
+            |_| panic!("must not delegate"),
+        );
+    }
+
+    #[test]
+    fn on_action_with_ignores_malaysia_settings() {
+        on_action_with(
+            "malaysia-settings".to_string(),
+            &[],
+            |_| panic!("must not minimize"),
+            |_| panic!("must not unminimize"),
+            |_| panic!("must not activate"),
+            |_, _| panic!("must not spawn"),
+            |_| panic!("must not open"),
+            |_| panic!("must not delegate"),
+        );
     }
 
     #[test]

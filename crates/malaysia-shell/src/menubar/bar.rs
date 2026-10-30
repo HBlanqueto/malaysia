@@ -739,7 +739,10 @@ impl App for BarApp {
         } else {
             let entries_for_window = self.entries.clone();
             let menus: [(&str, MenuItems); 7] = [
-                (appmenu::TITLE, Rc::new(appmenu::malaysia_menu_items)),
+                (
+                    appmenu::TITLE,
+                    Rc::new(|| appmenu::malaysia_menu_items(&Toplevels::get().list.read().clone())),
+                ),
                 ("Archivo", Rc::new(appmenu::file_menu_items)),
                 ("Edición", Rc::new(appmenu::edit_menu_items)),
                 ("Visualización", Rc::new(appmenu::view_menu_items)),
