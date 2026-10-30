@@ -542,7 +542,7 @@ fn missing_target_help() -> String {
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "result/share/systemd/user".to_string());
     format!(
-        "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/malaysia-session.target;          systemctl --user link {units}/malaysia-shell@.service; systemctl --user daemon-reload;          systemctl --user enable --now malaysia-shell@wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service"
+        "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/malaysia-session.target;          systemctl --user link {units}/malaysia-shell@.service;          systemctl --user link {units}/malaysia-wallpaper.service; systemctl --user daemon-reload;          systemctl --user enable --now malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service"
     )
 }
 

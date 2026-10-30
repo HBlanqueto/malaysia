@@ -46,7 +46,8 @@ procesos de la shell (ADR 0023), los de la shell nativa:
 | `malaysia-scene` | layout de ventanas y popups: geometría, stacking, hit-testing (ADR 0015) | `crates/malaysia-scene/src/scene.rs` |
 | `grade-graphics` | los shaders GLSL compartidos (≈ Core Graphics/Core Text) | `docs/glossary.md` |
 | `barrier-kit` | el toolkit de la shell y las apps (≈ AppKit): render GLES, texto | `docs/glossary.md`, `docs/arquitectura/wallpaper.md` |
-| `malaysia-shell` | un binario, un proceso por componente: `malaysia-shell wallpaper`, `menubar`, ... | `docs/arquitectura/modelo-de-procesos.md` |
+| `malaysia-shell` | un binario, un proceso por componente: `menubar`, `dock`, `lock`, ... | `docs/arquitectura/modelo-de-procesos.md` |
+| `malaysia-wallpaper` | fondo de escritorio en Vulkan/wgpu (ADR 0049) | `docs/arquitectura/wallpaper.md` |
 | `tools/sctk-probe` | clientes de prueba (dev only) | `tools/sctk-probe/README.md` |
 
 Los nombres siguen el reparto de macOS (glosario): BarrierKit ≈ AppKit, Grade
@@ -62,11 +63,10 @@ sobre los crates de núcleo de Freya con Skia en los procesos cliente (ADR 0034)
 
 Estado de los componentes:
 
-- **Wallpaper** (`malaysia-shell wallpaper`) — hecho. Dibuja la capa `Background` con
-  el render GLES de `barrier-kit`, presentado por **EGL**/dmabuf sobre un
-  `wl_egl_window` (Bloque 7c, ADR 0027; sin copias por CPU), y vigila
-  `wallpaper.domain` (cambio en vivo). Ver
-  [`arquitectura/wallpaper.md`](arquitectura/wallpaper.md).
+- **Wallpaper** (`malaysia-wallpaper`) — hecho. Dibuja la capa `Background` con
+  un renderizador **Vulkan**/wgpu propio, presentado por dmabuf (Bloque 16a,
+  ADR 0049; sin copias por CPU), y vigila `wallpaper.domain` (cambio en vivo).
+  Ver [`arquitectura/wallpaper.md`](arquitectura/wallpaper.md).
 - **Menubar** (`malaysia-shell menubar`) — hecho. Capa `Top` con zona exclusiva:
   app activa (el compositor la publica en `window.domain`) + reloj. Ver
   [`arquitectura/menubar.md`](arquitectura/menubar.md).

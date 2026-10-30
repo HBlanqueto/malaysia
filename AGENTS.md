@@ -102,8 +102,8 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   Kaisen*) hablarán por D-Bus (`org.malaysia.Compositor1`) — ADR 0021. **Wallpaper**:
   el dominio `wallpaper.domain` (en `.local/share/malaysia/`) lleva el catálogo y la
   selección actual en `[desktops]`, como `com.apple.wallpaper`; lo dibuja el
-  componente nativo **`malaysia-shell wallpaper`** (ADR 0023/0024, render GLES de
-  `barrier-kit` presentado por `EGL`/dmabuf (Bloque 7c, ADR 0027) en la capa `Background`.
+  componente nativo independiente **`malaysia-wallpaper`** (ADR 0049, render
+  Vulkan/wgpu presentado por dmabuf) en la capa `Background`.
 - **Investigación**: `docs/investigacion/` — cómo renderiza macOS y comparación
   con Wayland (contexto de diseño).
 - **Interfaz**: `docs/arquitectura/interfaz.md` reúne todo lo visual (Tengen,
@@ -143,7 +143,7 @@ bordes, temas o la shell debe respetar esta política. Está escrita en
   BarrierKit sobre los crates de núcleo de Freya 0.4.3 y su runner Wayland
   propio (SCTK + calloop + EGL); el camino GLES/`cosmic-text` de la shell se
   eliminó. Nix precompila Skia para `freya-skia-bindings` 0.98.0.
-- Shell: componentes nativos `malaysia-shell wallpaper`, `menubar`, `dock` y `lock`
+- Shell: componentes nativos `malaysia-wallpaper`, `malaysia-shell menubar`, `dock` y `lock`
   (`docs/arquitectura/`). El compositor publica la app activa en
   `~/.local/share/malaysia/window.domain`, sirve `ext-foreign-toplevel-list-v1` +
   `zwlr_foreign_toplevel_management_v1` (dock), `ext-session-lock-v1` (lock,

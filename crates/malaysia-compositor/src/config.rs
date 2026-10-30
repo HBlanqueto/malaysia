@@ -284,7 +284,7 @@ impl Default for LockConfig {
 ///
 /// This section describes *which* wallpapers exist and how they are drawn; the
 /// current selection per desktop is kept separately, like macOS's
-/// `com.apple.wallpaper`, and read by the shell (`malaysia-shell wallpaper`).
+/// `com.apple.wallpaper`, and read by `malaysia-wallpaper`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct WallpaperConfig {

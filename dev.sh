@@ -837,7 +837,10 @@ demo() {
     trap _demo_cleanup EXIT INT TERM
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/malaysia-shell"
-        if [ ! -x "$script_dir/target/debug/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
+        _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
+        if [ ! -x "$script_dir/target/debug/malaysia-compositor" ] ||
+            [ ! -x "$_shell_bin" ] ||
+            [ ! -x "$_wallpaper_bin" ]; then
             "$script_dir/dev.sh" build
         fi
         _kit_dir=$(barrierkit_dir)
@@ -860,7 +863,10 @@ demo() {
         fi
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
-        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
+        _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
+        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] ||
+            [ ! -x "$_shell_bin" ] ||
+            [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
         # Packaged examples live in the barrierkit package, not here.
@@ -902,7 +908,10 @@ demo() {
         _pids="$_pids $!"
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
-    demo_client wallpaper "$_shell_bin" wallpaper
+    # The wallpaper client is a separate Vulkan binary; point it at an ICD so
+    # wgpu can load a driver even when the host does not export one.
+    VK_DRIVER_FILES="${VK_DRIVER_FILES:-/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json}" \
+        demo_client wallpaper "$_wallpaper_bin"
     demo_client menubar "$_shell_bin" menubar
     demo_client dock "$_shell_bin" dock
     # Give the background layer a moment, then open windows so the dock has
@@ -1007,10 +1016,11 @@ lab() {
 
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/malaysia-shell"
+        _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
         # Rebuild only the binaries the lab actually uses. Avoid the full
         # workspace build because auxiliary crates such as malaysia-settings may be
         # broken.
-        cargo build -p malaysia-compositor -p malaysia-shell ||
+        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
@@ -1035,7 +1045,10 @@ lab() {
         fi
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
-        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] || [ ! -x "$_shell_bin" ]; then
+        _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
+        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] ||
+            [ ! -x "$_shell_bin" ] ||
+            [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
         _window_csd="$script_dir/result/bin/window_csd"
@@ -1118,7 +1131,10 @@ lab() {
             "$@"
     }
 
-    lab_client wallpaper "$_shell_bin" wallpaper
+    # The wallpaper client is a separate Vulkan binary; point it at an ICD so
+    # wgpu can load a driver even when the host does not export one.
+    VK_DRIVER_FILES="${VK_DRIVER_FILES:-/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json}" \
+        lab_client wallpaper "$_wallpaper_bin"
     lab_client menubar "$_shell_bin" menubar
     lab_client dock "$_shell_bin" dock
     sleep 0.5

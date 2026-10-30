@@ -81,7 +81,7 @@ literales que antes estaban copiados a mano ya no viven en `src/`.
   `ColorScheme::resolved()`, la misma fuente que publica el portal.
 - `window_tint_scope = "desktop"` mezcla barra y dock con el dominante del
   wallpaper (20 % claro / 26 % oscuro), leyendo `wallpaper.state`.
-- `malaysia-shell wallpaper` decodifica PNG/JPEG, calcula el dominante (rejilla
+- `malaysia-wallpaper` decodifica PNG/JPEG, calcula el dominante (rejilla
   ~256×256, histograma 4 bits ponderado por croma, grises descartados, HSL
   45–65 %) y escribe `~/.local/share/malaysia/wallpaper.state`
   (`dominant = [r, g, b]`). El compositor ya no decodifica imágenes: lee ese

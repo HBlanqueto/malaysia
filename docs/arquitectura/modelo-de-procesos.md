@@ -28,12 +28,12 @@ Un proceso por componente — dock, barra superior, notificaciones, launcher,
 pantalla de bloqueo, ... — todos clientes Wayland de MalaysiaDreams. Ninguno depende de otro:
 si el dock muere, la barra sigue funcionando.
 
-**Estado**: cuatro componentes nativos funcionan — **`malaysia-shell wallpaper`**
-(render GLES de `barrier-kit`, presentado por **EGL**/dmabuf — Bloque 7c,
-ADR 0027), **`malaysia-shell menubar`** (capa `Top`, app activa + reloj),
-**`malaysia-shell dock`** (capa `Top` abajo, lista de apps + activar al clic) y
-**`malaysia-shell lock`** (`ext-session-lock-v1`, con la garantía de que la sesión
-no se desbloquea si el cliente muere).
+**Estado**: cuatro componentes nativos funcionan — **`malaysia-wallpaper`**
+(render **Vulkan**/wgpu propio, presentado por dmabuf — Bloque 16a, ADR 0049),
+**`malaysia-shell menubar`** (capa `Top`, app activa + reloj), **`malaysia-shell
+ dock`** (capa `Top` abajo, lista de apps + activar al clic) y **`malaysia-shell
+lock`** (`ext-session-lock-v1`, con la garantía de que la sesión no se desbloquea
+si el cliente muere).
 La shell es nativa (ADR 0025); no hay dependencias de shell externas.
 
 **Fuera de la shell** hay un proceso más: **`xdg-desktop-portal-malaysia`** (ADR

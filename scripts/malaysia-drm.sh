@@ -47,16 +47,17 @@ cmd_setup() {
     # `enable` pins each instance to the store path of the template it found.
     # After a rebuild that path is gone and the old links make the units "bad",
     # so `enable` fails. Drop them (and their wants links) before re-linking.
-    for unit in malaysia-shell@wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service; do
+    for unit in malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service; do
         rm -f "$user_units/$unit" "$user_units/malaysia-session.target.wants/$unit"
     done
     systemctl --user daemon-reload
     systemctl --user link --force "$units/malaysia-session.target"
     systemctl --user link --force "$units/malaysia-shell@.service"
+    systemctl --user link --force "$units/malaysia-wallpaper.service"
     systemctl --user daemon-reload
     # Sin --now: no deben arrancar dentro de GNOME. Las arranca MalaysiaDreams con el target.
     systemctl --user enable \
-        malaysia-shell@wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service
+        malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service
 
     info "listo. Ahora: Ctrl+Alt+F3 (emergencia) y Ctrl+Alt+F4 → $0 run"
 }

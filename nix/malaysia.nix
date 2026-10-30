@@ -26,13 +26,15 @@ in
     };
 
     shellComponents = lib.mkOption {
-      type = lib.types.listOf (lib.types.enum [ "wallpaper" "menubar" "dock" ]);
-      default = [
-        "wallpaper"
-        "menubar"
-        "dock"
-      ];
+      type = lib.types.listOf (lib.types.enum [ "menubar" "dock" ]);
+      default = [ "menubar" "dock" ];
       description = "The malaysia-shell components started in malaysia-session.target.";
+    };
+
+    wallpaper = {
+      enable = lib.mkEnableOption "the MalaysiaDreams Vulkan wallpaper client" // {
+        default = true;
+      };
     };
   };
 
@@ -76,11 +78,17 @@ in
 
     systemd.user.targets.malaysia-session = {
       description = "MalaysiaDreams shell session";
-      wants = map (component: "malaysia-shell@${component}.service") cfg.shellComponents;
+      wants =
+        map (component: "malaysia-shell@${component}.service") cfg.shellComponents
+        ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service";
     };
 
     systemd.user.units."malaysia-shell@.service".text =
       builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
         (builtins.readFile "${../share/systemd/user}/malaysia-shell@.service");
+
+    systemd.user.units."malaysia-wallpaper.service".text =
+      builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
+        (builtins.readFile "${../share/systemd/user}/malaysia-wallpaper.service");
   };
 }

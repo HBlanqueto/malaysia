@@ -29,6 +29,7 @@
         udev
         freetype
         fontconfig
+        vulkan-loader
       ];
 
       # The mockup extractor is hermetic: Chromium and Python's Playwright come
@@ -175,12 +176,22 @@
             install -Dm644 share/applications/io.github.hblanqueto.malaysia.settings.desktop \
               $out/share/applications/io.github.hblanqueto.malaysia.settings.desktop
             # Ship the systemd user units that supervise the shell components
-            # (ADR 0023), with the package's binary path substituted in.
+            # (ADR 0023) and the Vulkan wallpaper client, with the package's
+            # binary path substituted in.
             mkdir -p $out/lib/systemd/user
-            for unit in malaysia-shell@.service malaysia-session.target; do
+            for unit in malaysia-shell@.service malaysia-wallpaper.service malaysia-session.target; do
               sed "s|@out@|$out|g" "share/systemd/user/$unit" \
                 > "$out/lib/systemd/user/$unit"
             done
+
+            # The Vulkan wallpaper client needs a loader and a stable ICD path.
+            # Wrap it after the generic loop so the Vulkan variables do not leak
+            # into the other shell components.
+            wrapProgram "$out/bin/malaysia-wallpaper" \
+              --run 'export MALAYSIA_ORIG_VK_DRIVER_FILES="''${MALAYSIA_ORIG_VK_DRIVER_FILES-''${VK_DRIVER_FILES-}}"' \
+              --run 'export MALAYSIA_ORIG_LD_LIBRARY_PATH="''${MALAYSIA_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
+              --set VK_DRIVER_FILES "${pkgs.mesa}/share/vulkan/icd.d/radeon_icd.x86_64.json" \
+              --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
           '';
           passthru = {
             providedSessions = [ "malaysia" ];
@@ -321,6 +332,8 @@
             export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
             # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
+            # wgpu needs a stable ICD path; pin the dev shell to the same Mesa the package uses.
+            export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/radeon_icd.x86_64.json''${VK_DRIVER_FILES:+:$VK_DRIVER_FILES}"
             # Without these, Mesa's GBM/DRI loader falls back to the host's
             # /run/opengl-driver, which is built against a different glibc.
             export LIBGL_DRIVERS_PATH="${pkgs.mesa}/lib/dri''${LIBGL_DRIVERS_PATH:+:$LIBGL_DRIVERS_PATH}"

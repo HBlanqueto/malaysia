@@ -27,6 +27,14 @@ absent freya-engine -p malaysia-compositor
 absent freya-skia-bindings -p malaysia-compositor
 absent freya-skia-safe -p malaysia-compositor
 absent skia-bindings -p malaysia-compositor
+absent wgpu -p malaysia-compositor
+
+# The wallpaper client is Vulkan/wgpu; it must not pull in the Freya/Skia stack.
+absent freya-core -p malaysia-wallpaper
+absent freya-engine -p malaysia-wallpaper
+absent freya-skia-bindings -p malaysia-wallpaper
+absent freya-skia-safe -p malaysia-wallpaper
+absent skia-bindings -p malaysia-wallpaper
 
 # The window backend is the compositor's own (smithay backend_winit, ADR 0009),
 # so `winit` is expected under `malaysia-compositor`; it must not reach a client crate.

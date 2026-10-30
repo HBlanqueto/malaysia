@@ -105,7 +105,7 @@ Tengen:
 | `accent` | el acento, 6 % en claro / 8 % en oscuro | derivados del acento |
 | `wallpaper` | el color dominante del wallpaper, 7 % / 9 % | derivados del wallpaper |
 
-El color dominante lo calcula `malaysia-shell wallpaper` al decodificar la imagen:
+El color dominante lo calcula `malaysia-wallpaper` al decodificar la imagen:
 muestreo en rejilla, histograma de 4 bits ponderado por croma, descarte de grises
 y normalización de luminosidad HSL a 45–65 %. Lo escribe en `wallpaper.state`;
 si no hay color, se usa el acento. El compositor vigila ese archivo y

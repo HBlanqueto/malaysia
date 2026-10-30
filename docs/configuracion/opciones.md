@@ -174,18 +174,17 @@ ver [`../investigacion/portapapeles-capturas.md`](../investigacion/portapapeles-
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `wallpaper.dir` | string (ruta) | `/run/current-system/sw/share/wallpapers/solid-colors` | datos | shell (`malaysia-shell wallpaper`), app de ajustes |
-| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | datos | shell |
-| `wallpaper.shuffle` | bool | `false` | datos | shell |
+| `wallpaper.dir` | string (ruta) | `/run/current-system/sw/share/wallpapers/solid-colors` | datos | `malaysia-wallpaper`, app de ajustes |
+| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | datos | `malaysia-wallpaper` |
+| `wallpaper.shuffle` | bool | `false` | datos | `malaysia-wallpaper` |
 
 **Los wallpapers de MalaysiaDreams viven en el propio proyecto** (`share/wallpapers/solid-colors/`,
 el set macOS "Solid Colors", vendored en el repo) y el flake los instala como datos
 del sistema en `/run/current-system/sw/share/wallpapers/`, igual que GNOME instala
 los suyos en `/usr/share/backgrounds`. `wallpaper.dir` por defecto apunta ahí; un
 desarrollo puede apuntarlo al repo o a otra carpeta. El componente
-**`malaysia-shell wallpaper`** dibuja el wallpaper en la capa `Background` con las
-imágenes de esa carpeta (ADR 0023/0024; render GLES presentado por **EGL**/dmabuf,
-ADR 0027).
+**`malaysia-wallpaper`** dibuja el wallpaper en la capa `Background` con las
+imágenes de esa carpeta (ADR 0049; render **Vulkan**/wgpu presentado por dmabuf).
 
 **El wallpaper por defecto es `Solid Aqua Blue.png`** (`vow_design::WALLPAPER`):
 es el que se ve cuando el almacén no elige ninguno o todavía no existe, como la
@@ -203,10 +202,10 @@ a la imagen:
 default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, Solid Aqua Blue
 ```
 
-Editar ese archivo cambia el wallpaper **en vivo** (`malaysia-shell wallpaper` vigila el
+Editar ese archivo cambia el wallpaper **en vivo** (`malaysia-wallpaper` vigila el
 almacén y repinta). El catálogo (qué wallpapers existen) y la selección actual (qué
 se muestra) están juntos en el dominio `wallpaper.domain`; el catálogo está en el
-sistema (`share/wallpapers/`). Al cambiar de fondo, la shell escribe el color
+sistema (`share/wallpapers/`). Al cambiar de fondo, el cliente escribe el color
 dominante en `wallpaper.state` (`dominant = [r, g, b]`) para el tinte de las
 ventanas y el `accent-color` del portal.
 

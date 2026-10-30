@@ -57,7 +57,7 @@ sesión directa del Bloque 8a.
 Cada componente es un proceso propio:
 
 ```sh
-malaysia-shell wallpaper   # fondo de pantalla
+malaysia-wallpaper         # fondo de pantalla (Vulkan/wgpu, ADR 0049)
 malaysia-shell menubar     # barra superior: app activa + reloj
 malaysia-shell dock        # dock de apps
 malaysia-shell lock        # pantalla de bloqueo

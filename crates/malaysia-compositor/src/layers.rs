@@ -1,6 +1,7 @@
 //! Minimal `wlr_layer_shell_v1` support.
 //!
-//! MalaysiaDreams serves layer-shell for its shell (`malaysia-shell`, ADR 0023). This module
+//! MalaysiaDreams serves layer-shell for its shell and the wallpaper client (`malaysia-wallpaper`,
+//! ADR 0023 and ADR 0049). This module
 //! tracks the layer surfaces a client creates, computes their geometry from
 //! anchors/margins/size, sends the configures, and exposes them for rendering
 //! and hit-testing.

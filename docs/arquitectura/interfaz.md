@@ -32,7 +32,7 @@ documentos enlazados; aquí está el mapa completo y el estado actual.
 
 | Quién | Qué dibuja | Cómo |
 |---|---|---|
-| Shell (`malaysia-shell wallpaper/menubar/dock/lock/launcher`) | Toda su UI, en su propio proceso | BarrierKit (Freya + Skia) sobre su superficie |
+| Shell (`malaysia-shell menubar/dock/lock/launcher`) + wallpaper (`malaysia-wallpaper`) | UI de la shell en su propio proceso; fondo en proceso aparte | BarrierKit (Freya + Skia) para la shell; wgpu/Vulkan para el wallpaper |
 | Apps propias con `Decorations::Client` (por defecto) | Su UI, **su titlebar de 44 px y sus semáforos** | BarrierKit + tokens de `vow-design` |
 | Apps propias con `Decorations::Server` | Su UI; MalaysiaDreams dibuja la titlebar SSD de 32 px | BarrierKit para el contenido; compositor para el chrome |
 | Apps ajenas que piden SSD | Su contenido | El compositor les añade la titlebar SSD (`chrome.rs`) |
@@ -61,7 +61,7 @@ Windows   superficie del cliente + titlebar SSD + popups xdg
    ▲
 Bottom    superficies Bottom de layer-shell (futuro)
    ▲
-Background wallpaper (malaysia-shell wallpaper)
+Background wallpaper (`malaysia-wallpaper`)
 ```
 
 Las zonas exclusivas de la menubar y el dock recortan el **workspace** donde se
@@ -95,7 +95,7 @@ solo se dibujan sus superficies (y el cursor).
 
 | Componente | Proceso | Capa | Estado |
 |---|---|---|---|
-| Wallpaper | `malaysia-shell wallpaper` | Background | hecho; EGL/dmabuf, vigila el store |
+| Wallpaper | `malaysia-wallpaper` | Background | hecho; Vulkan/wgpu + dmabuf, vigila el store |
 | Menubar | `malaysia-shell menubar` | Top, 28 px | hecho; app activa + reloj, paleta clara Tengen |
 | Dock | `malaysia-shell dock` | Top, abajo | hecho; lista de ventanas, tiles y activar |
 | Lock | `malaysia-shell lock` | lock surfaces | hecho; PAM, auto-lock, recuperación |
