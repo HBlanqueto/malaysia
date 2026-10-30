@@ -1,9 +1,13 @@
-//! SVG icons for the focused-app menus.
+//! SVG icons for the menubar menus.
 //!
 //! Layout icons share one 16 px frame: a rounded rectangle from (1.25, 2.25)
 //! to (14.75, 13.75) with a 1.3 px stroke. Filled zones stay inside it, in the
 //! x 2..14, y 3..13 box. Every colour is `currentColor`, so the menu decides
 //! muted, white or faint.
+
+// shortcut: allow temporal; los iconos se usan en el commit siguiente — mejora:
+// quitarlo en feat(menubar): menús del escritorio con la estructura del Finder.
+#![allow(dead_code)]
 
 /// Left half filled.
 pub const HALF_LEFT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"3\" width=\"6\" height=\"10\" fill=\"currentColor\"/><rect x=\"1.25\" y=\"2.25\" width=\"13.5\" height=\"11.5\" rx=\"2.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
@@ -123,6 +127,39 @@ pub const PASTE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" 
 /// Select all: dashed rectangle.
 pub const SELECT_ALL: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2.5\" y=\"2.5\" width=\"11\" height=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-dasharray=\"2 1.5\"/></svg>";
 
+/// Share sheet: a rectangle with an upward arrow.
+pub const SHARE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M8 3v7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><path d=\"M5 6l3-3 3 3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><rect x=\"2.5\" y=\"8\" width=\"11\" height=\"5\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// Eject: an upward triangle above a line.
+pub const EJECT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 9l4-5 4 5z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/><line x1=\"3\" y1=\"11\" x2=\"13\" y2=\"11\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>";
+
+/// Printer: a sheet feeding into a body.
+pub const PRINTER: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"3\" y=\"5\" width=\"10\" height=\"7\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"4.5\" y=\"2.5\" width=\"7\" height=\"4\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"5.5\" y1=\"8\" x2=\"10.5\" y2=\"8\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/><line x1=\"5.5\" y1=\"10\" x2=\"9.5\" y2=\"10\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// Emoji picker: a smiley face.
+pub const EMOJI: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"8\" cy=\"8\" r=\"6.25\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"5.7\" cy=\"7\" r=\"0.8\" fill=\"currentColor\"/><circle cx=\"10.3\" cy=\"7\" r=\"0.8\" fill=\"currentColor\"/><path d=\"M5.5 9.5a4.5 4.5 0 0 0 5 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// View as icons: four small squares in a grid.
+pub const VIEW_ICONS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"3\" y=\"3\" width=\"4.5\" height=\"4.5\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"8.5\" y=\"3\" width=\"4.5\" height=\"4.5\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"3\" y=\"8.5\" width=\"4.5\" height=\"4.5\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"8.5\" y=\"8.5\" width=\"4.5\" height=\"4.5\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// View as list: three bulleted rows.
+pub const VIEW_LIST: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"3\" y=\"4\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><line x1=\"6.5\" y1=\"5\" x2=\"13\" y2=\"5\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><rect x=\"3\" y=\"7\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><line x1=\"6.5\" y1=\"8\" x2=\"13\" y2=\"8\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/><rect x=\"3\" y=\"10\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><line x1=\"6.5\" y1=\"11\" x2=\"13\" y2=\"11\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg>";
+
+/// View as columns: two tall rectangles side by side.
+pub const VIEW_COLUMNS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2.5\" y=\"3\" width=\"4.5\" height=\"10\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"9\" y=\"3\" width=\"4.5\" height=\"10\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/></svg>";
+
+/// View as gallery: a picture frame with a sun and mountains.
+pub const VIEW_GALLERY: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2.5\" y=\"4\" width=\"11\" height=\"8\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><circle cx=\"6\" cy=\"7.5\" r=\"0.9\" fill=\"currentColor\"/><path d=\"M3 12l3-3.5 2 2 3-3.5 3 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// Applications folder: a folder with a small grid of app tiles.
+pub const APPS: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M2 4.5h4l1.5 1.5h6.5v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"6\" y=\"7\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><rect x=\"9\" y=\"7\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><rect x=\"6\" y=\"10\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/><rect x=\"9\" y=\"10\" width=\"2\" height=\"2\" rx=\"0.5\" fill=\"currentColor\"/></svg>";
+
+/// Book: a closed book with lines on the cover.
+pub const BOOK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"3\" y=\"2.5\" width=\"10\" height=\"11\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><line x1=\"3\" y1=\"5.5\" x2=\"13\" y2=\"5.5\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"5\" y1=\"8\" x2=\"11\" y2=\"8\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/><line x1=\"5\" y1=\"10\" x2=\"10\" y2=\"10\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
+/// Keyboard: a small keyboard with a few keys.
+pub const KEYBOARD: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"5\" width=\"12\" height=\"6\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"4\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><rect x=\"7\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><rect x=\"10\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"4\" y1=\"10\" x2=\"12\" y2=\"10\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +255,17 @@ mod tests {
             COPY,
             PASTE,
             SELECT_ALL,
+            SHARE,
+            EJECT,
+            PRINTER,
+            EMOJI,
+            VIEW_ICONS,
+            VIEW_LIST,
+            VIEW_COLUMNS,
+            VIEW_GALLERY,
+            APPS,
+            BOOK,
+            KEYBOARD,
         ] {
             assert!(icon.starts_with("<svg"), "icon does not start with <svg>");
             assert!(icon.ends_with("</svg>"), "icon does not end with </svg>");
