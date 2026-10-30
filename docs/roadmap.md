@@ -441,6 +441,20 @@ con un bloque del roadmap:
 
 Ningún documento ni comentario de este repositorio usa "Bloque N" para algo distinto
 del bloque N de este roadmap.
+
+## Bloque 16 — Fondo en Vulkan
+
+- **16a — paridad con el fondo actual.** Nuevo binario `malaysia-wallpaper` fuera de
+  `malaysia-shell`, cliente Wayland propio con SCTK + calloop + `wgpu` sobre Vulkan.
+  Una layer surface `Background` por salida, escala fraccional con
+  `wp_fractional_scale_v1` + `wp_viewporter`, textura compartida con mipmaps y
+  muestreo trilineal. Repintado solo por eventos. Estado: **en curso**.
+- **16b — HEIC como formato por defecto.** Reemplazar el PNG/JPEG por HEIC como
+  catálogo de fondos por defecto; decodificación por librería HEIF/HEIC acelerada.
+- **16c — fondos dinámicos y throttling de frame callbacks.** Fondos que cambian con
+  la hora del día, transiciones suaves, y dejar de enviar frame callbacks a capas
+  `Background` totalmente tapadas por ventanas.
+
 ## Bloque 15 — Rebranding a MalaysiaDreams
 
 - Renombrar crates, paquetes, librerías y binarios a los nombres de Malaysia

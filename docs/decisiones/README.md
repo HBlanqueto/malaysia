@@ -59,6 +59,7 @@ continua.
 | 0046 | Tengen: renombrado del lenguaje visual ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0047 | BarrierKit en capas ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | propuesto |
 | 0048 | BarrierKit en su propio repositorio | aceptado |
+| 0049 | Fondo de pantalla en Vulkan | aceptado |
 
 > El ADR 0022 ("La shell es Quickshell") fue **reemplazado y eliminado** por el
 > ADR 0025: la shell se construye como procesos nativos y Quickshell no se usa.
