@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/073a606";
+      url = "github:HBlanqueto/barrierkit/4cc8d6c";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -88,8 +88,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=073a606#073a606f43627b570407f4e460f467add283eee8" =
-              "sha256-bWKxA5awv8KQlHIITdpJvisu1nWb25c/X9uUktfj8vI=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=4cc8d6c#4cc8d6cda06289079ab74ab9ad34d85f3f6f45c7" =
+              "sha256-6raDd+e8+yKTs2xmgwZj3iXU8pf9vAlerEQLL10YBj8=";
           };
 
           # The per-crate build script refuses to compile without this marker
