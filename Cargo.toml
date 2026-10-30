@@ -9,6 +9,7 @@ members = [
     "crates/malaysia-scene",
     "crates/grade-graphics",
     "crates/malaysia-shell",
+    "crates/malaysia-wallpaper",
     "crates/malaysia-settings",
     "crates/xdg-desktop-portal-malaysia",
     "tools/sctk-probe",
@@ -24,6 +25,7 @@ default-members = [
     "crates/malaysia-scene",
     "crates/grade-graphics",
     "crates/malaysia-shell",
+    "crates/malaysia-wallpaper",
     "crates/malaysia-settings",
     "crates/xdg-desktop-portal-malaysia",
 ]
@@ -120,6 +122,9 @@ wayland-client = { version = "0.31", features = ["system"] }
 wayland-egl = "0.32"
 # Protocol generation for the private Infinity protocol (ADR 0039).
 wayland-scanner = "0.31"
+# Standard Wayland protocols: staging for fractional_scale/viewporter (wallpaper)
+# and client for the shell.
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 # WLR protocols; the compositor uses server-side foreign-toplevel handles in
 # Infinity and the shell uses the client side.
 wayland-protocols-wlr = { version = "0.3.12", default-features = false }
@@ -150,6 +155,13 @@ zune-jpeg = "0.5"
 smithay-client-toolkit = "0.19.2"
 # Same package, under the shorter name the shell uses (`sctk::...`).
 sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
+
+# Vulkan wallpaper (Bloque 16a). `wgpu` is restricted to the Vulkan backend and
+# the WGSL shading language; `raw-window-handle` wires the Wayland surface into
+# wgpu without a window backend; `bytemuck` uploads the per-surface uniforms.
+wgpu = { version = "24", default-features = false, features = ["vulkan-portability", "wgsl"] }
+raw-window-handle = "0.6"
+bytemuck = { version = "1", features = ["derive"] }
 
 # Compositor framework, pinned to master by revision (ADR 0028). The rev is
 # what `Cargo.lock` resolves; bumping it is a deliberate change. Default
