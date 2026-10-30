@@ -29,7 +29,7 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::menu::{self, MenuItems, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
-use barrier_kit::menu::SearchQuery;
+use barrier_kit::menu::{RevealRoots, SearchQuery};
 use barrier_kit::platform::AppMenuAddress;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
@@ -737,34 +737,36 @@ impl App for BarApp {
                 }
             }
         } else {
-            let entries_for_window = self.entries.clone();
-            let menus: [(&str, MenuItems); 7] = [
-                (
-                    appmenu::TITLE,
-                    Rc::new(|| appmenu::malaysia_menu_items(&Toplevels::get().list.read().clone())),
-                ),
-                ("Archivo", Rc::new(appmenu::file_menu_items)),
-                ("Edición", Rc::new(appmenu::edit_menu_items)),
-                ("Visualización", Rc::new(appmenu::view_menu_items)),
-                ("Ir", Rc::new(appmenu::go_menu_items)),
-                (
-                    "Ventana",
-                    Rc::new(move || {
-                        appmenu::window_menu_items(
-                            &entries_for_window,
-                            &Toplevels::get().list.read().clone(),
-                        )
-                    }),
-                ),
-                ("Ayuda", Rc::new(appmenu::help_menu_items)),
-            ];
-            for (offset, (label, items)) in menus.into_iter().enumerate() {
+            let entries = Rc::new(self.entries.clone());
+            let toplevels = Rc::new(Toplevels::get().list.read().clone());
+            let desktop_menus = appmenu::desktop_menus(entries.clone(), toplevels.clone());
+            let desktop_searchable: SearchableItems = {
+                let entries = entries.clone();
+                let toplevels = toplevels.clone();
+                Rc::new(move || menu::SearchableLists {
+                    menu: appmenu::searchable_menu_items(entries.clone(), toplevels.clone()),
+                    help: focused::help_search_topics(),
+                })
+            };
+            let desktop_reveal_roots: RevealRoots = {
+                let menus = desktop_menus.clone();
+                Rc::new(move || menus.iter().map(|(_, items)| items()).collect())
+            };
+            let labels: Vec<&str> = desktop_menus.iter().map(|(label, _)| *label).collect();
+            let help_index = appmenu::desktop_help_title_index(&labels)
+                .expect("Ayuda must be present in the desktop menus");
+            for (offset, (label, items)) in desktop_menus.into_iter().enumerate() {
+                let is_help = offset == help_index;
                 specs.push(MenuTitleSpec {
                     label: label.to_string(),
                     glyph: None,
                     bold: offset == 0,
                     items,
-                    searchable: None,
+                    searchable: if is_help {
+                        Some(desktop_searchable.clone())
+                    } else {
+                        None
+                    },
                     on_activate: Rc::new(appmenu::on_action),
                     live_items: None,
                     on_open: None,
@@ -773,8 +775,16 @@ impl App for BarApp {
                     submenu_source: None,
                     anchor: title_anchor(offset + 1),
                     enabled: true,
-                    query_state: None,
-                    reveal_roots: None,
+                    query_state: if is_help {
+                        Some(help_query.clone())
+                    } else {
+                        None
+                    },
+                    reveal_roots: if is_help {
+                        Some(desktop_reveal_roots.clone())
+                    } else {
+                        None
+                    },
                 });
             }
         }

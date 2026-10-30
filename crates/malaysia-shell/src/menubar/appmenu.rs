@@ -9,14 +9,15 @@ pub const TITLE: &str = "Escritorio";
 
 use std::env;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
-use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchLocation, SearchableEntry};
 use barrier_kit::platform::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::{
-    create_desktop_folder, focused, help_topics, icons, items, resolve_app_name, spawn_component,
-    system, xdg_open, xdg_user_dir,
+    create_desktop_folder, focused, help_topics, icons, items, menu::MenuItems, resolve_app_name,
+    spawn_component, system, xdg_open, xdg_user_dir,
 };
 
 /// The Escritorio menu (about, settings, empty trash, services, hide/show).
@@ -585,6 +586,69 @@ fn help_topic_item(title: &str, icon: &'static str) -> MenuItem {
         })
 }
 
+/// Returns true for the help ids that must be delegated to focused::on_action.
+pub fn is_help_action(id: &str) -> bool {
+    id.starts_with("app-help-topic:") || id == "app-help-topics-index"
+}
+
+/// The seven desktop menus in the order they appear in the menubar.
+pub fn desktop_menus(
+    entries: Rc<Vec<DesktopEntry>>,
+    toplevels: Rc<Vec<ToplevelInfo>>,
+) -> Vec<(&'static str, MenuItems)> {
+    let toplevels_for_title = toplevels.clone();
+    vec![
+        (
+            TITLE,
+            Rc::new(move || malaysia_menu_items(&toplevels_for_title)) as MenuItems,
+        ),
+        ("Archivo", Rc::new(file_menu_items)),
+        ("Edición", Rc::new(edit_menu_items)),
+        ("Visualización", Rc::new(view_menu_items)),
+        ("Ir", Rc::new(go_menu_items)),
+        (
+            "Ventana",
+            Rc::new(move || window_menu_items(&entries, &toplevels)),
+        ),
+        ("Ayuda", Rc::new(help_menu_items)),
+    ]
+}
+
+/// Returns the index of the title that owns the Help search field in the
+/// desktop menu list. Used by bar.rs so the wiring is not hidden in a label
+/// comparison that can drift if the menu order changes.
+pub fn desktop_help_title_index(labels: &[&str]) -> Option<usize> {
+    labels.iter().position(|&label| label == "Ayuda")
+}
+
+/// All menu entries that the Help search field can reach from the desktop
+/// menus, paired with their menu path and menubar location. The Ayuda menu
+/// itself is excluded because its topics come from `focused::help_search_topics`.
+pub fn searchable_menu_items(
+    entries: Rc<Vec<DesktopEntry>>,
+    toplevels: Rc<Vec<ToplevelInfo>>,
+) -> Vec<SearchableEntry> {
+    let mut out = Vec::new();
+    let menus = desktop_menus(entries, toplevels);
+    let labels: Vec<&str> = menus.iter().map(|(label, _)| *label).collect();
+    let help_index = desktop_help_title_index(&labels);
+    for (title_index, (title, items)) in menus.into_iter().enumerate() {
+        if Some(title_index) == help_index {
+            continue;
+        }
+        focused::collect_searchable(
+            &items(),
+            title,
+            SearchLocation {
+                title_index,
+                indices: Vec::new(),
+            },
+            &mut out,
+        );
+    }
+    out
+}
+
 /// Handles an action from any of the desktop menus.
 pub fn on_action(id: String) {
     let toplevels = Toplevels::get();
@@ -661,7 +725,7 @@ pub fn on_action_with(
                 activate(index);
             }
         }
-        id if id.starts_with("app-help-topic:") || id == "app-help-topics-index" => {
+        id if is_help_action(id) => {
             delegate(id.to_string());
         }
         _ => {}
@@ -689,7 +753,7 @@ mod tests {
     use std::rc::Rc;
 
     use super::*;
-    use barrier_kit::menu::MenuItem;
+    use barrier_kit::menu::{MenuItem, SearchSource};
 
     fn label(item: &MenuItem) -> Option<&str> {
         match item {
@@ -1224,5 +1288,91 @@ mod tests {
         let shortcuts_id = action_id(shortcuts).expect("shortcuts must be an action");
         assert_eq!(docs_id, format!("app-help-topic:{docs_url}"));
         assert_eq!(shortcuts_id, format!("app-help-topic:{shortcuts_url}"));
+    }
+
+    fn find_search<'a>(
+        entries: &'a [SearchableEntry],
+        wanted_label: &str,
+    ) -> Option<&'a SearchableEntry> {
+        entries
+            .iter()
+            .find(|entry| label(&entry.item) == Some(wanted_label))
+    }
+
+    #[test]
+    fn search_finds_desktop_menu_entries_with_title_indices() {
+        let toplevels = vec![toplevel(false), toplevel(true)];
+        let entries = searchable_menu_items(Rc::new(vec![]), Rc::new(toplevels));
+
+        let settings = find_search(&entries, "Ajustes…").expect("Ajustes missing");
+        assert_eq!(settings.path, "Escritorio");
+        assert_eq!(settings.location.as_ref().unwrap().title_index, 0);
+
+        let new_window = find_search(&entries, "Nueva ventana").expect("Nueva ventana missing");
+        assert_eq!(new_window.path, "Archivo");
+        assert_eq!(new_window.location.as_ref().unwrap().title_index, 1);
+
+        let undo = find_search(&entries, "Deshacer").expect("Deshacer missing");
+        assert_eq!(undo.path, "Edición");
+        assert_eq!(undo.location.as_ref().unwrap().title_index, 2);
+
+        let as_icons = find_search(&entries, "Como iconos").expect("Como iconos missing");
+        assert_eq!(as_icons.path, "Visualización");
+        assert_eq!(as_icons.location.as_ref().unwrap().title_index, 3);
+
+        let documents = find_search(&entries, "Documentos").expect("Documentos missing");
+        assert_eq!(documents.path, "Ir");
+        assert_eq!(documents.location.as_ref().unwrap().title_index, 4);
+
+        let minimize = find_search(&entries, "Minimizar").expect("Minimizar missing");
+        assert_eq!(minimize.path, "Ventana");
+        assert_eq!(minimize.location.as_ref().unwrap().title_index, 5);
+
+        let show_desktop =
+            find_search(&entries, "Mostrar escritorio").expect("Mostrar escritorio missing");
+        assert_eq!(show_desktop.path, "Ventana");
+        assert_eq!(show_desktop.location.as_ref().unwrap().title_index, 5);
+
+        let left = find_search(&entries, "Izquierda").expect("Izquierda missing");
+        assert_eq!(left.path, "Ventana › Trasladar y redimensionar");
+        assert!(!left.location.as_ref().unwrap().indices.is_empty());
+
+        assert!(
+            entries.iter().all(|entry| {
+                action_id(&entry.item)
+                    .map(|id| !id.starts_with("app-help-topic:"))
+                    .unwrap_or(true)
+            }),
+            "Ayuda menu must not contribute app-help-topic entries to menu search"
+        );
+    }
+
+    #[test]
+    fn search_includes_help_topics() {
+        let topics = focused::help_search_topics();
+        let docs = topics
+            .iter()
+            .find(|entry| label(&entry.item) == Some("Documentación de MalaysiaDreams"))
+            .expect("docs topic missing");
+        assert_eq!(docs.path, "Temas de ayuda");
+        assert!(matches!(docs.source, SearchSource::Help));
+        assert!(docs.location.is_none());
+    }
+
+    #[test]
+    fn is_help_action_recognizes_help_ids() {
+        assert!(is_help_action("app-help-topic:https://example.com"));
+        assert!(is_help_action("app-help-topics-index"));
+        assert!(!is_help_action("help-report"));
+        assert!(!is_help_action("malaysia-settings"));
+    }
+
+    #[test]
+    fn desktop_help_title_index_points_to_ayuda() {
+        let labels: Vec<&str> = desktop_menus(Rc::new(vec![]), Rc::new(vec![]))
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect();
+        assert_eq!(desktop_help_title_index(&labels), Some(6));
     }
 }

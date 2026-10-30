@@ -339,7 +339,7 @@ pub fn help_search_topics() -> Vec<SearchableEntry> {
         .collect()
 }
 
-fn collect_searchable(
+pub(crate) fn collect_searchable(
     items: &[MenuItem],
     path: &str,
     location: SearchLocation,
