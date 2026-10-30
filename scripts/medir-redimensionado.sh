@@ -171,7 +171,7 @@ measure_client() {
     stop_malaysia
 
     python3 - "$logfile" "$client_log" "$name" <<'PY'
-import sys, re
+import sys, re, statistics
 comp_log, client_log, name = sys.argv[1:4]
 
 ts_re = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)Z')
@@ -198,8 +198,6 @@ send = events(comp_log, 'send_configure')
 ack = events(comp_log, 'ack_configure')
 commit = events(comp_log, 'commit resized window')
 
-# Pair send -> ack -> first commit after that ack by serial, but only if no
-# newer send arrives before the commit. Otherwise the configure was replaced.
 ack_by_serial = {}
 for t, line in ack:
     m = re.search(r'serial=(\d+)', line)
@@ -214,16 +212,21 @@ for t, line in send:
 
 commit_times = [t for t, _ in commit]
 
-ack_deltas = []
-commit_deltas = []
+send_ack = []
+ack_commit = []
+send_send = []
+commit_next_send = []
 replaced = 0
 no_commit = 0
 
 for i, (t_send, serial) in enumerate(send_serials):
+    if i > 0:
+        send_send.append((t_send - send_serials[i-1][0]) * 1000)
+
     t_ack = ack_by_serial.get(serial)
     if t_ack is None:
         continue
-    ack_deltas.append((t_ack - t_send) * 1000)
+    send_ack.append((t_ack - t_send) * 1000)
 
     first_commit = None
     for t_commit in commit_times:
@@ -236,7 +239,14 @@ for i, (t_send, serial) in enumerate(send_serials):
     if i + 1 < len(send_serials) and send_serials[i + 1][0] < first_commit:
         replaced += 1
         continue
-    commit_deltas.append((first_commit - t_send) * 1000)
+    ack_commit.append((first_commit - t_ack) * 1000)
+
+    next_send = None
+    for j in range(i + 1, len(send_serials)):
+        next_send = send_serials[j][0]
+        break
+    if next_send is not None:
+        commit_next_send.append((next_send - first_commit) * 1000)
 
 # client draw/swap times
 draw_start = []
@@ -266,6 +276,15 @@ if send:
 else:
     duration = 0
 
+# Refresh-rate estimate from commit spacing.
+commit_intervals = []
+for i in range(1, len(commit_times)):
+    dt = (commit_times[i] - commit_times[i-1]) * 1000
+    if dt > 1:
+        commit_intervals.append(dt)
+refresh_ms = statistics.median(commit_intervals) if commit_intervals else 16.67
+refresh_hz = 1000 / refresh_ms if refresh_ms > 0 else 0
+
 def stats(vals):
     if not vals:
         return 0, 0.0, 0.0, 0.0, 0.0
@@ -277,21 +296,29 @@ def stats(vals):
     mx = vals[-1]
     return n, mean, median, p95, mx
 
-ack_n, ack_mean, ack_med, ack_p95, ack_max = stats(ack_deltas)
-commit_n, commit_mean, commit_med, commit_p95, commit_max = stats(commit_deltas)
+def fmt_frames(ms, refresh_ms):
+    return f"{ms / refresh_ms:.2f}f" if refresh_ms > 0 else "?f"
+
+sa_n, sa_mean, sa_med, sa_p95, sa_max = stats(send_ack)
+ac_n, ac_mean, ac_med, ac_p95, ac_max = stats(ack_commit)
+ss_n, ss_mean, ss_med, ss_p95, ss_max = stats(send_send)
+cns_n, cns_mean, cns_med, cns_p95, cns_max = stats(commit_next_send)
 draw_n, draw_mean, draw_med, draw_p95, draw_max = stats(draw_deltas)
 swap_n, swap_mean, swap_med, swap_p95, swap_max = stats(swap_us)
 
 print(f"{name}:")
+print(f"  refresh estimate:       {refresh_hz:.1f} Hz ({refresh_ms:.2f} ms/frame)")
 print(f"  configures sent:        {len(send)}")
 print(f"  duration (s):           {duration:.3f}")
 if duration > 0:
     print(f"  configures/sec:         {len(send)/duration:.1f}")
 else:
     print("  configures/sec:         -")
-print(f"  ack latency  n/mean/med/p95/max: {ack_n} / {ack_mean:.1f} / {ack_med:.1f} / {ack_p95:.1f} / {ack_max:.1f} ms")
+print(f"  send→ack   n/mean/med/p95/max: {sa_n} / {sa_mean:.1f} / {sa_med:.1f} ({fmt_frames(sa_med, refresh_ms)}) / {sa_p95:.1f} ({fmt_frames(sa_p95, refresh_ms)}) / {sa_max:.1f} ms")
+print(f"  ack→commit n/mean/med/p95/max: {ac_n} / {ac_mean:.1f} / {ac_med:.1f} ({fmt_frames(ac_med, refresh_ms)}) / {ac_p95:.1f} ({fmt_frames(ac_p95, refresh_ms)}) / {ac_max:.1f} ms")
+print(f"  send→send  n/mean/med/p95/max: {ss_n} / {ss_mean:.1f} / {ss_med:.1f} ({fmt_frames(ss_med, refresh_ms)}) / {ss_p95:.1f} ({fmt_frames(ss_p95, refresh_ms)}) / {ss_max:.1f} ms")
+print(f"  commit→next send n/mean/med/p95/max: {cns_n} / {cns_mean:.1f} / {cns_med:.1f} / {cns_p95:.1f} / {cns_max:.1f} ms")
 print(f"  replaced / no commit:   {replaced} / {no_commit}")
-print(f"  commit latency n/mean/med/p95/max: {commit_n} / {commit_mean:.1f} / {commit_med:.1f} / {commit_p95:.1f} / {commit_max:.1f} ms")
 print(f"  client draw n/mean/med/p95/max: {draw_n} / {draw_mean:.1f} / {draw_med:.1f} / {draw_p95:.1f} / {draw_max:.1f} ms")
 print(f"  client swap_us n/mean/med/p95/max: {swap_n} / {swap_mean:.1f} / {swap_med:.1f} / {swap_p95:.1f} / {swap_max:.1f} us")
 PY
