@@ -79,6 +79,9 @@ pub struct App {
 }
 
 struct OutputSurface {
+    /// The wgpu surface must be dropped before the Wayland surface it wraps,
+    /// otherwise the Vulkan swapchain outlives its wl_surface and crashes.
+    wgpu_surface: wgpu::Surface<'static>,
     output: WlOutput,
     surface: WlSurface,
     layer_surface: LayerSurface,
@@ -89,8 +92,6 @@ struct OutputSurface {
     logical_size: (u32, u32),
     /// Fractional scale value from wp_fractional_scale_v1, or 1.0.
     scale: f64,
-    /// The wgpu surface for this output.
-    wgpu_surface: wgpu::Surface<'static>,
     /// True once the wgpu surface has been configured.
     configured: bool,
     /// Surface format chosen from the adapter's supported formats.
@@ -348,6 +349,7 @@ impl App {
         let wgpu_surface = unsafe { self.render.create_surface(display_handle, window_handle)? };
 
         let output_surface = OutputSurface {
+            wgpu_surface,
             output: output.clone(),
             surface,
             layer_surface,
@@ -355,7 +357,6 @@ impl App {
             fractional_scale,
             logical_size: (1, 1),
             scale: 1.0,
-            wgpu_surface,
             configured: false,
             // Real format is selected in configure_output from surface capabilities.
             surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,

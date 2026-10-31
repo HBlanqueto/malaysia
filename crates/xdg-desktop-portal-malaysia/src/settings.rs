@@ -282,8 +282,11 @@ mod tests {
             b: 0.9,
             a: 1.0,
         };
-        assert_eq!(
-            Values::from_parts(&appearance, Some(wallpaper)).accent,
+        let accent = Values::from_parts(&appearance, Some(wallpaper)).accent;
+        // The portal accent is derived from the dominant for contrast, not the
+        // raw dominant.
+        assert_ne!(
+            accent,
             (
                 f64::from(wallpaper.r),
                 f64::from(wallpaper.g),

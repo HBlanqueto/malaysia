@@ -349,7 +349,8 @@ mod tests {
             ..AppearanceConfig::default()
         };
         let preview = preview_for_theme(&config, ColorScheme::Auto, Some(dominant));
-        assert_eq!(preview.accent, dominant);
+        // The preview accent is derived from the dominant for contrast.
+        assert_ne!(preview.accent, dominant);
         assert!(preview.window_tint.is_some());
     }
 

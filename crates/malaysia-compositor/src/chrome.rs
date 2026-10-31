@@ -966,7 +966,14 @@ mod tests {
         };
         let theme = ChromeTheme::from_parts(&appearance, Some(wallpaper));
         let factor = WINDOW_TINT_WALLPAPER[1];
-        assert_eq!(theme.palette.accent, wallpaper);
+        // The accent is derived from the dominant for contrast; the tint itself
+        // and the traffic lights still use the raw dominant.
+        let accent = theme.palette.accent;
+        assert_ne!(accent, wallpaper);
+        assert!(
+            accent.contrast_ratio(vow_design::BG_WINDOW_DARK) >= 3.0,
+            "derived accent must contrast with the window background"
+        );
         assert_eq!(
             theme.palette.titlebar_bg.focused,
             vow_design::BG_WINDOW_DARK.mix(wallpaper, factor)
