@@ -32,7 +32,7 @@ use sctk::registry_handlers;
 use sctk::shell::WaylandSurface;
 use sctk::shell::wlr_layer::{
     Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
-    LayerSurfaceConfigure,
+    LayerSurfaceConfigure, LayerSurfaceData,
 };
 use tracing::{error, info, warn};
 use wayland_protocols::wp::fractional_scale::v1::client::{
@@ -41,6 +41,10 @@ use wayland_protocols::wp::fractional_scale::v1::client::{
 };
 use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
+};
+use wayland_protocols_wlr::layer_shell::v1::client::{
+    zwlr_layer_shell_v1::ZwlrLayerShellV1,
+    zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1},
 };
 
 use crate::image::{Wallpaper, load_snapshot, reload};
@@ -62,6 +66,7 @@ pub struct App {
     qh: QueueHandle<App>,
     connection: Connection,
     loop_signal: Option<calloop::LoopSignal>,
+    loop_handle: Option<calloop::LoopHandle<'static, App>>,
     render: RenderContext,
     /// Current wallpaper texture shared by all outputs.
     texture: Option<WallpaperTexture>,
@@ -138,6 +143,7 @@ impl App {
             qh,
             connection,
             loop_signal: None,
+            loop_handle: None,
             render,
             texture: None,
             outputs: HashMap::new(),
@@ -163,6 +169,7 @@ impl App {
         let mut event_loop: EventLoop<'static, Self> = EventLoop::try_new()?;
         self.loop_signal = Some(event_loop.get_signal());
         let loop_handle = event_loop.handle();
+        self.loop_handle = Some(loop_handle.clone());
 
         let wayland_source = WaylandSource::new(self.connection.clone(), event_queue);
         wayland_source
@@ -224,7 +231,7 @@ impl App {
         if let Some(loaded) = self.wallpaper.image.take() {
             self.texture = Some(self.render.upload_texture(&loaded.decoded));
         }
-        self.draw_all_outputs();
+        self.schedule_redraw_all();
     }
 
     /// Renders and commits every configured output immediately.
@@ -242,6 +249,30 @@ impl App {
                     signal.stop();
                 }
             }
+        }
+    }
+
+    /// Schedules a redraw of every configured output on the next idle tick.
+    ///
+    /// This is used during event dispatch so the layer-surface configure ack is
+    /// flushed before we attach the first buffer.
+    fn schedule_redraw_all(&mut self) {
+        if let Some(handle) = self.loop_handle.as_ref() {
+            handle.insert_idle(|app| app.draw_all_outputs());
+        }
+    }
+
+    /// Schedules a redraw of one surface on the next idle tick.
+    fn schedule_redraw(&mut self, surface: WlSurface) {
+        if let Some(handle) = self.loop_handle.as_ref() {
+            handle.insert_idle(move |app| {
+                if let Err(error) = app.render_surface(&surface) {
+                    error!(%error, "render failed");
+                    if let Some(signal) = app.loop_signal.as_ref() {
+                        signal.stop();
+                    }
+                }
+            });
         }
     }
 
@@ -427,9 +458,41 @@ impl App {
                 anyhow::bail!("wgpu render error: {error}");
             }
         }
-        let output = self.outputs.get(&output_id).expect("output exists");
-        output.layer_surface.commit();
         Ok(())
+    }
+
+    /// Applies a layer-surface configure: update logical size, reconfigure the
+    /// wgpu surface and render. Called both from the layer-surface dispatch
+    /// (after ack_configure) and from the [`LayerShellHandler`] trait impl.
+    fn apply_configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        layer: &LayerSurface,
+        width: u32,
+        height: u32,
+        _serial: u32,
+    ) {
+        let surface = layer.wl_surface();
+        let surface_id = surface.id();
+        let output_id = {
+            let Some(output) = self
+                .outputs
+                .values_mut()
+                .find(|o| o.surface.id() == surface_id)
+            else {
+                return;
+            };
+            let width = width.max(1);
+            let height = height.max(1);
+            output.logical_size = (width, height);
+            output.output.id()
+        };
+        self.configure_output(&output_id);
+
+        if self.outputs.get(&output_id).is_some_and(|o| o.configured) {
+            self.schedule_redraw(surface.clone());
+        }
     }
 }
 
@@ -482,15 +545,11 @@ impl CompositorHandler for App {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        surface: &WlSurface,
+        _surface: &WlSurface,
         _time: u32,
     ) {
-        if let Err(error) = self.render_surface(surface) {
-            error!(%error, "render failed");
-            if let Some(signal) = self.loop_signal.as_ref() {
-                signal.stop();
-            }
-        }
+        // No frame callbacks are requested by this client; the compositor
+        // drives repaints through configure and fractional-scale events.
     }
 
     fn surface_enter(
@@ -520,37 +579,20 @@ impl LayerShellHandler for App {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
-        _serial: u32,
+        serial: u32,
     ) {
-        let surface = layer.wl_surface();
-        let surface_id = surface.id();
-        let output_id = {
-            let Some(output) = self
-                .outputs
-                .values_mut()
-                .find(|o| o.surface.id() == surface_id)
-            else {
-                return;
-            };
-            let width = configure.new_size.0.max(1);
-            let height = configure.new_size.1.max(1);
-            output.logical_size = (width, height);
-            output.output.id()
-        };
-        self.configure_output(&output_id);
-
-        if self.outputs.get(&output_id).is_some_and(|o| o.configured)
-            && let Err(error) = self.render_surface(surface)
-        {
-            error!(%error, "render failed after configure");
-            if let Some(signal) = self.loop_signal.as_ref() {
-                signal.stop();
-            }
-        }
+        self.apply_configure(
+            conn,
+            qh,
+            layer,
+            configure.new_size.0,
+            configure.new_size.1,
+            serial,
+        );
     }
 }
 
@@ -591,15 +633,19 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for App {
             return;
         };
         let scale = f64::from(scale) / SCALE_DENOMINATOR;
-        let id = surface.id();
-        let Some(output) = state.outputs.get_mut(&id) else {
+        let surface_id = surface.id();
+        let Some(output) = state
+            .outputs
+            .values_mut()
+            .find(|o| o.surface.id() == surface_id)
+        else {
             return;
         };
         if (output.scale - scale).abs() > f64::EPSILON {
             output.scale = scale;
             let output_id = output.output.id();
             state.configure_output(&output_id);
-            state.draw_all_outputs();
+            state.schedule_redraw(surface.clone());
         }
     }
 }
@@ -628,10 +674,53 @@ impl Dispatch<WlRegion, ()> for App {
     }
 }
 
+impl Dispatch<ZwlrLayerShellV1, GlobalData> for App {
+    fn event(
+        state: &mut Self,
+        proxy: &ZwlrLayerShellV1,
+        event: <ZwlrLayerShellV1 as Proxy>::Event,
+        data: &GlobalData,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        <LayerShell as Dispatch<ZwlrLayerShellV1, GlobalData, App>>::event(
+            state, proxy, event, data, conn, qh,
+        );
+    }
+}
+
+impl Dispatch<ZwlrLayerSurfaceV1, LayerSurfaceData> for App {
+    fn event(
+        state: &mut Self,
+        surface: &ZwlrLayerSurfaceV1,
+        event: <ZwlrLayerSurfaceV1 as Proxy>::Event,
+        _data: &LayerSurfaceData,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+    ) {
+        let Some(layer_surface) = LayerSurface::from_wlr_surface(surface) else {
+            return;
+        };
+        match event {
+            zwlr_layer_surface_v1::Event::Configure {
+                serial,
+                width,
+                height,
+            } => {
+                surface.ack_configure(serial);
+                if let Err(error) = conn.flush() {
+                    warn!(%error, "failed to flush ack_configure");
+                }
+                state.apply_configure(conn, qh, &layer_surface, width, height, serial);
+            }
+            zwlr_layer_surface_v1::Event::Closed => {
+                state.closed(conn, qh, &layer_surface);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 delegate_registry!(App);
 delegate_compositor!(App);
 delegate_output!(App);
-
-// `delegate_layer!` generates Dispatch for zwlr_layer_shell_v1 and
-// zwlr_layer_surface_v1.
-sctk::delegate_layer!(App);
