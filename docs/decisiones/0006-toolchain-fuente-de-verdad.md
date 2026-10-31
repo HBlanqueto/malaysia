@@ -17,4 +17,3 @@ Una subida de toolchain es una subida del input del flake; editores y herramient
 ## Alternativas descartadas
 
 - `rust-toolchain.toml` con rust-overlay/fenix: segundo mecanismo y no funciona sin rustup.
-- Mantener el archivo como espejo con comprobación: dos fuentes que pueden discrepar.

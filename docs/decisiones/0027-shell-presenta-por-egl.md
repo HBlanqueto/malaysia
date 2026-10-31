@@ -4,7 +4,7 @@ Estado: aceptado (Bloque 7c).
 
 ## Contexto
 
-La shell dibujaba offscreen y presentaba por `wl_shm`: copia CPU a CPU y re-subida a textura. Era barato para CPU y caro para GPU, y la dejaba fuera de dmabuf (ADR 0026).
+La shell dibujaba offscreen y presentaba por `wl_shm`: copia CPU a CPU y re-subida a textura.
 
 ## Decisión
 
@@ -17,9 +17,8 @@ La shell dibujaba offscreen y presentaba por `wl_shm`: copia CPU a CPU y re-subi
 
 ## Consecuencias
 
-Un solo camino; la subida de menubar/dock es parcial. Cada componente de texto paga ~18 MB de USS por su contexto GLES; la medida USS+GPU quedó borderline pero no «claramente mayor» que el umbral. El reloj commitea al minuto.
+Un solo camino; la subida de menubar/dock es parcial.
 
 ## Alternativas descartadas
 
 - Mantener `wl_shm`: copia CPU y re-subida a GPU.
-- Readback offscreen por frame: coste de memoria y ancho de banda.

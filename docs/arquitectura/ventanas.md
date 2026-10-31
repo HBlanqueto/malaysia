@@ -14,38 +14,17 @@ La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px
 
 Solo las ventanas SSD reciben titlebar (ADR 0014/0019). GTK/Libadwaita y los clientes que piden CSD conservan su chrome; `window.decorations = "force_server"` puede forzar la barra en apps ajenas (con riesgo de duplicarla). Telegram (Qt) puede necesitar desactivar su marco en Ajustes › Avanzado; con `window.qt_server_decorations = true` (default) el compositor pide server-side.
 
-## Apps propias y CSD (ADR 0035)
+## Apps propias
 
-Una app de BarrierKit usa `app_id` con prefijo `io.github.hblanqueto.malaysia.` y pide su modo por `xdg-decoration` antes del primer commit:
-
-- `Decorations::Client` (default): barra propia de 44 px con `TrafficLights` y hueco de toolbar; para apps con toolbar/sidebar (Ajustes).
-- `Decorations::Server`: el compositor dibuja la barra de 32 px; para utilidades simples.
-
-Para estas ventanas el compositor respeta el modo pedido; `force_server`/`force_client` solo afectan a apps ajenas. Si falta `xdg-decoration`, el kit dibuja su barra de 44 px. El prefijo no autentica nada.
-
+Una app de BarrierKit usa `app_id` con prefijo `io.github.hblanqueto.malaysia.` y pide su modo por `xdg-decoration` antes del primer commit: `Client` dibuja su barra de 44 px (apps con toolbar/sidebar); `Server` deja la barra de 32 px al compositor (utilidades simples). `force_server`/`force_client` solo afectan a apps ajenas.
 ## Resize por bordes
 
 Las ventanas SSD normales (no maximizadas ni fullscreen) se redimensionan desde una banda exterior: `window.resize_border` (10 px) en los lados y una «L» de `window.resize_corner` (20 px) en las esquinas, con 2 px de tolerancia hacia dentro. El hit-test recorre la pila: la ventana superior gana y su contenido bloquea la banda de una inferior. Los semáforos se comprueban antes que el resize. Las CSD gestionan sus propios bordes.
 
-## Color y semáforos
+## Color
 
-`appearance.window_color` tiñe la titlebar:
+`appearance.window_color` tiñe la titlebar: `neutral` no tiñe, `accent` usa el acento (6 %/8 %) y `wallpaper` el dominante (7 %/9 %). `traffic_lights` fuerza `standard`, `accent` o `wallpaper`; `window_tint_scope = "desktop"` tiñe menubar y dock (20 %/26 %).
+## Botones y doble clic
 
-| Modo | Tinte | Semáforos `auto` |
-|---|---|---|
-| `neutral` | ninguno | estándar |
-| `accent` | acento, 6 % claro / 8 % oscuro | derivados del acento |
-| `wallpaper` | dominante, 7 % / 9 % | derivados del wallpaper |
+Cerrar cierra, minimizar deja el tile en el dock, maximizar guarda el rectángulo y envía `maximized`; repetir restaura. Los semáforos muestran su glifo al pasar el puntero y oscurecen solo el botón pulsado. Doble clic (400 ms, 4 px) ejecuta `window.double_click_titlebar`.
 
-El dominante lo calcula `malaysia-wallpaper` y lo escribe en `wallpaper.state`; sin color se usa el acento. `appearance.traffic_lights` fuerza `standard`, `accent` o `wallpaper`. `window_tint_scope = "desktop"` tiñe menubar y dock (20 %/26 %).
-
-## Botones, hover y doble clic
-
-- Cerrar → `xdg_toplevel.close`; minimizar → sale de la escena y queda en el dock; maximizar → guarda el rectángulo, ocupa el workspace y envía `maximized`; repetir restaura.
-- Al entrar el puntero en el grupo, los tres semáforos se encienden y muestran su glifo (aspa, línea o dos triángulos); se escalan con la barra.
-- Pulsar oscurece solo si el puntero sigue sobre ese botón. Un zoom no admitido (ventana de tamaño fijo) se dibuja gris y sin glifo.
-- Doble clic en la barra (400 ms, 4 px) ejecuta `window.double_click_titlebar`: `zoom`/`fill` maximizan, `minimize` minimiza, `none` no hace nada.
-
-## Límites actuales
-
-- La titlebar no aparece en la captura de **ventana**; sí en la de salida/región. El blur de fondo aún no se dibuja. La captura con marco sigue pendiente (roadmap, Bloque 13).

@@ -4,7 +4,7 @@ Estado: aceptado (2026-10-26).
 
 ## Contexto
 
-Al cambiar claro/oscuro, cada superficie cambia en su commit y produce un parpadeo escalonado. macOS funde la pantalla completa con una instantánea del estado anterior mientras el nuevo se renderiza debajo.
+Al cambiar claro/oscuro, cada superficie cambia en su commit y produce un parpadeo escalonado.
 
 ## Decisión
 
@@ -20,9 +20,8 @@ Al cambiar claro/oscuro, cada superficie cambia en su commit y produce un parpad
 
 ## Consecuencias
 
-El cambio se percibe como un fundido global. Durante el fundido se fuerza daño completo y un cuadro por vblank; después vuelve el daño parcial. No cambian clientes, `barrier-kit`, protocolos ni la captura.
+El cambio se percibe como un fundido global.
 
 ## Alternativas descartadas
 
 - Fundido por cliente: requiere protocolo privado y no garantiza sincronía.
-- Fundido en CPU: lee framebuffer, introduce latencia y ancho de banda.

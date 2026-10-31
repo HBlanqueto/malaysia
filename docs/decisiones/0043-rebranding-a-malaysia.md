@@ -4,7 +4,7 @@ Estado: aceptado (2026-10-26).
 
 ## Contexto
 
-El proyecto nació como **Yuki**. El repo ya es `github.com/HBlanqueto/malaysia`, así que el escritorio pasa a **MalaysiaDreams** y los paquetes, binarios, librerías, rutas, variables y documentación viva se alinean.
+El proyecto nació como **Yuki**.
 
 ## Decisión
 
@@ -37,9 +37,8 @@ El proyecto nació como **Yuki**. El repo ya es `github.com/HBlanqueto/malaysia`
 
 ## Consecuencias
 
-Todos los nombres nuevos son coherentes con el repo. Quien tenga configuración en `~/.config/yuki` debe moverla a mano. Los ADR antiguos son el registro del nombre de su momento.
+Todos los nombres nuevos son coherentes con el repo.
 
 ## Alternativas descartadas
 
 - Mantener Yuki en paquetes y rutas: contradice el repo y el rebranding.
-- Migración automática: mezcla estados viejos y nuevos sin avisar.

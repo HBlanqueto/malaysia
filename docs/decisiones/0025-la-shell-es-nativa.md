@@ -4,7 +4,7 @@ Estado: aceptado. Reemplaza y elimina el ADR 0022 ("La shell es Quickshell").
 
 ## Contexto
 
-Quickshell (QtQuick/QML) no aportaba al trabajo real: cada componente es pequeño y el toolkit propio ya cubre geometría, texto y presentación. Mantenerlo añadía una dependencia grande y su configuración.
+Quickshell (QtQuick/QML) no aportaba al trabajo real: cada componente es pequeño y el toolkit propio ya cubre geometría, texto y presentación.
 
 ## Decisión
 
@@ -15,9 +15,8 @@ Quickshell (QtQuick/QML) no aportaba al trabajo real: cada componente es pequeñ
 
 ## Consecuencias
 
-Se elimina Quickshell del código, flake, configuración y documentación. `shell.engine` y `shell.config` salen del catálogo. La supervisión usa las unidades systemd del flake.
+Se elimina Quickshell del código, flake, configuración y documentación.
 
 ## Alternativas descartadas
 
 - Seguir con Quickshell: dependencia grande y configuración duplicada.
-- Shell dentro del compositor: rompe el aislamiento del ADR 0023.

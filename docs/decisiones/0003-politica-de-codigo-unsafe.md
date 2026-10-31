@@ -4,7 +4,7 @@ Estado: aceptado (Bloque 0).
 
 ## Contexto
 
-El compositor necesitará `unsafe` acotado para dmabuf, GL y GBM. `forbid` no se relaja sin editar la raíz del crate; `deny` permite un `#[allow(unsafe_code)]` explícito y revisable.
+El compositor necesitará `unsafe` acotado para dmabuf, GL y GBM.
 
 ## Decisión
 
@@ -17,4 +17,3 @@ Cada `unsafe` del compositor es una excepción nombrada y visible; los crates ho
 ## Alternativas descartadas
 
 - `forbid` en todas partes: obliga a editar la raíz y luego a relajaciones no revisables.
-- `deny` en todas partes: pierde la garantía permanente de los crates hoja.

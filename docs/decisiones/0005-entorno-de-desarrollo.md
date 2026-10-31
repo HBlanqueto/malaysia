@@ -4,7 +4,7 @@ Estado: aceptado (Bloque 0).
 
 ## Contexto
 
-El proyecto apunta a una sola máquina. La compilación vive en `nix develop`, mold acelera el enlace y `dev.sh` gestiona un proceso en segundo plano.
+El proyecto apunta a una sola máquina.
 
 ## Decisión
 
@@ -14,10 +14,8 @@ El proyecto apunta a una sola máquina. La compilación vive en `nix develop`, m
 
 ## Consecuencias
 
-Compilar fuera del devShell produce un binario distinto (prohibido por el ADR 0007). `dev.sh` es Linux por `/proc`. Un PID reutilizado no puede matar un proceso ajeno.
+Compilar fuera del devShell produce un binario distinto (prohibido por el ADR 0007).
 
 ## Alternativas descartadas
 
 - mold incondicional en `.cargo/config.toml`: rompe `nix build`.
-- Sondear mold en `PATH`: compilaciones distintas e invalidación de la caché.
-- Matar el grupo de procesos: puede matar la terminal que invoca `dev.sh`.

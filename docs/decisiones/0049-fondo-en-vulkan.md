@@ -4,7 +4,7 @@ Estado: aceptado (2026-10-30).
 
 ## Contexto
 
-El fondo vivía en `malaysia-shell wallpaper`, dibujado con BarrierKit/Skia GL. Es el único sitio que necesitará shaders propios, HEIC y fondos dinámicos; meterlo en el kit obligaría a BarrierKit a arrastrar un backend alternativo para una superficie opaca.
+El fondo vivía en `malaysia-shell wallpaper`, dibujado con BarrierKit/Skia GL.
 
 ## Decisión
 
@@ -16,9 +16,8 @@ El fondo vivía en `malaysia-shell wallpaper`, dibujado con BarrierKit/Skia GL. 
 
 ## Consecuencias
 
-Hay un proceso más que supervisar, con `malaysia-wallpaper.service`. Sin respaldo GL: si no hay adaptador Vulkan, falla con mensaje claro y sale con código distinto de cero. 16c debe dejar de enviar frame callbacks a capas `Background` tapadas. La foto se comparte como una textura con mipmaps en GPU; el RGBA de CPU se libera tras la subida.
+Hay un proceso más que supervisar, con `malaysia-wallpaper.service`.
 
 ## Alternativas descartadas
 
 - Mantener el fondo en el kit: contamina menubar/dock/lock con dependencias que no necesitan.
-- Añadir un backend GL de respaldo: duplica caminos y oculta la falta de Vulkan.

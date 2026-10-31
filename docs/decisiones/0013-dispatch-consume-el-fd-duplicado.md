@@ -14,10 +14,8 @@ Los datos del loop son `Session { display, state }`. Se inserta un `Generic` sob
 
 ## Consecuencias
 
-`State` sigue siendo solo protocolo; `Session` es privado de `session.rs`. Cuesta un `fcntl` en el arranque, no por evento. Un cliente que deja de leer no atasca el loop.
+`State` sigue siendo solo protocolo; `Session` es privado de `session.rs`.
 
 ## Alternativas descartadas
 
 - `calloop-wayland-source`: es para clientes, no para `wayland_server::Display`.
-- `Generic<Display>` con `get_mut`: viola la política de `unsafe`.
-- `EventSource` a mano: no alcanza el `State` del loop.

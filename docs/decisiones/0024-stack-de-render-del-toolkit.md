@@ -4,7 +4,7 @@ Estado: aceptado (opción A), modificado para los clientes por los ADR 0033 y 00
 
 ## Contexto
 
-Cada componente del shell es un cliente Wayland que pinta su superficie layer-shell (ADR 0023). El criterio era compartir el GLSL del squircle y la titlebar entre compositor y shell.
+Cada componente del shell es un cliente Wayland que pinta su superficie layer-shell (ADR 0023).
 
 ## Decisión
 
@@ -19,4 +19,3 @@ Un solo lenguaje visual compartido por GLSL; el compositor mantiene GLES y la sh
 ## Alternativas descartadas
 
 - Skia en ambos lados: obligaba a portar el compositor o duplicar el dibujo.
-- Vello/wgpu: stack distinto y blur/filtros aún en alpha.

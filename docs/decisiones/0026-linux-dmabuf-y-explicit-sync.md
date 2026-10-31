@@ -4,7 +4,7 @@ Estado: aceptado (Bloque 7a y 7b).
 
 ## Contexto
 
-Mesa necesita `zwp_linux_dmabuf_v1` para inicializar EGL/Vulkan en Wayland; sin él, los clientes GPU fallan o caen a software. La copia a `wl_shm` era el cuello de botella en la iGPU Vega.
+Mesa necesita `zwp_linux_dmabuf_v1` para inicializar EGL/Vulkan en Wayland; sin él, los clientes GPU fallan o caen a software.
 
 ## Decisión
 
@@ -18,10 +18,8 @@ Mesa necesita `zwp_linux_dmabuf_v1` para inicializar EGL/Vulkan en Wayland; sin 
 
 ## Consecuencias
 
-wezterm, Firefox, vkcube y mpv corren acelerados; los clientes SHM siguen. Matar clientes con commits bloqueados no deja blockers/fds huérfanos.
+wezterm, Firefox, vkcube y mpv corren acelerados; los clientes SHM siguen.
 
 ## Alternativas descartadas
 
 - `wl_drm`: legacy innecesario.
-- Fallback a v3: duplica caminos y oculta la falta de render node.
-- Liberar en el siguiente commit: señala antes de que la GPU lea.

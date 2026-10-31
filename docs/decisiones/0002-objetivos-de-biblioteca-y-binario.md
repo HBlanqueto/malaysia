@@ -12,9 +12,8 @@ Un paquete con `src/lib.rs` (módulos reutilizables) y `src/main.rs` (arranque q
 
 ## Consecuencias
 
-Los módulos futuros son testeables sin `#[allow(dead_code)]`; el árbol gana `src/lib.rs`, una desviación deliberada. La garantía compile-fail de geometría se movió a `yuki-scene` (ADR 0001).
+Los módulos futuros son testeables sin `#[allow(dead_code)]`; el árbol gana `src/lib.rs`, una desviación deliberada.
 
 ## Alternativas descartadas
 
 - Solo binario: exigía usos falsos o un compile-fail que no se ejecuta.
-- Un crate `-core` separado: prematuro antes de tener nada que separar.

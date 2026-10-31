@@ -4,7 +4,7 @@ Estado: aceptado (sesión anidada, parte 1).
 
 ## Contexto
 
-Direct Session sustituirá winit por DRM/KMS. Si los handles del backend viven en `State`, cada handler que pida un frame o importe un buffer nombrará winit y habrá que editarlo.
+Direct Session sustituirá winit por DRM/KMS.
 
 ## Decisión
 
@@ -19,4 +19,3 @@ Cambiar de backend toca `session.rs` y la escena, no los handlers; los handlers 
 ## Alternativas descartadas
 
 - Campos concretos de winit en `State`: acopla todos los handlers al backend.
-- Enum `Backend` de niri: útil con varios backends simultáneos; aquí hay uno por ejecución.

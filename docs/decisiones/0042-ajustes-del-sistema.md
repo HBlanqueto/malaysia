@@ -4,7 +4,7 @@ Estado: aceptado (2026-10-26).
 
 ## Contexto
 
-El escritorio necesita una app de preferencias. La primera sección, Apariencia, cambia esquema de color, acento, modo de color de ventanas y estilo de semáforos; debe integrarse con el menú del sistema, Nix y Neptunia.
+El escritorio necesita una app de preferencias.
 
 ## Decisión
 
@@ -17,9 +17,8 @@ El escritorio necesita una app de preferencias. La primera sección, Apariencia,
 
 ## Consecuencias
 
-Hoy solo existe Apariencia; más dominios llegan con el catálogo y el D-Bus de configuración (ADR 0021). No es un componente `yuki-shell`; es un cliente Wayland independiente. El `.desktop` usa `StartupWMClass` con el `app_id`.
+Hoy solo existe Apariencia; más dominios llegan con el catálogo y el D-Bus de configuración (ADR 0021).
 
 ## Alternativas descartadas
 
 - Una app GTK genérica: no comparte tokens ni chrome.
-- Ajustes dentro del compositor: agranda el proceso que debe ser pequeño.

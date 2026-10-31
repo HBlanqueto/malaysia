@@ -4,7 +4,7 @@ Estado: superado por el ADR 0011. Se conserva como registro de lo que se rechaz�
 
 ## Contexto
 
-Sin tokens, el mismo color o radio se copia en varios sitios. Este contrato se escribió antes de que existiera ningún valor de diseño.
+Sin tokens, el mismo color o radio se copia en varios sitios.
 
 ## Decisión
 
@@ -12,9 +12,8 @@ Sin tokens, el mismo color o radio se copia en varios sitios. Este contrato se e
 
 ## Consecuencias
 
-El generador y la comprobación de obsolescencia nunca se escribieron; el ADR 0011 invirtió la decisión. Un cambio semántico exigía un `vN.nix` nuevo.
+El generador y la comprobación de obsolescencia nunca se escribieron; el ADR 0011 invirtió la decisión.
 
 ## Alternativas descartadas
 
 - Generar en `OUT_DIR` con `build.rs`: los diffs de diseño dejan de ser visibles.
-- Escribir tokens a mano y dejar Nix como documentación: dos fuentes sin sincronía.

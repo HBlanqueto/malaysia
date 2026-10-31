@@ -4,7 +4,7 @@ Estado: aceptado (cierra la pregunta abierta 5 del Bloque 0; el guard se movió 
 
 ## Contexto
 
-Sin la shell falta `RUSTFLAGS` con mold: el binario se enlaza distinto y se calienta otra caché. Un guard solo en `dev.sh` no atrapa un `cargo build` directo.
+Sin la shell falta `RUSTFLAGS` con mold: el binario se enlaza distinto y se calienta otra caché.
 
 ## Decisión
 
@@ -14,10 +14,8 @@ La derivación Nix establece el marcador a propósito y envuelve los binarios co
 
 ## Consecuencias
 
-`cargo build/check/test/clippy` directo falla con el mensaje previsto. El paquete Nix arranca fuera de la shell; el binario de `target/` sigue dependiendo del devShell. No es una sandbox: es una barandilla contra omisiones.
+`cargo build/check/test/clippy` directo falla con el mensaje previsto.
 
 ## Alternativas descartadas
 
 - Solo documentación: el error se descubre tarde.
-- Marcador solo en `dev.sh`: no cubre `cargo` directo.
-- `rustc-wrapper`: se ejecuta también en `nix build` y necesita su propia detección.

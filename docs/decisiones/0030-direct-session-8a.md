@@ -21,9 +21,8 @@ Estado: aceptado (Bloque 8a).
 
 ## Consecuencias
 
-8a no soporta hotplug, monitores externos, escala por salida, direct scanout ni XWayland. vkms cubre DRM/KMS, GBM/EGL, import dmabuf y vblank; no cubre eDP, touchpad, VT ni lock + VT. 8b/8c no cambian el contrato de `State`.
+8a no soporta hotplug, monitores externos, escala por salida, direct scanout ni XWayland.
 
 ## Alternativas descartadas
 
 - Copiar multi-GPU/planos de Otto/anvil: fuera de una sesión mínima.
-- Fallback a winit desde DRM: oculta fallos de arranque.

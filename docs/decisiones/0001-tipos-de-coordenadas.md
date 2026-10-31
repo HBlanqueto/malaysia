@@ -17,4 +17,3 @@ Handlers y render usan un único conjunto de tipos; las dos geometrías quedan s
 ## Alternativas descartadas
 
 - Tipos propios en el compositor y conversión en cada handler: replicaba la geometría en toda la API de Smithay (se revirtió).
-- Diferir la creación de `yuki-scene`: sus tipos y tests deben compilar desde el inicio.

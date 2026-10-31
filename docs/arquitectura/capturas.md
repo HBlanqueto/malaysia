@@ -28,23 +28,14 @@ input.rs → ScreenshotMode (state.rs) → overlay (session.rs)
 ```
 
 - La región se normaliza y se recorta a la salida; un arrastre de tamaño cero no captura.
-- Salida y región se re-renderizan con la escala de la salida, no leen el framebuffer presentado. Ventana renderiza solo la superficie del cliente.
-- `target = "desktop"` usa `xdg::desktop_dir()` (nombre localizado). El nombre es `Screenshot AAAA-MM-DD at HH.MM.SS.png`, con ` (2)`, ` (3)`… si coincide. Ventana: PNG transparente; salida/región: opaco.
-- `target = "clipboard"` no escribe fichero: publica `image/png` en la selección del asiento; el compositor sirve los bytes en un hilo hasta que otro cliente copie.
-- `show_pointer` decide si el puntero sale en salida/región (default `false`); la ventana nunca lo incluye.
+- Salida y región se re-renderizan con la escala de la salida; ventana renderiza solo la superficie del cliente.
+- `target = "desktop"` usa `xdg::desktop_dir()` (nombre localizado) y nombre `Screenshot AAAA-MM-DD at HH.MM.SS.png`, con ` (2)`… si coincide. Ventana: PNG transparente; salida/región: opaco.
+- `target = "clipboard"` no escribe fichero: publica `image/png` en la selección; el compositor sirve los bytes en un hilo hasta que otro cliente copie.
+- `show_pointer` decide si el puntero sale en salida/región (default `false`).
+
 ## Configuración
 
-`~/.config/malaysia/screenshot.domain`; catálogo en [`../configuracion/opciones.md`](../configuracion/opciones.md). Hoy están activas `show_pointer` y `target` (`desktop`/`clipboard`). `show_thumbnail`, `location`, `type`, `include_date`, `disable_shadow`, `timer` y `remember_selection` se leen y validan, pero el flujo actual guarda en el Escritorio, en PNG y con fecha.
+`screenshot.domain`; hoy solo están activos `show_pointer` y `target` (`desktop`/`clipboard`). Miniatura, `location`, `type`, `include_date`, `disable_shadow`, `timer` y `remember_selection` se leen y validan, pero el flujo guarda en el Escritorio, en PNG y con fecha.
+## Protocolo y límites
 
-La lógica vive en `input.rs` (atajos), `state.rs` (modo y petición), `session.rs` (overlay y guardado), `capture.rs` (render, PNG y destino), `xdg.rs` (Escritorio), `config.rs` (opciones) y `handlers.rs` (protocolo).
-## Capturas por protocolo
-
-Apps y el futuro portal usan `ext-image-copy-capture-v1` con fuente de salida o de ventana. Comparten el render offscreen, pero el frame va al cliente y no pasa por `screenshot.domain`. El portal es el Bloque 12a.
-## Límites
-
-- Miniatura, temporizador, formatos, sombra de ventana y destinos `preview`/`mail`/`messages`/`other` están reservados.
-- `Control` para copiar al vuelo aún no existe; se usa `target = "clipboard"`.
-- No hay gestor de portapapeles: la imagen dura hasta que otro cliente copie.
-- La captura de ventana no incluye chrome ni sombra; la salida rotada se ignora.
-- La ruta dmabuf del protocolo está implementada, pero los probes usan SHM.
-- El volcado `SIGUSR1` escribe en `$XDG_RUNTIME_DIR/malaysia` y no es la vía de usuario.
+Apps y el portal usan `ext-image-copy-capture-v1`; el frame va al cliente y no pasa por `screenshot.domain`. Faltan `Control` al vuelo, gestor de portapapeles, captura con marco y salida rotada; la ruta dmabuf está implementada pero los probes usan SHM.

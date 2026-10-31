@@ -4,7 +4,7 @@ Estado: aceptado.
 
 ## Contexto
 
-`desktop::Space` está detrás de la feature `desktop`, desactivada (ADR 0009). Las ventanas llevan chrome del compositor: rectángulo exterior, superficie del cliente y región de entrada no coinciden, y `Space` modela la geometría de la superficie del cliente.
+`desktop::Space` está detrás de la feature `desktop`, desactivada (ADR 0009).
 
 ## Decisión
 
@@ -12,9 +12,8 @@ No se habilita `desktop` ni se adopta `Space`. `yuki-scene` es la autoridad del 
 
 ## Consecuencias
 
-`window.rs` es la semilla del layout, no un placeholder. El Bloque 4 añade stacking, contención e insets; el Bloque 5, árbol de popups y grabs. `desktop` se revisará solo ante un requisito multi-salida o layer-shell concreto.
+`window.rs` es la semilla del layout, no un placeholder.
 
 ## Alternativas descartadas
 
 - Adoptar `Space` con una tabla lateral de insets: recrea el problema dentro de `Space` y obliga a reescribir los consumidores si se revierte.
-- Habilitar `desktop` solo por `PopupManager`/grabs: arrastra una escena que no encaja.

@@ -12,7 +12,7 @@ Se eligen con `--winit` y `--drm`, sin autodetección. El default es `--winit`. 
 
 ## Consecuencias
 
-El archivo de sesión y el arranque manual desde un TTY pasan `--drm`; `dev.sh` y las pruebas usan el default. Un futuro autodetectado sería otra decisión y otro flag.
+El archivo de sesión y el arranque manual desde un TTY pasan `--drm`; `dev.sh` y las pruebas usan el default.
 
 ## Alternativas descartadas
 

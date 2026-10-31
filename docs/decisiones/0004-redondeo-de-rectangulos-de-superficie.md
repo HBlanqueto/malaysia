@@ -17,5 +17,3 @@ Los tests cubren dos rectángulos que comparten una arista fraccionaria; cada ll
 ## Alternativas descartadas
 
 - Redondeo al más cercano: deja costuras.
-- Redondeo elegido por el llamador: invita a inconsistencias.
-- Valores fraccionarios hasta el rasterizado: incompatible con scissor/viewport enteros.

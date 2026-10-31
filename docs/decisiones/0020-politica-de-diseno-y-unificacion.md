@@ -4,7 +4,7 @@ Estado: aceptado. Complementa al ADR 0019 y supera su exclusión de sombras en v
 
 ## Contexto
 
-En Linux conviven GTK/libadwaita, Qt, Electron y apps propias; el compositor no puede redibujar su interior. macOS unifica por monopolio del toolkit; GNOME, por reparto entre chrome y preferencias estándar.
+En Linux conviven GTK/libadwaita, Qt, Electron y apps propias; el compositor no puede redibujar su interior.
 
 ## Decisión
 
@@ -16,9 +16,8 @@ En Linux conviven GTK/libadwaita, Qt, Electron y apps propias; el compositor no 
 
 ## Consecuencias
 
-Las apps GTK se ven como son, pero quedan enmarcadas por el compositor; un tema transparente funciona en todas. ADR 0019 sigue vigente para la negociación.
+Las apps GTK se ven como son, pero quedan enmarcadas por el compositor; un tema transparente funciona en todas.
 
 ## Alternativas descartadas
 
 - Redibujar el interior de las apps: imposible sin reimplementar cada toolkit.
-- Efectos por app: rompe la uniformidad.

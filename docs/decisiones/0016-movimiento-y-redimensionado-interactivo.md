@@ -4,7 +4,7 @@ Estado: aceptado (Bloque 4).
 
 ## Contexto
 
-Move y resize llegan por `xdg_toplevel.move`/`resize` y por la decoración. Smithay ofrece `PointerGrab`, pero el grab de popups del Bloque 5 está detrás de `desktop` y no se reutiliza aquí.
+Move y resize llegan por `xdg_toplevel.move`/`resize` y por la decoración.
 
 ## Decisión
 

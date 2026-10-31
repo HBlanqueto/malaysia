@@ -4,7 +4,7 @@ Estado: aceptado (sesión anidada, parte 4).
 
 ## Contexto
 
-El configure de un toplevel lleva su tamaño útil (ventana menos insets); los insets deben existir antes de escribir ese configure. El chrome se decide en `yuki-design` y puede cambiar mientras la ventana vive.
+El configure de un toplevel lleva su tamaño útil (ventana menos insets); los insets deben existir antes de escribir ese configure.
 
 ## Decisión
 
@@ -23,4 +23,3 @@ El configure inicial pide al cliente una superficie menor por la titlebar; el ti
 ## Alternativas descartadas
 
 - Capturar los insets al mapear: no soporta fullscreen, maximizado ni cambios de modo.
-- Incluir la sombra: movería ventanas adyacentes y rompería el solapamiento visual.

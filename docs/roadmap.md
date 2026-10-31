@@ -8,25 +8,18 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
 
 - **Menú global (Bloque 14).** Faltan 14b-2 (diálogos Suspender/Reiniciar/
   Apagar/Cerrar sesión), 14e (apps propias exportan dbusmenu) y 14f-2 (cliente
-  `org.gtk.Menus`). 14c necesita navegación completa por teclado y scroll.
-  Prueba: `./dev.sh demo` y los menús de una app real.
+  `org.gtk.Menus`). 14c necesita navegación por teclado y scroll. Prueba:
+  `./dev.sh demo` y los menús de una app real.
 - **Modo foco.** `window.green_button = "focus"` solo registra la petición
-  (`input.rs`, `GreenButtonAction::Focus`); falta atenuar el resto y mantener la
-  ventana al frente.
+  (`GreenButtonAction::Focus`); falta atenuar el resto y mantener la ventana al
+  frente.
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` está hecho. Faltan `Screenshot`, `ScreenCast` con
   PipeWire y los diálogos de permiso. Prueba: `./dev.sh screencopy` y
-  `./dev.sh screencopy-window` para la base.
-- **Servicios 12b.** Notificaciones, agente polkit, keyring/Secret Service y
-  AT-SPI. Sin empezar.
+  `./dev.sh screencopy-window`.
 - **NixOS.** El módulo ya instala paquete, sesión, PAM, `hardware.graphics`,
-  units y `xdg.portal` con fallback GTK. Faltan `services.graphical-desktop`,
-  `security.polkit`, keyring/AT-SPI con `mkDefault` y una VM de prueba.
-- **Multi-monitor y planos.** 8b (hotplug, escala por salida) y 8c (overlay/
-  cursor planes, direct scanout), en ese orden y después de cerrar 9 y 11.
-- **Portapapeles propio del kit.** `freya-clipboard` sigue arrastrando una
-  segunda copia de SCTK/calloop; el reemplazo vive en barrierkit.
+  units y `xdg.portal` con GTK de fallback. Faltan polkit, keyring/AT-SPI y una VM.
 
 ## Bloques
 
@@ -160,9 +153,3 @@ inotify de `wallpaper.domain` (ADR 0049). **16b** (HEIC por defecto) y **16c**
 PAM, `hardware.graphics`, units de shell y `xdg.portal` con GTK de fallback.
 Pendiente: `services.graphical-desktop`, `security.polkit`, keyring/AT-SPI y una
 VM que arranque `malaysia-session.target`.
-
-## Límites por ahora
-
-El compositor sigue en GLES/EGL: Vulkan es solo para clientes como el wallpaper.
-No hay fork propio de Smithay y no se copia código GPL/LGPL (se lee y se
-reimplementa en Rust). 8b/8c no empiezan hasta cerrar 9 y 11.

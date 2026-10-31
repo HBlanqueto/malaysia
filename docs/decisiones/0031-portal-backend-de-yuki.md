@@ -4,7 +4,7 @@ Estado: aceptado. `Settings` implementado; faltan `Screenshot` y `ScreenCast`.
 
 ## Contexto
 
-`xdg-desktop-portal` enruta a un backend `org.freedesktop.impl.portal.*`. Yuki ya tiene la apariencia (`appearance.domain`, ADR 0021) y la captura (Bloque 11); falta exponerlo con las interfaces estándar.
+`xdg-desktop-portal` enruta a un backend `org.freedesktop.impl.portal.*`.
 
 ## Decisión
 
@@ -18,10 +18,8 @@ Estado: aceptado. `Settings` implementado; faltan `Screenshot` y `ScreenCast`.
 
 ## Consecuencias
 
-Una app GTK/Qt/Electron lee dark/light, accent y contraste sin hablar con el compositor; el portal puede caerse sin tumbar la sesión. `Screenshot`/`ScreenCast` reutilizarán la captura y PipeWire; no se implementa `wlr-screencopy`.
+Una app GTK/Qt/Electron lee dark/light, accent y contraste sin hablar con el compositor; el portal puede caerse sin tumbar la sesión.
 
 ## Alternativas descartadas
 
 - Solo `xdg-desktop-portal-gtk`: no conoce apariencia ni captura del compositor.
-- Implementar todas las interfaces: duplica diálogos genéricos.
-- Portal dentro del compositor: lo agranda y mezcla responsabilidades.

@@ -16,10 +16,8 @@ El escritorio necesita opciones en caliente (efectos, apariencia, decoración) c
 
 ## Consecuencias
 
-Opciones documentadas en un sitio y tipadas en `config.rs`; archivo, comando y app comparten tipos. Hoy funcionan `Config`, la carga TOML y `window.decorations`; el bus, `domain` y la app siguen pendientes.
+Opciones documentadas en un sitio y tipadas en `config.rs`; archivo, comando y app comparten tipos.
 
 ## Alternativas descartadas
 
 - Variables de entorno: sin catálogo, tipos ni recarga.
-- Un único archivo: pierde el reparto por dominio de macOS.
-- Configuración solo en el compositor: shell y app no podrían leerla.

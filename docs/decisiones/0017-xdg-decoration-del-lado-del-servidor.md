@@ -12,9 +12,8 @@ Anunciar `zxdg_decoration_manager_v1` y responder siempre `ServerSide` en `new_d
 
 ## Consecuencias
 
-Se elimina el doble chrome en clientes que negocian; el compositor debe ofrecer cierre y botones. El ADR 0019 revierte forzar server-side contra una petición explícita de client-side.
+Se elimina el doble chrome en clientes que negocian; el compositor debe ofrecer cierre y botones.
 
 ## Alternativas descartadas
 
 - No anunciar el global: los clientes decoradores usan CSD y duplican chrome.
-- Seguir el modo pedido sin política: mezcla CSD y SSD sin criterio.
