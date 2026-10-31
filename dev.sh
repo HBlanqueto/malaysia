@@ -49,6 +49,7 @@ Commands:
     log [-f]            Print the log, or follow it with -f
     clean               Remove build artifacts and runtime files
     check               Run formatting, clippy and tests
+    wallpaper-check     Build, start the compositor, capture the wallpaper and run the ignored pixel test
     kit-local           Use ../barrierkit as a path override for the kit crates
                         (the rev in Cargo.toml must already be pushed; kit-local only swaps the source)
     kit-remote          Remove the ../barrierkit path override
@@ -86,6 +87,58 @@ require() {
 require_devshell() {
     [ "${MALAYSIA_DEV_SHELL:-}" = "1" ] ||
         fail "$EXIT_NOT_DEVSHELL" "not inside the dev shell; run 'nix develop' first (see ADR 0007)"
+}
+
+# require_vulkan - fail when VK_DRIVER_FILES is missing or points to files that
+# do not exist. Shared by demo, lab and wallpaper-check.
+require_vulkan() {
+    _vk_files=${VK_DRIVER_FILES:-}
+    if [ -z "$_vk_files" ]; then
+        fail "$EXIT_MISSING_TOOL" \
+            "VK_DRIVER_FILES no está definido o apunta a archivos que no existen (${_vk_files}); cierra y reabre nix develop y ejecuta ./dev.sh build"
+    fi
+    _missing=
+    _old_ifs=$IFS
+    IFS=:
+    for _path in $_vk_files; do
+        [ -e "$_path" ] || _missing="$_missing $_path"
+    done
+    IFS=$_old_ifs
+    if [ -n "$_missing" ]; then
+        fail "$EXIT_MISSING_TOOL" \
+            "VK_DRIVER_FILES no está definido o apunta a archivos que no existen (${_vk_files}); cierra y reabre nix develop y ejecuta ./dev.sh build"
+    fi
+}
+
+# check_wallpaper_ready PREFIX - wait up to 5 s for demo-wallpaper.log to contain
+# "output configured" or for the wallpaper process to die. Prints a warning to
+# stderr if neither happens; the demo/lab continues either way.
+check_wallpaper_ready() {
+    _prefix=$1
+    _pid_file="$RUNTIME_DIR/demo-wallpaper.pid"
+    _log_file="$RUNTIME_DIR/demo-wallpaper.log"
+    _pid=$(cat "$_pid_file" 2>/dev/null || true)
+    _waited=0
+    while [ "$_waited" -lt 50 ]; do
+        if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+            _code=$?
+            printf '%s: malaysia-wallpaper terminó al arrancar (código %s); últimas líneas:\n' \
+                "$_prefix" "$_code" >&2
+            if [ -f "$_log_file" ]; then
+                tail -n 20 "$_log_file" >&2
+            fi
+            return
+        fi
+        if [ -f "$_log_file" ] && grep -q "output configured" "$_log_file" 2>/dev/null; then
+            return 0
+        fi
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    printf '%s: malaysia-wallpaper no se configuró en 5 s; últimas líneas:\n' "$_prefix" >&2
+    if [ -f "$_log_file" ]; then
+        tail -n 20 "$_log_file" >&2
+    fi
 }
 
 # barrierkit_dir - print the absolute path to the sibling barrierkit checkout,
@@ -783,6 +836,8 @@ activation() {
 # `MALAYSIA_SCALE` passes through, so `MALAYSIA_SCALE=1.5 ./dev.sh demo` shows the
 # fractional-scale path.
 demo() {
+    require_devshell
+    require_vulkan
     _scheme=
     case "${1:-}" in
         --dark | --light)
@@ -836,13 +891,10 @@ demo() {
     }
     trap _demo_cleanup EXIT INT TERM
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
+        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper ||
+            fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        if [ ! -x "$script_dir/target/debug/malaysia-compositor" ] ||
-            [ ! -x "$_shell_bin" ] ||
-            [ ! -x "$_wallpaper_bin" ]; then
-            "$script_dir/dev.sh" build
-        fi
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
             _example_dir="$_kit_dir/target/debug/examples"
@@ -908,12 +960,10 @@ demo() {
         _pids="$_pids $!"
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
-    # The wallpaper client is a separate Vulkan binary; point it at an ICD so
-    # wgpu can load a driver even when the host does not export one.
-    VK_DRIVER_FILES="${VK_DRIVER_FILES:-/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json}" \
-        demo_client wallpaper "$_wallpaper_bin"
+    demo_client wallpaper "$_wallpaper_bin"
     demo_client menubar "$_shell_bin" menubar
     demo_client dock "$_shell_bin" dock
+    check_wallpaper_ready demo
     # Give the background layer a moment, then open windows so the dock has
     # tiles and the menubar an active app.
     sleep 0.5
@@ -948,6 +998,8 @@ demo() {
 # available, each with its own log.  The session keeps running until the host
 # window closes or the user presses Ctrl-C.
 lab() {
+    require_devshell
+    require_vulkan
     _scheme=
     case "${1:-}" in
         --dark | --light)
@@ -1131,12 +1183,10 @@ lab() {
             "$@"
     }
 
-    # The wallpaper client is a separate Vulkan binary; point it at an ICD so
-    # wgpu can load a driver even when the host does not export one.
-    VK_DRIVER_FILES="${VK_DRIVER_FILES:-/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json}" \
-        lab_client wallpaper "$_wallpaper_bin"
+    lab_client wallpaper "$_wallpaper_bin"
     lab_client menubar "$_shell_bin" menubar
     lab_client dock "$_shell_bin" dock
+    check_wallpaper_ready lab
     sleep 0.5
 
     if command -v foot >/dev/null 2>&1; then
@@ -1506,6 +1556,86 @@ drm_vkms() {
     printf '  presentation: %s\n' "$(grep 'presentation: presented' "$_presentation_log" | tail -n 1)"
 }
 
+# wallpaper-check - start the compositor, run only malaysia-wallpaper, capture the
+# output and compare the captured pixels against the CPU reference.
+wallpaper_check() {
+    require_devshell
+    require_vulkan
+    if [ "$#" -ne 0 ]; then
+        fail "$EXIT_USAGE" "unexpected argument for wallpaper-check: $1"
+    fi
+
+    cargo build -p malaysia-compositor -p malaysia-wallpaper ||
+        fail "$EXIT_RUN_FAILED" "could not build wallpaper-check binaries"
+
+    _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
+    _config_dir=$(mktemp -d) ||
+        fail "$EXIT_RUN_FAILED" "could not create the wallpaper-check config directory"
+    _wallpaper_log="$RUNTIME_DIR/wallpaper-check-wallpaper.log"
+
+    trap 'stop; rm -rf "$_config_dir"' EXIT INT TERM
+
+    start
+    _sock=
+    _waited=0
+    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
+        _sock=$(sed -n \
+            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+            "$LOG_FILE" 2>/dev/null | tail -n 1)
+        [ -n "$_sock" ] && break
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    if [ -z "$_sock" ]; then
+        fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
+    fi
+
+    env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+        MALAYSIA_CONFIG_DIR="$_config_dir" MALAYSIA_DATA_DIR="$_config_dir" \
+        "$_wallpaper_bin" >"$_wallpaper_log" 2>&1 &
+    _wallpaper_pid=$!
+
+    _waited=0
+    while [ "$_waited" -lt 100 ]; do
+        if ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
+            fail "$EXIT_RUN_FAILED" \
+                "malaysia-wallpaper exited before first frame; log follows: $(tail -n 20 "$_wallpaper_log" 2>/dev/null)"
+        fi
+        if grep -q "first frame presented" "$_wallpaper_log" 2>/dev/null; then
+            break
+        fi
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    if ! grep -q "first frame presented" "$_wallpaper_log" 2>/dev/null; then
+        fail "$EXIT_RUN_FAILED" \
+            "malaysia-wallpaper did not present a frame in 10 s; log follows: $(tail -n 20 "$_wallpaper_log" 2>/dev/null)"
+    fi
+
+    _compositor_pid=$(read_pid)
+    _before_capture=$(mktemp) || fail "$EXIT_RUN_FAILED" "could not create capture reference file"
+    kill -USR1 "$_compositor_pid" || fail "$EXIT_RUN_FAILED" "could not send SIGUSR1"
+
+    _capture_dir="${XDG_RUNTIME_DIR:-/run/user/$(id - u)}/malaysia-compositor"
+    _capture=
+    _waited=0
+    while [ -z "$_capture" ] && [ "$_waited" -lt 100 ]; do
+        _capture=$(find "$_capture_dir" -name 'capture-*.png' -newer "$_before_capture" 2>/dev/null | sort | tail -n 1)
+        [ -n "$_capture" ] && break
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    rm -f "$_before_capture"
+    [ -n "$_capture" ] ||
+        fail "$EXIT_RUN_FAILED" "no capture written to $_capture_dir"
+
+    MALAYSIA_WALLPAPER_CAPTURE="$_capture" cargo test -p malaysia-wallpaper -- --ignored capture_matches_reference ||
+        fail "$EXIT_RUN_FAILED" "capture_matches_reference failed"
+
+    printf 'wallpaper-check: PASS\n'
+    printf '  capture: %s\n' "$_capture"
+}
+
 if [ "$#" -eq 0 ]; then
     usage >&2
     exit "$EXIT_USAGE"
@@ -1527,6 +1657,7 @@ case "$command_name" in
     log) show_log "$@" ;;
     clean) clean ;;
     check) check ;;
+    wallpaper-check) wallpaper_check "$@" ;;
     kit-local) kit_local ;;
     kit-remote) kit_remote ;;
     smoke) smoke "$@" ;;
