@@ -199,13 +199,16 @@ pub fn decode_image(path: &Path) -> anyhow::Result<DecodedImage> {
 
 /// Decodes a PNG or JPEG in memory into top-down RGBA8 pixels.
 pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
-    if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
+    let start = std::time::Instant::now();
+    let result = if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
         decode_png(bytes)
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
         decode_jpeg(bytes)
     } else {
         anyhow::bail!("unsupported image format (expected PNG or JPEG)")
-    }
+    };
+    tracing::info!(elapsed_ms = start.elapsed().as_millis(), "image decoded");
+    result
 }
 
 /// Decodes a PNG preserving 16-bit colour when present.
@@ -325,6 +328,138 @@ impl DecodedImage {
             ],
         }
     }
+
+    /// Returns a half-size version when the image exceeds `max` in either
+    /// dimension, averaging 2×2 blocks in linear light. Repeats until both
+    /// dimensions fit.
+    pub fn downscale_to_fit(&self, max: u32) -> Self {
+        let (mut width, mut height) = self.size;
+        if width <= max && height <= max {
+            return self.clone();
+        }
+        let mut current = self.clone();
+        while width > max || height > max {
+            let new_w = (width / 2).max(1);
+            let new_h = (height / 2).max(1);
+            current = current.downscale_2x2(new_w, new_h);
+            width = new_w;
+            height = new_h;
+        }
+        current
+    }
+
+    fn downscale_2x2(&self, new_w: u32, new_h: u32) -> Self {
+        match &self.pixels {
+            Pixels::Srgb8(pixels) => {
+                let mut rgba = Vec::with_capacity((new_w * new_h * 4) as usize);
+                let (old_w, old_h) = self.size;
+                for y in 0..new_h {
+                    for x in 0..new_w {
+                        let mut linear = [0.0f32; 4];
+                        for dy in 0..2 {
+                            for dx in 0..2 {
+                                let sx = (x * 2 + dx).min(old_w - 1);
+                                let sy = (y * 2 + dy).min(old_h - 1);
+                                let offset = ((sy * old_w + sx) * 4) as usize;
+                                let [r, g, b, a] = [
+                                    pixels[offset],
+                                    pixels[offset + 1],
+                                    pixels[offset + 2],
+                                    pixels[offset + 3],
+                                ];
+                                linear[0] += srgb8_to_linear(r);
+                                linear[1] += srgb8_to_linear(g);
+                                linear[2] += srgb8_to_linear(b);
+                                linear[3] += a as f32 / 255.0;
+                            }
+                        }
+                        rgba.extend_from_slice(&[
+                            linear8_to_srgb(linear[0] / 4.0),
+                            linear8_to_srgb(linear[1] / 4.0),
+                            linear8_to_srgb(linear[2] / 4.0),
+                            (linear[3] / 4.0 * 255.0).round() as u8,
+                        ]);
+                    }
+                }
+                DecodedImage {
+                    size: (new_w, new_h),
+                    pixels: Pixels::Srgb8(rgba),
+                }
+            }
+            Pixels::Srgb16(pixels) => {
+                let mut rgba = Vec::with_capacity((new_w * new_h * 4) as usize);
+                let (old_w, old_h) = self.size;
+                for y in 0..new_h {
+                    for x in 0..new_w {
+                        let mut linear = [0.0f32; 4];
+                        for dy in 0..2 {
+                            for dx in 0..2 {
+                                let sx = (x * 2 + dx).min(old_w - 1);
+                                let sy = (y * 2 + dy).min(old_h - 1);
+                                let offset = ((sy * old_w + sx) * 4) as usize;
+                                let [r, g, b, a] = [
+                                    pixels[offset],
+                                    pixels[offset + 1],
+                                    pixels[offset + 2],
+                                    pixels[offset + 3],
+                                ];
+                                linear[0] += srgb16_to_linear(r);
+                                linear[1] += srgb16_to_linear(g);
+                                linear[2] += srgb16_to_linear(b);
+                                linear[3] += a as f32 / 65535.0;
+                            }
+                        }
+                        rgba.extend_from_slice(&[
+                            linear16_to_srgb(linear[0] / 4.0),
+                            linear16_to_srgb(linear[1] / 4.0),
+                            linear16_to_srgb(linear[2] / 4.0),
+                            (linear[3] / 4.0 * 65535.0).round() as u16,
+                        ]);
+                    }
+                }
+                DecodedImage {
+                    size: (new_w, new_h),
+                    pixels: Pixels::Srgb16(rgba),
+                }
+            }
+        }
+    }
+}
+
+fn srgb8_to_linear(c: u8) -> f32 {
+    let v = c as f32 / 255.0;
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear8_to_srgb(c: f32) -> u8 {
+    let v = if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        c.powf(1.0 / 2.4) * 1.055 - 0.055
+    };
+    (v * 255.0).round() as u8
+}
+
+fn srgb16_to_linear(c: u16) -> f32 {
+    let v = c as f32 / 65535.0;
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear16_to_srgb(c: f32) -> u16 {
+    let v = if c <= 0.0031308 {
+        c * 12.92
+    } else {
+        c.powf(1.0 / 2.4) * 1.055 - 0.055
+    };
+    (v * 65535.0).round() as u16
 }
 
 /// The dominant colour, sampled on a grid and weighted by chroma.
@@ -387,14 +522,10 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
                     let nr = r as isize + dr;
                     let ng = g as isize + dg;
                     let nb = b as isize + db;
-                    if !(0..16).contains(&nr)
-                        || !(0..16).contains(&ng)
-                        || !(0..16).contains(&nb)
-                    {
+                    if !(0..16).contains(&nr) || !(0..16).contains(&ng) || !(0..16).contains(&nb) {
                         continue;
                     }
-                    let idx =
-                        ((nr as usize) << 8) | ((ng as usize) << 4) | (nb as usize);
+                    let idx = ((nr as usize) << 8) | ((ng as usize) << 4) | (nb as usize);
                     weight += weights[idx];
                     sum[0] += sums[idx][0];
                     sum[1] += sums[idx][1];

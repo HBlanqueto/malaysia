@@ -15,6 +15,8 @@ pub struct RenderContext {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    /// Maximum 2D texture dimension reported by the adapter.
+    pub max_texture_dimension_2d: u32,
     pipeline: Option<wgpu::RenderPipeline>,
     mip_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     sampler: wgpu::Sampler,
@@ -87,15 +89,18 @@ impl RenderContext {
             );
         }
 
+        let limits = wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits());
+        tracing::info!(
+            max_texture_dimension_2d = limits.max_texture_dimension_2d,
+            "wgpu adapter limits"
+        );
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("malaysia-wallpaper"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits {
-                        max_texture_dimension_2d: 4096,
-                        ..wgpu::Limits::downlevel_defaults()
-                    },
+                    required_limits: limits.clone(),
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 None,
@@ -159,6 +164,7 @@ impl RenderContext {
             adapter,
             device,
             queue,
+            max_texture_dimension_2d: limits.max_texture_dimension_2d,
             pipeline: None,
             mip_pipelines: HashMap::new(),
             sampler,
@@ -240,12 +246,24 @@ impl RenderContext {
 
     /// Uploads a decoded image as a GPU texture with a full mip chain.
     pub fn upload_texture(&mut self, image: &DecodedImage) -> WallpaperTexture {
+        let original_size = image.size;
+        let image = image.downscale_to_fit(self.max_texture_dimension_2d);
+        if image.size != original_size {
+            tracing::warn!(
+                original_w = original_size.0,
+                original_h = original_size.1,
+                final_w = image.size.0,
+                final_h = image.size.1,
+                "wallpaper image downscaled to fit adapter texture limit"
+            );
+        }
+
         let (width, height) = image.size;
         let format = match &image.pixels {
             Pixels::Srgb8(_) => wgpu::TextureFormat::Rgba8UnormSrgb,
             Pixels::Srgb16(_) => wgpu::TextureFormat::Rgba16Float,
         };
-        let features = self.adapter.features();
+        let features = self.device.features();
         let mip_level_count = mip_level_count(format, features, width, height);
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("wallpaper texture"),
@@ -268,6 +286,8 @@ impl RenderContext {
             Pixels::Srgb8(pixels) => (width * 4, bytemuck::cast_slice(pixels).to_vec()),
             Pixels::Srgb16(pixels) => (width * 8, srgb16_to_linear_f16(pixels)),
         };
+
+        let upload_start = std::time::Instant::now();
 
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -297,6 +317,11 @@ impl RenderContext {
             &texture,
             format,
             mip_level_count,
+        );
+
+        tracing::info!(
+            elapsed_ms = upload_start.elapsed().as_millis(),
+            "wallpaper texture uploaded with mipmaps"
         );
 
         let gpu_bytes = gpu_texture_bytes(width, height, format, mip_level_count);
@@ -472,6 +497,7 @@ fn gpu_texture_bytes(
 
 /// Converts sRGB-coded u16 samples to linear f16, leaving alpha linear.
 fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
+    let start = std::time::Instant::now();
     static TABLE: LazyLock<[f16; 65536]> = LazyLock::new(|| {
         let mut table = [f16::ZERO; 65536];
         for (i, entry) in table.iter_mut().enumerate() {
@@ -496,6 +522,10 @@ fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
         };
         out.extend_from_slice(&f.to_ne_bytes());
     }
+    tracing::info!(
+        elapsed_ms = start.elapsed().as_millis(),
+        "16-bit image converted to linear"
+    );
     out
 }
 
@@ -840,14 +870,45 @@ mod tests {
                     ]
                 };
                 let expected = reference_color(&image, x, y, 1280, 800);
+                println!("cover {format:?} ({x},{y}): got {got:?}, expected {expected:?}");
                 assert!(
                     got.iter()
                         .zip(expected.iter())
-                        .all(|(a, b)| a.abs_diff(*b) <= 8),
-                    "mismatch at ({x},{y}) for {format:?}: got {got:?}, expected {expected:?}"
+                        .all(|(a, b)| a.abs_diff(*b) <= 3),
+                    "mismatch at ({x},{y}) for {format:?}: got {got:?}, expected {expected:?}; texels: {}",
+                    surrounding_texels(&image, x, y, 1280, 800)
                 );
             }
         }
+    }
+
+    fn surrounding_texels(
+        image: &DecodedImage,
+        x: u32,
+        y: u32,
+        surf_w: u32,
+        surf_h: u32,
+    ) -> String {
+        let surf = (surf_w as f32, surf_h as f32);
+        let img = (image.size.0 as f32, image.size.1 as f32);
+        let s = (surf.0 / img.0).max(surf.1 / img.1);
+        let u = 0.5 + (((x as f32 + 0.5) / surf.0) - 0.5) * (surf.0 / (img.0 * s));
+        let v = 0.5 + (((y as f32 + 0.5) / surf.1) - 0.5) * (surf.1 / (img.1 * s));
+        let sample_x = u * img.0 - 0.5;
+        let sample_y = v * img.1 - 0.5;
+        let x0 = sample_x.floor() as i32;
+        let y0 = sample_y.floor() as i32;
+        let mut parts = Vec::new();
+        for dy in 0..2 {
+            for dx in 0..2 {
+                let sx = (x0 + dx).clamp(0, image.size.0 as i32 - 1) as u32;
+                let sy = (y0 + dy).clamp(0, image.size.1 as i32 - 1) as u32;
+                let offset = ((sy * image.size.0 + sx) * 4) as usize;
+                let [r, g, b, a] = image.rgba8_at(offset);
+                parts.push(format!("({sx},{sy})=[{r},{g},{b},{a}]"));
+            }
+        }
+        parts.join(", ")
     }
 
     #[test]
@@ -1112,18 +1173,19 @@ mod tests {
         let (w, h) = capture.size;
         let source = decode_default();
 
-        // The compositor's output capture can have host-window rounding artifacts
-        // in the very corners, so sample well inside them.
-        let inset = (w.min(h) / 8).max(2);
+        // Exact corners, edge centres and centre. If the compositor draws rounded
+        // corners over the background, the corner points are shifted inward by the
+        // design radius; the edges and centre stay put.
+        let corner_inset = corner_inset_for_capture(w, h);
         let points: [(u32, u32); 9] = [
-            (inset, inset),
-            (w - 1 - inset, inset),
-            (inset, h - 1 - inset),
-            (w - 1 - inset, h - 1 - inset),
-            (w / 2, inset),
-            (w / 2, h - 1 - inset),
-            (inset, h / 2),
-            (w - 1 - inset, h / 2),
+            (corner_inset, corner_inset),
+            (w - 1 - corner_inset, corner_inset),
+            (corner_inset, h - 1 - corner_inset),
+            (w - 1 - corner_inset, h - 1 - corner_inset),
+            (w / 2, 0),
+            (w / 2, h - 1),
+            (0, h / 2),
+            (w - 1, h / 2),
             (w / 2, h / 2),
         ];
 
@@ -1131,6 +1193,7 @@ mod tests {
             let offset = ((y * w + x) * 4) as usize;
             let got = capture.rgba8_at(offset);
             let expected = reference_color(&source, x, y, w, h);
+            println!("capture ({x},{y}) in {w}x{h}: got {got:?}, expected {expected:?}");
             assert!(
                 got.iter()
                     .zip(expected.iter())
@@ -1138,5 +1201,31 @@ mod tests {
                 "mismatch at ({x},{y}) in {w}x{h} capture: got {got:?}, expected {expected:?}"
             );
         }
+    }
+
+    fn corner_inset_for_capture(_w: u32, _h: u32) -> u32 {
+        // The background layer is not clipped by the window corner radius; the
+        // compositor rounds only window frames. Keep the exact corner samples.
+        0
+    }
+
+    #[test]
+    fn oversized_image_is_downscaled_to_texture_limit() {
+        let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
+        let max = ctx.max_texture_dimension_2d;
+        let width = max + 1;
+        let height = 64u32;
+        let rgba: Vec<u8> = (0..(width * height * 4)).map(|i| (i % 256) as u8).collect();
+        let image = DecodedImage {
+            size: (width, height),
+            pixels: Pixels::Srgb8(rgba),
+        };
+        let texture = ctx.upload_texture(&image);
+        assert!(
+            texture.size.0 <= max && texture.size.1 <= max,
+            "texture {}x{} exceeds limit {max}",
+            texture.size.0,
+            texture.size.1
+        );
     }
 }

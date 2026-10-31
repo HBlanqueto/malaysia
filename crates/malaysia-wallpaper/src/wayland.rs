@@ -383,8 +383,32 @@ impl App {
             };
             (output.logical_size.0, output.logical_size.1, output.scale)
         };
-        let buffer_w = ((f64::from(logical_w) * scale).round() as u32).max(1);
-        let buffer_h = ((f64::from(logical_h) * scale).round() as u32).max(1);
+        let max = self.render.max_texture_dimension_2d;
+        let mut buffer_w = ((f64::from(logical_w) * scale).round() as u32).max(1);
+        let mut buffer_h = ((f64::from(logical_h) * scale).round() as u32).max(1);
+        if buffer_w > max || buffer_h > max {
+            warn!(
+                logical_w,
+                logical_h,
+                scale,
+                buffer_w,
+                buffer_h,
+                max,
+                "output buffer exceeds adapter texture limit; scaling down"
+            );
+            if buffer_w > max {
+                buffer_h =
+                    (f64::from(buffer_h) * f64::from(max) / f64::from(buffer_w)).round() as u32;
+                buffer_w = max;
+            }
+            if buffer_h > max {
+                buffer_w =
+                    (f64::from(buffer_w) * f64::from(max) / f64::from(buffer_h)).round() as u32;
+                buffer_h = max;
+            }
+            buffer_w = buffer_w.max(1);
+            buffer_h = buffer_h.max(1);
+        }
 
         let surface = {
             let Some(output) = self.outputs.get(output_id) else {

@@ -82,7 +82,7 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
     Some(CaptureDma { node, formats })
 }
 
-/// Captures the composed output to `$XDG_RUNTIME_DIR/malaysia/capture-*.png`.
+/// Captures the composed output to `$XDG_RUNTIME_DIR/malaysia-compositor/capture-*.png`.
 ///
 /// The output is re-rendered offscreen (reading the presented buffer is
 /// unreliable), with the backend's render transform and output scale so the
@@ -503,7 +503,7 @@ fn capture_into_shm(
     .map_err(|error| format!("shm buffer access failed: {error}"))?
 }
 
-/// The directory for captures: `$XDG_RUNTIME_DIR/malaysia` (or `/tmp/malaysia`).
+/// The directory for captures: `$XDG_RUNTIME_DIR/malaysia-compositor` (or `/tmp/malaysia-compositor`).
 fn capture_dir() -> PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)

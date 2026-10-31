@@ -964,6 +964,7 @@ demo() {
     demo_client menubar "$_shell_bin" menubar
     demo_client dock "$_shell_bin" dock
     check_wallpaper_ready demo
+    _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     # Give the background layer a moment, then open windows so the dock has
     # tiles and the menubar an active app.
     sleep 0.5
@@ -989,7 +990,16 @@ demo() {
     printf 'demo: close the host window or press Ctrl-C to end\n'
 
     _compositor=$(read_pid)
-    wait "$_compositor" 2>/dev/null || true
+    while kill -0 "$_compositor" 2>/dev/null; do
+        if [ -n "$_wallpaper_pid" ] && ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
+            _wp_code=0
+            wait "$_wallpaper_pid" 2>/dev/null || _wp_code=$?
+            printf 'demo: malaysia-wallpaper terminó durante la demo (código %s); log: %s\n' \
+                "$_wp_code" "$RUNTIME_DIR/demo-wallpaper.log" >&2
+            _wallpaper_pid=
+        fi
+        sleep 1
+    done
 }
 
 # lab - interactive manual-test session with shell, demo windows and optional
@@ -1187,6 +1197,7 @@ lab() {
     lab_client menubar "$_shell_bin" menubar
     lab_client dock "$_shell_bin" dock
     check_wallpaper_ready lab
+    _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
 
     if command -v foot >/dev/null 2>&1; then
@@ -1278,7 +1289,16 @@ EOF
     printf 'lab: close the host window or press Ctrl-C to end\n'
 
     _compositor=$(read_pid)
-    wait "$_compositor" 2>/dev/null || true
+    while kill -0 "$_compositor" 2>/dev/null; do
+        if [ -n "$_wallpaper_pid" ] && ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
+            _wp_code=0
+            wait "$_wallpaper_pid" 2>/dev/null || _wp_code=$?
+            printf 'lab: malaysia-wallpaper terminó durante la demo (código %s); log: %s\n' \
+                "$_wp_code" "$RUNTIME_DIR/demo-wallpaper.log" >&2
+            _wallpaper_pid=
+        fi
+        sleep 1
+    done
 }
 
 # example - run a BarrierKit example against the demo that is already running.
@@ -1616,7 +1636,7 @@ wallpaper_check() {
     _before_capture=$(mktemp) || fail "$EXIT_RUN_FAILED" "could not create capture reference file"
     kill -USR1 "$_compositor_pid" || fail "$EXIT_RUN_FAILED" "could not send SIGUSR1"
 
-    _capture_dir="${XDG_RUNTIME_DIR:-/run/user/$(id - u)}/malaysia-compositor"
+    _capture_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/malaysia-compositor"
     _capture=
     _waited=0
     while [ -z "$_capture" ] && [ "$_waited" -lt 100 ]; do
@@ -1629,8 +1649,43 @@ wallpaper_check() {
     [ -n "$_capture" ] ||
         fail "$EXIT_RUN_FAILED" "no capture written to $_capture_dir"
 
-    MALAYSIA_WALLPAPER_CAPTURE="$_capture" cargo test -p malaysia-wallpaper -- --ignored capture_matches_reference ||
+    MALAYSIA_WALLPAPER_CAPTURE="$_capture" cargo test -p malaysia-wallpaper -- --ignored -- --nocapture capture_matches_reference ||
         fail "$EXIT_RUN_FAILED" "capture_matches_reference failed"
+
+    _alive=1
+    _watched=0
+    while [ "$_watched" -lt 30 ]; do
+        if ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
+            _alive=0
+            break
+        fi
+        _watched=$((_watched + 1))
+        sleep 1
+    done
+    if [ "$_alive" -eq 0 ]; then
+        _wp_exit=0
+        wait "$_wallpaper_pid" 2>/dev/null || _wp_exit=$?
+        _wp_signal=
+        case "$_wp_exit" in
+            129) _wp_signal=HUP ;;
+            130) _wp_signal=INT ;;
+            131) _wp_signal=QUIT ;;
+            132) _wp_signal=ILL ;;
+            133) _wp_signal=TRAP ;;
+            134) _wp_signal=ABRT ;;
+            136) _wp_signal=FPE ;;
+            137) _wp_signal=KILL ;;
+            139) _wp_signal=SEGV ;;
+            143) _wp_signal=TERM ;;
+        esac
+        if [ -n "$_wp_signal" ]; then
+            _wp_status="signal $_wp_signal (exit $_wp_exit)"
+        else
+            _wp_status="exit code $_wp_exit"
+        fi
+        fail "$EXIT_RUN_FAILED" \
+            "malaysia-wallpaper died during wallpaper-check ($_wp_status); log tail:\n$(tail -n 40 "$_wallpaper_log" 2>/dev/null)"
+    fi
 
     printf 'wallpaper-check: PASS\n'
     printf '  capture: %s\n' "$_capture"
