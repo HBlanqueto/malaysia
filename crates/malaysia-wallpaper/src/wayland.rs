@@ -450,6 +450,7 @@ impl App {
             return;
         };
         output.surface_format = format;
+        output.layer_surface.set_size(logical_w, logical_h);
         output
             .viewport
             .set_destination(logical_w as i32, logical_h as i32);
@@ -529,6 +530,7 @@ impl App {
                 output.first_frame_presented = true;
                 info!(output = ?output_id, "first frame presented");
             }
+            output.surface.commit();
         }
         Ok(())
     }
