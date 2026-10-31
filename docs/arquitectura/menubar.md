@@ -1,195 +1,57 @@
 # La menubar (`malaysia-shell menubar`)
 
-El segundo componente nativo del shell (ADR 0023/0034): la barra superior,
-como la menu bar de macOS. Primera versión: **nombre de la app activa** a la
-izquierda y **reloj** a la derecha. El menú global por app está planeado
-(Bloque 14); ver [Menú global](#menú-global-planeado-bloque-14).
+> Mapa general: [`interfaz.md`](interfaz.md).
+
+Componente nativo (ADR 0023/0034): barra superior de 28 px con la app activa, el reloj y los menús.
 
 ## Cómo funciona
 
 ```
-window.domain ──► app_id de la app activa (el compositor lo publica)
-   (~/.local/share/malaysia)                │
-                                        ▼
-  frame RGBA: fondo + texto (barrier-kit::text, cosmic-text)
-                                        │
-                                        ▼
-  superficie layer-shell Top, 1280×28, exclusive zone 28
-                                        │  eglSwapBuffers (wl_egl_window → dmabuf)
-                                        ▼
-                        MalaysiaDreams (compositor) lo compone sobre las ventanas
+window.domain ──► app activa (título/app_id)
+        ▼
+frame RGBA (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
 ```
 
-1. **La superficie**: capa **`Top`**, anclada a arriba/izquierda/derecha,
-   **28 px de alto** con `exclusive_zone = 28` — las ventanas no se meten
-   debajo de la barra.
-2. **El render** es CPU: `barrier-kit::text` (cosmic-text + swash) compone el
-   texto en un frame RGBA sobre la `ShellPalette` de Tengen (barra
-   translúcida, `#f2f4f7e6` en claro) y la textura se presenta
-   por **EGL** sobre un `wl_egl_window` (Bloque 7c, ADR 0027) — el swap es un
-   dmabuf que el compositor texturiza directo. La subida a la textura es
-   **parcial**: solo la franja del reloj (90 px) o del título (250 px) que
-   cambió, con `glTexSubImage2D`.
-3. **El reloj**: solo muestra minutos (`%H:%M`), así que commitea **al borde de
-   minuto** (timer alineado), no cada segundo.
-4. **La app activa**: el compositor publica la ventana enfocada en el estado
-   `window.domain` (`[active] title`/`app_id`) — el mismo patrón de almacén que
-   el wallpaper — y la menubar lo vigila. La menubar usa el **app_id**, nunca
-   el título de la ventana.
-
-## El estado de la app activa
-
-`ext-foreign-toplevel-list-v1` no lleva el estado "activada" (no existe en el
-protocolo), así que la menubar no puede saber qué ventana es la activa por ahí.
-El compositor conoce la ventana enfocada, y la publica en el almacén de estado
-(`crates/malaysia-compositor/src/active.rs`): al dar foco (`focus_window`) escribe
-`~/.local/share/malaysia/window.domain` con el título y el app_id de la ventana; al
-quitarlo, vacío. Es el mecanismo de primera versión; el canal de notificación
-adecuado (D-Bus, ADR 0021) lo reemplazará cuando llegue. `ext-foreign-toplevel-list`
-sigue siendo la vía para la **lista** de ventanas del dock (paso 4).
+1. Capa `Top`, anclada arriba/izquierda/derecha, `exclusive_zone = 28`; las ventanas no se meten debajo.
+2. El texto se compone por CPU con `barrier-kit::text` sobre `ShellPalette` y se presenta por EGL; la subida a textura es parcial (franja del reloj o del título), no el frame entero (ADR 0027).
+3. El reloj muestra `%H:%M` y commitea al borde de minuto.
+4. La app activa se lee de `window.domain` (`[active] title`/`app_id`), que publica el compositor al enfocar. La menubar usa el **app_id**, nunca el título de la ventana.
 
 ## El nombre de la app
 
-La menubar muestra el nombre de la aplicación enfocada, como macOS, no el
-título del documento. A partir del `app_id` publicado en `window.domain`:
+1. `.desktop` cuyo id o `StartupWMClass` coincide → su `Name` localizado (`foot` → «Foot», `org.wezfurlong.wezterm` → «WezTerm»).
+2. Sin `.desktop`, el último segmento con mayúscula inicial (`org.example.notes` → «Notes»).
+3. Sin app ni ventana, «MalaysiaDreams».
 
-1. busca el `.desktop` cuyo id o `StartupWMClass` coincide con el app_id y usa
-   su `Name` ya localizado (el mismo lector que el launcher):
-   `foot` → «Foot», `org.wezfurlong.wezterm` → «WezTerm»;
-2. si no hay `.desktop`, usa el último segmento del app_id con mayúscula
-   inicial (`org.example.notes` → «Notes»);
-3. sin app_id ni ventana enfocada, «MalaysiaDreams».
+Va en negrita (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, con la sans de `vow-design` (Geist); el reloj en peso normal.
 
-El nombre va en negrita (`MENUBAR_APP_NAME_WEIGHT`, token
-`components.shell.menubar.app-name.weight`, 700), color `ink-strong` y 13 px.
-La menubar entera usa la pila sans de `vow-design` (Geist); el reloj queda en
-el peso normal.
+## Zona exclusiva
 
-## La zona exclusiva en el compositor
+El compositor calcula el workspace como el output menos las zonas exclusivas de capas `Top`/`Overlay` ancladas a los bordes (`Layers::exclusive_top`/`exclusive_bottom`). Las ventanas nuevas se colocan ahí: origen `(0, top)` y tamaño `(w, h − top − bottom)`.
 
-Para que la barra reserve espacio, el compositor calcula el **workspace** de las
-ventanas: el output menos las zonas exclusivas de las capas `Top`/`Overlay`
-ancladas al borde (`Layers::exclusive_top`/`exclusive_bottom`). Las ventanas
-nuevas se colocan y dimensionan dentro de ese workspace (debajo de la barra):
-`State::workspace()` → origen `(0, top)` y tamaño `(w, h - top - bottom)`. Esto
-es el caso de falla documentado en el ADR 0023 (muerte del dock → se recalcula
-el área útil).
+## Menú global
 
-## Divergencias
+La barra integra `barrier_kit::menu::MenuView`.
 
-- **App activa por el almacén, no por protocolo**: `ext-foreign-toplevel-list-v1`
-  no expresa "activada"; se usa el estado `window.domain`. Documentado arriba.
-- **Render CPU** (cosmic-text a un frame RGBA) en vez de GLES para el texto:
-  los glifos se rasterizan con swash de todos modos; el contenido es casi
-  estático, así que la subida a la textura es parcial y barata. Las animaciones
-  (blur de la barra, ADR 0020/0034, futuras) deben renderizarse en GPU, nunca
-  CPU + subida por frame (ADR 0027).
-- `menubar.autohide` se lee del catálogo pero aún no se implementa (el
-  comportamiento de autohide es trabajo futuro).
+- **Sin ventana:** ❄ · MalaysiaDreams (negrita) · Archivo · Edición · Visualización · Ir · Ventana · Ayuda, cada uno con su menú; reloj a la derecha.
+- **Con ventana:** ❄ · {App} · menús reales de la app · Ventana · Ayuda.
+- **Menú real:** `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); el compositor publica el par por Infinity v2 y la barra pide el árbol.
+- **Respaldo:** si no hay menú, nombre y acciones del `.desktop` y los controles reales de la ventana (14c).
+- **GTK:** `gtk_shell1` → `org.gtk.Menus`; 14f-1 solo registra el evento, 14f-2 dibuja el menú (ADR 0045).
 
-## Aceptación (verificada)
+Habilitados: carpetas de Ir (salvo Atrás/Adelante/Ir a la carpeta), Nueva ventana, Nueva carpeta, Buscar, Minimizar todo, Mostrar escritorio, lista de ventanas, Bloquear pantalla y Ajustes del sistema. El resto se ve deshabilitado.
 
-- La menubar se mapea en la capa `Top` a 1280×28 con zona exclusiva.
-- El compositor coloca las ventanas nuevas debajo de la barra (workspace).
-- Al abrir `foot`, `window.domain` publica su app_id y la menubar muestra
-  «Foot»; el reloj avanza al minuto (1 commit/min, `Dma`).
-- `kill -9` al proceso: el compositor y los demás componentes siguen; el
-  supervisor lo relanza.
-- El texto se rasteriza (el bug de `layout_runs` vacío se corrigió en 7.1);
-  la menubar muestra la app activa y el reloj sobre la paleta clara de Tengen.
-- Todo verde: clippy `-D warnings`, fmt y tests.
+**Pendiente:** 14b-2 (diálogos Suspender/Reiniciar/Apagar/Cerrar sesión), 14f-2, navegación por teclado (F10/Alt) y desbordamiento de la barra. `menubar.autohide` está en el catálogo sin implementar.
 
-## Menú global (Bloque 14)
+## Medidas y atajos
 
-### 14b-1 — Menús de escritorio (implementado)
+Barra 28 px; menús radio 12; elementos de 24 px con radio 8; texto 13. Los atajos se muestran como `⌃⌥⇧❖` + tecla, sin `+` ni glifo de Command; el control recibe `Ctrl+Shift+G`, `Alt+Inicio` o `Super+L` y los formatea.
 
-La barra real integra `barrier_kit::menu::MenuView`. Sin ventana enfocada
-muestra el copo (glifo SVG), «MalaysiaDreams» en negrita y los títulos **Archivo**,
-**Edición**, **Visualización**, **Ir**, **Ventana** y **Ayuda**, cada uno con su
-propio menú; el reloj va a la derecha. Con una ventana enfocada quedan el copo y
-el nombre de la app en negrita. Falta el teclado en los menús y la aceptación
-manual.
+## Verificación
 
-Ver [`docs/bloques/14-menu-global.md`](../bloques/14-menu-global.md#14b-1--menús-de-escritorio).
-
-### 14b-2 — Diálogos del sistema (pendiente)
-
-Diálogos de confirmación para Suspender, Reiniciar, Apagar y Cerrar sesión.
-
-### Flujo completo (planificado para 14c y siguientes)
-
-```
-app ──org_kde_kwin_appmenu──► compositor ──window.domain──► menubar
-                                                              │
-                                              com.canonical.dbusmenu
-                                                              ▼
-                                                     popups BarrierKit
+```sh
+./dev.sh demo
+./dev.sh check
 ```
 
-El cliente anuncia el servicio y la ruta de su menú por superficie. El
-compositor guarda el par y publica el de la ventana enfocada en `window.domain`.
-La menubar pide el árbol dbusmenu y lo dibuja en popups de BarrierKit.
-
-### Los cuatro modos
-
-1. **Escritorio** (sin ventana enfocada): menú «MalaysiaDreams».
-2. **Menú real**: la app entrega su menú por dbusmenu.
-3. **Respaldo**: la app no entrega menú; se usan nombre y acciones del
-   `.desktop`, los controles reales de la ventana y Salir.
-4. **App propia**: una app de BarrierKit exporta su menú por la misma vía
-   dbusmenu.
-
-### Menús implementados en 14b-1
-
-Las carpetas usan `xdg-open` y los `xdg-user-dirs`. Contenido exacto:
-
-- **❄** (sistema): Acerca de este equipo · Ajustes del sistema… · — · Forzar
-  salida… (`⌥❖⎋`) · — · Suspender · Reiniciar… · Apagar… · — · Bloquear
-  pantalla · Cerrar sesión…
-- **MalaysiaDreams**: Acerca de MalaysiaDreams · — · Ajustes… · — · Vaciar papelera…
-- **Archivo**: Nueva ventana (gestor de archivos en `~`) · Nueva carpeta en el
-  escritorio · Abrir… · Buscar (abre el launcher)
-- **Edición**: Deshacer · Cortar · Copiar · Pegar · Seleccionar todo
-- **Visualización**: Mostrar/ocultar dock · Cambiar fondo de pantalla…
-- **Ir**: Atrás · Adelante · — · Inicio · Escritorio · Documentos · Descargas ·
-  Imágenes · Música · Vídeos · — · Papelera · — · Ir a la carpeta…
-- **Ventana**: Minimizar todo · Mostrar escritorio · — · lista de ventanas (o
-  «No hay ventanas abiertas»)
-- **Ayuda**: Atajos de teclado · Documentación de MalaysiaDreams
-
-Habilitados en esta entrega: los de Ir salvo Atrás, Adelante e Ir a la
-carpeta…; Nueva ventana, Nueva carpeta en el escritorio y Buscar; Minimizar
-todo, Mostrar escritorio y la lista de ventanas; Bloquear pantalla; y Ajustes
-del sistema (lanza `malaysia-settings`). El resto se ve deshabilitado.
-`zwlr_foreign_toplevel_management_v1` v3 sirve minimizar y activar la lista.
-
-### Medidas de Tengen
-
-Menubar 28 px, menús con radio 12, elementos de menú de 24 px con radio 8 y
-texto 13. Se dibujaron como maquetas en el lienzo de diseño «MalaysiaDreams — Global
-menu».
-
-### Glifos de atajos (decidido)
-
-Los atajos se muestran con glifos de teclas reales, como macOS, en el orden
-`⌃` `⌥` `⇧` `❖` seguido de la tecla: `⌃` Ctrl, `⌥` Alt, `⇧` Shift, `❖` Super.
-Sin `+` entre ellos y sin el glifo de Command en ningún sitio. El control recibe el atajo como
-texto (`Ctrl+Shift+G`, `Alt+Inicio`) y lo formatea; ningún menú escribe glifos a
-mano. Ejemplos: `Ctrl+Shift+G` → `⌃⇧G`, `Alt+Inicio` → `⌥Inicio`,
-`Super+L` → `❖L`.
-
-### Decisiones abiertas
-
-- Menús sólidos o translúcidos (Tengen reserva el cristal para el primer
-  arranque).
-- Desbordamiento de la barra, navegación con teclado (F10/Alt) y comportamiento
-  con una app sin respuesta.
-
-## Relación
-
-- [`interfaz.md`](interfaz.md) — el mapa completo de la UI.
-- ADR 0023 (procesos), ADR 0034 (BarrierKit sobre Freya), ADR 0032
-  (Tengen).
-- `wallpaper.md` — componente hermano (presentación EGL, ADR 0027).
-- `modelo-de-procesos.md` — la distribución de procesos.
-- `configuracion/opciones.md` — `menubar.autohide` (catálogo).
+El reloj avanza al minuto (1 commit/min, Dma); `kill -9` al proceso no afecta al compositor ni a los demás.

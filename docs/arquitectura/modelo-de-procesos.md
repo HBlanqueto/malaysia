@@ -1,126 +1,55 @@
-# Modelo de procesos del shell
+# Modelo de procesos y reparto compositor ↔ shell
 
-Descrito por el ADR 0023: cada componente del shell corre como su propio proceso y
-su propio cliente Wayland. Este documento describe la distribución de procesos
-resultante y cómo se relacionan.
+ADR 0023: cada componente del shell es un proceso y un cliente Wayland propio. El diagrama está en [`malaysia-y-shell.svg`](malaysia-y-shell.svg); el mapa de la UI, en [`interfaz.md`](interfaz.md).
 
-## La distribución
+## Distribución
 
 ```
 COMPOSITOR (un proceso)
-  ┌────────────────────────────────────────────┐
-  │ MALAYSIA_COMPOSITOR — display server                      │
-  │ scene · capas · geometría · input ·        │
-  │ efectos · almacén .domain · lock garantía  │
-  └────────────────────────────────────────────┘
-      ▲              ▲              ▲             ▲
-      │layer-shell   │layer-shell   │layer-shell  │ext-session-lock-v1
-      │              │              │             │
-  ┌───┴────┐    ┌────┴────┐    ┌───┴────┐   ┌─────┴─────┐
-  │ malaysia-compositor-  │    │ malaysia-compositor-   │    │ malaysia-compositor-  │   │ malaysia-compositor-     │
-  │ shell  │    │ shell   │    │ shell  │   │ shell     │
-  │ dock   │    │ topbar  │    │ notify │   │ lock      │  (+ launcher, …)
-  └────────┘    └─────────┘    └────────┘   └───────────┘
-  SHELL (un proceso por componente, ninguno depende de otro)
+  escena · capas · geometría · input · efectos · .domain · garantía de lock
+      ▲            ▲             ▲              ▲
+ layer-shell  layer-shell   layer-shell   ext-session-lock
+      │            │             │              │
+  wallpaper     menubar         dock           lock      (+ launcher)
 ```
 
-Un proceso por componente — dock, barra superior, notificaciones, launcher,
-pantalla de bloqueo, ... — todos clientes Wayland de MalaysiaDreams. Ninguno depende de otro:
-si el dock muere, la barra sigue funcionando.
+Un proceso por componente: **`malaysia-wallpaper`**, **`malaysia-shell menubar`**, **`dock`**, **`lock`** y **`launcher`**. Ninguno depende de otro: si el dock muere, la barra sigue. No hay daemon central de shell.
 
-**Estado**: cuatro componentes nativos funcionan — **`malaysia-wallpaper`**
-(render **Vulkan**/wgpu propio, presentado por dmabuf — Bloque 16a, ADR 0049),
-**`malaysia-shell menubar`** (capa `Top`, app activa + reloj), **`malaysia-shell
- dock`** (capa `Top` abajo, lista de apps + activar al clic) y **`malaysia-shell
-lock`** (`ext-session-lock-v1`, con la garantía de que la sesión no se desbloquea
-si el cliente muere).
-La shell es nativa (ADR 0025); no hay dependencias de shell externas.
+Fuera de la shell, `xdg-desktop-portal-malaysia` (ADR 0031) es un backend D-Bus aparte; lo arranca `xdg-desktop-portal` por activación y puede caer sin tumbar la sesión.
 
-**Fuera de la shell** hay un proceso más: **`xdg-desktop-portal-malaysia`** (ADR
-0031). No es un cliente Wayland ni se supervisa con `malaysia-session.target`: lo
-arranca `xdg-desktop-portal` por activación D-Bus cuando una app pide
-`Settings` (después `Screenshot`/`ScreenCast`). Si cae, el compositor y la
-shell siguen; las apps pierden el portal hasta que D-Bus lo relance.
+## Reparto de trabajo
 
-## Qué significa en la práctica
+| Aspecto | Quién decide |
+|---|---|
+| Protocolos (`wl_surface`, `xdg_shell`, layer-shell...) | compositor |
+| Orden de composición (Background → Ventanas → Top → Overlay) | compositor |
+| Geometría (posición, tamaño, anchors, zona exclusiva) | compositor |
+| Efectos de contorno (sombra, borde, radio, blur futuro) | compositor |
+| Contenido de las superficies de shell | shell |
+| Fondo | `malaysia-wallpaper` |
+| Titlebar SSD | compositor |
+| Capturas de pantalla | compositor (sin proceso de shell) |
 
-- **Aislamiento de fallas por componente**: la muerte de uno no tumba a los demás.
-  Es la motivación del modelo (ADR 0023).
-- **Tolerancia a la ausencia**: cada componente trata a los demás como opcionales
-  (p. ej. la barra oculta el indicador de notificaciones mientras el servidor de
-  notificaciones está caído).
-- **El compositor es el único punto de falla inevitable**; mantener el shell fuera
-  lo mantiene más chico y, por tanto, más fiable.
-- **No hay "daemon del shell"** central: reintroduciría el punto único de falla.
+La shell **pide** colocación; el compositor la valida y decide. Cada uno manda en su capa, como el Dock y WindowServer en macOS.
 
-## Cómo se comunican
+## Comunicación
 
-### Shell → compositor (por protocolos Wayland)
+- **`.domain`:** el compositor es dueño de la configuración; cada componente lee `~/.config/malaysia/` y `~/.local/share/malaysia/`. No escribe su propia configuración.
+- **Protocolos:** layer-shell y sus zonas exclusivas; `window.domain` publica la app activa; `ext-foreign-toplevel-list-v1` da la lista; `zwlr` activa/cierra/minimiza; `ext-session-lock-v1` bloquea; `xdg-activation` enfoca.
+- **Efectos:** el compositor envuelve las superficies de shell con los mismos efectos que las ventanas (ADR 0020); la shell no los dibuja.
 
-| Componente | Protocolo | Superficie |
+También están hechos `wp_presentation`, `xdg-activation-v1`, `ext-idle-notify-v1` + `zwp_idle_inhibit_manager_v1`, `wp_cursor_shape_v1`, pointer constraints, relative-pointer, explicit sync, dmabuf y la captura. Quedan `keyboard-shortcuts-inhibit` y el portal `Screenshot`/`ScreenCast`.
+
+## Fallos
+
+| Fallo | Qué pasa | Recuperación |
 |---|---|---|
-| dock | `zwlr_layer_shell_v1` | capa Bottom/Top con exclusive zone |
-| barra superior | `zwlr_layer_shell_v1` | capa Top con exclusive zone |
-| notificaciones | `zwlr_layer_shell_v1` | capa Top/Overlay |
-| launcher | `zwlr_layer_shell_v1` | capa Overlay |
-| pantalla de bloqueo | `ext-session-lock-v1` | lock surface por output |
+| Componente del shell | solo ese componente | systemd lo relanza |
+| Lock | la sesión sigue bloqueada | color sólido y lock nuevo |
+| Dock | se reacomodan ventanas | se reacomodan al volver |
+| Portal | apps pierden Settings | D-Bus lo relanza |
+| Compositor | mueren todos los clientes | único punto de falla inevitable |
 
-Común a dock y barra: `ext-foreign-toplevel-list-v1` (lista de ventanas) y
-`zwlr_foreign_toplevel_management_v1` (activar/cerrar/minimizar; su `set_rectangle`
-da la posición del ícono del dock para la animación de minimizar). El launcher y el
-dock usan `xdg-activation-v1` para dar el foco a las apps que lanzan;
-`ext-idle-notify-v1` dispara el bloqueo automático.
+## Relación
 
-### Componentes → sistema (por D-Bus directo)
-
-El estado del sistema — batería, red, audio, brillo — va por D-Bus desde cada
-componente (UPower, NetworkManager, PipeWire), no por Wayland. Un protocolo privado
-de MalaysiaDreams solo se introduce cuando aparezca una necesidad concreta que los protocolos
-estándar no cubran.
-
-### Estado del arte de la lista de protocolos
-
-Los protocolos de la tabla son de la integración del modelo de procesos, no de
-los bloques actuales del roadmap. Lo que el compositor **ya sirve** hoy:
-
-- `zwlr_layer_shell_v1` — hecho (la shell lo usa; ADR 0023).
-- `wp_viewporter` y `wp_fractional_scale_manager_v1` — hechos (los necesita el
-  render HiDPI de la shell; el wallpaper y los futuros paneles los usan).
-- `xdg_popup` con padre layer-surface (`get_popup`) — hecho (Bloque 5).
-- `ext-session-lock-v1` — hecho (el lock, ADR 0023; garantía de no desbloquear
-  si el cliente muere).
-- `ext-foreign-toplevel-list-v1` y `zwlr_foreign_toplevel_management_v1` —
-  hechos (el dock).
-- `zwp_linux_dmabuf_v1` — hecho (Bloque 7a): v5 con feedback del render node y
-  los formatos del renderer GLES, para clientes con GPU (Mesa EGL/Vulkan).
-
-También están hechos `wp_presentation`, `xdg-activation-v1`,
-`ext-idle-notify-v1` + `zwp_idle_inhibit_manager_v1`, `wp_cursor_shape_v1`, las
-pointer constraints, `relative-pointer`, el sync explícito
-`wp_linux_drm_syncobj_v1` (Bloque 7b) y la captura
-(`ext-image-copy-capture-v1`, Bloque 11). Queda como trabajo futuro
-`keyboard-shortcuts-inhibit` y el portal `Screenshot`/`ScreenCast` del Bloque
-12a.
-
-## Fallos esperados y su tratamiento
-
-| Fallo | Qué pasa | Cómo se recupera |
-|---|---|---|
-| cae un componente del shell | solo ese componente | la supervisión lo relanza (propuesta ADR 0023) |
-| cae la pantalla de bloqueo | la sesión **sigue bloqueada** | el compositor muestra un color sólido y nunca desbloquea (`ext-session-lock-v1`) |
-| cae el dock y su zona exclusiva | las ventanas maximizadas se reacomodan | se vuelven a reacomodar al reiniciar el dock; se acepta el parpadeo |
-| cae el compositor | mueren todos los clientes | es el único punto de falla inevitable |
-| cae el portal (`xdg-desktop-portal-malaysia`) | las apps pierden `Settings` (y después `Screenshot`/`ScreenCast`) | D-Bus lo relanza en la siguiente petición; el escritorio sigue |
-| reinicio de GPU (amdgpu) | afecta a todos los procesos con contexto GL | separar procesos no protege contra esto |
-
-## Relación con el resto de la documentación
-
-- [`interfaz.md`](interfaz.md) — el mapa completo de la UI y sus capas.
-
-- ADR 0023 — la decisión (este documento es su consecuencia en forma de distribución).
-- ADR 0025 — la shell es nativa: los componentes `malaysia-shell` son estos procesos.
-- ADR 0031 — el portal es un backend D-Bus aparte, no un componente del shell.
-- `malaysia-y-shell.md` — la división de trabajo compositor ↔ shell (quién decide
-  cada cosa).
-- [`../bloques/12-portales-y-servicios.md`](../bloques/12-portales-y-servicios.md)
-  — el portal `Settings` y lo que sigue.
+ADR 0023 (procesos), ADR 0025 (shell nativa), ADR 0031 (portal), [`interfaz.md`](interfaz.md) y los documentos de cada componente.
