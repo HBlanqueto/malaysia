@@ -6,10 +6,10 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
 
 ## Ahora (2026-10-31)
 
-- **Menú global (Bloque 14).** Faltan 14b-2 (diálogos Suspender/Reiniciar/
-  Apagar/Cerrar sesión), 14e (apps propias exportan dbusmenu) y 14f-2 (cliente
-  `org.gtk.Menus`). 14c necesita navegación por teclado y scroll. Prueba:
-  `./dev.sh demo` y los menús de una app real.
+- **Menú global (Bloque 14).** Faltan 14f-2 (cliente `org.gtk.Menus`), 14b-2
+  (diálogos del sistema), subrayado de mnemónicos con Alt y scroll de menús
+  largos. 14d-1, 14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
+  y los menús de una app real.
 - **Modo foco.** `window.green_button = "focus"` solo registra la petición
   (`GreenButtonAction::Focus`); falta atenuar el resto y mantener la ventana al
   frente.
@@ -131,12 +131,55 @@ Pendiente: modo foco real y captura de ventana con marco. Prueba:
 
 ### 14 — Menú global
 
-`org_kde_kwin_appmenu` + `com.canonical.dbusmenu` (ADR 0036/0040). **Hechos:**
-14a (popups en BarrierKit, aceptado 2026-10-24), 14b-1 (menú de escritorio,
-2026-10-24), 14c (menú por app, 2026-10-25), 14d-1..3 (2026-10-26) y 14d-5/6
-(2026-10-27). **Pendientes:** 14b-2 (diálogos del sistema), 14e (apps propias
-exportan dbusmenu), 14f-2 (cliente `org.gtk.Menus`), navegación por teclado y
-scroll. Prueba: `./dev.sh demo` con apps reales.
+`org_kde_kwin_appmenu` + `com.canonical.dbusmenu` (ADR 0036/0040) y
+`gtk_shell1` → `org.gtk.Menus` (ADR 0045). Las fuentes de estado son el
+documento del bloque fusionado en `fb02921` (`git show
+fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
+
+**Hechos:**
+
+- 14a (popups en BarrierKit): aceptado 2026-10-24; submenús hermanos
+  re-aceptados 2026-10-28.
+- 14b-1 (menú de escritorio): 2026-10-24.
+- 14c (menú por app con respaldo de `.desktop`): 2026-10-25.
+- 14d-1 (compositor, `org_kde_kwin_appmenu` + evento `app_menu` de Infinity
+  v2): implementado; `7c3bfd1` y `fb4005f` en el tag
+  `archivo/historia-hasta-2026-10-26`, código en
+  `crates/malaysia-compositor/src/appmenu.rs`.
+- 14d-2/3 (cliente dbusmenu, árbol completo): 2026-10-26.
+- 14d-5/6 (títulos recordados, `MENU_GRACE`, separadores): 2026-10-27.
+- 14e (apps propias exportan dbusmenu): aceptado 2026-10-26 con el ejemplo
+  `contador` (barrierkit `crates/barrier-kit/examples/contador.rs`,
+  `crates/barrier-kit/src/platform/app_menu_export.rs`).
+- 14f-1 (`gtk_shell1` v5 + evento `gtk_menus` de Infinity v3): aceptado
+  2026-10-28 en sesión anidada (`crates/malaysia-compositor/src/gtk.rs`; la
+  barra solo registra la dirección, `crates/malaysia-shell/src/menubar/bar.rs`).
+- Teclado en los popups (barrierkit `crates/barrier-kit/src/menu.rs`,
+  `on_global_key_down`): ↑↓, Inicio/Fin, → abre submenú, ← cierra el nivel,
+  Enter/Espacio activan, ←→ en el menú raíz pasan al título vecino
+  (`with_navigation`, usado en `crates/malaysia-shell/src/menubar/menu.rs`).
+  Esc lo resuelve el compositor (`State::dismiss_topmost_popup`).
+
+**Pendientes:**
+
+- 14f-2: cliente `org.gtk.Menus`/`org.gtk.Actions` en la barra y
+  `capabilities` distinto de 0 (hoy `gtk.rs` anuncia `capabilities(0)`).
+- 14b-2: Suspender, Reiniciar…, Apagar…, Cerrar sesión…, Forzar salida… y
+  Acerca de este equipo siguen con `enabled: false`
+  (`crates/malaysia-shell/src/menubar/system.rs`).
+- Mnemónicos subrayados al pulsar Alt (no existe en `menu.rs`).
+- Scroll de menús más altos que la salida (`menu.rs` solo desplaza los
+  resultados de búsqueda).
+- Espacio activa también con Ctrl/Alt (`menu.rs`, rama `Key::Character(" ")`):
+  decidir si se filtra con `inserts_text`.
+- «Ajustes del sistema…» del menú ❄ no abre el cliente con
+  `MALAYSIA_TEST_INPUT` en la sesión anidada.
+- Aceptación en DRM de 14a, 14b-1 y 14c.
+
+**Fuera del bloque (anotado):** HUD en el launcher, menú de atajos por app y
+casado por pid del Registrar (XWayland).
+
+Prueba: `./dev.sh demo` con apps reales.
 
 ### 15 — Rebranding a MalaysiaDreams
 
