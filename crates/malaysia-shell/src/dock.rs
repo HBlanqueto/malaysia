@@ -8,9 +8,7 @@
 
 use std::path::PathBuf;
 
-use barrier_kit::platform::{
-    Anchors, KeyboardInteractivity, Layer, SurfaceSpec, Toplevels, run_layer,
-};
+use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
@@ -88,7 +86,7 @@ pub fn run() -> anyhow::Result<()> {
 
     run_layer(
         app,
-        SurfaceSpec::Layer {
+        LayerSpec {
             namespace: "malaysia-dock".to_string(),
             layer: Layer::Top,
             anchors: Anchors::BOTTOM,

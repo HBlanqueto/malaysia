@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchLocation, SearchableEntry};
-use barrier_kit::platform::{ToplevelInfo, Toplevels};
+use barrier_kit::shell::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::{

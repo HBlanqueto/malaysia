@@ -7,7 +7,7 @@
 use barrier_kit::menu::{
     CheckState, MenuIcon, MenuItem, SearchLocation, SearchSource, SearchableEntry,
 };
-use barrier_kit::platform::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
+use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::menubar::{help_topics, icons, items, xdg_open};
 

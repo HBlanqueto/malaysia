@@ -1,7 +1,7 @@
 //! The system menu title (snowflake) on the far left of the menubar.
 
 use barrier_kit::menu::{CheckState, MenuItem};
-use barrier_kit::platform::ToplevelInfo;
+use barrier_kit::shell::ToplevelInfo;
 
 use crate::menubar::{spawn_app, spawn_component};
 
@@ -46,7 +46,7 @@ fn action(id: &str, label: &str, shortcut: Option<&str>, enabled: bool) -> MenuI
 /// Handles enabled system-menu actions using the current toplevel list.
 pub fn on_system_action(id: String, toplevels: &[ToplevelInfo]) {
     on_system_action_with(id, toplevels, spawn_app, |index| {
-        barrier_kit::platform::Toplevels::get().activate(index)
+        barrier_kit::shell::Toplevels::get().activate(index)
     });
 }
 

@@ -13,10 +13,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use barrier_kit::menu::MenuItem;
-use barrier_kit::platform::{
-    Anchors, KeyboardInteractivity, Layer as SurfaceLayer, SurfaceSpec, Timers, Toplevels,
-    run_layer,
-};
+use barrier_kit::platform::{Timers};
+use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
@@ -251,7 +249,7 @@ impl App for BarApp {
         });
         let last_gtk_menus = use_hook(|| {
             Rc::new(RefCell::new(
-                None::<(String, Option<barrier_kit::platform::GtkMenusAddress>)>,
+                None::<(String, Option<barrier_kit::shell::GtkMenusAddress>)>,
             ))
         });
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
@@ -953,8 +951,8 @@ fn load_active_app(store_path: &PathBuf) -> Option<String> {
 }
 
 /// The layer-shell surface: top strip with its exclusive zone reserved.
-fn surface_spec() -> SurfaceSpec {
-    SurfaceSpec::Layer {
+fn surface_spec() -> LayerSpec {
+    LayerSpec {
         namespace: "malaysia-menubar".to_string(),
         layer: SurfaceLayer::Top,
         anchors: Anchors::TOP,
@@ -1011,22 +1009,18 @@ mod tests {
 
     #[test]
     fn the_bar_reserves_the_menubar_height() {
-        match surface_spec() {
-            SurfaceSpec::Layer {
-                layer,
-                anchors,
-                exclusive_zone,
-                size,
-                ..
-            } => {
-                assert_eq!(layer, SurfaceLayer::Top);
-                assert!(anchors.top && anchors.left && anchors.right);
-                assert!(!anchors.bottom);
-                assert_eq!(exclusive_zone, MENUBAR_HEIGHT);
-                assert_eq!(size, Some((0, MENUBAR_HEIGHT as u32)));
-            }
-            _ => panic!("the menubar is a layer surface"),
-        }
+        let LayerSpec {
+            layer,
+            anchors,
+            exclusive_zone,
+            size,
+            ..
+        } = surface_spec();
+        assert_eq!(layer, SurfaceLayer::Top);
+        assert!(anchors.top && anchors.left && anchors.right);
+        assert!(!anchors.bottom);
+        assert_eq!(exclusive_zone, MENUBAR_HEIGHT);
+        assert_eq!(size, Some((0, MENUBAR_HEIGHT as u32)));
     }
 
     #[test]

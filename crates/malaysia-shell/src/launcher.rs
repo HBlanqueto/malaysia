@@ -15,9 +15,8 @@ use std::{
 };
 
 use barrier_kit::animation::Spring;
-use barrier_kit::platform::{
-    Activation, Anchors, KeyboardInteractivity, Layer, SurfaceSpec, Timers, Toplevels, run_layer,
-};
+use barrier_kit::platform::{Timers};
+use barrier_kit::shell::{Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::input::Input;
 use freya_components::svg_viewer::SvgViewer;
@@ -461,7 +460,7 @@ pub fn run() -> anyhow::Result<()> {
 
     run_layer(
         app,
-        SurfaceSpec::Layer {
+        LayerSpec {
             namespace: "malaysia-launcher".to_string(),
             layer: Layer::Overlay,
             anchors: Anchors::default(),

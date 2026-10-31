@@ -19,7 +19,7 @@ chrono.workspace = true
 serde.workspace = true
 toml.workspace = true
 png.workspace = true
-barrier-kit.workspace = true
+barrier-kit = { workspace = true, features = ["shell"] }
 freya-core.workspace = true
 freya-components.workspace = true
 freya-engine.workspace = true
