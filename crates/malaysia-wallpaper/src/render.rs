@@ -1,9 +1,13 @@
 //! Vulkan/WGPU rendering for one wallpaper texture shared across outputs.
 
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+use half::f16;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgpu::util::DeviceExt;
 
-use crate::image::DecodedImage;
+use crate::image::{DecodedImage, Pixels};
 
 /// GPU state shared by every output surface.
 pub struct RenderContext {
@@ -12,7 +16,7 @@ pub struct RenderContext {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pipeline: Option<wgpu::RenderPipeline>,
-    mip_pipeline: wgpu::RenderPipeline,
+    mip_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     uniform_buffer: wgpu::Buffer,
@@ -130,66 +134,6 @@ impl RenderContext {
             ],
         });
 
-        let mip_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("mipmap bind group layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
-
-        let mip_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("mipmap pipeline layout"),
-            bind_group_layouts: &[&mip_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let mip_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("mipmap shader"),
-            source: wgpu::ShaderSource::Wgsl(MIP_SHADER.into()),
-        });
-
-        let mip_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("mipmap pipeline"),
-            layout: Some(&mip_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &mip_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &mip_shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("wallpaper sampler"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -216,7 +160,7 @@ impl RenderContext {
             device,
             queue,
             pipeline: None,
-            mip_pipeline,
+            mip_pipelines: HashMap::new(),
             sampler,
             bind_group_layout,
             uniform_buffer,
@@ -295,9 +239,14 @@ impl RenderContext {
     }
 
     /// Uploads a decoded image as a GPU texture with a full mip chain.
-    pub fn upload_texture(&self, image: &DecodedImage) -> WallpaperTexture {
+    pub fn upload_texture(&mut self, image: &DecodedImage) -> WallpaperTexture {
         let (width, height) = image.size;
-        let mip_level_count = max_mip_levels(width, height);
+        let format = match &image.pixels {
+            Pixels::Srgb8(_) => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Pixels::Srgb16(_) => wgpu::TextureFormat::Rgba16Float,
+        };
+        let features = self.adapter.features();
+        let mip_level_count = mip_level_count(format, features, width, height);
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("wallpaper texture"),
             size: wgpu::Extent3d {
@@ -308,12 +257,17 @@ impl RenderContext {
             mip_level_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_DST
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
+
+        let (bytes_per_row, data) = match &image.pixels {
+            Pixels::Srgb8(pixels) => (width * 4, bytemuck::cast_slice(pixels).to_vec()),
+            Pixels::Srgb16(pixels) => (width * 8, srgb16_to_linear_f16(pixels)),
+        };
 
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -322,10 +276,10 @@ impl RenderContext {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &image.rgba,
+            &data,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(width * 4),
+                bytes_per_row: Some(bytes_per_row),
                 rows_per_image: Some(height),
             },
             wgpu::Extent3d {
@@ -338,10 +292,21 @@ impl RenderContext {
         generate_mipmaps(
             &self.device,
             &self.queue,
-            &self.mip_pipeline,
+            &mut self.mip_pipelines,
             &self.sampler,
             &texture,
+            format,
             mip_level_count,
+        );
+
+        let gpu_bytes = gpu_texture_bytes(width, height, format, mip_level_count);
+        tracing::info!(
+            width,
+            height,
+            ?format,
+            mip_level_count,
+            gpu_bytes,
+            "wallpaper texture uploaded"
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -459,17 +424,152 @@ fn max_mip_levels(width: u32, height: u32) -> u32 {
     (u32::BITS - max.leading_zeros()).max(1)
 }
 
+/// Returns the number of mip levels for `format`, or 1 when the format cannot
+/// be filtered or used as a render target.
+pub fn mip_level_count(
+    format: wgpu::TextureFormat,
+    features: wgpu::Features,
+    width: u32,
+    height: u32,
+) -> u32 {
+    let guaranteed = format.guaranteed_format_features(features);
+    if !guaranteed
+        .flags
+        .contains(wgpu::TextureFormatFeatureFlags::FILTERABLE)
+        || !guaranteed
+            .allowed_usages
+            .contains(wgpu::TextureUsages::RENDER_ATTACHMENT)
+    {
+        tracing::warn!(
+            ?format,
+            "format is not filterable or renderable; skipping mipmaps"
+        );
+        return 1;
+    }
+    max_mip_levels(width, height)
+}
+
+/// Approximate GPU bytes for a texture plus its mip chain.
+fn gpu_texture_bytes(
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    mip_level_count: u32,
+) -> u64 {
+    let bpp = match format {
+        wgpu::TextureFormat::Rgba8UnormSrgb => 4,
+        wgpu::TextureFormat::Rgba16Float => 8,
+        _ => 4,
+    };
+    let mut total = 0u64;
+    for level in 0..mip_level_count {
+        let w = (width >> level).max(1) as u64;
+        let h = (height >> level).max(1) as u64;
+        total += w * h * bpp;
+    }
+    total
+}
+
+/// Converts sRGB-coded u16 samples to linear f16, leaving alpha linear.
+fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
+    static TABLE: LazyLock<[f16; 65536]> = LazyLock::new(|| {
+        let mut table = [f16::ZERO; 65536];
+        for (i, entry) in table.iter_mut().enumerate() {
+            let v = i as f32 / 65535.0;
+            let linear = if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            };
+            *entry = f16::from_f32(linear);
+        }
+        table
+    });
+
+    let mut out = Vec::with_capacity(pixels.len() * 2);
+    for (i, &v) in pixels.iter().enumerate() {
+        let f = if (i + 1) % 4 == 0 {
+            // Alpha: linear.
+            f16::from_f32(v as f32 / 65535.0)
+        } else {
+            TABLE[v as usize]
+        };
+        out.extend_from_slice(&f.to_ne_bytes());
+    }
+    out
+}
+
 fn generate_mipmaps(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    pipeline: &wgpu::RenderPipeline,
+    pipelines: &mut HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
     sampler: &wgpu::Sampler,
     texture: &wgpu::Texture,
+    format: wgpu::TextureFormat,
     mip_level_count: u32,
 ) {
     if mip_level_count <= 1 {
         return;
     }
+    let pipeline = pipelines.entry(format).or_insert_with(|| {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mipmap pipeline layout"),
+            bind_group_layouts: &[&device.create_bind_group_layout(
+                &wgpu::BindGroupLayoutDescriptor {
+                    label: Some("mipmap bind group layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                },
+            )],
+            push_constant_ranges: &[],
+        });
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("mipmap shader"),
+            source: wgpu::ShaderSource::Wgsl(MIP_SHADER.into()),
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("mipmap pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
+    });
+
     let bind_group_layout = pipeline.get_bind_group_layout(0);
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("mipmap encoder"),
@@ -478,7 +578,7 @@ fn generate_mipmaps(
     for level in 1..mip_level_count {
         let src_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("mipmap src"),
-            format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
+            format: None,
             dimension: Some(wgpu::TextureViewDimension::D2),
             aspect: wgpu::TextureAspect::All,
             base_mip_level: level - 1,
@@ -489,7 +589,7 @@ fn generate_mipmaps(
         });
         let dst_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("mipmap dst"),
-            format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
+            format: None,
             dimension: Some(wgpu::TextureViewDimension::D2),
             aspect: wgpu::TextureAspect::All,
             base_mip_level: level,
@@ -541,9 +641,11 @@ fn generate_mipmaps(
 mod tests {
     use futures_lite::future::block_on;
 
-    use crate::image::{DEFAULT_WALLPAPER_BYTES, DecodedImage, decode_image_bytes, decode_png};
+    use crate::image::{
+        DEFAULT_WALLPAPER_BYTES, DecodedImage, Pixels, decode_image_bytes, decode_png,
+    };
 
-    use super::{RenderContext, WallpaperTexture};
+    use super::{RenderContext, WallpaperTexture, mip_level_count};
 
     fn padded_bytes_per_row(width: u32) -> u32 {
         let unpadded = width * 4;
@@ -656,10 +758,11 @@ mod tests {
                 let weight =
                     (if dx == 0 { 1.0 - xf } else { xf }) * (if dy == 0 { 1.0 - yf } else { yf });
                 let offset = ((sy * image.size.0 + sx) * 4) as usize;
-                for (c, channel) in linear.iter_mut().enumerate().take(3) {
-                    *channel += srgb_to_linear(image.rgba[offset + c] as f32 / 255.0) * weight;
-                }
-                linear[3] += image.rgba[offset + 3] as f32 * weight;
+                let [r, g, b, a] = image.rgba8_at(offset);
+                linear[0] += srgb_to_linear(r as f32 / 255.0) * weight;
+                linear[1] += srgb_to_linear(g as f32 / 255.0) * weight;
+                linear[2] += srgb_to_linear(b as f32 / 255.0) * weight;
+                linear[3] += a as f32 * weight;
             }
         }
         [
@@ -787,9 +890,10 @@ mod tests {
             for x in 0..img_w {
                 let offset = ((y * img_w + x) * 4) as usize;
                 let q = (if x < img_w / 2 { 0 } else { 1 }) + (if y < img_h / 2 { 0 } else { 2 });
-                for (c, channel) in source[q].iter_mut().enumerate().take(3) {
-                    *channel += image.rgba[offset + c] as f32;
-                }
+                let [r, g, b, _] = image.rgba8_at(offset);
+                source[q][0] += r as f32;
+                source[q][1] += g as f32;
+                source[q][2] += b as f32;
                 source_counts[q] += 1;
             }
         }
@@ -808,6 +912,192 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn make_ramp_image(depth16: bool) -> DecodedImage {
+        let width = 1024u32;
+        let height = 512u32;
+        if depth16 {
+            let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+            for y in 0..height {
+                for x in 0..width {
+                    let r = ((x as f32 / (width - 1) as f32) * 65535.0).round() as u16;
+                    let g = ((y as f32 / (height - 1) as f32) * 65535.0).round() as u16;
+                    let b = (0.3f32 * 65535.0).round() as u16;
+                    pixels.extend_from_slice(&[r, g, b, u16::MAX]);
+                }
+            }
+            DecodedImage {
+                size: (width, height),
+                pixels: Pixels::Srgb16(pixels),
+            }
+        } else {
+            let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+            for y in 0..height {
+                for x in 0..width {
+                    let r = ((x as f32 / (width - 1) as f32) * 255.0).round() as u8;
+                    let g = ((y as f32 / (height - 1) as f32) * 255.0).round() as u8;
+                    let b = (0.3f32 * 255.0).round() as u8;
+                    rgba.extend_from_slice(&[r, g, b, 255]);
+                }
+            }
+            DecodedImage {
+                size: (width, height),
+                pixels: Pixels::Srgb8(rgba),
+            }
+        }
+    }
+
+    #[test]
+    fn sixteen_bit_texture_matches_reference() {
+        let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
+        let image = make_ramp_image(true);
+        let texture = ctx.upload_texture(&image);
+        assert_eq!(texture.size, (1024, 512));
+
+        let points: [(u32, u32); 9] = [
+            (0, 0),
+            (1023, 0),
+            (0, 511),
+            (1023, 511),
+            (512, 0),
+            (512, 511),
+            (0, 256),
+            (1023, 256),
+            (512, 256),
+        ];
+
+        let data = draw_offscreen(
+            &mut ctx,
+            &texture,
+            1024,
+            512,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        );
+        let bytes_per_row = padded_bytes_per_row(1024);
+        for &(x, y) in &points {
+            let offset = (y * bytes_per_row + x * 4) as usize;
+            let got = [
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ];
+            let [r, g, b, a] = image.rgba8_at(((y * 1024 + x) * 4) as usize);
+            let expected = [r, g, b, a];
+            assert!(
+                got.iter()
+                    .zip(expected.iter())
+                    .all(|(a, b)| a.abs_diff(*b) <= 1),
+                "mismatch at ({x},{y}): got {got:?}, expected {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn mips_follow_the_texture_format() {
+        let mut rendered = [[[0.0f32; 3]; 4]; 2];
+        for (i, depth16) in [false, true].into_iter().enumerate() {
+            let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
+            let image = make_ramp_image(depth16);
+            let texture = ctx.upload_texture(&image);
+            assert_eq!(texture.size, (1024, 512));
+            let format = if depth16 {
+                wgpu::TextureFormat::Rgba16Float
+            } else {
+                wgpu::TextureFormat::Rgba8UnormSrgb
+            };
+            assert_eq!(
+                ctx.device
+                    .create_texture(&wgpu::TextureDescriptor {
+                        label: Some("probe"),
+                        size: wgpu::Extent3d {
+                            width: 1024,
+                            height: 512,
+                            depth_or_array_layers: 1
+                        },
+                        mip_level_count: 11,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING
+                            | wgpu::TextureUsages::COPY_DST
+                            | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[],
+                    })
+                    .mip_level_count(),
+                11,
+                "probe texture should accept 11 levels"
+            );
+
+            let (w, h) = (256u32, 128u32);
+            let data = draw_offscreen(
+                &mut ctx,
+                &texture,
+                w,
+                h,
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+            );
+            let bytes_per_row = padded_bytes_per_row(w);
+
+            let mut counts = [0u32; 4];
+            for y in 0..h {
+                for x in 0..w {
+                    let offset = (y * bytes_per_row + x * 4) as usize;
+                    let q = (if x < w / 2 { 0 } else { 1 }) + (if y < h / 2 { 0 } else { 2 });
+                    rendered[i][q][0] += data[offset] as f32;
+                    rendered[i][q][1] += data[offset + 1] as f32;
+                    rendered[i][q][2] += data[offset + 2] as f32;
+                    counts[q] += 1;
+                }
+            }
+            for (q, row) in rendered[i].iter_mut().enumerate() {
+                for channel in row.iter_mut() {
+                    *channel /= counts[q] as f32;
+                }
+            }
+        }
+
+        for (q, (eight, sixteen)) in rendered[0].iter().zip(rendered[1].iter()).enumerate() {
+            for (c, (&a, &b)) in eight.iter().zip(sixteen.iter()).enumerate() {
+                let diff = (a - b).abs();
+                assert!(
+                    diff <= 6.0,
+                    "quadrant {q} channel {c}: 8-bit mean {a} vs 16-bit mean {b}, diff {diff}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn non_filterable_formats_get_one_level() {
+        assert_eq!(
+            mip_level_count(
+                wgpu::TextureFormat::Rgba32Float,
+                wgpu::Features::empty(),
+                1024,
+                512
+            ),
+            1
+        );
+        assert_eq!(
+            mip_level_count(
+                wgpu::TextureFormat::Rgba32Float,
+                wgpu::Features::FLOAT32_FILTERABLE,
+                1024,
+                512,
+            ),
+            11
+        );
+        assert_eq!(
+            mip_level_count(
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                wgpu::Features::empty(),
+                1024,
+                512
+            ),
+            11
+        );
     }
 
     #[test]
@@ -839,12 +1129,7 @@ mod tests {
 
         for (x, y) in points {
             let offset = ((y * w + x) * 4) as usize;
-            let got = [
-                capture.rgba[offset],
-                capture.rgba[offset + 1],
-                capture.rgba[offset + 2],
-                capture.rgba[offset + 3],
-            ];
+            let got = capture.rgba8_at(offset);
             let expected = reference_color(&source, x, y, w, h);
             assert!(
                 got.iter()

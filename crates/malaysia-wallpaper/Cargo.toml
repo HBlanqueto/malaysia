@@ -22,6 +22,7 @@ serde.workspace = true
 toml.workspace = true
 png.workspace = true
 zune-jpeg.workspace = true
+half.workspace = true
 vow-appearance.workspace = true
 vow-design.workspace = true
 
