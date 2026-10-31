@@ -667,18 +667,18 @@ mod tests {
     }
 
     #[test]
-    fn the_embedded_default_wallpaper_decodes_to_1080x607() {
+    fn the_embedded_default_wallpaper_decodes_to_1280x959() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
-        assert_eq!(image.size, (1080, 607));
+        assert_eq!(image.size, (1280, 959));
     }
 
     #[test]
     fn the_embedded_default_has_a_dominant_colour() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
         let color = dominant(&image).expect("great_forest should have a dominant colour");
-        // Obtained empirically on 2026-10-30 from the shipped JPEG.
-        assert!((color.r - 0.802479).abs() < 0.001);
-        assert!((color.g - 0.792251).abs() < 0.001);
-        assert!((color.b - 0.097521).abs() < 0.001);
+        // Obtained empirically on 2026-10-31 from the shipped JPEG.
+        assert!((color.r - 0.820188).abs() < 0.001);
+        assert!((color.g - 0.821487).abs() < 0.001);
+        assert!((color.b - 0.078513).abs() < 0.001);
     }
 }
