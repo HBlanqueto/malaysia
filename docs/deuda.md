@@ -28,5 +28,6 @@ Hallazgos abiertos contra `22070c6` (2026-10-31); los corregidos y los del toolk
 | P5-19 | `crates/malaysia-shell/src/menubar/dbusmenu.rs:859-875` | `ItemsPropertiesUpdated` no invalida `full`; la Ayuda ve datos viejos. | L1i |
 | P5-20 | `crates/malaysia-shell/src/menubar/mod.rs:93,95` y `dock.rs:108` | `ActiveWindow.title` muerto y dock con parser propio. | L2b |
 | G-01 | `crates/xdg-desktop-portal-malaysia/src/gtk.rs` | `gtk_bridge` se lee aparte del `AppearanceConfig` de barrierkit; moverlo allí al unificar `for-malaysia` con `main`. Los fondos base de Adwaita están fijados a libadwaita 1.6+. | L2b |
+| G-03 | `crates/malaysia-settings` (vía barrierkit `for-malaysia`) | Las cápsulas de Ajustes heredan el tinte completo de la ventana desde barrierkit `57da904` (`main`); malaysia lo verá al unificar `for-malaysia` con `main`. El puente GTK ya aplica la misma regla a las tarjetas. | L2b |
 | G-02 | `crates/xdg-desktop-portal-malaysia/src/gtk.rs` | GTK no relee `gtk.css`: acento y tinte nuevos solo al reabrir la app. Falta una recarga sin parpadeo. | — |
 | L3 | `session.rs:2178`, `input.rs:3041`, `handlers.rs:1345` | Tres arneses de test; unificar y añadir el test de PX-06. | L3 |

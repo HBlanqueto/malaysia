@@ -168,10 +168,22 @@ fn tinted_backgrounds(
             ),
         ]);
     }
+    // Cards keep the window's full tint one elevation step lighter, the same
+    // rule barrier-kit uses for its groups (`surfaces.surface`).
     if parts.groups
         && let Some(card) = base.card
     {
-        colors.push(("card_bg_color", mix(card, LAYER_FACTOR_SURFACE)));
+        let window = mix(base.window, 1.0);
+        let step = |w: f32, b: f32, c: f32| (w + c - b).clamp(0.0, 1.0);
+        colors.push((
+            "card_bg_color",
+            Rgba {
+                r: step(window.r, base.window.r, card.r),
+                g: step(window.g, base.window.g, card.g),
+                b: step(window.b, base.window.b, card.b),
+                a: card.a,
+            },
+        ));
     }
     if parts.menus {
         colors.extend([
