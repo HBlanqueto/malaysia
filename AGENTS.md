@@ -201,6 +201,20 @@ En NixOS, el flake expone `nixosModules.default` (`programs.malaysia.enable = tr
 instala el paquete, registra la sesión, crea `/etc/pam.d/malaysia-lock` y arranca
 `malaysia-session.target` con los componentes de la shell.
 
+## Ramas y push (permanente)
+
+- Todo cambio va **directo a `main`**. No crees ramas, ni locales ni remotas,
+  ni hagas push a otra rama. Esto vale para cualquier agente (opencode, Claude
+  Code en local o en la nube, DeepSeek, Kimi, etc.).
+- Hay varias sesiones trabajando a la vez: `git pull --ff-only` antes de
+  empezar y antes de cada push. Nunca `push --force`, `reset --hard` sobre
+  commits subidos ni rebase de historia publicada.
+- `Cargo.lock` nunca se sube generado con `dev.sh kit-local` (pierde las
+  líneas `source` de barrierkit). Si aparece modificado y no cambiaste
+  dependencias, `git checkout Cargo.lock` antes del commit.
+- La historia anterior al 28-oct-2026 vive en el tag
+  `archivo/historia-hasta-2026-10-26`, no en una rama.
+
 ## Convenciones de commits
 
 El tipo va delante y el ámbito entre paréntesis: `fix(kit): …`,
