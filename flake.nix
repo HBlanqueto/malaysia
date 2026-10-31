@@ -173,8 +173,8 @@
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
-            install -Dm644 share/wallpapers/great_forest.jpg \
-              $out/share/wallpapers/great_forest.jpg
+            install -Dm644 share/wallpapers/bandura.jpg \
+              $out/share/wallpapers/bandura.jpg
             install -Dm644 NOTICE \
               $out/share/doc/malaysia/NOTICE
             # The Settings app launcher entry.

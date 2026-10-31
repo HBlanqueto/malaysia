@@ -186,11 +186,11 @@ desarrollo puede apuntarlo al repo o a otra carpeta. El componente
 **`malaysia-wallpaper`** dibuja el wallpaper en la capa `Background` con las
 imágenes de esa carpeta (ADR 0049; render **Vulkan**/wgpu presentado por dmabuf).
 
-**El wallpaper por defecto es `great_forest.jpg`**: un JPEG sRGB de 1080×607
+**El wallpaper por defecto es `bandura.jpg`**: un JPEG sRGB de 1280×959
 incrustado en el binario de `malaysia-wallpaper`.
 Es el que se ve cuando el almacén no elige ninguno, todavía no existe, o la
 selección apunta a un archivo que no existe o no decodifica. Si `wallpaper.dir`
-apunta a otra carpeta y no hay selección, sigue viéndose `great_forest.jpg`.
+apunta a otra carpeta y no hay selección, sigue viéndose `bandura.jpg`.
 
 **Como macOS, la selección actual vive en un almacén aparte**:
 `~/.local/share/malaysia/wallpaper.domain` (el equivalente a `~/Library/Application
@@ -200,7 +200,7 @@ a la imagen:
 ```toml
 # ~/.local/share/malaysia/wallpaper.domain  (current selection, per desktop)
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, great_forest.jpg
+default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, bandura.jpg
 ```
 
 Editar ese archivo cambia el wallpaper **en vivo** (`malaysia-wallpaper` vigila el

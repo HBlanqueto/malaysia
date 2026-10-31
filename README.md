@@ -171,7 +171,7 @@ default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Min
 ```
 
 `dir` es el catálogo de imágenes PNG. Si no hay `[desktops].default`, o la
-selección apunta a un archivo que no existe, se usa `great_forest.jpg`, un JPEG
+selección apunta a un archivo que no existe, se usa `bandura.jpg`, un JPEG
 incrustado en el binario de `malaysia-wallpaper`.
 
 Toda la documentación vive en [`docs/`](docs/README.md):
