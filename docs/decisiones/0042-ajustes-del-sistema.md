@@ -1,61 +1,37 @@
-# 0042 — Ajustes del sistema (`yuki-settings`)
+# 0042 — Ajustes del sistema (`malaysia-settings`)
 
 Estado: **aceptado** (2026-10-26).
 
 ## Contexto
 
-El escritorio necesita una aplicación de preferencias. La primera sección,
-**Apariencia**, permite cambiar el esquema de color, el color de acento, el
-modo de color de las ventanas y el estilo de los semáforos. Debe integrarse
-con el menú del sistema, el empaquetado Nix y el tema Neptunia.
+El escritorio necesita una app de preferencias. La primera sección, Apariencia,
+cambia esquema de color, acento, modo de color de ventanas y estilo de semáforos;
+debe integrarse con el menú del sistema, Nix y Tengen.
 
 ## Decisión
 
-1. **App propia sobre CelestialKit.** El binario se llama `yuki-settings`,
-   vive en `crates/yuki-settings` y se dibuja con `celestial-kit` sobre Freya
-   (ADR 0034).
-
-2. **`app_id` fijo.** El prefijo de apps nativas es
-   `io.github.hblanqueto.yuki.` (constante `NATIVE_APP_ID_PREFIX` de
-   `yuki-design`). La app pasa `"settings"` a `WindowOptions`, por lo que el
-   `app_id` completo es `io.github.hblanqueto.yuki.settings`.
-
-3. **Ventana con decoración cliente (CSD).** La ventana usa
-   `Decorations::Client` y dibuja su propia titlebar con semáforos; el tamaño
-   inicial y los límites salen de `yuki-design::SETTINGS`.
-
-4. **Se abre desde el menú ❄.** El item "Ajustes del sistema…" del menú del
-   sistema en `yuki-shell menubar` llama a `spawn_app("yuki-settings", &[])`;
-   esta función preserva `WAYLAND_DISPLAY` y elimina el entorno Mesa privado
-   del compositor, igual que para los componentes de la shell.
-
-5. **Persistencia en `appearance.domain`.** La app lee y escribe
-   `~/.config/yuki/appearance.domain` a través de `yuki_appearance::load_appearance`
-   y `write_appearance`. Solo edita campos relacionados con apariencia; el
-   resto de dominios quedan para fases posteriores.
-
-6. **Empaquetado Nix.** El flake instala el binario `yuki-settings`, lo envuelve
-   con el mismo wrapper Mesa que `yuki` y `yuki-shell`, y copia
-   `share/applications/io.github.hblanqueto.yuki.settings.desktop`.
+1. App propia sobre BarrierKit: binario `malaysia-settings`, crate
+   `malaysia-settings`, dibujada con `barrier-kit` sobre Freya (ADR 0034).
+2. `app_id` fijo: prefijo `io.github.hblanqueto.malaysia.` y `"settings"` →
+   `io.github.hblanqueto.malaysia.settings`.
+3. Ventana CSD: `Decorations::Client` y titlebar propia con semáforos; tamaño y
+   límites de `vow-design::SETTINGS`.
+4. Se abre desde el menú ❄ con `spawn_app("malaysia-settings", &[])`, que
+   preserva `WAYLAND_DISPLAY` y elimina el entorno Mesa privado.
+5. Persistencia en `appearance.domain` vía `vow_appearance`; solo edita campos
+   de apariencia.
+6. Nix instala el binario, lo envuelve con el wrapper Mesa y copia
+   `share/applications/io.github.hblanqueto.malaysia.settings.desktop`.
 
 ## Consecuencias
 
-- Hoy solo existe la sección Apariencia; más dominios se añadirán cuando el
-  catálogo de opciones y el backend D-Bus (`org.yuki.Compositor1`, ADR 0021)
-  estén listos.
-- La app no es un componente `yuki-shell`; es un cliente Wayland independiente.
-- El lanzador del menú del sistema no requiere portal ni D-Bus de activación.
-- El archivo `.desktop` usa `StartupWMClass` con el `app_id` para que los
-  launchers externos puedan agrupar la ventana correctamente.
+- Hoy solo existe Apariencia; más dominios llegan con el catálogo y el D-Bus de
+  configuración (ADR 0021).
+- No es un componente `malaysia-shell`; es un cliente Wayland independiente.
+- El lanzador del menú no requiere portal ni activación D-Bus.
+- El `.desktop` usa `StartupWMClass` con el `app_id`.
 
-## Referencias
+## Alternativas descartadas
 
-- [`0021`](0021-superficie-de-configuracion-y-control.md) — configuración y
-  control por D-Bus.
-- [`0025`](0025-la-shell-es-nativa.md) — la shell es nativa.
-- [`0032`](0032-neptunia-es-la-fuente-de-diseno-del-escritorio.md) — Neptunia.
-- [`0034`](0034-celestialkit-sobre-freya.md) — CelestialKit sobre Freya.
-- [`0041`](0041-barra-lateral-en-isla.md) — barra lateral en isla.
-- `crates/yuki-settings/src/main.rs` — implementación.
-- `crates/yuki-shell/src/menubar/system.rs` — item del menú del sistema.
-- `share/applications/io.github.hblanqueto.yuki.settings.desktop`.
+- Usar una app GTK genérica: no comparte tokens ni el chrome de la shell.
+- Ajustes dentro del compositor: agranda el proceso que debe ser pequeño.
