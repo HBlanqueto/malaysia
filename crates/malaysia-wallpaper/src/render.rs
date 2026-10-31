@@ -184,6 +184,35 @@ impl RenderContext {
             push_constant_ranges: &[],
         });
 
+        let mip_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("mipmap bind group layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let mip_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mipmap pipeline layout"),
+            bind_group_layouts: &[&mip_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("wallpaper shader"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),
@@ -222,7 +251,7 @@ impl RenderContext {
 
         let mip_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("mipmap pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&mip_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &mip_shader,
                 entry_point: Some("vs_main"),
