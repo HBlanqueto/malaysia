@@ -98,6 +98,8 @@ struct OutputSurface {
     /// True when a redraw for this surface is already scheduled on the idle
     /// queue; cleared by the idle callback before rendering.
     pending_redraw: bool,
+    /// True once the first successful present has happened for this output.
+    first_frame_presented: bool,
 }
 
 impl App {
@@ -358,6 +360,7 @@ impl App {
             // Real format is selected in configure_output from surface capabilities.
             surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,
             pending_redraw: false,
+            first_frame_presented: false,
         };
         info!(output = ?output.id(), "output added");
         self.outputs.insert(output.id(), output_surface);
@@ -475,14 +478,17 @@ impl App {
             )
         };
 
+        let mut presented = false;
         match render_result {
-            Ok(()) => {}
+            Ok(()) => presented = true,
             Err(wgpu::SurfaceError::Outdated) => {
                 self.configure_output(&output_id);
                 let output = self.outputs.get(&output_id).expect("output exists");
                 let texture = self.texture.as_ref().expect("texture exists");
                 if let Err(error) = self.render.render(&output.wgpu_surface, format, texture) {
                     error!(%error, "render failed after reconfigure");
+                } else {
+                    presented = true;
                 }
             }
             Err(wgpu::SurfaceError::Lost) => {
@@ -490,6 +496,13 @@ impl App {
             }
             Err(error) => {
                 anyhow::bail!("wgpu render error: {error}");
+            }
+        }
+        if presented {
+            let output = self.outputs.get_mut(&output_id).expect("output exists");
+            if !output.first_frame_presented {
+                output.first_frame_presented = true;
+                info!(output = ?output_id, "first frame presented");
             }
         }
         Ok(())

@@ -33,78 +33,11 @@ struct Uniforms {
     _pad: [f32; 2],
 }
 
-const SHADER: &str = r#"
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
-    let uv = vec2<f32>(
-        f32(idx == 1u) * 2.0 + -1.0,
-        f32(idx == 2u) * 2.0 + -1.0,
-    );
-    var out: VertexOutput;
-    out.position = vec4<f32>(uv, 0.0, 1.0);
-    out.uv = uv * 0.5 + vec2<f32>(0.5);
-    return out;
-}
-
-@group(0) @binding(0)
-var wallpaper: texture_2d<f32>;
-@group(0) @binding(1)
-var samp: sampler;
-@group(0) @binding(2)
-var<uniform> uniforms: Uniforms;
-
-struct Uniforms {
-    surface_size: vec2<f32>,
-    image_size: vec2<f32>,
-    _pad: vec2<f32>,
-};
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let img = uniforms.image_size;
-    let surf = uniforms.surface_size;
-    let scale = max(surf.x / img.x, surf.y / img.y);
-    let scaled = img * scale;
-    let offset = (surf - scaled) / (2.0 * surf);
-    let factor = scaled / surf;
-    let uv = clamp(in.uv * factor + offset, vec2<f32>(0.0), vec2<f32>(1.0));
-    return textureSample(wallpaper, samp, uv);
-}
-"#;
-
-const MIP_SHADER: &str = r#"
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
-    let uv = vec2<f32>(
-        f32(idx == 1u) * 2.0 + -1.0,
-        f32(idx == 2u) * 2.0 + -1.0,
-    );
-    var out: VertexOutput;
-    out.position = vec4<f32>(uv, 0.0, 1.0);
-    out.uv = uv * 0.5 + vec2<f32>(0.5);
-    return out;
-}
-
-@group(0) @binding(0)
-var src: texture_2d<f32>;
-@group(0) @binding(1)
-var samp: sampler;
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(src, samp, in.uv);
-}
-"#;
+const SHADER: &str = concat!(
+    include_str!("fullscreen.wgsl"),
+    include_str!("wallpaper.wgsl")
+);
+const MIP_SHADER: &str = concat!(include_str!("fullscreen.wgsl"), include_str!("mip.wgsl"));
 
 impl RenderContext {
     /// Creates a Vulkan-only wgpu context and logs the chosen adapter.
@@ -124,7 +57,21 @@ impl RenderContext {
                 force_fallback_adapter: false,
             })
             .await
-            .ok_or_else(|| anyhow::anyhow!("no Vulkan adapter found; is RADV available?"))?;
+            .ok_or_else(|| {
+                let vk_files = std::env::var("VK_DRIVER_FILES")
+                    .unwrap_or_else(|_| "(sin definir)".to_string());
+                let mut msg = format!("no Vulkan adapter found; VK_DRIVER_FILES={vk_files}");
+                if vk_files != "(sin definir)" {
+                    for path in vk_files.split(':').filter(|p| !p.is_empty()) {
+                        let exists = std::path::Path::new(path).exists();
+                        msg.push_str(&format!(
+                            "\n  {path}: {}",
+                            if exists { "existe" } else { "no existe" }
+                        ));
+                    }
+                }
+                anyhow::anyhow!(msg)
+            })?;
 
         {
             let info = adapter.get_info();
@@ -141,7 +88,10 @@ impl RenderContext {
                 &wgpu::DeviceDescriptor {
                     label: Some("malaysia-wallpaper"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    required_limits: wgpu::Limits {
+                        max_texture_dimension_2d: 4096,
+                        ..wgpu::Limits::downlevel_defaults()
+                    },
                     memory_hints: wgpu::MemoryHints::MemoryUsage,
                 },
                 None,
@@ -392,8 +342,6 @@ impl RenderContext {
             &self.sampler,
             &texture,
             mip_level_count,
-            width,
-            height,
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -436,33 +384,15 @@ impl RenderContext {
         );
     }
 
-    /// Renders one frame to `surface` using the shared texture.
-    ///
-    /// Surface-outdated errors are logged and ignored; surface-lost errors
-    /// are propagated so the caller can exit.
-    pub fn render(
+    /// Encodes the wallpaper draw pass into `view` and submits it.
+    pub fn draw(
         &mut self,
-        surface: &wgpu::Surface<'_>,
+        view: &wgpu::TextureView,
         format: wgpu::TextureFormat,
         texture: &WallpaperTexture,
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) {
         self.ensure_pipeline(format);
         let pipeline = self.pipeline.as_ref().expect("pipeline was just ensured");
-        let output = match surface.get_current_texture() {
-            Ok(output) => output,
-            Err(wgpu::SurfaceError::Outdated) => {
-                tracing::warn!("surface outdated, will reconfigure");
-                return Err(wgpu::SurfaceError::Outdated);
-            }
-            Err(wgpu::SurfaceError::Lost) => {
-                tracing::error!("surface lost");
-                return Err(wgpu::SurfaceError::Lost);
-            }
-            Err(error) => return Err(error),
-        };
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -472,7 +402,7 @@ impl RenderContext {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wallpaper pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -488,6 +418,34 @@ impl RenderContext {
             pass.draw(0..3, 0..1);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
+    }
+
+    /// Renders one frame to `surface` using the shared texture.
+    ///
+    /// Surface-outdated errors are logged and ignored; surface-lost errors
+    /// are propagated so the caller can exit.
+    pub fn render(
+        &mut self,
+        surface: &wgpu::Surface<'_>,
+        format: wgpu::TextureFormat,
+        texture: &WallpaperTexture,
+    ) -> Result<(), wgpu::SurfaceError> {
+        let output = match surface.get_current_texture() {
+            Ok(output) => output,
+            Err(wgpu::SurfaceError::Outdated) => {
+                tracing::warn!("surface outdated, will reconfigure");
+                return Err(wgpu::SurfaceError::Outdated);
+            }
+            Err(wgpu::SurfaceError::Lost) => {
+                tracing::error!("surface lost");
+                return Err(wgpu::SurfaceError::Lost);
+            }
+            Err(error) => return Err(error),
+        };
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        self.draw(&view, format, texture);
         output.present();
         Ok(())
     }
@@ -501,7 +459,6 @@ fn max_mip_levels(width: u32, height: u32) -> u32 {
     (u32::BITS - max.leading_zeros()).max(1)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn generate_mipmaps(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -509,8 +466,6 @@ fn generate_mipmaps(
     sampler: &wgpu::Sampler,
     texture: &wgpu::Texture,
     mip_level_count: u32,
-    width: u32,
-    height: u32,
 ) {
     if mip_level_count <= 1 {
         return;
@@ -520,13 +475,7 @@ fn generate_mipmaps(
         label: Some("mipmap encoder"),
     });
 
-    let mut src_width = width;
-    let mut src_height = height;
-
     for level in 1..mip_level_count {
-        let dst_width = src_width.max(1) / 2;
-        let dst_height = src_height.max(1) / 2;
-
         let src_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("mipmap src"),
             format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
@@ -583,10 +532,326 @@ fn generate_mipmaps(
             pass.set_bind_group(0, &bind_group, &[]);
             pass.draw(0..3, 0..1);
         }
-
-        src_width = dst_width;
-        src_height = dst_height;
     }
 
     queue.submit(std::iter::once(encoder.finish()));
+}
+
+#[cfg(test)]
+mod tests {
+    use futures_lite::future::block_on;
+
+    use crate::image::{DEFAULT_WALLPAPER_BYTES, DecodedImage, decode_image_bytes, decode_png};
+
+    use super::{RenderContext, WallpaperTexture};
+
+    fn padded_bytes_per_row(width: u32) -> u32 {
+        let unpadded = width * 4;
+        unpadded.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+    }
+
+    fn draw_offscreen(
+        ctx: &mut RenderContext,
+        texture: &WallpaperTexture,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+    ) -> Vec<u8> {
+        let output = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("wallpaper test offscreen"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = output.create_view(&wgpu::TextureViewDescriptor::default());
+        ctx.set_uniforms(width, height, texture.size);
+        ctx.draw(&view, format, texture);
+
+        let bytes_per_row = padded_bytes_per_row(width);
+        let buffer_size = u64::from(bytes_per_row * height);
+        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("wallpaper test readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("wallpaper test copy"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &output,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        ctx.queue.submit(std::iter::once(encoder.finish()));
+
+        let slice = buffer.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        ctx.device.poll(wgpu::Maintain::Wait);
+        slice.get_mapped_range().to_vec()
+    }
+
+    fn srgb_to_linear(c: f32) -> f32 {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    fn linear_to_srgb(c: f32) -> f32 {
+        if c <= 0.0031308 {
+            c * 12.92
+        } else {
+            c.powf(1.0 / 2.4) * 1.055 - 0.055
+        }
+    }
+
+    fn reference_color(image: &DecodedImage, x: u32, y: u32, surf_w: u32, surf_h: u32) -> [u8; 4] {
+        let surf = (surf_w as f32, surf_h as f32);
+        let img = (image.size.0 as f32, image.size.1 as f32);
+        let s = (surf.0 / img.0).max(surf.1 / img.1);
+        let u = 0.5 + (((x as f32 + 0.5) / surf.0) - 0.5) * (surf.0 / (img.0 * s));
+        let v = 0.5 + (((y as f32 + 0.5) / surf.1) - 0.5) * (surf.1 / (img.1 * s));
+
+        let sample_x = u * img.0 - 0.5;
+        let sample_y = v * img.1 - 0.5;
+        let x0 = sample_x.floor() as i32;
+        let y0 = sample_y.floor() as i32;
+        let xf = sample_x - x0 as f32;
+        let yf = sample_y - y0 as f32;
+
+        let mut linear = [0.0f32; 4];
+        for dy in 0..2 {
+            for dx in 0..2 {
+                let sx = (x0 + dx).clamp(0, image.size.0 as i32 - 1) as u32;
+                let sy = (y0 + dy).clamp(0, image.size.1 as i32 - 1) as u32;
+                let weight =
+                    (if dx == 0 { 1.0 - xf } else { xf }) * (if dy == 0 { 1.0 - yf } else { yf });
+                let offset = ((sy * image.size.0 + sx) * 4) as usize;
+                for (c, channel) in linear.iter_mut().enumerate().take(3) {
+                    *channel += srgb_to_linear(image.rgba[offset + c] as f32 / 255.0) * weight;
+                }
+                linear[3] += image.rgba[offset + 3] as f32 * weight;
+            }
+        }
+        [
+            (linear_to_srgb(linear[0]) * 255.0).round() as u8,
+            (linear_to_srgb(linear[1]) * 255.0).round() as u8,
+            (linear_to_srgb(linear[2]) * 255.0).round() as u8,
+            (linear[3]).round() as u8,
+        ]
+    }
+
+    fn decode_default() -> DecodedImage {
+        decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap()
+    }
+
+    #[test]
+    fn cover_matches_reference_at_1280x800() {
+        let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
+        let image = decode_default();
+        let texture = ctx.upload_texture(&image);
+
+        let points: [(u32, u32); 9] = [
+            (0, 0),
+            (1279, 0),
+            (0, 799),
+            (1279, 799),
+            (640, 0),
+            (640, 799),
+            (0, 400),
+            (1279, 400),
+            (640, 400),
+        ];
+
+        // Guard: the prompt asks for the 9 edge/corner/center points; if the
+        // image is too uniform at those spots the test cannot detect flips.
+        let top_center = reference_color(&image, 640, 0, 1280, 800);
+        let bottom_center = reference_color(&image, 640, 799, 1280, 800);
+        let top_left = reference_color(&image, 0, 0, 1280, 800);
+        let top_right = reference_color(&image, 1279, 0, 1280, 800);
+        assert!(
+            top_center
+                .iter()
+                .zip(bottom_center.iter())
+                .any(|(a, b)| a.abs_diff(*b) > 30),
+            "guard failed: top-center and bottom-center are too similar; cannot detect a vertical flip"
+        );
+        assert!(
+            top_left
+                .iter()
+                .zip(top_right.iter())
+                .any(|(a, b)| a.abs_diff(*b) > 30),
+            "guard failed: top-left and top-right are too similar; cannot detect a horizontal mirror"
+        );
+
+        for format in [
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+        ] {
+            let data = draw_offscreen(&mut ctx, &texture, 1280, 800, format);
+            let bytes_per_row = padded_bytes_per_row(1280);
+            for &(x, y) in &points {
+                let offset = (y * bytes_per_row + x * 4) as usize;
+                let got = if format == wgpu::TextureFormat::Bgra8UnormSrgb {
+                    [
+                        data[offset + 2],
+                        data[offset + 1],
+                        data[offset],
+                        data[offset + 3],
+                    ]
+                } else {
+                    [
+                        data[offset],
+                        data[offset + 1],
+                        data[offset + 2],
+                        data[offset + 3],
+                    ]
+                };
+                let expected = reference_color(&image, x, y, 1280, 800);
+                assert!(
+                    got.iter()
+                        .zip(expected.iter())
+                        .all(|(a, b)| a.abs_diff(*b) <= 8),
+                    "mismatch at ({x},{y}) for {format:?}: got {got:?}, expected {expected:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn minified_quadrants_keep_orientation() {
+        let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
+        let image = decode_default();
+        let texture = ctx.upload_texture(&image);
+        let (w, h) = (270, 152);
+        let data = draw_offscreen(
+            &mut ctx,
+            &texture,
+            w,
+            h,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        );
+        let bytes_per_row = padded_bytes_per_row(w);
+
+        let mut rendered = [[0.0f32; 3]; 4];
+        let mut counts = [0u32; 4];
+        for y in 0..h {
+            for x in 0..w {
+                let offset = (y * bytes_per_row + x * 4) as usize;
+                let q = (if x < w / 2 { 0 } else { 1 }) + (if y < h / 2 { 0 } else { 2 });
+                for (c, channel) in rendered[q].iter_mut().enumerate().take(3) {
+                    *channel += data[offset + c] as f32;
+                }
+                counts[q] += 1;
+            }
+        }
+        for (q, row) in rendered.iter_mut().enumerate() {
+            for channel in row.iter_mut().take(3) {
+                *channel /= counts[q] as f32;
+            }
+        }
+
+        let (img_w, img_h) = (image.size.0, image.size.1);
+        let mut source = [[0.0f32; 3]; 4];
+        let mut source_counts = [0u32; 4];
+        for y in 0..img_h {
+            for x in 0..img_w {
+                let offset = ((y * img_w + x) * 4) as usize;
+                let q = (if x < img_w / 2 { 0 } else { 1 }) + (if y < img_h / 2 { 0 } else { 2 });
+                for (c, channel) in source[q].iter_mut().enumerate().take(3) {
+                    *channel += image.rgba[offset + c] as f32;
+                }
+                source_counts[q] += 1;
+            }
+        }
+        for (q, row) in source.iter_mut().enumerate() {
+            for channel in row.iter_mut().take(3) {
+                *channel /= source_counts[q] as f32;
+            }
+        }
+
+        for (q, (row, src)) in rendered.iter().zip(source.iter()).enumerate() {
+            for (c, (&r, &s)) in row.iter().take(3).zip(src.iter().take(3)).enumerate() {
+                let diff = (r - s).abs();
+                assert!(
+                    diff <= 10.0,
+                    "quadrant {q} channel {c}: rendered mean {r} vs source mean {s}, diff {diff}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn capture_matches_reference() {
+        let path = std::env::var_os("MALAYSIA_WALLPAPER_CAPTURE").expect(
+            "set MALAYSIA_WALLPAPER_CAPTURE to the PNG path and run with ./dev.sh wallpaper-check",
+        );
+        let path = std::path::PathBuf::from(path);
+        let bytes = std::fs::read(&path).expect("read capture PNG");
+        let capture = decode_png(&bytes).expect("decode capture PNG");
+        let (w, h) = capture.size;
+        let source = decode_default();
+
+        // The compositor's output capture can have host-window rounding artifacts
+        // in the very corners, so sample well inside them.
+        let inset = (w.min(h) / 8).max(2);
+        let points: [(u32, u32); 9] = [
+            (inset, inset),
+            (w - 1 - inset, inset),
+            (inset, h - 1 - inset),
+            (w - 1 - inset, h - 1 - inset),
+            (w / 2, inset),
+            (w / 2, h - 1 - inset),
+            (inset, h / 2),
+            (w - 1 - inset, h / 2),
+            (w / 2, h / 2),
+        ];
+
+        for (x, y) in points {
+            let offset = ((y * w + x) * 4) as usize;
+            let got = [
+                capture.rgba[offset],
+                capture.rgba[offset + 1],
+                capture.rgba[offset + 2],
+                capture.rgba[offset + 3],
+            ];
+            let expected = reference_color(&source, x, y, w, h);
+            assert!(
+                got.iter()
+                    .zip(expected.iter())
+                    .all(|(a, b)| a.abs_diff(*b) <= 3),
+                "mismatch at ({x},{y}) in {w}x{h} capture: got {got:?}, expected {expected:?}"
+            );
+        }
+    }
 }
