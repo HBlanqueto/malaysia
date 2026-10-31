@@ -8,13 +8,15 @@ use crate::image::DecodedImage;
 /// GPU state shared by every output surface.
 pub struct RenderContext {
     pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pipeline: wgpu::RenderPipeline,
+    pipeline: Option<wgpu::RenderPipeline>,
     mip_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     bind_group_layout: wgpu::BindGroupLayout,
     uniform_buffer: wgpu::Buffer,
+    surface_format: Option<wgpu::TextureFormat>,
 }
 
 /// A texture created from the current wallpaper.
@@ -178,12 +180,6 @@ impl RenderContext {
             ],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("wallpaper pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
         let mip_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("mipmap bind group layout"),
@@ -211,37 +207,6 @@ impl RenderContext {
             label: Some("mipmap pipeline layout"),
             bind_group_layouts: &[&mip_bind_group_layout],
             push_constant_ranges: &[],
-        });
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("wallpaper shader"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("wallpaper pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
         });
 
         let mip_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -297,13 +262,15 @@ impl RenderContext {
 
         Ok(Self {
             instance,
+            adapter,
             device,
             queue,
-            pipeline,
+            pipeline: None,
             mip_pipeline,
             sampler,
             bind_group_layout,
             uniform_buffer,
+            surface_format: None,
         })
     }
 
@@ -323,6 +290,58 @@ impl RenderContext {
             raw_window_handle: window,
         };
         Ok(unsafe { self.instance.create_surface_unsafe(target) }?)
+    }
+
+    /// Ensures the render pipeline exists for `format`.
+    ///
+    /// The pipeline target format must match the surface format, so it is
+    /// created lazily once the first surface reports its capabilities.
+    pub fn ensure_pipeline(&mut self, format: wgpu::TextureFormat) {
+        if self.surface_format == Some(format) && self.pipeline.is_some() {
+            return;
+        }
+        let pipeline_layout = self
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("wallpaper pipeline layout"),
+                bind_group_layouts: &[&self.bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let shader = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("wallpaper shader"),
+                source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            });
+        self.pipeline = Some(
+            self.device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("wallpaper pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader,
+                        entry_point: Some("fs_main"),
+                        compilation_options: Default::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                }),
+        );
+        self.surface_format = Some(format);
     }
 
     /// Uploads a decoded image as a GPU texture with a full mip chain.
@@ -422,10 +441,13 @@ impl RenderContext {
     /// Surface-outdated errors are logged and ignored; surface-lost errors
     /// are propagated so the caller can exit.
     pub fn render(
-        &self,
+        &mut self,
         surface: &wgpu::Surface<'_>,
+        format: wgpu::TextureFormat,
         texture: &WallpaperTexture,
     ) -> Result<(), wgpu::SurfaceError> {
+        self.ensure_pipeline(format);
+        let pipeline = self.pipeline.as_ref().expect("pipeline was just ensured");
         let output = match surface.get_current_texture() {
             Ok(output) => output,
             Err(wgpu::SurfaceError::Outdated) => {
@@ -461,7 +483,7 @@ impl RenderContext {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            pass.set_pipeline(&self.pipeline);
+            pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &texture.bind_group, &[]);
             pass.draw(0..3, 0..1);
         }

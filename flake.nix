@@ -72,6 +72,7 @@
             ./Cargo.toml
             ./Cargo.lock
             ./share
+            ./NOTICE
           ];
         };
         skia = barrierkit.packages.${system}.skia-binaries;
@@ -174,8 +175,8 @@
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
             install -Dm644 share/wallpapers/great_forest.jpg \
               $out/share/wallpapers/great_forest.jpg
-            install -Dm644 share/wallpapers/great_forest.NOTICE \
-              $out/share/wallpapers/great_forest.NOTICE
+            install -Dm644 NOTICE \
+              $out/share/doc/malaysia/NOTICE
             # The Settings app launcher entry.
             install -Dm644 share/applications/io.github.hblanqueto.malaysia.settings.desktop \
               $out/share/applications/io.github.hblanqueto.malaysia.settings.desktop

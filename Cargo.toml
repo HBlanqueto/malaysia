@@ -157,9 +157,10 @@ smithay-client-toolkit = "0.19.2"
 sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 
 # Vulkan wallpaper (Bloque 16a). `wgpu` is restricted to the Vulkan backend and
-# the WGSL shading language; `raw-window-handle` wires the Wayland surface into
-# wgpu without a window backend; `bytemuck` uploads the per-surface uniforms.
-wgpu = { version = "24", default-features = false, features = ["vulkan-portability", "wgsl"] }
+# the WGSL shading language (no GLES, no DX12, no Metal); `raw-window-handle`
+# wires the Wayland surface into wgpu without a window backend; `bytemuck`
+# uploads the per-surface uniforms.
+wgpu = { version = "24", default-features = false, features = ["wgsl"] }
 raw-window-handle = "0.6"
 bytemuck = { version = "1", features = ["derive"] }
 

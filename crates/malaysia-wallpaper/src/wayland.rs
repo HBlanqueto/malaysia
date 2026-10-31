@@ -88,12 +88,12 @@ struct OutputSurface {
     logical_size: (u32, u32),
     /// Fractional scale value from wp_fractional_scale_v1, or 1.0.
     scale: f64,
-    /// Whether a frame has been requested but not yet rendered.
-    frame_pending: bool,
     /// The wgpu surface for this output.
     wgpu_surface: wgpu::Surface<'static>,
     /// True once the wgpu surface has been configured.
     configured: bool,
+    /// Surface format chosen from the adapter's supported formats.
+    surface_format: wgpu::TextureFormat,
 }
 
 impl App {
@@ -224,21 +224,11 @@ impl App {
         if let Some(loaded) = self.wallpaper.image.take() {
             self.texture = Some(self.render.upload_texture(&loaded.decoded));
         }
-        self.request_redraw_all();
+        self.draw_all_outputs();
     }
 
-    fn request_redraw(&mut self, surface: &WlSurface) {
-        let Some(output) = self.outputs.values_mut().find(|o| o.surface == *surface) else {
-            return;
-        };
-        if !output.frame_pending {
-            output.frame_pending = true;
-            output.surface.frame(&self.qh, surface.clone());
-            output.surface.commit();
-        }
-    }
-
-    fn request_redraw_all(&mut self) {
+    /// Renders and commits every configured output immediately.
+    fn draw_all_outputs(&mut self) {
         let surfaces: Vec<WlSurface> = self
             .outputs
             .values()
@@ -246,7 +236,12 @@ impl App {
             .map(|o| o.surface.clone())
             .collect();
         for surface in surfaces {
-            self.request_redraw(&surface);
+            if let Err(error) = self.render_surface(&surface) {
+                error!(%error, "render failed");
+                if let Some(signal) = self.loop_signal.as_ref() {
+                    signal.stop();
+                }
+            }
         }
     }
 
@@ -294,9 +289,10 @@ impl App {
             fractional_scale,
             logical_size: (1, 1),
             scale: 1.0,
-            frame_pending: false,
             wgpu_surface,
             configured: false,
+            // Real format is selected in configure_output from surface capabilities.
+            surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,
         };
         info!(output = ?output.id(), "output added");
         self.outputs.insert(output.id(), output_surface);
@@ -321,12 +317,6 @@ impl App {
         let buffer_w = ((f64::from(logical_w) * scale).round() as u32).max(1);
         let buffer_h = ((f64::from(logical_h) * scale).round() as u32).max(1);
 
-        info!(
-            output = ?output_id,
-            logical_w, logical_h, scale, buffer_w, buffer_h,
-            "output configured"
-        );
-
         let surface = {
             let Some(output) = self.outputs.get(output_id) else {
                 return;
@@ -335,15 +325,44 @@ impl App {
         };
         self.set_opaque_region(&surface, logical_w, logical_h);
 
+        let format = {
+            let Some(output) = self.outputs.get(output_id) else {
+                return;
+            };
+            let caps = output.wgpu_surface.get_capabilities(&self.render.adapter);
+            let preferred = [
+                wgpu::TextureFormat::Bgra8UnormSrgb,
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+            ];
+            preferred
+                .into_iter()
+                .find(|f| caps.formats.contains(f))
+                .unwrap_or_else(|| {
+                    // Fall back to the first sRGB-capable format the adapter offers.
+                    caps.formats
+                        .into_iter()
+                        .find(|f| f.is_srgb())
+                        .unwrap_or(wgpu::TextureFormat::Rgba8UnormSrgb)
+                })
+        };
+
+        info!(
+            output = ?output_id,
+            logical_w, logical_h, scale, buffer_w, buffer_h,
+            ?format,
+            "output configured"
+        );
+
         let Some(output) = self.outputs.get_mut(output_id) else {
             return;
         };
+        output.surface_format = format;
         output
             .viewport
             .set_destination(logical_w as i32, logical_h as i32);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format,
             width: buffer_w,
             height: buffer_h,
             present_mode: wgpu::PresentMode::Fifo,
@@ -365,35 +384,39 @@ impl App {
     fn render_surface(&mut self, surface: &WlSurface) -> anyhow::Result<()> {
         let id = surface.id();
         let output_id = {
-            let Some(output) = self.outputs.values_mut().find(|o| o.surface.id() == id) else {
+            let Some(output) = self.outputs.values().find(|o| o.surface.id() == id) else {
                 return Ok(());
             };
-            output.frame_pending = false;
             if !output.configured {
                 return Ok(());
             }
             output.output.id()
         };
 
-        let render_result = {
-            let texture = self.texture.as_ref();
+        let Some(texture) = self.texture.as_ref() else {
             let output = self.outputs.get(&output_id).expect("output exists");
-            let Some(texture) = texture else {
-                let output = self.outputs.get(&output_id).expect("output exists");
-                output.layer_surface.commit();
-                return Ok(());
-            };
+            output.layer_surface.commit();
+            return Ok(());
+        };
+
+        let (format, render_result) = {
+            let output = self.outputs.get(&output_id).expect("output exists");
             self.render
                 .set_uniforms(output.logical_size.0, output.logical_size.1, texture.size);
-            self.render.render(&output.wgpu_surface, texture)
+            let format = output.surface_format;
+            (
+                format,
+                self.render.render(&output.wgpu_surface, format, texture),
+            )
         };
+
         match render_result {
             Ok(()) => {}
             Err(wgpu::SurfaceError::Outdated) => {
                 self.configure_output(&output_id);
                 let output = self.outputs.get(&output_id).expect("output exists");
                 let texture = self.texture.as_ref().expect("texture exists");
-                if let Err(error) = self.render.render(&output.wgpu_surface, texture) {
+                if let Err(error) = self.render.render(&output.wgpu_surface, format, texture) {
                     error!(%error, "render failed after reconfigure");
                 }
             }
@@ -504,9 +527,13 @@ impl LayerShellHandler for App {
         _serial: u32,
     ) {
         let surface = layer.wl_surface();
-        let id = surface.id();
+        let surface_id = surface.id();
         let output_id = {
-            let Some(output) = self.outputs.get_mut(&id) else {
+            let Some(output) = self
+                .outputs
+                .values_mut()
+                .find(|o| o.surface.id() == surface_id)
+            else {
                 return;
             };
             let width = configure.new_size.0.max(1);
@@ -516,10 +543,13 @@ impl LayerShellHandler for App {
         };
         self.configure_output(&output_id);
 
-        if let Some(output) = self.outputs.get(&output_id)
-            && output.configured
+        if self.outputs.get(&output_id).is_some_and(|o| o.configured)
+            && let Err(error) = self.render_surface(surface)
         {
-            self.request_redraw(surface);
+            error!(%error, "render failed after configure");
+            if let Some(signal) = self.loop_signal.as_ref() {
+                signal.stop();
+            }
         }
     }
 }
@@ -569,7 +599,7 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for App {
             output.scale = scale;
             let output_id = output.output.id();
             state.configure_output(&output_id);
-            state.request_redraw(surface);
+            state.draw_all_outputs();
         }
     }
 }
