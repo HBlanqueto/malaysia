@@ -14,13 +14,22 @@ pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     "/../../share/wallpapers/bandura.jpg"
 ));
 
+/// Pixel storage for a decoded wallpaper.
+#[derive(Clone, PartialEq)]
+pub enum Pixels {
+    /// RGBA8 in sRGB, top-down.
+    Srgb8(Vec<u8>),
+    /// RGBA16 with the image's sRGB encoding (linear alpha), top-down.
+    Srgb16(Vec<u16>),
+}
+
 /// A decoded picture, ready to become a GPU texture.
 #[derive(Clone, PartialEq)]
 pub struct DecodedImage {
     /// Width and height in pixels.
     pub size: (u32, u32),
-    /// Top-down RGBA8 pixels.
-    pub rgba: Vec<u8>,
+    /// Top-down pixels.
+    pub pixels: Pixels,
 }
 
 /// The image selection on disk and the decoded picture, if any.
@@ -199,10 +208,14 @@ pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     }
 }
 
-/// Decodes a PNG, normalizing 16-bit and indexed images to 8-bit colour.
+/// Decodes a PNG preserving 16-bit colour when present.
+#[allow(clippy::chunks_exact_to_as_chunks)]
 pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
-    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    // EXPAND normalises indexed and low-bit-depth greyscale to 8/16-bit RGB/RGBA.
+    // shortcut: se ignoran gAMA/iCCP y se asume sRGB; leerlos cuando entre la
+    // gestión de color (16c o posterior).
+    decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info()?;
     let mut buf = vec![0; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf)?;
@@ -210,11 +223,55 @@ pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     let width = info.width;
     let height = info.height;
     let bytes = &buf[..info.buffer_size()];
-    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
 
+    if info.bit_depth == png::BitDepth::Sixteen {
+        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+        match info.color_type {
+            png::ColorType::Rgb => {
+                for px in bytes.chunks_exact(6) {
+                    rgba.extend_from_slice(&[
+                        u16::from_be_bytes([px[0], px[1]]),
+                        u16::from_be_bytes([px[2], px[3]]),
+                        u16::from_be_bytes([px[4], px[5]]),
+                        u16::MAX,
+                    ]);
+                }
+            }
+            png::ColorType::Rgba => {
+                for px in bytes.chunks_exact(8) {
+                    rgba.extend_from_slice(&[
+                        u16::from_be_bytes([px[0], px[1]]),
+                        u16::from_be_bytes([px[2], px[3]]),
+                        u16::from_be_bytes([px[4], px[5]]),
+                        u16::from_be_bytes([px[6], px[7]]),
+                    ]);
+                }
+            }
+            png::ColorType::Grayscale => {
+                for px in bytes.chunks_exact(2) {
+                    let v = u16::from_be_bytes([px[0], px[1]]);
+                    rgba.extend_from_slice(&[v, v, v, u16::MAX]);
+                }
+            }
+            png::ColorType::GrayscaleAlpha => {
+                for px in bytes.chunks_exact(4) {
+                    let v = u16::from_be_bytes([px[0], px[1]]);
+                    let a = u16::from_be_bytes([px[2], px[3]]);
+                    rgba.extend_from_slice(&[v, v, v, a]);
+                }
+            }
+            color => anyhow::bail!("unsupported PNG colour type {color:?}"),
+        }
+        return Ok(DecodedImage {
+            size: (width, height),
+            pixels: Pixels::Srgb16(rgba),
+        });
+    }
+
+    let mut rgba = Vec::with_capacity((width * height * 4) as usize);
     match info.color_type {
         png::ColorType::Rgb => {
-            for px in bytes.chunks(3) {
+            for px in bytes.chunks_exact(3) {
                 rgba.extend_from_slice(&[px[0], px[1], px[2], 255]);
             }
         }
@@ -225,7 +282,7 @@ pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
             }
         }
         png::ColorType::GrayscaleAlpha => {
-            for px in bytes.chunks(2) {
+            for px in bytes.chunks_exact(2) {
                 rgba.extend_from_slice(&[px[0], px[0], px[0], px[1]]);
             }
         }
@@ -233,7 +290,7 @@ pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     }
     Ok(DecodedImage {
         size: (width, height),
-        rgba,
+        pixels: Pixels::Srgb8(rgba),
     })
 }
 
@@ -251,8 +308,23 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
         .ok_or_else(|| anyhow::anyhow!("the JPEG headers were not decoded"))?;
     Ok(DecodedImage {
         size: (u32::from(info.width), u32::from(info.height)),
-        rgba,
+        pixels: Pixels::Srgb8(rgba),
     })
+}
+
+impl DecodedImage {
+    /// Returns the RGBA8 value at `index` (top-down, four channels per pixel).
+    pub fn rgba8_at(&self, index: usize) -> [u8; 4] {
+        match &self.pixels {
+            Pixels::Srgb8(v) => [v[index], v[index + 1], v[index + 2], v[index + 3]],
+            Pixels::Srgb16(v) => [
+                (v[index] >> 8) as u8,
+                (v[index + 1] >> 8) as u8,
+                (v[index + 2] >> 8) as u8,
+                (v[index + 3] >> 8) as u8,
+            ],
+        }
+    }
 }
 
 /// The dominant colour, sampled on a grid and weighted by chroma.
@@ -275,12 +347,7 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     for y in (0..height).step_by(step) {
         for x in (0..width).step_by(step) {
             let index = (y * width + x) * 4;
-            let [r, g, b, a] = [
-                image.rgba[index],
-                image.rgba[index + 1],
-                image.rgba[index + 2],
-                image.rgba[index + 3],
-            ];
+            let [r, g, b, a] = image.rgba8_at(index);
             if a < 128 {
                 continue;
             }
@@ -420,7 +487,7 @@ pub fn write_state(path: &Path, dominant: Option<Rgba>) -> anyhow::Result<()> {
 mod tests {
     use std::path::Path;
 
-    use super::*;
+    use super::{Pixels, *};
     use vow_design::Rgba;
 
     fn scratch(name: &str) -> PathBuf {
@@ -609,7 +676,7 @@ mod tests {
     fn a_gray_wallpaper_has_no_dominant_colour() {
         let image = DecodedImage {
             size: (16, 16),
-            rgba: [128u8, 128, 128, 255].repeat(256),
+            pixels: Pixels::Srgb8([128u8, 128, 128, 255].repeat(256)),
         };
         assert_eq!(dominant(&image), None);
     }
@@ -630,7 +697,7 @@ mod tests {
         }
         let image = DecodedImage {
             size: (64, 64),
-            rgba,
+            pixels: Pixels::Srgb8(rgba),
         };
         assert_orange(dominant(&image).expect("a dominant colour"));
     }
@@ -639,7 +706,7 @@ mod tests {
     fn a_dark_colour_is_lifted_into_the_lightness_band() {
         let image = DecodedImage {
             size: (16, 16),
-            rgba: [77u8, 26, 0, 255].repeat(256),
+            pixels: Pixels::Srgb8([77u8, 26, 0, 255].repeat(256)),
         };
         let color = dominant(&image).expect("a dominant colour");
         let (_, _, lightness) = rgb_to_hsl([color.r, color.g, color.b]);
@@ -680,5 +747,19 @@ mod tests {
         assert!((color.r - 0.820188).abs() < 0.001);
         assert!((color.g - 0.821487).abs() < 0.001);
         assert!((color.b - 0.078513).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_sixteen_bit_png_keeps_sixteen_bits() {
+        let image = fixture("orange-16.png");
+        assert_eq!(image.size, (16, 16));
+        assert!(matches!(image.pixels, Pixels::Srgb16(_)));
+    }
+
+    #[test]
+    fn an_indexed_png_stays_eight_bit() {
+        let image = fixture("orange-indexed.png");
+        assert_eq!(image.size, (16, 16));
+        assert!(matches!(image.pixels, Pixels::Srgb8(_)));
     }
 }
