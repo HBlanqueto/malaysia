@@ -11,8 +11,8 @@ registro del *porqué*; la numeración es continua.
 
 | ADR | Título | Estado |
 |---|---|---|
-| 0001 | Tipos de coordenadas: Smithay en el compositor, los nuestros en `malaysia-scene` | aceptado |
-| 0002 | Exponer el compositor como biblioteca y binario | aceptado |
+| 0001 | Tipos de coordenadas: los de Smithay en el compositor, los nuestros en `yuki-scene` | aceptado |
+| 0002 | Exponer `crates/yuki` como biblioteca y binario | aceptado |
 | 0003 | `deny(unsafe_code)` en el compositor, `forbid` en el resto | aceptado |
 | 0004 | Redondear rectángulos lógicos al espacio entero | aceptado |
 | 0005 | Una máquina, una shell, un linker | aceptado |
@@ -25,7 +25,7 @@ registro del *porqué*; la numeración es continua.
 | 0012 | El backend vive junto al State del compositor | aceptado |
 | 0013 | El dispatch usa un fd duplicado del display | aceptado |
 | 0014 | Los insets de decoración son función del estado | aceptado |
-| 0015 | El layout vive en `malaysia-scene`; no se adopta `desktop::Space` | aceptado |
+| 0015 | El layout vive en `yuki-scene`; no se adopta `desktop::Space` | aceptado |
 | 0016 | Move y resize interactivos son estado propio | aceptado |
 | 0017 | xdg-decoration siempre server-side | superado por 0019 |
 | 0018 | La salida winit se voltea al renderizar, no en `wl_output` | aceptado |
@@ -34,7 +34,7 @@ registro del *porqué*; la numeración es continua.
 | 0021 | Configuración y control: valores, comandos e IPC | aceptado |
 | 0023 | Los componentes del shell corren como procesos separados | aceptado |
 | 0024 | Stack de render del toolkit | aceptado (A); modificado por 0034 |
-| 0025 | La shell es nativa (`malaysia-shell`) | aceptado |
+| 0025 | La shell es nativa (`yuki-shell`) | aceptado |
 | 0026 | linux-dmabuf y explicit sync | aceptado |
 | 0027 | La shell presenta por EGL | aceptado |
 | 0028 | Smithay se ancla a master por revisión | aceptado |
@@ -45,13 +45,13 @@ registro del *porqué*; la numeración es continua.
 | 0033 | Skia en clientes y CelestialKit desde otto-kit ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | reemplazado por 0034 |
 | 0034 | CelestialKit sobre Freya ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado (reemplaza 0033; modifica 0024) |
 | 0035 | Identificación de apps propias y CSD ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
-| 0036 | Menú global (`org_kde_kwin_appmenu` + dbusmenu) | aceptado e implementado (14a–14f) |
+| 0036 | Menú global (`org_kde_kwin_appmenu` + dbusmenu) | aceptado e implementado (14a–14e, 14f-1; 14f-2 pendiente) |
 | 0037 | Marco de ventanas dibujado por el compositor | aceptado |
 | 0038 | Reducir transparencia por defecto | aceptado |
 | 0039 | Infinity v1: gestión de ventanas para la shell ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0040 | Menú global real: arquitectura propia | aceptado e implementado (14d) |
 | 0041 | Barra lateral en isla ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
-| 0042 | Ajustes del sistema (`malaysia-settings`) | aceptado |
+| 0042 | Ajustes del sistema (`yuki-settings`) | aceptado |
 | 0043 | Rebranding a Malaysia | aceptado |
 | 0044 | Fundido de apariencia en la GPU | aceptado |
 | 0045 | GTK `gtk_shell1` y `org.gtk.Menus` | aceptado (14f-1; 14f-2 pendiente) |

@@ -37,7 +37,6 @@ manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
 `malaysia-session.target` con `menubar`, `dock` y `wallpaper` (configurable con
 `programs.malaysia.shellComponents`). El display manager ejecuta
 `malaysia-compositor --drm`, la sesión directa del Bloque 8a.
-
 ## Datos generales
 
 | Dato | Estado |
@@ -47,7 +46,6 @@ manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
 | Backend | Winit anidado para desarrollo; DRM/KMS directo aceptado en panel real (8a) |
 | Gráficos | EGL + OpenGL ES 3; Vulkan solo en clientes (p. ej. wallpaper, vkcube) |
 | Shell | `malaysia-shell` nativa, un proceso por componente (ADR 0023) |
-
 ## Comandos
 
 ```sh
@@ -72,7 +70,6 @@ malaysia-shell dock        # dock
 malaysia-shell lock        # bloqueo
 malaysia-shell launcher    # launcher
 ```
-
 ## Configuración (ADR 0021)
 
 La interfaz acordada es el comando `domain`, con la sintaxis de `defaults` de
@@ -110,7 +107,6 @@ Cada archivo es opcional; si falta, se usan los defaults.
 `MALAYSIA_CONFIG_DIR` y `MALAYSIA_DATA_DIR` permiten otros directorios.
 El catálogo completo, con tipos y estados, está en
 [`docs/configuracion/opciones.md`](docs/configuracion/opciones.md).
-
 ## Documentación
 
 - [`docs/README.md`](docs/README.md) — índice y cómo compilar/probar.

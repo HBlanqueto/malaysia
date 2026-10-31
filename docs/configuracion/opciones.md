@@ -27,7 +27,7 @@ directorios — preferencias y estado:
 ~/.local/share/malaysia/       ← ~/Library/Application Support
 ├── wallpaper.domain       ← catálogo + selección actual ([desktops]), como
 │                            com.apple.wallpaper
-├── wallpaper.state        ← color dominante del fondo (lo escribe la shell)
+├── wallpaper.state        ← color dominante del fondo (lo escribe malaysia-wallpaper)
 └── window.domain          ← estado: la app activa, publicada por el compositor
 ```
 
@@ -167,8 +167,8 @@ Estado: `show_pointer` y `target = "clipboard"` ya se aplican. El resto se lee
 y valida, pero el flujo actual sigue guardando en el Escritorio, en PNG y con
 fecha; `preview`/`mail`/`messages`/`other`, miniatura, temporizador, formatos y
 sombra se conectarán en las siguientes pasadas. Las capturas de ventana nunca
-incluyen el puntero. El portapapeles es `image/png` y lo sirve el compositor;
-ver [`../investigacion/portapapeles-capturas.md`](../investigacion/portapapeles-capturas.md).
+incluyen el puntero. El portapapeles es `image/png` y lo sirve el compositor; contexto en
+[`../investigacion.md`](../investigacion.md).
 
 ## `wallpaper` — wallpapers del sistema (System Settings → Wallpaper)
 
@@ -278,7 +278,8 @@ hace que el compositor difumine lo que hay detrás (vibrancy tipo macOS).
 El comando de control del compositor, con la misma estructura que `defaults` de
 macOS. Habla con el compositor por D-Bus (`org.malaysia.Compositor1`); la app de
 ajustes y la shell usan el mismo canal. El dominio de cada opción es su sección:
-`appearance`, `window`, `dock`, `menubar`, `lock`, `effects`, `debug`.
+`appearance`, `display`, `window`, `screenshot`, `wallpaper`, `dock`,
+`menubar`, `lock`, `effects`, `debug`.
 
 ```
 domain read   <domain> <key>

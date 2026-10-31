@@ -4,30 +4,20 @@ Estado: aceptado (sesión anidada, parte 2).
 
 ## Contexto
 
-El patrón canónico de Smithay envuelve el `Display` en un `Generic` y usa
-`unsafe { get_mut() }`. Este crate prohíbe `unsafe` (ADR 0003).
+El patrón canónico de Smithay envuelve el `Display` en un `Generic` y usa `unsafe { get_mut() }`; este crate prohíbe `unsafe` (ADR 0003).
 
 ## Decisión
 
-Los datos del loop son `Session { display, state }`. Se inserta un `Generic`
-sobre un segundo fd del display obtenido con
-`BorrowedFd::try_clone_to_owned`; al ser legible, el closure desestructura
-`Session` y llama a `display.dispatch_clients(state)`. El display conserva el
-original y el poller vigila la copia. Dispatch y flush son no bloqueantes; un
-error se registra y el loop sigue.
+Los datos del loop son `Session { display, state }`. Se inserta un `Generic` sobre un segundo fd del display (`BorrowedFd::try_clone_to_owned`); al ser legible, el closure desestructura `Session` y llama a `display.dispatch_clients(state)`. El display conserva el original y el poller vigila la copia. Dispatch y flush son no bloqueantes; un error se registra y el loop sigue.
 
-`WAYLAND_DISPLAY` no se muta en el entorno del propio compositor: el nombre del
-socket se registra al arrancar y a los hijos se les pasa con `Command::env`.
+`WAYLAND_DISPLAY` no se muta en el entorno del compositor: el socket se registra al arrancar y a los hijos se les pasa con `Command::env`.
 
 ## Consecuencias
 
-- `State` sigue siendo solo protocolo; `Session` es privado de `session.rs`.
-- Cuesta un `fcntl` en el arranque, no por evento.
-- Un cliente que deja de leer no atasca el loop.
+`State` sigue siendo solo protocolo; `Session` es privado de `session.rs`. Cuesta un `fcntl` en el arranque, no por evento. Un cliente que deja de leer no atasca el loop.
 
 ## Alternativas descartadas
 
-- `calloop-wayland-source`: es para clientes (`wayland_client`), no para un
-  `wayland_server::Display`.
+- `calloop-wayland-source`: es para clientes, no para `wayland_server::Display`.
 - `Generic<Display>` con `get_mut`: viola la política de `unsafe`.
-- `EventSource` a mano: no tiene acceso al `State` del loop.
+- `EventSource` a mano: no alcanza el `State` del loop.

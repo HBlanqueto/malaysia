@@ -42,18 +42,6 @@ frame RGBA (barrier-kit) → layer-shell Top → EGL/dmabuf
 - `set_rectangle` se guarda en `State::dock_rectangle`; la animación de minimizar (genie/scale) sigue pendiente. Los tiles muestran el título; los iconos SVG del kit aún no se usan.
 - `activate` no lleva serial de pulsación en esta versión del XML, así que no se valida contra el grab implícito.
 
-## Aceptación
-
-- `wayland-info` anuncia `ext_foreign_toplevel_list_v1` y
-  `zwlr_foreign_toplevel_manager_v1`.
-- El dock mapea en `Top` (1280×64) con zona exclusiva; el workspace queda bajo
-  la menubar (28) y sobre el dock (64).
-- Al abrir `foot`, aparece su tile y la menubar publica su app activa.
-- `kill -9` al dock no tumba al compositor ni a los demás; el supervisor lo
-  relanza.
-- `appearance.window_tint_scope = "desktop"` tiñe barra y tiles con el
-  dominante del wallpaper (20 % claro / 26 % oscuro), en vivo.
-
 ## Relación
 
 ADR 0023 (procesos y protocolos), ADR 0032 (Tengen), ADR 0034 (BarrierKit).

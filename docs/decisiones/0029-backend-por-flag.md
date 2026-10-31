@@ -4,22 +4,16 @@ Estado: aceptado (Bloque 8a).
 
 ## Contexto
 
-Hay dos backends: winit anidado (desarrollo) y DRM/KMS directo (toma el seat y
-la pantalla real).
+Hay dos backends: winit anidado (desarrollo) y DRM/KMS directo (toma el seat y la pantalla real).
 
 ## Decisión
 
-Se eligen con `--winit` y `--drm`, sin autodetección. El default es `--winit`.
-`--drm` falla con un error claro si no hay seat, GPU o conector interno; no cae
-de vuelta a winit.
+Se eligen con `--winit` y `--drm`, sin autodetección. El default es `--winit`. `--drm` falla con un error claro si no hay seat, GPU o conector interno; no cae de vuelta a winit.
 
 ## Consecuencias
 
-- El archivo de sesión y el arranque manual desde un TTY pasan `--drm`.
-- `dev.sh` y las pruebas siguen usando el default sin cambiar sus comandos.
-- Un futuro autodetectado sería otra decisión y otro flag.
+El archivo de sesión y el arranque manual desde un TTY pasan `--drm`; `dev.sh` y las pruebas usan el default. Un futuro autodetectado sería otra decisión y otro flag.
 
 ## Alternativas descartadas
 
-- Autodetección: un fallo en un TTY podría tomar el seat o la pantalla por
-  sorpresa.
+- Autodetección: un fallo en un TTY podría tomar el seat o la pantalla por sorpresa.

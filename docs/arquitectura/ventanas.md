@@ -49,12 +49,3 @@ El dominante lo calcula `malaysia-wallpaper` y lo escribe en `wallpaper.state`; 
 ## Límites actuales
 
 - La titlebar no aparece en la captura de **ventana**; sí en la de salida/región. El blur de fondo aún no se dibuja. La captura con marco sigue pendiente (roadmap, Bloque 13).
-
-## Verificación
-
-```sh
-./dev.sh demo
-./dev.sh titlebar
-MALAYSIA_SCALE=1.5 ./dev.sh demo
-./dev.sh check
-```

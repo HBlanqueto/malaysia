@@ -89,12 +89,3 @@ Catálogo canónico: [`../configuracion/opciones.md`](../configuracion/opciones.
 ## Pendiente de UI
 
 Modo foco real, captura de ventana con marco, iconos del dock, notificaciones y menús GTK (`14f-2`). El blur de fondo sigue sin implementar.
-
-## Verificación
-
-```sh
-./dev.sh demo
-./dev.sh titlebar
-./dev.sh check
-MALAYSIA_SCALE=1.5 ./dev.sh demo
-```

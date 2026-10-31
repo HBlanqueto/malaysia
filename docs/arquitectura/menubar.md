@@ -46,12 +46,3 @@ Habilitados: carpetas de Ir (salvo Atrás/Adelante/Ir a la carpeta), Nueva venta
 ## Medidas y atajos
 
 Barra 28 px; menús radio 12; elementos de 24 px con radio 8; texto 13. Los atajos se muestran como `⌃⌥⇧❖` + tecla, sin `+` ni glifo de Command; el control recibe `Ctrl+Shift+G`, `Alt+Inicio` o `Super+L` y los formatea.
-
-## Verificación
-
-```sh
-./dev.sh demo
-./dev.sh check
-```
-
-El reloj avanza al minuto (1 commit/min, Dma); `kill -9` al proceso no afecta al compositor ni a los demás.
