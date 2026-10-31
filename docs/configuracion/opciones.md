@@ -71,10 +71,20 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %), **Ajustes del sistema** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar, **Ajustes del sistema** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **activa** | estilo de la barra lateral del kit |
+| `appearance.gtk_bridge` | bool | `true` | **activa** | portal: acento exacto y tinte en GTK 3/4 y libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050). La lee solo el portal |
 
 macOS: "Appearance: **Light / Dark / Auto**" y "**Accent color**"; "Increase
 contrast" y "Reduce motion" viven en Accessibility y se publican en el mismo
 namespace del portal.
+
+`color_scheme` llega a todas las apps: barrier-kit lo lee del dominio; GTK 4,
+libadwaita, Qt con el tema del portal, Firefox, Chromium y Electron lo leen del
+portal (`org.freedesktop.appearance`, y `org.gnome.desktop.interface`
+`color-scheme` para las que solo leen la clave de GNOME); GTK 3 lo lee de
+`gtk-3.0/settings.ini`, que escribe el puente GTK (ADR 0050). Con
+`gtk_bridge = true` el portal también escribe el acento exacto y, si
+`window_color` tiñe, los fondos de Adwaita tintados; GTK los aplica al abrir la
+app.
 
 La app **Ajustes del sistema** lee y escribe `appearance.domain` a través de
 `vow-appearance::write_appearance`. La escritura es atómica (archivo temporal +

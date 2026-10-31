@@ -3,6 +3,11 @@
 //! The values are read-only for apps. The portal watches the domain file and
 //! emits `SettingChanged` when it changes, so toolkits can follow dark/light,
 //! the accent and the accessibility switches without restarting.
+//!
+//! Besides `org.freedesktop.appearance`, `org.gnome.desktop.interface`
+//! publishes `color-scheme` as GNOME's string (`default` / `prefer-dark`) for
+//! apps that only read that key (libhandy, older Electron and Chromium). The
+//! same watcher keeps the GTK bridge (ADR 0050) in sync.
 
 use std::collections::HashMap;
 use std::os::fd::AsFd;
@@ -17,8 +22,21 @@ use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 
-/// The only namespace this backend publishes.
+use crate::gtk::Bridge;
+
+/// The standard namespace this backend publishes.
 pub const NAMESPACE: &str = "org.freedesktop.appearance";
+/// GNOME's namespace, published for apps that only read it.
+pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
+
+/// Every `(namespace, key)` this backend publishes.
+const KEYS: [(&str, &str); 5] = [
+    (NAMESPACE, "color-scheme"),
+    (NAMESPACE, "accent-color"),
+    (NAMESPACE, "contrast"),
+    (NAMESPACE, "reduced-motion"),
+    (GNOME_NAMESPACE, "color-scheme"),
+];
 
 const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 
@@ -73,31 +91,41 @@ impl Values {
         }
     }
 
-    fn value(&self, key: &str) -> Option<OwnedValue> {
-        let value = match key {
-            "color-scheme" => Value::new(self.color_scheme),
-            "accent-color" => Value::new(self.accent),
-            "contrast" => Value::new(self.contrast),
-            "reduced-motion" => Value::new(self.reduced_motion),
+    fn value(&self, namespace: &str, key: &str) -> Option<OwnedValue> {
+        let value = match (namespace, key) {
+            (NAMESPACE, "color-scheme") => Value::new(self.color_scheme),
+            (NAMESPACE, "accent-color") => Value::new(self.accent),
+            (NAMESPACE, "contrast") => Value::new(self.contrast),
+            (NAMESPACE, "reduced-motion") => Value::new(self.reduced_motion),
+            (GNOME_NAMESPACE, "color-scheme") => Value::new(self.gnome_color_scheme()),
             _ => return None,
         };
         Some(owned(value))
     }
 
-    fn all(&self) -> HashMap<String, OwnedValue> {
-        ["color-scheme", "accent-color", "contrast", "reduced-motion"]
-            .into_iter()
-            .filter_map(|key| self.value(key).map(|value| (key.to_string(), value)))
+    /// GNOME's spelling of `color-scheme`: light is `default` there.
+    fn gnome_color_scheme(&self) -> &'static str {
+        if self.color_scheme == 1 {
+            "prefer-dark"
+        } else {
+            "default"
+        }
+    }
+
+    /// The keys of `namespace`, with their values.
+    fn all(&self, namespace: &str) -> HashMap<String, OwnedValue> {
+        KEYS.into_iter()
+            .filter(|(ns, _)| *ns == namespace)
+            .filter_map(|(ns, key)| self.value(ns, key).map(|value| (key.to_string(), value)))
             .collect()
     }
 
-    /// The keys that differ from `old`, with their new values.
-    fn changed(&self, old: &Self) -> Vec<(&'static str, OwnedValue)> {
-        ["color-scheme", "accent-color", "contrast", "reduced-motion"]
-            .into_iter()
-            .filter_map(|key| {
-                let new = self.value(key)?;
-                (Some(&new) != old.value(key).as_ref()).then_some((key, new))
+    /// The `(namespace, key)` pairs that differ from `old`, with their new values.
+    fn changed(&self, old: &Self) -> Vec<(&'static str, &'static str, OwnedValue)> {
+        KEYS.into_iter()
+            .filter_map(|(namespace, key)| {
+                let new = self.value(namespace, key)?;
+                (Some(&new) != old.value(namespace, key).as_ref()).then_some((namespace, key, new))
             })
             .collect()
     }
@@ -118,7 +146,7 @@ impl Settings {
 #[zbus::interface(name = "org.freedesktop.impl.portal.Settings")]
 impl Settings {
     fn read(&self, namespace: &str, key: &str) -> Result<OwnedValue, PortalError> {
-        if namespace != NAMESPACE {
+        if !KEYS.iter().any(|(ns, _)| *ns == namespace) {
             return Err(PortalError::NotFound(format!(
                 "unknown settings namespace {namespace}"
             )));
@@ -126,22 +154,25 @@ impl Settings {
         self.values
             .read()
             .expect("the settings lock is not poisoned")
-            .value(key)
+            .value(namespace, key)
             .ok_or_else(|| PortalError::NotFound(format!("unknown settings key {key}")))
     }
 
     fn read_all(&self, namespaces: Vec<String>) -> HashMap<String, HashMap<String, OwnedValue>> {
-        let mut result = HashMap::new();
-        if namespaces.is_empty() || namespaces.iter().any(|pattern| namespace_matches(pattern)) {
-            result.insert(
-                NAMESPACE.to_string(),
-                self.values
-                    .read()
-                    .expect("the settings lock is not poisoned")
-                    .all(),
-            );
-        }
-        result
+        let values = self
+            .values
+            .read()
+            .expect("the settings lock is not poisoned");
+        [NAMESPACE, GNOME_NAMESPACE]
+            .into_iter()
+            .filter(|namespace| {
+                namespaces.is_empty()
+                    || namespaces
+                        .iter()
+                        .any(|pattern| namespace_matches(pattern, namespace))
+            })
+            .map(|namespace| (namespace.to_string(), values.all(namespace)))
+            .collect()
     }
 
     #[zbus(property)]
@@ -167,9 +198,9 @@ enum PortalError {
     ZBus(zbus::Error),
 }
 
-/// Watches `appearance.domain` and `wallpaper.state` and emits `SettingChanged`
-/// for each key that changes.
-pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
+/// Watches `appearance.domain` and `wallpaper.state`, emits `SettingChanged`
+/// for each key that changes and refreshes the GTK bridge.
+pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option<Bridge>) {
     std::thread::spawn(move || {
         let watch = match vow_appearance::watch::AppearanceWatch::new() {
             Ok(watch) => watch,
@@ -204,6 +235,9 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
                     continue;
                 }
             };
+            if let Some(bridge) = &bridge {
+                bridge.sync(appearance.as_ref(), read_dominant());
+            }
             let new = Values::from_appearance(appearance.as_ref());
             let old = {
                 let mut guard = values.write().expect("the settings lock is not poisoned");
@@ -216,27 +250,27 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>) {
                 tracing::warn!("the Settings interface is not registered");
                 continue;
             };
-            for (key, value) in new.changed(&old) {
+            for (namespace, key, value) in new.changed(&old) {
                 if let Err(error) = zbus::block_on(Settings::setting_changed(
                     interface.signal_emitter(),
-                    NAMESPACE,
+                    namespace,
                     key,
                     value,
                 )) {
-                    tracing::warn!(%error, key, "could not emit SettingChanged");
+                    tracing::warn!(%error, namespace, key, "could not emit SettingChanged");
                 }
             }
         }
     });
 }
 
-fn namespace_matches(pattern: &str) -> bool {
+fn namespace_matches(pattern: &str, namespace: &str) -> bool {
     if pattern.is_empty() {
         return true;
     }
     match pattern.strip_suffix('*') {
-        Some(prefix) => NAMESPACE.starts_with(prefix),
-        None => pattern == NAMESPACE,
+        Some(prefix) => namespace.starts_with(prefix),
+        None => pattern == namespace,
     }
 }
 
@@ -325,11 +359,15 @@ mod tests {
 
     #[test]
     fn namespaces_use_trailing_globs() {
-        assert!(namespace_matches(""));
-        assert!(namespace_matches(NAMESPACE));
-        assert!(namespace_matches("org.freedesktop.*"));
-        assert!(!namespace_matches("org.gnome.*"));
-        assert!(!namespace_matches("org.freedesktop.appearance.extra"));
+        assert!(namespace_matches("", NAMESPACE));
+        assert!(namespace_matches(NAMESPACE, NAMESPACE));
+        assert!(namespace_matches("org.freedesktop.*", NAMESPACE));
+        assert!(!namespace_matches("org.gnome.*", NAMESPACE));
+        assert!(namespace_matches("org.gnome.*", GNOME_NAMESPACE));
+        assert!(!namespace_matches(
+            "org.freedesktop.appearance.extra",
+            NAMESPACE
+        ));
     }
 
     #[test]
@@ -337,7 +375,42 @@ mod tests {
         let old = Values::from_appearance(None);
         let mut new = old.clone();
         new.contrast = 1;
-        let changed: Vec<_> = new.changed(&old).into_iter().map(|(key, _)| key).collect();
-        assert_eq!(changed, ["contrast"]);
+        let changed: Vec<_> = new
+            .changed(&old)
+            .into_iter()
+            .map(|(namespace, key, _)| (namespace, key))
+            .collect();
+        assert_eq!(changed, [(NAMESPACE, "contrast")]);
+    }
+
+    #[test]
+    fn the_gnome_namespace_mirrors_the_color_scheme() {
+        let dark = AppearanceConfig {
+            color_scheme: ColorScheme::DarkTint,
+            ..AppearanceConfig::default()
+        };
+        let dark = Values::from_appearance(Some(&dark));
+        assert_eq!(dark.gnome_color_scheme(), "prefer-dark");
+        assert_eq!(
+            Values::from_appearance(None).gnome_color_scheme(),
+            "default"
+        );
+
+        let mut light = dark.clone();
+        light.color_scheme = 2;
+        let changed: Vec<_> = light
+            .changed(&dark)
+            .into_iter()
+            .map(|(namespace, key, _)| (namespace, key))
+            .collect();
+        assert_eq!(
+            changed,
+            [
+                (NAMESPACE, "color-scheme"),
+                (GNOME_NAMESPACE, "color-scheme")
+            ]
+        );
+        assert!(dark.all(GNOME_NAMESPACE).contains_key("color-scheme"));
+        assert_eq!(dark.all(NAMESPACE).len(), 4);
     }
 }

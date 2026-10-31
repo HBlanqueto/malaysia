@@ -80,12 +80,19 @@ in
       description = "MalaysiaDreams shell session";
       wants =
         map (component: "malaysia-shell@${component}.service") cfg.shellComponents
-        ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service";
+        ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service"
+        # ADR 0050: the portal also keeps the GTK/libadwaita bridge, so it starts
+        # with the session instead of waiting for the first app to activate it.
+        ++ [ "xdg-desktop-portal-malaysia.service" ];
     };
 
     systemd.user.units."malaysia-shell@.service".text =
       builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
         (builtins.readFile "${../share/systemd/user}/malaysia-shell@.service");
+
+    systemd.user.units."xdg-desktop-portal-malaysia.service".text =
+      builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
+        (builtins.readFile "${../share/systemd/user}/xdg-desktop-portal-malaysia.service");
 
     systemd.user.units."malaysia-wallpaper.service".text =
       builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]

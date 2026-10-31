@@ -161,7 +161,8 @@
                 --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
             done
             # The portal backend (ADR 0031), its portal registration and its
-            # D-Bus activation file. `xdg-desktop-portal` starts it on demand.
+            # D-Bus activation file. `xdg-desktop-portal` starts it on demand;
+            # `malaysia-session.target` also starts it at login (ADR 0050).
             install -Dm644 share/xdg-desktop-portal/portals/malaysia.portal \
               $out/share/xdg-desktop-portal/portals/malaysia.portal
             mkdir -p $out/share/dbus-1/services
@@ -184,7 +185,8 @@
             # (ADR 0023) and the Vulkan wallpaper client, with the package's
             # binary path substituted in.
             mkdir -p $out/lib/systemd/user
-            for unit in malaysia-shell@.service malaysia-wallpaper.service malaysia-session.target; do
+            for unit in malaysia-shell@.service malaysia-wallpaper.service malaysia-session.target \
+                xdg-desktop-portal-malaysia.service; do
               sed "s|@out@|$out|g" "share/systemd/user/$unit" \
                 > "$out/lib/systemd/user/$unit"
             done

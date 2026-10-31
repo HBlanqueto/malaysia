@@ -1,0 +1,23 @@
+# Malaysia's portal backend (ADR 0031) as a session unit (ADR 0050).
+#
+# D-Bus activation still works (the activation file names this unit through
+# `SystemdService=`), but `malaysia-session.target` starts it at login so the
+# GTK bridge writes the GTK user CSS before the first app opens, and stopping
+# the target removes it again (the backend cleans up on SIGTERM).
+#
+# Installed by the flake with the `@out@` placeholder replaced by the store
+# path of the package.
+[Unit]
+Description=MalaysiaDreams portal backend and GTK bridge
+PartOf=malaysia-session.target
+After=malaysia-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.malaysia
+ExecStart=@out@/bin/xdg-desktop-portal-malaysia
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=malaysia-session.target

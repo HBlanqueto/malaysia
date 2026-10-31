@@ -54,5 +54,6 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0047 | BarrierKit en capas ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | propuesto |
 | 0048 | BarrierKit en su repo | aceptado |
 | 0049 | Fondo en Vulkan | aceptado |
+| 0050 | Puente GTK/libadwaita | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.

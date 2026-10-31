@@ -15,7 +15,8 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   frente.
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
-- **Portal 12a.** `Settings` está hecho. Faltan `Screenshot`, `ScreenCast` con
+- **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
+  hechos. Faltan `Screenshot`, `ScreenCast` con
   PipeWire y los diálogos de permiso. Prueba: `./dev.sh screencopy` y
   `./dev.sh screencopy-window`.
 - **NixOS.** El módulo ya instala paquete, sesión, PAM, `hardware.graphics`,
@@ -110,7 +111,12 @@ sin sombra). Pruebas: `./dev.sh presentation`, `activation`, `pointers`,
 
 **12a parcial:** `xdg-desktop-portal-malaysia` sirve `Settings`
 (`org.freedesktop.appearance` desde `appearance.domain`, `SettingChanged`,
-`UseIn=Malaysia` y GTK de fallback). Faltan `Screenshot`/`ScreenCast` y los
+`UseIn=Malaysia` y GTK de fallback) y `org.gnome.desktop.interface`
+`color-scheme`. **Puente GTK hecho (2026-10-31, ADR 0050):** acento exacto y
+tinte en GTK 3/4 y libadwaita por CSS de usuario; GTK 3 oscuro por
+`settings.ini`; el portal arranca con `malaysia-session.target`. Prueba:
+`cargo test -p xdg-desktop-portal-malaysia`, y en sesión abrir Nautilus con
+`window_color = "wallpaper"`. Faltan `Screenshot`/`ScreenCast` y los
 diálogos de permiso. **12b pendiente:** notificaciones, polkit, keyring/Secret
 Service y AT-SPI.
 
