@@ -3287,7 +3287,9 @@ mod tests {
     #[test]
     fn unplaced_toplevel_gets_frame_callbacks() {
         use std::sync::mpsc;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
+
+        use nix::poll::{PollFd, PollFlags, poll};
 
         use sctk::reexports::client::globals::GlobalListContents;
         use sctk::reexports::client::globals::registry_queue_init;
@@ -3332,7 +3334,7 @@ mod tests {
             std::os::unix::net::UnixStream::pair().expect("a socket pair");
         let (done_tx, done_rx) = mpsc::channel::<()>();
 
-        std::thread::spawn(move || {
+        let client_handle = std::thread::spawn(move || {
             struct Client {
                 frame_done: bool,
                 done_tx: mpsc::Sender<()>,
@@ -3480,15 +3482,19 @@ mod tests {
             )
             .expect("the server accepts the client");
 
-        let mut spins = 0;
+        let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             display.dispatch_clients(&mut state).expect("dispatch");
             display.flush_clients().expect("flush");
             if state.windows.len() == 1 {
                 break;
             }
-            spins += 1;
-            assert!(spins < 1000, "the toplevel was never tracked");
+            if Instant::now() >= deadline {
+                panic!("the toplevel was never tracked");
+            }
+            let fd = display.backend().poll_fd();
+            let poll_fd = PollFd::new(fd, PollFlags::POLLIN);
+            let _ = poll(&mut [poll_fd], 1u8);
         }
 
         let unplaced = state
@@ -3508,5 +3514,9 @@ mod tests {
         done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("the client should receive the frame callback");
+
+        if let Err(error) = client_handle.join() {
+            std::panic::resume_unwind(error);
+        }
     }
 }
