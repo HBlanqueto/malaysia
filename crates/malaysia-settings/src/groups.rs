@@ -1,7 +1,7 @@
 //! Grupos de Ajustes: títulos, filas, tarjetas y contenido desplazable.
 
 use barrier_kit::ProbeExt;
-use barrier_kit::controls::ScrollView;
+use barrier_kit::controls::{Checkbox, ScrollView, Slider};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Content, Direction, Gaps, Position, Size};
@@ -21,8 +21,8 @@ const SWATCH_PROBES: [&str; 8] = [
     "group.color.swatch.gris",
 ];
 use crate::state::{
-    AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, WindowTintScope,
-    card_background, load_appearance, matches_filter, palette, rgba, save_config,
+    AppearanceConfig, ColorScheme, Resolved, Rgba, TintParts, TintStrength, WindowColorMode,
+    WindowTintScope, card_background, load_appearance, matches_filter, palette, rgba, save_config,
     tint_scope_disabled,
 };
 
@@ -314,9 +314,14 @@ fn color_group(
         false,
     );
     let selected_window_mode = config.window_color;
+    let window_help = match selected_window_mode {
+        WindowColorMode::Neutral => "Grises sin tinte.",
+        WindowColorMode::Accent => "Toman un poco del color de acento.",
+        WindowColorMode::Wallpaper => "Toman el color del fondo de pantalla.",
+    };
     let window_mode_row = row_card(
         &resolved,
-        "Color de las ventanas\nGrises sin tinte.",
+        &format!("Color de las ventanas\n{window_help}"),
         rect()
             .width(Size::auto())
             .direction(Direction::Horizontal)
@@ -445,9 +450,75 @@ fn color_group(
         "group.color.alcance",
         "group.color.alcance.label",
         None,
-        true,
+        scope_disabled,
     )
     .height(Size::px(SETTINGS.group_row_min_height as f32));
+
+    let tint_disabled = config.window_color == WindowColorMode::Neutral;
+    let current_strength = match config.window_color {
+        WindowColorMode::Accent => config.tint_strength_accent,
+        WindowColorMode::Wallpaper => config.tint_strength_wallpaper,
+        WindowColorMode::Neutral => TintStrength::default(),
+    };
+    let strength_row = row_card(
+        &resolved,
+        "Intensidad del tinte\nAcento y Fondo guardan cada uno la suya.",
+        Slider::stepped(4)
+            .value(strength_index(current_strength))
+            .labels(&["Sutil", "Normal", "Fuerte", "Intenso"])
+            .disabled(tint_disabled)
+            .sub_ids(
+                "group.color.intensidad.knob",
+                &[
+                    "group.color.intensidad.step.sutil",
+                    "group.color.intensidad.step.normal",
+                    "group.color.intensidad.step.fuerte",
+                    "group.color.intensidad.step.intenso",
+                ],
+            )
+            .probe("group.color.intensidad.slider")
+            .on_change({
+                let mut error = error;
+                move |value| {
+                    if !tint_disabled {
+                        let mut config = load_appearance();
+                        let strength = index_strength(value);
+                        match config.window_color {
+                            WindowColorMode::Accent => config.tint_strength_accent = strength,
+                            WindowColorMode::Wallpaper => config.tint_strength_wallpaper = strength,
+                            WindowColorMode::Neutral => {}
+                        }
+                        if let Some(msg) = save_config(&config) {
+                            error.set(Some(msg));
+                        }
+                    }
+                }
+            })
+            .into_element(),
+        "group.color.intensidad",
+        "group.color.intensidad.label",
+        Some("group.color.intensidad.help"),
+        tint_disabled,
+    );
+
+    let parts_row = row_card(
+        &resolved,
+        "Teñir en las ventanas\nLo que no marques queda en gris neutro.",
+        tint_parts_grid(config.tint_parts, tint_disabled, {
+            let mut error = error;
+            move |parts| {
+                let mut config = load_appearance();
+                config.tint_parts = parts;
+                if let Some(msg) = save_config(&config) {
+                    error.set(Some(msg));
+                }
+            }
+        }),
+        "group.color.partes",
+        "group.color.partes.label",
+        Some("group.color.partes.help"),
+        tint_disabled,
+    );
 
     let mut rows: Vec<Element> = Vec::new();
     if matches_filter(
@@ -461,6 +532,18 @@ fn color_group(
         "color de las ventanas tinte neutro acento fondo de pantalla",
     ) {
         rows.push(window_mode_row.into_element());
+    }
+    if matches_filter(
+        query,
+        "intensidad del tinte sutil normal fuerte intenso acento fondo",
+    ) {
+        rows.push(strength_row.into_element());
+    }
+    if matches_filter(
+        query,
+        "tenir ventanas partes barras laterales fondo tarjetas controles menus",
+    ) {
+        rows.push(parts_row.into_element());
     }
     if matches_filter(
         query,
@@ -538,15 +621,9 @@ fn row_card(
     };
     let (title, desc) = label_text.split_once('\n').unwrap_or((label_text, ""));
 
-    let text_height = TEXT.line_height as f32
-        + if desc.is_empty() {
-            0.0
-        } else {
-            SETTINGS.group_desc_gap as f32 + CALLOUT.line_height as f32
-        };
     let mut text_col = rect()
-        .width(Size::flex(1.0))
-        .height(Size::px(text_height))
+        .width(Size::px(SETTINGS.label_column as f32))
+        .height(Size::auto())
         .direction(Direction::Vertical)
         .spacing(SETTINGS.group_desc_gap as f32)
         .child(
@@ -583,7 +660,6 @@ fn row_card(
         .min_height(Size::px(SETTINGS.group_row_min_height as f32))
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
-        .content(Content::flex())
         .padding(Gaps::new(
             SETTINGS.group_row_padding_y as f32,
             SETTINGS.group_row_padding_x as f32,
@@ -593,7 +669,14 @@ fn row_card(
         .spacing(SETTINGS.row_gap as f32)
         .probe(probe)
         .child(text_col)
-        .child(control)
+        .child(
+            rect()
+                .width(Size::flex(1.0))
+                .height(Size::auto())
+                .direction(Direction::Horizontal)
+                .main_align(Alignment::Center)
+                .child(control),
+        )
 }
 
 fn card_container(resolved: &Resolved, rows: Vec<Element>, probe: &'static str) -> Rect {
@@ -710,3 +793,114 @@ fn svg_viewer(template: &str, color: Rgba, size: u32) -> SvgViewer {
 }
 
 const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><circle cx=\"6.8\" cy=\"6.8\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"/><path d=\"M10 10l3.2 3.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
+
+fn strength_index(strength: TintStrength) -> usize {
+    match strength {
+        TintStrength::Subtle => 0,
+        TintStrength::Normal => 1,
+        TintStrength::Strong => 2,
+        TintStrength::Intense => 3,
+    }
+}
+
+fn index_strength(index: usize) -> TintStrength {
+    match index {
+        0 => TintStrength::Subtle,
+        1 => TintStrength::Normal,
+        2 => TintStrength::Strong,
+        _ => TintStrength::Intense,
+    }
+}
+
+fn tint_parts_grid(
+    parts: TintParts,
+    disabled: bool,
+    on_change: impl FnMut(TintParts) + 'static,
+) -> Element {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let column_gap = SETTINGS.check.column_gap as f32;
+    let row_gap = SETTINGS.check.row_gap as f32;
+    let control_width = SETTINGS.window_width as f32
+        - (vow_design::SIDEBAR.width + 2 * vow_design::SIDEBAR.inset) as f32
+        - 2.0 * SETTINGS.group_content_padding_x as f32
+        - 2.0 * SETTINGS.group_row_padding_x as f32
+        - SETTINGS.label_column as f32
+        - SETTINGS.row_gap as f32;
+    let column_width = (control_width - column_gap) / 2.0;
+    let on_change = Rc::new(RefCell::new(on_change));
+    let make = |label: &'static str,
+                checked: bool,
+                probe: &'static str,
+                toggle: fn(&mut TintParts),
+                on_change: Rc<RefCell<dyn FnMut(TintParts)>>| {
+        Checkbox::new(label)
+            .checked(checked)
+            .disabled(disabled)
+            .width(Size::fill())
+            .probe(probe)
+            .on_toggle(move |value| {
+                if value != checked {
+                    let mut parts = parts;
+                    toggle(&mut parts);
+                    on_change.borrow_mut()(parts);
+                }
+            })
+            .into_element()
+    };
+    let column = |children: Vec<Element>| {
+        rect()
+            .width(Size::px(column_width))
+            .height(Size::auto())
+            .direction(Direction::Vertical)
+            .spacing(row_gap)
+            .children(children)
+            .into_element()
+    };
+    rect()
+        .width(Size::px(control_width))
+        .height(Size::auto())
+        .direction(Direction::Horizontal)
+        .spacing(column_gap)
+        .child(column(vec![
+            make(
+                "Barras laterales",
+                parts.sidebars,
+                "group.color.partes.barras",
+                |p| p.sidebars = !p.sidebars,
+                on_change.clone(),
+            ),
+            make(
+                "Grupos y tarjetas",
+                parts.groups,
+                "group.color.partes.tarjetas",
+                |p| p.groups = !p.groups,
+                on_change.clone(),
+            ),
+            make(
+                "Menús y diálogos",
+                parts.menus,
+                "group.color.partes.menus",
+                |p| p.menus = !p.menus,
+                on_change.clone(),
+            ),
+        ]))
+        .child(column(vec![
+            make(
+                "Fondo de la ventana",
+                parts.window,
+                "group.color.partes.ventana",
+                |p| p.window = !p.window,
+                on_change.clone(),
+            ),
+            make(
+                "Controles",
+                parts.controls,
+                "group.color.partes.controles",
+                |p| p.controls = !p.controls,
+                on_change.clone(),
+            ),
+        ]))
+        .into_element()
+}

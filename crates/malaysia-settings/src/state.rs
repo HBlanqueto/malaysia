@@ -1,8 +1,9 @@
 //! Estado compartido de Ajustes: config, filtro, cuenta y helpers de color.
 
 pub use vow_appearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightStyle, WindowColorMode, WindowTintScope,
-    load_appearance, load_dominant, palette, resolve, write_appearance,
+    AppearanceConfig, ColorScheme, Resolved, TintParts, TintStrength, TrafficLightStyle,
+    WindowColorMode, WindowTintScope, load_appearance, load_dominant, palette, resolve,
+    write_appearance,
 };
 pub use vow_design::Rgba;
 

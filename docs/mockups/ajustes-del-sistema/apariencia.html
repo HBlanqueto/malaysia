@@ -25,7 +25,10 @@
     "oscuro":          { "theme": "dark",  "query": "" },
     "busqueda-acento": { "theme": "light", "query": "acento" },
     "sin-resultados":  { "theme": "light", "query": "zzz" },
-    "semaforos-menu":  { "theme": "light", "query": "", "menu": "semaforos" }
+    "semaforos-menu":  { "theme": "light", "query": "", "menu": "semaforos" },
+    "acento-normal":      { "theme": "light", "query": "", "window": "acento", "strength": 1 },
+    "acento-solo-barras": { "theme": "light", "query": "", "accent": "morado", "window": "acento", "strength": 2, "parts": ["barras"] },
+    "fondo-oscuro":       { "theme": "dark",  "query": "", "window": "fondo", "strength": 2, "parts": ["barras", "ventana", "tarjetas", "controles", "menus"] }
   }
 }
 </script>
@@ -70,7 +73,6 @@ html[data-compositor] .win{border-radius:var(--window-radius)}
 .items{display:flex;flex-direction:column;gap:var(--settings-sidebar-item-gap);margin-top:var(--settings-section-gap)}
 .it{display:flex;align-items:center;gap:var(--window-sidebar-item-gap);height:var(--window-sidebar-item-height);padding:0 var(--window-sidebar-item-padding-x);border-radius:var(--window-sidebar-item-radius);color:var(--ink-strong)}
 .it[data-state~="selected"]{background:var(--window-sidebar-item-selected-bg);color:var(--window-sidebar-item-selected-ink);font-weight:var(--window-sidebar-item-selected-weight)}
-html[data-theme="dark"] .it[data-state~="selected"]{background:color-mix(in srgb,var(--accent) calc(100% * (1 - var(--settings-selected-dark-mix))),var(--window-sidebar-island-bg))}
 .appico{width:var(--window-sidebar-item-app-icon);height:var(--window-sidebar-item-app-icon);border-radius:var(--radius-sm);background:var(--settings-section-icon-bg);color:var(--on-accent);display:grid;place-items:center;flex:none}
 .appico .ico{width:var(--settings-sidebar-app-icon-glyph);height:var(--settings-sidebar-app-icon-glyph)}
 
@@ -89,11 +91,14 @@ html[data-theme="dark"] .it[data-state~="selected"]{background:color-mix(in srgb
 .grpc{background:var(--bg-surface);border-radius:var(--settings-group-radius);box-shadow:inset 0 0 0 1px var(--line)}
 .row{position:relative;display:flex;align-items:center;gap:var(--settings-row-gap);min-height:var(--settings-group-row-min-height);padding:var(--settings-group-row-padding-y) var(--settings-group-row-padding-x)}
 .row + .row::before{content:"";position:absolute;top:0;left:var(--settings-group-row-padding-x);right:var(--settings-group-row-padding-x);height:1px;background:var(--line)}
-.row .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--settings-group-desc-gap)}
+.row .tx{flex:0 0 var(--settings-label-column);min-width:0;display:flex;flex-direction:column;gap:var(--settings-group-desc-gap)}
+/* v6.1: las opciones se centran en el espacio que deja la columna de etiquetas. */
+.row > .tx + *{margin-inline:auto}
 .row .tx b{font-weight:inherit;color:var(--ink-strong)}
 .row .tx small{color:var(--ink-muted)}
 .row[data-state~="disabled"] .tx b{color:var(--ink-faint)}
 .row[data-state~="disabled"] .radios{opacity:.4}
+.row[data-state~="disabled"] .cb{color:var(--ink-faint)}
 
 /* Tarjetas con vista previa */
 .cards{display:flex;gap:var(--settings-card-gap)}
@@ -164,6 +169,51 @@ html[data-menu="semaforos"] .menu{display:flex}
 .mi .ck{width:var(--menu-popover-check);height:var(--menu-popover-check);stroke-width:2;visibility:hidden}
 .mi[data-state~="checked"] .ck{visibility:visible}
 .msep{height:1px;margin:var(--menu-popover-separator-margin) var(--menu-popover-item-padding-x);background:var(--line);flex:none}
+
+/* Intensidad del tinte: deslizador por pasos (data-kit="Slider" data-variant="stepped"). */
+.sld{position:relative;width:var(--settings-strength-width);height:calc(var(--slider-knob) + var(--settings-strength-label-gap) + var(--type-caption-line-height));flex:none;--sld-steps:3;--sld-run:calc(var(--settings-strength-width) - var(--slider-knob));--sld-pos:0}
+.sld-tick,.sld-lb{--i:0}
+html{--tint-src:transparent}
+.sld-track{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc((var(--slider-knob) - var(--slider-track)) / 2);height:var(--slider-track);border-radius:var(--radius-pill);background:var(--slider-track-color)}
+.sld-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sld-run) * var(--sld-pos) / var(--sld-steps));border-radius:var(--radius-pill);background:var(--slider-fill-color)}
+.sld-tick{position:absolute;top:calc((var(--slider-knob) - var(--settings-strength-tick)) / 2);width:var(--settings-strength-tick);height:var(--settings-strength-tick);margin-left:calc(var(--settings-strength-tick) / -2);border-radius:var(--radius-pill);background:var(--line-strong);left:calc(var(--slider-knob) / 2 + var(--sld-run) * var(--i) / var(--sld-steps))}
+.sld-tick.on{background:var(--on-accent)}
+.sld-knob{position:absolute;top:0;left:calc(var(--sld-run) * var(--sld-pos) / var(--sld-steps));width:var(--slider-knob);height:var(--slider-knob);border-radius:var(--radius-pill);background:var(--switch-knob-color);box-shadow:var(--shadow-knob)}
+.sld-lbs{position:absolute;top:calc(var(--slider-knob) + var(--settings-strength-label-gap));left:calc(var(--slider-knob) / 2);width:var(--sld-run);display:flex;justify-content:space-between;color:var(--ink-muted)}
+.sld-lb[data-state~="selected"]{color:var(--ink-strong)}
+.sld-lb{white-space:nowrap}
+
+/* Teñir en las ventanas: casillas (data-kit="Checkbox"). */
+.checks{display:grid;grid-template-columns:1fr 1fr;column-gap:var(--settings-check-column-gap);row-gap:var(--settings-check-row-gap)}
+.cb{display:inline-flex;align-items:center;gap:var(--settings-check-gap);color:var(--ink-strong);white-space:nowrap}
+.cb i{width:var(--checkbox-size);height:var(--checkbox-size);border-radius:var(--checkbox-radius);background:var(--bg-surface);box-shadow:inset 0 0 0 1px var(--checkbox-border);display:grid;place-items:center;flex:none;color:var(--on-accent)}
+.cb i svg{width:calc(var(--checkbox-size) - 4px);height:calc(var(--checkbox-size) - 4px);stroke-width:var(--checkbox-check-stroke);visibility:hidden}
+.cb[data-state~="checked"] i{background:var(--checkbox-on);box-shadow:none}
+.cb[data-state~="checked"] i svg{visibility:visible}
+.row[data-state~="disabled"] .sld{opacity:.4}
+
+/* Simulación del tinte en la propia ventana (lo hará vow-appearance). Solo en las variantes con "window". */
+html{--raw-window:var(--bg-window);--raw-sidebar:var(--sidebar-island-bg);--raw-surface:var(--bg-surface);--raw-raised:var(--bg-raised);--raw-control:var(--bg-control);--raw-hover:var(--bg-hover);--raw-line:var(--line);--raw-toolgroup:var(--toolbar-glass-bg);
+  --tint-strength:var(--appearance-tint-strength-normal);--tint-k:calc(var(--tint-base, 0) * var(--tint-strength))}
+html[data-window="acento"]{--tint-base:var(--appearance-modes-accent-windows-light)}
+html[data-window="acento"][data-theme="dark"]{--tint-base:var(--appearance-modes-accent-windows-dark)}
+html[data-window="fondo"]{--tint-base:var(--appearance-modes-wallpaper-scope-windows-windows-light)}
+html[data-window="fondo"][data-theme="dark"]{--tint-base:var(--appearance-modes-wallpaper-scope-windows-windows-dark)}
+html[data-strength="0"]{--tint-strength:var(--appearance-tint-strength-subtle)}
+html[data-strength="1"]{--tint-strength:var(--appearance-tint-strength-normal)}
+html[data-strength="2"]{--tint-strength:var(--appearance-tint-strength-strong)}
+html[data-strength="3"]{--tint-strength:var(--appearance-tint-strength-intense)}
+html[data-window="acento"] .win,html[data-window="fondo"] .win{
+  --mix-sunken:calc(var(--tint-k) * var(--appearance-layer-factors-bg-sunken) * 100%);
+  --mix-window:calc(var(--tint-k) * var(--appearance-layer-factors-bg-window) * 100%);
+  --mix-surface:calc(var(--tint-k) * var(--appearance-layer-factors-bg-surface) * 100%);
+  --mix-control:calc(var(--tint-k) * var(--appearance-layer-factors-bg-control) * 100%);
+  --mix-line:calc(var(--tint-k) * var(--appearance-layer-factors-line) * 100%)}
+html[data-parts~="barras"] .win{--window-sidebar-island-bg:color-mix(in srgb,var(--tint-src) var(--mix-sunken),var(--raw-sidebar))}
+html[data-parts~="ventana"] .win{--bg-window:color-mix(in srgb,var(--tint-src) var(--mix-window),var(--raw-window))}
+html[data-parts~="tarjetas"] .win{--bg-surface:color-mix(in srgb,var(--tint-src) var(--mix-surface),var(--raw-surface));--line:color-mix(in srgb,var(--tint-src) var(--mix-line),var(--raw-line))}
+html[data-parts~="controles"] .win{--bg-control:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-control));--bg-hover:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-hover));--window-toolgroup-bg:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-toolgroup))}
+html[data-parts~="menus"] .win{--bg-raised:color-mix(in srgb,var(--tint-src) var(--mix-surface),var(--raw-raised))}
 </style>
 </head>
 <body>
@@ -256,6 +306,22 @@ html[data-menu="semaforos"] .menu{display:flex}
               </button>
             </div>
           </div>
+          <div class="row" data-id="group.color.intensidad" data-app="row_card" data-state="disabled" data-search="intensidad del tinte fuerza sutil normal fuerte intenso acento fondo de pantalla">
+            <div class="tx"><b class="t-body" data-id="group.color.intensidad.label">Intensidad del tinte</b><small class="t-callout" data-id="group.color.intensidad.help">Acento y Fondo guardan cada uno la suya.</small></div>
+            <div class="sld" data-id="group.color.intensidad.slider" data-kit="Slider" data-variant="stepped" data-app="tint_strength_slider" style="--sld-pos:1">
+              <span class="sld-track"><i class="sld-fill"></i></span><i class="sld-tick" style="--i:0"></i><i class="sld-tick" style="--i:1"></i><i class="sld-tick" style="--i:2"></i><i class="sld-tick" style="--i:3"></i><i class="sld-knob" data-id="group.color.intensidad.knob"></i><span class="sld-lbs"><span class="sld-lb t-caption first" data-id="group.color.intensidad.step.sutil" style="--i:0">Sutil</span><span class="sld-lb t-caption" data-id="group.color.intensidad.step.normal" style="--i:1">Normal</span><span class="sld-lb t-caption" data-id="group.color.intensidad.step.fuerte" style="--i:2">Fuerte</span><span class="sld-lb t-caption last" data-id="group.color.intensidad.step.intenso" style="--i:3">Intenso</span></span>
+            </div>
+          </div>
+          <div class="row" data-id="group.color.partes" data-app="row_card" data-state="disabled" data-search="tenir en las ventanas partes barras laterales sidebar fondo de la ventana grupos tarjetas controles menus dialogos tinte">
+            <div class="tx"><b class="t-body" data-id="group.color.partes.label">Teñir en las ventanas</b><small class="t-callout" data-id="group.color.partes.help">Lo que no marques queda en gris neutro.</small></div>
+            <div class="checks">
+              <span class="cb t-body" data-id="group.color.partes.barras" data-kit="Checkbox" data-app="tint_part" data-part="barras" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Barras laterales</span>
+              <span class="cb t-body" data-id="group.color.partes.ventana" data-kit="Checkbox" data-app="tint_part" data-part="ventana" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Fondo de la ventana</span>
+              <span class="cb t-body" data-id="group.color.partes.tarjetas" data-kit="Checkbox" data-app="tint_part" data-part="tarjetas" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Grupos y tarjetas</span>
+              <span class="cb t-body" data-id="group.color.partes.controles" data-kit="Checkbox" data-app="tint_part" data-part="controles" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Controles</span>
+              <span class="cb t-body" data-id="group.color.partes.menus" data-kit="Checkbox" data-app="tint_part" data-part="menus" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Menús y diálogos</span>
+            </div>
+          </div>
           <div class="row" data-id="group.color.alcance" data-app="row_card" data-state="disabled" data-search="aplicar el tinte escritorio barra de menus dock fondo de pantalla">
             <div class="tx"><b class="t-body" data-id="group.color.alcance.label">Aplicar el tinte a</b></div>
             <div class="radios">
@@ -320,6 +386,43 @@ html[data-menu="semaforos"] .menu{display:flex}
   }
   document.querySelectorAll('[data-select-theme]').forEach(function (card) {
     if (card.dataset.selectTheme === v.theme) card.dataset.state = 'selected';
+  });
+
+
+  // Color de las ventanas, intensidad y partes teñidas.
+  var mode = v.window || 'neutro';
+  root.dataset.window = mode;
+  document.querySelectorAll('[data-app="window_color_card"]').forEach(function (card) {
+    if (card.dataset.id === 'group.color.ventanas.card.' + mode) card.dataset.state = 'selected';
+    else card.removeAttribute('data-state');
+  });
+  var help = { neutro: 'Grises sin tinte.', acento: 'Toman un poco del color de acento.', fondo: 'Toman el color del fondo de pantalla.' };
+  document.querySelector('[data-id="group.color.ventanas.help"]').textContent = help[mode];
+  if (mode !== 'neutro') {
+    ['alcance', 'intensidad', 'partes'].forEach(function (id) {
+      document.querySelector('[data-id="group.color.' + id + '"]').removeAttribute('data-state');
+    });
+    // Valor del ejemplo; en la app sale del color dominante.
+    var src = mode === 'fondo' ? '#4169aa' : getComputedStyle(root).getPropertyValue('--accent').trim();
+    if (mode === 'fondo') root.style.setProperty('--accent', src);
+    root.style.setProperty('--tint-src', src);
+    var style = mode === 'fondo' ? 'tl-wall' : 'tl-accent';
+    document.querySelector('[data-id="sidebar.traffic"]').classList.add(style);
+    document.querySelector('[data-id="group.ventanas.semaforos.dropdown"] .prev').classList.add(style);
+    document.querySelector('[data-id="group.ventanas.semaforos.menu.automatico"] .prev').classList.add(style);
+  }
+  var strength = v.strength == null ? 1 : v.strength;
+  root.dataset.strength = String(strength);
+  var slider = document.querySelector('[data-id="group.color.intensidad.slider"]');
+  slider.style.setProperty('--sld-pos', strength);
+  slider.dataset.value = String(strength);
+  slider.querySelectorAll('.sld-lb').forEach(function (lb, k) { if (k === strength) lb.dataset.state = 'selected'; });
+  slider.querySelectorAll('.sld-tick').forEach(function (t, k) { if (k <= strength) t.classList.add('on'); });
+  var parts = v.parts || ['barras', 'ventana', 'tarjetas', 'controles', 'menus'];
+  if (mode !== 'neutro') root.dataset.parts = parts.join(' ');
+  document.querySelectorAll('[data-app="tint_part"]').forEach(function (box) {
+    if (parts.indexOf(box.dataset.part) >= 0) box.dataset.state = 'checked';
+    else box.removeAttribute('data-state');
   });
 
   var norm = function (s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };

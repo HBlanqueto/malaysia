@@ -296,7 +296,7 @@
     "rect": [
      266,
      90.5,
-     222,
+     150,
      18
     ],
     "text": "Apariencia",
@@ -310,7 +310,7 @@
    {
     "id": "group.apariencia.card.automatico",
     "rect": [
-     500,
+     464,
      66,
      70,
      67
@@ -320,7 +320,7 @@
    {
     "id": "group.apariencia.card.automatico.preview",
     "rect": [
-     500,
+     464,
      66,
      70,
      46
@@ -330,7 +330,7 @@
    {
     "id": "group.apariencia.card.claro",
     "rect": [
-     580,
+     544,
      66,
      70,
      67
@@ -341,7 +341,7 @@
    {
     "id": "group.apariencia.card.claro.preview",
     "rect": [
-     580,
+     544,
      66,
      70,
      46
@@ -351,7 +351,7 @@
    {
     "id": "group.apariencia.card.oscuro",
     "rect": [
-     660,
+     624,
      66,
      70,
      67
@@ -361,7 +361,7 @@
    {
     "id": "group.apariencia.card.oscuro.preview",
     "rect": [
-     660,
+     624,
      66,
      70,
      46
@@ -391,7 +391,7 @@
      252,
      179,
      492,
-     190
+     352
     ],
     "app": "card_container",
     "background": "rgb(255, 255, 255)",
@@ -412,7 +412,7 @@
     "rect": [
      266,
      199.5,
-     197,
+     150,
      18
     ],
     "text": "Color de acento",
@@ -426,7 +426,7 @@
    {
     "id": "group.color.swatch.azul",
     "rect": [
-     475,
+     451.5,
      189,
      24,
      39
@@ -437,7 +437,7 @@
    {
     "id": "group.color.swatch.morado",
     "rect": [
-     508,
+     484.5,
      189,
      24,
      39
@@ -447,7 +447,7 @@
    {
     "id": "group.color.swatch.rosa",
     "rect": [
-     541,
+     517.5,
      189,
      24,
      39
@@ -457,7 +457,7 @@
    {
     "id": "group.color.swatch.rojo",
     "rect": [
-     574,
+     550.5,
      189,
      24,
      39
@@ -467,7 +467,7 @@
    {
     "id": "group.color.swatch.naranja",
     "rect": [
-     607,
+     583.5,
      189,
      24,
      39
@@ -477,7 +477,7 @@
    {
     "id": "group.color.swatch.amarillo",
     "rect": [
-     640,
+     616.5,
      189,
      24,
      39
@@ -487,7 +487,7 @@
    {
     "id": "group.color.swatch.verde",
     "rect": [
-     673,
+     649.5,
      189,
      24,
      39
@@ -497,7 +497,7 @@
    {
     "id": "group.color.swatch.gris",
     "rect": [
-     706,
+     682.5,
      189,
      24,
      39
@@ -519,7 +519,7 @@
     "rect": [
      266,
      263.5,
-     222,
+     150,
      18
     ],
     "text": "Color de las ventanas",
@@ -535,7 +535,7 @@
     "rect": [
      266,
      283.5,
-     222,
+     150,
      16
     ],
     "text": "Grises sin tinte.",
@@ -549,7 +549,7 @@
    {
     "id": "group.color.ventanas.card.neutro",
     "rect": [
-     500,
+     464,
      248,
      70,
      67
@@ -560,7 +560,7 @@
    {
     "id": "group.color.ventanas.card.neutro.preview",
     "rect": [
-     500,
+     464,
      248,
      70,
      46
@@ -570,7 +570,7 @@
    {
     "id": "group.color.ventanas.card.acento",
     "rect": [
-     580,
+     544,
      248,
      70,
      67
@@ -580,7 +580,7 @@
    {
     "id": "group.color.ventanas.card.acento.preview",
     "rect": [
-     580,
+     544,
      248,
      70,
      46
@@ -590,7 +590,7 @@
    {
     "id": "group.color.ventanas.card.fondo",
     "rect": [
-     660,
+     624,
      248,
      70,
      67
@@ -600,7 +600,7 @@
    {
     "id": "group.color.ventanas.card.fondo.preview",
     "rect": [
-     660,
+     624,
      248,
      70,
      46
@@ -609,10 +609,279 @@
     "radius": 8
    },
    {
-    "id": "group.color.alcance",
+    "id": "group.color.intensidad",
     "rect": [
      252,
      325,
+     492,
+     72
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
      492,
      44
     ],
@@ -623,8 +892,8 @@
     "id": "group.color.alcance.label",
     "rect": [
      266,
-     338,
-     184.5,
+     500,
+     150,
      18
     ],
     "text": "Aplicar el tinte a",
@@ -638,8 +907,8 @@
    {
     "id": "group.color.alcance.ventanas",
     "rect": [
-     462.5,
-     338,
+     445,
+     500,
      127.5,
      18
     ],
@@ -656,8 +925,8 @@
    {
     "id": "group.color.alcance.escritorio",
     "rect": [
-     606,
-     338,
+     589,
+     500,
      124,
      18
     ],
@@ -674,7 +943,7 @@
     "id": "group.ventanas.title",
     "rect": [
      264,
-     385,
+     547,
      480,
      18
     ],
@@ -691,7 +960,7 @@
     "id": "group.ventanas",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -703,7 +972,7 @@
     "id": "group.ventanas.semaforos",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -713,8 +982,8 @@
     "id": "group.ventanas.semaforos.label",
     "rect": [
      266,
-     419,
-     308,
+     581,
+     150,
      18
     ],
     "text": "Semáforos",
@@ -728,8 +997,8 @@
    {
     "id": "group.ventanas.semaforos.dropdown",
     "rect": [
-     586,
-     415,
+     507,
+     577,
      144,
      26
     ],
@@ -1026,7 +1295,7 @@
     "rect": [
      266,
      90.5,
-     222,
+     150,
      18
     ],
     "text": "Apariencia",
@@ -1040,7 +1309,7 @@
    {
     "id": "group.apariencia.card.automatico",
     "rect": [
-     500,
+     464,
      66,
      70,
      67
@@ -1050,7 +1319,7 @@
    {
     "id": "group.apariencia.card.automatico.preview",
     "rect": [
-     500,
+     464,
      66,
      70,
      46
@@ -1060,7 +1329,7 @@
    {
     "id": "group.apariencia.card.claro",
     "rect": [
-     580,
+     544,
      66,
      70,
      67
@@ -1071,7 +1340,7 @@
    {
     "id": "group.apariencia.card.claro.preview",
     "rect": [
-     580,
+     544,
      66,
      70,
      46
@@ -1081,7 +1350,7 @@
    {
     "id": "group.apariencia.card.oscuro",
     "rect": [
-     660,
+     624,
      66,
      70,
      67
@@ -1091,7 +1360,7 @@
    {
     "id": "group.apariencia.card.oscuro.preview",
     "rect": [
-     660,
+     624,
      66,
      70,
      46
@@ -1121,7 +1390,7 @@
      252,
      179,
      492,
-     190
+     352
     ],
     "app": "card_container",
     "background": "rgb(255, 255, 255)",
@@ -1142,7 +1411,7 @@
     "rect": [
      266,
      199.5,
-     197,
+     150,
      18
     ],
     "text": "Color de acento",
@@ -1156,7 +1425,7 @@
    {
     "id": "group.color.swatch.azul",
     "rect": [
-     475,
+     451.5,
      189,
      24,
      39
@@ -1166,7 +1435,7 @@
    {
     "id": "group.color.swatch.morado",
     "rect": [
-     508,
+     484.5,
      189,
      24,
      39
@@ -1177,7 +1446,7 @@
    {
     "id": "group.color.swatch.rosa",
     "rect": [
-     541,
+     517.5,
      189,
      24,
      39
@@ -1187,7 +1456,7 @@
    {
     "id": "group.color.swatch.rojo",
     "rect": [
-     574,
+     550.5,
      189,
      24,
      39
@@ -1197,7 +1466,7 @@
    {
     "id": "group.color.swatch.naranja",
     "rect": [
-     607,
+     583.5,
      189,
      24,
      39
@@ -1207,7 +1476,7 @@
    {
     "id": "group.color.swatch.amarillo",
     "rect": [
-     640,
+     616.5,
      189,
      24,
      39
@@ -1217,7 +1486,7 @@
    {
     "id": "group.color.swatch.verde",
     "rect": [
-     673,
+     649.5,
      189,
      24,
      39
@@ -1227,7 +1496,7 @@
    {
     "id": "group.color.swatch.gris",
     "rect": [
-     706,
+     682.5,
      189,
      24,
      39
@@ -1249,7 +1518,7 @@
     "rect": [
      266,
      263.5,
-     222,
+     150,
      18
     ],
     "text": "Color de las ventanas",
@@ -1265,7 +1534,7 @@
     "rect": [
      266,
      283.5,
-     222,
+     150,
      16
     ],
     "text": "Grises sin tinte.",
@@ -1279,7 +1548,7 @@
    {
     "id": "group.color.ventanas.card.neutro",
     "rect": [
-     500,
+     464,
      248,
      70,
      67
@@ -1290,7 +1559,7 @@
    {
     "id": "group.color.ventanas.card.neutro.preview",
     "rect": [
-     500,
+     464,
      248,
      70,
      46
@@ -1300,7 +1569,7 @@
    {
     "id": "group.color.ventanas.card.acento",
     "rect": [
-     580,
+     544,
      248,
      70,
      67
@@ -1310,7 +1579,7 @@
    {
     "id": "group.color.ventanas.card.acento.preview",
     "rect": [
-     580,
+     544,
      248,
      70,
      46
@@ -1320,7 +1589,7 @@
    {
     "id": "group.color.ventanas.card.fondo",
     "rect": [
-     660,
+     624,
      248,
      70,
      67
@@ -1330,7 +1599,7 @@
    {
     "id": "group.color.ventanas.card.fondo.preview",
     "rect": [
-     660,
+     624,
      248,
      70,
      46
@@ -1339,10 +1608,279 @@
     "radius": 8
    },
    {
-    "id": "group.color.alcance",
+    "id": "group.color.intensidad",
     "rect": [
      252,
      325,
+     492,
+     72
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
      492,
      44
     ],
@@ -1353,8 +1891,8 @@
     "id": "group.color.alcance.label",
     "rect": [
      266,
-     338,
-     184.5,
+     500,
+     150,
      18
     ],
     "text": "Aplicar el tinte a",
@@ -1368,8 +1906,8 @@
    {
     "id": "group.color.alcance.ventanas",
     "rect": [
-     462.5,
-     338,
+     445,
+     500,
      127.5,
      18
     ],
@@ -1386,8 +1924,8 @@
    {
     "id": "group.color.alcance.escritorio",
     "rect": [
-     606,
-     338,
+     589,
+     500,
      124,
      18
     ],
@@ -1404,7 +1942,7 @@
     "id": "group.ventanas.title",
     "rect": [
      264,
-     385,
+     547,
      480,
      18
     ],
@@ -1421,7 +1959,7 @@
     "id": "group.ventanas",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -1433,7 +1971,7 @@
     "id": "group.ventanas.semaforos",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -1443,8 +1981,8 @@
     "id": "group.ventanas.semaforos.label",
     "rect": [
      266,
-     419,
-     308,
+     581,
+     150,
      18
     ],
     "text": "Semáforos",
@@ -1458,8 +1996,8 @@
    {
     "id": "group.ventanas.semaforos.dropdown",
     "rect": [
-     586,
-     415,
+     507,
+     577,
      144,
      26
     ],
@@ -1636,7 +2174,7 @@
     "kit": "SidebarItem",
     "app": "sidebar_item",
     "state": "selected",
-    "background": "color(srgb 0.135294 0.260784 0.490196)",
+    "background": "rgb(47, 111, 228)",
     "radius": 8
    },
    {
@@ -1756,7 +2294,7 @@
     "rect": [
      266,
      90.5,
-     222,
+     150,
      18
     ],
     "text": "Apariencia",
@@ -1770,7 +2308,7 @@
    {
     "id": "group.apariencia.card.automatico",
     "rect": [
-     500,
+     464,
      66,
      70,
      67
@@ -1780,7 +2318,7 @@
    {
     "id": "group.apariencia.card.automatico.preview",
     "rect": [
-     500,
+     464,
      66,
      70,
      46
@@ -1790,7 +2328,7 @@
    {
     "id": "group.apariencia.card.claro",
     "rect": [
-     580,
+     544,
      66,
      70,
      67
@@ -1800,7 +2338,7 @@
    {
     "id": "group.apariencia.card.claro.preview",
     "rect": [
-     580,
+     544,
      66,
      70,
      46
@@ -1810,7 +2348,7 @@
    {
     "id": "group.apariencia.card.oscuro",
     "rect": [
-     660,
+     624,
      66,
      70,
      67
@@ -1821,7 +2359,7 @@
    {
     "id": "group.apariencia.card.oscuro.preview",
     "rect": [
-     660,
+     624,
      66,
      70,
      46
@@ -1851,7 +2389,7 @@
      252,
      179,
      492,
-     190
+     352
     ],
     "app": "card_container",
     "background": "rgb(38, 38, 38)",
@@ -1872,7 +2410,7 @@
     "rect": [
      266,
      199.5,
-     197,
+     150,
      18
     ],
     "text": "Color de acento",
@@ -1886,7 +2424,7 @@
    {
     "id": "group.color.swatch.azul",
     "rect": [
-     475,
+     451.5,
      189,
      24,
      39
@@ -1897,7 +2435,7 @@
    {
     "id": "group.color.swatch.morado",
     "rect": [
-     508,
+     484.5,
      189,
      24,
      39
@@ -1907,7 +2445,7 @@
    {
     "id": "group.color.swatch.rosa",
     "rect": [
-     541,
+     517.5,
      189,
      24,
      39
@@ -1917,7 +2455,7 @@
    {
     "id": "group.color.swatch.rojo",
     "rect": [
-     574,
+     550.5,
      189,
      24,
      39
@@ -1927,7 +2465,7 @@
    {
     "id": "group.color.swatch.naranja",
     "rect": [
-     607,
+     583.5,
      189,
      24,
      39
@@ -1937,7 +2475,7 @@
    {
     "id": "group.color.swatch.amarillo",
     "rect": [
-     640,
+     616.5,
      189,
      24,
      39
@@ -1947,7 +2485,7 @@
    {
     "id": "group.color.swatch.verde",
     "rect": [
-     673,
+     649.5,
      189,
      24,
      39
@@ -1957,7 +2495,7 @@
    {
     "id": "group.color.swatch.gris",
     "rect": [
-     706,
+     682.5,
      189,
      24,
      39
@@ -1979,7 +2517,7 @@
     "rect": [
      266,
      263.5,
-     222,
+     150,
      18
     ],
     "text": "Color de las ventanas",
@@ -1995,7 +2533,7 @@
     "rect": [
      266,
      283.5,
-     222,
+     150,
      16
     ],
     "text": "Grises sin tinte.",
@@ -2009,7 +2547,7 @@
    {
     "id": "group.color.ventanas.card.neutro",
     "rect": [
-     500,
+     464,
      248,
      70,
      67
@@ -2020,7 +2558,7 @@
    {
     "id": "group.color.ventanas.card.neutro.preview",
     "rect": [
-     500,
+     464,
      248,
      70,
      46
@@ -2030,7 +2568,7 @@
    {
     "id": "group.color.ventanas.card.acento",
     "rect": [
-     580,
+     544,
      248,
      70,
      67
@@ -2040,7 +2578,7 @@
    {
     "id": "group.color.ventanas.card.acento.preview",
     "rect": [
-     580,
+     544,
      248,
      70,
      46
@@ -2050,7 +2588,7 @@
    {
     "id": "group.color.ventanas.card.fondo",
     "rect": [
-     660,
+     624,
      248,
      70,
      67
@@ -2060,7 +2598,7 @@
    {
     "id": "group.color.ventanas.card.fondo.preview",
     "rect": [
-     660,
+     624,
      248,
      70,
      46
@@ -2069,10 +2607,279 @@
     "radius": 8
    },
    {
-    "id": "group.color.alcance",
+    "id": "group.color.intensidad",
     "rect": [
      252,
      325,
+     492,
+     72
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(107, 107, 107)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
      492,
      44
     ],
@@ -2083,8 +2890,8 @@
     "id": "group.color.alcance.label",
     "rect": [
      266,
-     338,
-     184.5,
+     500,
+     150,
      18
     ],
     "text": "Aplicar el tinte a",
@@ -2098,8 +2905,8 @@
    {
     "id": "group.color.alcance.ventanas",
     "rect": [
-     462.5,
-     338,
+     445,
+     500,
      127.5,
      18
     ],
@@ -2116,8 +2923,8 @@
    {
     "id": "group.color.alcance.escritorio",
     "rect": [
-     606,
-     338,
+     589,
+     500,
      124,
      18
     ],
@@ -2134,7 +2941,7 @@
     "id": "group.ventanas.title",
     "rect": [
      264,
-     385,
+     547,
      480,
      18
     ],
@@ -2151,7 +2958,7 @@
     "id": "group.ventanas",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -2163,7 +2970,7 @@
     "id": "group.ventanas.semaforos",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -2173,8 +2980,8 @@
     "id": "group.ventanas.semaforos.label",
     "rect": [
      266,
-     419,
-     308,
+     581,
+     150,
      18
     ],
     "text": "Semáforos",
@@ -2188,8 +2995,8 @@
    {
     "id": "group.ventanas.semaforos.dropdown",
     "rect": [
-     586,
-     415,
+     507,
+     577,
      144,
      26
     ],
@@ -2482,7 +3289,7 @@
      252,
      84,
      492,
-     146
+     218
     ],
     "app": "card_container",
     "background": "rgb(255, 255, 255)",
@@ -2503,7 +3310,7 @@
     "rect": [
      266,
      104.5,
-     197,
+     150,
      18
     ],
     "text": "Color de acento",
@@ -2517,7 +3324,7 @@
    {
     "id": "group.color.swatch.azul",
     "rect": [
-     475,
+     451.5,
      94,
      24,
      39
@@ -2528,7 +3335,7 @@
    {
     "id": "group.color.swatch.morado",
     "rect": [
-     508,
+     484.5,
      94,
      24,
      39
@@ -2538,7 +3345,7 @@
    {
     "id": "group.color.swatch.rosa",
     "rect": [
-     541,
+     517.5,
      94,
      24,
      39
@@ -2548,7 +3355,7 @@
    {
     "id": "group.color.swatch.rojo",
     "rect": [
-     574,
+     550.5,
      94,
      24,
      39
@@ -2558,7 +3365,7 @@
    {
     "id": "group.color.swatch.naranja",
     "rect": [
-     607,
+     583.5,
      94,
      24,
      39
@@ -2568,7 +3375,7 @@
    {
     "id": "group.color.swatch.amarillo",
     "rect": [
-     640,
+     616.5,
      94,
      24,
      39
@@ -2578,7 +3385,7 @@
    {
     "id": "group.color.swatch.verde",
     "rect": [
-     673,
+     649.5,
      94,
      24,
      39
@@ -2588,7 +3395,7 @@
    {
     "id": "group.color.swatch.gris",
     "rect": [
-     706,
+     682.5,
      94,
      24,
      39
@@ -2610,7 +3417,7 @@
     "rect": [
      266,
      168.5,
-     222,
+     150,
      18
     ],
     "text": "Color de las ventanas",
@@ -2626,7 +3433,7 @@
     "rect": [
      266,
      188.5,
-     222,
+     150,
      16
     ],
     "text": "Grises sin tinte.",
@@ -2640,7 +3447,7 @@
    {
     "id": "group.color.ventanas.card.neutro",
     "rect": [
-     500,
+     464,
      153,
      70,
      67
@@ -2651,7 +3458,7 @@
    {
     "id": "group.color.ventanas.card.neutro.preview",
     "rect": [
-     500,
+     464,
      153,
      70,
      46
@@ -2661,7 +3468,7 @@
    {
     "id": "group.color.ventanas.card.acento",
     "rect": [
-     580,
+     544,
      153,
      70,
      67
@@ -2671,7 +3478,7 @@
    {
     "id": "group.color.ventanas.card.acento.preview",
     "rect": [
-     580,
+     544,
      153,
      70,
      46
@@ -2681,7 +3488,7 @@
    {
     "id": "group.color.ventanas.card.fondo",
     "rect": [
-     660,
+     624,
      153,
      70,
      67
@@ -2691,7 +3498,7 @@
    {
     "id": "group.color.ventanas.card.fondo.preview",
     "rect": [
-     660,
+     624,
      153,
      70,
      46
@@ -2700,10 +3507,141 @@
     "radius": 8
    },
    {
+    "id": "group.color.intensidad",
+    "rect": [
+     252,
+     230,
+     492,
+     72
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     240,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     260,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     247,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     247,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     271,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     271,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     271,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     271,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
     "id": "group.ventanas.title",
     "rect": [
      264,
-     246,
+     318,
      480,
      18
     ],
@@ -2720,7 +3658,7 @@
     "id": "group.ventanas",
     "rect": [
      252,
-     266,
+     338,
      492,
      46
     ],
@@ -2732,7 +3670,7 @@
     "id": "group.ventanas.semaforos",
     "rect": [
      252,
-     266,
+     338,
      492,
      46
     ],
@@ -2742,8 +3680,8 @@
     "id": "group.ventanas.semaforos.label",
     "rect": [
      266,
-     280,
-     308,
+     352,
+     150,
      18
     ],
     "text": "Semáforos",
@@ -2757,8 +3695,8 @@
    {
     "id": "group.ventanas.semaforos.dropdown",
     "rect": [
-     586,
-     276,
+     507,
+     348,
      144,
      26
     ],
@@ -3345,7 +4283,7 @@
     "rect": [
      266,
      90.5,
-     222,
+     150,
      18
     ],
     "text": "Apariencia",
@@ -3359,7 +4297,7 @@
    {
     "id": "group.apariencia.card.automatico",
     "rect": [
-     500,
+     464,
      66,
      70,
      67
@@ -3369,7 +4307,7 @@
    {
     "id": "group.apariencia.card.automatico.preview",
     "rect": [
-     500,
+     464,
      66,
      70,
      46
@@ -3379,7 +4317,7 @@
    {
     "id": "group.apariencia.card.claro",
     "rect": [
-     580,
+     544,
      66,
      70,
      67
@@ -3390,7 +4328,7 @@
    {
     "id": "group.apariencia.card.claro.preview",
     "rect": [
-     580,
+     544,
      66,
      70,
      46
@@ -3400,7 +4338,7 @@
    {
     "id": "group.apariencia.card.oscuro",
     "rect": [
-     660,
+     624,
      66,
      70,
      67
@@ -3410,7 +4348,7 @@
    {
     "id": "group.apariencia.card.oscuro.preview",
     "rect": [
-     660,
+     624,
      66,
      70,
      46
@@ -3440,7 +4378,7 @@
      252,
      179,
      492,
-     190
+     352
     ],
     "app": "card_container",
     "background": "rgb(255, 255, 255)",
@@ -3461,7 +4399,7 @@
     "rect": [
      266,
      199.5,
-     197,
+     150,
      18
     ],
     "text": "Color de acento",
@@ -3475,7 +4413,7 @@
    {
     "id": "group.color.swatch.azul",
     "rect": [
-     475,
+     451.5,
      189,
      24,
      39
@@ -3486,7 +4424,7 @@
    {
     "id": "group.color.swatch.morado",
     "rect": [
-     508,
+     484.5,
      189,
      24,
      39
@@ -3496,7 +4434,7 @@
    {
     "id": "group.color.swatch.rosa",
     "rect": [
-     541,
+     517.5,
      189,
      24,
      39
@@ -3506,7 +4444,7 @@
    {
     "id": "group.color.swatch.rojo",
     "rect": [
-     574,
+     550.5,
      189,
      24,
      39
@@ -3516,7 +4454,7 @@
    {
     "id": "group.color.swatch.naranja",
     "rect": [
-     607,
+     583.5,
      189,
      24,
      39
@@ -3526,7 +4464,7 @@
    {
     "id": "group.color.swatch.amarillo",
     "rect": [
-     640,
+     616.5,
      189,
      24,
      39
@@ -3536,7 +4474,7 @@
    {
     "id": "group.color.swatch.verde",
     "rect": [
-     673,
+     649.5,
      189,
      24,
      39
@@ -3546,7 +4484,7 @@
    {
     "id": "group.color.swatch.gris",
     "rect": [
-     706,
+     682.5,
      189,
      24,
      39
@@ -3568,7 +4506,7 @@
     "rect": [
      266,
      263.5,
-     222,
+     150,
      18
     ],
     "text": "Color de las ventanas",
@@ -3584,7 +4522,7 @@
     "rect": [
      266,
      283.5,
-     222,
+     150,
      16
     ],
     "text": "Grises sin tinte.",
@@ -3598,7 +4536,7 @@
    {
     "id": "group.color.ventanas.card.neutro",
     "rect": [
-     500,
+     464,
      248,
      70,
      67
@@ -3609,7 +4547,7 @@
    {
     "id": "group.color.ventanas.card.neutro.preview",
     "rect": [
-     500,
+     464,
      248,
      70,
      46
@@ -3619,7 +4557,7 @@
    {
     "id": "group.color.ventanas.card.acento",
     "rect": [
-     580,
+     544,
      248,
      70,
      67
@@ -3629,7 +4567,7 @@
    {
     "id": "group.color.ventanas.card.acento.preview",
     "rect": [
-     580,
+     544,
      248,
      70,
      46
@@ -3639,7 +4577,7 @@
    {
     "id": "group.color.ventanas.card.fondo",
     "rect": [
-     660,
+     624,
      248,
      70,
      67
@@ -3649,7 +4587,7 @@
    {
     "id": "group.color.ventanas.card.fondo.preview",
     "rect": [
-     660,
+     624,
      248,
      70,
      46
@@ -3658,10 +4596,279 @@
     "radius": 8
    },
    {
-    "id": "group.color.alcance",
+    "id": "group.color.intensidad",
     "rect": [
      252,
      325,
+     492,
+     72
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card",
+    "state": "disabled"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(138, 150, 168)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
      492,
      44
     ],
@@ -3672,8 +4879,8 @@
     "id": "group.color.alcance.label",
     "rect": [
      266,
-     338,
-     184.5,
+     500,
+     150,
      18
     ],
     "text": "Aplicar el tinte a",
@@ -3687,8 +4894,8 @@
    {
     "id": "group.color.alcance.ventanas",
     "rect": [
-     462.5,
-     338,
+     445,
+     500,
      127.5,
      18
     ],
@@ -3705,8 +4912,8 @@
    {
     "id": "group.color.alcance.escritorio",
     "rect": [
-     606,
-     338,
+     589,
+     500,
      124,
      18
     ],
@@ -3723,7 +4930,7 @@
     "id": "group.ventanas.title",
     "rect": [
      264,
-     385,
+     547,
      480,
      18
     ],
@@ -3740,7 +4947,7 @@
     "id": "group.ventanas",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -3752,7 +4959,7 @@
     "id": "group.ventanas.semaforos",
     "rect": [
      252,
-     405,
+     567,
      492,
      46
     ],
@@ -3762,8 +4969,8 @@
     "id": "group.ventanas.semaforos.label",
     "rect": [
      266,
-     419,
-     308,
+     581,
+     150,
      18
     ],
     "text": "Semáforos",
@@ -3777,8 +4984,8 @@
    {
     "id": "group.ventanas.semaforos.dropdown",
     "rect": [
-     586,
-     415,
+     507,
+     577,
      144,
      26
     ],
@@ -3787,8 +4994,8 @@
    {
     "id": "group.ventanas.semaforos.menu",
     "rect": [
-     557,
-     410,
+     478,
+     572,
      180,
      123
     ],
@@ -3799,8 +5006,8 @@
    {
     "id": "group.ventanas.semaforos.menu.automatico",
     "rect": [
-     562,
-     415,
+     483,
+     577,
      170,
      26
     ],
@@ -3810,8 +5017,8 @@
    {
     "id": "group.ventanas.semaforos.menu.clasico",
     "rect": [
-     562,
-     450,
+     483,
+     612,
      170,
      26
     ],
@@ -3820,8 +5027,8 @@
    {
     "id": "group.ventanas.semaforos.menu.acento",
     "rect": [
-     562,
-     476,
+     483,
+     638,
      170,
      26
     ],
@@ -3832,13 +5039,2997 @@
    {
     "id": "group.ventanas.semaforos.menu.fondo",
     "rect": [
-     562,
-     502,
+     483,
+     664,
      170,
      26
     ],
     "diff": "ignore",
     "radius": 8
+   }
+  ],
+  "acento-normal": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "color(srgb 0.903137 0.925569 0.964157)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "color(srgb 0.845271 0.880722 0.940816)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.132706 0.313412 0.643765)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.132706 0.313412 0.643765)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.657412 0.762824 0.955529)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "color(srgb 0.839373 0.875639 0.934149)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(47, 111, 228)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "color(srgb 0.932416 0.953211 0.991227 / 0.868988)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     503,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     150,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     464,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     464,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     544,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     544,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     624,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     624,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     352
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     150,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     451.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     484.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     517.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     550.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     583.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     616.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     649.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     682.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     255.5,
+     150,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     275.5,
+     150,
+     32
+    ],
+    "text": "Toman un poco del color de acento.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     464,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     464,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     544,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     544,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     624,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     624,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.intensidad",
+    "rect": [
+     252,
+     325,
+     492,
+     72
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     539,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Normal",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "text": "Fuerte",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
+     492,
+     44
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     500,
+     150,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     445,
+     500,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     589,
+     500,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     547,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     581,
+     150,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     507,
+     577,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "acento-solo-barras": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "rgb(242, 244, 247)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "color(srgb 0.861906 0.850416 0.932745)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.400941 0.256941 0.609882)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.400941 0.256941 0.609882)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.813882 0.729882 0.935765)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "rgb(227, 232, 239)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(142, 91, 216)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "rgba(255, 255, 255, 0.86)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     503,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     150,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     464,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     464,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     544,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     544,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     624,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     624,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     352
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     150,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     451.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     484.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     517.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     550.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     583.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     616.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     649.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     682.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     255.5,
+     150,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     275.5,
+     150,
+     32
+    ],
+    "text": "Toman un poco del color de acento.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     464,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     464,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     544,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     544,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     624,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     624,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.intensidad",
+    "rect": [
+     252,
+     325,
+     492,
+     72
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     599,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "text": "Normal",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Fuerte",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "text": "Fondo de la ventana",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "text": "Controles",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "text": "Menús y diálogos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
+     492,
+     44
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     500,
+     150,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     445,
+     500,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     589,
+     500,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     547,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "rgb(255, 255, 255)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     581,
+     150,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     507,
+     577,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
+   }
+  ],
+  "fondo-oscuro": [
+   {
+    "id": "window",
+    "rect": [
+     0,
+     0,
+     760,
+     620
+    ],
+    "kit": "Window",
+    "variant": "fixed-width",
+    "background": "color(srgb 0.136176 0.157353 0.191765)"
+   },
+   {
+    "id": "sidebar",
+    "rect": [
+     8,
+     8,
+     220,
+     604
+    ],
+    "kit": "Sidebar",
+    "variant": "island",
+    "background": "color(srgb 0.118145 0.147792 0.195969)",
+    "radius": 12
+   },
+   {
+    "id": "sidebar.traffic",
+    "rect": [
+     26,
+     24,
+     52,
+     12
+    ],
+    "kit": "TrafficLights",
+    "variant": "standard fixed-width"
+   },
+   {
+    "id": "sidebar.traffic.close",
+    "rect": [
+     26,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.183529 0.296471 0.48)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.minimize",
+    "rect": [
+     46,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.183529 0.296471 0.48)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.traffic.zoom",
+    "rect": [
+     66,
+     24,
+     12,
+     12
+    ],
+    "background": "color(srgb 0.687059 0.752941 0.86)",
+    "radius": 4
+   },
+   {
+    "id": "sidebar.search",
+    "rect": [
+     18,
+     54,
+     200,
+     30
+    ],
+    "app": "search_field",
+    "background": "color(srgb 0.231898 0.25731 0.298604)",
+    "radius": 999
+   },
+   {
+    "id": "sidebar.search.text",
+    "rect": [
+     50,
+     60,
+     158,
+     18
+    ],
+    "text": "Buscar",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.account",
+    "rect": [
+     18,
+     96,
+     200,
+     48
+    ],
+    "app": "account_row",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.account.avatar",
+    "rect": [
+     24,
+     102,
+     36,
+     36
+    ],
+    "background": "rgb(125, 130, 140)",
+    "radius": 999,
+    "text": "HB",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.name",
+    "rect": [
+     70,
+     103,
+     129,
+     18
+    ],
+    "text": "Humberto Blanqueto",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "sidebar.account.detail",
+    "rect": [
+     70,
+     121,
+     129,
+     16
+    ],
+    "text": "Cuenta local",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     158,
+     200,
+     30
+    ],
+    "kit": "SidebarItem",
+    "app": "sidebar_item",
+    "state": "selected",
+    "background": "rgb(65, 105, 170)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.icon",
+    "rect": [
+     26,
+     162,
+     22,
+     22
+    ],
+    "background": "rgb(43, 43, 43)",
+    "radius": 8
+   },
+   {
+    "id": "sidebar.item.apariencia.label",
+    "rect": [
+     56,
+     164,
+     64.5,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(255, 255, 255)",
+    "font": [
+     13,
+     18,
+     500
+    ]
+   },
+   {
+    "id": "toolbar.nav",
+    "rect": [
+     250,
+     13,
+     75,
+     34
+    ],
+    "kit": "ToolGroup",
+    "variant": "island",
+    "background": "color(srgb 0.232591 0.261959 0.316058 / 0.865263)",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.back",
+    "rect": [
+     253,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar.nav.forward",
+    "rect": [
+     288,
+     15,
+     34,
+     30
+    ],
+    "kit": "ToolButton",
+    "state": "disabled",
+    "radius": 999
+   },
+   {
+    "id": "toolbar",
+    "rect": [
+     503,
+     20,
+     76.5,
+     20
+    ],
+    "text": "Apariencia",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     15,
+     20,
+     600
+    ]
+   },
+   {
+    "id": "content",
+    "rect": [
+     236,
+     52,
+     524,
+     568
+    ],
+    "app": "content_scroll"
+   },
+   {
+    "id": "group.apariencia",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "radius": 16
+   },
+   {
+    "id": "group.apariencia.row",
+    "rect": [
+     252,
+     56,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.apariencia.label",
+    "rect": [
+     266,
+     90.5,
+     150,
+     18
+    ],
+    "text": "Apariencia",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.apariencia.card.automatico",
+    "rect": [
+     464,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.automatico.preview",
+    "rect": [
+     464,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.claro",
+    "rect": [
+     544,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card"
+   },
+   {
+    "id": "group.apariencia.card.claro.preview",
+    "rect": [
+     544,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.apariencia.card.oscuro",
+    "rect": [
+     624,
+     66,
+     70,
+     67
+    ],
+    "app": "theme_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.apariencia.card.oscuro.preview",
+    "rect": [
+     624,
+     66,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.title",
+    "rect": [
+     264,
+     159,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Color",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.color",
+    "rect": [
+     252,
+     179,
+     492,
+     352
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "radius": 16
+   },
+   {
+    "id": "group.color.acento",
+    "rect": [
+     252,
+     179,
+     492,
+     59
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.acento.label",
+    "rect": [
+     266,
+     199.5,
+     150,
+     18
+    ],
+    "text": "Color de acento",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.swatch.azul",
+    "rect": [
+     451.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.swatch.morado",
+    "rect": [
+     484.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rosa",
+    "rect": [
+     517.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.rojo",
+    "rect": [
+     550.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.naranja",
+    "rect": [
+     583.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.amarillo",
+    "rect": [
+     616.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.verde",
+    "rect": [
+     649.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.swatch.gris",
+    "rect": [
+     682.5,
+     189,
+     24,
+     39
+    ],
+    "app": "accent_swatch"
+   },
+   {
+    "id": "group.color.ventanas",
+    "rect": [
+     252,
+     238,
+     492,
+     87
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.ventanas.label",
+    "rect": [
+     266,
+     255.5,
+     150,
+     18
+    ],
+    "text": "Color de las ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.help",
+    "rect": [
+     266,
+     275.5,
+     150,
+     32
+    ],
+    "text": "Toman el color del fondo de pantalla.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.ventanas.card.neutro",
+    "rect": [
+     464,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.neutro.preview",
+    "rect": [
+     464,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.acento",
+    "rect": [
+     544,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card"
+   },
+   {
+    "id": "group.color.ventanas.card.acento.preview",
+    "rect": [
+     544,
+     248,
+     70,
+     46
+    ],
+    "radius": 8
+   },
+   {
+    "id": "group.color.ventanas.card.fondo",
+    "rect": [
+     624,
+     248,
+     70,
+     67
+    ],
+    "app": "window_color_card",
+    "state": "selected"
+   },
+   {
+    "id": "group.color.ventanas.card.fondo.preview",
+    "rect": [
+     624,
+     248,
+     70,
+     46
+    ],
+    "diff": "ignore",
+    "radius": 8
+   },
+   {
+    "id": "group.color.intensidad",
+    "rect": [
+     252,
+     325,
+     492,
+     72
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.intensidad.label",
+    "rect": [
+     266,
+     335,
+     150,
+     18
+    ],
+    "text": "Intensidad del tinte",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.help",
+    "rect": [
+     266,
+     355,
+     150,
+     32
+    ],
+    "text": "Acento y Fondo guardan cada uno la suya.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.intensidad.slider",
+    "rect": [
+     479,
+     342,
+     200,
+     38
+    ],
+    "kit": "Slider",
+    "app": "tint_strength_slider",
+    "variant": "stepped"
+   },
+   {
+    "id": "group.color.intensidad.knob",
+    "rect": [
+     599,
+     342,
+     20,
+     20
+    ],
+    "background": "rgb(255, 255, 255)",
+    "radius": 999
+   },
+   {
+    "id": "group.color.intensidad.step.sutil",
+    "rect": [
+     489,
+     366,
+     24.5,
+     14
+    ],
+    "text": "Sutil",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.normal",
+    "rect": [
+     527.5,
+     366,
+     38.5,
+     14
+    ],
+    "text": "Normal",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.fuerte",
+    "rect": [
+     580.5,
+     366,
+     34.5,
+     14
+    ],
+    "state": "selected",
+    "text": "Fuerte",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.intensidad.step.intenso",
+    "rect": [
+     629,
+     366,
+     40,
+     14
+    ],
+    "text": "Intenso",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "group.color.partes",
+    "rect": [
+     252,
+     397,
+     492,
+     90
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.partes.label",
+    "rect": [
+     266,
+     416,
+     150,
+     18
+    ],
+    "text": "Teñir en las ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.help",
+    "rect": [
+     266,
+     436,
+     150,
+     32
+    ],
+    "text": "Lo que no marques queda en gris neutro.",
+    "color": "rgb(155, 155, 155)",
+    "font": [
+     12,
+     16,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.barras",
+    "rect": [
+     428,
+     407,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Barras laterales",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.ventana",
+    "rect": [
+     587,
+     407,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Fondo de la ventana",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.tarjetas",
+    "rect": [
+     428,
+     433,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Grupos y tarjetas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.controles",
+    "rect": [
+     587,
+     433,
+     143,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Controles",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.partes.menus",
+    "rect": [
+     428,
+     459,
+     141,
+     18
+    ],
+    "kit": "Checkbox",
+    "app": "tint_part",
+    "state": "checked",
+    "text": "Menús y diálogos",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance",
+    "rect": [
+     252,
+     487,
+     492,
+     44
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.color.alcance.label",
+    "rect": [
+     266,
+     500,
+     150,
+     18
+    ],
+    "text": "Aplicar el tinte a",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.ventanas",
+    "rect": [
+     445,
+     500,
+     127.5,
+     18
+    ],
+    "app": "radio",
+    "state": "selected",
+    "text": "Solo las ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.color.alcance.escritorio",
+    "rect": [
+     589,
+     500,
+     124,
+     18
+    ],
+    "app": "radio",
+    "text": "Todo el escritorio",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.title",
+    "rect": [
+     264,
+     547,
+     480,
+     18
+    ],
+    "app": "group_title",
+    "text": "Ventanas",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     600
+    ]
+   },
+   {
+    "id": "group.ventanas",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "card_container",
+    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "radius": 16
+   },
+   {
+    "id": "group.ventanas.semaforos",
+    "rect": [
+     252,
+     567,
+     492,
+     46
+    ],
+    "app": "row_card"
+   },
+   {
+    "id": "group.ventanas.semaforos.label",
+    "rect": [
+     266,
+     581,
+     150,
+     18
+    ],
+    "text": "Semáforos",
+    "color": "rgb(245, 245, 245)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "group.ventanas.semaforos.dropdown",
+    "rect": [
+     507,
+     577,
+     144,
+     26
+    ],
+    "app": "traffic_dropdown"
    }
   ]
  }

@@ -133,9 +133,10 @@ mod tests {
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
     use vow_appearance::{
-        AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
+        AppearanceConfig, ColorScheme, TintParts, TintStrength, WindowColorMode, WindowTintScope,
+        resolve, write_appearance,
     };
-    use vow_design::{ACCENT_SWATCHES, BG_WINDOW_LIGHT};
+    use vow_design::{ACCENT_SWATCHES, BG_WINDOW_LIGHT, Rgba};
 
     use super::*;
 
@@ -711,13 +712,13 @@ mod tests {
         test.sync_and_update();
     }
 
-    fn variant_config(variant: &str) -> (AppearanceConfig, Option<&str>, bool) {
+    fn variant_config(variant: &str) -> (AppearanceConfig, Option<Rgba>, Option<&str>, bool) {
         let light = AppearanceConfig {
             color_scheme: ColorScheme::Light,
             ..AppearanceConfig::default()
         };
         match variant {
-            "claro" => (light, None, false),
+            "claro" => (light, None, None, false),
             "claro-morado" => {
                 let purple = ACCENT_SWATCHES
                     .iter()
@@ -730,6 +731,7 @@ mod tests {
                         ..light
                     },
                     None,
+                    None,
                     false,
                 )
             }
@@ -739,11 +741,70 @@ mod tests {
                     ..AppearanceConfig::default()
                 },
                 None,
+                None,
                 false,
             ),
-            "busqueda-acento" => (light, Some("acento"), false),
-            "sin-resultados" => (light, Some("zzz"), false),
-            "semaforos-menu" => (light, None, true),
+            "busqueda-acento" => (light, None, Some("acento"), false),
+            "sin-resultados" => (light, None, Some("zzz"), false),
+            "semaforos-menu" => (light, None, None, true),
+            "acento-normal" => (
+                AppearanceConfig {
+                    color_scheme: ColorScheme::Light,
+                    window_color: WindowColorMode::Accent,
+                    ..Default::default()
+                },
+                None,
+                None,
+                false,
+            ),
+            "acento-solo-barras" => {
+                let purple = ACCENT_SWATCHES
+                    .iter()
+                    .find(|(name, _)| *name == "Morado")
+                    .map(|(_, color)| *color)
+                    .expect("purple swatch exists");
+                (
+                    AppearanceConfig {
+                        color_scheme: ColorScheme::Light,
+                        accent_color: Some([purple.r, purple.g, purple.b]),
+                        window_color: WindowColorMode::Accent,
+                        tint_strength_accent: TintStrength::Strong,
+                        tint_parts: TintParts {
+                            sidebars: true,
+                            window: false,
+                            groups: false,
+                            controls: false,
+                            menus: false,
+                        },
+                        ..Default::default()
+                    },
+                    None,
+                    None,
+                    false,
+                )
+            }
+            "fondo-oscuro" => {
+                let dominant = Rgba::rgb8(0x41, 0x69, 0xaa);
+                (
+                    AppearanceConfig {
+                        color_scheme: ColorScheme::Dark,
+                        accent_color: Some([dominant.r, dominant.g, dominant.b]),
+                        window_color: WindowColorMode::Wallpaper,
+                        tint_strength_wallpaper: TintStrength::Strong,
+                        tint_parts: TintParts {
+                            sidebars: true,
+                            window: true,
+                            groups: true,
+                            controls: true,
+                            menus: true,
+                        },
+                        ..Default::default()
+                    },
+                    Some(dominant),
+                    None,
+                    false,
+                )
+            }
             other => panic!("unknown mockup variant {other}"),
         }
     }
@@ -796,6 +857,15 @@ mod tests {
             ),
             "semaforos-menu" => include_bytes!(
                 "../../../docs/mockups/ajustes-del-sistema/apariencia.semaforos-menu.png"
+            ),
+            "acento-normal" => include_bytes!(
+                "../../../docs/mockups/ajustes-del-sistema/apariencia.acento-normal.png"
+            ),
+            "acento-solo-barras" => include_bytes!(
+                "../../../docs/mockups/ajustes-del-sistema/apariencia.acento-solo-barras.png"
+            ),
+            "fondo-oscuro" => include_bytes!(
+                "../../../docs/mockups/ajustes-del-sistema/apariencia.fondo-oscuro.png"
             ),
             other => panic!("no reference PNG for {other}"),
         }
@@ -891,8 +961,8 @@ mod tests {
         let failures = with_temp_config(|_dir| {
             let mut failures = Vec::new();
             for (variant, nodes) in &layout.variants {
-                let (config, query, scroll) = variant_config(variant);
-                let mut test = run_app(config, None);
+                let (config, dominant, query, scroll) = variant_config(variant);
+                let mut test = run_app(config, dominant);
                 if let Some(query) = query {
                     type_query(&mut test, query);
                 }
