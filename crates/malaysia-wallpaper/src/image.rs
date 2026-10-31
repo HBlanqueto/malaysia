@@ -8,6 +8,12 @@ use std::path::{Path, PathBuf};
 
 use vow_design::Rgba;
 
+/// The embedded default wallpaper: a sRGB JPEG shipped with the package.
+pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../share/wallpapers/great_forest.jpg"
+));
+
 /// A decoded picture, ready to become a GPU texture.
 #[derive(Clone, PartialEq)]
 pub struct DecodedImage {
@@ -49,39 +55,55 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
             return current.clone();
         }
     };
-    let Some((path, scale)) = selection else {
-        if let Err(error) = write_state(state_path, None) {
-            tracing::error!(%error, "failed to write the state");
+
+    let (selection, decoded) = match selection {
+        Some((path, scale)) => {
+            if current
+                .selection
+                .as_ref()
+                .is_some_and(|(old_path, old_scale)| old_path == &path && old_scale == &scale)
+            {
+                return current.clone();
+            }
+            if !scale.is_empty() && scale != "fill" {
+                // shortcut: only "fill" is implemented; add a scale enum and shader UV
+                // branch when another scale is needed.
+                tracing::warn!(scale, "scale is not implemented yet; using 'fill'");
+            }
+            tracing::info!(?path, "loading wallpaper");
+            match decode_image(&path) {
+                Ok(decoded) => (Some((path, scale)), decoded),
+                Err(error) => {
+                    tracing::error!(?path, %error, "failed to decode wallpaper");
+                    if current.image.is_some() {
+                        return current.clone();
+                    }
+                    load_default_image()
+                }
+            }
         }
-        return Wallpaper::default();
+        None => load_default_image(),
     };
-    if current
-        .selection
-        .as_ref()
-        .is_some_and(|(old_path, old_scale)| old_path == &path && old_scale == &scale)
-    {
-        return current.clone();
-    }
-    if !scale.is_empty() && scale != "fill" {
-        // shortcut: only "fill" is implemented; add a scale enum and shader UV
-        // branch when another scale is needed.
-        tracing::warn!(scale, "scale is not implemented yet; using 'fill'");
-    }
-    tracing::info!(?path, "loading wallpaper");
-    let decoded = match decode_image(&path) {
-        Ok(decoded) => decoded,
-        Err(error) => {
-            tracing::error!(?path, %error, "failed to decode wallpaper");
-            return current.clone();
-        }
-    };
+
     let dominant = dominant(&decoded);
     if let Err(error) = write_state(state_path, dominant) {
         tracing::error!(%error, "failed to write the state");
     }
     Wallpaper {
         image: Some(LoadedImage { decoded }),
-        selection: Some((path, scale)),
+        selection,
+    }
+}
+
+/// Decodes the embedded default image. This is the fallback when there is no
+/// valid selection or when a startup selection cannot be decoded.
+fn load_default_image() -> (Option<(PathBuf, String)>, DecodedImage) {
+    match decode_image_bytes(DEFAULT_WALLPAPER_BYTES) {
+        Ok(decoded) => (None, decoded),
+        Err(error) => {
+            // The embedded asset is part of the build; failing here is a bug.
+            panic!("embedded default wallpaper is corrupt: {error}")
+        }
     }
 }
 
@@ -90,6 +112,10 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
 /// The `wallpaper.domain` store, as macOS keeps `com.apple.wallpaper`.
 #[derive(Debug, Default, serde::Deserialize)]
 struct WallpaperStore {
+    /// Kept for forward compatibility with existing `wallpaper.domain` files;
+    /// `malaysia-wallpaper` no longer uses this field because the default is
+    /// embedded.
+    #[allow(dead_code)]
     #[serde(default)]
     dir: String,
     #[serde(default)]
@@ -106,47 +132,21 @@ struct Desktops {
 
 /// Reads the current wallpaper image path from the store.
 ///
-/// The store's selection wins. Without one (or without a store at all, as on
-/// a fresh account) the default is [`vow_design::WALLPAPER`] inside the
-/// catalog folder; a custom folder that lacks it falls back to its first image.
+/// Returns `Some((path, scale))` only when the store has a valid
+/// `[desktops].default` entry. Any other case (no store, no selection, or a
+/// selection pointing to a missing file) returns `None`; the caller must then
+/// fall back to the embedded default image.
 pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, String)>> {
     let store: WallpaperStore = match std::fs::read_to_string(store_path) {
         Ok(text) => toml::from_str(&text)?,
         Err(_) => WallpaperStore::default(),
     };
-    if let Some(url) = &store.desktops.default
-        && let Some(path) = file_url_to_path(url)
-    {
-        return Ok(Some((path, store.scale)));
-    }
-    let dir = if store.dir.is_empty() {
-        PathBuf::from(vow_design::WALLPAPER_DIR)
-    } else {
-        PathBuf::from(&store.dir)
-    };
-    let default = dir.join(vow_design::WALLPAPER);
-    if default.is_file() {
-        return Ok(Some((default, store.scale)));
-    }
-    let mut entries: Vec<_> = std::fs::read_dir(&dir)
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| {
-                    matches!(
-                        extension.to_ascii_lowercase().as_str(),
-                        "png" | "jpg" | "jpeg"
-                    )
-                })
-        })
-        .collect();
-    entries.sort();
-    Ok(entries.first().cloned().map(|p| (p, store.scale)))
+    Ok(store
+        .desktops
+        .default
+        .as_ref()
+        .and_then(|url| file_url_to_path(url))
+        .map(|path| (path, store.scale)))
 }
 
 /// Turns a `file://` URL into a path, decoding `%XX` escapes.
@@ -183,13 +183,17 @@ fn hex(b: u8) -> Option<u8> {
     }
 }
 
-/// Decodes a PNG or JPEG into top-down RGBA8 pixels.
+/// Decodes a PNG or JPEG file into top-down RGBA8 pixels.
 pub fn decode_image(path: &Path) -> anyhow::Result<DecodedImage> {
-    let bytes = std::fs::read(path)?;
+    decode_image_bytes(&std::fs::read(path)?)
+}
+
+/// Decodes a PNG or JPEG in memory into top-down RGBA8 pixels.
+pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
-        decode_png(&bytes)
+        decode_png(bytes)
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
-        decode_jpeg(&bytes)
+        decode_jpeg(bytes)
     } else {
         anyhow::bail!("unsupported image format (expected PNG or JPEG)")
     }
@@ -255,7 +259,6 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
 pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     const SAMPLE_TARGET: f64 = 65_536.0;
     const MIN_CHROMA: f32 = 0.12;
-    const MIN_DOMINANT_SHARE: f32 = 0.01;
 
     let (width, height) = image.size;
     if width == 0 || height == 0 {
@@ -268,11 +271,9 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
         .max(1.0) as usize;
     let mut weights = [0.0f32; 4096];
     let mut sums = [[0.0f32; 3]; 4096];
-    let mut sampled = 0usize;
 
     for y in (0..height).step_by(step) {
         for x in (0..width).step_by(step) {
-            sampled += 1;
             let index = (y * width + x) * 4;
             let [r, g, b, a] = [
                 image.rgba[index],
@@ -304,9 +305,12 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
         .iter()
         .enumerate()
         .max_by(|a, b| a.1.total_cmp(b.1))?;
-    if *weight < sampled as f32 * MIN_DOMINANT_SHARE {
+    if *weight == 0.0 {
         return None;
     }
+    // We used to require `weight >= sampled * MIN_DOMINANT_SHARE`, but that
+    // discarded real-world photographs (forest, landscape) whose chroma is
+    // spread across many buckets. Keep the strongest chromatic bucket.
     Some(normalize_lightness([
         sums[bucket][0] / weight,
         sums[bucket][1] / weight,
@@ -436,18 +440,20 @@ mod tests {
     #[test]
     fn without_a_selection_the_default_wallpaper_is_used() {
         let dir = scratch("default");
-        touch(&dir, "Black.png");
-        let aqua = touch(&dir, vow_design::WALLPAPER);
         let store = dir.join("wallpaper.domain");
-        std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
-        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
-        assert_eq!(path, aqua);
+        let state = dir.join("wallpaper.state");
+        let wallpaper = load_snapshot(&store, &state);
+        assert!(
+            wallpaper.image.is_some(),
+            "the embedded default should load"
+        );
+        assert!(wallpaper.selection.is_none());
     }
 
     #[test]
     fn the_store_selection_wins_over_the_default() {
         let dir = scratch("selection");
-        touch(&dir, vow_design::WALLPAPER);
+        touch(&dir, "great_forest.jpg");
         let mint = touch(&dir, "Solid Mint.png");
         let store = dir.join("wallpaper.domain");
         std::fs::write(
@@ -464,14 +470,37 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_without_the_default_falls_back_to_its_first_image() {
+    fn a_folder_without_selection_uses_the_embedded_default() {
         let dir = scratch("custom");
-        let black = touch(&dir, "Black.png");
+        touch(&dir, "Black.png");
         touch(&dir, "Yellow.png");
         let store = dir.join("wallpaper.domain");
         std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
-        let (path, _) = load_wallpaper(&store).unwrap().unwrap();
-        assert_eq!(path, black);
+        let state = dir.join("wallpaper.state");
+        let wallpaper = load_snapshot(&store, &state);
+        assert!(
+            wallpaper.image.is_some(),
+            "the embedded default should load"
+        );
+        assert!(wallpaper.selection.is_none());
+    }
+
+    #[test]
+    fn a_missing_selection_at_startup_uses_the_embedded_default() {
+        let dir = scratch("missing");
+        let store = dir.join("wallpaper.domain");
+        let state = dir.join("wallpaper.state");
+        std::fs::write(
+            &store,
+            "[desktops]\ndefault = \"file:///no/such/file.jpg\"\n",
+        )
+        .unwrap();
+        let wallpaper = load_snapshot(&store, &state);
+        assert!(
+            wallpaper.image.is_some(),
+            "the embedded default should load"
+        );
+        assert!(wallpaper.selection.is_none());
     }
 
     fn fixture_path(name: &str) -> PathBuf {
@@ -638,10 +667,18 @@ mod tests {
     }
 
     #[test]
-    fn the_default_wallpaper_ships_with_malaysia() {
-        let shipped = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../share/wallpapers/solid-colors")
-            .join(vow_design::WALLPAPER);
-        assert!(shipped.is_file(), "{shipped:?} is missing");
+    fn the_embedded_default_wallpaper_decodes_to_1080x607() {
+        let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
+        assert_eq!(image.size, (1080, 607));
+    }
+
+    #[test]
+    fn the_embedded_default_has_a_dominant_colour() {
+        let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
+        let color = dominant(&image).expect("great_forest should have a dominant colour");
+        // Obtained empirically on 2026-10-30 from the shipped JPEG.
+        assert!((color.r - 0.802479).abs() < 0.001);
+        assert!((color.g - 0.792251).abs() < 0.001);
+        assert!((color.b - 0.097521).abs() < 0.001);
     }
 }

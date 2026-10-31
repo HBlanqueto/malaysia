@@ -172,6 +172,10 @@
             # /usr/share/backgrounds. `[wallpaper].dir` defaults to this path.
             mkdir -p $out/share/wallpapers
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
+            install -Dm644 share/wallpapers/great_forest.jpg \
+              $out/share/wallpapers/great_forest.jpg
+            install -Dm644 share/wallpapers/great_forest.NOTICE \
+              $out/share/wallpapers/great_forest.NOTICE
             # The Settings app launcher entry.
             install -Dm644 share/applications/io.github.hblanqueto.malaysia.settings.desktop \
               $out/share/applications/io.github.hblanqueto.malaysia.settings.desktop

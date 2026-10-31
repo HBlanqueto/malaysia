@@ -167,11 +167,12 @@ dir = "/run/current-system/sw/share/wallpapers/solid-colors"
 scale = "fill"
 
 [desktops]
-default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqua Blue.png"
+default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Mint.png"
 ```
 
-`dir` es el catálogo de imágenes PNG. Si no hay `[desktops].default`, se usa
-`Solid Aqua Blue.png` dentro de `dir` (o la primera imagen si no existe).
+`dir` es el catálogo de imágenes PNG. Si no hay `[desktops].default`, o la
+selección apunta a un archivo que no existe, se usa `great_forest.jpg`, un JPEG
+incrustado en el binario de `malaysia-wallpaper`.
 
 Toda la documentación vive en [`docs/`](docs/README.md):
 

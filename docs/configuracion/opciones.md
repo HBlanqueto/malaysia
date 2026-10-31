@@ -186,10 +186,11 @@ desarrollo puede apuntarlo al repo o a otra carpeta. El componente
 **`malaysia-wallpaper`** dibuja el wallpaper en la capa `Background` con las
 imágenes de esa carpeta (ADR 0049; render **Vulkan**/wgpu presentado por dmabuf).
 
-**El wallpaper por defecto es `Solid Aqua Blue.png`** (`vow_design::WALLPAPER`):
-es el que se ve cuando el almacén no elige ninguno o todavía no existe, como la
-imagen por defecto de una cuenta nueva de macOS. Si `wallpaper.dir` apunta a una
-carpeta propia que no lo tiene, se usa la primera imagen de esa carpeta.
+**El wallpaper por defecto es `great_forest.jpg`**: un JPEG sRGB de 1080×607
+incrustado en el binario de `malaysia-wallpaper`.
+Es el que se ve cuando el almacén no elige ninguno, todavía no existe, o la
+selección apunta a un archivo que no existe o no decodifica. Si `wallpaper.dir`
+apunta a otra carpeta y no hay selección, sigue viéndose `great_forest.jpg`.
 
 **Como macOS, la selección actual vive en un almacén aparte**:
 `~/.local/share/malaysia/wallpaper.domain` (el equivalente a `~/Library/Application
@@ -199,7 +200,7 @@ a la imagen:
 ```toml
 # ~/.local/share/malaysia/wallpaper.domain  (current selection, per desktop)
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, Solid Aqua Blue
+default = "file:///home/.../Solid Colors/Solid Mint.png"   # opcional; sin esta línea, great_forest.jpg
 ```
 
 Editar ese archivo cambia el wallpaper **en vivo** (`malaysia-wallpaper` vigila el
@@ -373,7 +374,7 @@ shuffle = false
 
 # Selección actual por desktop (como com.apple.wallpaper):
 [desktops]
-default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Aqua Blue.png"
+default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Mint.png"
 ```
 
 ```toml
