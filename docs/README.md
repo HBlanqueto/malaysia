@@ -1,69 +1,39 @@
 # Documentación de MalaysiaDreams
 
-Índice de toda la documentación del proyecto. La estructura va del plan general a
-lo concreto: primero la visión del proyecto, luego el **roadmap** (el plan de
-bloques), después cada **bloque implementado**, y por debajo las **decisiones**
-(ADRs) y las **investigaciones**.
+Índice de la documentación. El estado vive **solo** en
+[`roadmap.md`](roadmap.md); el porqué de cada decisión, en los ADR; los
+hallazgos abiertos, en [`deuda.md`](deuda.md).
 
-## Mapa de la documentación
+## Mapa
 
 ```
 docs/
-├── README.md          ← este índice
-├── malaysia-compositor.md         visión general del proyecto y cómo desarrollarlo (dev shell, dev.sh)
-├── glossary.md        glosario de nombres (barrier-kit, grade-graphics, ...)
-├── roadmap.md         EL ROADMAP: plan maestro por bloques (0–14 + lo siguiente)
-├── por-hacer.md       plan corto: aceptación de 8a/10 y orden de 9, 11, 12
-├── bloques/           qué se ha hecho e implementado, bloque por bloque
-│   ├── 00-cimientos.md
-│   ├── 01-sesion.md            (cubre los Bloques 1–3)
-│   ├── 02-ventana-en-pantalla.md
-│   ├── 03-entrada.md
-│   ├── 04-ventanas-manipulables.md
-│   ├── 05-popups.md
-│   ├── 06-portapapeles.md
-│   ├── 07-linux-dmabuf-y-explicit-sync.md
-│   ├── 08-direct-session.md
-│   ├── 09-escala-fraccional.md
-│   ├── 10-lock.md
-│   ├── 11-protocolos-de-uso-diario.md
-│   ├── 12-portales-y-servicios.md
-│   ├── 13-chrome-y-launcher.md
-│   └── 14-menu-global.md
-├── decisiones/        ADRs: las decisiones técnicas documentadas (0001–0030)
-│   └── README.md      índice de ADRs y decisiones abiertas
-├── arquitectura/
-│   ├── interfaz.md             mapa completo de la UI (diseño, shell, ventanas, capas)
-│   ├── tengen.md             Tengen vendorizado, build.rs y comprobaciones
-│   ├── malaysia-y-shell.md        cómo se reparten el trabajo compositor ↔ shell nativa
-│   ├── malaysia-y-shell.svg       diagrama de la división de trabajo
-│   ├── modelo-de-procesos.md  distribución de procesos del shell (ADR 0023)
-│   ├── wallpaper.md           el componente nativo del wallpaper (ADR 0023/0034)
-│   ├── menubar.md             la menubar nativa (app activa + reloj)
-│   ├── dock.md                el dock nativo (lista de apps + activar al clic)
-│   ├── lock.md                el lock nativo (ext-session-lock-v1)
-│   ├── ventanas.md            la titlebar Tengen del compositor
-│   └── capturas.md            capturas macOS: atajos, overlay, guardado y opciones
+├── README.md            este índice
+├── roadmap.md           estado por bloques y sección «Ahora»
+├── deuda.md             deuda técnica abierta (id · dónde · qué · lote)
+├── glossary.md          nombres del proyecto (BarrierKit, Grade, Infinity)
+├── hardware.md          línea base de GPU/EGL de la máquina
+├── investigacion.md     conclusiones de macOS, GNOME y Otto
+├── arquitectura/        cómo es la UI y el shell HOY
+│   ├── interfaz.md          mapa visual completo
+│   ├── modelo-de-procesos.md  procesos y reparto compositor ↔ shell
+│   ├── ventanas.md          titlebar, marco y decoración
+│   ├── wallpaper.md         malaysia-wallpaper (wgpu/Vulkan)
+│   ├── menubar.md           barra superior y menús
+│   ├── dock.md              dock
+│   ├── lock.md              pantalla de bloqueo
+│   ├── capturas.md          capturas de pantalla
+│   └── malaysia-y-shell.svg diagrama del reparto
+├── decisiones/          ADRs (índice en decisiones/README.md)
 ├── configuracion/
-│   └── opciones.md    catálogo canónico de opciones del compositor (ADR 0021)
-├── hardware.md        línea base de hardware/gráficos de la máquina
-└── investigacion/
-    ├── como-renderiza-macos.md   investigación a fondo del renderizado de macOS
-    ├── wayland-vs-macos.md       comparación con Wayland y qué probar en malaysia-compositor
-    ├── otto-y-forks.md           Otto y los forks de HBlanqueto: contexto histórico
-    ├── gnome.md                  GNOME como referencia: funciones, portales y licencias
-    ├── escalado-macos.md         puntos, backing store y downsample en macOS
-    ├── portapapeles-capturas.md  portapapeles de capturas: Otto, GNOME y macOS
-    ├── resize-bordes-y-cursores.md  resize por bordes y cursores: GNOME, Otto y macOS
-    └── global-menu.md            menú global: proyectos de referencia y qué toma MalaysiaDreams
+│   └── opciones.md      catálogo canónico de opciones
+└── mockups/             lienzos de diseño; no se editan a mano
 ```
 
-> **`AGENTS.md` en la raíz**: guía obligatoria para agentes de IA. Contiene la
-> **POLÍTICA DE DISEÑO** (ADR 0020) — chrome separado (GTK/Libadwaita conserva su
-> apariencia; Qt y demás reciben el chrome de MalaysiaDreams) y efectos para todas las
-> ventanas (inner border, sombra, blur). Si vas a tocar diseño, léelo.
->
-> **Avisos de terceros.** `NOTICE` debe actualizarse en el mismo commit en que se copie código de un tercero (Otto incluido).
+El toolkit (`barrier-kit`, `vow-design`, `vow-appearance`,
+`infinity-protocol`) vive en
+[`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit)
+desde el ADR 0048; su documentación y sus ADR están allí.
 
 ## Compilar y probar
 
@@ -74,136 +44,45 @@ nix develop
 ./dev.sh build            # debug de los miembros por defecto
 ./dev.sh run              # compositor anidado
 ./dev.sh demo             # sesión anidada con shell y ventanas de prueba
-./dev.sh lab              # sesión anidada con apps reales para pruebas manuales
-./dev.sh check            # fmt + clippy + tests + checks de diseño/Tengen
-nix build .#default       # paquete instalable (perfil dist)
+./dev.sh lab              # sesión anidada con apps reales
+./dev.sh check            # fmt + clippy + tests
+./dev.sh titlebar         # cerrar/minimizar/maximizar
+./dev.sh smoke            # mapeo de toplevels
+./dev.sh drm-vkms         # Direct Session sobre vkms
+nix build .#default       # paquete instalable
 ```
 
 El día a día usa el perfil `dev`: nuestro código sin optimizar, dependencias a
 `opt-level = 2` y `debug = "line-tables-only"`. El paquete Nix usa `dist` (fat
-LTO, `codegen-units = 1`) y separa `buildDepsOnly` de `buildPackage` con crane:
-las dependencias quedan en la caché de Nix y no se recompilan al cambiar
-`crates/`. Skia llega precompilada de `nix/skia.nix` por `SKIA_BINARIES_URL`; el
-build no descarga ni compila Skia.
+LTO, `codegen-units = 1`) y separa `buildDepsOnly` de `buildPackage` con crane.
+Skia llega precompilada de `nix/skia.nix` por `SKIA_BINARIES_URL`.
 
-Tiempos medidos en esta máquina (Ryzen 5 PRO 5650U, x86_64-linux):
+### Regenerar Skia al subir Freya
 
-| Caso | Tiempo |
-| --- | --- |
-| Limpio, `cargo build -p malaysia-compositor` con `target/` vacío | ~3 min 50 s |
-| Incremental sin cambios | <1 s |
-| Incremental tras tocar un crate propio (`malaysia-compositor`) | ~5 s |
-
-El primer `nix build .#default` puede tardar más porque construye Skia una vez;
-después Skia y las dependencias salen de la caché de Nix. Los checks del flake
-(`design-tokens`, `tengen-generated`) usan un `lib.fileset` reducido, no el
-árbol entero.
-
-### Regenerar Skia al cambiar de versión de Freya
-
-Skia se compila para `freya-skia-bindings` 0.98.0, que es lo que activa
-`freya-engine` 0.4.3. Al subir Freya:
-
-1. Actualiza `nix/skia-prebuild/Cargo.toml` (versiones exactas de
-   `freya-engine`, `freya-skia-safe` y `freya-skia-bindings`) y regenera su
-   `Cargo.lock` con `cargo generate-lockfile` dentro de `nix/skia-prebuild`.
-2. Lee la etiqueta de Skia en el `Cargo.toml` del nuevo
-   `freya-skia-bindings` (`[package.metadata] skia`) y actualiza `tag` y `hash`
-   de `skia-source` en `nix/skia.nix`.
+1. Actualiza `nix/skia-prebuild/Cargo.toml` y regenera su `Cargo.lock`.
+2. Lee la etiqueta de Skia del nuevo `freya-skia-bindings` y actualiza `tag` y
+   `hash` de `skia-source` en `nix/skia.nix`.
 3. Regenera `nix/skia-externals.json` desde el `DEPS` de esa etiqueta y el hash
-   de `nix/skia-deps.nix` si cambiaron las bibliotecas del sistema.
-4. Ajusta el número de versión del guard en `flake.nix` y compila
-   `nix build .#default`. Si las features no coinciden, el `preBuild` muestra
-   el `diff` contra `${skia}/features.txt`.
-5. En desarrollo, `SKIA_BINARIES_URL` apunta al `.tar.gz` de la derivación; sin
-   red, el build de Skia no se intenta.
+   de `nix/skia-deps.nix` si cambiaron las librerías del sistema.
+4. Ajusta el guard de `flake.nix` y compila `nix build .#default`.
+
+## Estado
+
+Los bloques 0–15 están hechos o aceptados, salvo los pendientes que el roadmap
+detalla; el 16a (fondo en Vulkan) está en curso. Ahora mismo faltan el modo foco,
+la captura de ventana con marco, el resto del menú global (14b-2/14e/14f-2), el
+portal 12a (`Screenshot`/`ScreenCast`), los servicios 12b, 8b/8c y las opciones
+NixOS de polkit/keyring/AT-SPI. Para el detalle, fechas y comandos de prueba,
+lee [`roadmap.md`](roadmap.md).
 
 ## Cómo leerlo
 
-1. **[`malaysia-compositor.md`](malaysia-compositor.md)** — qué es el proyecto y cómo compilarlo/ejecutarlo.
-2. **[`glossary.md`](glossary.md)** — los nombres del proyecto y su reparto
-   (BarrierKit ≈ AppKit sobre Freya, Grade Graphics ≈ Core Graphics/Core Text, Grade
-   Animation ≈ Core Animation, Infinity ≈ SkyLight).
-3. **[`roadmap.md`](roadmap.md)** — el **ROADMAP básico**: la lista canónica de
-   bloques, su estado (hecho / no empezado) y sus pruebas de aceptación. Es la
-   fuente de verdad sobre qué hay planeado.
-4. **[`bloques/`](bloques/)** — el detalle de **cada cosa implementada**: lo que
-   construyó cada bloque, las divergencias con el brief y cómo se verificó.
-5. **[`por-hacer.md`](por-hacer.md)** — el plan corto: el escritorio usable
-   (Bloque 13), el cierre de 12a/12b y el hardware real. El roadmap es el plan
-   largo; este documento es la lista de ahora.
-6. **[`decisiones/`](decisiones/)** — las decisiones de diseño detrás de la
-   implementación (ADR 0001–0036, índice en [`decisiones/README.md`](decisiones/README.md),
-   que incluye la lista de decisiones abiertas). Referenciadas desde los bloques.
-7. **[`arquitectura/interfaz.md`](arquitectura/interfaz.md)** — el mapa completo
-   de la interfaz: Tengen, capas, shell, ventanas, capturas, cursor y
-   configuración. Empieza aquí si vas a tocar algo visual. El detalle del
-   [Tengen vendorizado](arquitectura/tengen.md), su `build.rs` y sus
-   comprobaciones está en su propia página.
-8. **[`arquitectura/`](arquitectura/)** — cómo se reparten el trabajo MalaysiaDreams
-   (compositor) y la shell nativa (`malaysia-shell`, ADR 0025): documento + diagrama
-   SVG, el [modelo de procesos](arquitectura/modelo-de-procesos.md) del shell
-   (ADR 0023), y los componentes nativos: [wallpaper](arquitectura/wallpaper.md),
-   [menubar](arquitectura/menubar.md), [dock](arquitectura/dock.md),
-   [lock](arquitectura/lock.md),
-   [capturas de pantalla](arquitectura/capturas.md) y
-   [ventanas/titlebar](arquitectura/ventanas.md).
-9. **[`configuracion/opciones.md`](configuracion/opciones.md)** — el catálogo
-   canónico de opciones del compositor, con **nombres y valores idénticos a macOS**
-   (secciones tipo System Settings, claves tipo `com.apple.dock`). Un archivo
-   **`.domain`** por dominio (extensión propia, como `.plist`); comando **`domain`**
-   (sintaxis `defaults`) y app de ajustes después, ADR 0021.
-10. **[`hardware.md`](hardware.md)** — referencia del hardware/GPU contra la que se
-   comparará el hito Direct Session (DRM/KMS).
-11. **[`investigacion/`](investigacion/)** — material de investigación: cómo
-   renderiza macOS su escritorio, cómo se compara con las opciones Wayland, qué
-   se documentó en [Otto y sus forks](investigacion/otto-y-forks.md) y qué
-   funciones de [GNOME](investigacion/gnome.md) sirven de referencia
-   (incluido el debate portal propio frente a `xdg-desktop-portal-gtk`), cómo
-   separa macOS puntos, backing store y píxeles de panel
-   ([escalado](investigacion/escalado-macos.md)) y cómo ponen una captura en el
-   portapapeles Otto, GNOME y macOS
-   ([portapapeles](investigacion/portapapeles-capturas.md)) y cómo detectan
-   GNOME, Otto y macOS los bordes de resize y el cursor
-   ([resize](investigacion/resize-bordes-y-cursores.md)).
-
-## Estado actual en una línea
-
-Los **Bloques 0–6** están implementados (scaffolding, conexión de clientes,
-ventana en pantalla, input, ventanas manipulables, popups y portapapeles).
-El **Bloque 7** está hecho: **7a** (linux-dmabuf v5 con feedback), **7b**
-(explicit sync + sync implícito, release diferido por fence) y **7c** (la shell
-presenta por EGL, un solo camino sin `wl_shm`). **7.1** (hecho) arregla el
-texto de la shell (`shape_until_scroll` + formato Alpha de swash), mide el daño
-real y añade la **captura de depuración** (volcado PNG por `SIGUSR1`).
-**7.2** (hecho) corrige el **bug de la matriz UV** del present EGL (column-major
-sin flip) que ocultaba los tiles del dock y el texto del lock, y re-verifica
-los criterios visuales de los bloques 2–6 por captura. **7.3** (hecho) añade la
-**verificación por patrón** (4 cuadrantes), el **test de regresión UV** en
-`barrier-kit`, un **verificador por regiones** (`scripts/verify-captures.py`),
-determina que **la titlebar nunca se implementó** (solo se reserva la banda), y
-corrige el **BAD_ALLOC de la captura** (el readback offscreen desenlazaba la
-superficie EGL de la ventana; la captura ahora corre antes del render de la
-ventana). Ya corren wezterm,
-Firefox, vkcube y mpv acelerados dentro de MalaysiaDreams anidado.
-El **Bloque 8a** (Direct Session mínima, DRM/KMS atómico) está implementado y
-aceptado en el panel real (2026-10-21, `wezterm`, touchpad y VT); **8b**
-(hotplug) y **8c** (planos y direct scanout) están planificados. El **Bloque 9**
-está cerrado: escala real, `display.scale` persistente y redondeo floor/ceil,
-aceptados en panel real a 1.0/1.25/1.5; la escala por salida queda para 8b. El **Bloque 10** está implementado y aceptado (PAM, auto-lock,
-recuperación y `Ctrl+Alt+L`). El **Bloque 11** está empezado con
-`wp_presentation`, `xdg-activation`, `cursor-shape`, el shake-to-locate,
-`pointer-constraints` + `relative-pointer`, la captura de salida y de ventana y
-las capturas al estilo macOS (`Shift+Super+3/4`; guardan en el Escritorio XDG
-o el portapapeles) con su dominio `screenshot.domain`. El **Bloque 12a** está
-empezado: el portal `Settings` ya publica `org.freedesktop.appearance` desde
-`appearance.domain`; faltan `Screenshot`/`ScreenCast`. Antes de seguir con
-ellos, el **Bloque 13 (adelantado)** está construyendo el escritorio usable:
-la titlebar Tengen arriba (32 px para ventanas SSD) ya se dibuja y sus botones funcionan; el
-launcher (`Super+Space`) ya busca, lanza y devuelve el foco. Tengen (`crates/vow-design/tengen`) es la fuente de diseño
-(ADR 0032, renombrado en ADR 0046); la shell ya usa su paleta clara. El **Bloque 12b** (notificaciones,
-polkit, keyring, AT-SPI) sigue planificado. La base NixOS está hecha
-(`nixosModules.default`), pendiente de portal, keyring, AT-SPI y VM. La shell es
-nativa (`malaysia-shell`, ADR 0025): **wallpaper**, **menubar**, **dock**,
-**lock** y **launcher** funcionan como procesos propios. Ver [`roadmap.md`](roadmap.md) y
-[`por-hacer.md`](por-hacer.md).
+1. [`roadmap.md`](roadmap.md) — qué hay, qué falta y cómo se prueba.
+2. [`arquitectura/interfaz.md`](arquitectura/interfaz.md) — mapa visual.
+3. [`glossary.md`](glossary.md) — nombres y equivalencias con macOS.
+4. [`decisiones/README.md`](decisiones/README.md) — ADR y decisiones abiertas.
+5. [`configuracion/opciones.md`](configuracion/opciones.md) — catálogo de
+   opciones y archivos `.domain`.
+6. [`investigacion.md`](investigacion.md) — por qué se tomó cada idea de macOS,
+   GNOME y Otto.
+7. [`AGENTS.md`](../AGENTS.md) — política de diseño y reglas para agentes.

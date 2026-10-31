@@ -1,19 +1,20 @@
 # MalaysiaDreams
 
-Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque.
+Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque. La
+documentación completa vive en [`docs/`](docs/README.md); el estado, en
+[`docs/roadmap.md`](docs/roadmap.md).
 
-> **Nota de repositorio (ADR 0048):** el toolkit `barrier-kit`, los tokens
-> `vow-design`, `vow-appearance` y el protocolo `infinity-protocol` viven en
+> **Nota de repositorio (ADR 0048):** `barrier-kit`, `vow-design`,
+> `vow-appearance` e `infinity-protocol` viven en
 > [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
 > Este repo contiene el compositor, la shell, Ajustes y los portales.
 
 > [!NOTE]
-> Este es un proyecto vibecoded, por gusto personal. No tiene más que uso diario como hobby.
+> Proyecto vibecoded, por gusto personal. Su uso previsto es el escritorio diario.
 
 ## NixOS
 
-El flake expone `nixosModules.default`. Con el módulo la sesión queda instalada
-sin enlaces manuales de systemd:
+El flake expone `nixosModules.default`:
 
 ```nix
 {
@@ -33,9 +34,9 @@ sin enlaces manuales de systemd:
 
 `programs.malaysia.enable` instala el paquete, registra la sesión en el display
 manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
-`malaysia-session.target` con `wallpaper`, `menubar` y `dock` (configurable con
-`programs.malaysia.shellComponents`). El display manager ejecuta `malaysia-compositor --drm`, la
-sesión directa del Bloque 8a.
+`malaysia-session.target` con `menubar`, `dock` y `wallpaper` (configurable con
+`programs.malaysia.shellComponents`). El display manager ejecuta
+`malaysia-compositor --drm`, la sesión directa del Bloque 8a.
 
 ## Datos generales
 
@@ -43,102 +44,51 @@ sesión directa del Bloque 8a.
 |---|---|
 | Lenguaje | Rust (edición 2024) |
 | Framework | Smithay, fijado por revisión (`023b78b1`, ADR 0028) |
-| Backend de sesión | Winit anidado para desarrollo; DRM/KMS directo aceptado en el panel real (Bloque 8a) |
-| Aceleración gráfica | Sí: renderizado por GPU con EGL + OpenGL ES 3 (GLES) |
-| DRM/KMS | Sí: sesión directa atómica con libseat/libinput; vkms verificado y panel real aceptado |
-| Vulkan | No como renderer del compositor; los clientes sí pueden usar Vulkan (p. ej. vkcube) |
-| OpenGL | OpenGL ES 3 vía EGL; no hay renderer OpenGL de escritorio ni fallback por software |
+| Backend | Winit anidado para desarrollo; DRM/KMS directo aceptado en panel real (8a) |
+| Gráficos | EGL + OpenGL ES 3; Vulkan solo en clientes (p. ej. wallpaper, vkcube) |
 | Shell | `malaysia-shell` nativa, un proceso por componente (ADR 0023) |
 
-## Comandos y configuración del escritorio
-
-### Shell
-
-Cada componente es un proceso propio:
+## Comandos
 
 ```sh
-malaysia-wallpaper         # fondo de pantalla (Vulkan/wgpu, ADR 0049)
-malaysia-shell menubar     # barra superior: app activa + reloj
-malaysia-shell dock        # dock de apps
-malaysia-shell lock        # pantalla de bloqueo
+nix develop
+./dev.sh build            # compila el workspace
+./dev.sh run              # compositor anidado
+./dev.sh demo             # shell + ventanas de prueba
+./dev.sh lab              # shell + apps reales
+./dev.sh check            # fmt + clippy + tests
+./dev.sh titlebar         # cerrar/minimizar/maximizar
+./dev.sh smoke            # mapeo de toplevels
+./dev.sh drm-vkms         # Direct Session sobre vkms
+nix build .#default       # paquete instalable
 ```
 
-### Configuración (ADR 0021)
+Cada componente de la shell es un proceso:
+
+```sh
+malaysia-wallpaper         # fondo (Vulkan/wgpu, ADR 0049)
+malaysia-shell menubar     # barra superior
+malaysia-shell dock        # dock
+malaysia-shell lock        # bloqueo
+malaysia-shell launcher    # launcher
+```
+
+## Configuración (ADR 0021)
 
 La interfaz acordada es el comando `domain`, con la sintaxis de `defaults` de
-macOS. Habla con el compositor por D-Bus (`org.malaysia.Compositor1`); el binario
-todavía no está implementado, pero la interfaz es esta:
+macOS. Hablará con el compositor por D-Bus (`org.malaysia.Compositor1`); el
+binario aún no existe:
 
 ```sh
 domain read   <dominio> <clave>
 domain write  <dominio> <clave> <valor> [-bool | -int | -float | -string]
-domain delete <dominio> <clave>          # vuelve al default
+domain delete <dominio> <clave>
 domain rename <dominio> <antigua> <nueva>
 domain find   <palabra>
 domain domains
-
-domain write appearance.color_scheme -string dark
-domain write dock.autohide -bool true
-domain read  effects.shadow.radius
 ```
 
-| Comando | Qué hace |
-|---|---|
-| `read <dominio> <clave>` | Lee el valor actual de esa opción. |
-| `write <dominio> <clave> <valor> <tipo>` | Escribe el valor en el archivo del dominio. El tipo (`-bool`, `-int`, `-float` o `-string`) indica cómo interpretarlo. |
-| `delete <dominio> <clave>` | Borra la clave del archivo del dominio; la opción vuelve a su valor por defecto. |
-| `rename <dominio> <antigua> <nueva>` | Renombra una clave conservando su valor. |
-| `find <palabra>` | Busca esa palabra entre los nombres de opciones. |
-| `domains` | Lista los dominios disponibles. |
-
-Los dominios son `appearance`, `window`, `dock`, `menubar`, `lock`, `effects` y
-`debug`.
-
-### Opciones
-
-`activa` cambia el comportamiento ya; `datos` está definida pero todavía no se
-consume; `pendiente` está acordada y se implementará después.
-
-| Opción | Valores | Default | Estado |
-|---|---|---|---|
-| `appearance.color_scheme` | `auto`, `dark`, `light` | `auto` | datos |
-| `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | datos |
-| `window.decorations` | `default`, `force_server`, `force_client` | `default` | activa |
-| `window.titlebar` | bool | `true` | datos |
-| `window.double_click_titlebar` | `fill`, `minimize`, `zoom`, `none` | `zoom` | datos |
-| `window.focus` | `click`, `sloppy` | `click` | datos |
-| `window.resize_border` | entero (px lógicos) | `6` | datos |
-| `wallpaper.dir` | ruta | `/run/current-system/sw/share/wallpapers/solid-colors` | datos |
-| `wallpaper.scale` | `fill`, `stretch`, `fit`, `center` | `fill` | datos |
-| `wallpaper.shuffle` | bool | `false` | datos |
-| `dock.autohide` | bool | `false` | pendiente |
-| `dock.orientation` | `bottom`, `left`, `right` | `bottom` | pendiente |
-| `dock.magnification` | bool | `false` | pendiente |
-| `dock.tilesize` | entero (px) | `48` | pendiente |
-| `dock.largesize` | entero (px) | `64` | pendiente |
-| `dock.mineffect` | `genie`, `scale`, `suck` | `genie` | pendiente |
-| `dock.show-process-indicators` | bool | `true` | pendiente |
-| `dock.static-only` | bool | `false` | pendiente |
-| `dock.minimize-to-application` | bool | `false` | pendiente |
-| `dock.show-recents` | bool | `true` | pendiente |
-| `lock.idle_timeout_seconds` | entero (segundos) | `300` | activa |
-| `menubar.autohide` | bool | `false` | pendiente |
-| `effects.corner_radius` | float (px) | `0.0` | datos |
-| `effects.inner_border.enabled` | bool | `false` | datos |
-| `effects.inner_border.width` | float (px) | `1.0` | datos |
-| `effects.inner_border.color` | `[r,g,b]` | `[0.5,0.5,0.5]` | datos |
-| `effects.shadow.enabled` | bool | `false` | datos |
-| `effects.shadow.radius` | float (px) | `24.0` | datos |
-| `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | datos |
-| `effects.shadow.opacity` | float `[0,1]` | `0.35` | datos |
-| `effects.blur.enabled` | bool | `false` | datos |
-| `effects.blur.radius` | float (px) | `20.0` | datos |
-| `debug.damage_highlight` | bool | `false` | datos |
-
-### Archivos `.domain`
-
-La configuración se guarda como TOML, un archivo por dominio, al estilo de los
-`.plist` de macOS:
+Un archivo TOML por dominio, como los `.plist` de macOS:
 
 ```text
 ~/.config/malaysia/                 preferencias
@@ -147,37 +97,28 @@ La configuración se guarda como TOML, un archivo por dominio, al estilo de los
 ├── dock.domain
 ├── menubar.domain
 ├── lock.domain
-├── effects.domain
-└── debug.domain
+├── display.domain
+├── screenshot.domain
+└── effects.domain
 
 ~/.local/share/malaysia/            estado y datos
-├── wallpaper.domain            catálogo + selección actual
+├── wallpaper.domain            catálogo + selección
 └── window.domain               app activa (la escribe el compositor)
 ```
 
-Cada archivo es opcional; si falta, se usan los valores por defecto. El
-compositor lee sus preferencias al arrancar; la shell relee sus almacenes en
-vivo (por ejemplo, el wallpaper cambia al editar `wallpaper.domain`).
-`MALAYSIA_CONFIG_DIR` y `MALAYSIA_DATA_DIR` permiten usar otros directorios.
+Cada archivo es opcional; si falta, se usan los defaults.
+`MALAYSIA_CONFIG_DIR` y `MALAYSIA_DATA_DIR` permiten otros directorios.
+El catálogo completo, con tipos y estados, está en
+[`docs/configuracion/opciones.md`](docs/configuracion/opciones.md).
 
-El wallpaper se elige en `~/.local/share/malaysia/wallpaper.domain`:
+## Documentación
 
-```toml
-dir = "/run/current-system/sw/share/wallpapers/solid-colors"
-scale = "fill"
+- [`docs/README.md`](docs/README.md) — índice y cómo compilar/probar.
+- [`docs/roadmap.md`](docs/roadmap.md) — estado por bloques y pendientes.
+- [`docs/arquitectura/interfaz.md`](docs/arquitectura/interfaz.md) — mapa visual.
+- [`docs/decisiones/`](docs/decisiones/) — ADR.
+- [`docs/deuda.md`](docs/deuda.md) — deuda técnica abierta.
+- [`docs/investigacion.md`](docs/investigacion.md) — conclusiones de macOS,
+  GNOME y Otto.
 
-[desktops]
-default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Mint.png"
-```
-
-`dir` es el catálogo de imágenes PNG. Si no hay `[desktops].default`, o la
-selección apunta a un archivo que no existe, se usa `bandura.jpg`, un JPEG
-incrustado en el binario de `malaysia-wallpaper`.
-
-Toda la documentación vive en [`docs/`](docs/README.md):
-
-- [`docs/malaysia.md`](docs/malaysia.md) — visión general y desarrollo
-- [`docs/roadmap.md`](docs/roadmap.md) — el roadmap por bloques
-- [`docs/bloques/`](docs/bloques/) — lo implementado, bloque por bloque
-- [`docs/decisiones/`](docs/decisiones/) — las decisiones (ADRs)
-- [`docs/investigacion/`](docs/investigacion/) — investigación sobre macOS y Wayland
+`LICENSE` y `NOTICE` cubren la licencia y los avisos de terceros.
