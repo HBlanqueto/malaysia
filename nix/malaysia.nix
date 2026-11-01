@@ -48,7 +48,8 @@ in
     # ADR 0052: replace the system libadwaita with a patched build that exports
     # the primary menu as an application menubar over org.gtk.Menus. This avoids
     # rebuilding every libadwaita application while still giving the shell a
-    # global menu for them.
+    # global menu for them. The same build hides AdwToolbarView top bars in
+    # focus mode (ADR 0053); ADW_DISABLE_FOCUS_MODE turns that off per app.
     system.replaceDependencies.replacements = lib.mkIf cfg.globalMenu.libadwaita.enable [
       {
         oldDependency = pkgs.libadwaita;

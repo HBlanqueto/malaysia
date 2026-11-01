@@ -1,0 +1,1151 @@
+diff --git a/src/adw-focus-mode-private.h b/src/adw-focus-mode-private.h
+new file mode 100644
+index 0000000..1152cc6
+--- /dev/null
++++ b/src/adw-focus-mode-private.h
+@@ -0,0 +1,29 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#pragma once
++
++#if !defined(_ADWAITA_INSIDE) && !defined(ADWAITA_COMPILATION)
++#error "Only <adwaita.h> can be included directly."
++#endif
++
++#include <gtk/gtk.h>
++
++#include "adw-toolbar-view.h"
++
++G_BEGIN_DECLS
++
++void adw_focus_mode_add_view    (AdwToolbarView *view);
++void adw_focus_mode_remove_view (AdwToolbarView *view);
++
++/* Tests: act as if the compositor offered the global (@active), the window
++ * were fullscreen and the bar were down, then apply at once. */
++void adw_focus_mode_set_state_for_testing (GtkWindow *window,
++                                           gboolean   active,
++                                           gboolean   fullscreen,
++                                           gboolean   bar_revealed);
++
++G_END_DECLS
+diff --git a/src/adw-focus-mode.c b/src/adw-focus-mode.c
+new file mode 100644
+index 0000000..aa15607
+--- /dev/null
++++ b/src/adw-focus-mode.c
+@@ -0,0 +1,586 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/*
++ * Focus mode for compositors that offer `infinity_focus_manager_v1`.
++ *
++ * In MalaysiaDreams, maximizing a window gives it a space of its own and the
++ * xdg fullscreen state (focus mode). Moving the pointer to the top edge
++ * brings the bar down and the compositor moves a client-decorated window
++ * down by the bar's height; `infinity_focus_surface_v1.bar` tells the client
++ * when the bar comes down (1) and goes up (0).
++ *
++ * With that global, a fullscreen window behaves like a fullscreen macOS
++ * window: its `AdwToolbarView`s hide their top bars and show them only while
++ * the bar is down. Leaving fullscreen shows them again.
++ *
++ * Without the global, or with ADW_DISABLE_FOCUS_MODE set, nothing changes.
++ *
++ * Which toolbar views: every `AdwToolbarView` rooted in the window, in the
++ * window's own surface (not in a popover), outside an `AdwDialog`, that has
++ * visible top bars and no ancestor toolbar view with visible top bars. So
++ * the outer header bar goes, and with split views both panes' header bars,
++ * but not the bars of a toolbar view nested inside another one's content.
++ *
++ * Apps that manage `reveal-top-bars` themselves are left alone:
++ *
++ * - The views are taken when the window becomes fullscreen, from an idle
++ *   callback, so a handler or binding on `GtkWindow:fullscreened` has run
++ *   already. A view whose top bars are already hidden then belongs to the
++ *   app until fullscreen ends.
++ * - If `reveal-top-bars` changes on a taken view and the change isn't ours,
++ *   the app took it over: it is no longer touched, nor restored when
++ *   fullscreen ends.
++ *
++ * Only taken views are restored (to visible, which they were) when
++ * fullscreen ends, when the global goes away, or when they leave the window.
++ */
++
++#include "config.h"
++
++#include "adw-focus-mode-private.h"
++
++#include <string.h>
++
++#include "adw-dialog.h"
++#include "adw-toolbar-view-private.h"
++
++#ifdef HAVE_INFINITY_FOCUS
++#include <gdk/wayland/gdkwayland.h>
++
++#include "infinity-focus-v1-client-protocol.h"
++#endif
++
++#define WINDOW_KEY "adw-focus-mode-window"
++#define DISPLAY_KEY "adw-focus-mode-display"
++
++typedef struct {
++  AdwToolbarView *view;
++  gulong notify_id;
++  /* We drive reveal-top-bars during this fullscreen */
++  gboolean taken;
++  /* The app drives it during this fullscreen */
++  gboolean app_owned;
++} ViewRecord;
++
++typedef struct _DisplayState DisplayState;
++
++typedef struct {
++  GtkWindow *window;
++  GPtrArray *views;
++
++  /* The compositor sends notices for this window */
++  gboolean active;
++  gboolean fullscreen;
++  gboolean bar_revealed;
++
++  gboolean applying;
++  guint idle_id;
++
++#ifdef HAVE_INFINITY_FOCUS
++  DisplayState *display;
++  struct infinity_focus_surface_v1 *notice;
++#endif
++} WindowState;
++
++static gboolean
++view_is_eligible (WindowState    *state,
++                  AdwToolbarView *view)
++{
++  GtkWidget *widget = GTK_WIDGET (view);
++  GtkWidget *parent;
++
++  if (gtk_widget_get_native (widget) != GTK_NATIVE (state->window))
++    return FALSE;
++
++  if (gtk_widget_get_ancestor (widget, ADW_TYPE_DIALOG))
++    return FALSE;
++
++  if (!adw_toolbar_view_has_top_bars (view))
++    return FALSE;
++
++  for (parent = gtk_widget_get_parent (widget);
++       parent;
++       parent = gtk_widget_get_parent (parent)) {
++    if (ADW_IS_TOOLBAR_VIEW (parent) &&
++        adw_toolbar_view_has_top_bars (ADW_TOOLBAR_VIEW (parent)))
++      return FALSE;
++  }
++
++  return TRUE;
++}
++
++static void
++set_reveal (WindowState    *state,
++            AdwToolbarView *view,
++            gboolean        reveal)
++{
++  gboolean applying = state->applying;
++
++  state->applying = TRUE;
++  adw_toolbar_view_set_reveal_top_bars (view, reveal);
++  state->applying = applying;
++}
++
++static void
++release_view (WindowState *state,
++              ViewRecord  *record)
++{
++  if (record->taken && !record->app_owned)
++    set_reveal (state, record->view, TRUE);
++
++  record->taken = FALSE;
++  record->app_owned = FALSE;
++}
++
++static void
++apply (WindowState *state)
++{
++  gboolean focus = state->active && state->fullscreen;
++  guint i;
++
++  g_clear_handle_id (&state->idle_id, g_source_remove);
++
++  for (i = 0; i < state->views->len; i++) {
++    ViewRecord *record = g_ptr_array_index (state->views, i);
++
++    if (!focus) {
++      release_view (state, record);
++      continue;
++    }
++
++    if (record->app_owned)
++      continue;
++
++    if (!record->taken) {
++      if (!view_is_eligible (state, record->view))
++        continue;
++
++      if (!adw_toolbar_view_get_reveal_top_bars (record->view)) {
++        record->app_owned = TRUE;
++        continue;
++      }
++
++      record->taken = TRUE;
++    }
++
++    set_reveal (state, record->view, state->bar_revealed);
++  }
++}
++
++static gboolean
++apply_idle_cb (gpointer data)
++{
++  WindowState *state = data;
++
++  state->idle_id = 0;
++  apply (state);
++
++  return G_SOURCE_REMOVE;
++}
++
++static void
++queue_apply (WindowState *state)
++{
++  if (state->idle_id)
++    return;
++
++  state->idle_id = g_idle_add (apply_idle_cb, state);
++}
++
++static ViewRecord *
++find_record (WindowState    *state,
++             AdwToolbarView *view,
++             guint          *index)
++{
++  guint i;
++
++  for (i = 0; i < state->views->len; i++) {
++    ViewRecord *record = g_ptr_array_index (state->views, i);
++
++    if (record->view == view) {
++      if (index)
++        *index = i;
++
++      return record;
++    }
++  }
++
++  return NULL;
++}
++
++static void
++notify_reveal_top_bars_cb (AdwToolbarView *view,
++                           GParamSpec     *pspec,
++                           WindowState    *state)
++{
++  ViewRecord *record;
++
++  if (state->applying)
++    return;
++
++  record = find_record (state, view, NULL);
++
++  /* Not our change: the app drives this view now */
++  if (record && record->taken) {
++    record->taken = FALSE;
++    record->app_owned = TRUE;
++  }
++}
++
++#ifdef HAVE_INFINITY_FOCUS
++
++struct _DisplayState {
++  struct wl_registry *registry;
++  struct infinity_focus_manager_v1 *manager;
++  guint32 manager_name;
++  GList *windows;
++};
++
++static void
++notice_bar_cb (void                             *data,
++               struct infinity_focus_surface_v1 *notice,
++               uint32_t                          revealed)
++{
++  WindowState *state = data;
++
++  state->bar_revealed = !!revealed;
++
++  /* In an idle, so leaving fullscreen in the same batch doesn't hide the
++   * bars only to show them again */
++  queue_apply (state);
++}
++
++static const struct infinity_focus_surface_v1_listener notice_listener = {
++  notice_bar_cb,
++};
++
++static void
++attach_notice (WindowState *state)
++{
++  GdkSurface *surface;
++  struct wl_surface *wl_surface;
++
++  if (state->notice || !state->display || !state->display->manager)
++    return;
++
++  if (!gtk_widget_get_realized (GTK_WIDGET (state->window)))
++    return;
++
++  surface = gtk_native_get_surface (GTK_NATIVE (state->window));
++  if (!GDK_IS_WAYLAND_SURFACE (surface))
++    return;
++
++  wl_surface = gdk_wayland_surface_get_wl_surface (surface);
++  if (!wl_surface)
++    return;
++
++  state->notice =
++    infinity_focus_manager_v1_get_focus_surface (state->display->manager,
++                                                 wl_surface);
++  infinity_focus_surface_v1_add_listener (state->notice, &notice_listener,
++                                          state);
++
++  state->active = TRUE;
++  state->bar_revealed = FALSE;
++  state->fullscreen = gtk_window_is_fullscreen (state->window);
++
++  queue_apply (state);
++}
++
++static void
++detach_notice (WindowState *state,
++               gboolean     restore)
++{
++  g_clear_pointer (&state->notice, infinity_focus_surface_v1_destroy);
++
++  state->active = FALSE;
++  state->bar_revealed = FALSE;
++
++  if (restore)
++    apply (state);
++}
++
++static void
++registry_global_cb (void               *data,
++                    struct wl_registry *registry,
++                    uint32_t            name,
++                    const char         *interface,
++                    uint32_t            version)
++{
++  DisplayState *display = data;
++  GList *l;
++
++  if (display->manager ||
++      strcmp (interface, infinity_focus_manager_v1_interface.name) != 0)
++    return;
++
++  display->manager =
++    wl_registry_bind (registry, name, &infinity_focus_manager_v1_interface, 1);
++  display->manager_name = name;
++
++  for (l = display->windows; l; l = l->next)
++    attach_notice (l->data);
++}
++
++static void
++registry_global_remove_cb (void               *data,
++                           struct wl_registry *registry,
++                           uint32_t            name)
++{
++  DisplayState *display = data;
++  GList *l;
++
++  if (!display->manager || name != display->manager_name)
++    return;
++
++  for (l = display->windows; l; l = l->next)
++    detach_notice (l->data, TRUE);
++
++  g_clear_pointer (&display->manager, infinity_focus_manager_v1_destroy);
++}
++
++static const struct wl_registry_listener registry_listener = {
++  registry_global_cb,
++  registry_global_remove_cb,
++};
++
++static void
++display_closed_cb (GdkDisplay   *gdk_display,
++                   gboolean      is_error,
++                   DisplayState *display)
++{
++  GList *l;
++
++  for (l = display->windows; l; l = l->next) {
++    WindowState *state = l->data;
++
++    detach_notice (state, TRUE);
++    state->display = NULL;
++  }
++
++  g_clear_pointer (&display->windows, g_list_free);
++  g_clear_pointer (&display->manager, infinity_focus_manager_v1_destroy);
++  g_clear_pointer (&display->registry, wl_registry_destroy);
++}
++
++static void
++display_state_free (gpointer data)
++{
++  DisplayState *display = data;
++
++  g_list_free (display->windows);
++  g_free (display);
++}
++
++static DisplayState *
++get_display_state (GdkDisplay *gdk_display)
++{
++  DisplayState *display;
++  struct wl_display *wl_display;
++
++  if (!GDK_IS_WAYLAND_DISPLAY (gdk_display))
++    return NULL;
++
++  display = g_object_get_data (G_OBJECT (gdk_display), DISPLAY_KEY);
++  if (display)
++    return display->registry ? display : NULL;
++
++  wl_display = gdk_wayland_display_get_wl_display (gdk_display);
++  if (!wl_display)
++    return NULL;
++
++  display = g_new0 (DisplayState, 1);
++  g_object_set_data_full (G_OBJECT (gdk_display), DISPLAY_KEY, display,
++                          display_state_free);
++
++  /* The globals arrive when GDK next dispatches; windows realized before
++   * that get their notice object then */
++  display->registry = wl_display_get_registry (wl_display);
++  wl_registry_add_listener (display->registry, &registry_listener, display);
++
++  g_signal_connect (gdk_display, "closed",
++                    G_CALLBACK (display_closed_cb), display);
++
++  return display;
++}
++
++static void
++set_display (WindowState  *state,
++             DisplayState *display)
++{
++  if (state->display == display)
++    return;
++
++  if (state->display)
++    state->display->windows = g_list_remove (state->display->windows, state);
++
++  state->display = display;
++
++  if (display)
++    display->windows = g_list_prepend (display->windows, state);
++}
++
++static void
++window_realize_cb (GtkWindow   *window,
++                   WindowState *state)
++{
++  set_display (state, get_display_state (gtk_widget_get_display (GTK_WIDGET (window))));
++  attach_notice (state);
++}
++
++static void
++window_unrealize_cb (GtkWindow   *window,
++                     WindowState *state)
++{
++  detach_notice (state, TRUE);
++}
++
++#endif /* HAVE_INFINITY_FOCUS */
++
++static void
++window_notify_fullscreened_cb (GtkWindow   *window,
++                               GParamSpec  *pspec,
++                               WindowState *state)
++{
++  state->fullscreen = gtk_window_is_fullscreen (window);
++
++  /* Let the app react to fullscreen first, see the top comment */
++  queue_apply (state);
++}
++
++static void
++window_state_free (gpointer data)
++{
++  WindowState *state = data;
++
++  g_clear_handle_id (&state->idle_id, g_source_remove);
++
++#ifdef HAVE_INFINITY_FOCUS
++  detach_notice (state, FALSE);
++  set_display (state, NULL);
++#endif
++
++  /* Views leave on unroot, before the window goes */
++  g_ptr_array_unref (state->views);
++  g_free (state);
++}
++
++static WindowState *
++get_window_state (GtkWindow *window)
++{
++  WindowState *state = g_object_get_data (G_OBJECT (window), WINDOW_KEY);
++
++  if (state)
++    return state;
++
++  state = g_new0 (WindowState, 1);
++  state->window = window;
++  state->views = g_ptr_array_new_with_free_func (g_free);
++  state->fullscreen = gtk_window_is_fullscreen (window);
++
++  g_object_set_data_full (G_OBJECT (window), WINDOW_KEY, state,
++                          window_state_free);
++
++  g_signal_connect (window, "notify::fullscreened",
++                    G_CALLBACK (window_notify_fullscreened_cb), state);
++
++#ifdef HAVE_INFINITY_FOCUS
++  g_signal_connect (window, "realize",
++                    G_CALLBACK (window_realize_cb), state);
++  g_signal_connect (window, "unrealize",
++                    G_CALLBACK (window_unrealize_cb), state);
++
++  if (gtk_widget_get_realized (GTK_WIDGET (window)))
++    window_realize_cb (window, state);
++#endif
++
++  return state;
++}
++
++/*
++ * Called when @view is rooted.
++ */
++void
++adw_focus_mode_add_view (AdwToolbarView *view)
++{
++  GtkRoot *root;
++  WindowState *state;
++  ViewRecord *record;
++
++  g_return_if_fail (ADW_IS_TOOLBAR_VIEW (view));
++
++  if (g_getenv ("ADW_DISABLE_FOCUS_MODE"))
++    return;
++
++  root = gtk_widget_get_root (GTK_WIDGET (view));
++  if (!GTK_IS_WINDOW (root))
++    return;
++
++  state = get_window_state (GTK_WINDOW (root));
++
++  if (find_record (state, view, NULL))
++    return;
++
++  record = g_new0 (ViewRecord, 1);
++  record->view = view;
++  record->notify_id =
++    g_signal_connect (view, "notify::reveal-top-bars",
++                      G_CALLBACK (notify_reveal_top_bars_cb), state);
++
++  g_ptr_array_add (state->views, record);
++
++  if (state->active && state->fullscreen)
++    queue_apply (state);
++}
++
++/*
++ * Called when @view is unrooted, while it still has its root.
++ */
++void
++adw_focus_mode_remove_view (AdwToolbarView *view)
++{
++  GtkRoot *root;
++  WindowState *state;
++  ViewRecord *record;
++  guint index;
++
++  g_return_if_fail (ADW_IS_TOOLBAR_VIEW (view));
++
++  root = gtk_widget_get_root (GTK_WIDGET (view));
++  if (!GTK_IS_WINDOW (root))
++    return;
++
++  state = g_object_get_data (G_OBJECT (root), WINDOW_KEY);
++  if (!state)
++    return;
++
++  record = find_record (state, view, &index);
++  if (!record)
++    return;
++
++  release_view (state, record);
++  g_clear_signal_handler (&record->notify_id, view);
++  g_ptr_array_remove_index (state->views, index);
++}
++
++void
++adw_focus_mode_set_state_for_testing (GtkWindow *window,
++                                      gboolean   active,
++                                      gboolean   fullscreen,
++                                      gboolean   bar_revealed)
++{
++  WindowState *state;
++
++  g_return_if_fail (GTK_IS_WINDOW (window));
++
++  state = get_window_state (window);
++  state->active = !!active;
++  state->fullscreen = !!fullscreen;
++  state->bar_revealed = !!bar_revealed;
++
++  apply (state);
++}
+diff --git a/src/adw-toolbar-view-private.h b/src/adw-toolbar-view-private.h
+new file mode 100644
+index 0000000..c106f2e
+--- /dev/null
++++ b/src/adw-toolbar-view-private.h
+@@ -0,0 +1,19 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#pragma once
++
++#if !defined(_ADWAITA_INSIDE) && !defined(ADWAITA_COMPILATION)
++#error "Only <adwaita.h> can be included directly."
++#endif
++
++#include "adw-toolbar-view.h"
++
++G_BEGIN_DECLS
++
++gboolean adw_toolbar_view_has_top_bars (AdwToolbarView *self);
++
++G_END_DECLS
+diff --git a/src/adw-toolbar-view.c b/src/adw-toolbar-view.c
+index 848fa0a..ab2cd4d 100644
+--- a/src/adw-toolbar-view.c
++++ b/src/adw-toolbar-view.c
+@@ -7,8 +7,9 @@
+  */
+ 
+ #include "config.h"
+-#include "adw-toolbar-view.h"
++#include "adw-toolbar-view-private.h"
+ 
++#include "adw-focus-mode-private.h"
+ #include "adw-gtkbuilder-utils-private.h"
+ #include "adw-widget-utils-private.h"
+ 
+@@ -508,6 +509,22 @@ adw_toolbar_view_set_property (GObject      *object,
+   }
+ }
+ 
++static void
++adw_toolbar_view_root (GtkWidget *widget)
++{
++  GTK_WIDGET_CLASS (adw_toolbar_view_parent_class)->root (widget);
++
++  adw_focus_mode_add_view (ADW_TOOLBAR_VIEW (widget));
++}
++
++static void
++adw_toolbar_view_unroot (GtkWidget *widget)
++{
++  adw_focus_mode_remove_view (ADW_TOOLBAR_VIEW (widget));
++
++  GTK_WIDGET_CLASS (adw_toolbar_view_parent_class)->unroot (widget);
++}
++
+ static void
+ adw_toolbar_view_class_init (AdwToolbarViewClass *klass)
+ {
+@@ -523,6 +540,8 @@ adw_toolbar_view_class_init (AdwToolbarViewClass *klass)
+   widget_class->size_allocate = adw_toolbar_view_size_allocate;
+   widget_class->focus = adw_widget_focus_child;
+   widget_class->compute_expand = adw_widget_compute_expand;
++  widget_class->root = adw_toolbar_view_root;
++  widget_class->unroot = adw_toolbar_view_unroot;
+ 
+   /**
+    * AdwToolbarView:content:
+@@ -1369,3 +1388,23 @@ adw_toolbar_view_get_bottom_bar_height (AdwToolbarView *self)
+ 
+   return self->bottom_bar_height;
+ }
++
++/*
++ * Whether @self has a visible top bar, revealed or not.
++ */
++gboolean
++adw_toolbar_view_has_top_bars (AdwToolbarView *self)
++{
++  GtkWidget *child;
++
++  g_return_val_if_fail (ADW_IS_TOOLBAR_VIEW (self), FALSE);
++
++  for (child = gtk_widget_get_first_child (self->top_box);
++       child;
++       child = gtk_widget_get_next_sibling (child)) {
++    if (gtk_widget_get_visible (child))
++      return TRUE;
++  }
++
++  return FALSE;
++}
+diff --git a/src/meson.build b/src/meson.build
+index 1a6a63f..7787e5f 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -301,6 +301,7 @@ libadwaita_private_sources += files([
+   'adw-dialog-host.c',
+   'adw-fading-label.c',
+   'adw-floating-sheet.c',
++  'adw-focus-mode.c',
+   'adw-gizmo.c',
+   'adw-global-menu.c',
+   'adw-gtkbuilder-utils.c',
+@@ -375,6 +376,32 @@ else
+   ]
+ endif
+ 
++# MalaysiaDreams focus mode (adw-focus-mode.c): infinity_focus_v1 client code
++# for GTK's Wayland backend. Without it the module builds as a no-op.
++gtk_wayland_dep = dependency('gtk4-wayland', version: gtk_min_version, required: false)
++wayland_client_dep = dependency('wayland-client', required: false)
++wayland_scanner_dep = dependency('wayland-scanner', native: true, required: false)
++
++if gtk_wayland_dep.found() and wayland_client_dep.found() and wayland_scanner_dep.found()
++  wayland_scanner = find_program(wayland_scanner_dep.get_variable(pkgconfig: 'wayland_scanner'))
++  infinity_focus_xml = files('protocols/infinity-focus-v1.xml')
++
++  libadwaita_private_sources += [
++    custom_target('infinity-focus-v1-client-protocol.h',
++       input: infinity_focus_xml,
++      output: 'infinity-focus-v1-client-protocol.h',
++     command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
++    ),
++    custom_target('infinity-focus-v1-protocol.c',
++       input: infinity_focus_xml,
++      output: 'infinity-focus-v1-protocol.c',
++     command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
++    ),
++  ]
++  libadwaita_deps += [gtk_wayland_dep, wayland_client_dep]
++  config_h.set('HAVE_INFINITY_FOCUS', 1)
++endif
++
+ libadwaita_sources = [
+   libadwaita_generated_headers,
+   libadwaita_public_sources,
+diff --git a/src/protocols/infinity-focus-v1.xml b/src/protocols/infinity-focus-v1.xml
+new file mode 100644
+index 0000000..d779a73
+--- /dev/null
++++ b/src/protocols/infinity-focus-v1.xml
+@@ -0,0 +1,79 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!--
++  Copied verbatim (below this comment) from MalaysiaDreams' barrierkit:
++  https://github.com/HBlanqueto/barrierkit, file
++  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision c8965c3.
++  It is MIT-licensed (notice in <copyright>); keep both copies in step.
++-->
++<protocol name="infinity_focus_v1">
++  <copyright>
++    Copyright © 2026 MalaysiaDreams contributors
++
++    Permission is hereby granted, free of charge, to any person obtaining a
++    copy of this software and associated documentation files (the "Software"),
++    to deal in the Software without restriction, including without limitation
++    the rights to use, copy, modify, merge, publish, distribute, sublicense,
++    and/or sell copies of the Software, and to permit persons to whom the
++    Software is furnished to do so, subject to the following conditions:
++
++    The above copyright notice and this permission notice (including the next
++    paragraph) shall be included in all copies or substantial portions of the
++    Software.
++
++    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
++    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++    DEALINGS IN THE SOFTWARE.
++  </copyright>
++
++  <interface name="infinity_focus_manager_v1" version="1">
++    <description summary="focus mode notices for applications">
++      MalaysiaDreams focus mode (ADR 0051): a maximized window gets a space of
++      its own and the xdg fullscreen state. In that space, the pointer at the
++      top edge brings the bar down; a client-decorated window is moved down
++      by the bar's height so its own titlebar stays visible under it.
++
++      This global tells a client-decorated application when that happens, so
++      it can hide its window controls while in focus mode and show them with
++      the bar, as macOS does. It carries no geometry and grants nothing, so
++      every client may bind it.
++    </description>
++
++    <request name="destroy" type="destructor">
++      <description summary="destroy the manager">
++        Objects created through it keep working.
++      </description>
++    </request>
++
++    <request name="get_focus_surface">
++      <description summary="follow focus mode for a toplevel surface">
++        Creates an object that reports focus-mode notices for the toplevel
++        whose wl_surface is given.
++      </description>
++      <arg name="id" type="new_id" interface="infinity_focus_surface_v1"/>
++      <arg name="surface" type="object" interface="wl_surface"/>
++    </request>
++  </interface>
++
++  <interface name="infinity_focus_surface_v1" version="1">
++    <description summary="focus mode notices for one toplevel"/>
++
++    <request name="destroy" type="destructor">
++      <description summary="stop the notices"/>
++    </request>
++
++    <event name="bar">
++      <description summary="the bar came down or went up over the window">
++        Sent while the toplevel is in focus mode (it has the xdg fullscreen
++        state). revealed is 1 when the bar is down over the window, which has
++        been moved down by the bar's height, and 0 when the bar is up again.
++        A client shows its window controls only while revealed is 1. Leaving
++        focus mode sends 0 if the bar was down.
++      </description>
++      <arg name="revealed" type="uint"/>
++    </event>
++  </interface>
++</protocol>
+diff --git a/tests/meson.build b/tests/meson.build
+index 36ce9f0..869cc3e 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -65,6 +65,7 @@ test_names = [
+   'test-entry-row',
+   'test-expander-row',
+   'test-flap',
++  'test-focus-mode',
+   'test-header-bar',
+   'test-inline-view-switcher',
+   'test-leaflet',
+diff --git a/tests/test-focus-mode.c b/tests/test-focus-mode.c
+new file mode 100644
+index 0000000..55efb82
+--- /dev/null
++++ b/tests/test-focus-mode.c
+@@ -0,0 +1,280 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include <adwaita.h>
++
++#include "adw-focus-mode-private.h"
++
++typedef struct {
++  GtkWindow *window;
++  AdwToolbarView *view;
++} Fixture;
++
++static AdwToolbarView *
++toolbar_view_new (gboolean top_bar)
++{
++  AdwToolbarView *view = ADW_TOOLBAR_VIEW (adw_toolbar_view_new ());
++
++  if (top_bar)
++    adw_toolbar_view_add_top_bar (view, adw_header_bar_new ());
++
++  return view;
++}
++
++static void
++fixture_setup (Fixture       *fixture,
++               gconstpointer  data)
++{
++  fixture->window = GTK_WINDOW (gtk_window_new ());
++  fixture->view = toolbar_view_new (TRUE);
++
++  gtk_window_set_child (fixture->window, GTK_WIDGET (fixture->view));
++}
++
++static void
++fixture_teardown (Fixture       *fixture,
++                  gconstpointer  data)
++{
++  gtk_window_destroy (fixture->window);
++}
++
++static void
++set_state (Fixture  *fixture,
++           gboolean  active,
++           gboolean  fullscreen,
++           gboolean  bar)
++{
++  adw_focus_mode_set_state_for_testing (fixture->window, active, fullscreen, bar);
++}
++
++static gboolean
++revealed (AdwToolbarView *view)
++{
++  return adw_toolbar_view_get_reveal_top_bars (view);
++}
++
++/* Without the compositor's global nothing changes */
++static void
++test_inactive (Fixture       *fixture,
++               gconstpointer  data)
++{
++  set_state (fixture, FALSE, TRUE, FALSE);
++  g_assert_true (revealed (fixture->view));
++
++  set_state (fixture, FALSE, FALSE, FALSE);
++  g_assert_true (revealed (fixture->view));
++}
++
++/* Hidden in fullscreen, shown with the bar, restored after */
++static void
++test_fullscreen (Fixture       *fixture,
++                 gconstpointer  data)
++{
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_true (revealed (fixture->view));
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_true (revealed (fixture->view));
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_true (revealed (fixture->view));
++
++  /* A bar notice outside fullscreen does nothing */
++  set_state (fixture, TRUE, FALSE, TRUE);
++  g_assert_true (revealed (fixture->view));
++}
++
++/* Losing the global while fullscreen restores the bars */
++static void
++test_global_removed (Fixture       *fixture,
++                     gconstpointer  data)
++{
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  set_state (fixture, FALSE, TRUE, FALSE);
++  g_assert_true (revealed (fixture->view));
++}
++
++/* An app that hid its bars before is left alone, then and after */
++static void
++test_app_hid_first (Fixture       *fixture,
++                    gconstpointer  data)
++{
++  adw_toolbar_view_set_reveal_top_bars (fixture->view, FALSE);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_false (revealed (fixture->view));
++
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  /* The next fullscreen looks again */
++  adw_toolbar_view_set_reveal_top_bars (fixture->view, TRUE);
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++}
++
++/* An app that changes the property in fullscreen takes the view over */
++static void
++test_app_takes_over (Fixture       *fixture,
++                     gconstpointer  data)
++{
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++
++  adw_toolbar_view_set_reveal_top_bars (fixture->view, TRUE);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_true (revealed (fixture->view));
++
++  adw_toolbar_view_set_reveal_top_bars (fixture->view, FALSE);
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_false (revealed (fixture->view));
++
++  /* Not restored: it is the app's */
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_false (revealed (fixture->view));
++}
++
++/* A view leaving the window gets its bars back */
++static void
++test_view_removed (Fixture       *fixture,
++                   gconstpointer  data)
++{
++  AdwToolbarView *view = g_object_ref (fixture->view);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (view));
++
++  gtk_window_set_child (fixture->window, NULL);
++  g_assert_true (revealed (view));
++
++  g_assert_finalize_object (view);
++}
++
++/* A view added in fullscreen is taken on the next update */
++static void
++test_view_added (Fixture       *fixture,
++                 gconstpointer  data)
++{
++  AdwToolbarView *view = toolbar_view_new (TRUE);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++
++  gtk_window_set_child (fixture->window, GTK_WIDGET (view));
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (view));
++}
++
++/* Only the outermost views with top bars: a split view's panes are both
++ * taken, a view inside another one's content isn't */
++static void
++test_nested (Fixture       *fixture,
++             gconstpointer  data)
++{
++  GtkWidget *box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
++  AdwToolbarView *sidebar = toolbar_view_new (TRUE);
++  AdwToolbarView *outer = toolbar_view_new (FALSE);
++  AdwToolbarView *inner = toolbar_view_new (TRUE);
++  AdwToolbarView *nested = toolbar_view_new (TRUE);
++
++  adw_toolbar_view_add_bottom_bar (outer, gtk_action_bar_new ());
++  adw_toolbar_view_set_content (outer, GTK_WIDGET (inner));
++  adw_toolbar_view_set_content (inner, GTK_WIDGET (nested));
++
++  gtk_box_append (GTK_BOX (box), GTK_WIDGET (sidebar));
++  gtk_box_append (GTK_BOX (box), GTK_WIDGET (outer));
++  gtk_window_set_child (fixture->window, box);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (sidebar));
++  g_assert_true (revealed (outer));
++  g_assert_false (revealed (inner));
++  g_assert_true (revealed (nested));
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_true (revealed (sidebar));
++  g_assert_true (revealed (inner));
++
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_true (revealed (sidebar));
++  g_assert_true (revealed (outer));
++  g_assert_true (revealed (inner));
++  g_assert_true (revealed (nested));
++}
++
++/* A view without top bars is not touched */
++static void
++test_no_top_bars (Fixture       *fixture,
++                  gconstpointer  data)
++{
++  AdwToolbarView *view = toolbar_view_new (FALSE);
++
++  gtk_window_set_child (fixture->window, GTK_WIDGET (view));
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_true (revealed (view));
++}
++
++/* ADW_DISABLE_FOCUS_MODE: views are never followed */
++static void
++test_disabled (void)
++{
++  GtkWindow *window;
++  AdwToolbarView *view;
++
++  g_setenv ("ADW_DISABLE_FOCUS_MODE", "1", TRUE);
++
++  window = GTK_WINDOW (gtk_window_new ());
++  view = toolbar_view_new (TRUE);
++  gtk_window_set_child (window, GTK_WIDGET (view));
++
++  adw_focus_mode_set_state_for_testing (window, TRUE, TRUE, FALSE);
++  g_assert_true (revealed (view));
++
++  gtk_window_destroy (window);
++  g_unsetenv ("ADW_DISABLE_FOCUS_MODE");
++}
++
++int
++main (int   argc,
++      char *argv[])
++{
++  g_unsetenv ("ADW_DISABLE_FOCUS_MODE");
++
++  gtk_test_init (&argc, &argv, NULL);
++  adw_init ();
++
++#define ADD(path, func) \
++  g_test_add ("/Adwaita/FocusMode/" path, Fixture, NULL, fixture_setup, func, fixture_teardown)
++
++  ADD ("inactive", test_inactive);
++  ADD ("fullscreen", test_fullscreen);
++  ADD ("global_removed", test_global_removed);
++  ADD ("app_hid_first", test_app_hid_first);
++  ADD ("app_takes_over", test_app_takes_over);
++  ADD ("view_removed", test_view_removed);
++  ADD ("view_added", test_view_added);
++  ADD ("nested", test_nested);
++  ADD ("no_top_bars", test_no_top_bars);
++
++#undef ADD
++
++  g_test_add_func ("/Adwaita/FocusMode/disabled", test_disabled);
++
++  return g_test_run ();
++}

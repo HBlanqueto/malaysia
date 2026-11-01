@@ -1,6 +1,7 @@
 # 0051 — Espacios y modo foco
 
-Estado: aceptado (2026-11-01). Pasos 1–5 implementados; 6 pendiente.
+Estado: aceptado (2026-11-01). Pasos 1–6 implementados; el 6 está sin
+aceptar en sesión (ADR 0053).
 
 ## Contexto
 
@@ -43,7 +44,9 @@ app.
      app se entera por un evento de Infinity.
    - **libadwaita/GTK**: se usa lo mismo que con barrierkit. La app conserva
      su headerbar (ADR 0020 §1). Las apps con modo inmersivo esconden el
-     headerbar ellas mismas al recibir `fullscreen`.
+     headerbar ellas mismas al recibir `fullscreen`. Con el fork de
+     libadwaita (ADR 0053), la headerbar se esconde en foco y aparece con la
+     barra, como los semáforos de barrierkit.
 7. **Modelo sin Smithay.** La fila vive en `malaysia_scene::spaces` (ADR
    0001). El compositor saca de la escena las ventanas de espacios no
    mostrados con `Windows::set_off_space`, que es independiente de minimizar,
@@ -84,7 +87,14 @@ app.
    ([HBlanqueto/libadwaita](https://github.com/HBlanqueto/libadwaita)):
    `AdwToolbarView` oculta sus barras superiores en fullscreen y las vuelve a
    mostrar con el puntero arriba. Se instala con `system.replaceDependencies`
-   para no recompilar las apps. Las apps Flatpak no lo reciben.
+   para no recompilar las apps. Las apps Flatpak no lo reciben. **Hecho**
+   (ADR 0053): con el global `infinity_focus_manager_v1`, las
+   `AdwToolbarView` exteriores de una ventana fullscreen ponen
+   `reveal-top-bars = FALSE` y lo devuelven a `TRUE` con `bar(1)` y al salir
+   de fullscreen; las que la app ya gestiona no se tocan. El compositor no
+   cambia: sigue bajando 28 px la ventana. Parche
+   `nix/patches/libadwaita-focus-mode.patch`, en el mismo paquete que el menú
+   global. Falta aceptarlo en sesión.
 
 ## Alternativas descartadas
 

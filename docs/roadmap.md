@@ -14,8 +14,8 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
 - **Espacios y modo foco (Bloque 17, ADR 0051).** 17a, 17b y 17c
   hechos: fila de espacios, deslizamiento con franja negra y modo foco con el
   botón verde, el borde superior en foco (17d), y la barra negra y los
-  semáforos de barrierkit que aparecen con ella (17e). Falta el experimento
-  con libadwaita (17f).
+  semáforos de barrierkit que aparecen con ella (17e). El modo foco de
+  libadwaita (17f) está hecho en el fork; falta aceptarlo en sesión.
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
@@ -292,7 +292,21 @@ Concepto y plan en el ADR 0051.
   fullscreen y los muestra solo con `bar(1)`, como Finder. Prueba: modo foco
   con una app de barrierkit (sin semáforos), puntero arriba (aparecen),
   puntero abajo (se van).
-- **17f — libadwaita.** Experimento con el fork. Pendiente.
+- **17f — libadwaita. Hecho (2026-11-01), sin aceptar en sesión.** El fork
+  (`src/adw-focus-mode.c`, ADR 0053) liga `infinity_focus_manager_v1` si el
+  compositor lo ofrece y crea un `infinity_focus_surface_v1` por ventana
+  realizada. En fullscreen, las `AdwToolbarView` exteriores (fuera de
+  diálogos y popovers) esconden sus barras superiores; `bar(1)` las muestra
+  con su animación y `bar(0)` las esconde. Al salir de fullscreen vuelven.
+  Una vista cuyo `reveal-top-bars` gestiona la app no se toca.
+  `ADW_DISABLE_FOCUS_MODE` lo desactiva; sin el global no cambia nada. Llega
+  por `nix/patches/libadwaita-focus-mode.patch` en el paquete
+  `libadwaita-global-menu` (dev shell y `system.replaceDependencies`). El
+  compositor no cambia. Tests en el fork (`tests/test-focus-mode.c`).
+  Prueba: `./dev.sh demo`, gnome-calculator y gnome-text-editor lanzadas
+  desde el dev shell; en foco sin headerbar, puntero arriba (aparece bajo la
+  barra), puntero abajo (se va), salir del foco (siempre visible). Con
+  `ADW_DISABLE_FOCUS_MODE=1`, comportamiento upstream.
 - **14f-3 — Menú global para apps libadwaita.** Implementado: parche
   `nix/patches/libadwaita-global-menu.patch`, paquete
   `packages.<system>.libadwaita-global-menu` y opción de NixOS
