@@ -20,7 +20,7 @@ use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
-use vow_design::{CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, Rgba, TEXT};
+use vow_design::{CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, Rgba, TEXT, TITLE_1};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
@@ -30,10 +30,13 @@ use crate::power::{self, PowerAction};
 /// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (380, 160);
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-const ABOUT_SIZE: (u32, u32) = (360, 480);
+/// macOS «Acerca de este Mac» measures 280×430.
+const ABOUT_SIZE: (u32, u32) = (280, 430);
 /// The laptop drawing keeps the SVG's 1024×680 aspect.
-const ABOUT_DRAWING: (f32, f32) = (220.0, 146.0);
+const ABOUT_DRAWING: (f32, f32) = (130.0, 86.0);
 const ABOUT_COLUMN_GAP: f32 = 8.0;
+/// Label and value column weights: the widest label is «Disco de arranque».
+const ABOUT_COLUMNS: (f32, f32) = (0.85, 1.15);
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
@@ -316,15 +319,15 @@ pub fn run_force_quit() -> anyhow::Result<()> {
 const THINKPAD_SVG: &[u8] = include_bytes!("about/thinkpad.svg");
 const GENERIC_SVG: &[u8] = include_bytes!("about/generic.svg");
 
-/// What «Acerca de este equipo» lists, read from the running system.
+/// What «Acerca de este equipo» lists, read from the running system. Like
+/// macOS it stays short: model, screen size and five rows.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct AboutInfo {
     model: String,
     thinkpad: bool,
-    hostname: String,
-    system: String,
+    /// «14 pulgadas» from the built-in panel, or the host name.
+    subtitle: String,
     cpu: String,
-    gpu: String,
     memory: String,
     disk: String,
     /// `product_serial` is root-only on most systems: `None` hides the row.
@@ -344,15 +347,34 @@ impl AboutInfo {
         Self {
             thinkpad: model.contains("ThinkPad"),
             model,
-            hostname: read("/proc/sys/kernel/hostname").trim().to_string(),
-            system: os_name(&read("/etc/os-release")),
+            subtitle: built_in_panel_inches()
+                .map(|inches| format!("{inches} pulgadas"))
+                .unwrap_or_else(|| read("/proc/sys/kernel/hostname").trim().to_string()),
             cpu: cpu_name(&read("/proc/cpuinfo")),
-            gpu: gpu_name(),
             memory: memory(&read("/proc/meminfo")),
             disk: startup_disk(&read("/proc/mounts")),
             serial: Some(dmi("product_serial")).filter(|serial| is_real(serial)),
         }
     }
+}
+
+/// The diagonal of the laptop panel (eDP or LVDS connector) from its EDID.
+fn built_in_panel_inches() -> Option<u32> {
+    std::fs::read_dir("/sys/class/drm")
+        .ok()?
+        .flatten()
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.contains("-eDP-") || name.contains("-LVDS-")
+        })
+        .find_map(|entry| panel_inches(&std::fs::read(entry.path().join("edid")).ok()?))
+}
+
+/// EDID bytes 21 and 22 hold the image size in centimetres.
+fn panel_inches(edid: &[u8]) -> Option<u32> {
+    let (width, height) = (f64::from(*edid.get(21)?), f64::from(*edid.get(22)?));
+    (width > 0.0 && height > 0.0).then(|| (width.hypot(height) / 2.54).round() as u32)
 }
 
 /// Firmware placeholders that are not a name.
@@ -385,7 +407,7 @@ fn model_name(vendor: &str, name: &str, version: &str, family: &str) -> String {
         .unwrap_or_else(|| "Este equipo".to_string())
 }
 
-/// The disk that holds `/`: its model and size, following partitions and
+/// The disk that holds `/` as «SSD de 512 GB», following partitions and
 /// device-mapper layers (LUKS, LVM) down to the physical disk.
 fn startup_disk(mounts: &str) -> String {
     let Some(device) = mounts.lines().find_map(|line| {
@@ -401,17 +423,17 @@ fn startup_disk(mounts: &str) -> String {
     else {
         return "Desconocido".to_string();
     };
-    let disk = physical_disk(&name);
-    let block = Path::new("/sys/class/block").join(&disk);
-    let model = std::fs::read_to_string(block.join("device/model"))
-        .map(|model| model.trim().to_string())
-        .unwrap_or_else(|_| disk.clone());
-    let size = std::fs::read_to_string(block.join("size"))
-        .ok()
-        .and_then(|sectors| sectors.trim().parse::<u64>().ok())
-        .map(|sectors| format!(" ({})", disk_size(sectors * 512)))
-        .unwrap_or_default();
-    format!("{model}{size}")
+    let block = Path::new("/sys/class/block").join(physical_disk(&name));
+    let read = |file: &str| std::fs::read_to_string(block.join(file)).unwrap_or_default();
+    let kind = if read("queue/rotational").trim() == "1" {
+        "Disco duro"
+    } else {
+        "SSD"
+    };
+    match read("size").trim().parse::<u64>() {
+        Ok(sectors) => format!("{kind} de {}", disk_size(sectors * 512)),
+        Err(_) => kind.to_string(),
+    }
 }
 
 /// `nvme0n1p2` → `nvme0n1`, `dm-0` → its first slave, recursively.
@@ -444,119 +466,51 @@ fn disk_size(bytes: u64) -> String {
     }
 }
 
-/// `PRETTY_NAME` from `/etc/os-release`.
-fn os_name(os_release: &str) -> String {
-    os_release
-        .lines()
-        .find_map(|line| line.strip_prefix("PRETTY_NAME="))
-        .map(|value| value.trim_matches('"').to_string())
-        .unwrap_or_else(|| "Linux".to_string())
-}
-
-/// The first `model name` and the number of logical CPUs.
+/// The first `model name`, without trademarks, clocks or the integrated GPU:
+/// «AMD Ryzen 5 PRO 5650U», «Intel Core i5-1135G7».
 fn cpu_name(cpuinfo: &str) -> String {
-    let model = cpuinfo
+    cpuinfo
         .lines()
         .find_map(|line| line.strip_prefix("model name"))
         .and_then(|rest| rest.split_once(':'))
-        .map(|(_, model)| model.trim().to_string())
-        .unwrap_or_else(|| "Desconocido".to_string());
-    let threads = cpuinfo
-        .lines()
-        .filter(|line| line.starts_with("processor"))
-        .count();
-    if threads > 0 {
-        format!("{model} ({threads} hilos)")
-    } else {
-        model
-    }
+        .map(|(_, model)| short_cpu(model))
+        .unwrap_or_else(|| "Desconocido".to_string())
 }
 
-/// `MemTotal` in GB, rounded to one decimal.
+fn short_cpu(model: &str) -> String {
+    let mut model = model
+        .replace("(R)", "")
+        .replace("(TM)", "")
+        .replace("(tm)", "");
+    for cut in [" with ", " @ "] {
+        if let Some(index) = model.find(cut) {
+            model.truncate(index);
+        }
+    }
+    model
+        .split_whitespace()
+        .filter(|word| {
+            !matches!(*word, "CPU" | "Processor")
+                && !word.ends_with("-Core")
+                && !(word.ends_with("th") && word.trim_end_matches("th").parse::<u32>().is_ok())
+                && *word != "Gen"
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Installed memory as sold: `MemTotal` misses what the firmware and GPU
+/// reserve, so it is rounded up to an even number of GB («16 GB»).
 fn memory(meminfo: &str) -> String {
     meminfo
         .lines()
         .find_map(|line| line.strip_prefix("MemTotal:"))
         .and_then(|rest| rest.split_whitespace().next()?.parse::<f64>().ok())
-        .map(|kib| format!("{:.1} GB", kib / 1024.0 / 1024.0))
-        .unwrap_or_else(|| "Desconocida".to_string())
-}
-
-/// The first DRM card, named from `pci.ids` when the system ships it.
-fn gpu_name() -> String {
-    let Some(card) = std::fs::read_dir("/sys/class/drm")
-        .ok()
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("card") && !name.contains('-'))
+        .map(|kib| {
+            let gib = kib / 1024.0 / 1024.0;
+            format!("{} GB", ((gib / 2.0).ceil() * 2.0) as u32)
         })
-        .min()
-    else {
-        return "Desconocida".to_string();
-    };
-    let id = |file: &str| {
-        std::fs::read_to_string(card.join("device").join(file))
-            .ok()
-            .and_then(|text| u16::from_str_radix(text.trim().trim_start_matches("0x"), 16).ok())
-    };
-    let (Some(vendor), Some(device)) = (id("vendor"), id("device")) else {
-        return "Desconocida".to_string();
-    };
-    let ids = [
-        "/run/current-system/sw/share/hwdata/pci.ids",
-        "/usr/share/hwdata/pci.ids",
-        "/usr/share/misc/pci.ids",
-    ]
-    .iter()
-    .find_map(|path| std::fs::read_to_string(Path::new(path)).ok())
-    .unwrap_or_default();
-    pci_name(&ids, vendor, device)
-}
-
-/// `Vendor Device` from a `pci.ids` text; the ids in hex when it is missing.
-fn pci_name(ids: &str, vendor: u16, device: u16) -> String {
-    let short_vendor = match vendor {
-        0x1002 => Some("AMD"),
-        0x8086 => Some("Intel"),
-        0x10de => Some("NVIDIA"),
-        _ => None,
-    };
-    let vendor_key = format!("{vendor:04x}");
-    let device_key = format!("\t{device:04x}");
-    let mut lines = ids.lines();
-    let mut vendor_name = None;
-    let mut device_name = None;
-    for line in lines.by_ref() {
-        if let Some(name) = line
-            .strip_prefix(&vendor_key)
-            .filter(|_| !line.starts_with('\t'))
-        {
-            vendor_name = Some(name.trim().to_string());
-            break;
-        }
-    }
-    if vendor_name.is_some() {
-        for line in lines {
-            if !line.starts_with('\t') && !line.starts_with('#') && !line.is_empty() {
-                break;
-            }
-            if let Some(name) = line.strip_prefix(&device_key) {
-                device_name = Some(name.trim().to_string());
-                break;
-            }
-        }
-    }
-    let vendor = short_vendor
-        .map(str::to_string)
-        .or(vendor_name)
-        .unwrap_or_else(|| format!("{vendor:04x}"));
-    let device = device_name.unwrap_or_else(|| format!("{device:04x}"));
-    format!("{vendor} {device}")
+        .unwrap_or_else(|| "Desconocida".to_string())
 }
 
 struct AboutApp {
@@ -578,14 +532,12 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
         let palette = vow_appearance::palette(resolved.scheme);
         let mut rows = vec![
             ("Procesador", info.cpu.clone()),
-            ("Gráficos", info.gpu.clone()),
             ("Memoria", info.memory.clone()),
             ("Disco de arranque", info.disk.clone()),
         ];
         if let Some(serial) = &info.serial {
             rows.push(("Número de serie", serial.clone()));
         }
-        rows.push(("Sistema", info.system.clone()));
         rows.push(("Malaysia", env!("CARGO_PKG_VERSION").to_string()));
         let rows = rows.into_iter().map(|(name, value)| {
             rect()
@@ -596,16 +548,16 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
                 .child(
                     label()
                         .text(name)
-                        .width(Size::flex(1.0))
+                        .width(Size::flex(ABOUT_COLUMNS.0))
                         .text_align(TextAlign::Right)
-                        .font_size(CAPTION.size as f32)
+                        .font_size(CALLOUT.size as f32)
                         .color(rgba(palette.text.focused)),
                 )
                 .child(
                     label()
                         .text(value)
-                        .width(Size::flex(1.2))
-                        .font_size(CAPTION.size as f32)
+                        .width(Size::flex(ABOUT_COLUMNS.1))
+                        .font_size(CALLOUT.size as f32)
                         .color(rgba(palette.text.unfocused)),
                 )
                 .into_element()
@@ -632,11 +584,12 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
                     .height(Size::flex(1.0))
                     .padding(Gaps::new(
                         0.0,
+                        DIALOG_PADDING / 2.0,
                         DIALOG_PADDING,
-                        DIALOG_PADDING,
-                        DIALOG_PADDING,
+                        DIALOG_PADDING / 2.0,
                     ))
                     .direction(Direction::Vertical)
+                    .main_align(Alignment::Center)
                     .cross_align(Alignment::Center)
                     .spacing(DIALOG_PADDING / 2.0)
                     .child(
@@ -649,13 +602,13 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
                             .text(info.model.clone())
                             .text_align(TextAlign::Center)
                             .width(Size::fill())
-                            .font_size(DISPLAY.size as f32)
+                            .font_size(TITLE_1.size as f32)
                             .font_weight(FontWeight::BOLD)
                             .color(rgba(palette.text.focused)),
                     )
                     .child(
                         label()
-                            .text(info.hostname.clone())
+                            .text(info.subtitle.clone())
                             .font_size(CAPTION.size as f32)
                             .color(rgba(palette.text.unfocused)),
                     )
@@ -669,7 +622,11 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
                     .child(
                         Button::new()
                             .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[]))
-                            .child(label().text("Más información…").font_size(TEXT.size as f32)),
+                            .child(
+                                label()
+                                    .text("Más información…")
+                                    .font_size(CALLOUT.size as f32),
+                            ),
                     ),
             )
     }
@@ -714,15 +671,30 @@ mod tests {
     }
 
     #[test]
-    fn system_files_are_parsed() {
+    fn system_files_are_parsed_into_short_values() {
+        let cpuinfo = "processor\t: 0\nmodel name\t: AMD Ryzen 5 PRO 5650U with Radeon Graphics\nprocessor\t: 1\n";
+        assert_eq!(cpu_name(cpuinfo), "AMD Ryzen 5 PRO 5650U");
         assert_eq!(
-            os_name("NAME=NixOS\nPRETTY_NAME=\"NixOS 26.05 (Yarara)\"\n"),
-            "NixOS 26.05 (Yarara)"
+            short_cpu("11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz"),
+            "Intel Core i5-1135G7"
         );
-        let cpuinfo = "processor\t: 0\nmodel name\t: AMD Ryzen 5 PRO 5650U\nprocessor\t: 1\nmodel name\t: AMD Ryzen 5 PRO 5650U\n";
-        assert_eq!(cpu_name(cpuinfo), "AMD Ryzen 5 PRO 5650U (2 hilos)");
-        assert_eq!(memory("MemTotal:       15728640 kB\n"), "15.0 GB");
+        assert_eq!(
+            short_cpu("AMD Ryzen 7 5800X 8-Core Processor"),
+            "AMD Ryzen 7 5800X"
+        );
+        assert_eq!(memory("MemTotal:       15728640 kB\n"), "16 GB");
+        assert_eq!(memory("MemTotal:       7990000 kB\n"), "8 GB");
         assert_eq!(memory(""), "Desconocida");
+    }
+
+    #[test]
+    fn the_panel_size_comes_from_the_edid() {
+        let mut edid = vec![0u8; 128];
+        edid[21] = 31;
+        edid[22] = 17;
+        assert_eq!(panel_inches(&edid), Some(14));
+        assert_eq!(panel_inches(&[0u8; 128]), None);
+        assert_eq!(panel_inches(&[]), None);
     }
 
     #[test]
@@ -749,14 +721,6 @@ mod tests {
     fn disk_sizes_read_like_a_label() {
         assert_eq!(disk_size(512_110_190_592), "512 GB");
         assert_eq!(disk_size(2_000_398_934_016), "2.0 TB");
-    }
-
-    #[test]
-    fn pci_ids_name_the_gpu() {
-        let ids = "# comment\n1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\t1636  Renoir\n\t1638  Cezanne\n1022  Advanced Micro Devices, Inc. [AMD]\n\t1638  Wrong vendor\n";
-        assert_eq!(pci_name(ids, 0x1002, 0x1638), "AMD Cezanne");
-        assert_eq!(pci_name(ids, 0x1002, 0xffff), "AMD ffff");
-        assert_eq!(pci_name("", 0x1234, 0x0001), "1234 0001");
     }
 
     #[test]

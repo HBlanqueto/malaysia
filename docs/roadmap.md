@@ -181,10 +181,10 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
   - Acerca de este equipo: `malaysia-shell about`, ventana fija con semáforos
     como «Acerca de este Mac». Modelo por DMI (Lenovo guarda «ThinkPad …» en
     `product_version`); dibujo `about/thinkpad.svg` para ThinkPad y
-    `about/generic.svg` para el resto. Lista procesador, gráficos (`pci.ids`),
-    memoria, disco de arranque (siguiendo LUKS/LVM hasta el disco), número de
-    serie si es legible, sistema (`os-release`) y versión; «Más información…»
-    abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`).
+    `about/generic.svg` para el resto. Subtítulo con las pulgadas del panel
+    (EDID). Filas cortas: procesador, memoria, disco de arranque («SSD de 512
+    GB», siguiendo LUKS/LVM), número de serie si es legible y versión; «Más información…»
+    abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`). Mide 280×430 como en macOS y muestra solo procesador, memoria, disco, serie y versión.
 - Mnemónicos subrayados al pulsar Alt (no existe en `menu.rs`).
 - Scroll de menús más altos que la salida (`menu.rs` solo desplaza los
   resultados de búsqueda).
