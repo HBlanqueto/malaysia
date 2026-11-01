@@ -1,8 +1,9 @@
 # 0052 — Menú global para libadwaita
 
-Estado: propuesto (2026-11-01). Implementado en el fork
+Estado: aceptado (2026-11-01). Implementado en el fork
 [`HBlanqueto/libadwaita`](https://github.com/HBlanqueto/libadwaita) (rama
-`claude/optimistic-bell-p2v9or`, `48d3ff5`) y en la barra; falta empaquetar el fork y aceptarlo con una app real.
+`claude/optimistic-bell-p2v9or`, `48d3ff5`), en la barra y en el módulo de
+NixOS; falta aceptarlo con una app real.
 
 ## Contexto
 
@@ -34,19 +35,35 @@ realizar la ventana (`gtkapplication-wayland.c`), y la exporta en
    toma el nombre de app de la barra, así `remote::compose` lo pliega en el
    título en negrita aunque `g_get_application_name()` no coincida con el
    `.desktop`.
-4. El botón ☰ sigue visible en el header bar; la app no cambia.
+4. **Paquete Nix.** El flake expone `packages.<system>.libadwaita-global-menu`,
+   derivado de `pkgs.libadwaita` con el parche del fork aplicado sobre el tag
+   `1.9.3` de GNOME. El parche usa solo API de GTK <= 4.22 para coincidir con
+   la libadwaita de nixpkgs.
+5. **Sin overlay, sin recompilar apps.** El módulo de NixOS usa
+   `system.replaceDependencies.replacements` para sustituir la libadwaita del
+   sistema por la versión parcheada. Las aplicaciones libadwaita existentes
+   conservan su caché y no se recompilan.
+6. **Opción de NixOS.** `programs.malaysia.globalMenu.libadwaita.enable`
+   (por defecto `true`) controla si se activa el reemplazo. Puede
+   desactivarse para no usar el fork.
+7. El botón ☰ sigue visible en el header bar; la app no cambia.
 
 ## Consecuencias
 
-- Solo lo ven las apps que enlazan el fork. Las apps Flatpak usan la
-  libadwaita de su runtime y siguen con 14c.
-- Falta un overlay de Nix que sustituya `libadwaita` por el fork (recompila
-  las apps que dependen de ella) o limitarlo a las apps de la sesión.
+- No hace falta un overlay de nixpkgs ni recompilar las aplicaciones.
+  `system.replaceDependencies` cambia la libadwaita en el cierre del sistema.
+- Solo lo ven las apps que enlazan la libadwaita del sistema. Las apps Flatpak
+  usan la libadwaita de su runtime y siguen con 14c.
+- El parche se aplica sobre una libadwaita concreta (1.9.3). Cuando nixpkgs
+  actualice libadwaita, hay que revisar que el parche siga aplicándose y que
+  siga usando solo API de GTK <= 4.22.
 - El ☰ es una lista plana: libadwaita da un menú de app, no Archivo/Editar.
 - `AdwWindow` no se engancha: no es `GtkApplicationWindow` y GTK no exporta
   sus acciones `win.*`.
 - Las acciones `win.*` del menú se activan en el `window_object_path` de la
   ventana enfocada, el mismo que la barra ya usa.
+- El punto de entrada para usuarios es la opción de NixOS, no un dominio
+  `.domain`.
 
 ## Alternativas descartadas
 

@@ -293,6 +293,12 @@ Concepto y plan en el ADR 0051.
   con una app de barrierkit (sin semáforos), puntero arriba (aparecen),
   puntero abajo (se van).
 - **17f — libadwaita.** Experimento con el fork. Pendiente.
+- **14f-3 — Menú global para apps libadwaita.** Implementado: parche
+  `nix/patches/libadwaita-global-menu.patch`, paquete
+  `packages.<system>.libadwaita-global-menu` y opción de NixOS
+  `programs.malaysia.globalMenu.libadwaita.enable` con
+  `system.replaceDependencies` (ADR 0052). Falta aceptarlo en sesión anidada
+  con una app real (`gnome-text-editor` o `gnome-calculator`).
 
 ### Transversal — NixOS
 

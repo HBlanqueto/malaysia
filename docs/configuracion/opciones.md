@@ -1,12 +1,16 @@
 # Catálogo de opciones de MalaysiaDreams
 
-Catálogo canónico de las opciones del compositor (ADR 0021). **Los nombres y
-valores son idénticos a los de macOS** siempre que exista un equivalente: las
-secciones imitan System Settings (`appearance`, `window`, `dock`, `menubar`) y las
-claves imitan `com.apple.dock` y demás (`autohide`, `orientation`, `tilesize`,
-`mineffect`, `show-process-indicators`, ...).
+Catálogo canónico de las opciones del compositor (ADR 0021) y de su módulo de
+NixOS. **Los nombres y valores de dominio son idénticos a los de macOS**
+siempre que exista un equivalente: las secciones imitan System Settings
+(`appearance`, `window`, `dock`, `menubar`) y las claves imitan `com.apple.dock`
+y demás (`autohide`, `orientation`, `tilesize`, `mineffect`,
+`show-process-indicators`, ...).
 
 Mapa visual completo: [`../arquitectura/interfaz.md`](../arquitectura/interfaz.md).
+
+Las opciones de NixOS (`programs.malaysia.*`) se documentan en su propia
+sección al final; no forman parte de los dominios `.domain`.
 
 **Como macOS, la configuración se guarda en un archivo por dominio** (extensión
 **`.domain`**, el formato propio de MalaysiaDreams, como `.plist` lo es de macOS) en dos
@@ -435,3 +439,19 @@ damage_highlight = false
 
 El catálogo vive en `crates/malaysia-compositor/src/config.rs` como tipos `serde` tipados; cualquier
 cambio en este documento debe reflejarse ahí y viceversa (ADR 0021).
+
+---
+
+## Opciones de NixOS (`programs.malaysia`)
+
+Estas opciones configuran la integración con el sistema; van en
+`configuration.nix`, no en un dominio `.domain`.
+
+| Opción | Tipo | Default | Descripción |
+|---|---|---|---|
+| `programs.malaysia.enable` | bool | `false` | Activa MalaysiaDreams: instala el paquete, registra la sesión Wayland, PAM, units y el portal. |
+| `programs.malaysia.globalMenu.libadwaita.enable` | bool | `true` | Reemplaza la libadwaita del sistema por una versión parcheada que exporta el menú principal como menubar global (`org.gtk.Menus`). Usa `system.replaceDependencies`, así que las apps no se recompilan (ADR 0052). |
+
+`programs.malaysia.globalMenu.libadwaita.enable` se puede desactivar para no
+usar el fork parcheado; las apps libadwaita seguirán funcionando, pero no
+publicarán su menú ☰ en la barra de menús de MalaysiaDreams.
