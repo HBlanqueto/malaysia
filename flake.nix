@@ -278,7 +278,13 @@
           dbus
           nautilus
           zenity
+          gnome-calculator
         ];
+
+        # ADR 0052: use the patched libadwaita in the dev shell so real apps
+        # launched inside `./dev.sh lab` export their primary menu over
+        # org.gtk.Menus without a full system rebuild.
+        libadwaitaPatched = self.packages.${system}.libadwaita-global-menu;
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
@@ -339,7 +345,7 @@
             ${pkgs.lib.optionalString hasFreyaSkia ''
               export SKIA_BINARIES_URL="file://${skia}/skia-binaries.tar.gz"
             ''}
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
             # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
             # wgpu needs a stable ICD path; pin the dev shell to the same Mesa the package uses.
