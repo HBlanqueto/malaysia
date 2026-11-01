@@ -58,6 +58,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `Alt+Super+Escape` | abre `malaysia-shell force-quit` («Forzar salida…»); no con la sesión bloqueada |
 | `Ctrl+Alt+←` / `Ctrl+Alt+→` | muestra el espacio de la izquierda / derecha, sin dar la vuelta (ADR 0051); no con la sesión bloqueada |
 | `Ctrl+Alt+N` | añade un escritorio al final de la fila y lo muestra; máximo 99 (ADR 0051) |
+| `Ctrl+Super+F` | entra o sale del modo foco con la ventana enfocada (ADR 0051) |
 
 ---
 
@@ -143,10 +144,14 @@ las ventanas; `"force_client"` no dibuja ninguno.
 Action**".
 
 `green_button` decide qué hace el semáforo verde. Como en macOS, el valor por
-defecto es **`focus`** (modo foco; de momento solo registra
-`focus mode requested` y no cambia la geometría). `zoom` maximiza conservando
-el marco; `fullscreen` y el modo foco se conectarán más adelante; `none` no hace
-nada. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
+defecto es **`focus`**: el modo foco del ADR 0051. La ventana recibe un
+espacio propio a la derecha de su escritorio y crece hasta cubrir la pantalla
+mientras el escritorio se desliza. Recibe el estado xdg `fullscreen`; la barra
+y el dock se ocultan. Repetir sale del foco. Con `focus`, el semáforo verde
+propio de una app CSD (`set_maximized`) hace lo mismo. `zoom` maximiza
+conservando el marco; `fullscreen` todavía solo registra la petición; `none`
+no hace nada. Una app que pide fullscreen (F11) y `Ctrl+Super+F` entran
+siempre en modo foco. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
 
 `qt_server_decorations` exporta `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` para los
 clientes que lanza `malaysia_compositor::spawn` y en el entorno de la sesión, de modo que Qt

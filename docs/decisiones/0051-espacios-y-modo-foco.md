@@ -1,6 +1,6 @@
 # 0051 — Espacios y modo foco
 
-Estado: aceptado (2026-11-01). Pasos 1 y 2 implementados; 3–6 pendientes.
+Estado: aceptado (2026-11-01). Pasos 1–3 implementados; 4–6 pendientes.
 
 ## Contexto
 
@@ -60,6 +60,11 @@ app.
    zona exclusiva. Duración, curva, ancho y color de la franja son tokens de
    `vow-design` (`SPACE_*`).
 3. Modo foco: espacio de foco, estado `fullscreen` y la animación combinada.
+   **Hecho.** También entran en foco F11 (`set_fullscreen`), el verde propio
+   de una app CSD con `green_button = "focus"` y `Ctrl+Super+F`. Durante la
+   animación se dibuja la superficie del cliente recortada a un rectángulo
+   redondeado que crece o se encoge, sin la barra SSD; si el cliente aún no
+   redibujó a su nuevo tamaño, el resto del rectángulo se ve negro.
 4. Borde superior: panel negro, titlebar SSD encima y deslizamiento de 28 px.
 5. Infinity: espacio actual para la shell y aviso de foco/panel para
    barrierkit.

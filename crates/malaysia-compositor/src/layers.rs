@@ -49,6 +49,16 @@ impl LayerEntry {
             && !self.anchors.contains(Anchor::BOTTOM)
             && self.exclusive_zone > 0
     }
+
+    /// Whether this surface is shell chrome a focus space hides: the desktop
+    /// bar, or a panel along the bottom edge (the dock). The launcher and
+    /// dialogs are not chrome and stay available (ADR 0051).
+    pub fn is_shell_chrome(&self) -> bool {
+        self.is_desktop_bar()
+            || (matches!(self.layer, Layer::Top | Layer::Overlay)
+                && self.anchors.contains(Anchor::BOTTOM)
+                && !self.anchors.contains(Anchor::TOP))
+    }
 }
 
 /// The compositor's registry of layer surfaces.
@@ -59,6 +69,9 @@ pub struct Layers {
     unmapped: Vec<LayerSurface>,
     /// Surfaces that are placed and rendered.
     mapped: Vec<LayerEntry>,
+    /// Whether the shell chrome (bar and dock) is hidden because a focus
+    /// space is shown: it is neither drawn nor hit (ADR 0051).
+    chrome_hidden: bool,
 }
 
 impl Layers {
@@ -181,6 +194,7 @@ impl Layers {
             .rev()
             .find(|entry| {
                 if !matches!(entry.layer, Layer::Top | Layer::Overlay)
+                    || (self.chrome_hidden && entry.is_shell_chrome())
                     || !entry.surface.wl_surface().alive()
                     || !entry.geometry.to_f64().contains(point)
                 {
@@ -193,6 +207,16 @@ impl Layers {
                 let local = point - entry.geometry.to_f64().loc;
                 (entry.surface.wl_surface().clone(), local)
             })
+    }
+
+    /// Hides or shows the shell chrome (bar and dock) for a focus space.
+    pub fn set_chrome_hidden(&mut self, hidden: bool) {
+        self.chrome_hidden = hidden;
+    }
+
+    /// Whether the shell chrome is hidden because a focus space is shown.
+    pub fn chrome_hidden(&self) -> bool {
+        self.chrome_hidden
     }
 
     /// The layer surfaces on a given layer, most recently added last.

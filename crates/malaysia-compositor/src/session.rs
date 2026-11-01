@@ -955,15 +955,27 @@ pub(crate) fn build_output_elements(
         append_theme_fade(state, &mut elements);
         append_screenshot_overlay(state, &mut elements);
         // While the spaces slide, each desktop's bar moves with it and only
-        // the other panels (the dock) stay in place (ADR 0051).
-        let slide = state.space_frame(Instant::now());
+        // the other panels (the dock) stay in place (ADR 0051). A window
+        // growing into focus mode, or shrinking out of it, is drawn above
+        // them all; a still focus space hides the bar and the dock.
+        let now = Instant::now();
+        let focus_frame = state.focus_transition_frame(now);
+        let slide = state.space_frame(now);
+        let moving = focus_frame.map(|frame| frame.window);
+        if let Some(frame) = focus_frame {
+            append_focus_transition(state, renderer, frame, scale, &mut elements);
+        }
+        let chrome_hidden = slide.is_none() && state.layers.chrome_hidden();
         append_layers(
             state,
             renderer,
             &mut elements,
             LayerSide::Front,
             0,
-            |entry| slide.is_none() || !entry.is_desktop_bar(),
+            |entry| {
+                (slide.is_none() || !entry.is_desktop_bar())
+                    && !(chrome_hidden && entry.is_shell_chrome())
+            },
         );
         for (id, _parent, rect) in state.windows.iter_popups().rev() {
             let Some(surface) = state.popups.surface_of(id) else {
@@ -983,7 +995,7 @@ pub(crate) fn build_output_elements(
             );
         }
         if let Some(position) = slide {
-            append_sliding_spaces(state, renderer, position, scale, &mut elements);
+            append_sliding_spaces(state, renderer, position, scale, moving, &mut elements);
         } else {
             let focused = state.focused_window();
             let window_ids: Vec<_> = state
@@ -991,6 +1003,7 @@ pub(crate) fn build_output_elements(
                 .iter_visible(&state.minimized)
                 .rev()
                 .map(|window| window.id())
+                .filter(|id| Some(*id) != moving)
                 .collect();
             for id in window_ids {
                 append_window_frame(
@@ -1003,10 +1016,101 @@ pub(crate) fn build_output_elements(
                     &mut elements,
                 );
             }
-            append_layers(state, renderer, &mut elements, LayerSide::Back, 0, |_| true);
+            let focus_space = matches!(
+                state.spaces.current().kind,
+                malaysia_scene::spaces::SpaceKind::Focus { .. }
+            );
+            if focus_space {
+                append_solid(
+                    Point::from((0, 0)),
+                    state.logical_output_size(),
+                    vow_design::SPACE_GAP_COLOR,
+                    scale,
+                    &mut elements,
+                );
+            } else {
+                append_layers(state, renderer, &mut elements, LayerSide::Back, 0, |_| true);
+            }
         }
     }
     elements
+}
+
+/// The visible frame of a window in output coordinates: the client's window
+/// geometry for CSD windows and dialogs, the decorated rectangle for SSD.
+pub(crate) fn window_frame_rect(window: &crate::window::Window<'_>) -> Rectangle<i32, Logical> {
+    if window.is_client_decorated() || matches!(window.role(), crate::decoration::Role::Dialog) {
+        let geometry = window.window_geometry();
+        let origin = window.location() + window.surface_location() + geometry.loc;
+        Rectangle::new(origin, geometry.size)
+    } else {
+        ssd_frame_rect(
+            window.location(),
+            window.size(),
+            window.window_geometry(),
+            window.insets(),
+            window.is_resizing(),
+        )
+    }
+}
+
+/// Draws a window growing into focus mode or shrinking out of it (ADR 0051):
+/// its client surface, with the window geometry's corner at the frame's
+/// corner, clipped to the moving rounded rectangle over black. The SSD bar is
+/// left out: in focus mode the window has none.
+fn append_focus_transition(
+    state: &State,
+    renderer: &mut GlesRenderer,
+    frame: crate::spaces::FocusFrame,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let Some(surface) = state
+        .windows
+        .iter_drawable(&state.minimized)
+        .find(|window| window.id() == frame.window)
+        .map(|window| (window.surface().clone(), window.window_geometry().loc))
+    else {
+        return;
+    };
+    let (surface, geometry_origin) = surface;
+    let rect_physical = physical_rect(frame.rect, scale);
+    let radius = (frame.radius * scale).round() as i32;
+    let exponent = frame_exponent(crate::decoration::Role::Toplevel);
+    let surface_elements = render_elements_from_surface_tree::<
+        GlesRenderer,
+        WaylandSurfaceRenderElement<GlesRenderer>,
+    >(
+        renderer,
+        &surface,
+        physical_point(frame.rect.loc - geometry_origin, scale),
+        scale,
+        1.0,
+        Kind::Unspecified,
+    );
+    for element in surface_elements {
+        let clipped = state.rounded_clip.clone().and_then(|program| {
+            crate::effects::RoundedTextureElement::from_surface_element(
+                &element,
+                rect_physical,
+                radius,
+                exponent,
+                scale,
+                program,
+            )
+        });
+        match clipped {
+            Some(rounded) => elements.push(rounded.into()),
+            None => elements.push(element.into()),
+        }
+    }
+    append_solid(
+        frame.rect.loc,
+        frame.rect.size,
+        vow_design::SPACE_GAP_COLOR,
+        scale,
+        elements,
+    );
 }
 
 /// Draws the row of spaces mid-slide (ADR 0051): every space that overlaps the
@@ -1018,6 +1122,7 @@ fn append_sliding_spaces(
     renderer: &mut GlesRenderer,
     position: f64,
     scale: f64,
+    moving: Option<malaysia_scene::scene::WindowId>,
     elements: &mut Vec<OutputRenderElement>,
 ) {
     let output = state.logical_output_size();
@@ -1044,7 +1149,7 @@ fn append_sliding_spaces(
             .iter_drawable(&state.minimized)
             .rev()
             .map(|window| window.id())
-            .filter(|id| state.spaces.space_of(*id) == Some(space))
+            .filter(|id| state.spaces.space_of(*id) == Some(space) && Some(*id) != moving)
             .collect();
         for id in window_ids {
             append_window_frame(
@@ -1638,7 +1743,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         let mut request_redraw = false;
         let now = Instant::now();
         // A slide between spaces moves every frame (ADR 0051).
-        if session.state.space_slide.is_some() {
+        if session.state.space_slide.is_some() || session.state.focus_transition.is_some() {
             request_redraw = true;
         }
         if let Some(fade) = session.state.theme_fade.as_mut() {

@@ -860,7 +860,35 @@ impl XdgShellHandler for State {
             return;
         };
         tracing::info!(window = id.get(), "maximize_request");
-        self.set_maximized(id, true);
+        // With the green light set to focus, a CSD app's own green light
+        // enters focus mode too (ADR 0051).
+        if self.config.window.green_button == crate::config::GreenButtonAction::Focus {
+            self.enter_focus_mode(id);
+        } else {
+            self.set_maximized(id, true);
+        }
+    }
+
+    fn fullscreen_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>,
+    ) {
+        // F11 and friends: a client asking for fullscreen gets focus mode,
+        // which is fullscreen in a space of its own (ADR 0051).
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        tracing::info!(window = id.get(), "fullscreen_request");
+        self.enter_focus_mode(id);
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        let Some(id) = self.windows.id_of(surface.wl_surface()) else {
+            return;
+        };
+        tracing::info!(window = id.get(), "unfullscreen_request");
+        self.exit_focus_mode(id);
     }
 
     fn minimize_request(&mut self, surface: ToplevelSurface) {
@@ -877,7 +905,11 @@ impl XdgShellHandler for State {
             return;
         };
         tracing::info!(window = id.get(), "unmaximize_request");
-        self.set_maximized(id, false);
+        if self.in_focus_mode(id) {
+            self.exit_focus_mode(id);
+        } else {
+            self.set_maximized(id, false);
+        }
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

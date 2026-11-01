@@ -483,7 +483,8 @@ enum CompositorShortcut {
     ArrangeCenter,
     /// Ctrl+Super+R: restore the focused window to its pre-arrange rectangle.
     ArrangeRestore,
-    /// Ctrl+Super+F: toggle fullscreen on the focused window.
+    /// Ctrl+Super+F: toggle focus mode (fullscreen in its own space) on the
+    /// focused window.
     ToggleFullscreen,
     /// Ctrl+Alt+Left: show the space to the left (ADR 0051).
     PreviousSpace,
@@ -905,9 +906,9 @@ impl State {
                                         }
                                     }
                                     CompositorShortcut::ToggleFullscreen => {
+                                        // Fullscreen is focus mode (ADR 0051).
                                         if let Some(id) = state.focused_window() {
-                                            let fullscreen = !state.fullscreen.contains_key(&id);
-                                            state.infinity_set_fullscreen(id, fullscreen);
+                                            state.toggle_focus_mode(id);
                                         }
                                     }
                                     CompositorShortcut::PreviousSpace => {
@@ -1123,6 +1124,7 @@ impl State {
         match self.config.window.green_button {
             GreenButtonAction::Focus => {
                 tracing::info!(window = id.get(), "focus mode requested");
+                self.toggle_focus_mode(id);
             }
             GreenButtonAction::Zoom => {
                 if self.windows.zoom_supported(id) {

@@ -305,6 +305,8 @@ pub struct State {
     pub(crate) spaces: malaysia_scene::spaces::Spaces,
     /// The slide between spaces being drawn, if any (ADR 0051, 17b).
     pub(crate) space_slide: Option<crate::spaces::SpaceSlide>,
+    /// A window growing into focus mode or shrinking out of it (ADR 0051, 17c).
+    pub(crate) focus_transition: Option<crate::spaces::FocusTransition>,
     /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
@@ -601,6 +603,7 @@ impl State {
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),
             space_slide: None,
+            focus_transition: None,
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),

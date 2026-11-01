@@ -9,11 +9,23 @@
 //! (17b). The windows of the target space take input at once; the slide is
 //! only drawn ([`SpaceSlide`]), so a fast second press retargets it from where
 //! it is.
+//!
+//! Focus mode (17c): maximizing gives the window a focus space right of its
+//! desktop. The row slides there while the window grows from its frame to the
+//! whole output ([`FocusTransition`]), drawn above the dock, which stays put
+//! until the window covers it. The window gets the xdg `fullscreen` state; in
+//! the focus space the bar and the dock are hidden and the background is
+//! black. Leaving runs the same animation backwards and only then removes the
+//! space, so the black space is what slides away.
 
 use std::time::{Duration, Instant};
 
+use malaysia_scene::geometry::{
+    Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
+};
 use malaysia_scene::scene::WindowId;
 use malaysia_scene::spaces::{SpaceId, SpaceKind, SpacesError};
+use smithay::utils::{Logical, Point, Rectangle, Size};
 
 use crate::state::State;
 
@@ -51,7 +63,208 @@ pub(crate) fn cubic_bezier(curve: [f32; 4], x: f64) -> f64 {
     axis((low + high) / 2.0, y1, y2)
 }
 
+/// A window growing into its focus space or shrinking back to its desktop.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FocusTransition {
+    /// The window.
+    pub(crate) window: WindowId,
+    /// Its frame on the desktop, in output coordinates.
+    desk: Rectangle<i32, Logical>,
+    /// Growing into focus (`true`) or shrinking back (`false`).
+    entering: bool,
+    start: Instant,
+}
+
+/// One frame of a [`FocusTransition`]: where the window is drawn and with
+/// which corner radius.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FocusFrame {
+    /// The window.
+    pub(crate) window: WindowId,
+    /// The rectangle its visible frame fills, in output coordinates.
+    pub(crate) rect: Rectangle<i32, Logical>,
+    /// The corner radius, in logical pixels.
+    pub(crate) radius: f64,
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+
+/// The rectangle between `from` and `to` at eased progress `t`.
+fn lerp_rect(
+    from: Rectangle<i32, Logical>,
+    to: Rectangle<i32, Logical>,
+    t: f64,
+) -> Rectangle<i32, Logical> {
+    let at = |a: i32, b: i32| lerp(f64::from(a), f64::from(b), t).round() as i32;
+    Rectangle::new(
+        Point::from((at(from.loc.x, to.loc.x), at(from.loc.y, to.loc.y))),
+        Size::from((at(from.size.w, to.size.w), at(from.size.h, to.size.h))),
+    )
+}
+
 impl State {
+    /// Whether a window is in focus mode (has a focus space).
+    pub(crate) fn in_focus_mode(&self, id: WindowId) -> bool {
+        self.spaces.focus_space_of(id).is_some()
+    }
+
+    /// Enters focus mode, or leaves it if the window is already there. What
+    /// the green light, a client's maximize request and F11 do (ADR 0051).
+    pub(crate) fn toggle_focus_mode(&mut self, id: WindowId) {
+        if self.in_focus_mode(id) {
+            self.exit_focus_mode(id);
+        } else {
+            self.enter_focus_mode(id);
+        }
+    }
+
+    /// Gives a window its own focus space and slides there while it grows.
+    pub(crate) fn enter_focus_mode(&mut self, id: WindowId) {
+        if self.focus_transition.is_some() || self.in_focus_mode(id) || self.locked {
+            return;
+        }
+        // A window on another space is shown first, without its own slide.
+        self.show_space_of(id);
+        self.space_slide = None;
+        let Some(desk) = self
+            .windows
+            .iter_visible(&self.minimized)
+            .find(|window| window.id() == id)
+            .map(|window| crate::session::window_frame_rect(&window))
+        else {
+            return;
+        };
+        let Some(outer) = self.windows.outer(id) else {
+            return;
+        };
+        let index = match self.spaces.enter_focus(id) {
+            Ok(index) => index,
+            Err(error) => {
+                tracing::warn!(window = id.get(), ?error, "focus mode refused");
+                return;
+            }
+        };
+        // Fullscreen first, while the window is still shown: its scene
+        // rectangle becomes the output and the client is configured.
+        self.fullscreen.insert(id, outer);
+        let full = self.output_scene_rect();
+        self.windows.set_fullscreen_with_outer(id, true, full);
+        self.foreign_state_changed(id);
+        tracing::info!(window = id.get(), index, "focus mode entered");
+        self.switch_space(index);
+        self.focus_transition = self.space_slide.map(|_| FocusTransition {
+            window: id,
+            desk,
+            entering: true,
+            start: Instant::now(),
+        });
+        self.raise_and_focus(id);
+    }
+
+    /// Leaves focus mode: the window shrinks back to its frame while the row
+    /// slides to its desktop; the focus space is removed at the end.
+    pub(crate) fn exit_focus_mode(&mut self, id: WindowId) {
+        if self.focus_transition.is_some() {
+            return;
+        }
+        let Some(focus) = self.spaces.focus_space_of(id) else {
+            return;
+        };
+        let Some(SpaceKind::Focus { home, .. }) = self.spaces.get(focus).map(|space| space.kind)
+        else {
+            return;
+        };
+        self.show_space_of(id);
+        self.space_slide = None;
+        let saved = self
+            .fullscreen
+            .remove(&id)
+            .or_else(|| self.windows.outer(id))
+            .unwrap_or_else(|| self.output_scene_rect());
+        self.windows.set_fullscreen_with_outer(id, false, saved);
+        self.foreign_state_changed(id);
+        let desk = self
+            .windows
+            .iter_visible(&self.minimized)
+            .find(|window| window.id() == id)
+            .map(|window| crate::session::window_frame_rect(&window));
+        tracing::info!(window = id.get(), "focus mode left");
+        let home_index = self
+            .spaces
+            .index_of(home)
+            .expect("a focus space's home exists");
+        self.switch_space(home_index);
+        match (self.space_slide, desk) {
+            (Some(_), Some(desk)) => {
+                self.focus_transition = Some(FocusTransition {
+                    window: id,
+                    desk,
+                    entering: false,
+                    start: Instant::now(),
+                });
+            }
+            _ => self.finish_focus_exit(id),
+        }
+    }
+
+    /// Removes the focus space after the shrink and shows the window on its
+    /// desktop again.
+    fn finish_focus_exit(&mut self, id: WindowId) {
+        if self.spaces.exit_focus(id).is_ok() {
+            self.sync_space_visibility();
+            self.raise_and_focus(id);
+        }
+    }
+
+    /// The focus transition for the frame being drawn, or `None` when none
+    /// runs. Ends a transition whose time is up (removing the focus space of
+    /// a window that left focus).
+    pub(crate) fn focus_transition_frame(&mut self, now: Instant) -> Option<FocusFrame> {
+        let transition = self.focus_transition?;
+        let elapsed = now.saturating_duration_since(transition.start);
+        if elapsed >= SLIDE || self.windows.outer(transition.window).is_none() {
+            self.focus_transition = None;
+            if !transition.entering {
+                self.finish_focus_exit(transition.window);
+            }
+            return None;
+        }
+        let eased = cubic_bezier(
+            vow_design::SPACE_SLIDE_EASE,
+            elapsed.as_secs_f64() / SLIDE.as_secs_f64(),
+        );
+        let size = self.logical_output_size();
+        let full = Rectangle::new(Point::from((0, 0)), size);
+        let corner = f64::from(vow_design::WINDOW.corner_radius);
+        let (rect, radius) = if transition.entering {
+            (
+                lerp_rect(transition.desk, full, eased),
+                lerp(corner, 0.0, eased),
+            )
+        } else {
+            (
+                lerp_rect(full, transition.desk, eased),
+                lerp(0.0, corner, eased),
+            )
+        };
+        Some(FocusFrame {
+            window: transition.window,
+            rect,
+            radius,
+        })
+    }
+
+    /// The whole output as a scene rectangle.
+    fn output_scene_rect(&self) -> SceneRect<f64, SceneLogical> {
+        let size = self.logical_output_size();
+        SceneRect::new(
+            ScenePoint::new(0.0, 0.0),
+            SceneSize::new(f64::from(size.w), f64::from(size.h)),
+        )
+    }
+
     /// Where the row is right now, in spaces: the shown index when still,
     /// somewhere between two indices while sliding.
     pub(crate) fn space_position(&self, now: Instant) -> f64 {
@@ -95,6 +308,13 @@ impl State {
 
     /// Stops tracking a destroyed window. Its focus space, if any, goes away.
     pub(crate) fn space_window_removed(&mut self, id: WindowId) {
+        if self
+            .focus_transition
+            .is_some_and(|transition| transition.window == id)
+        {
+            self.focus_transition = None;
+        }
+        self.fullscreen.remove(&id);
         let before = self.spaces.current().id;
         self.spaces.remove_window(id);
         if self.spaces.current().id != before {
@@ -120,11 +340,17 @@ impl State {
 
     /// Shows the space to the right (Ctrl+Alt+→). The row does not wrap.
     pub(crate) fn next_space(&mut self) -> bool {
+        if self.focus_transition.is_some() {
+            return false;
+        }
         self.switch_space(self.spaces.current_index() + 1)
     }
 
     /// Shows the space to the left (Ctrl+Alt+←). The row does not wrap.
     pub(crate) fn previous_space(&mut self) -> bool {
+        if self.focus_transition.is_some() {
+            return false;
+        }
         match self.spaces.current_index() {
             0 => false,
             index => self.switch_space(index - 1),
@@ -184,6 +410,9 @@ impl State {
             self.windows.set_off_space(id, !self.spaces.is_shown(id));
         }
         let current = self.spaces.current();
+        // A focus space hides the bar and the dock, for drawing and input.
+        self.layers
+            .set_chrome_hidden(matches!(current.kind, SpaceKind::Focus { .. }));
         tracing::info!(
             index = self.spaces.current_index(),
             spaces = self.spaces.len(),
@@ -205,6 +434,18 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::cubic_bezier;
+
+    #[test]
+    fn rectangles_interpolate_from_one_to_the_other() {
+        use smithay::utils::{Point, Rectangle, Size};
+        let from = Rectangle::new(Point::from((100, 50)), Size::from((400, 300)));
+        let to = Rectangle::new(Point::from((0, 0)), Size::from((1280, 800)));
+        assert_eq!(super::lerp_rect(from, to, 0.0), from);
+        assert_eq!(super::lerp_rect(from, to, 1.0), to);
+        let half = super::lerp_rect(from, to, 0.5);
+        assert_eq!(half.loc, Point::from((50, 25)));
+        assert_eq!(half.size, Size::from((840, 550)));
+    }
 
     #[test]
     fn the_curve_starts_at_zero_and_ends_at_one() {

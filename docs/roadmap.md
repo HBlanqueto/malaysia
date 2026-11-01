@@ -11,10 +11,9 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   largos; la pantalla completa desde el menú Ventana sigue pendiente. 14d-1,
   14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
   y los menús de una app real.
-- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a y 17b hechos:
-  fila de espacios, `Ctrl+Alt+←/→` y `Ctrl+Alt+N`, y deslizamiento con
-  franja negra, barra por escritorio y dock fijo. Sigue el modo foco (17c); hasta entonces
-  `window.green_button = "focus"` solo registra la petición.
+- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a, 17b y 17c
+  hechos: fila de espacios, deslizamiento con franja negra y modo foco con el
+  botón verde. Sigue el borde superior en foco (17d).
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
@@ -246,8 +245,17 @@ Concepto y plan en el ADR 0051.
   frame y una segunda pulsación reorienta el deslizamiento desde donde está.
   `appearance.reduced_motion` lo quita. Prueba: `./dev.sh demo`, dos
   escritorios con ventanas y `Ctrl+Alt+←/→`.
-- **17c — Modo foco.** Espacio de foco, estado `fullscreen` y animación de
-  crecer y deslizar a la vez. Pendiente.
+- **17c — Modo foco. Hecho (2026-11-01), sin aceptar en sesión.** El
+  semáforo verde (`green_button = "focus"`), el verde propio de una app CSD,
+  F11 (`set_fullscreen`) y `Ctrl+Super+F` crean un espacio de foco a la
+  derecha del escritorio. La ventana recibe `fullscreen` y crece desde su
+  marco hasta la salida, con la esquina pasando de 16 a 0, mientras la fila se
+  desliza. La ventana se dibuja por encima del dock, que no se mueve hasta
+  quedar tapado. En el espacio de foco la barra y el dock no se dibujan ni
+  reciben clics, y el fondo es negro. Salir hace lo inverso y borra el espacio
+  al terminar; cerrar la ventana lo borra al instante. Durante la animación se
+  ignoran `Ctrl+Alt+←/→`. Prueba: `./dev.sh demo`, botón verde de una ventana
+  SSD, `Ctrl+Alt+←/→` entre el escritorio y el foco, y verde otra vez.
 - **17d — Borde superior.** Panel negro, titlebar SSD encima en apps ajenas y
   deslizamiento de 28 px en barrierkit y libadwaita. Pendiente.
 - **17e — Infinity.** Espacio actual para la shell y aviso de foco para
