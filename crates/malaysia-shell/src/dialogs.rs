@@ -13,14 +13,15 @@ use std::rc::Rc;
 use barrier_kit::controls::Button;
 use barrier_kit::platform::{Decorations, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
-use barrier_kit::titlebar::Titlebar;
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
-use vow_design::{CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, Rgba, TEXT, TITLE_1};
+use vow_design::{
+    CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, Rgba, TEXT, TITLE_1, TITLEBAR,
+};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
@@ -30,8 +31,9 @@ use crate::power::{self, PowerAction};
 /// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (380, 160);
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-/// macOS «Acerca de este Mac» measures 280×430.
-const ABOUT_SIZE: (u32, u32) = (280, 430);
+/// macOS «Acerca de este Mac» measures 280×430 with its titlebar; the
+/// compositor adds its own, so the client area is that much shorter.
+const ABOUT_SIZE: (u32, u32) = (280, 430 - TITLEBAR.thickness);
 /// The laptop drawing keeps the SVG's 1024×680 aspect.
 const ABOUT_DRAWING: (f32, f32) = (130.0, 86.0);
 const ABOUT_COLUMN_GAP: f32 = 8.0;
@@ -520,13 +522,15 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        about_view(&self.info, Titlebar::new().on_close(|()| close()))
+        about_view(&self.info, *Platform::get().is_app_focused.read())
     }
 }
 
-/// The window content; the titlebar is a parameter so tests can pass a
-/// preview one that needs no Wayland window.
-fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> {
+/// The window content. The compositor draws the titlebar (same height as every
+/// server-side window) and there is no divider, so the whole window takes the
+/// titlebar colour: `surfaces.window` with focus, `surfaces.sunken` without,
+/// exactly as `ChromeTheme` paints the bar.
+fn about_view(info: &AboutInfo, focused: bool) -> impl IntoElement + use<> {
     {
         let resolved = barrier_kit::theme::resolved();
         let palette = vow_appearance::palette(resolved.scheme);
@@ -570,20 +574,23 @@ fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> 
         rect()
             .width(Size::fill())
             .height(Size::fill())
-            .background(rgba(resolved.surfaces.window))
+            .background(rgba(if focused {
+                resolved.surfaces.window
+            } else {
+                resolved.surfaces.sunken
+            }))
             .direction(Direction::Vertical)
             .on_global_key_down(|event: Event<KeyboardEventData>| {
                 if matches!(event.key, Key::Named(NamedKey::Escape)) {
                     close();
                 }
             })
-            .child(titlebar)
             .child(
                 rect()
                     .width(Size::fill())
                     .height(Size::flex(1.0))
                     .padding(Gaps::new(
-                        0.0,
+                        DIALOG_PADDING,
                         DIALOG_PADDING / 2.0,
                         DIALOG_PADDING,
                         DIALOG_PADDING / 2.0,
@@ -638,8 +645,10 @@ pub fn run_about() -> anyhow::Result<()> {
     tracing::info!(?info, "about this computer");
     run_window(
         AppComponent::new(AboutApp { info }),
-        WindowOptions::new("Acerca de este equipo", "about")
-            .decorations(Decorations::Client)
+        // An empty title like macOS; the compositor's titlebar keeps the
+        // traffic lights and the height of every other window.
+        WindowOptions::new("", "about")
+            .decorations(Decorations::Server)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
             .max_size(Some(ABOUT_SIZE)),
@@ -739,21 +748,14 @@ mod tests {
 #[cfg(test)]
 mod render_tests {
     use super::*;
-    use barrier_kit::platform::{DecorationResponse, WindowStatus};
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
 
-    struct Preview(AboutInfo);
+    struct Preview(AboutInfo, bool);
 
     impl App for Preview {
         fn render(&self) -> impl IntoElement {
-            let status = WindowStatus {
-                activated: true,
-                maximized: false,
-                decoration: DecorationResponse::Client,
-                fixed: true,
-            };
-            about_view(&self.0, Titlebar::preview(status, "", true))
+            about_view(&self.0, self.1)
         }
     }
 
@@ -767,8 +769,12 @@ mod render_tests {
                 ..AboutInfo::default()
             };
             let size = Size2D::new(ABOUT_SIZE.0 as f32, ABOUT_SIZE.1 as f32);
-            let (mut test, _) =
-                TestingRunner::new(AppComponent::new(Preview(info)), size, |_| {}, 1.0);
+            let (mut test, _) = TestingRunner::new(
+                AppComponent::new(Preview(info, thinkpad)),
+                size,
+                |_| {},
+                1.0,
+            );
             test.sync_and_update();
             assert!(!test.render().as_ref().is_empty());
         }
