@@ -8,14 +8,14 @@
 Description=MalaysiaDreams Vulkan wallpaper client
 PartOf=malaysia-session.target
 After=malaysia-session.target
+StartLimitBurst=10
+StartLimitIntervalSec=30
 
 [Service]
 Type=simple
 ExecStart=@out@/bin/malaysia-wallpaper
 Restart=on-failure
 RestartSec=2
-StartLimitBurst=10
-StartLimitIntervalSec=30
 
 [Install]
 WantedBy=malaysia-session.target

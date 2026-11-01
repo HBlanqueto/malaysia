@@ -92,6 +92,11 @@ in
       session include login
     '';
 
+    # The package already ships the per-component units in
+    # $out/lib/systemd/user with @out@ substituted. Install them system-wide
+    # and let the target pull in the configured subset.
+    systemd.packages = [ cfg.package ];
+
     systemd.user.targets.malaysia-session = {
       description = "MalaysiaDreams shell session";
       wants =
@@ -101,17 +106,5 @@ in
         # with the session instead of waiting for the first app to activate it.
         ++ [ "xdg-desktop-portal-malaysia.service" ];
     };
-
-    systemd.user.units."malaysia-shell@.service".text =
-      builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
-        (builtins.readFile "${../share/systemd/user}/malaysia-shell@.service");
-
-    systemd.user.units."xdg-desktop-portal-malaysia.service".text =
-      builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
-        (builtins.readFile "${../share/systemd/user}/xdg-desktop-portal-malaysia.service");
-
-    systemd.user.units."malaysia-wallpaper.service".text =
-      builtins.replaceStrings [ "@out@" ] [ "${cfg.package}" ]
-        (builtins.readFile "${../share/systemd/user}/malaysia-wallpaper.service");
   };
 }
