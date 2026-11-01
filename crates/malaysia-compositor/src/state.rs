@@ -737,6 +737,21 @@ impl State {
     /// Applies the configured titlebar double-click action to `id`. Shared by
     /// pointer input and GTK's `titlebar_gesture(double_click)`.
     pub(crate) fn apply_titlebar_double_click(&mut self, id: WindowId) {
+        // Zooming is maximizing, and with the green light set to focus,
+        // maximizing is focus mode, the same as a client's set_maximized
+        // (ADR 0051). Fixed-width windows still stretch vertically.
+        let zooms = matches!(
+            self.config.window.double_click_titlebar,
+            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill
+        );
+        if zooms
+            && (self.in_focus_mode(id)
+                || (self.config.window.green_button == crate::config::GreenButtonAction::Focus
+                    && !self.has_fixed_width(id)))
+        {
+            self.toggle_focus_mode(id);
+            return;
+        }
         match self.config.window.double_click_titlebar {
             crate::config::DoubleClickAction::Zoom => {
                 if self.windows.zoom_supported(id) {

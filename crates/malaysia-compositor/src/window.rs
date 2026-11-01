@@ -567,9 +567,19 @@ impl Windows {
         // was configured (a terminal's cell grid, a client that ignored a
         // resize). Follow the committed geometry so placement, rendering and
         // hit-testing all stay on what the client actually drew.
+        //
+        // Only while the compositor also wants it normal: the committed state
+        // lags behind. A client that commits one more frame at its old size
+        // before acking a fullscreen or maximized configure (GTK closing the
+        // popover whose item asked for fullscreen) would otherwise have that
+        // old size adopted and sent back as the fullscreen size (ADR 0051).
         let should_resize = {
             let data = &self.windows[index];
-            if !data.mapped || data.state() != WindowState::Normal {
+            if !data.mapped
+                || data.fullscreen
+                || data.maximized
+                || data.state() != WindowState::Normal
+            {
                 None
             } else {
                 let insets = data.insets(self.decoration_of(data.id));
