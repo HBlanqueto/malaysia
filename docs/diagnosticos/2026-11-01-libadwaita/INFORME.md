@@ -332,5 +332,20 @@ En `capturas/` (también en `/tmp/malaysia-diag/capturas/`):
   libadwaita (y el título en negrita) salía de `active_app`, que puede ir por
   detrás al cambiar el foco; el menú no se plegaba en el título. Ahora ambos
   salen de la misma ventana.
-- Pendiente de confirmar en sesión: la barra que cae al menú de escritorio
-  al bajarla en modo foco (no se reprodujo en la ejecución final).
+- **Salida del foco ampliada y borrosa:** la app recibía el «ya no eres
+  pantalla completa» al empezar la animación, redibujaba pequeña y esa imagen
+  se estiraba al rectángulo grande. Ahora sigue en pantalla completa mientras
+  se encoge (su imagen solo se reduce) y se la suelta al final; el compositor
+  mantiene la imagen en su sitio hasta que llega el frame pequeño (300 ms
+  máx., log `focus exit handed over`). La animación usa el rectángulo del
+  contenido guardado al entrar.
+- **Barra que cae al menú de escritorio en foco:** causa probable encontrada.
+  En cada commit, si la ventana activa «no era visible» se borraba la ventana
+  activa, y «visible» incluía que la geometría cupiera en el buffer: el frame
+  transitorio de GTK al pasar a pantalla completa dejaba el escritorio sin
+  ventana activa. Ahora solo se quita el foco a una ventana desmapeada,
+  oculta, minimizada o sin buffer. Si vuelve a pasar, el log dice desde dónde:
+  `active window cleared` (compositor, con `origin`) y
+  `menubar: no active window, Escritorio menu` (barra).
+- **`surface missing from known popups`:** lo registra Smithay, no Malaysia;
+  es inofensivo. Detalle en `docs/deuda.md` (S-01).

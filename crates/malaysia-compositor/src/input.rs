@@ -1686,8 +1686,22 @@ impl State {
     }
 
     /// Drops keyboard focus and clears the active window.
+    ///
+    /// The caller is logged: a bar that falls back to the Escritorio menu
+    /// means the active window was cleared, and this says from where.
+    #[track_caller]
     pub(crate) fn clear_keyboard_focus(&mut self) {
+        let location = std::panic::Location::caller();
         let previous = self.active_window.clear();
+        if previous.is_some() {
+            tracing::info!(
+                previous = previous.map(|id| id.get()),
+                origin = format!("{}:{}", location.file(), location.line()),
+                space = self.spaces.current_index(),
+                bar_revealed = self.focus_reveal.is_shown(),
+                "active window cleared"
+            );
+        }
         let serial = SERIAL_COUNTER.next_serial();
         if let Some(keyboard) = self.seat.get_keyboard() {
             keyboard.set_focus(self, None, serial);

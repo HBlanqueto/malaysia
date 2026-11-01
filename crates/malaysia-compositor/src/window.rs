@@ -868,6 +868,20 @@ impl Windows {
         })
     }
 
+    /// Whether the window is on screen in the lasting sense: mapped, not
+    /// hidden or minimized, with a buffer. Unlike [`Windows::is_visible`] it
+    /// ignores a single commit whose geometry does not fit its buffer or that
+    /// carries no damage yet, so focus does not flicker away on one.
+    pub fn is_presented(&self, id: WindowId, minimized: &HashSet<WindowId>) -> bool {
+        self.index(id).is_some_and(|index| {
+            let data = &self.windows[index];
+            data.mapped
+                && !data.is_hidden()
+                && !minimized.contains(&id)
+                && surface_has_buffer(data.toplevel.wl_surface())
+        })
+    }
+
     /// The tracked windows that are currently visible, back to front.
     pub fn iter_visible<'a>(
         &'a self,
@@ -1148,7 +1162,13 @@ impl Windows {
         };
         let state_changed = self.windows[index].fullscreen != fullscreen;
         self.windows[index].fullscreen = fullscreen;
-        self.scene.set_outer(id, outer);
+        // A window hidden on another space keeps its rectangle for when it is
+        // shown again; writing the scene would make it hittable while hidden.
+        if self.windows[index].is_hidden() {
+            self.windows[index].hidden_rect = Some(outer);
+        } else {
+            self.scene.set_outer(id, outer);
+        }
         self.windows[index].outer_size = Size::from((round(outer.width()), round(outer.height())));
         self.send_configure(index);
         state_changed

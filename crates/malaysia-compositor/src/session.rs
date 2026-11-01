@@ -1090,22 +1090,12 @@ pub(crate) fn build_output_elements(
     elements
 }
 
-/// The visible frame of a window in output coordinates: the client's window
-/// geometry for CSD windows and dialogs, the decorated rectangle for SSD.
-pub(crate) fn window_frame_rect(window: &crate::window::Window<'_>) -> Rectangle<i32, Logical> {
-    if window.is_client_decorated() || matches!(window.role(), crate::decoration::Role::Dialog) {
-        let geometry = window.window_geometry();
-        let origin = window.location() + window.surface_location() + geometry.loc;
-        Rectangle::new(origin, geometry.size)
-    } else {
-        ssd_frame_rect(
-            window.location(),
-            window.size(),
-            window.window_geometry(),
-            window.insets(),
-            window.is_resizing(),
-        )
-    }
+/// The client's content (its window geometry) in output coordinates, without
+/// the SSD bar. Focus mode animates this rectangle (ADR 0051).
+pub(crate) fn window_content_rect(window: &crate::window::Window<'_>) -> Rectangle<i32, Logical> {
+    let geometry = window.window_geometry();
+    let origin = window.location() + window.surface_location() + geometry.loc;
+    Rectangle::new(origin, geometry.size)
 }
 
 /// Draws the titlebar of a server-decorated focus window with its top at `y`,

@@ -322,6 +322,9 @@ pub struct State {
     pub(crate) arranged: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows in fullscreen, with the rectangle to restore.
     pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
+    /// Where each focus-mode window's content sat on its desktop, to shrink
+    /// back to it (ADR 0051).
+    pub(crate) focus_desk: HashMap<WindowId, Rectangle<i32, Logical>>,
     /// Active `infinity_window_manager_v1` instances, for broadcasting events.
     pub(crate) infinity_managers: Vec<InfinityWindowManagerV1>,
     /// The `infinity_window_manager_v1` global id (kept alive for the session).
@@ -628,6 +631,7 @@ impl State {
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),
+            focus_desk: HashMap::new(),
             infinity_managers: Vec::new(),
             dock_rectangle: None,
             config,

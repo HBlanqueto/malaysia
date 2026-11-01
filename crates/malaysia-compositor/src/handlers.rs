@@ -191,9 +191,13 @@ impl CompositorHandler for State {
             self.inject_test_press(mapped);
             self.inject_test_screenshot();
         }
+        // Only a window that really went away loses the focus: unmapped,
+        // hidden, minimized or without a buffer. A transient commit whose
+        // geometry does not fit its buffer (GTK going fullscreen) must not
+        // clear the active window, or the bar falls back to Escritorio.
         if let Some(id) = self.windows.id_of(surface)
             && self.focused_window() == Some(id)
-            && !self.windows.is_visible(id, &self.minimized)
+            && !self.windows.is_presented(id, &self.minimized)
         {
             self.clear_keyboard_focus();
         }

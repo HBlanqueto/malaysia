@@ -86,6 +86,10 @@ pub(crate) struct FocusTransition {
     /// Growing into focus (`true`) or shrinking back (`false`).
     entering: bool,
     start: Instant,
+    /// When leaving: when the client was told it is no longer fullscreen,
+    /// at the end of the shrink. Until then it keeps its full-size buffer,
+    /// which is only ever scaled down, never blown up.
+    released: Option<Instant>,
 }
 
 /// One frame of a [`FocusTransition`]: where the window is drawn and with
@@ -341,7 +345,7 @@ impl State {
             .windows
             .iter_visible(&self.minimized)
             .find(|window| window.id() == id)
-            .map(|window| crate::session::window_frame_rect(&window))
+            .map(|window| crate::session::window_content_rect(&window))
         else {
             return;
         };
@@ -358,6 +362,7 @@ impl State {
         // Fullscreen first, while the window is still shown: its scene
         // rectangle becomes the output and the client is configured.
         self.fullscreen.insert(id, outer);
+        self.focus_desk.insert(id, desk);
         let full = self.output_scene_rect();
         self.windows.set_fullscreen_with_outer(id, true, full);
         self.foreign_state_changed(id);
@@ -368,6 +373,7 @@ impl State {
             desk,
             entering: true,
             start: Instant::now(),
+            released: None,
         });
         self.raise_and_focus(id);
     }
@@ -388,18 +394,10 @@ impl State {
         self.show_space_of(id);
         self.space_slide = None;
         self.reset_focus_reveal();
-        let saved = self
-            .fullscreen
-            .remove(&id)
-            .or_else(|| self.windows.outer(id))
-            .unwrap_or_else(|| self.output_scene_rect());
-        self.windows.set_fullscreen_with_outer(id, false, saved);
-        self.foreign_state_changed(id);
-        let desk = self
-            .windows
-            .iter_visible(&self.minimized)
-            .find(|window| window.id() == id)
-            .map(|window| crate::session::window_frame_rect(&window));
+        // The window stays fullscreen while it shrinks: its full-size buffer
+        // is scaled down onto the animated rectangle (sharp, like macOS). It
+        // is told to leave fullscreen at the end (`release_focus_window`).
+        let desk = self.focus_desk.get(&id).copied();
         tracing::info!(window = id.get(), "focus mode left");
         let home_index = self
             .spaces
@@ -413,15 +411,32 @@ impl State {
                     desk,
                     entering: false,
                     start: Instant::now(),
+                    released: None,
                 });
             }
-            _ => self.finish_focus_exit(id),
+            _ => {
+                self.release_focus_window(id);
+                self.finish_focus_exit(id);
+            }
         }
+    }
+
+    /// Tells a window leaving focus mode that it is no longer fullscreen and
+    /// gives it back its desktop rectangle.
+    fn release_focus_window(&mut self, id: WindowId) {
+        let saved = self
+            .fullscreen
+            .remove(&id)
+            .or_else(|| self.windows.outer(id))
+            .unwrap_or_else(|| self.output_scene_rect());
+        self.windows.set_fullscreen_with_outer(id, false, saved);
+        self.foreign_state_changed(id);
     }
 
     /// Removes the focus space after the shrink and shows the window on its
     /// desktop again.
     fn finish_focus_exit(&mut self, id: WindowId) {
+        self.focus_desk.remove(&id);
         if self.spaces.exit_focus(id).is_ok() {
             self.sync_space_visibility();
             self.raise_and_focus(id);
@@ -453,6 +468,39 @@ impl State {
                 radius: 0.0,
             });
         }
+        if !transition.entering && committed.is_some() && elapsed >= SLIDE {
+            // The shrink is done: release the window, then hold it on its
+            // desktop rectangle until it commits a buffer that is no longer
+            // the output size (or the wait runs out).
+            let released = match transition.released {
+                Some(released) => released,
+                None => {
+                    self.release_focus_window(transition.window);
+                    self.focus_transition = Some(FocusTransition {
+                        released: Some(now),
+                        ..transition
+                    });
+                    now
+                }
+            };
+            let caught_up = committed.is_some_and(|committed| committed != size);
+            if !caught_up && now.saturating_duration_since(released) < HANDOVER_WAIT {
+                return Some(FocusFrame {
+                    window: transition.window,
+                    rect: transition.desk,
+                    radius: f64::from(vow_design::WINDOW.corner_radius),
+                });
+            }
+            tracing::info!(
+                window = transition.window.get(),
+                ?committed,
+                late_ms = now.saturating_duration_since(released).as_millis() as u64,
+                "focus exit handed over"
+            );
+            self.focus_transition = None;
+            self.finish_focus_exit(transition.window);
+            return None;
+        }
         if elapsed >= SLIDE || committed.is_none() {
             if transition.entering {
                 tracing::info!(
@@ -465,6 +513,7 @@ impl State {
             }
             self.focus_transition = None;
             if !transition.entering {
+                self.release_focus_window(transition.window);
                 self.finish_focus_exit(transition.window);
             }
             return None;
@@ -551,6 +600,7 @@ impl State {
             self.focus_transition = None;
         }
         self.fullscreen.remove(&id);
+        self.focus_desk.remove(&id);
         let before = self.spaces.current().id;
         self.spaces.remove_window(id);
         if self.spaces.current().id != before {

@@ -350,7 +350,18 @@ impl App for BarApp {
                         tracing::info!(app_id = %key.app_id, "menubar: app_menu none");
                         self.dbus.unfocus();
                     }
-                    None => self.dbus.unfocus(),
+                    None => {
+                        // The bar falls back to the Escritorio menu. Logged
+                        // with what the bar knew, to tell a cleared active
+                        // window from a toplevel list that lags behind.
+                        tracing::info!(
+                            active_app = ?app_id,
+                            toplevels = toplevels.len(),
+                            active = toplevels.iter().filter(|window| window.active).count(),
+                            "menubar: no active window, Escritorio menu"
+                        );
+                        self.dbus.unfocus();
+                    }
                 }
                 *last = key;
             }
