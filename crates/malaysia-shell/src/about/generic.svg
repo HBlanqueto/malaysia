@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="680" viewBox="0 0 1024 680">
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="564" viewBox="92 52 840 564">
   <!-- The ground shadow is a plain translucent ellipse: Skia's SVG module drops
        stop-opacity in radial gradients (solid black) and ignores feGaussianBlur. -->
   <defs>

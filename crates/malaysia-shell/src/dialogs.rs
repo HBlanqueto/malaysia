@@ -41,8 +41,9 @@ const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 /// footer 20 px above the bottom edge.
 const ABOUT_SIZE: (u32, u32) = (335, 550);
 const ABOUT_DRAWING_TOP: f32 = 75.0;
-/// The 175×125 box, keeping the SVG's 1024×680 aspect.
-const ABOUT_DRAWING: (f32, f32) = (175.0, 116.0);
+/// The laptop fills the 175×125 box: the SVGs' viewBox is cropped to the
+/// drawing (840×564), so no empty canvas shrinks it.
+const ABOUT_DRAWING: (f32, f32) = (175.0, 118.0);
 const ABOUT_DRAWING_BOX_HEIGHT: f32 = 125.0;
 const ABOUT_GAP: f32 = 20.0;
 const ABOUT_LABEL_WIDTH: f32 = 120.0;
