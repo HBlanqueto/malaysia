@@ -25,6 +25,9 @@ use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, note_call, timed};
 
 pub const MENUS_INTERFACE: &str = "org.gtk.Menus";
 pub const ACTIONS_INTERFACE: &str = "org.gtk.Actions";
+/// Menubar attribute of the libadwaita fork (ADR 0052): the submenu is the
+/// window's primary menu and belongs under the app title.
+const ADW_APP_MENU: &str = "x-adw-app-menu";
 
 type Attributes = HashMap<String, OwnedValue>;
 /// `(group, menu, items)`, the reply of `Start`.
@@ -200,6 +203,7 @@ impl Tree {
     pub fn build(app_menu: &Export, menubar: &Export, actions: &Actions, app_name: &str) -> Self {
         let mut builder = Builder {
             actions,
+            app_name,
             next_id: 1,
             targets: HashMap::new(),
         };
@@ -241,6 +245,7 @@ fn find(items: &[RawItem], id: i32) -> Option<&RawItem> {
 
 struct Builder<'a> {
     actions: &'a Actions,
+    app_name: &'a str,
     next_id: i32,
     targets: HashMap<i32, Target>,
 }
@@ -263,8 +268,18 @@ impl Builder<'_> {
                 out.push(separator(self.id()));
                 continue;
             }
-            let label = string(attributes, "label").unwrap_or_default();
+            let mut label = string(attributes, "label").unwrap_or_default();
             if let Some((group, menu)) = attributes.get(":submenu").and_then(link) {
+                // libadwaita exports its primary (☰) menu as a submenu marked
+                // `x-adw-app-menu`; naming it after the app folds it into the
+                // bold title even when `g_get_application_name` differs.
+                if attributes
+                    .get(ADW_APP_MENU)
+                    .and_then(|value| bool::try_from(value.clone()).ok())
+                    .unwrap_or(false)
+                {
+                    label = self.app_name.to_string();
+                }
                 let id = self.id();
                 let children = self.menu(export, group, menu);
                 out.push(RawItem {
@@ -854,6 +869,38 @@ mod tests {
             items[1].label().map(strip_mnemonic).as_deref(),
             Some("Preferences")
         );
+    }
+
+    #[test]
+    fn the_libadwaita_primary_menu_takes_the_app_name() {
+        let mut menubar = Export::new("/org/gnome/Demo/menus/menubar");
+        menubar.started(
+            &[0, 1],
+            vec![
+                (
+                    0,
+                    0,
+                    vec![attrs(&[
+                        ("label", text("demo-binary")),
+                        (ADW_APP_MENU, OwnedValue::from(true)),
+                        (":submenu", pair(1, 0)),
+                    ])],
+                ),
+                (
+                    1,
+                    0,
+                    vec![attrs(&[
+                        ("label", text("_About")),
+                        ("action", text("app.about")),
+                    ])],
+                ),
+            ],
+        );
+        let actions = actions(&[("app.about", true, None)]);
+        let tree = Tree::build(&Export::new(""), &menubar, &actions, "Demo");
+        let items = menu_items(&tree.items);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].label(), Some("Demo"));
     }
 
     #[test]

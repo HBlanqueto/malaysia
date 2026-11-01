@@ -203,6 +203,10 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
 - «Ajustes del sistema…» del menú ❄ no abre el cliente con
   `MALAYSIA_TEST_INPUT` en la sesión anidada.
 - Aceptación en DRM de 14a, 14b-1 y 14c.
+- 14f-3 (libadwaita, ADR 0052): el fork `HBlanqueto/libadwaita` publica el
+  menú ☰ como menubar con `x-adw-app-menu` y la barra lo pliega en el título
+  de la app. Falta el overlay de Nix con el fork y aceptarlo con una app
+  libadwaita real.
 
 **Fuera del bloque (anotado):** HUD en el launcher, menú de atajos por app y
 casado por pid del Registrar (XWayland).
