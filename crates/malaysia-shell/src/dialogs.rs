@@ -11,10 +11,11 @@ use std::path::Path;
 use std::rc::Rc;
 
 use barrier_kit::controls::Button;
-use barrier_kit::platform::{Decorations, WindowControls, WindowOptions, run_window};
+use barrier_kit::platform::{Decorations, Timers, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use barrier_kit::titlebar::window_drag_handler;
 use barrier_kit::traffic::TrafficLights;
+use freya_components::button::ButtonLayoutThemePartialExt;
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
@@ -31,7 +32,8 @@ use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
 
 /// Dialog surfaces, in logical px. The panel fills the layer.
-const CONFIRM_SIZE: (u32, u32) = (380, 160);
+const CONFIRM_SIZE: (u32, u32) = (280, 250);
+const CONFIRM_BUTTON_GAP: f32 = 10.0;
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 /// «Acerca de este equipo» takes its measurements from eqsh's About window
 /// (eq-desktop/eqsh, `About.qml`, Apache-2.0; only the numbers, no code):
@@ -130,52 +132,171 @@ fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) 
         )
 }
 
-/// What a confirmation shows for each action.
-fn confirm_text(action: PowerAction) -> (&'static str, &'static str, &'static str) {
+const POWER_ICON_SIZE: f32 = 64.0;
+const POWER_GLYPH_SIZE: f32 = 34.0;
+const COUNTDOWN_SECONDS: u32 = 60;
+
+const POWER_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M10.2 8.6a10 10 0 1 0 11.6 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M16 4.5v11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>";
+const RESTART_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M25.5 16A9.5 9.5 0 1 1 22.7 9.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M23.6 3.8v6.4h-6.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
+const LOGOUT_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><circle cx=\"16\" cy=\"11\" r=\"5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\"/><path d=\"M6.5 26.5a9.5 9.5 0 0 1 19 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>";
+const SLEEP_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M20.5 5.5a11 11 0 1 0 6 14.5 9 9 0 0 1-6-14.5z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linejoin=\"round\"/></svg>";
+
+struct ConfirmText {
+    question: &'static str,
+    outcome: &'static str,
+    button: &'static str,
+    glyph: &'static str,
+}
+
+fn confirm_text(action: PowerAction) -> ConfirmText {
     match action {
-        PowerAction::Restart => (
-            "¿Seguro que quieres reiniciar el equipo ahora?",
-            "Las apps abiertas se cerrarán.",
-            "Reiniciar",
-        ),
-        PowerAction::ShutDown => (
-            "¿Seguro que quieres apagar el equipo ahora?",
-            "Las apps abiertas se cerrarán.",
-            "Apagar",
-        ),
-        PowerAction::LogOut => (
-            "¿Seguro que quieres cerrar la sesión?",
-            "Las apps abiertas se cerrarán.",
-            "Cerrar sesión",
-        ),
-        PowerAction::Suspend => ("¿Suspender el equipo?", "", "Suspender"),
+        PowerAction::Restart => ConfirmText {
+            question: "¿Quieres reiniciar el equipo?",
+            outcome: "el equipo se reiniciará",
+            button: "Reiniciar",
+            glyph: RESTART_SVG,
+        },
+        PowerAction::ShutDown => ConfirmText {
+            question: "¿Quieres apagar el equipo?",
+            outcome: "el equipo se apagará",
+            button: "Apagar",
+            glyph: POWER_SVG,
+        },
+        PowerAction::LogOut => ConfirmText {
+            question: "¿Seguro que quieres salir de todas las apps y cerrar la sesión?",
+            outcome: "la sesión se cerrará",
+            button: "Cerrar sesión",
+            glyph: LOGOUT_SVG,
+        },
+        PowerAction::Suspend => ConfirmText {
+            question: "¿Quieres suspender el equipo?",
+            outcome: "el equipo se suspenderá",
+            button: "Suspender",
+            glyph: SLEEP_SVG,
+        },
     }
+}
+
+fn countdown_text(outcome: &str, seconds: u32) -> String {
+    let unit = if seconds == 1 { "segundo" } else { "segundos" };
+    format!("Si no haces nada, {outcome} automáticamente dentro de {seconds} {unit}.")
+}
+
+fn schedule_tick(timers: Timers, remaining: State<u32>, action: PowerAction) {
+    let next = timers.clone();
+    timers.after(std::time::Duration::from_secs(1), move || {
+        let mut remaining = remaining;
+        let left = remaining.peek().saturating_sub(1);
+        remaining.set(left);
+        if left == 0 {
+            power::run(action);
+            close();
+        } else {
+            schedule_tick(next.clone(), remaining, action);
+        }
+    });
+}
+
+fn power_badge(glyph: &'static str) -> Rect {
+    let resolved = barrier_kit::theme::resolved();
+    let palette = vow_appearance::palette(resolved.scheme);
+    let mut disc = palette.text.unfocused;
+    disc.a = 0.55;
+    rect()
+        .width(Size::px(POWER_ICON_SIZE))
+        .height(Size::px(POWER_ICON_SIZE))
+        .corner_radius(POWER_ICON_SIZE / 2.0)
+        .background(rgba(disc))
+        .main_align(Alignment::Center)
+        .cross_align(Alignment::Center)
+        .child(
+            SvgViewer::new(bytes::Bytes::from_static(glyph.as_bytes()))
+                .width(Size::px(POWER_GLYPH_SIZE))
+                .height(Size::px(POWER_GLYPH_SIZE))
+                .color(Color::WHITE)
+                .show_loader(false),
+        )
+}
+
+fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> Rect {
+    rect()
+        .width(Size::fill())
+        .height(Size::auto())
+        .direction(Direction::Horizontal)
+        .content(Content::Flex)
+        .spacing(CONFIRM_BUTTON_GAP)
+        .child(
+            Button::new()
+                .width(Size::flex(1.0))
+                .padding(Gaps::new(6.0, 8.0, 6.0, 8.0))
+                .on_press(|_| close())
+                .child(label().text("Cancelar").max_lines(1)),
+        )
+        .child(
+            Button::new()
+                .filled()
+                .width(Size::flex(1.0))
+                .padding(Gaps::new(6.0, 8.0, 6.0, 8.0))
+                .on_press(move |_| on_default())
+                .child(label().text(default_label.to_string()).max_lines(1)),
+        )
 }
 
 struct ConfirmApp {
     action: PowerAction,
+    remaining: State<u32>,
 }
 
 impl App for ConfirmApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
         let action = self.action;
-        let confirm = move || {
-            power::run(action);
-            close();
-        };
-        let (question, detail, button) = confirm_text(action);
-        panel()
-            .on_global_key_down(move |event: Event<KeyboardEventData>| match event.key {
-                Key::Named(NamedKey::Escape) => close(),
-                Key::Named(NamedKey::Enter) => confirm(),
-                _ => {}
-            })
-            .child(title(question))
-            .child(body(detail))
-            .child(rect().width(Size::fill()).height(Size::flex(1.0)))
-            .child(buttons(button, confirm, true))
+        let remaining = self.remaining;
+        let timers = Timers::get();
+        use_hook(move || schedule_tick(timers, remaining, action));
+        confirm_view(action, *remaining.read())
     }
+}
+
+fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
+    let confirm = move || {
+        power::run(action);
+        close();
+    };
+    let text = confirm_text(action);
+    let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
+    panel()
+        .spacing(0.0)
+        .content(Content::Flex)
+        .on_global_key_down(move |event: Event<KeyboardEventData>| match event.key {
+            Key::Named(NamedKey::Escape) => close(),
+            Key::Named(NamedKey::Enter) => confirm(),
+            _ => {}
+        })
+        .child(power_badge(text.glyph))
+        .child(
+            label()
+                .width(Size::fill())
+                .padding(Gaps::new(14.0, 0.0, 8.0, 0.0))
+                .text(text.question)
+                .font_size(TEXT.size as f32)
+                .font_weight(FontWeight::BOLD)
+                .color(rgba(palette.text.focused)),
+        )
+        .child(
+            label()
+                .width(Size::fill())
+                .text(countdown_text(text.outcome, seconds))
+                .font_size(CALLOUT.size as f32)
+                .color(rgba(palette.text.focused)),
+        )
+        .child(
+            rect()
+                .width(Size::fill())
+                .height(Size::flex(1.0))
+                .min_height(Size::px(18.0)),
+        )
+        .child(wide_buttons(text.button, confirm))
 }
 
 /// `malaysia-shell power <restart|shutdown|logout>`.
@@ -184,7 +305,10 @@ pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
         .and_then(PowerAction::from_arg)
         .ok_or_else(|| anyhow::anyhow!("usage: malaysia-shell power <restart|shutdown|logout>"))?;
     run_layer(
-        AppComponent::new(ConfirmApp { action }),
+        AppComponent::new(ConfirmApp {
+            action,
+            remaining: State::create_global(COUNTDOWN_SECONDS),
+        }),
         spec("malaysia-dialog", CONFIRM_SIZE),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
@@ -695,7 +819,7 @@ pub fn run_about() -> anyhow::Result<()> {
     tracing::info!(?info, "about this computer");
     run_window(
         AppComponent::new(AboutApp { info }),
-        WindowOptions::new("Acerca de este equipo", "about")
+        WindowOptions::new("Acerca de este PC", "about")
             .decorations(Decorations::Client)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
@@ -787,10 +911,19 @@ mod tests {
             PowerAction::ShutDown,
             PowerAction::LogOut,
         ] {
-            let (question, _, button) = confirm_text(action);
-            assert!(question.ends_with('?'));
-            assert!(!button.is_empty());
+            let text = confirm_text(action);
+            assert!(text.question.starts_with('¿') && text.question.ends_with('?'));
+            assert!(!text.button.is_empty());
         }
+    }
+
+    #[test]
+    fn the_countdown_reads_like_macos() {
+        assert_eq!(
+            countdown_text(confirm_text(PowerAction::ShutDown).outcome, 53),
+            "Si no haces nada, el equipo se apagará automáticamente dentro de 53 segundos."
+        );
+        assert!(countdown_text("x", 1).ends_with("1 segundo."));
     }
 }
 #[cfg(test)]

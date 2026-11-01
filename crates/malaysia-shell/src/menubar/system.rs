@@ -1,51 +1,112 @@
 //! The system menu title (snowflake) on the far left of the menubar.
 
-use barrier_kit::menu::{CheckState, MenuItem};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
-use crate::menubar::{spawn_app, spawn_component, spawn_component_with};
+use crate::desktop::DesktopEntry;
+use crate::menubar::{icons, recents, spawn_app, spawn_component, spawn_component_with, xdg_open};
 use crate::power::{self, PowerAction};
 
 const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
 
-/// The snowflake drawn as the system-menu title.
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
-/// Items for the system menu.
-pub fn system_menu_items() -> Vec<MenuItem> {
+pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
+    let mut items = base_items(&logout_label(user_display_name().as_deref()));
+    if let Some(MenuItem::Submenu { items: recent, .. }) = items
+        .iter_mut()
+        .find(|item| matches!(item, MenuItem::Submenu { .. }))
+    {
+        *recent = recents::menu_items(entries);
+    }
+    items
+}
+
+fn base_items(logout: &str) -> Vec<MenuItem> {
     vec![
-        action("about-this-computer", "Acerca de este equipo", None, true),
-        action("system-settings", "Ajustes del sistema…", None, true),
-        MenuItem::Separator,
         action(
-            "force-quit",
-            "Forzar salida…",
-            Some("Alt+Super+Escape"),
-            true,
+            "about-this-computer",
+            "Acerca de este PC",
+            None,
+            Some(icons::LAPTOP),
+        ),
+        action(
+            "system-settings",
+            "Ajustes del sistema…",
+            None,
+            Some(icons::GEAR),
         ),
         MenuItem::Separator,
-        action("sleep", "Suspender", None, true),
-        action("restart", "Reiniciar…", None, true),
-        action("shutdown", "Apagar…", None, true),
+        MenuItem::Submenu {
+            id: None,
+            label: "Elementos recientes".to_string(),
+            enabled: true,
+            items: Vec::new(),
+            icon: None,
+        },
         MenuItem::Separator,
-        action("lock-screen", "Bloquear pantalla", Some("Ctrl+Alt+L"), true),
-        action("logout", "Cerrar sesión…", None, true),
+        action("sleep", "Suspender", None, None),
+        action("restart", "Reiniciar…", None, None),
+        action("shutdown", "Apagar…", None, None),
+        MenuItem::Separator,
+        action("lock-screen", "Bloquear pantalla", Some("Ctrl+Alt+L"), None),
+        action("logout", logout, None, None),
     ]
 }
 
-fn action(id: &str, label: &str, shortcut: Option<&str>, enabled: bool) -> MenuItem {
+fn logout_label(name: Option<&str>) -> String {
+    match name.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(name) => format!("Cerrar sesión de {name}…"),
+        None => "Cerrar sesión…".to_string(),
+    }
+}
+
+/// Full name from the passwd GECOS field, else the login name.
+fn user_display_name() -> Option<String> {
+    let pw = unsafe { libc::getpwuid(libc::getuid()) };
+    if pw.is_null() {
+        return None;
+    }
+    let read = |ptr: *const libc::c_char| {
+        (!ptr.is_null()).then(|| {
+            unsafe { std::ffi::CStr::from_ptr(ptr) }
+                .to_string_lossy()
+                .into_owned()
+        })
+    };
+    let gecos = read(unsafe { (*pw).pw_gecos })
+        .and_then(|gecos| gecos.split(',').next().map(str::trim).map(str::to_string))
+        .filter(|name| !name.is_empty());
+    gecos.or_else(|| read(unsafe { (*pw).pw_name }))
+}
+
+fn action(id: &str, label: &str, shortcut: Option<&str>, icon: Option<&'static str>) -> MenuItem {
     MenuItem::Action {
         id: id.to_string(),
         label: label.to_string(),
         shortcut: shortcut.map(ToOwned::to_owned),
-        enabled,
+        enabled: true,
         check: CheckState::None,
-        icon: None,
+        icon: icon.map(MenuIcon::svg),
     }
 }
 
-/// Handles enabled system-menu actions using the current toplevel list.
-pub fn on_system_action(id: String, toplevels: &[ToplevelInfo]) {
+pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[DesktopEntry]) {
+    if let Some(app) = id.strip_prefix(recents::APP_PREFIX) {
+        if let Some(entry) = entries.iter().find(|entry| entry.id == app) {
+            recents::record_app(&entry.id);
+            crate::launcher::spawn_entry(entry, None);
+        }
+        return;
+    }
+    if let Some(path) = id.strip_prefix(recents::DOC_PREFIX) {
+        xdg_open(path);
+        return;
+    }
+    if id == recents::CLEAR_ID {
+        recents::clear();
+        return;
+    }
     on_system_action_with(id, toplevels, spawn_app, |index| {
         barrier_kit::shell::Toplevels::get().activate(index)
     });
@@ -65,8 +126,6 @@ pub fn on_system_action_with(
     match id.as_str() {
         "lock-screen" => spawn_component("lock"),
         "about-this-computer" => spawn_component("about"),
-        "force-quit" => spawn_component("force-quit"),
-        // Suspend has no «…»: macOS runs it at once.
         "sleep" => power::run(PowerAction::Suspend),
         "restart" => spawn_component_with("power", &[PowerAction::Restart.arg()]),
         "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),
@@ -100,6 +159,38 @@ mod tests {
             app_menu: None,
             gtk_menus: None,
         }
+    }
+
+    fn labels(items: &[MenuItem]) -> Vec<&str> {
+        items
+            .iter()
+            .map(|item| item.label().unwrap_or("-"))
+            .collect()
+    }
+
+    #[test]
+    fn the_system_menu_follows_the_macos_layout() {
+        let items = base_items(&logout_label(Some("H. Blanqueto")));
+        assert_eq!(
+            labels(&items),
+            [
+                "Acerca de este PC",
+                "Ajustes del sistema…",
+                "-",
+                "Elementos recientes",
+                "-",
+                "Suspender",
+                "Reiniciar…",
+                "Apagar…",
+                "-",
+                "Bloquear pantalla",
+                "Cerrar sesión de H. Blanqueto…",
+            ]
+        );
+        assert!(matches!(items[3], MenuItem::Submenu { .. }));
+        assert!(matches!(&items[0], MenuItem::Action { icon: Some(_), .. }));
+        assert!(matches!(&items[1], MenuItem::Action { icon: Some(_), .. }));
+        assert_eq!(logout_label(Some(" ")), "Cerrar sesión…");
     }
 
     #[test]

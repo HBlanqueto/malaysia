@@ -39,8 +39,8 @@ use crate::desktop::{self, DesktopEntry};
 /// A loaded icon. SVG bytes are kept for Skia; PNGs are passed by path.
 #[derive(Clone, PartialEq)]
 pub(crate) struct IconData {
-    path: PathBuf,
-    svg: Option<Vec<u8>>,
+    pub(crate) path: PathBuf,
+    pub(crate) svg: Option<Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -484,6 +484,16 @@ pub fn run() -> anyhow::Result<()> {
 }
 
 pub(crate) fn load_icon(icon: Option<&str>) -> Option<IconData> {
+    load_icon_sized(
+        icon,
+        &[
+            "scalable", "512x512", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32",
+            "24x24", "16x16",
+        ],
+    )
+}
+
+pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<IconData> {
     let icon = icon?;
     let direct = PathBuf::from(icon);
     if direct.is_absolute() && direct.is_file() {
@@ -503,10 +513,6 @@ pub(crate) fn load_icon(icon: Option<&str>) -> Option<IconData> {
         });
     let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Adwaita".to_string());
     let themes = [theme.as_str(), "hicolor"];
-    let sizes = [
-        "scalable", "512x512", "256x256", "128x128", "96x96", "64x64", "48x48", "32x32", "24x24",
-        "16x16",
-    ];
     for theme in themes {
         for dir in std::iter::once(&data_home).chain(&data_dirs) {
             for size in sizes {
@@ -550,7 +556,7 @@ fn icon_data(path: &std::path::Path) -> Option<IconData> {
 }
 
 /// Launches a desktop entry detached, with the activation token when present.
-fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
+pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
     let terminal = env::var("MALAYSIA_TERMINAL")
         .or_else(|_| env::var("TERMINAL"))
         .unwrap_or_else(|_| "wezterm".to_string());

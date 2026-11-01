@@ -656,7 +656,7 @@ pub fn on_action(id: String) {
     // Settings is handled by the existing system helper so it activates an
     // existing settings window or launches the real malaysia-settings binary.
     if id == "malaysia-settings" {
-        system::on_system_action("system-settings".into(), &list);
+        system::on_system_action("system-settings".into(), &list, &[]);
         return;
     }
     on_action_with(

@@ -120,6 +120,18 @@ pub const BOOK: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" h
 /// Keyboard: a small keyboard with a few keys.
 pub const KEYBOARD: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"2\" y=\"5\" width=\"12\" height=\"6\" rx=\"1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><rect x=\"4\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><rect x=\"7\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><rect x=\"10\" y=\"7\" width=\"2\" height=\"1.5\" rx=\"0.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.1\"/><line x1=\"4\" y1=\"10\" x2=\"12\" y2=\"10\" stroke=\"currentColor\" stroke-width=\"1.1\" stroke-linecap=\"round\"/></svg>";
 
+/// Laptop: a screen above a wider base.
+pub const LAPTOP: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><rect x=\"3\" y=\"3.5\" width=\"10\" height=\"7\" rx=\"1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M1.5 12.25h13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></svg>";
+
+/// Generic file: a sheet with a folded corner.
+pub const FILE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 1.75h5l3 3v9.5H4z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/><path d=\"M9 1.75v3h3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/></svg>";
+
+/// Text document: a sheet with lines.
+pub const FILE_TEXT: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 1.75h5l3 3v9.5H4z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/><path d=\"M9 1.75v3h3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/><path d=\"M6 8h4M6 10h4M6 12h2.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/></svg>";
+
+/// Image file: a sheet with a small landscape.
+pub const FILE_IMAGE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 1.75h5l3 3v9.5H4z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/><path d=\"M9 1.75v3h3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linejoin=\"round\"/><path d=\"M5.5 12.5l2-2.5 1.3 1.3 1.7-2 1 3.2z\" fill=\"currentColor\"/></svg>";
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -506,15 +506,20 @@ impl App for BarApp {
             }
             anchors[index].clone()
         };
+        let system_entries = Rc::new(self.entries.clone());
+        let system_items = {
+            let entries = system_entries.clone();
+            move || system::system_menu_items(&entries)
+        };
         let mut specs = vec![MenuTitleSpec {
             label: "Sistema".to_string(),
             glyph: Some(system::SNOWFLAKE_SVG),
             bold: false,
-            items: Rc::new(system::system_menu_items),
+            items: Rc::new(system_items),
             searchable: None,
-            on_activate: Rc::new(|id| {
+            on_activate: Rc::new(move |id| {
                 let toplevels = Toplevels::get().list.read().clone();
-                system::on_system_action(id, &toplevels);
+                system::on_system_action(id, &toplevels, &system_entries);
             }),
             live_items: None,
             on_open: None,
@@ -873,6 +878,9 @@ fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State
         let id = load_active_app(&window_store);
         let mut active_app = active_app;
         if *active_app.peek() != id {
+            if let Some(id) = &id {
+                super::recents::record_app(id);
+            }
             active_app.set(id);
         }
         schedule_active_poll(retry.clone(), window_store.clone(), active_app);

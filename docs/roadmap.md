@@ -173,17 +173,22 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
   `menubar/gtkmenus.rs`, ADR 0045 §5–6).
 - 14b-2: implementado 2026-11-01, falta aceptarlo en anidado.
   - Suspender va directo; Reiniciar…, Apagar… y Cerrar sesión… abren
-    `malaysia-shell power <acción>` (confirmación con Esc/Cancelar y Enter).
+    `malaysia-shell power <acción>`: diálogo estilo macOS (icono, pregunta,
+    cuenta atrás de 60 s que ejecuta la acción, Cancelar/acción a lo ancho).
     logind: `Suspend`/`Reboot`/`PowerOff(true)` y `TerminateSession` con
     `XDG_SESSION_ID`, que el compositor importa al user manager
     (`crates/malaysia-shell/src/power.rs`).
   - `MALAYSIA_POWER_DRY_RUN=1` (por defecto en `./dev.sh`, forzado en el
     compositor anidado) solo escribe la llamada en el log.
-  - Forzar salida… (⌥❖Esc o el menú ❄): `malaysia-shell force-quit` lista
+  - Menú ❄: Acerca de este PC, Ajustes del sistema… (con iconos),
+    Elementos recientes (apps enfocadas en `recents.domain` y documentos de
+    `recently-used.xbel`; «Vaciar menú» oculta lo anterior), energía,
+    Bloquear pantalla y «Cerrar sesión de <nombre>…» (GECOS).
+  - Forzar salida… (⌥❖Esc, ya no está en el menú ❄): `malaysia-shell force-quit` lista
     una fila por app de `zwlr_foreign_toplevel` con su icono; el botón pide
     `force_quit` (Infinity v4, barrierkit `8b96ae7`) y el compositor envía
     SIGKILL al pid de las credenciales del socket.
-  - Acerca de este equipo: `malaysia-shell about`, ventana fija con semáforos
+  - Acerca de este PC: `malaysia-shell about`, ventana fija con semáforos
     como «Acerca de este Mac». Modelo por DMI (Lenovo guarda «ThinkPad …» en
     `product_version`); dibujo `about/thinkpad.svg` para ThinkPad y
     `about/generic.svg` para el resto. Subtítulo con las pulgadas del panel

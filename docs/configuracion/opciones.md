@@ -32,6 +32,8 @@ directorios — preferencias y estado:
 ├── wallpaper.domain       ← catálogo + selección actual ([desktops]), como
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← color dominante del fondo (lo escribe malaysia-wallpaper)
+├── recents.domain         ← Elementos recientes del menú ❄: `apps` (app ids) y
+│                            `cleared_at` (unix; «Vaciar menú»), lo escribe la menubar
 └── window.domain          ← estado: la app activa, publicada por el compositor
 ```
 

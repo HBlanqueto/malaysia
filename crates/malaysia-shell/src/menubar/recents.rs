@@ -1,0 +1,358 @@
+//! Recent items for the system menu: apps the user focused and documents from
+//! `recently-used.xbel`. State lives in `recents.domain`.
+
+use std::path::{Path, PathBuf};
+
+use barrier_kit::menu::{MenuIcon, MenuItem};
+use vow_appearance::data_dir;
+
+use crate::desktop::DesktopEntry;
+use crate::launcher::{IconData, load_icon_sized};
+use crate::menubar::{find_entry, icons, items};
+
+const MAX_APPS: usize = 10;
+const MAX_DOCUMENTS: usize = 10;
+const MENU_ICON_SIZES: &[&str] = &[
+    "scalable", "32x32", "48x48", "24x24", "64x64", "16x16", "128x128",
+];
+
+pub const APP_PREFIX: &str = "recent-app:";
+pub const DOC_PREFIX: &str = "recent-doc:";
+pub const CLEAR_ID: &str = "recent-clear";
+
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Recents {
+    pub apps: Vec<String>,
+    pub cleared_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Document {
+    pub path: PathBuf,
+    pub name: String,
+    pub modified: i64,
+}
+
+fn store_path() -> PathBuf {
+    data_dir().join("recents.domain")
+}
+
+impl Recents {
+    pub fn load_from(path: &Path) -> Self {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| toml::from_str(&text).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_to(&self, path: &Path) {
+        let Ok(text) = toml::to_string(self) else {
+            return;
+        };
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let tmp = path.with_extension("domain.tmp");
+        if std::fs::write(&tmp, text).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
+
+    pub fn push_app(&mut self, app_id: &str) -> bool {
+        let app_id = app_id.trim();
+        if app_id.is_empty() || self.apps.first().is_some_and(|first| first == app_id) {
+            return false;
+        }
+        self.apps.retain(|id| id != app_id);
+        self.apps.insert(0, app_id.to_string());
+        self.apps.truncate(MAX_APPS);
+        true
+    }
+}
+
+/// Moves `app_id` to the front of the recent apps.
+pub fn record_app(app_id: &str) {
+    let path = store_path();
+    let mut recents = Recents::load_from(&path);
+    if recents.push_app(app_id) {
+        recents.save_to(&path);
+    }
+}
+
+/// Empties the menu: forgets the apps and hides documents used before now.
+pub fn clear() {
+    let path = store_path();
+    let recents = Recents {
+        apps: Vec::new(),
+        cleared_at: chrono::Utc::now().timestamp(),
+    };
+    recents.save_to(&path);
+}
+
+fn xbel_path() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+        .unwrap_or_default()
+        .join("recently-used.xbel")
+}
+
+fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let needle = format!(" {name}=\"");
+    let start = tag.find(&needle)? + needle.len();
+    let end = tag[start..].find('"')?;
+    Some(&tag[start..start + end])
+}
+
+fn unescape_xml(value: &str) -> String {
+    value
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&value[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn timestamp(value: &str) -> i64 {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|time| time.timestamp())
+        .unwrap_or(0)
+}
+
+/// Local files in an xbel document, newest first.
+pub fn parse_xbel(text: &str) -> Vec<Document> {
+    let mut documents: Vec<Document> = text
+        .split("<bookmark ")
+        .skip(1)
+        .filter_map(|chunk| {
+            let tag = &chunk[..chunk.find('>')?];
+            let tag = format!(" {tag}");
+            let href = unescape_xml(attribute(&tag, "href")?);
+            let path = PathBuf::from(percent_decode(href.strip_prefix("file://")?));
+            let name = path.file_name()?.to_string_lossy().into_owned();
+            let modified = ["visited", "modified", "added"]
+                .iter()
+                .filter_map(|key| attribute(&tag, key))
+                .map(timestamp)
+                .max()
+                .unwrap_or(0);
+            Some(Document {
+                path,
+                name,
+                modified,
+            })
+        })
+        .collect();
+    documents.sort_by_key(|doc| std::cmp::Reverse(doc.modified));
+    documents.dedup_by(|a, b| a.path == b.path);
+    documents
+}
+
+fn documents(cleared_at: i64) -> Vec<Document> {
+    let text = std::fs::read_to_string(xbel_path()).unwrap_or_default();
+    parse_xbel(&text)
+        .into_iter()
+        .filter(|doc| doc.modified > cleared_at && doc.path.is_file())
+        .take(MAX_DOCUMENTS)
+        .collect()
+}
+
+fn menu_icon(icon: Option<IconData>) -> Option<MenuIcon> {
+    let icon = icon?;
+    match icon.svg {
+        Some(svg) => String::from_utf8(svg).ok().map(MenuIcon::svg),
+        None => std::fs::read(&icon.path).ok().and_then(MenuIcon::image),
+    }
+}
+
+fn document_icon(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "heic" | "bmp" | "tif" | "tiff" => {
+            icons::FILE_IMAGE
+        }
+        "doc" | "docx" | "odt" | "rtf" | "txt" | "md" | "pdf" => icons::FILE_TEXT,
+        _ => icons::FILE,
+    }
+}
+
+/// Items of the «Elementos recientes» submenu.
+pub fn menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
+    let recents = Recents::load_from(&store_path());
+    build_items(&recents, &documents(recents.cleared_at), entries, |entry| {
+        menu_icon(load_icon_sized(entry.icon.as_deref(), MENU_ICON_SIZES))
+    })
+}
+
+fn build_items(
+    recents: &Recents,
+    documents: &[Document],
+    entries: &[DesktopEntry],
+    icon: impl Fn(&DesktopEntry) -> Option<MenuIcon>,
+) -> Vec<MenuItem> {
+    let mut apps: Vec<(&DesktopEntry, String)> = recents
+        .apps
+        .iter()
+        .filter_map(|id| find_entry(id, entries).map(|entry| (entry, id.clone())))
+        .collect();
+    apps.sort_by_key(|(entry, _)| entry.name.to_lowercase());
+    apps.dedup_by(|a, b| a.0.id == b.0.id);
+
+    let mut out = Vec::new();
+    if !apps.is_empty() {
+        out.push(items::header("Aplicaciones"));
+        for (entry, _) in &apps {
+            out.push(items::action(
+                format!("{APP_PREFIX}{}", entry.id),
+                entry.name.clone(),
+                None,
+                true,
+                icon(entry),
+            ));
+        }
+        out.push(items::separator());
+    }
+    if !documents.is_empty() {
+        let mut documents = documents.to_vec();
+        documents.sort_by_key(|doc| doc.name.to_lowercase());
+        out.push(items::header("Documentos"));
+        for doc in &documents {
+            out.push(items::action(
+                format!("{DOC_PREFIX}{}", doc.path.display()),
+                doc.name.clone(),
+                None,
+                true,
+                Some(MenuIcon::svg(document_icon(&doc.path))),
+            ));
+        }
+        out.push(items::separator());
+    }
+    out.push(items::action(
+        CLEAR_ID,
+        "Vaciar menú",
+        None,
+        !out.is_empty(),
+        None,
+    ));
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str, name: &str) -> DesktopEntry {
+        DesktopEntry {
+            id: id.into(),
+            name: name.into(),
+            generic_name: None,
+            keywords: Vec::new(),
+            icon: None,
+            exec: vec![id.trim_end_matches(".desktop").into()],
+            path: None,
+            terminal: false,
+            startup_wm_class: None,
+        }
+    }
+
+    #[test]
+    fn recent_apps_move_to_the_front_and_stay_bounded() {
+        let mut recents = Recents::default();
+        for i in 0..12 {
+            recents.push_app(&format!("app{i}"));
+        }
+        assert_eq!(recents.apps.len(), MAX_APPS);
+        assert!(recents.push_app("app5"));
+        assert_eq!(recents.apps[0], "app5");
+        assert!(!recents.push_app("app5"));
+        assert!(!recents.push_app(" "));
+    }
+
+    #[test]
+    fn xbel_documents_are_decoded_and_sorted() {
+        let xbel = r#"<?xml version="1.0"?>
+<xbel version="1.0">
+  <bookmark href="file:///home/u/Carta_Poder.pdf" added="2026-10-01T10:00:00Z" modified="2026-10-01T10:00:00Z" visited="2026-10-01T10:00:00Z">
+  </bookmark>
+  <bookmark href="file:///home/u/Acta%20de%20defunci%C3%B3n.pdf" added="2026-10-02T10:00:00.123456Z" modified="2026-10-02T10:00:00Z" visited="2026-10-03T10:00:00Z">
+  </bookmark>
+  <bookmark href="https://example.org/" added="2026-10-04T10:00:00Z" modified="2026-10-04T10:00:00Z" visited="2026-10-04T10:00:00Z"/>
+</xbel>"#;
+        let docs = parse_xbel(xbel);
+        assert_eq!(docs.len(), 2);
+        assert_eq!(docs[0].name, "Acta de defunción.pdf");
+        assert_eq!(docs[1].path, PathBuf::from("/home/u/Carta_Poder.pdf"));
+        assert!(docs[0].modified > docs[1].modified);
+    }
+
+    #[test]
+    fn the_submenu_lists_apps_then_documents_then_clear() {
+        let entries = vec![
+            entry("org.telegram.desktop", "Telegram"),
+            entry("firefox.desktop", "Firefox"),
+        ];
+        let recents = Recents {
+            apps: vec![
+                "org.telegram.desktop".into(),
+                "firefox.desktop".into(),
+                "missing".into(),
+            ],
+            cleared_at: 0,
+        };
+        let docs = vec![Document {
+            path: "/tmp/a.pdf".into(),
+            name: "a.pdf".into(),
+            modified: 1,
+        }];
+        let items = build_items(&recents, &docs, &entries, |_| None);
+        let labels: Vec<_> = items
+            .iter()
+            .map(|item| item.label().unwrap_or("-"))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Aplicaciones",
+                "Firefox",
+                "Telegram",
+                "-",
+                "Documentos",
+                "a.pdf",
+                "-",
+                "Vaciar menú"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_empty_menu_only_offers_a_disabled_clear() {
+        let items = build_items(&Recents::default(), &[], &[], |_| None);
+        assert_eq!(items.len(), 1);
+        assert!(matches!(&items[0], MenuItem::Action { enabled: false, .. }));
+    }
+}

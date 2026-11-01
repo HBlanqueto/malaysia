@@ -29,7 +29,7 @@ components:
   power <restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
   force-quit  the «Forzar salida» list of running apps
-  about       «Acerca de este equipo»
+  about       «Acerca de este PC»
 ";
 
 fn main() -> ExitCode {
