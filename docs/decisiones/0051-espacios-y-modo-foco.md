@@ -71,7 +71,11 @@ app.
    puro con texto blanco necesita que la shell sepa que está sobre un foco
    (paso 5).
 5. Infinity: espacio actual para la shell y aviso de foco/panel para
-   barrierkit.
+   barrierkit. **La parte de la shell está hecha:** Infinity v5 tiene el
+   evento `space` con el estado de la barra (`focus_bar`), y sobre un foco la
+   menubar se pinta en negro puro con texto blanco (`FOCUS_BAR_*` en
+   `vow-design`). Falta el aviso a las apps de barrierkit. Infinity solo lo
+   bindea la shell de confianza, así que necesita otro canal.
 6. Experimento con un fork de libadwaita
    ([HBlanqueto/libadwaita](https://github.com/HBlanqueto/libadwaita)):
    `AdwToolbarView` oculta sus barras superiores en fullscreen y las vuelve a

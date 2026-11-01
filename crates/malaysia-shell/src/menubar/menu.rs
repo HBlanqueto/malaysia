@@ -255,7 +255,17 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let resolved = barrier_kit::theme::resolved();
     let palette =
         barrier_kit::theme::menu_palette(&resolved, barrier_kit::theme::SurfaceKind::LayerShell);
-    let fg_rgba = barrier_kit::theme::shell_palette(&resolved).text;
+    // Over a focus space the bar's titles are white on black (ADR 0051).
+    let over_focus = barrier_kit::shell::Toplevels::get()
+        .space
+        .read()
+        .focus_bar
+        .over_focus();
+    let fg_rgba = if over_focus {
+        vow_design::FOCUS_BAR_TEXT
+    } else {
+        barrier_kit::theme::shell_palette(&resolved).text
+    };
     let fg = rgba(fg_rgba);
 
     let mut container = rect()

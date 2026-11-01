@@ -144,6 +144,10 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
                 }
             }
         }
+        if manager.version() >= 5 {
+            let (index, count, desktop, focus_bar) = state.space_state();
+            manager.space(index, count, desktop, focus_bar);
+        }
         state.infinity_managers.push(manager);
     }
 
@@ -253,7 +257,7 @@ impl InfinityGlobalData {
     /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         let data = InfinityGlobalData;
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(4, data)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(5, data)
     }
 }
 
@@ -360,6 +364,51 @@ impl State {
         info!(window = id.get(), outer = ?saved, "infinity restore");
         self.apply_infinity_geometry(id, saved);
         self.send_restorable(id);
+    }
+
+    /// The shown space for the Infinity `space` event (ADR 0051): position,
+    /// count, desktop number (0 for a focus space) and the bar's state.
+    pub(crate) fn space_state(
+        &self,
+    ) -> (
+        u32,
+        u32,
+        u32,
+        protocol::infinity_window_manager_v1::FocusBar,
+    ) {
+        use protocol::infinity_window_manager_v1::FocusBar;
+        let current = self.spaces.current();
+        let desktop = self.spaces.desktop_number(current.id).unwrap_or(0);
+        let focus_bar = match current.kind {
+            malaysia_scene::spaces::SpaceKind::Desktop => FocusBar::None,
+            malaysia_scene::spaces::SpaceKind::Focus { .. } if self.focus_reveal.is_shown() => {
+                FocusBar::Revealed
+            }
+            malaysia_scene::spaces::SpaceKind::Focus { .. } => FocusBar::Hidden,
+        };
+        (
+            self.spaces.current_index() as u32,
+            self.spaces.len() as u32,
+            desktop as u32,
+            focus_bar,
+        )
+    }
+
+    /// Sends the shown space to every Infinity v5 client (the shell), when it
+    /// changed since the last send.
+    pub(crate) fn send_space_state(&mut self) {
+        let state = self.space_state();
+        if self.last_space_state == Some(state) {
+            return;
+        }
+        self.last_space_state = Some(state);
+        let (index, count, desktop, focus_bar) = state;
+        self.infinity_managers.retain(|manager| manager.is_alive());
+        for manager in &self.infinity_managers {
+            if manager.version() >= 5 {
+                manager.space(index, count, desktop, focus_bar);
+            }
+        }
     }
 
     /// Sets or unsets fullscreen through Infinity.

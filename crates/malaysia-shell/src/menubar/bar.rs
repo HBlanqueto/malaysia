@@ -430,13 +430,24 @@ impl App for BarApp {
             None
         };
         let palette = barrier_kit::theme::shell_palette(&resolved);
-        let text = rgba(palette.text);
+        // Over a focus space the bar is absolute black with white text,
+        // whatever the appearance (ADR 0051).
+        let over_focus = Toplevels::get().space.read().focus_bar.over_focus();
+        let text = if over_focus {
+            rgba(vow_design::FOCUS_BAR_TEXT)
+        } else {
+            rgba(palette.text)
+        };
         // Opaque by default; the blur for reduce_transparency = false will
         // arrive with the compositor's surface effects (ADR 0024).
-        let bar = rgba(barrier_kit::theme::surface_background(
-            &resolved,
-            barrier_kit::theme::SurfaceKind::LayerShell,
-        ));
+        let bar = if over_focus {
+            rgba(vow_design::FOCUS_BAR_BACKGROUND)
+        } else {
+            rgba(barrier_kit::theme::surface_background(
+                &resolved,
+                barrier_kit::theme::SurfaceKind::LayerShell,
+            ))
+        };
 
         let mut root = rect()
             .width(Size::fill())

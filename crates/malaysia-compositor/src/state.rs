@@ -309,6 +309,13 @@ pub struct State {
     pub(crate) focus_transition: Option<crate::spaces::FocusTransition>,
     /// The bar coming down at the top edge of a focus space (ADR 0051, 17d).
     pub(crate) focus_reveal: crate::spaces::FocusReveal,
+    /// The last Infinity `space` event sent, to send only changes.
+    pub(crate) last_space_state: Option<(
+        u32,
+        u32,
+        u32,
+        infinity_protocol::server::infinity_window_manager_v1::infinity_window_manager_v1::FocusBar,
+    )>,
     /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
@@ -607,6 +614,7 @@ impl State {
             space_slide: None,
             focus_transition: None,
             focus_reveal: crate::spaces::FocusReveal::default(),
+            last_space_state: None,
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),

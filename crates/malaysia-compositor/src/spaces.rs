@@ -135,6 +135,11 @@ pub(crate) struct FocusReveal {
 }
 
 impl FocusReveal {
+    /// Whether the bar is (going) down.
+    pub(crate) fn is_shown(&self) -> bool {
+        self.shown
+    }
+
     /// How far down the bar is, from 0 (hidden) to 1 (down).
     pub(crate) fn progress(&self, now: Instant) -> f64 {
         let target = if self.shown { 1.0 } else { 0.0 };
@@ -220,6 +225,7 @@ impl State {
         };
         self.layers.set_bar_revealed(shown);
         tracing::info!(window = owner.get(), shown, "focus space bar");
+        self.send_space_state();
         self.request_redraw();
     }
 
@@ -295,6 +301,7 @@ impl State {
         }
         self.focus_reveal = FocusReveal::default();
         self.layers.set_bar_revealed(false);
+        self.send_space_state();
     }
 
     /// Whether a window is in focus mode (has a focus space).
@@ -538,6 +545,9 @@ impl State {
         self.spaces.remove_window(id);
         if self.spaces.current().id != before {
             self.sync_space_visibility();
+        } else {
+            // The row may have lost a focus space that was not shown.
+            self.send_space_state();
         }
     }
 
@@ -649,6 +659,7 @@ impl State {
                 None => self.clear_keyboard_focus(),
             }
         }
+        self.send_space_state();
         self.request_redraw();
     }
 }
