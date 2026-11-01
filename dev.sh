@@ -904,12 +904,11 @@ demo() {
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
             _example_dir="$_kit_dir/target/debug/examples"
-            if [ ! -x "$_example_dir/window_csd" ] ||
-                [ ! -x "$_example_dir/window_ssd" ] ||
-                [ ! -x "$_example_dir/dialog" ]; then
-                (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
-                    fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
-            fi
+            # Always rebuild: cargo is incremental, and a binary that merely
+            # exists can predate the kit it should be running (stale examples
+            # kept the old green light after the kit changed).
+            (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
+                fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
             _window_csd="$_example_dir/window_csd"
             _window_ssd="$_example_dir/window_ssd"
             _dialog="$_example_dir/dialog"
@@ -1093,13 +1092,11 @@ lab() {
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
             _example_dir="$_kit_dir/target/debug/examples"
-            if [ ! -x "$_example_dir/window_csd" ] ||
-                [ ! -x "$_example_dir/window_ssd" ] ||
-                [ ! -x "$_example_dir/dialog" ] ||
-                [ ! -x "$_example_dir/contador" ]; then
-                (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
-                    fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
-            fi
+            # Always rebuild: cargo is incremental, and a binary that merely
+            # exists can predate the kit it should be running (stale examples
+            # kept the old green light after the kit changed).
+            (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
+                fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
             _window_csd="$_example_dir/window_csd"
             _window_ssd="$_example_dir/window_ssd"
             _dialog="$_example_dir/dialog"
