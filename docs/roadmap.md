@@ -13,9 +13,9 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   y los menús de una app real.
 - **Espacios y modo foco (Bloque 17, ADR 0051).** 17a, 17b y 17c
   hechos: fila de espacios, deslizamiento con franja negra y modo foco con el
-  botón verde, el borde superior en foco (17d) y la barra negra (17e). Falta
-  que las apps de barrierkit oculten sus semáforos en foco (17e) y el
-  experimento con libadwaita (17f).
+  botón verde, el borde superior en foco (17d), y la barra negra y los
+  semáforos de barrierkit que aparecen con ella (17e). Falta el experimento
+  con libadwaita (17f).
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
@@ -275,16 +275,19 @@ Concepto y plan en el ADR 0051.
   sube cuando el puntero baja más de dos titlebars por debajo de ella, salvo
   con un menú abierto. La barra negra con texto blanco llega con el 17e. Prueba: `./dev.sh demo`, modo
   foco con una ventana SSD y con una CSD, y el puntero arriba.
-- **17e — Infinity. Barra negra hecha (2026-11-01), sin aceptar en
-  sesión.** Infinity v5 (barrierkit `ee5b141`) añade el evento `space`:
+- **17e — Infinity. Hecho (2026-11-01), sin aceptar en sesión.** Infinity v5 (barrierkit `ee5b141`) añade el evento `space`:
   posición, número de espacios, escritorio y estado de la barra sobre un
   foco (`focus_bar`: none, hidden, revealed). El compositor lo envía al
   bindear y en cada cambio; la shell lo publica en `Toplevels::space`. Sobre
   un espacio de foco la menubar se pinta con `FOCUS_BAR_BACKGROUND` (negro) y
-  `FOCUS_BAR_TEXT` (blanco). Falta que las apps de barrierkit oculten y
-  muestren sus semáforos con el panel (necesita un canal app↔compositor; hoy
-  Infinity solo lo bindea la shell de confianza). Prueba: modo foco y puntero
-  arriba; la barra sale negra con texto blanco.
+  `FOCUS_BAR_TEXT` (blanco). Para las apps, el protocolo aparte
+  `infinity_focus_v1` (barrierkit `c8965c3`) está abierto a cualquier
+  cliente: el objeto de una superficie recibe `bar(1)` cuando la barra baja
+  sobre la ventana CSD en foco (y la ventana baja con ella) y `bar(0)` cuando
+  sube. El kit oculta los semáforos de su titlebar y de su barra lateral en
+  fullscreen y los muestra solo con `bar(1)`, como Finder. Prueba: modo foco
+  con una app de barrierkit (sin semáforos), puntero arriba (aparecen),
+  puntero abajo (se van).
 - **17f — libadwaita.** Experimento con el fork. Pendiente.
 
 ### Transversal — NixOS

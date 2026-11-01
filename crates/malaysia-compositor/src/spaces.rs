@@ -214,8 +214,10 @@ impl State {
             self.windows
                 .set_scene_y(owner, f64::from(self.desktop_bar_height()));
             shifted = Some(owner);
+            self.send_focus_bar(owner, true);
         } else if !shown && let Some(window) = shifted.take() {
             self.windows.set_scene_y(window, 0.0);
+            self.send_focus_bar(window, false);
         }
         self.focus_reveal = FocusReveal {
             shown,
@@ -298,6 +300,7 @@ impl State {
     fn reset_focus_reveal(&mut self) {
         if let Some(window) = self.focus_reveal.shifted {
             self.windows.set_scene_y(window, 0.0);
+            self.send_focus_bar(window, false);
         }
         self.focus_reveal = FocusReveal::default();
         self.layers.set_bar_revealed(false);

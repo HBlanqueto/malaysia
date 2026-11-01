@@ -27,6 +27,7 @@ pub mod config;
 mod cursor;
 pub mod decoration;
 mod effects;
+mod focus_notice;
 mod foreign;
 mod gtk;
 mod handlers;

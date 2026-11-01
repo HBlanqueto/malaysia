@@ -327,6 +327,12 @@ pub struct State {
     /// The `infinity_window_manager_v1` global id (kept alive for the session).
     #[allow(dead_code)]
     pub(crate) infinity_global: GlobalId,
+    /// The `infinity_focus_v1` global, open to every client (ADR 0051).
+    pub(crate) _focus_notice_global: GlobalId,
+    /// Live `infinity_focus_surface_v1` objects.
+    pub(crate) focus_notices: Vec<
+        infinity_protocol::server::focus::infinity_focus_v1::infinity_focus_surface_v1::InfinityFocusSurfaceV1,
+    >,
     /// The last dock icon rectangle (`set_rectangle`), for the minimize anim.
     pub dock_rectangle: Option<(WindowId, Rectangle<i32, Logical>)>,
     /// The runtime configuration, loaded from the per-domain files in
@@ -609,6 +615,10 @@ impl State {
             gtk: GtkShellState::new(display_handle),
             list_handles: Vec::new(),
             infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
+            _focus_notice_global: crate::focus_notice::FocusNoticeGlobalData::create_global(
+                display_handle,
+            ),
+            focus_notices: Vec::new(),
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),
             space_slide: None,

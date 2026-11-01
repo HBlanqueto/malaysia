@@ -1,6 +1,6 @@
 # 0051 — Espacios y modo foco
 
-Estado: aceptado (2026-11-01). Pasos 1–4 implementados; 5–6 pendientes.
+Estado: aceptado (2026-11-01). Pasos 1–5 implementados; 6 pendiente.
 
 ## Contexto
 
@@ -74,8 +74,12 @@ app.
    barrierkit. **La parte de la shell está hecha:** Infinity v5 tiene el
    evento `space` con el estado de la barra (`focus_bar`), y sobre un foco la
    menubar se pinta en negro puro con texto blanco (`FOCUS_BAR_*` en
-   `vow-design`). Falta el aviso a las apps de barrierkit. Infinity solo lo
-   bindea la shell de confianza, así que necesita otro canal.
+   `vow-design`). **El aviso a las apps también está hecho:** como Infinity
+   solo lo bindea la shell de confianza, va por un protocolo aparte,
+   `infinity_focus_v1`, abierto a cualquier cliente porque no da geometría
+   ni permisos: `bar(1)`/`bar(0)` por superficie cuando la barra baja o sube
+   sobre una ventana CSD en foco. El kit oculta sus semáforos en fullscreen y
+   los muestra con `bar(1)`.
 6. Experimento con un fork de libadwaita
    ([HBlanqueto/libadwaita](https://github.com/HBlanqueto/libadwaita)):
    `AdwToolbarView` oculta sus barras superiores en fullscreen y las vuelve a
