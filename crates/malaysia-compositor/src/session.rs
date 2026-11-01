@@ -954,7 +954,17 @@ pub(crate) fn build_output_elements(
         }
         append_theme_fade(state, &mut elements);
         append_screenshot_overlay(state, &mut elements);
-        append_layers(state, renderer, &mut elements, LayerSide::Front);
+        // While the spaces slide, each desktop's bar moves with it and only
+        // the other panels (the dock) stay in place (ADR 0051).
+        let slide = state.space_frame(Instant::now());
+        append_layers(
+            state,
+            renderer,
+            &mut elements,
+            LayerSide::Front,
+            0,
+            |entry| slide.is_none() || !entry.is_desktop_bar(),
+        );
         for (id, _parent, rect) in state.windows.iter_popups().rev() {
             let Some(surface) = state.popups.surface_of(id) else {
                 continue;
@@ -972,19 +982,92 @@ pub(crate) fn build_output_elements(
                 .map(|e| e.into()),
             );
         }
-        let focused = state.focused_window();
-        let window_ids: Vec<_> = state
-            .windows
-            .iter_visible(&state.minimized)
-            .rev()
-            .map(|window| window.id())
-            .collect();
-        for id in window_ids {
-            append_window_frame(state, renderer, id, focused, scale, &mut elements);
+        if let Some(position) = slide {
+            append_sliding_spaces(state, renderer, position, scale, &mut elements);
+        } else {
+            let focused = state.focused_window();
+            let window_ids: Vec<_> = state
+                .windows
+                .iter_visible(&state.minimized)
+                .rev()
+                .map(|window| window.id())
+                .collect();
+            for id in window_ids {
+                append_window_frame(
+                    state,
+                    renderer,
+                    id,
+                    focused,
+                    scale,
+                    Point::from((0, 0)),
+                    &mut elements,
+                );
+            }
+            append_layers(state, renderer, &mut elements, LayerSide::Back, 0, |_| true);
         }
-        append_layers(state, renderer, &mut elements, LayerSide::Back);
     }
     elements
+}
+
+/// Draws the row of spaces mid-slide (ADR 0051): every space that overlaps the
+/// output, shifted by its distance from `position`, over the black gap. A
+/// desktop brings its bar, windows and wallpaper; a focus space only its
+/// windows over black.
+fn append_sliding_spaces(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    position: f64,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let output = state.logical_output_size();
+    let stride = f64::from(output.w + vow_design::SPACE_GAP);
+    let shown: Vec<_> = state
+        .spaces
+        .iter()
+        .enumerate()
+        .filter_map(|(index, space)| {
+            let x = ((index as f64 - position) * stride).round() as i32;
+            (x > -output.w && x < output.w).then_some((space.id, space.kind, x))
+        })
+        .collect();
+    let focused = state.focused_window();
+    for (space, kind, x) in shown {
+        let desktop = kind == malaysia_scene::spaces::SpaceKind::Desktop;
+        if desktop {
+            append_layers(state, renderer, elements, LayerSide::Front, x, |entry| {
+                entry.is_desktop_bar()
+            });
+        }
+        let window_ids: Vec<_> = state
+            .windows
+            .iter_drawable(&state.minimized)
+            .rev()
+            .map(|window| window.id())
+            .filter(|id| state.spaces.space_of(*id) == Some(space))
+            .collect();
+        for id in window_ids {
+            append_window_frame(
+                state,
+                renderer,
+                id,
+                focused,
+                scale,
+                Point::from((x, 0)),
+                elements,
+            );
+        }
+        if desktop {
+            append_layers(state, renderer, elements, LayerSide::Back, x, |_| true);
+        }
+    }
+    append_solid(
+        Point::from((0, 0)),
+        output,
+        vow_design::SPACE_GAP_COLOR,
+        scale,
+        elements,
+    );
 }
 
 /// Window data needed to build its frame; copied out so the mutable borrow of
@@ -1060,12 +1143,13 @@ fn append_window_frame(
     id: malaysia_scene::scene::WindowId,
     focused: Option<malaysia_scene::scene::WindowId>,
     scale: f64,
+    offset: Point<i32, Logical>,
     elements: &mut Vec<OutputRenderElement>,
 ) {
     let data = {
         let Some(window) = state
             .windows
-            .iter_visible(&state.minimized)
+            .iter_drawable(&state.minimized)
             .find(|w| w.id() == id)
         else {
             return;
@@ -1075,7 +1159,7 @@ fn append_window_frame(
         }
         WindowFrameData {
             title: window.title(),
-            location: window.location(),
+            location: window.location() + offset,
             size: window.size(),
             surface_location: window.surface_location(),
             surface: window.surface().clone(),
@@ -1553,6 +1637,10 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         drop(result);
         let mut request_redraw = false;
         let now = Instant::now();
+        // A slide between spaces moves every frame (ADR 0051).
+        if session.state.space_slide.is_some() {
+            request_redraw = true;
+        }
         if let Some(fade) = session.state.theme_fade.as_mut() {
             match fade.tick(now) {
                 crate::theme_fade::FadeTick::Done => session.state.theme_fade = None,
@@ -1806,6 +1894,8 @@ fn append_layers(
     renderer: &mut GlesRenderer,
     elements: &mut Vec<OutputRenderElement>,
     side: LayerSide,
+    offset_x: i32,
+    include: impl Fn(&crate::layers::LayerEntry) -> bool,
 ) {
     let layers = match side {
         LayerSide::Back => [Layer::Background, Layer::Bottom],
@@ -1813,8 +1903,8 @@ fn append_layers(
     };
     let scale = state.scale.fractional_scale();
     for layer in layers {
-        for entry in state.layers.on_layer(layer) {
-            let location = physical_point(entry.geometry.loc, scale);
+        for entry in state.layers.on_layer(layer).filter(|entry| include(entry)) {
+            let location = physical_point(entry.geometry.loc + Point::from((offset_x, 0)), scale);
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,

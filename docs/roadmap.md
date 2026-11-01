@@ -11,9 +11,9 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   largos; la pantalla completa desde el menú Ventana sigue pendiente. 14d-1,
   14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
   y los menús de una app real.
-- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a hecho: fila de
-  espacios y cambio instantáneo con `Ctrl+Alt+←/→` y `Ctrl+Alt+N`. Siguen el
-  deslizamiento (17b) y el modo foco (17c); hasta entonces
+- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a y 17b hechos:
+  fila de espacios, `Ctrl+Alt+←/→` y `Ctrl+Alt+N`, y deslizamiento con
+  franja negra, barra por escritorio y dock fijo. Sigue el modo foco (17c); hasta entonces
   `window.green_button = "focus"` solo registra la petición.
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
@@ -236,8 +236,16 @@ Concepto y plan en el ADR 0051.
   Enfocar una ventana de otro espacio (dock, activación) muestra su espacio.
   Prueba: `./dev.sh demo`, abrir ventanas, `Ctrl+Alt+N`, abrir otra y alternar
   con `Ctrl+Alt+←/→`; el log muestra `space shown`.
-- **17b — Deslizamiento.** Separador negro, barra superior por escritorio y
-  dock fijo. Pendiente.
+- **17b — Deslizamiento. Hecho (2026-11-01), sin aceptar en sesión.** Al
+  cambiar de espacio la fila se desliza (`SPACE_SLIDE_MS` 480 ms, curva
+  `SPACE_SLIDE_EASE`) con una franja negra de `SPACE_GAP` (48 px) entre
+  espacios; los tokens están en `vow-design` (barrierkit `55614a3`). La barra
+  superior (panel Top anclado arriba con zona exclusiva) y el fondo se dibujan
+  dentro de cada escritorio y se van con él; el dock y los demás paneles
+  quedan fijos. Las ventanas del destino reciben la entrada desde el primer
+  frame y una segunda pulsación reorienta el deslizamiento desde donde está.
+  `appearance.reduced_motion` lo quita. Prueba: `./dev.sh demo`, dos
+  escritorios con ventanas y `Ctrl+Alt+←/→`.
 - **17c — Modo foco.** Espacio de foco, estado `fullscreen` y animación de
   crecer y deslizar a la vez. Pendiente.
 - **17d — Borde superior.** Panel negro, titlebar SSD encima en apps ajenas y

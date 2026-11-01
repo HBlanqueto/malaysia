@@ -257,7 +257,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "barrier-kit"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=a2394a6#a2394a62b5cb40a1acf1fad34d48d05521477f88"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=55614a3#55614a396d55c0d17fe62a0e149b44d02bc95888"
 dependencies = [
  "accesskit",
  "async-channel",
@@ -1619,7 +1619,7 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=a2394a6#a2394a62b5cb40a1acf1fad34d48d05521477f88"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=55614a3#55614a396d55c0d17fe62a0e149b44d02bc95888"
 dependencies = [
  "wayland-backend",
  "wayland-client",
@@ -3842,7 +3842,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vow-appearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=a2394a6#a2394a62b5cb40a1acf1fad34d48d05521477f88"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=55614a3#55614a396d55c0d17fe62a0e149b44d02bc95888"
 dependencies = [
  "nix",
  "serde",
@@ -3855,7 +3855,7 @@ dependencies = [
 [[package]]
 name = "vow-design"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=a2394a6#a2394a62b5cb40a1acf1fad34d48d05521477f88"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=55614a3#55614a396d55c0d17fe62a0e149b44d02bc95888"
 dependencies = [
  "serde_json",
 ]

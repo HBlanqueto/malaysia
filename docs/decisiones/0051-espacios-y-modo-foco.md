@@ -1,6 +1,6 @@
 # 0051 — Espacios y modo foco
 
-Estado: aceptado (2026-11-01). Paso 1 implementado; pasos 2–6 pendientes.
+Estado: aceptado (2026-11-01). Pasos 1 y 2 implementados; 3–6 pendientes.
 
 ## Contexto
 
@@ -53,9 +53,12 @@ app.
 
 1. Modelo de espacios y cambio instantáneo con atajos. **Hecho.**
 2. Deslizamiento con separador negro, barra por escritorio y dock fijo.
-   Decisión pendiente: el compositor dibuja la misma superficie de la menubar
-   dentro de cada espacio durante el deslizamiento, en vez de que la shell
-   cree una barra por escritorio.
+   **Hecho.** La shell sigue teniendo una sola menubar: durante el
+   deslizamiento el compositor dibuja esa superficie dentro de cada escritorio,
+   junto con su fondo, así que cada uno lleva su barra y se va con ella. Cuenta
+   como barra superior el panel Top/Overlay anclado arriba, a lo ancho y con
+   zona exclusiva. Duración, curva, ancho y color de la franja son tokens de
+   `vow-design` (`SPACE_*`).
 3. Modo foco: espacio de foco, estado `fullscreen` y la animación combinada.
 4. Borde superior: panel negro, titlebar SSD encima y deslizamiento de 28 px.
 5. Infinity: espacio actual para la shell y aviso de foco/panel para

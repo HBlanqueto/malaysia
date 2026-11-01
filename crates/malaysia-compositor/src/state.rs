@@ -303,6 +303,8 @@ pub struct State {
     /// The row of desktops and focus spaces, and where each window lives
     /// (ADR 0051).
     pub(crate) spaces: malaysia_scene::spaces::Spaces,
+    /// The slide between spaces being drawn, if any (ADR 0051, 17b).
+    pub(crate) space_slide: Option<crate::spaces::SpaceSlide>,
     /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
@@ -598,6 +600,7 @@ impl State {
             infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),
+            space_slide: None,
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),

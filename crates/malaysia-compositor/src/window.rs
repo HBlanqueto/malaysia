@@ -867,6 +867,35 @@ impl Windows {
             .filter(move |window| window.is_visible(minimized))
     }
 
+    /// Every window that can be drawn, back to front: the visible ones, plus
+    /// the ones only hidden because their space is not shown, at the
+    /// rectangle they keep on that space. Used while spaces slide (ADR 0051);
+    /// minimized windows are never included.
+    pub fn iter_drawable<'a>(
+        &'a self,
+        minimized: &'a HashSet<WindowId>,
+    ) -> impl DoubleEndedIterator<Item = Window<'a>> + 'a {
+        self.scene.iter().filter_map(move |(id, outer)| {
+            let data = self.windows.iter().find(|data| data.id == id)?;
+            let outer = if data.off_space && !data.hidden {
+                data.hidden_rect?
+            } else {
+                outer
+            };
+            let drawable = data.mapped
+                && !data.hidden
+                && !minimized.contains(&id)
+                && surface_has_buffer(data.toplevel.wl_surface())
+                && data.damaged
+                && data.geometry_fits_buffer();
+            drawable.then(|| Window {
+                data,
+                outer,
+                decoration: self.decoration_of(id),
+            })
+        })
+    }
+
     /// The topmost visible window, if any.
     pub fn topmost_visible(&self, minimized: &HashSet<WindowId>) -> Option<WindowId> {
         self.iter_visible(minimized)

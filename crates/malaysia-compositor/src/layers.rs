@@ -36,6 +36,21 @@ pub struct LayerEntry {
     pub keyboard_interactivity: KeyboardInteractivity,
 }
 
+impl LayerEntry {
+    /// Whether this surface is a desktop's own bar: a Top/Overlay panel along
+    /// the whole top edge that reserves space (the menubar). Each desktop has
+    /// one and it slides with its desktop; the dock and other panels stay put
+    /// (ADR 0051).
+    pub fn is_desktop_bar(&self) -> bool {
+        matches!(self.layer, Layer::Top | Layer::Overlay)
+            && self
+                .anchors
+                .contains(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT)
+            && !self.anchors.contains(Anchor::BOTTOM)
+            && self.exclusive_zone > 0
+    }
+}
+
 /// The compositor's registry of layer surfaces.
 #[derive(Debug, Default)]
 pub struct Layers {
