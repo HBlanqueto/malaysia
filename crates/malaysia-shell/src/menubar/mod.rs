@@ -138,7 +138,13 @@ pub fn spawn_component_with(component: &str, args: &[&str]) {
         eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
         return;
     };
-    let program = env::current_exe().unwrap_or_else(|_| PathBuf::from("malaysia-shell"));
+    // Prefer the Nix wrapper next to the running binary. `current_exe()` on a
+    // wrapped binary points at `.malaysia-shell-wrapped`; the wrapper sets the
+    // Mesa environment and is what systemd/input.rs launch, so use it here too.
+    let program = env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("malaysia-shell")))
+        .unwrap_or_else(|| PathBuf::from("malaysia-shell"));
     let mut command = Command::new(&program);
     command
         .arg(component)
