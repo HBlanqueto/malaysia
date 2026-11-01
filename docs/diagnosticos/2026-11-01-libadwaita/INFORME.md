@@ -314,3 +314,23 @@ En `capturas/` (también en `/tmp/malaysia-diag/capturas/`):
 - `E4-A-c-client-fullscreen-broken.png`: fullscreen del cliente (menú
   «Pantalla completa»/F11) deja la ventana en 1024x548 sobre fondo negro.
 - `E5-A-c-after-exit.png`: restaurado tras `Ctrl+Super+F`.
+
+## Resolución (2026-11-01)
+
+- **A(b) doble clic en la headerbar:** `apply_titlebar_double_click` (GTK
+  `titlebar_gesture` y titlebar SSD) entra o sale del modo foco con
+  `green_button = "focus"`; las ventanas de ancho fijo siguen estirándose en
+  vertical. Commit `d92b64c`.
+- **A(c) F11 / «Pantalla completa» del cliente a 1024x548:** carrera en
+  `Windows::commit`. GTK dibuja un frame más a su tamaño viejo (al cerrar el
+  popover) antes de confirmar el configure de fullscreen; el compositor miraba
+  el estado comprometido (aún Normal), adoptaba ese tamaño y lo reenviaba con
+  el estado fullscreen. Ya no sigue el tamaño del cliente si ha pedido
+  fullscreen o maximizado. Commit `d92b64c`.
+- **B ítem espurio «TextEditor»/«Escritorio» en la barra:** el menú salía de
+  la ventana activa, pero el nombre con el que se titulaba el menú primario de
+  libadwaita (y el título en negrita) salía de `active_app`, que puede ir por
+  detrás al cambiar el foco; el menú no se plegaba en el título. Ahora ambos
+  salen de la misma ventana.
+- Pendiente de confirmar en sesión: la barra que cae al menú de escritorio
+  al bajarla en modo foco (no se reprodujo en la ejecución final).

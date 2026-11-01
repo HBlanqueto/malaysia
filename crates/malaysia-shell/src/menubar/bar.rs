@@ -260,7 +260,6 @@ impl App for BarApp {
 
         let now = self.clock.read().clone();
         let app_id = self.active_app.read().clone();
-        let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let focused = app_id.is_some();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
@@ -277,6 +276,14 @@ impl App for BarApp {
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
+        // The bold title and the menus follow the same window: the active
+        // toplevel when there is one, `active_app` otherwise.
+        let app = resolve_app_name(
+            active_info
+                .map(|info| info.app_id.as_str())
+                .or(app_id.as_deref()),
+            &self.entries,
+        );
         let key = active_info.map(|info| MenuKey {
             app_id: info.app_id.clone(),
             app_menu: info.app_menu.clone(),
@@ -330,8 +337,14 @@ impl App for BarApp {
                             generation = next_generation,
                             "menubar: org.gtk.Menus focus"
                         );
+                        // Name the menu after the window it comes from, not
+                        // after `active_app`, which can still name the
+                        // previous app while focus changes: the libadwaita
+                        // primary menu would be titled «TextEditor» on
+                        // Calculator and not fold into the bold title.
+                        let menu_app = resolve_app_name(Some(app_id.as_str()), &self.entries);
                         self.dbus
-                            .gtk_focus(menus.clone(), app.clone(), next_generation);
+                            .gtk_focus(menus.clone(), menu_app, next_generation);
                     }
                     Some(key) => {
                         tracing::info!(app_id = %key.app_id, "menubar: app_menu none");
