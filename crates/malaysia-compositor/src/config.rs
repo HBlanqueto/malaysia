@@ -397,11 +397,23 @@ impl Default for DockConfig {
 }
 
 /// Menu bar options (macOS System Settings → Menu Bar).
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct MenubarConfig {
     /// `autohide` — automatically hide and show the menu bar.
     pub autohide: bool,
+    /// `app_menus` — the bar shows the focused app's own menus. The compositor
+    /// only tells GTK to hide its menubar (`gtk_shell1` capabilities) when true.
+    pub app_menus: bool,
+}
+
+impl Default for MenubarConfig {
+    fn default() -> Self {
+        Self {
+            autohide: false,
+            app_menus: true,
+        }
+    }
 }
 
 /// Compositor-side surface effects (ADR 0020). These apply to *every* window,
@@ -645,6 +657,7 @@ mod tests {
         assert_eq!(config.dock.mineffect, MinimizeEffect::Genie);
         assert!(config.dock.show_process_indicators);
         assert!(!config.menubar.autohide);
+        assert!(config.menubar.app_menus);
         assert_eq!(config.wallpaper.scale, WallpaperScale::Fill);
         assert!(!config.wallpaper.shuffle);
         assert!(!config.effects.inner_border.enabled);

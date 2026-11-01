@@ -12,14 +12,17 @@ use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use barrier_kit::platform::{AppMenuAddress, WakeHandle};
+use barrier_kit::shell::GtkMenusAddress;
 use futures_lite::{StreamExt, future};
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
+use crate::menubar::gtkmenus;
+
 pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
 pub const REGISTRAR_PATH: &str = "/com/canonical/AppMenu/Registrar";
 const DBUSMENU_INTERFACE: &str = "com.canonical.dbusmenu";
-const CALL_TIMEOUT: Duration = Duration::from_millis(500);
+pub(crate) const CALL_TIMEOUT: Duration = Duration::from_millis(500);
 /// `GetLayout(0, -1, [])` measures 354–478 ms in Kate, so the full tree gets
 /// its own budget instead of the 500 ms of the other calls.
 const FULL_TREE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -34,7 +37,7 @@ pub fn render_calls() -> usize {
     RENDER_CALLS.load(Ordering::Relaxed)
 }
 
-fn note_call() {
+pub(crate) fn note_call() {
     if RENDER_THREAD.get() == Some(&std::thread::current().id()) {
         RENDER_CALLS.fetch_add(1, Ordering::Relaxed);
         debug_assert!(false, "D-Bus call on the render thread");
@@ -46,6 +49,13 @@ fn note_call() {
 pub enum Command {
     Focus {
         address: AppMenuAddress,
+        generation: u64,
+    },
+    /// The focused window has no dbusmenu but exports `org.gtk.Menus`
+    /// (ADR 0045: dbusmenu wins when both exist).
+    GtkFocus {
+        menus: GtkMenusAddress,
+        app_name: String,
         generation: u64,
     },
     /// The focused window has no menu; drops any pending full-tree prefetch.
@@ -100,6 +110,14 @@ impl MenuClient {
     pub fn focus(&self, address: AppMenuAddress, generation: u64) {
         let _ = self.commands.send_blocking(Command::Focus {
             address,
+            generation,
+        });
+    }
+
+    pub fn gtk_focus(&self, menus: GtkMenusAddress, app_name: String, generation: u64) {
+        let _ = self.commands.send_blocking(Command::GtkFocus {
+            menus,
+            app_name,
             generation,
         });
     }
@@ -507,6 +525,7 @@ async fn run(
     let mut pending = Pending::default();
     let mut deadline: Option<Instant> = None;
     let mut background = BackgroundFullTree::default();
+    let mut gtk: Option<gtkmenus::Session> = None;
     loop {
         let timer = match (deadline, background.next()) {
             (Some(debounce), Some(full)) => Some(debounce.min(full)),
@@ -543,6 +562,7 @@ async fn run(
                 if !enabled {
                     focused = None;
                     background = BackgroundFullTree::default();
+                    end_gtk(&connection, &mut gtk).await;
                 }
                 tracing::info!(enabled, "menubar: app_menus changed");
                 set_registrar(&connection, &windows, enabled).await;
@@ -554,6 +574,7 @@ async fn run(
                 if !app_menus {
                     continue;
                 }
+                end_gtk(&connection, &mut gtk).await;
                 focused = Some((address.clone(), generation));
                 pending = Pending::default();
                 deadline = None;
@@ -591,11 +612,30 @@ async fn run(
                     arm(&mut deadline);
                 }
             }
+            Event::Command(Ok(Command::GtkFocus {
+                menus,
+                app_name,
+                generation,
+            })) => {
+                if !app_menus {
+                    continue;
+                }
+                focused = None;
+                pending = Pending::default();
+                deadline = None;
+                background = BackgroundFullTree::default();
+                end_gtk(&connection, &mut gtk).await;
+                let session =
+                    gtkmenus::Session::open(&connection, menus, app_name, generation).await;
+                send_gtk(&snapshots, &wake, &session, 0, false).await;
+                gtk = Some(session);
+            }
             Event::Command(Ok(Command::Unfocus)) => {
                 focused = None;
                 pending = Pending::default();
                 deadline = None;
                 background = BackgroundFullTree::default();
+                end_gtk(&connection, &mut gtk).await;
             }
             Event::Command(Ok(Command::Open {
                 address,
@@ -603,6 +643,10 @@ async fn run(
                 generation,
             })) => {
                 if !app_menus {
+                    continue;
+                }
+                if let Some(session) = gtk_for(&gtk, &address, generation) {
+                    send_gtk(&snapshots, &wake, session, id, true).await;
                     continue;
                 }
                 let started = Instant::now();
@@ -647,6 +691,10 @@ async fn run(
                 generation,
             })) => {
                 if !app_menus {
+                    continue;
+                }
+                if let Some(session) = gtk_for(&gtk, &address, generation) {
+                    send_gtk(&snapshots, &wake, session, 0, true).await;
                     continue;
                 }
                 let started = Instant::now();
@@ -708,6 +756,10 @@ async fn run(
                 id,
                 timestamp,
             })) => {
+                if let Some(session) = gtk.as_ref().filter(|session| session.address == address) {
+                    session.activate(&connection, id).await;
+                    continue;
+                }
                 if let Err(error) =
                     event(&connection, &dbus, &mut proxies, &address, id, timestamp).await
                 {
@@ -725,6 +777,23 @@ async fn run(
                     continue;
                 }
                 let service = args.name().to_string();
+                if let Some(session) =
+                    gtk.take_if(|session| session.menus.unique_bus_name == service)
+                {
+                    tracing::info!(%service, "menubar: GTK menu service vanished");
+                    send(
+                        &snapshots,
+                        &wake,
+                        MenuSnapshot {
+                            generation: session.generation,
+                            address: session.address,
+                            parent: None,
+                            items: None,
+                            cached: false,
+                        },
+                    )
+                    .await;
+                }
                 proxies.retain(|address, _| address.service != service);
                 let evicted = caches.evict_service(&service);
                 if let Some((address, generation)) = &focused
@@ -748,6 +817,18 @@ async fn run(
                 }
             }
             Event::Owner(None) => break,
+            Event::Menu(Some(Ok(message)))
+                if message
+                    .header()
+                    .interface()
+                    .is_some_and(|interface| interface.starts_with("org.gtk.")) =>
+            {
+                if let Some(session) = gtk.as_mut()
+                    && session.signal(&connection, &message).await
+                {
+                    send_gtk(&snapshots, &wake, session, 0, false).await;
+                }
+            }
             Event::Menu(Some(Ok(message))) => {
                 handle_signal(
                     message,
@@ -795,6 +876,45 @@ async fn run(
             }
         }
     }
+}
+
+/// The GTK session behind `address` while `generation` is current.
+fn gtk_for<'a>(
+    gtk: &'a Option<gtkmenus::Session>,
+    address: &AppMenuAddress,
+    generation: u64,
+) -> Option<&'a gtkmenus::Session> {
+    gtk.as_ref()
+        .filter(|session| session.address == *address && session.generation == generation)
+}
+
+async fn end_gtk(connection: &zbus::Connection, gtk: &mut Option<gtkmenus::Session>) {
+    if let Some(session) = gtk.take() {
+        session.close(connection).await;
+    }
+}
+
+/// Sends the GTK tree (`id == 0`) or one submenu of it. The whole tree is
+/// already loaded, so submenus answer from memory.
+async fn send_gtk(
+    snapshots: &Sender<MenuSnapshot>,
+    wake: &Arc<Mutex<Option<WakeHandle>>>,
+    session: &gtkmenus::Session,
+    id: i32,
+    cached: bool,
+) {
+    send(
+        snapshots,
+        wake,
+        MenuSnapshot {
+            generation: session.generation,
+            address: session.address.clone(),
+            parent: (id != 0).then_some(id),
+            items: session.tree.children(id),
+            cached,
+        },
+    )
+    .await;
 }
 
 fn arm(deadline: &mut Option<Instant>) {
@@ -1095,10 +1215,23 @@ fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
     }
 }
 
-async fn menu_stream(connection: &zbus::Connection) -> zbus::Result<zbus::MessageStream> {
+/// dbusmenu, `org.gtk.Menus` and `org.gtk.Actions` signals in one stream.
+async fn menu_stream(
+    connection: &zbus::Connection,
+) -> zbus::Result<impl futures_lite::Stream<Item = zbus::Result<zbus::Message>> + Unpin> {
+    Ok(signal_stream(connection, DBUSMENU_INTERFACE)
+        .await?
+        .or(signal_stream(connection, gtkmenus::MENUS_INTERFACE).await?)
+        .or(signal_stream(connection, gtkmenus::ACTIONS_INTERFACE).await?))
+}
+
+async fn signal_stream(
+    connection: &zbus::Connection,
+    interface: &'static str,
+) -> zbus::Result<zbus::MessageStream> {
     let rule = zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
-        .interface(DBUSMENU_INTERFACE)?
+        .interface(interface)?
         .build();
     zbus::MessageStream::for_match_rule(rule, connection, None).await
 }
@@ -1180,7 +1313,7 @@ async fn layout(
 }
 
 /// Resolves to `None` when `future` has not finished after `limit`.
-async fn timed<F: std::future::Future>(limit: Duration, future: F) -> Option<F::Output> {
+pub(crate) async fn timed<F: std::future::Future>(limit: Duration, future: F) -> Option<F::Output> {
     future::or(async move { Some(future.await) }, async move {
         async_io::Timer::after(limit).await;
         None

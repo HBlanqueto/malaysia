@@ -15,8 +15,10 @@ use std::{
 };
 
 use barrier_kit::animation::Spring;
-use barrier_kit::platform::{Timers};
-use barrier_kit::shell::{Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use barrier_kit::platform::Timers;
+use barrier_kit::shell::{
+    Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
+};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::input::Input;
 use freya_components::svg_viewer::SvgViewer;

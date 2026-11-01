@@ -16,6 +16,7 @@ pub mod clock;
 pub mod dbusmenu;
 pub mod dbusmenu_map;
 pub mod focused;
+pub mod gtkmenus;
 pub mod help_topics;
 pub mod icons;
 pub mod items;

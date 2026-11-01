@@ -13,8 +13,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use barrier_kit::menu::MenuItem;
-use barrier_kit::platform::{Timers};
-use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec, Toplevels, run_layer};
+use barrier_kit::platform::Timers;
+use barrier_kit::shell::{
+    Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec, Toplevels,
+    run_layer,
+};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
@@ -24,6 +27,7 @@ use vow_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIE
 use crate::desktop::DesktopEntry;
 use crate::menubar::dbusmenu::{self, MenuClient};
 use crate::menubar::dbusmenu_map;
+use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuItems, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
@@ -190,6 +194,23 @@ pub struct RemoteMenu {
     pub items: Vec<MenuItem>,
 }
 
+/// What decides which menu source the focused window uses.
+#[derive(Clone, Debug, PartialEq)]
+struct MenuKey {
+    app_id: String,
+    app_menu: Option<AppMenuAddress>,
+    gtk_menus: Option<GtkMenusAddress>,
+    enabled: bool,
+}
+
+impl MenuKey {
+    fn address(&self) -> Option<AppMenuAddress> {
+        self.app_menu
+            .clone()
+            .or_else(|| self.gtk_menus.as_ref().map(gtkmenus::address))
+    }
+}
+
 pub struct BarApp {
     pub clock: State<String>,
     pub active_app: State<Option<String>>,
@@ -242,16 +263,9 @@ impl App for BarApp {
         let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let focused = app_id.is_some();
         let app_menus_enabled = *self.app_menus.read();
-        let last_app_menu = use_hook(|| {
-            Rc::new(RefCell::new(
-                None::<(String, Option<barrier_kit::platform::AppMenuAddress>, bool)>,
-            ))
-        });
-        let last_gtk_menus = use_hook(|| {
-            Rc::new(RefCell::new(
-                None::<(String, Option<barrier_kit::shell::GtkMenusAddress>)>,
-            ))
-        });
+        let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
+        let last_gtk_menus =
+            use_hook(|| Rc::new(RefCell::new(None::<(String, Option<GtkMenusAddress>)>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
         let previous_len = use_hook(|| Rc::new(Cell::new(0usize)));
         let pending_new = use_hook(|| Rc::new(Cell::new(None::<usize>)));
@@ -263,12 +277,11 @@ impl App for BarApp {
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
-        let key = active_info.map(|info| {
-            (
-                info.app_id.clone(),
-                info.app_menu.clone(),
-                app_menus_enabled,
-            )
+        let key = active_info.map(|info| MenuKey {
+            app_id: info.app_id.clone(),
+            app_menu: info.app_menu.clone(),
+            gtk_menus: info.gtk_menus.clone(),
+            enabled: app_menus_enabled,
         });
         {
             let mut snapshot_state = self.menu_snapshot;
@@ -277,16 +290,27 @@ impl App for BarApp {
                 let next_generation = generation.get() + 1;
                 generation.set(next_generation);
                 snapshot_state.set(None);
-                if let (Some((old_app, Some(_), _)), Some((new_app, None, _))) = (&*last, &key)
-                    && old_app == new_app
+                if let (Some(old), Some(new)) = (&*last, &key)
+                    && old.app_id == new.app_id
+                    && old.address().is_some()
+                    && new.address().is_none()
                 {
                     // shortcut: only the focused window's address is visible,
                     // so focusing another window of the same app can look like
                     // the app dropping its menu.
-                    memory.borrow_mut().forget(new_app);
+                    memory.borrow_mut().forget(&new.app_id);
                 }
+                // ADR 0045: dbusmenu, then org.gtk.Menus, then the 14c fallback.
                 match &key {
-                    Some((app_id, Some(menu), true)) => {
+                    Some(key) if !key.enabled => {
+                        tracing::info!(app_id = %key.app_id, "menubar: app_menus disabled");
+                        self.dbus.unfocus();
+                    }
+                    Some(MenuKey {
+                        app_id,
+                        app_menu: Some(menu),
+                        ..
+                    }) => {
                         tracing::info!(
                             app_id = %app_id,
                             service = %menu.service,
@@ -296,12 +320,21 @@ impl App for BarApp {
                         );
                         self.dbus.focus(menu.clone(), next_generation);
                     }
-                    Some((app_id, _, false)) => {
-                        tracing::info!(app_id = %app_id, "menubar: app_menus disabled");
-                        self.dbus.unfocus();
+                    Some(MenuKey {
+                        app_id,
+                        gtk_menus: Some(menus),
+                        ..
+                    }) => {
+                        tracing::info!(
+                            app_id = %app_id,
+                            generation = next_generation,
+                            "menubar: org.gtk.Menus focus"
+                        );
+                        self.dbus
+                            .gtk_focus(menus.clone(), app.clone(), next_generation);
                     }
-                    Some((app_id, None, true)) => {
-                        tracing::info!(app_id = %app_id, "menubar: app_menu none");
+                    Some(key) => {
+                        tracing::info!(app_id = %key.app_id, "menubar: app_menu none");
                         self.dbus.unfocus();
                     }
                     None => self.dbus.unfocus(),
@@ -374,12 +407,12 @@ impl App for BarApp {
                     started: None,
                 }
             } else {
-                stored.decide(
-                    &app_id,
-                    active_info.and_then(|info| info.app_menu.as_ref()),
-                    newly_mapped,
-                    Instant::now(),
-                )
+                let address = active_info.and_then(|info| {
+                    info.app_menu
+                        .clone()
+                        .or_else(|| info.gtk_menus.as_ref().map(gtkmenus::address))
+                });
+                stored.decide(&app_id, address.as_ref(), newly_mapped, Instant::now())
             };
             drop(stored);
             if let Some(deadline) = decision.started {

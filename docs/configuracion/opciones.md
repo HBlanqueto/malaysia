@@ -253,7 +253,7 @@ compositor lanza `malaysia-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
 | `menubar.autohide` | bool | `false` | pendiente | shell |
-| `menubar.app_menus` | bool | `true` | **activa** | shell |
+| `menubar.app_menus` | bool | `true` | **activa** | shell (dbusmenu y `org.gtk.Menus`) y compositor (`gtk_shell1` `capabilities` 3/0, ADR 0045) |
 
 ## `effects` — efectos de superficie del compositor (ADR 0020)
 

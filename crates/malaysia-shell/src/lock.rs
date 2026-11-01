@@ -16,7 +16,7 @@ use std::{
 };
 
 use barrier_kit::password::{PasswordField, State as FieldState};
-use barrier_kit::platform::{inserts_text};
+use barrier_kit::platform::inserts_text;
 use barrier_kit::shell::{SessionUnlock, run_lock};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;

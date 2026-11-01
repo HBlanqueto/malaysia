@@ -152,9 +152,22 @@ impl GtkShellState {
     }
 }
 
+/// `global_app_menu | global_menu_bar` when the bar shows app menus (14f-2).
+///
+/// GTK 3.24 and 4.22 test each setting as `(caps & bit) == bit`, so 3 also
+/// turns on `gtk-shell-shows-desktop` (the enum gives `desktop_icons` the value
+/// 3, GNOME bug 787407): `GtkPlacesSidebar` then lists «Desktop». With 0 GTK
+/// keeps its own menubar, which is what a bar without app menus needs.
+// shortcut: read once per bind; a client bound before `menubar.app_menus`
+// changes keeps the old value until it reconnects. Upgrade: rebind-free
+// update is not in the protocol, so document it in the settings app.
+fn capabilities(app_menus: bool) -> u32 {
+    if app_menus { 3 } else { 0 }
+}
+
 impl GlobalDispatch<GtkShell1, (), State> for GtkShellState {
     fn bind(
-        _state: &mut State,
+        state: &mut State,
         _handle: &DisplayHandle,
         _client: &Client,
         resource: New<GtkShell1>,
@@ -162,8 +175,7 @@ impl GlobalDispatch<GtkShell1, (), State> for GtkShellState {
         data_init: &mut DataInit<'_, State>,
     ) {
         let shell = data_init.init(resource, ());
-        // 14f-1 sends 0; 14f-2 will send 3 (global_app_menu | global_menu_bar).
-        shell.capabilities(0);
+        shell.capabilities(capabilities(state.config.menubar.app_menus));
     }
 }
 
@@ -477,7 +489,14 @@ mod tests {
     use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
     use smithay::wayland::xdg_activation::XdgActivationTokenData;
 
-    use super::{Gesture, GtkDbusProperties, decode_gesture};
+    use super::{Gesture, GtkDbusProperties, capabilities, decode_gesture};
+
+    #[test]
+    fn capabilities_follow_the_bar_app_menus() {
+        // global_app_menu | global_menu_bar, or GTK keeps its own menubar.
+        assert_eq!(capabilities(true), 3);
+        assert_eq!(capabilities(false), 0);
+    }
 
     struct TestClient;
 
