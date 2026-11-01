@@ -1232,10 +1232,14 @@ lab() {
 
         if command -v zenity >/dev/null 2>&1; then
             lab_app_client zenity zenity --info --text "Prueba GTK sin headerbar"
-        elif command -v gnome-calculator >/dev/null 2>&1; then
+        else
+            printf 'lab: zenity not found; skipping GTK dialog test\n' >&2
+        fi
+
+        if command -v gnome-calculator >/dev/null 2>&1; then
             lab_app_client gnome-calculator gnome-calculator
         else
-            printf 'lab: zenity or gnome-calculator not found; skipping GTK test\n' >&2
+            printf 'lab: gnome-calculator not found; skipping GTK/libadwaita test\n' >&2
         fi
 
         if command -v kate >/dev/null 2>&1; then
