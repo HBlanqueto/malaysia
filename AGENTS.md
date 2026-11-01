@@ -81,8 +81,6 @@ No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).
 NixOS: `nixosModules.default` instala paquete, sesión, PAM y
 `malaysia-session.target`.
 
-## Commits
-
 ## Ramas y push
 
 Todo va directo a `main`, sin ramas ni PR salvo petición. Antes de empezar y de cada push: `git pull --ff-only`; nunca `--force`, `reset --hard` sobre commits publicados ni rebase de historia publicada. `Cargo.lock` no se sube generado con `kit-local`; si aparece modificado sin cambiar dependencias, `git checkout Cargo.lock`. La historia anterior al 28-oct-2026 vive en el tag `archivo/historia-hasta-2026-10-26`.
@@ -108,3 +106,68 @@ No modifiques nada fuera del repo y `$XDG_RUNTIME_DIR/malaysia`: sockets, ficher
 
 Si copias código de un tercero, actualiza `NOTICE` en el mismo commit. Otto es
 MIT; `laye-rs` no tiene licencia y no se usa.
+
+## Código mínimo (reglas duras, estilo ponytail)
+
+Se cumplen al pie de la letra. Ganan el diff más corto y la respuesta más corta.
+
+1. **Reutiliza antes de escribir.** Busca con `grep` si ya existe la función, el
+   token o el módulo. Cada valor y cada regla viven en un solo sitio; nunca copies.
+2. **Nada «por si acaso».** Prohibido añadir parámetros, features, traits,
+   genéricos, opciones o ramas que hoy nadie usa. El código muerto se borra: no
+   se comenta ni se tapa con `#[allow(dead_code)]`.
+3. **Lo más directo.** Nada de wrappers ni abstracciones de un solo uso. Se
+   extrae a la tercera repetición, no antes.
+4. **Una función, una tarea; un módulo, un motivo de cambio.** Si un bloque
+   necesita un comentario para entenderse, extráelo a una función con ese nombre.
+5. **Los nombres sustituyen al comentario:** `dias_transcurridos`, no `d`.
+   Booleanos con forma de pregunta: `focused`, `zoom_supported`.
+6. **Comentarios: ninguno por defecto.** Solo se permiten:
+   - `// SAFETY:` en cada `unsafe`;
+   - una línea con el *porqué* de un invariante cuya rotura desestabiliza y que
+     el código no puede expresar: orden de protocolo, rodeo de un bug externo
+     (con enlace) o seguridad. Cita el ADR si existe.
+
+   Prohibido: explicar qué hace el código, contar historia («antes…», «ahora…»),
+   `TODO` sin issue, código comentado, cabeceras decorativas y `///` que repiten
+   el nombre. Si borras docs en un crate con `#![warn(missing_docs)]`, quita el
+   lint en el mismo commit.
+7. **Diff mínimo.** Toca solo lo que pide el cambio: no reformatees ni
+   renombres de paso. El formato y los lints los ponen las herramientas.
+8. **Tests solo para lógica pura con riesgo**, y que el nombre sea la
+   especificación. Si borras código, borra también sus tests.
+9. **Ahorra tokens.** Lee rangos, no ficheros enteros. No pegues en el chat el
+   código que ya está en el diff. Cierra con 1–3 líneas: qué cambió y qué queda.
+
+### Así se aplica en malaysia
+
+```rust
+// ✗ lanzar un cliente a mano (hereda el Mesa/EGL privado del wrapper)
+Command::new(app).spawn()?;
+// ✓ el único punto que lanza procesos
+spawn::spawn(spawn::command(app, &config), &config)?;
+```
+
+```rust
+// ✗ literal de diseño en crates/malaysia-compositor/src
+const FADE: Duration = Duration::from_millis(250);
+// ✓ token de vow-design
+const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
+```
+
+```rust
+// ✗ cabecera de 30 líneas que repite el ADR
+// ✓ una línea con el invariante
+// ADR 0004: posición floor, tamaño ceil; sin costuras entre rectángulos.
+```
+
+```rust
+// ✓ el nombre del test es la especificación (malaysia-scene/geometry.rs)
+#[test]
+fn a_fractional_logical_size_is_ceiled() { … }
+```
+
+- Un módulo por tema (`cursor.rs`, `lock.rs`, `spaces.rs`…). Si un fichero
+  pasa de unas 1500 líneas, la siguiente función nueva va a un módulo propio.
+- Una opción nueva se añade en `config.rs` y en `docs/configuracion/opciones.md`,
+  sin ningún otro sitio.

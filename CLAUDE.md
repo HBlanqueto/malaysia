@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-Las instrucciones del proyecto están en [AGENTS.md](AGENTS.md); léelo antes de trabajar.
-
 @AGENTS.md
 
 ## Regla de ramas (prioridad máxima)
