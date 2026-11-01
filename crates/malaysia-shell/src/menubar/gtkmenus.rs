@@ -268,17 +268,19 @@ impl Builder<'_> {
                 out.push(separator(self.id()));
                 continue;
             }
-            let mut label = string(attributes, "label").unwrap_or_default();
+            let label = string(attributes, "label").unwrap_or_default();
             if let Some((group, menu)) = attributes.get(":submenu").and_then(link) {
                 // libadwaita exports its primary (☰) menu as a submenu marked
-                // `x-adw-app-menu`; naming it after the app folds it into the
-                // bold title even when `g_get_application_name` differs.
+                // `x-adw-app-menu`. It is a flat list, so it is split by what
+                // each entry does, the way macOS lays out an app's menus.
                 if attributes
                     .get(ADW_APP_MENU)
                     .and_then(|value| bool::try_from(value.clone()).ok())
                     .unwrap_or(false)
                 {
-                    label = self.app_name.to_string();
+                    let children = self.menu(export, group, menu);
+                    out.extend(self.split_primary_menu(children));
+                    continue;
                 }
                 let id = self.id();
                 let children = self.menu(export, group, menu);
@@ -291,6 +293,66 @@ impl Builder<'_> {
             }
             if let Some(item) = self.action(attributes, label) {
                 out.push(item);
+            }
+        }
+        out
+    }
+
+    /// Splits the libadwaita primary (☰) menu by GTK action (ADR 0052):
+    ///
+    /// - About, Preferences and Quit take their places in the app menu: they
+    ///   go in a submenu named after the app, labelled like the fallback
+    ///   entries they replace (`remote::compose` swaps them in).
+    /// - Help and keyboard shortcuts go to Ayuda.
+    /// - Fullscreen is left out: Ventana already has it.
+    /// - The rest keeps its sections in a title of its own, «Archivo» when it
+    ///   opens, creates or saves, «Opciones» otherwise.
+    fn split_primary_menu(&mut self, children: Vec<RawItem>) -> Vec<RawItem> {
+        let mut app = Vec::new();
+        let mut help = Vec::new();
+        let mut rest = Vec::new();
+        for child in children {
+            let action = self
+                .targets
+                .get(&child.id)
+                .map(|target| target.action.clone());
+            match action.as_deref().map(primary_slot) {
+                Some(PrimarySlot::About) => {
+                    app.push(relabel(child, &format!("Acerca de {}", self.app_name)))
+                }
+                Some(PrimarySlot::Preferences) => app.push(relabel(child, "Ajustes…")),
+                Some(PrimarySlot::Quit) => {
+                    app.push(relabel(child, &format!("Salir de {}", self.app_name)))
+                }
+                Some(PrimarySlot::Help) => help.push(child),
+                Some(PrimarySlot::Window) => {}
+                Some(PrimarySlot::Other) | None => rest.push(child),
+            }
+        }
+        let opens_files = rest.iter().any(|item| {
+            self.targets
+                .get(&item.id)
+                .is_some_and(|target| opens_files(&target.action))
+        });
+        let mut out = Vec::new();
+        for (label, items) in [
+            (self.app_name.to_string(), app),
+            (
+                if opens_files { "Archivo" } else { "Opciones" }.to_string(),
+                rest,
+            ),
+            ("Ayuda".to_string(), help),
+        ] {
+            let has_entries = items
+                .iter()
+                .any(|item| !matches!(string_prop(item, "type").as_deref(), Some("separator")));
+            if has_entries {
+                let id = self.id();
+                out.push(RawItem {
+                    id,
+                    properties: submenu_properties(&label),
+                    children: items,
+                });
             }
         }
         out
@@ -340,6 +402,51 @@ impl Builder<'_> {
             children: Vec::new(),
         })
     }
+}
+
+/// Where an entry of the libadwaita primary menu belongs on the bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PrimarySlot {
+    About,
+    Preferences,
+    Quit,
+    Help,
+    Window,
+    Other,
+}
+
+/// The slot for a GTK action name (`app.about`, `win.show-help-overlay`…).
+fn primary_slot(action: &str) -> PrimarySlot {
+    match action {
+        "app.about" => PrimarySlot::About,
+        "app.preferences" | "app.settings" => PrimarySlot::Preferences,
+        "app.quit" => PrimarySlot::Quit,
+        "app.help" | "app.shortcuts" | "win.show-help-overlay" | "win.shortcuts" => {
+            PrimarySlot::Help
+        }
+        "win.fullscreen" | "win.toggle-fullscreen" | "app.fullscreen" => PrimarySlot::Window,
+        _ => PrimarySlot::Other,
+    }
+}
+
+/// Whether an action creates, opens or saves: its menu is then «Archivo».
+fn opens_files(action: &str) -> bool {
+    let name = action.split_once('.').map_or(action, |(_, name)| name);
+    ["new-window", "new-tab", "new", "open", "save"]
+        .iter()
+        .any(|word| name == *word || name.starts_with(&format!("{word}-")))
+}
+
+/// Gives a menu entry another label, keeping its action and state.
+fn relabel(mut item: RawItem, label: &str) -> RawItem {
+    item.properties.insert("label".to_string(), text(label));
+    item
+}
+
+fn string_prop(item: &RawItem, key: &str) -> Option<String> {
+    item.properties
+        .get(key)
+        .and_then(|value| String::try_from(value.clone()).ok())
 }
 
 fn submenu_properties(label: &str) -> HashMap<String, OwnedValue> {
@@ -901,6 +1008,91 @@ mod tests {
         let items = menu_items(&tree.items);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].label(), Some("Demo"));
+    }
+
+    /// The libadwaita ☰ of GNOME Calculator, as seen in Malaysia.
+    fn calculator_primary_menu() -> (Export, Actions) {
+        let mut menubar = Export::new("/org/gnome/Calculator/menus/menubar");
+        let item =
+            |label: &str, action: &str| attrs(&[("label", text(label)), ("action", text(action))]);
+        menubar.started(
+            &[0, 1],
+            vec![
+                (
+                    0,
+                    0,
+                    vec![attrs(&[
+                        ("label", text("gnome-calculator")),
+                        (ADW_APP_MENU, OwnedValue::from(true)),
+                        (":submenu", pair(1, 0)),
+                    ])],
+                ),
+                (
+                    1,
+                    0,
+                    vec![
+                        attrs(&[(":section", pair(1, 1))]),
+                        attrs(&[(":section", pair(1, 2))]),
+                        attrs(&[(":section", pair(1, 3))]),
+                    ],
+                ),
+                (1, 1, vec![item("_Ventana nueva", "app.new-window")]),
+                (1, 2, vec![item("_Limpiar histórico", "win.clear-history")]),
+                (
+                    1,
+                    3,
+                    vec![
+                        item("_Preferencias", "app.preferences"),
+                        item("_Atajos de teclado", "win.show-help-overlay"),
+                        item("_Ayuda", "app.help"),
+                        item("_Acerca de Calculadora", "app.about"),
+                    ],
+                ),
+            ],
+        );
+        let actions = actions(&[
+            ("app.new-window", true, None),
+            ("win.clear-history", true, None),
+            ("app.preferences", true, None),
+            ("win.show-help-overlay", true, None),
+            ("app.help", true, None),
+            ("app.about", true, None),
+        ]);
+        (menubar, actions)
+    }
+
+    #[test]
+    fn the_primary_menu_is_split_by_what_each_entry_does() {
+        let (menubar, actions) = calculator_primary_menu();
+        let tree = Tree::build(&Export::new(""), &menubar, &actions, "Calculadora");
+        let items = menu_items(&tree.items);
+        let titles: Vec<_> = items.iter().filter_map(|item| item.label()).collect();
+        assert_eq!(titles, vec!["Calculadora", "Archivo", "Ayuda"]);
+        let children = |index: usize| match &items[index] {
+            MenuItem::Submenu { items, .. } => items
+                .iter()
+                .filter_map(|item| item.label().map(strip_mnemonic))
+                .collect::<Vec<_>>(),
+            _ => panic!("expected a submenu"),
+        };
+        // About and Preferences are named like the app-menu entries they
+        // take the place of.
+        assert_eq!(children(0), vec!["Ajustes…", "Acerca de Calculadora"]);
+        assert_eq!(children(1), vec!["Ventana nueva", "Limpiar histórico"]);
+        assert_eq!(children(2), vec!["Atajos de teclado", "Ayuda"]);
+    }
+
+    #[test]
+    fn without_new_open_or_save_the_extra_title_is_opciones() {
+        assert!(opens_files("app.new-window"));
+        assert!(opens_files("win.new-tab"));
+        assert!(opens_files("win.save-as"));
+        assert!(opens_files("app.open"));
+        assert!(!opens_files("win.clear-history"));
+        assert!(!opens_files("win.newline"));
+        assert_eq!(primary_slot("win.fullscreen"), PrimarySlot::Window);
+        assert_eq!(primary_slot("app.shortcuts"), PrimarySlot::Help);
+        assert_eq!(primary_slot("win.number-format"), PrimarySlot::Other);
     }
 
     #[test]

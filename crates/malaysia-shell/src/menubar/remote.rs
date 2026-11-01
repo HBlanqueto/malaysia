@@ -109,7 +109,8 @@ impl MenuSources {
             let normalized = normalize(&label);
             if normalized == app_name {
                 if seen.insert(normalized) {
-                    append(&mut app_items, children);
+                    let rest = fill_slots(&mut app_items, children);
+                    append(&mut app_items, rest);
                     app_remote = id;
                 }
             } else if normalized == "ventana" || normalized == "window" {
@@ -158,6 +159,51 @@ impl MenuSources {
         });
         titles
     }
+}
+
+/// Puts the app's own entries in the places of the fallback entries with the
+/// same label («Acerca de Calculadora», «Ajustes…», «Salir de …»): the app's
+/// action and state replace the greyed-out placeholder, which keeps its icon
+/// and, when the app gives none, its shortcut. Returns the entries that match
+/// no placeholder, to be appended as before.
+fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
+    let mut rest = Vec::new();
+    for extra in extras {
+        let MenuItem::Action {
+            id,
+            label,
+            shortcut,
+            enabled,
+            check,
+            ..
+        } = &extra
+        else {
+            rest.push(extra);
+            continue;
+        };
+        let wanted = normalize(label);
+        let slot = items.iter_mut().find(
+            |item| matches!(item, MenuItem::Action { label, .. } if normalize(label) == wanted),
+        );
+        match slot {
+            Some(MenuItem::Action {
+                id: slot_id,
+                shortcut: slot_shortcut,
+                enabled: slot_enabled,
+                check: slot_check,
+                ..
+            }) => {
+                *slot_id = id.clone();
+                *slot_enabled = *enabled;
+                *slot_check = *check;
+                if shortcut.is_some() {
+                    *slot_shortcut = shortcut.clone();
+                }
+            }
+            _ => rest.push(extra),
+        }
+    }
+    rest
 }
 
 fn append(items: &mut Vec<MenuItem>, extras: Vec<MenuItem>) {
@@ -412,6 +458,66 @@ mod tests {
             window.items[window.items.len() - 2],
             MenuItem::Separator
         ));
+    }
+
+    #[test]
+    fn app_entries_take_the_places_of_the_greyed_out_fallbacks() {
+        let disabled = |label: &str, shortcut: Option<&str>| MenuItem::Action {
+            id: format!("static:{label}"),
+            label: label.to_string(),
+            shortcut: shortcut.map(str::to_string),
+            enabled: false,
+            check: CheckState::None,
+            icon: None,
+        };
+        let sources = MenuSources {
+            app_name: "Calculadora".to_string(),
+            app_items: Rc::new(move || {
+                vec![
+                    disabled("Acerca de Calculadora", None),
+                    disabled("Ajustes…", Some("Super+,")),
+                    action("Salir de Calculadora"),
+                ]
+            }),
+            window_items: Rc::new(Vec::new),
+            help_items: Rc::new(Vec::new),
+        };
+        let remote = vec![submenu(
+            "Calculadora",
+            "7",
+            vec![
+                MenuItem::Action {
+                    id: "dbusmenu:3".to_string(),
+                    label: "Ajustes…".to_string(),
+                    shortcut: Some("Ctrl+comma".to_string()),
+                    enabled: true,
+                    check: CheckState::None,
+                    icon: None,
+                },
+                MenuItem::Action {
+                    id: "dbusmenu:4".to_string(),
+                    label: "Acerca de Calculadora".to_string(),
+                    shortcut: None,
+                    enabled: true,
+                    check: CheckState::None,
+                    icon: None,
+                },
+            ],
+        )];
+        let titles = sources.compose(&remote);
+        let app = &titles[0].items;
+        // Nothing appended after «Salir»: the entries filled their slots.
+        assert_eq!(app.len(), 3);
+        assert!(matches!(
+            &app[0],
+            MenuItem::Action { id, enabled: true, .. } if id == "dbusmenu:4"
+        ));
+        assert!(matches!(
+            &app[1],
+            MenuItem::Action { id, enabled: true, shortcut: Some(shortcut), .. }
+                if id == "dbusmenu:3" && shortcut == "Ctrl+comma"
+        ));
+        assert_eq!(app[2].label(), Some("Salir de Calculadora"));
     }
 
     #[test]

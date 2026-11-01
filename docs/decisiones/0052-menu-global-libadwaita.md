@@ -31,10 +31,24 @@ realizar la ventana (`gtkapplication-wayland.c`), y la exporta en
    Se recalcula en `notify::is-active`, `notify::focus-widget` (en idle) y
    `notify::menu-model` del botón. Sin botón, el menubar queda vacío y la barra
    usa el respaldo 14c.
-3. **En la barra** (`menubar/gtkmenus.rs`): un submenú con `x-adw-app-menu`
-   toma el nombre de app de la barra, así `remote::compose` lo pliega en el
-   título en negrita aunque `g_get_application_name()` no coincida con el
-   `.desktop`.
+3. **En la barra** (`menubar/gtkmenus.rs`): el submenú con `x-adw-app-menu`
+   se reparte por la acción GTK de cada entrada, como ordena macOS los menús
+   de una app (revisado el 2026-11-01; antes se plegaba entero al final del
+   menú de la app, debajo de «Salir»):
+   - `app.about`, `app.preferences` y `app.quit` ocupan «Acerca de X»,
+     «Ajustes…» y «Salir de X» del menú de la app. Van en un submenú con el
+     nombre de la app y con la etiqueta de esa entrada; `remote::compose`
+     (`fill_slots`) pone su acción y su estado en el hueco, que deja de estar
+     en gris, en vez de añadirlas al final.
+   - `app.help`, `app.shortcuts` y `win.show-help-overlay` van a Ayuda, bajo
+     la búsqueda.
+   - `win.fullscreen` no se repite: Ventana ya tiene «Activar pantalla
+     completa».
+   - El resto conserva sus secciones en un título propio a la derecha del de
+     la app: «Archivo» si alguna acción crea, abre o guarda (`new-window`,
+     `new-tab`, `open`, `save`…), «Opciones» si no.
+   - Una acción con otro nombre cae en ese título propio: no se pierde nada.
+   Mockup: <https://claude.ai/artifact/D3DcNEJHPZK7XAnkkB9ZB7>.
 4. **Paquete Nix.** El flake expone `packages.<system>.libadwaita-global-menu`,
    derivado de `pkgs.libadwaita` con el parche del fork aplicado sobre el tag
    `1.9.3` de GNOME. El parche usa solo API de GTK <= 4.22 para coincidir con
