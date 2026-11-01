@@ -324,6 +324,13 @@ impl State {
         if self.focus_transition.is_some() || self.in_focus_mode(id) || self.locked {
             return;
         }
+        if self.has_fixed_width(id) {
+            tracing::info!(
+                window = id.get(),
+                "focus mode refused: the window has a fixed width"
+            );
+            return;
+        }
         // A window on another space is shown first, without its own slide.
         self.show_space_of(id);
         self.space_slide = None;

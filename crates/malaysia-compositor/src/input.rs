@@ -1124,6 +1124,10 @@ impl State {
     fn green_button(&mut self, id: WindowId) {
         use crate::config::GreenButtonAction;
         match self.config.window.green_button {
+            GreenButtonAction::Focus if self.has_fixed_width(id) => {
+                // A fixed-width window stretches vertically instead.
+                self.toggle_maximize(id);
+            }
             GreenButtonAction::Focus => {
                 tracing::info!(window = id.get(), "focus mode requested");
                 self.toggle_focus_mode(id);
@@ -1214,6 +1218,15 @@ impl State {
         self.focus_window(id);
         self.foreign_state_changed(id);
         self.request_redraw();
+    }
+
+    /// Whether the client fixes its width (min = max), like System Settings:
+    /// its green light stretches it vertically and it never enters focus
+    /// mode (ADR 0051).
+    pub(crate) fn has_fixed_width(&self, id: WindowId) -> bool {
+        self.windows
+            .client_size_bounds(id)
+            .is_some_and(|(min, max)| is_fixed_width(min, max))
     }
 
     /// Computes the target rectangle for maximizing `id`.

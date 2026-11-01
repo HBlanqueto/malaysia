@@ -862,7 +862,14 @@ impl XdgShellHandler for State {
         tracing::info!(window = id.get(), "maximize_request");
         // With the green light set to focus, a CSD app's own green light
         // enters focus mode too (ADR 0051).
-        if self.config.window.green_button == crate::config::GreenButtonAction::Focus {
+        // A fixed-width window (System Settings) only stretches vertically.
+        // A window already in focus mode (a client that only knows maximize)
+        // leaves it.
+        if self.in_focus_mode(id) {
+            self.exit_focus_mode(id);
+        } else if self.config.window.green_button == crate::config::GreenButtonAction::Focus
+            && !self.has_fixed_width(id)
+        {
             self.enter_focus_mode(id);
         } else {
             self.set_maximized(id, true);

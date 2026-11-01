@@ -261,7 +261,10 @@ Concepto y plan en el ADR 0051.
   buffer a ese tamaño (máximo 300 ms), para no mostrar un frame negro; el log
   `focus transition handed over` dice cuánto esperó. Prueba: `./dev.sh demo`,
   botón verde de una ventana SSD, `Ctrl+Alt+←/→` entre el escritorio y el
-  foco, y verde otra vez.
+  foco, y verde otra vez. Una ventana de ancho fijo (Ajustes) nunca entra en
+  foco: su verde la estira en vertical. Las apps CSD de barrierkit piden
+  fullscreen con su verde (barrierkit `ec9ff5a`), y un `set_maximized` sobre
+  una ventana en foco la saca.
 - **17d — Borde superior. Hecho (2026-11-01), sin aceptar en sesión.** En un
   espacio de foco quieto, el puntero en el borde superior baja la barra sobre
   una franja negra (`DURATION_BASE`, 220 ms). Una ventana SSD recupera su
