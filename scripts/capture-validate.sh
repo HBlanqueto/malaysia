@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Validate a MalaysiaDreams debug capture against an expected colour.
-#
-# Usage:
-#   capture-validate.sh <compositor-pid> [expected-rgb]
-#   capture-validate.sh <capture.png> <expected-rgb>
-#
-# Sends SIGUSR1 (which asks the next frame to write a debug PNG), waits, then
-# decodes the newest capture with ffmpeg and checks that a sample of pixels
-# match the expected colour within ±1 per channel. Default expected colour is
-# the default Solid Aqua Blue wallpaper (65, 105, 170).
-#
-# Exits 0 (PASS) or 1 (FAIL).
 
 set -euo pipefail
 EXPECTED="${2:-65 105 170}"
@@ -39,7 +27,6 @@ for spec in "640 400" "40 600" "1240 700" "300 500"; do
   O=$(( (Y * W + X) * 3 ))
   R=${RAW:$O:3}
   R=$((16#${R:0:2})); G=$((16#${R:2:2})); B=$((16#${R:4:2}))
-  # ffmpeg raw rgb24: bytes are binary; parse via od
   PX=$(printf '%s' "$RAW" | od -An -tu1 -j $O -N 3)
   read -r R G B <<<"$PX"
   if [ $((R > ew + 1 || R < ew - 1 || G > eg + 1 || G < eg - 1 || B > eb + 1 || B < eb - 1)) -eq 1 ]; then

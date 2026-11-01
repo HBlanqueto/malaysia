@@ -1,14 +1,4 @@
-//! `infinity_focus_v1`: focus-mode notices for applications (ADR 0051).
-//!
-//! Open to every client: it grants nothing and only says when the bar comes
-//! down over a client-decorated window in focus mode (`bar(1)`) and when it
-//! goes up again (`bar(0)`). A barrierkit app shows its traffic lights only
-//! in between, like Finder.
-//!
-//! Version 1 objects get their window moved down under the bar. A version 2
-//! object that sent `set_overlay` draws its titlebar over its content below
-//! the bar itself, so the window stays put and `bar_height` precedes every
-//! `bar(1)` (ADR 0054).
+//! `infinity_focus_v1`: tells applications when focus mode hides or shows the bar.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -27,23 +17,18 @@ use malaysia_scene::scene::WindowId;
 
 use crate::state::State;
 
-/// Marker data for the `infinity_focus_manager_v1` global and its objects.
 #[derive(Debug, Clone)]
 pub struct FocusNoticeGlobalData;
 
-/// The toplevel surface an `infinity_focus_surface_v1` reports on.
 #[derive(Debug)]
 pub struct FocusNoticeSurfaceData {
     surface: WlSurface,
-    /// The client draws its titlebar over its content (`set_overlay`).
     overlay: AtomicBool,
 }
 
-/// The global's version: 2 adds `set_overlay` and `bar_height`.
 const VERSION: u32 = 2;
 
 impl FocusNoticeGlobalData {
-    /// Creates the global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         display_handle
             .create_global::<State, InfinityFocusManagerV1, _>(VERSION, FocusNoticeGlobalData)
@@ -96,7 +81,6 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
-        // `destroy` is handled by `destroyed`.
         if let infinity_focus_surface_v1::Request::SetOverlay = request {
             self.overlay.store(true, Ordering::Relaxed);
         }
@@ -109,8 +93,6 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
 }
 
 impl State {
-    /// Whether the window's client draws its titlebar over its content in
-    /// focus mode (`set_overlay`), so the bar must not move the window.
     pub(crate) fn focus_overlay(&self, window: WindowId) -> bool {
         let Some(surface) = self.windows.surface_of(window) else {
             return false;
@@ -123,8 +105,6 @@ impl State {
         })
     }
 
-    /// Tells the window's client that the bar came down over it (`true`) or
-    /// went up (`false`). An overlay client first gets the bar's height.
     pub(crate) fn send_focus_bar(&mut self, window: WindowId, revealed: bool) {
         let Some(surface) = self.windows.surface_of(window).cloned() else {
             return;

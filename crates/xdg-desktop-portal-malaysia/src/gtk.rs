@@ -1,30 +1,4 @@
-//! GTK 3/4 and libadwaita bridge (ADR 0050).
-//!
-//! The portal publishes `color-scheme` and `accent-color`, but libadwaita
-//! rounds the accent to the nearest of its nine presets and knows nothing of
-//! the window tint. This bridge writes the exact accent and, when the window
-//! colour mode tints, the tinted Adwaita backgrounds as user CSS:
-//!
-//! - `$XDG_CONFIG_HOME/gtk-4.0/malaysia.css`: a light block and a dark block
-//!   behind `@media (prefers-color-scheme: …)`, so a libadwaita app follows
-//!   dark/light live, and also when it forces one scheme.
-//! - `$XDG_CONFIG_HOME/gtk-3.0/malaysia.css`: the current scheme only (GTK 3
-//!   has no media queries), plus `gtk-application-prefer-dark-theme` in
-//!   `gtk-3.0/settings.ini`, the only dark switch GTK 3 understands.
-//!
-//! Each `gtk.css` gets a marked block at the top that imports `malaysia.css`;
-//! whatever the user wrote stays below it and keeps winning. The block and the
-//! generated files are removed when the portal stops or when
-//! `appearance.gtk_bridge = false`, so another session does not inherit them.
-//!
-//! The idea (marked `@import` plus `@define-color` overrides) comes from the
-//! ChromaLeon GNOME extension; no code or template was copied from it.
-//!
-//! GTK reads `gtk.css` only at startup. The same GTK 4 rules are also
-//! published live in the portal namespace `org.malaysia.appearance`
-//! ([`live_css`], ADR 0055); Malaysia's libadwaita loads them above the user
-//! CSS, so running apps follow a new accent or tint without reopening.
-
+//! Bridge from portal appearance settings to GTK 3/4 and libadwaita.
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -33,18 +7,11 @@ use serde::Deserialize;
 use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, palette, resolve};
 use vow_design::{LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba};
 
-/// First line of the block this bridge owns inside `gtk.css`.
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
-/// Last line of the block.
 const END: &str = "/* malaysia:gtk-bridge end */";
-/// The generated stylesheet, next to `gtk.css`.
 const GENERATED: &str = "malaysia.css";
-/// The GTK 3 key that selects the dark variant of the theme.
 const PREFER_DARK: &str = "gtk-application-prefer-dark-theme";
 
-/// Adwaita's stock backgrounds (libadwaita 1.6+), the base the tint mixes
-/// into. They are libadwaita's values, not Malaysia design tokens: the bridge
-/// keeps the GTK look (ADR 0020 §1) and only shifts it toward the tint.
 #[derive(Debug, Clone, Copy)]
 struct AdwaitaBase {
     window: Rgba,
@@ -55,8 +22,6 @@ struct AdwaitaBase {
     sidebar_backdrop: Rgba,
     secondary_sidebar: Rgba,
     secondary_sidebar_backdrop: Rgba,
-    /// `None` in dark: the card is a translucent white overlay that already
-    /// shows the tinted background below it.
     card: Option<Rgba>,
     dialog: Rgba,
     popover: Rgba,
@@ -90,17 +55,13 @@ const ADWAITA_DARK: AdwaitaBase = AdwaitaBase {
     popover: Rgba::rgb8(0x36, 0x36, 0x3a),
 };
 
-/// The named colours of one scheme, in libadwaita's names.
 #[derive(Debug, Clone, PartialEq)]
 struct SchemeColors {
     dark: bool,
-    /// `(name, colour)` with the underscore name; the CSS variable is derived.
     colors: Vec<(&'static str, Rgba)>,
 }
 
 impl SchemeColors {
-    /// The accent always; the backgrounds only when the window is tinted, so
-    /// a neutral desktop keeps Adwaita exactly as shipped.
     fn new(appearance: &AppearanceConfig, dominant: Option<Rgba>, scheme: ColorScheme) -> Self {
         let concrete = AppearanceConfig {
             color_scheme: scheme,
@@ -114,7 +75,6 @@ impl SchemeColors {
             ("accent_fg_color", on_accent),
             ("accent_color", standalone_accent(resolved.accent, dark)),
         ];
-        // Increase contrast wins over decoration: no tint, only the accent.
         if !appearance.contrast {
             colors.extend(tinted_backgrounds(&resolved, appearance, dark));
         }
@@ -128,8 +88,6 @@ impl SchemeColors {
     }
 }
 
-/// The Adwaita backgrounds shifted toward the window tint, honouring the
-/// `tint_parts` the user chose for Malaysia's own windows.
 fn tinted_backgrounds(
     resolved: &Resolved,
     appearance: &AppearanceConfig,
@@ -187,17 +145,9 @@ fn tinted_backgrounds(
     colors
 }
 
-/// The lightness libadwaita clamps an accent to when it is used as text or an
-/// icon on the window background (`adw_rgba_to_standalone`): at most this in
-/// light. Like [`ADWAITA_LIGHT`], libadwaita's value, not a design token.
 const ADWAITA_STANDALONE_MAX_L_LIGHT: f32 = 0.5;
-/// At least this in dark.
 const ADWAITA_STANDALONE_MIN_L_DARK: f32 = 0.85;
 
-/// `accent_color`: the accent as text or an icon, with libadwaita's
-/// contrast rule. libadwaita 1.6+ derives `--accent-color` itself from
-/// `--accent-bg-color`; the named colour, read by older code, is overridden
-/// here with the same rule so it never loses contrast.
 fn standalone_accent(accent: Rgba, dark: bool) -> Rgba {
     let [l, a, b] = srgb_to_oklab(accent);
     let l = if dark {
@@ -230,7 +180,6 @@ fn linear_to_srgb(c: f32) -> f32 {
     }
 }
 
-/// Björn Ottosson's OKLab, as `adw_rgb_to_oklab` computes it.
 fn srgb_to_oklab(color: Rgba) -> [f32; 3] {
     let (r, g, b) = (
         srgb_to_linear(color.r),
@@ -259,8 +208,6 @@ fn oklab_to_srgb([l, a, b]: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-/// The concrete light and dark schemes for `appearance`: the dark one is
-/// `dark_tint` when the user picked it.
 fn schemes(appearance: &AppearanceConfig) -> (ColorScheme, ColorScheme) {
     let dark = if appearance.color_scheme == ColorScheme::DarkTint {
         ColorScheme::DarkTint
@@ -270,7 +217,6 @@ fn schemes(appearance: &AppearanceConfig) -> (ColorScheme, ColorScheme) {
     (ColorScheme::Light, dark)
 }
 
-/// `#rrggbb`, or `rgba(…)` when the colour is translucent.
 fn css_color(color: Rgba) -> String {
     let [r, g, b, _] = color.to_rgba8();
     if color.a >= 0.999 {
@@ -289,13 +235,9 @@ fn push_define_colors(out: &mut String, colors: &SchemeColors, indent: &str) {
     }
 }
 
-/// libadwaita 1.6+ reads CSS variables (`--accent-bg-color`); older versions
-/// and GTK 3 read the named colours. Both are written.
 fn push_variables(out: &mut String, colors: &SchemeColors, indent: &str) {
     out.push_str(&format!("{indent}:root {{\n"));
     for (name, color) in &colors.colors {
-        // `accent_color` is derived by libadwaita 1.6+ from the background;
-        // only the named colour is overridden for older versions.
         if *name == "accent_color" {
             continue;
         }
@@ -309,7 +251,6 @@ const HEADER: &str = "/* Generado por xdg-desktop-portal-malaysia desde appearan
                       * (ADR 0050). Se reescribe en cada cambio: no lo edites; tus reglas\n \
                       * van en gtk.css, debajo del bloque malaysia:gtk-bridge. */\n";
 
-/// One `@media (prefers-color-scheme: …)` block per scheme.
 fn push_media_blocks(out: &mut String, light: &SchemeColors, dark: &SchemeColors) {
     for (query, colors) in [("light", light), ("dark", dark)] {
         out.push_str(&format!("\n@media (prefers-color-scheme: {query}) {{\n"));
@@ -319,8 +260,6 @@ fn push_media_blocks(out: &mut String, light: &SchemeColors, dark: &SchemeColors
     }
 }
 
-/// The GTK 4 / libadwaita stylesheet: the current scheme at the top level for
-/// GTK < 4.16, then one `@media` block per scheme for live switching.
 fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let (light, dark) = schemes(appearance);
     let light = SchemeColors::new(appearance, dominant, light);
@@ -340,10 +279,6 @@ fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     out
 }
 
-/// The rules published live in `org.malaysia.appearance` `gtk4-css` (ADR
-/// 0055): the same colours as [`gtk4_css`], only behind the media queries.
-/// Malaysia's libadwaita sets `prefers-color-scheme` on the provider that
-/// loads them, so the block of the scheme the app shows applies.
 pub fn live_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let (light, dark) = schemes(appearance);
     let light = SchemeColors::new(appearance, dominant, light);
@@ -353,8 +288,6 @@ pub fn live_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String
     out
 }
 
-/// The GTK 3 stylesheet: the current scheme only, plus the `theme_*` names
-/// the stock GTK 3 Adwaita theme uses.
 fn gtk3_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let (light, dark) = schemes(appearance);
     let scheme = match appearance.color_scheme.resolved() {
@@ -377,7 +310,6 @@ fn gtk3_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     out
 }
 
-/// `gtk.css` with the bridge block removed.
 fn strip_block(css: &str) -> String {
     let mut out = String::with_capacity(css.len());
     let mut inside = false;
@@ -398,8 +330,6 @@ fn strip_block(css: &str) -> String {
     out
 }
 
-/// `gtk.css` with the bridge block first: GTK only honours `@import` before
-/// any other rule, and the user's own rules below it keep winning.
 fn install_block(css: &str) -> String {
     let rest = strip_block(css);
     let rest = rest.trim_start_matches('\n');
@@ -411,8 +341,6 @@ fn install_block(css: &str) -> String {
     out
 }
 
-/// Sets `key=value` in the `[Settings]` group of a GTK `settings.ini`,
-/// keeping every other line.
 fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
     let entry = format!("{key}={value}");
     let mut out = Vec::new();
@@ -457,7 +385,6 @@ fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
     text
 }
 
-/// Writes `contents` atomically, and only when it changed.
 fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
     if fs::read_to_string(path).is_ok_and(|current| current == contents) {
         return Ok(());
@@ -470,14 +397,10 @@ fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
     fs::rename(&tmp, path)
 }
 
-/// A file managed by another tool (home-manager links into the read-only
-/// store) is left alone.
 fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
-/// `appearance.gtk_bridge`, read on its own so the shared `AppearanceConfig`
-/// does not need a portal-only field yet.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 struct BridgeOptions {
@@ -490,7 +413,6 @@ impl Default for BridgeOptions {
     }
 }
 
-/// Whether `appearance.domain` enables the bridge (the default).
 pub fn enabled() -> bool {
     let path = vow_appearance::appearance_path();
     let Ok(text) = fs::read_to_string(&path) else {
@@ -502,13 +424,11 @@ pub fn enabled() -> bool {
     }
 }
 
-/// The GTK user configuration directories the bridge writes to.
 pub struct Bridge {
     config_home: PathBuf,
 }
 
 impl Bridge {
-    /// `$XDG_CONFIG_HOME`, else `~/.config`.
     pub fn from_env() -> Option<Self> {
         let config_home = std::env::var_os("XDG_CONFIG_HOME")
             .filter(|value| !value.is_empty())
@@ -526,7 +446,6 @@ impl Bridge {
         self.config_home.join(version)
     }
 
-    /// Writes the stylesheets, the `gtk.css` blocks and the GTK 3 dark switch.
     pub fn apply(&self, appearance: &AppearanceConfig, dominant: Option<Rgba>) -> io::Result<()> {
         let dark = matches!(
             appearance.color_scheme.resolved(),
@@ -557,8 +476,6 @@ impl Bridge {
         Ok(())
     }
 
-    /// Removes the blocks and the generated stylesheets. `settings.ini` keeps
-    /// its last value: it is a plain GTK preference.
     pub fn remove(&self) -> io::Result<()> {
         for version in ["gtk-4.0", "gtk-3.0"] {
             let dir = self.dir(version);
@@ -583,7 +500,6 @@ impl Bridge {
         Ok(())
     }
 
-    /// Applies or removes according to `appearance.gtk_bridge`.
     pub fn sync(&self, appearance: Option<&AppearanceConfig>, dominant: Option<Rgba>) {
         let result = if enabled() {
             let default = AppearanceConfig::default();
@@ -681,7 +597,6 @@ mod tests {
         assert!(live.contains("@media (prefers-color-scheme: dark)"));
         assert!(live.contains("window_bg_color"));
         assert!(!live.contains("Generado"));
-        // The file carries the same blocks after its header.
         assert!(gtk4_css(&appearance, None).ends_with(&live));
     }
 
@@ -693,11 +608,8 @@ mod tests {
         let dark_accent = Rgba::rgb8(0x50, 0x58, 0x68);
         let dark = standalone_accent(dark_accent, true);
         assert!(srgb_to_oklab(dark)[0] >= ADWAITA_STANDALONE_MIN_L_DARK - 1e-3);
-        // A saturated accent leaves the sRGB gamut and is clipped, as in
-        // libadwaita; it still gets lighter.
         let navy = Rgba::rgb8(0x1a, 0x3a, 0x80);
         assert!(srgb_to_oklab(standalone_accent(navy, true))[0] > srgb_to_oklab(navy)[0] + 0.3);
-        // An accent already within the bound is kept.
         let blue = Rgba::rgb8(0x0b, 0x3d, 0x91);
         let kept = standalone_accent(blue, false);
         assert!((kept.r - blue.r).abs() < 2e-3 && (kept.b - blue.b).abs() < 2e-3);
@@ -768,7 +680,6 @@ mod tests {
             fs::read_to_string(gtk4.join("gtk.css")).unwrap(),
             "label { color: red; }\n"
         );
-        // GTK 3 had no gtk.css of its own: it is removed with the block.
         assert!(!home.join("gtk-3.0/gtk.css").exists());
         let _ = fs::remove_dir_all(&home);
     }

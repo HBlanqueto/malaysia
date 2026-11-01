@@ -1,15 +1,4 @@
-//! Exercises the native-app decoration rule (ADR 0035).
-//!
-//! Each scenario talks to a compositor started with
-//! `window.decorations = "force_server"` and checks the configure width:
-//! native app ids must never get MalaysiaDreams's titlebar, while a foreign app still
-//! does.
-//!
-//! - `a`: a native app asking for server-side.
-//! - `b`: a native app asking for client-side after setting its app id.
-//! - `c`: a native app that never sends `request_mode`.
-//! - `d`: a foreign app with no request.
-
+//! Probe: native app ids must never get compositor decorations.
 use std::time::Duration;
 
 use smithay_client_toolkit::reexports::client::protocol::{
@@ -41,9 +30,7 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
 };
 
-/// The native app-id prefix from `vow_design`.
 const NATIVE_PREFIX: &str = "io.github.hblanqueto.malaysia.";
-/// The titlebar inset MalaysiaDreams reserves for foreign SSD windows.
 const TITLEBAR: i32 = 32;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -211,8 +198,6 @@ impl WindowHandler for App {
             "native_decoration: scenario {} mode {:?} size {width}x{height} (output height {output_height})",
             self.scenario, configure.decoration_mode
         );
-        // The first configure can arrive before the app id is known. The
-        // titlebar sits on top, so its presence shows up as a shorter height.
         if height == expected_height {
             self.checked = true;
             self.loop_signal.stop();

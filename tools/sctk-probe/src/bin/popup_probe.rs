@@ -1,18 +1,4 @@
-//! Maps a toplevel and a popup anchored to its bottom edge, asserting that the
-//! compositor constraint-adjusts the popup (Bloque 5).
-//!
-//! The toplevel is sized so its bottom edge sits near the bottom of the output.
-//! A popup with `gravity = bottom` would land below the window — off-screen —
-//! so a compositor honouring `constraint_adjustment` must flip it up. The probe
-//! reads the popup's configure geometry and fails if it sticks out of the
-//! output.
-//!
-//! Run it against a running compositor:
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin popup_probe
-//! ```
-
+//! Probe: the compositor constraint-adjusts a popup anchored near the output edge.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -48,14 +34,9 @@ use smithay_client_toolkit::{
     },
 };
 
-/// The toplevel's surface size, in pixels.
 const SIDE: u32 = 1000;
-/// The popup's size.
 const POPUP_W: i32 = 200;
 const POPUP_H: i32 = 120;
-/// Where the popup anchors on the window, near its bottom edge. The compositor
-/// configures the window at the output size (the client surface is ignored), so
-/// the bottom of the usable area sits around `OUTPUT_H - titlebar`.
 const ANCHOR_Y: i32 = 760;
 
 fn main() {
@@ -66,7 +47,6 @@ fn main() {
     let shm = Shm::bind(&globals, &qh).unwrap();
     let mut pool = SlotPool::new((SIDE * SIDE * 4) as usize, &shm).expect("no shm pool");
 
-    // A window tall enough that its bottom edge nears the output's bottom.
     let surface = compositor.create_surface(&qh);
     let window = xdg_shell.create_window(surface, WindowDecorations::RequestServer, &qh);
     let (buffer, canvas) = pool
@@ -78,8 +58,6 @@ fn main() {
         )
         .expect("no buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: xdg-shell requires the initial configure
-    // before the client attaches anything.
     window.commit();
 
     let wm_base: XdgWmBase =
@@ -87,8 +65,6 @@ fn main() {
             .expect("no xdg_wm_base");
     let positioner = wm_base.create_positioner(&qh, ());
     positioner.set_size(POPUP_W, POPUP_H);
-    // Anchor to the bottom-centre of the window and pull the popup below it:
-    // off the bottom of the output unless the compositor flips it up.
     positioner.set_anchor_rect((SIDE as i32) / 2 - POPUP_W / 2, ANCHOR_Y, POPUP_W, 1);
     positioner.set_anchor(xdg_positioner::Anchor::Bottom);
     positioner.set_gravity(xdg_positioner::Gravity::Bottom);
@@ -175,8 +151,6 @@ impl App {
         self.phase += 1;
     }
 
-    /// The popup's configure must land inside the output: gravity pulled it
-    /// below the window, so only a successful flip keeps it on screen.
     fn verify(&self) -> Result<(), String> {
         let (output_w, output_h) = self.output_size.ok_or("no output size was seen")?;
         let geometry = self
@@ -189,8 +163,6 @@ impl App {
                 "the popup sticks out of the output: ({x}, {y}) {w}x{h} not inside {output_w}x{output_h}"
             ));
         }
-        // The flip must actually move it up: unflipped, the popup hangs below
-        // the window's bottom edge (y + h would exceed the output).
         Ok(())
     }
 }

@@ -1,11 +1,6 @@
-//! Shared menu item constructors.
-//!
-//! Used by the desktop ([`appmenu`]) and focused-app ([`focused`]) menus so both
-//! share the same row shape: action, header, separator and submenu.
-
+//! Shared constructors for menu rows: action, header, separator and submenu.
 use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 
-/// A plain menu action with an optional shortcut and icon.
 pub fn action(
     id: impl Into<String>,
     label: impl Into<String>,
@@ -23,7 +18,6 @@ pub fn action(
     }
 }
 
-/// A section header.
 pub fn header(label: &str) -> MenuItem {
     MenuItem::Header {
         label: label.to_string(),
@@ -31,7 +25,6 @@ pub fn header(label: &str) -> MenuItem {
     }
 }
 
-/// A submenu with optional icon.
 pub fn submenu(
     id: Option<String>,
     label: impl Into<String>,
@@ -48,7 +41,6 @@ pub fn submenu(
     }
 }
 
-/// A separator line.
 pub fn separator() -> MenuItem {
     MenuItem::Separator
 }

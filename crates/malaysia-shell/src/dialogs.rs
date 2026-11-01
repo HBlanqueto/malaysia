@@ -1,9 +1,4 @@
-//! The system dialogs of the ❄ menu (14b-2): confirm a power action, force
-//! quit an app and «Acerca de este equipo».
-//!
-//! Each one runs as `malaysia-shell <component>`: a centred Overlay layer that
-//! owns the keyboard, like the launcher. Esc (or Cancelar) closes it; Enter
-//! runs the default button.
+//! System menu dialogs: power confirmation, force quit and «Acerca de este PC».
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -31,20 +26,11 @@ use crate::launcher::{IconData, app_icon, load_icon};
 use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
 
-/// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (280, 250);
 const CONFIRM_BUTTON_GAP: f32 = 10.0;
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-/// «Acerca de este equipo» takes its measurements from eqsh's About window
-/// (eq-desktop/eqsh, `About.qml`, Apache-2.0; only the numbers, no code):
-/// 335×550 with the titlebar, the drawing in a 175×125 box 75 px from the top,
-/// the title 20 px below it, label and value columns of 120 and 160 px with a
-/// 5 px gap and 5 px between rows, the button 20 px below the rows and the
-/// footer 20 px above the bottom edge.
 const ABOUT_SIZE: (u32, u32) = (335, 550);
 const ABOUT_DRAWING_TOP: f32 = 75.0;
-/// The laptop fills the 175×125 box: the SVGs' viewBox is cropped to the
-/// drawing (840×564), so no empty canvas shrinks it.
 const ABOUT_DRAWING: (f32, f32) = (175.0, 118.0);
 const ABOUT_DRAWING_BOX_HEIGHT: f32 = 125.0;
 const ABOUT_GAP: f32 = 20.0;
@@ -75,7 +61,6 @@ fn close() {
     std::process::exit(0);
 }
 
-/// The Tengen dialog panel: raised surface, dialog radius and padding.
 fn panel() -> Rect {
     let resolved = barrier_kit::theme::resolved();
     rect()
@@ -110,7 +95,6 @@ fn body(text: &str) -> Label {
         .color(rgba(palette.text.unfocused))
 }
 
-/// Cancelar plus the default (filled) button, aligned to the right.
 fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) -> Rect {
     rect()
         .width(Size::fill())
@@ -299,7 +283,6 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
         .child(wide_buttons(text.button, confirm))
 }
 
-/// `malaysia-shell power <restart|shutdown|logout>`.
 pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
     let action = arg
         .and_then(PowerAction::from_arg)
@@ -314,8 +297,6 @@ pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-/// One app in the Force Quit list: the first toplevel of each `app_id`, since
-/// killing the process closes all its windows.
 #[derive(Clone, Debug, PartialEq)]
 struct RunningApp {
     index: usize,
@@ -438,7 +419,6 @@ impl App for ForceQuitApp {
     }
 }
 
-/// `malaysia-shell force-quit`, also opened by Alt+Super+Escape.
 pub fn run_force_quit() -> anyhow::Result<()> {
     let app = ForceQuitApp {
         entries: Rc::new(desktop::read_entries()),
@@ -452,22 +432,17 @@ pub fn run_force_quit() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-/// The laptop drawings of «Acerca de este equipo».
 const THINKPAD_SVG: &[u8] = include_bytes!("about/thinkpad.svg");
 const GENERIC_SVG: &[u8] = include_bytes!("about/generic.svg");
 
-/// What «Acerca de este equipo» lists, read from the running system. Like
-/// macOS it stays short: model, screen size and five rows.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct AboutInfo {
     model: String,
     thinkpad: bool,
-    /// «14 pulgadas» from the built-in panel, or the host name.
     subtitle: String,
     cpu: String,
     memory: String,
     disk: String,
-    /// `product_serial` is root-only on most systems: `None` hides the row.
     serial: Option<String>,
 }
 
@@ -495,7 +470,6 @@ impl AboutInfo {
     }
 }
 
-/// The diagonal of the laptop panel (eDP or LVDS connector) from its EDID.
 fn built_in_panel_inches() -> Option<u32> {
     std::fs::read_dir("/sys/class/drm")
         .ok()?
@@ -508,13 +482,11 @@ fn built_in_panel_inches() -> Option<u32> {
         .find_map(|entry| panel_inches(&std::fs::read(entry.path().join("edid")).ok()?))
 }
 
-/// EDID bytes 21 and 22 hold the image size in centimetres.
 fn panel_inches(edid: &[u8]) -> Option<u32> {
     let (width, height) = (f64::from(*edid.get(21)?), f64::from(*edid.get(22)?));
     (width > 0.0 && height > 0.0).then(|| (width.hypot(height) / 2.54).round() as u32)
 }
 
-/// Firmware placeholders that are not a name.
 fn is_real(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     !value.is_empty()
@@ -529,8 +501,6 @@ fn is_real(value: &str) -> bool {
         .any(|placeholder| lower.contains(placeholder))
 }
 
-/// The marketing name of the machine. Lenovo keeps it in `product_version`
-/// («ThinkPad L14 Gen 2») and the machine type in `product_name` («20X1…»).
 fn model_name(vendor: &str, name: &str, version: &str, family: &str) -> String {
     if vendor.eq_ignore_ascii_case("lenovo")
         && let Some(model) = [version, family].into_iter().find(|value| is_real(value))
@@ -544,8 +514,6 @@ fn model_name(vendor: &str, name: &str, version: &str, family: &str) -> String {
         .unwrap_or_else(|| "Este equipo".to_string())
 }
 
-/// The disk that holds `/` as «SSD de 512 GB», following partitions and
-/// device-mapper layers (LUKS, LVM) down to the physical disk.
 fn startup_disk(mounts: &str) -> String {
     let Some(device) = mounts.lines().find_map(|line| {
         let mut fields = line.split_whitespace();
@@ -573,7 +541,6 @@ fn startup_disk(mounts: &str) -> String {
     }
 }
 
-/// `nvme0n1p2` → `nvme0n1`, `dm-0` → its first slave, recursively.
 fn physical_disk(name: &str) -> String {
     let block = Path::new("/sys/class/block").join(name);
     if let Some(slave) = std::fs::read_dir(block.join("slaves"))
@@ -593,7 +560,6 @@ fn physical_disk(name: &str) -> String {
     name.to_string()
 }
 
-/// Bytes in decimal GB or TB, the way disks are sold.
 fn disk_size(bytes: u64) -> String {
     let gb = bytes as f64 / 1e9;
     if gb >= 1000.0 {
@@ -603,8 +569,6 @@ fn disk_size(bytes: u64) -> String {
     }
 }
 
-/// The first `model name`, without trademarks, clocks or the integrated GPU:
-/// «AMD Ryzen 5 PRO 5650U», «Intel Core i5-1135G7».
 fn cpu_name(cpuinfo: &str) -> String {
     cpuinfo
         .lines()
@@ -636,8 +600,6 @@ fn short_cpu(model: &str) -> String {
         .join(" ")
 }
 
-/// Installed memory as sold: `MemTotal` misses what the firmware and GPU
-/// reserve, so it is rounded up to an even number of GB («16 GB»).
 fn memory(meminfo: &str) -> String {
     meminfo
         .lines()
@@ -663,10 +625,6 @@ impl App for AboutApp {
     }
 }
 
-/// A client-side copy of the compositor's titlebar: its 32 px height and its
-/// traffic lights at the same place (only close works), but no title, like
-/// macOS. The kit's CSD
-/// `Titlebar` is the taller client bar (`titlebar-h`), so it is not used here.
 fn about_titlebar(focused: bool, fixed: bool) -> Element {
     let (x, ..) = vow_appearance::traffic::group_rect();
     rect()
@@ -689,9 +647,6 @@ fn about_titlebar(focused: bool, fixed: bool) -> Element {
         .into_element()
 }
 
-/// The window content. The titlebar has no divider, so the whole window takes
-/// the titlebar colour: `surfaces.window` with focus, `surfaces.sunken`
-/// without, exactly as the compositor's `ChromeTheme` paints its bar.
 fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
     let palette = vow_appearance::palette(resolved.scheme);
@@ -813,7 +768,6 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
         )
 }
 
-/// `malaysia-shell about`: a fixed-size window like macOS «Acerca de este Mac».
 pub fn run_about() -> anyhow::Result<()> {
     let info = AboutInfo::read();
     tracing::info!(?info, "about this computer");

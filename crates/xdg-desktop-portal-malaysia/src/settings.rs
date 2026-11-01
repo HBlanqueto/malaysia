@@ -1,20 +1,4 @@
-//! `org.freedesktop.impl.portal.Settings`, backed by `appearance.domain`.
-//!
-//! The values are read-only for apps. The portal watches the domain file and
-//! emits `SettingChanged` when it changes, so toolkits can follow dark/light,
-//! the accent and the accessibility switches without restarting.
-//!
-//! Besides `org.freedesktop.appearance`, `org.gnome.desktop.interface`
-//! publishes `color-scheme` as GNOME's string (`default` / `prefer-dark`) for
-//! apps that only read that key (libhandy, older Electron and Chromium). The
-//! same watcher keeps the GTK bridge (ADR 0050) in sync.
-//!
-//! `org.malaysia.appearance` carries what the standard namespace cannot
-//! (ADR 0055): `gtk4-css`, the libadwaita rules with the exact accent and the
-//! window tint, and `accent-color`, the exact accent. Malaysia's libadwaita
-//! follows them live. With `appearance.gtk_bridge = false` the stylesheet is
-//! empty and the accent unset, `(-1, -1, -1)`, and libadwaita is stock.
-
+//! `org.freedesktop.impl.portal.Settings` backed by `appearance.domain`.
 use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
@@ -30,14 +14,10 @@ use zbus::zvariant::{OwnedValue, Value};
 
 use crate::gtk::{self, Bridge};
 
-/// The standard namespace this backend publishes.
 pub const NAMESPACE: &str = "org.freedesktop.appearance";
-/// GNOME's namespace, published for apps that only read it.
 pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
-/// Malaysia's namespace, read by Malaysia's libadwaita (ADR 0055).
 pub const LIVE_NAMESPACE: &str = "org.malaysia.appearance";
 
-/// Every `(namespace, key)` this backend publishes.
 const KEYS: [(&str, &str); 7] = [
     (NAMESPACE, "color-scheme"),
     (NAMESPACE, "accent-color"),
@@ -48,27 +28,21 @@ const KEYS: [(&str, &str); 7] = [
     (LIVE_NAMESPACE, "accent-color"),
 ];
 
-/// `org.malaysia.appearance` `accent-color` when there is none to give.
 const UNSET_ACCENT: (f64, f64, f64) = (-1.0, -1.0, -1.0);
 
 const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 
-/// The published values, already mapped for D-Bus.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Values {
     color_scheme: u32,
     accent: (f64, f64, f64),
     contrast: u32,
     reduced_motion: u32,
-    /// `org.malaysia.appearance` `gtk4-css`; empty without the bridge.
     live_css: String,
-    /// `org.malaysia.appearance` `accent-color`; [`UNSET_ACCENT`] without
-    /// the bridge.
     live_accent: (f64, f64, f64),
 }
 
 impl Values {
-    /// Reads the current `appearance.domain`, or the defaults when it is absent.
     pub fn load() -> Self {
         match read_appearance() {
             Ok(appearance) => Self::from_appearance(appearance.as_ref()),
@@ -131,7 +105,6 @@ impl Values {
         Some(owned(value))
     }
 
-    /// GNOME's spelling of `color-scheme`: light is `default` there.
     fn gnome_color_scheme(&self) -> &'static str {
         if self.color_scheme == 1 {
             "prefer-dark"
@@ -140,7 +113,6 @@ impl Values {
         }
     }
 
-    /// The keys of `namespace`, with their values.
     fn all(&self, namespace: &str) -> HashMap<String, OwnedValue> {
         KEYS.into_iter()
             .filter(|(ns, _)| *ns == namespace)
@@ -148,7 +120,6 @@ impl Values {
             .collect()
     }
 
-    /// The `(namespace, key)` pairs that differ from `old`, with their new values.
     fn changed(&self, old: &Self) -> Vec<(&'static str, &'static str, OwnedValue)> {
         KEYS.into_iter()
             .filter_map(|(namespace, key)| {
@@ -159,13 +130,11 @@ impl Values {
     }
 }
 
-/// The D-Bus interface served at `/org/freedesktop/portal/desktop`.
 pub struct Settings {
     values: Arc<RwLock<Values>>,
 }
 
 impl Settings {
-    /// Serves the values held by `values`; the watcher updates them.
     pub fn new(values: Arc<RwLock<Values>>) -> Self {
         Self { values }
     }
@@ -217,7 +186,6 @@ impl Settings {
     ) -> zbus::Result<()>;
 }
 
-/// The portal error apps see for a namespace or key that is not published.
 #[derive(Debug, zbus::DBusError)]
 #[zbus(prefix = "org.freedesktop.portal.Error", impl_display = true)]
 enum PortalError {
@@ -226,8 +194,6 @@ enum PortalError {
     ZBus(zbus::Error),
 }
 
-/// Watches `appearance.domain` and `wallpaper.state`, emits `SettingChanged`
-/// for each key that changes and refreshes the GTK bridge.
 pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option<Bridge>) {
     std::thread::spawn(move || {
         let watch = match vow_appearance::watch::AppearanceWatch::new() {
@@ -345,8 +311,6 @@ mod tests {
             a: 1.0,
         };
         let accent = Values::from_parts(&appearance, Some(wallpaper), true).accent;
-        // The portal accent is derived from the dominant for contrast, not the
-        // raw dominant.
         assert_ne!(
             accent,
             (
@@ -457,7 +421,6 @@ mod tests {
         let off = Values::from_parts(&appearance, None, false);
         assert!(off.live_css.is_empty());
         assert_eq!(off.live_accent, UNSET_ACCENT);
-        // The standard namespace does not depend on the bridge.
         assert_eq!(off.accent, on.accent);
 
         let changed: Vec<_> = off

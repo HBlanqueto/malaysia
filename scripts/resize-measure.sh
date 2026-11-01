@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Medida de resize interactivo con MALAYSIA_TEST_INPUT.
-#
-# Arrastra la esquina inferior derecha de window_csd y de foot desde 640x420
-# hasta 1100x700 en 60 pasos, y reporta configures enviados, commits recibidos
-# y tiempo por fotograma.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -99,7 +94,6 @@ measure_client() {
     ox=${origin%,*}
     oy=${origin#*,}
 
-    # The window starts at 640x420; lower-right corner is where we grab.
     start_x=$((ox + 640 - 4))
     start_y=$((oy + 420 - 4))
     end_x=$((ox + 1100 - 4))
@@ -108,7 +102,6 @@ measure_client() {
     dx=$(awk "BEGIN { printf \"%.2f\", ($end_x - $start_x) / $steps }")
     dy=$(awk "BEGIN { printf \"%.2f\", ($end_y - $start_y) / $steps }")
 
-    # Build the input script: wait for the client, press, drag in steps, release.
     input="wait:2000;move:$start_x,$start_y;press:$start_x,$start_y"
     for i in $(seq 1 "$steps"); do
         x=$(awk "BEGIN { printf \"%.0f\", $start_x + $dx * $i }")
@@ -120,13 +113,11 @@ measure_client() {
     kill "$client_pid" 2>/dev/null || true
     stop_malaysia
 
-    # Second run with the scripted drag.
     : >"$logfile"
     socket=$(start_malaysia "$input")
     eval "$launch"
     client_pid=$!
 
-    # Wait for the drag to finish plus a bit.
     sleep 1.5
 
     kill "$client_pid" 2>/dev/null || true
@@ -137,7 +128,6 @@ measure_client() {
     final_requested=$(grep 'send_configure' "$logfile" | tail -n 1 | sed -n 's/.*configured=Size { w: \([0-9]*\), h: \([0-9]*\) }.*/\1x\2/p' || true)
     final_committed=$(grep 'commit resized window' "$logfile" | tail -n 1 | sed -n 's/.*outer_size=Size { w: \([0-9]*\), h: \([0-9]*\) }.*/\1x\2/p' || true)
 
-    # Frame times from "frame presented" debug logs.
     python3 - "$logfile" "$name" "$configures" "$commits" "$final_requested" "$final_committed" <<'PY'
 import sys, re
 logfile, name, configures, commits = sys.argv[1:5]

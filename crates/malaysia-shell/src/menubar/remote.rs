@@ -1,14 +1,9 @@
-//! Merges a real dbusmenu tree with the 14c fallback menus (ADR 0040 §6).
-//!
-//! The composition is pure: the bar rebuilds it from the current snapshot on
-//! every render, and open popups use the same function to update in place.
-
+//! Merges a dbusmenu tree with the fallback menus.
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use barrier_kit::menu::{CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry};
 
-/// The 14c menus that always frame the app's own titles.
 #[derive(Clone)]
 pub struct MenuSources {
     pub app_name: String,
@@ -17,20 +12,16 @@ pub struct MenuSources {
     pub help_items: Rc<dyn Fn() -> Vec<MenuItem>>,
 }
 
-/// One first-level title on the bar.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Title {
     pub label: String,
     pub items: Vec<MenuItem>,
-    /// dbusmenu id to open lazily; `None` for static titles and root actions.
     pub remote_id: Option<i32>,
     pub bold: bool,
     pub enabled: bool,
 }
 
 impl Title {
-    /// Items for the title's popup: the loading row while a remote submenu has
-    /// not answered yet.
     pub fn visible_items(&self) -> Vec<MenuItem> {
         if self.items.is_empty() && self.remote_id.is_some() {
             vec![loading()]
@@ -62,7 +53,6 @@ pub fn unavailable() -> MenuItem {
     }
 }
 
-/// Lowercase and strip accents for title matching.
 pub fn normalize(label: &str) -> String {
     barrier_kit::menu::strip_mnemonic(label)
         .trim()
@@ -76,8 +66,6 @@ pub fn normalize(label: &str) -> String {
 }
 
 impl MenuSources {
-    /// Builds the bar titles, folding Ventana/Window, Ayuda/Help and the app's
-    /// own title into ours.
     pub fn compose(&self, remote: &[MenuItem]) -> Vec<Title> {
         let mut app_items = (self.app_items)();
         let mut window_items = (self.window_items)();
@@ -161,11 +149,6 @@ impl MenuSources {
     }
 }
 
-/// Puts the app's own entries in the places of the fallback entries with the
-/// same label («Acerca de Calculadora», «Ajustes…», «Salir de …»): the app's
-/// action and state replace the greyed-out placeholder, which keeps its icon
-/// and, when the app gives none, its shortcut. Returns the entries that match
-/// no placeholder, to be appended as before.
 fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
     let mut rest = Vec::new();
     for extra in extras {
@@ -227,7 +210,6 @@ fn insert_after_search(items: &mut Vec<MenuItem>, extras: Vec<MenuItem>) {
     items.splice(position..position, extras);
 }
 
-/// All actions reachable from the composed titles, used by the Help search.
 pub fn searchable(titles: &[Title]) -> Vec<SearchableEntry> {
     let mut out = Vec::new();
     for (title_index, title) in titles.iter().enumerate() {
@@ -265,7 +247,6 @@ fn collect(
             MenuItem::Submenu { label, items, .. } => {
                 let mut location = location.clone();
                 location.indices.push(index);
-                // Paths are display and search text: no mnemonic marks.
                 let label = barrier_kit::menu::strip_mnemonic(label);
                 collect(items, &format!("{path} › {label}"), location, out);
             }
@@ -274,8 +255,6 @@ fn collect(
     }
 }
 
-/// Replaces the loaded children of the remote submenu `id`. Returns whether a
-/// matching submenu existed.
 pub fn merge_subtree(items: &mut [MenuItem], id: i32, children: &[MenuItem]) -> bool {
     for item in items.iter_mut() {
         let MenuItem::Submenu {
@@ -297,7 +276,6 @@ pub fn merge_subtree(items: &mut [MenuItem], id: i32, children: &[MenuItem]) -> 
     false
 }
 
-/// Finds the loaded children of a submenu by dbusmenu id.
 pub fn find_subtree(items: &[MenuItem], id: i32) -> Option<Vec<MenuItem>> {
     for item in items {
         let MenuItem::Submenu {
@@ -506,7 +484,6 @@ mod tests {
         )];
         let titles = sources.compose(&remote);
         let app = &titles[0].items;
-        // Nothing appended after «Salir»: the entries filled their slots.
         assert_eq!(app.len(), 3);
         assert!(matches!(
             &app[0],

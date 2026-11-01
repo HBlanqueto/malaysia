@@ -23,8 +23,6 @@ Criteria:
 import subprocess
 import sys
 
-# The default wallpaper (vow_design::WALLPAPER). A session whose
-# wallpaper.domain selects another image will not match.
 WALLPAPER = (65, 105, 170)
 
 
@@ -36,7 +34,6 @@ def decode(path):
 
 
 def dimensions(path):
-    # PNG IHDR: width and height are two big-endian u32s at offsets 16 and 20.
     with open(path, "rb") as f:
         header = f.read(24)
     if header[:8] != b"\x89PNG\r\n\x1a\n":
@@ -58,8 +55,6 @@ def region(raw, w, x0, y0, x1, y1, step):
 
 
 def check_wallpaper(raw, w, h):
-    # The workspace (below the menu bar at 28, above the dock at 736) must be
-    # the default wallpaper; the shell panels are excluded.
     samples = region(raw, w, 0, 60, w, 700, 24)
     bad = [p for p in samples if not close(p, WALLPAPER)]
     print(f"wallpaper: {len(bad)}/{len(samples)} píxeles fuera de ±1")
@@ -67,8 +62,6 @@ def check_wallpaper(raw, w, h):
 
 
 def check_window(raw, w, h):
-    # The window covers the workspace (below the menu bar, above the dock);
-    # the wallpaper should be mostly hidden there.
     samples = region(raw, w, 40, 60, w - 40, 720, 40)
     wall_px = [p for p in samples if close(p, WALLPAPER)]
     print(f"window: {len(wall_px)}/{len(samples)} muestras del wallpaper en el workspace")
@@ -76,8 +69,6 @@ def check_window(raw, w, h):
 
 
 def check_foot(raw, w, h):
-    # The foot window fills the workspace with its dark background and the
-    # prompt (light text) sits in the top rows.
     bg = region(raw, w, 32, 120, w - 32, 700, 40)
     dark = [p for p in bg if all(c <= 80 for c in p)]
     if len(dark) < len(bg) // 2:
@@ -90,8 +81,6 @@ def check_foot(raw, w, h):
 
 
 def check_popup(raw, w, h):
-    # The popup colour (0x80 = 128) fills its configured region near the
-    # bottom, above the window's lower edge.
     pop = region(raw, w, 400, 620, 600, 760, 4)
     found = [p for p in pop if close(p, (128, 128, 128), 2)]
     if len(found) < len(pop) // 2:
@@ -104,8 +93,6 @@ def check_popup(raw, w, h):
 
 
 def check_ssd(raw, w, h):
-    # The titlebar band on the left is the wallpaper; the content (0x40 = 64)
-    # fills the rest of the workspace.
     band = region(raw, w, 0, 60, 31, 700, 6)
     wall = [p for p in band if close(p, WALLPAPER, 3)]
     if len(wall) < len(band) // 2:

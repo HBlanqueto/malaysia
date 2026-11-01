@@ -1,5 +1,4 @@
 #!/bin/sh
-# Bring a Tengen folder into malaysia on purpose. Never run from the build or CI.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

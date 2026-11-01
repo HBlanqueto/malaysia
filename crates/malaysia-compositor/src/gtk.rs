@@ -1,11 +1,4 @@
-//! `gtk_shell1`: GTK's private Wayland shell extension.
-//!
-//! This module only stores the D-Bus properties GTK 3/4 announces via
-//! `gtk_surface1.set_dbus_properties` and forwards them to the shell through
-//! Infinity v3. It never talks D-Bus and never draws a menu (ADR 0045).
-//!
-//! The protocol file is `protocols/gtk-shell.xml`, copied unmodified from GTK
-//! commit efcc16deb0e0373655e2e4aed139ff7de3096134. MalaysiaDreams advertises version 5.
+//! `gtk_shell1`: stores GTK's D-Bus properties and forwards them to the shell.
 
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId, ObjectId};
@@ -19,7 +12,6 @@ use tracing::{debug, info, warn};
 use crate::appmenu::AddressStore;
 use crate::state::State;
 
-/// Generated server-side bindings for the GTK shell protocol.
 pub(crate) mod protocol {
     #![allow(dead_code, non_camel_case_types, unused_unsafe, unused_variables)]
     #![allow(non_upper_case_globals, non_snake_case, unused_imports)]
@@ -40,7 +32,6 @@ pub(crate) mod protocol {
 use protocol::gtk_shell1::GtkShell1;
 use protocol::gtk_surface1::GtkSurface1;
 
-/// The six D-Bus properties GTK sets on a surface.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GtkDbusProperties {
     pub application_id: String,
@@ -61,8 +52,6 @@ impl GtkDbusProperties {
             && self.unique_bus_name.is_empty()
     }
 
-    /// The GTK menu address represented by these properties, if the bus name is
-    /// present and at least one of the menu paths is present.
     fn to_menus_address(&self) -> Option<GtkMenusAddress> {
         if self.unique_bus_name.is_empty()
             || (self.menubar_path.is_empty() && self.app_menu_path.is_empty())
@@ -80,25 +69,19 @@ impl GtkDbusProperties {
     }
 }
 
-/// Per-surface GTK state: the D-Bus properties and the modal flag.
 #[derive(Debug, Clone, Default)]
 struct GtkSurfaceState {
-    /// Which `gtk_surface1` object owns this entry, so a second object for the
-    /// same surface can be detected and the newest wins. `None` only before the
-    /// first `set_dbus_properties`.
     owner: Option<ObjectId>,
     modal: bool,
     props: GtkDbusProperties,
 }
 
-/// The `gtk_shell1` global and the live per-surface state.
 pub struct GtkShellState {
     _global: GlobalId,
     surfaces: AddressStore<ObjectId, GtkSurfaceState>,
 }
 
 impl GtkShellState {
-    /// Creates the global, visible to every client (GTK needs it).
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
             _global: display.create_global::<State, GtkShell1, ()>(5, ()),
@@ -152,15 +135,6 @@ impl GtkShellState {
     }
 }
 
-/// `global_app_menu | global_menu_bar` when the bar shows app menus (14f-2).
-///
-/// GTK 3.24 and 4.22 test each setting as `(caps & bit) == bit`, so 3 also
-/// turns on `gtk-shell-shows-desktop` (the enum gives `desktop_icons` the value
-/// 3, GNOME bug 787407): `GtkPlacesSidebar` then lists «Desktop». With 0 GTK
-/// keeps its own menubar, which is what a bar without app menus needs.
-// shortcut: read once per bind; a client bound before `menubar.app_menus`
-// changes keeps the old value until it reconnects. Upgrade: rebind-free
-// update is not in the protocol, so document it in the settings app.
 fn capabilities(app_menus: bool) -> u32 {
     if app_menus { 3 } else { 0 }
 }
@@ -209,7 +183,6 @@ impl Dispatch<GtkShell1, (), State> for GtkShellState {
     }
 }
 
-/// Decodes a `titlebar_gesture` value into the action the compositor performs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Gesture {
     Double,
@@ -305,7 +278,6 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
                         state.apply_titlebar_double_click(id);
                     }
                     Gesture::Right => {
-                        // No compositor window menu yet; log only.
                         info!(window = id.get(), "gtk_surface titlebar right_click");
                     }
                     Gesture::Middle => {
@@ -333,8 +305,6 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
 }
 
 impl State {
-    /// Stores the GTK D-Bus properties announced for `surface` and publishes
-    /// them if the surface already belongs to a mapped window.
     pub(crate) fn set_surface_gtk_menus(
         &mut self,
         surface: &WlSurface,
@@ -361,8 +331,6 @@ impl State {
         }
     }
 
-    /// Drops the GTK properties for `surface`; a mapped window gets an empty
-    /// gtk_menus event.
     pub(crate) fn clear_surface_gtk_menus(&mut self, surface: &WlSurface) {
         if !self.gtk.clear_surface(surface) {
             return;
@@ -376,8 +344,6 @@ impl State {
         }
     }
 
-    /// Drops the GTK properties only if `owner` matches the current surface
-    /// owner, ignoring stale clears from a replaced `gtk_surface1`.
     pub(crate) fn clear_surface_gtk_menus_by_owner(
         &mut self,
         surface: &WlSurface,
@@ -395,8 +361,6 @@ impl State {
         }
     }
 
-    /// Handles GTK's `gtk_surface1.present` request, activating the surface only
-    /// when its client already holds keyboard focus.
     pub(crate) fn handle_gtk_present(&mut self, surface: &WlSurface) {
         let focused = self
             .seat
@@ -411,13 +375,9 @@ impl State {
             }
         } else {
             info!("ignored gtk present from a client that does not hold keyboard focus");
-            // shortcut: urgency/attention is not signalled; improve by adding an
-            // urgency hint or a visual attention request when the policy is defined.
         }
     }
 
-    /// Handles GTK's `gtk_surface1.request_focus` request, activating the surface
-    /// only when `startup_id` names a valid xdg-activation token.
     pub(crate) fn handle_gtk_request_focus(
         &mut self,
         surface: &WlSurface,
@@ -435,7 +395,6 @@ impl State {
         self.activate_with_token(token, data, surface.clone(), "gtk-request-focus");
     }
 
-    /// The stored GTK menu address for a tracked window, if any.
     pub(crate) fn gtk_menus_address(&self, id: WindowId) -> Option<GtkMenusAddress> {
         let surface = self.windows.surface_of(id)?;
         let props = self.gtk.props(surface)?;
@@ -443,7 +402,6 @@ impl State {
     }
 }
 
-/// Where a window's GTK `org.gtk.Menus` lives on D-Bus.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GtkMenusAddress {
     pub unique_bus_name: String,
@@ -454,7 +412,6 @@ pub struct GtkMenusAddress {
     pub application_object_path: String,
 }
 
-/// Delegates the gtk_shell1 interfaces to [`GtkShellState`].
 #[macro_export]
 macro_rules! delegate_gtk {
     ($ty:ty) => {
@@ -493,7 +450,6 @@ mod tests {
 
     #[test]
     fn capabilities_follow_the_bar_app_menus() {
-        // global_app_menu | global_menu_bar, or GTK keeps its own menubar.
         assert_eq!(capabilities(true), 3);
         assert_eq!(capabilities(false), 0);
     }
@@ -632,9 +588,6 @@ mod tests {
             .expect("insert client");
     }
 
-    /// Creates a client with one xdg toplevel and returns its wl_surface once
-    /// the compositor has tracked it, plus a channel to shut the client thread
-    /// down cleanly.
     fn create_toplevel(
         display: &mut Display<super::State>,
         state: &mut super::State,
@@ -795,7 +748,6 @@ mod tests {
         let token_key = token.clone().into();
         assert!(state.activation_state.data_for_token(&token_key).is_some());
         state.handle_gtk_request_focus(&surface, Some(token.clone()));
-        // The token is consumed by the activation path, which then rejects it for age.
         assert!(state.activation_state.data_for_token(&token_key).is_none());
         assert!(state.minimized.contains(&id));
         let _ = shutdown.send(());
@@ -811,7 +763,6 @@ mod tests {
         let token_key = token.clone().into();
         assert!(state.activation_state.data_for_token(&token_key).is_some());
         state.handle_gtk_request_focus(&surface, Some(token));
-        // The activation path consumed the valid token and restored the window.
         assert!(state.activation_state.data_for_token(&token_key).is_none());
         assert!(!state.minimized.contains(&id));
         let _ = shutdown.send(());

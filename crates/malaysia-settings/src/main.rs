@@ -1,8 +1,4 @@
-//! Ajustes del sistema de Malaysia.
-//!
-//! Ventana de preferencias con sidebar, toolbar y contenido desplazable.
-//! Todos los colores y medidas salen de `vow-design`, `vow-appearance` y los
-//! componentes de `barrier-kit`; no hay literales de diseño.
+//! Malaysia system settings window.
 
 mod cards;
 mod controls;
@@ -58,9 +54,6 @@ impl App for SettingsApp {
     }
 }
 
-/// Vista completa de Ajustes. Si se pasa un estado explícito se usa para
-/// tests; si no, se lee el `Resolved` reactivo del runner para que la vista
-/// se actualice cuando cambie la apariencia.
 pub fn app_view(
     state: Option<(AppearanceConfig, Option<Rgba>, Resolved)>,
     titlebar: Titlebar,
@@ -283,7 +276,6 @@ mod tests {
     fn root_pixels_are_bg_window() {
         with_temp_config(|_dir| {
             let mut test = run_app(AppearanceConfig::default(), None);
-            // Evita zonas con contenido; el punto clave es que no hay fondo de pantalla.
             let (image, width) = render(&mut test);
             compare(
                 pixel(&image, width, 4, 8),
@@ -316,14 +308,12 @@ mod tests {
         with_temp_config(|_dir| {
             let mut test = run_app(dark_accent, None);
             let (image, width) = render(&mut test);
-            // (700, 600) is in the content margin, away from cards and text.
             let window_pixel = pixel(&image, width, 700, 600);
             compare(
                 window_pixel,
                 resolved.surfaces.window,
                 "window background must use resolved.surfaces.window",
             );
-            // A point inside the first card container, below the theme row.
             let group_pixel = pixel(&image, width, 300, 220);
             compare(
                 group_pixel,
@@ -508,7 +498,6 @@ mod tests {
             let initial = AppearanceConfig::default();
             write_appearance(&path, &initial).unwrap();
 
-            // Make the config directory read-only so subsequent writes fail.
             let mut permissions = fs::metadata(&dir).unwrap().permissions();
             permissions.set_mode(0o555);
             fs::set_permissions(&dir, permissions).unwrap();
@@ -1026,8 +1015,6 @@ mod tests {
                             None => style.push("fondo no expuesto".to_string()),
                         }
                     }
-                    // The search placeholder is drawn by the freya TextField;
-                    // its probe is only the text box and exposes no style.
                     let text_style = node.id != "sidebar.search.text";
                     if text_style
                         && let Some(expected) = node.color.as_deref().and_then(parse_color)

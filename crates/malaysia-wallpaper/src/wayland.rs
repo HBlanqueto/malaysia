@@ -1,5 +1,4 @@
-//! Wayland layer-shell client: one Background surface per output.
-
+//! Wayland layer-shell client with one Background surface per output.
 use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::os::raw::c_void;
@@ -51,7 +50,6 @@ use vow_appearance::watch::{AppearanceEvent, AppearanceWatch};
 const NAMESPACE: &str = "malaysia-wallpaper";
 const SCALE_DENOMINATOR: f64 = 120.0;
 
-/// State shared by every Wayland/output callback and the event loop.
 pub struct App {
     compositor: CompositorState,
     layer_shell: LayerShell,
@@ -64,23 +62,15 @@ pub struct App {
     loop_signal: Option<calloop::LoopSignal>,
     loop_handle: Option<calloop::LoopHandle<'static, App>>,
     render: RenderContext,
-    /// Current wallpaper texture shared by all outputs.
     texture: Option<WallpaperTexture>,
-    /// Per-output surface state.
     outputs: HashMap<ObjectId, OutputSurface>,
-    /// Wallpaper domain store path.
     store_path: std::path::PathBuf,
-    /// Wallpaper state path (dominant colour).
     state_path: std::path::PathBuf,
-    /// Last loaded wallpaper selection.
     wallpaper: Wallpaper,
-    /// inotify watcher for `wallpaper.domain`.
     appearance_watch: AppearanceWatch,
 }
 
 struct OutputSurface {
-    /// The wgpu surface must be dropped before the Wayland surface it wraps,
-    /// otherwise the Vulkan swapchain outlives its wl_surface and crashes.
     wgpu_surface: wgpu::Surface<'static>,
     output: WlOutput,
     surface: WlSurface,
@@ -88,25 +78,15 @@ struct OutputSurface {
     viewport: WpViewport,
     #[allow(dead_code)]
     fractional_scale: Option<WpFractionalScaleV1>,
-    /// Logical size from the last configure.
     logical_size: (u32, u32),
-    /// Fractional scale value from wp_fractional_scale_v1, or 1.0.
     scale: f64,
-    /// True once the wgpu surface has been configured.
     configured: bool,
-    /// Surface format chosen from the adapter's supported formats.
     surface_format: wgpu::TextureFormat,
-    /// True when a redraw for this surface is already scheduled on the idle
-    /// queue; cleared by the idle callback before rendering.
     pending_redraw: bool,
-    /// True once the first successful present has happened for this output.
     first_frame_presented: bool,
 }
 
 impl App {
-    /// Connects to the compositor, binds globals and creates the render context.
-    ///
-    /// The returned event queue must be passed to [`App::run`].
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
         let store_path = data_dir().join("wallpaper.domain");
         let state_path = data_dir().join("wallpaper.state");
@@ -155,18 +135,15 @@ impl App {
             appearance_watch,
         };
 
-        // Upload the initial wallpaper if there is one.
         if let Some(loaded) = app.wallpaper.image.take() {
             app.texture = Some(app.render.upload_texture(&loaded.decoded));
         }
 
-        // Dispatch the first round of globals so outputs are known.
         event_queue.roundtrip(&mut app)?;
 
         Ok((app, event_queue))
     }
 
-    /// Runs the event loop until SIGTERM/SIGINT.
     pub fn run(&mut self, event_queue: EventQueue<Self>) -> anyhow::Result<()> {
         let mut event_loop: EventLoop<'static, Self> = EventLoop::try_new()?;
         self.loop_signal = Some(event_loop.get_signal());
@@ -236,7 +213,6 @@ impl App {
         self.schedule_redraw_all();
     }
 
-    /// Renders and commits every configured output immediately.
     fn draw_all_outputs(&mut self) {
         for output in self.outputs.values_mut() {
             output.pending_redraw = false;
@@ -257,10 +233,6 @@ impl App {
         }
     }
 
-    /// Schedules a redraw of every configured output on the next idle tick.
-    ///
-    /// This is used during event dispatch so the layer-surface configure ack is
-    /// flushed before we attach the first buffer.
     fn schedule_redraw_all(&mut self) {
         let any_new =
             self.outputs
@@ -279,7 +251,6 @@ impl App {
         }
     }
 
-    /// Schedules a redraw of one surface on the next idle tick.
     fn schedule_redraw(&mut self, surface: WlSurface) {
         let surface_id = surface.id();
         let Some(output) = self
@@ -335,7 +306,6 @@ impl App {
             surface.clone(),
         ));
 
-        // Initial opaque region and commit without a buffer.
         self.set_opaque_region(&surface, 1, 1);
         layer_surface.commit();
 
@@ -358,7 +328,6 @@ impl App {
             logical_size: (1, 1),
             scale: 1.0,
             configured: false,
-            // Real format is selected in configure_output from surface capabilities.
             surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,
             pending_redraw: false,
             first_frame_presented: false,
@@ -431,7 +400,6 @@ impl App {
                 .into_iter()
                 .find(|f| caps.formats.contains(f))
                 .unwrap_or_else(|| {
-                    // Fall back to the first sRGB-capable format the adapter offers.
                     caps.formats
                         .into_iter()
                         .find(|f| f.is_srgb())
@@ -569,7 +537,6 @@ impl CompositorHandler for App {
         _surface: &WlSurface,
         _new_factor: i32,
     ) {
-        // Fractional scale is authoritative; wl_output integer scale is ignored.
     }
 
     fn transform_changed(
@@ -588,8 +555,6 @@ impl CompositorHandler for App {
         _surface: &WlSurface,
         _time: u32,
     ) {
-        // No frame callbacks are requested by this client; the compositor
-        // drives repaints through configure and fractional-scale events.
     }
 
     fn surface_enter(
@@ -730,7 +695,4 @@ delegate_registry!(App);
 delegate_compositor!(App);
 delegate_output!(App);
 
-// `delegate_layer!` generates Dispatch for zwlr_layer_shell_v1 and
-// zwlr_layer_surface_v1; the latter acks the configure before calling
-// [`LayerShellHandler::configure`].
 sctk::delegate_layer!(App);

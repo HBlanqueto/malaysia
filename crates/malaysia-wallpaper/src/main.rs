@@ -1,8 +1,4 @@
-//! `malaysia-wallpaper` — the MalaysiaDreams desktop wallpaper.
-//!
-//! A standalone Wayland client that draws the desktop picture with wgpu on
-//! Vulkan, outside of BarrierKit. See ADR 0049.
-
+//! `malaysia-wallpaper`: standalone Wayland client that draws the desktop picture with wgpu.
 mod image;
 mod render;
 mod wayland;
@@ -26,8 +22,6 @@ fn run() -> anyhow::Result<()> {
     app.run(event_queue)
 }
 
-/// Installs the wallpaper's tracing subscriber: `RUST_LOG` when set, `info`
-/// otherwise, always on stderr.
 fn init_logging() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));

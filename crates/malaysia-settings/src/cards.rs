@@ -1,4 +1,4 @@
-//! Tarjetas de previsualización de Ajustes (tema y color de ventanas).
+//! Settings preview cards for theme and window color.
 
 use barrier_kit::ProbeExt;
 use freya_core::prelude::*;
@@ -7,8 +7,6 @@ use vow_design::SETTINGS;
 
 use crate::state::{AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, resolve, rgba};
 
-/// Resolves the preview for a theme card while keeping the rest of the
-/// current config (window colour mode, accent, etc.).
 fn preview_for_theme(
     base_config: &AppearanceConfig,
     scheme: ColorScheme,
@@ -21,7 +19,6 @@ fn preview_for_theme(
     resolve(&test_config, dominant)
 }
 
-/// Construye una tarjeta de tema (Claro/Oscuro/Automático).
 #[allow(clippy::too_many_arguments)]
 pub fn theme_card(
     caption: &'static str,
@@ -53,7 +50,6 @@ pub fn theme_card(
     )
 }
 
-/// Miniatura de tema: degradado del acento con panel, menú y mini app.
 pub fn theme_preview(
     scheme: ColorScheme,
     base_config: &AppearanceConfig,
@@ -184,7 +180,6 @@ fn preview_app(resolved: &Resolved) -> Rect {
         )
 }
 
-/// Tarjeta de color de ventanas (Neutro/Acento/Fondo).
 #[allow(clippy::too_many_arguments)]
 pub fn window_color_card(
     caption: &'static str,
@@ -220,7 +215,6 @@ pub fn window_color_card(
     )
 }
 
-/// Miniatura de color de ventanas sobre el degradado del acento.
 pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
     let window_bg = preview_resolved.surfaces.window;
     let sunken = preview_resolved.surfaces.sunken;
@@ -250,7 +244,6 @@ pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
     )
 }
 
-/// Tarjeta seleccionable con miniatura, anillo de selección y pie.
 #[allow(clippy::too_many_arguments)]
 pub fn selectable_card(
     caption: &'static str,
@@ -349,7 +342,6 @@ mod tests {
             ..AppearanceConfig::default()
         };
         let preview = preview_for_theme(&config, ColorScheme::Auto, Some(dominant));
-        // The preview accent is derived from the dominant for contrast.
         assert_ne!(preview.accent, dominant);
         assert!(preview.window_tint.is_some());
     }

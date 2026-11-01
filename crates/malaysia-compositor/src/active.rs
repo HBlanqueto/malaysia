@@ -1,23 +1,10 @@
-//! The compositor's active window, published for the shell as state.
-//!
-//! The menu bar shows the active app's name (macOS: the frontmost app). The
-//! active window is internal to the compositor, so it is published through the
-//! state store — `~/.local/share/malaysia/window.domain`, the `~/Library/Application
-//! Support` equivalent — which the shell components watch. It is the same
-//! pattern as the wallpaper store: the compositor owns the state, the shell
-//! reads it.
-//!
-//! This is the first-version mechanism; a proper notification channel (the
-//! D-Bus surface of ADR 0021) will replace the file when it lands.
+//! Publishes the active window to the shell through the state store.
 
 use std::path::Path;
 
-/// The active window's identity, as the shell wants it.
 #[derive(Debug, Clone)]
 pub struct ActiveWindow {
-    /// The window title.
     pub title: String,
-    /// The window's app id.
     pub app_id: String,
 }
 
@@ -32,7 +19,6 @@ struct StoredActive<'a> {
     app_id: &'a str,
 }
 
-/// Writes the store at an explicit directory (testable without touching env).
 pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
     let path = dir.join("window.domain");
     if let Some(parent) = path.parent() {

@@ -1,12 +1,4 @@
-//! Asserts that a window can be captured through `ext-image-copy-capture-v1`.
-//!
-//! Maps a client-decorated toplevel, waits for its `ext-foreign-toplevel-list`
-//! handle, creates a capture source from it and opens a session. On the
-//! compositor's constraints it allocates a matching SHM buffer, captures and
-//! checks the frame is ready and shows the window's own (grey) content.
-//!
-//! Run against a running compositor, or `./dev.sh screencopy-window`.
-
+//! Probe: a window can be captured through `ext-image-copy-capture-v1`.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -69,11 +61,8 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// The grey every byte of the window buffer is filled with.
 const GREY: u8 = 0x40;
-/// How long to wait for the frame to become ready.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -210,8 +199,6 @@ struct App {
 }
 
 impl App {
-    /// Opens the capture session once the toplevel handle and the mapped
-    /// window are both known.
     fn open_session(&mut self, qh: &QueueHandle<Self>) {
         if self.session.is_some() {
             return;
@@ -227,7 +214,6 @@ impl App {
         self.session = Some(session);
     }
 
-    /// Allocates a buffer from the constraints and starts the capture.
     fn start_capture(&mut self, qh: &QueueHandle<Self>) {
         if !self.done || self.frame.is_some() {
             return;
@@ -303,7 +289,6 @@ impl App {
         self.frame = Some(frame);
     }
 
-    /// Reads the captured pixels back and checks the window's grey content.
     fn check_pixels(&mut self) {
         let Some((width, height)) = self.size else {
             return;
@@ -386,8 +371,6 @@ impl WindowHandler for App {
         configure: WindowConfigure,
         _: u32,
     ) {
-        // Honor the compositor's size so the window's usable rect and the
-        // surface match; a fixed buffer would capture mostly background.
         let width = configure.new_size.0.map_or(0, |w| w.get() as i32);
         let height = configure.new_size.1.map_or(0, |h| h.get() as i32);
         if width > 0 && height > 0 && self.window_size != Some((width, height)) {

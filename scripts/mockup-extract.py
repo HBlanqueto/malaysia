@@ -107,7 +107,6 @@ def main() -> int:
     layout_path = stem.with_name(stem.name + '.layout.json')
 
     with sync_playwright() as pw:
-        # file:// trata cada hoja de estilo como otro origen; sin esto no se leen sus reglas.
         browser = pw.chromium.launch(args=['--allow-file-access-from-files'])
         page = browser.new_page()
         page.goto(html.as_uri())

@@ -1,10 +1,4 @@
-//! A linear DMA-BUF allocated with `/dev/udmabuf`, for the capture probes.
-//!
-//! The capture probe needs a DMA-BUF it can inspect from the CPU, without
-//! pulling in GBM or EGL. `udmabuf` turns a memfd into a linear DMA-BUF, which
-//! is enough for `ext-image-copy-capture-v1`'s constraints when the compositor
-//! offers a linear modifier.
-
+//! Linear DMA-BUF allocated through `/dev/udmabuf`, for the capture probes.
 use std::{
     fs::OpenOptions,
     io,
@@ -26,7 +20,6 @@ struct UdmabufCreate {
     size: u64,
 }
 
-/// A mapped, linear DMA-BUF.
 pub struct DmaBuffer {
     fd: OwnedFd,
     map: *mut u8,
@@ -37,7 +30,6 @@ pub struct DmaBuffer {
 unsafe impl Send for DmaBuffer {}
 
 impl DmaBuffer {
-    /// Creates a DMA-BUF of `stride * height` bytes, rounded to a page.
     pub fn new(_width: i32, height: i32, stride: usize) -> io::Result<Self> {
         let len = stride * height as usize;
         let page = 4096;
@@ -56,7 +48,6 @@ impl DmaBuffer {
         if unsafe { libc::ftruncate(memfd.as_raw_fd(), aligned as libc::off_t) } < 0 {
             return Err(io::Error::last_os_error());
         }
-        // udmabuf only accepts a memfd whose size cannot change underneath it.
         if unsafe { libc::fcntl(memfd.as_raw_fd(), libc::F_ADD_SEALS, libc::F_SEAL_SHRINK) } < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -103,12 +94,10 @@ impl DmaBuffer {
         })
     }
 
-    /// The DMA-BUF file descriptor.
     pub fn fd(&self) -> BorrowedFd<'_> {
         self.fd.as_fd()
     }
 
-    /// Counts bytes that differ from `background`.
     pub fn count_different(&self, background: [u8; 4]) -> usize {
         let bytes = unsafe { std::slice::from_raw_parts(self.map, self.len) };
         bytes
@@ -119,7 +108,6 @@ impl DmaBuffer {
             .count()
     }
 
-    /// Reads a pixel as B, G, R, X from the CPU mapping.
     pub fn pixel(&self, x: usize, y: usize) -> [u8; 4] {
         let offset = y * self.stride + x * 4;
         if offset + 4 > self.len {

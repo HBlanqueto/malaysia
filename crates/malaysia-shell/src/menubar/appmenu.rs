@@ -1,10 +1,4 @@
-//! The desktop menus of the menubar.
-//!
-//! With no focused window the bar shows the Escritorio menu next to the shared
-//! Archivo, Edición, Visualización, Ir, Ventana and Ayuda menus. Each title owns
-//! one menu and every action reuses a shell helper that already exists.
-
-/// The menubar title shown when no application is focused.
+//! Desktop menus of the menubar, shown when no window is focused.
 pub const TITLE: &str = "Escritorio";
 
 use std::env;
@@ -20,12 +14,10 @@ use crate::menubar::{
     spawn_component, system, xdg_open, xdg_user_dir,
 };
 
-/// The Escritorio menu (about, settings, empty trash, services, hide/show).
 pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
-        // shortcut: falta diálogo Acerca de — mejora: añadir ventana modal.
         items::action(
             "malaysia-about",
             "Acerca de MalaysiaDreams",
@@ -42,7 +34,6 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::GEAR)),
         ),
         items::separator(),
-        // shortcut: falta diálogo de confirmación en la shell.
         items::action(
             "malaysia-empty-trash",
             "Vaciar papelera…",
@@ -75,7 +66,6 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             ],
         ),
         items::separator(),
-        // shortcut: Super+H no está cableado para el escritorio.
         items::action(
             "desktop-hide",
             "Ocultar Escritorio",
@@ -83,7 +73,6 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: no hay atajo global cableado todavía.
         items::action(
             "desktop-hide-others",
             "Ocultar otros",
@@ -91,7 +80,6 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             other_unminimized,
             None,
         ),
-        // shortcut: no hay atajo global cableado todavía.
         items::action(
             "desktop-show-all",
             "Mostrar todo",
@@ -102,7 +90,6 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     ]
 }
 
-/// The Archivo menu.
 pub fn file_menu_items() -> Vec<MenuItem> {
     vec![
         items::action("file-new-window", "Nueva ventana", None, true, None),
@@ -113,7 +100,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             true,
             None,
         ),
-        // shortcut: Ctrl+Super+N no está cableado globalmente.
         items::action(
             "file-new-folder-selection",
             "Nueva carpeta con la selección",
@@ -121,7 +107,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: Super+T no está cableado globalmente.
         items::action(
             "file-new-tab",
             "Nueva pestaña",
@@ -129,11 +114,8 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: Super+O no está cableado globalmente.
         items::action("file-open", "Abrir", Some("Super+O"), false, None),
-        // shortcut: falta selección y submenú de apps asociadas.
         items::submenu(None, "Abrir con", false, None, Vec::new()),
-        // shortcut: Super+W no está cableado globalmente.
         items::action(
             "file-close-window",
             "Cerrar ventana",
@@ -142,7 +124,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // shortcut: Super+I no está cableado globalmente.
         items::action(
             "file-get-info",
             "Obtener información",
@@ -150,13 +131,9 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: falta selección y diálogo de renombre.
         items::action("file-rename", "Renombrar", None, false, None),
-        // shortcut: falta selección y backend de compresión.
         items::action("file-compress", "Comprimir", None, false, None),
-        // shortcut: Super+D no está cableado globalmente.
         items::action("file-duplicate", "Duplicar", Some("Super+D"), false, None),
-        // shortcut: Ctrl+Super+A no está cableado globalmente.
         items::action(
             "file-make-alias",
             "Crear enlace",
@@ -164,7 +141,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: Super+Y no está cableado globalmente.
         items::action(
             "file-quick-look",
             "Vista rápida",
@@ -173,7 +149,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // shortcut: falta backend de compartir.
         items::action(
             "file-share",
             "Compartir…",
@@ -182,7 +157,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::SHARE)),
         ),
         items::separator(),
-        // shortcut: Super+BackSpace no está cableado globalmente.
         items::action(
             "file-move-to-trash",
             "Mover a la papelera",
@@ -190,7 +164,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::TRASH)),
         ),
-        // shortcut: Super+E no está cableado globalmente.
         items::action(
             "file-eject",
             "Expulsar",
@@ -199,7 +172,6 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::EJECT)),
         ),
         items::separator(),
-        // shortcut: Super+P no está cableado globalmente.
         items::action(
             "file-print",
             "Imprimir",
@@ -210,21 +182,14 @@ pub fn file_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-/// The Edición menu.
 pub fn edit_menu_items() -> Vec<MenuItem> {
     vec![
-        // shortcut: Super+Z no está cableado globalmente.
         items::action("edit-undo", "Deshacer", Some("Super+Z"), false, None),
-        // shortcut: Shift+Super+Z no está cableado globalmente.
         items::action("edit-redo", "Rehacer", Some("Shift+Super+Z"), false, None),
         items::separator(),
-        // shortcut: Super+X no está cableado globalmente.
         items::action("edit-cut", "Cortar", Some("Super+X"), false, None),
-        // shortcut: Super+C no está cableado globalmente.
         items::action("edit-copy", "Copiar", Some("Super+C"), false, None),
-        // shortcut: Super+V no está cableado globalmente.
         items::action("edit-paste", "Pegar", Some("Super+V"), false, None),
-        // shortcut: Super+A no está cableado globalmente.
         items::action(
             "edit-select-all",
             "Seleccionar todo",
@@ -233,7 +198,6 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // shortcut: falta visor del portapapeles.
         items::action(
             "edit-show-clipboard",
             "Mostrar portapapeles",
@@ -242,7 +206,6 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // Super+Space abre el launcher en el compositor.
         items::action(
             "edit-search",
             "Buscar",
@@ -251,7 +214,6 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::SEARCH)),
         ),
         items::separator(),
-        // shortcut: falta panel de emojis y símbolos.
         items::action(
             "edit-emoji",
             "Emojis y símbolos",
@@ -262,12 +224,8 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-/// The Visualización menu.
 pub fn view_menu_items() -> Vec<MenuItem> {
     vec![
-        // shortcut: Super+1 no está cableado globalmente.
-        // The check mark and the icon share the leading column, so this row
-        // keeps the mark and omits the icon.
         MenuItem::Action {
             id: "view-as-icons".to_string(),
             label: "Como iconos".to_string(),
@@ -276,7 +234,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             check: CheckState::Checkbox(true),
             icon: None,
         },
-        // shortcut: Super+2 no está cableado globalmente.
         items::action(
             "view-as-list",
             "Como lista",
@@ -284,7 +241,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::VIEW_LIST)),
         ),
-        // shortcut: Super+3 no está cableado globalmente.
         items::action(
             "view-as-columns",
             "Como columnas",
@@ -292,7 +248,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::VIEW_COLUMNS)),
         ),
-        // shortcut: Super+4 no está cableado globalmente.
         items::action(
             "view-as-gallery",
             "Como galería",
@@ -301,7 +256,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::VIEW_GALLERY)),
         ),
         items::separator(),
-        // shortcut: falta señal al dock para mostrar/ocultar.
         items::action(
             "view-toggle-dock",
             "Mostrar/ocultar Dock",
@@ -310,7 +264,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // shortcut: falta diálogo de fondo de pantalla.
         items::action(
             "view-change-wallpaper",
             "Cambiar fondo de pantalla…",
@@ -318,7 +271,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: Super+J no está cableado globalmente.
         items::action(
             "view-show-view-options",
             "Mostrar opciones de visualización",
@@ -327,7 +279,6 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::separator(),
-        // shortcut: Ctrl+Super+F no está cableado globalmente.
         items::action(
             "view-fullscreen",
             "Ver en pantalla completa",
@@ -338,14 +289,10 @@ pub fn view_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-/// The Ir menu: the XDG user folders and the trash.
 pub fn go_menu_items() -> Vec<MenuItem> {
     vec![
-        // shortcut: Super+[ no está cableado globalmente.
         items::action("go-back", "Atrás", Some("Super+["), false, None),
-        // shortcut: Super+] no está cableado globalmente.
         items::action("go-forward", "Adelante", Some("Super+]"), false, None),
-        // shortcut: Super+Up no está cableado globalmente.
         items::action(
             "go-enclosing-folder",
             "Carpeta contenedora",
@@ -418,10 +365,8 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::TRASH)),
         ),
         items::separator(),
-        // shortcut: falta historial de carpetas recientes.
         items::submenu(None, "Carpetas recientes", false, None, Vec::new()),
         items::separator(),
-        // shortcut: Shift+Super+G no está cableado globalmente.
         items::action(
             "go-to-folder",
             "Ir a la carpeta…",
@@ -429,7 +374,6 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        // shortcut: Super+K no está cableado globalmente.
         items::action(
             "go-connect-to-server",
             "Conectarse al servidor…",
@@ -440,15 +384,11 @@ pub fn go_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-/// The Ventana menu: window controls, layout submenus and the open windows.
 pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let mut items = vec![
-        // shortcut: Super+M no está cableado globalmente.
         items::action("window-minimize", "Minimizar", Some("Super+M"), false, None),
-        // shortcut: falta maximizar la ventana activa.
         items::action("window-maximize", "Maximizar", None, false, None),
-        // shortcut: Ctrl+Super+Return no está cableado globalmente.
         items::action(
             "window-fill",
             "Rellenar",
@@ -456,7 +396,6 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             false,
             None,
         ),
-        // shortcut: Ctrl+Super+C no está cableado globalmente.
         items::action(
             "window-center",
             "Centrar",
@@ -472,7 +411,6 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             Some(MenuIcon::svg(icons::GRID)),
             focused::move_resize_items(None, None),
         ),
-        // shortcut: falta gestión de pantalla completa.
         items::submenu(
             None,
             "Ventana a pantalla completa",
@@ -494,7 +432,6 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
                     None,
                 ),
                 items::separator(),
-                // shortcut: Ctrl+Super+F no está cableado globalmente.
                 items::action(
                     "window-fullscreen-toggle",
                     "Activar pantalla completa",
@@ -551,7 +488,6 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
     items
 }
 
-/// The Ayuda menu.
 pub fn help_menu_items() -> Vec<MenuItem> {
     vec![
         MenuItem::SearchField {
@@ -586,12 +522,10 @@ fn help_topic_item(title: &str, icon: &'static str) -> MenuItem {
         })
 }
 
-/// Returns true for the help ids that must be delegated to focused::on_action.
 pub fn is_help_action(id: &str) -> bool {
     id.starts_with("app-help-topic:") || id == "app-help-topics-index"
 }
 
-/// The seven desktop menus in the order they appear in the menubar.
 pub fn desktop_menus(
     entries: Rc<Vec<DesktopEntry>>,
     toplevels: Rc<Vec<ToplevelInfo>>,
@@ -614,16 +548,10 @@ pub fn desktop_menus(
     ]
 }
 
-/// Returns the index of the title that owns the Help search field in the
-/// desktop menu list. Used by bar.rs so the wiring is not hidden in a label
-/// comparison that can drift if the menu order changes.
 pub fn desktop_help_title_index(labels: &[&str]) -> Option<usize> {
     labels.iter().position(|&label| label == "Ayuda")
 }
 
-/// All menu entries that the Help search field can reach from the desktop
-/// menus, paired with their menu path and menubar location. The Ayuda menu
-/// itself is excluded because its topics come from `focused::help_search_topics`.
 pub fn searchable_menu_items(
     entries: Rc<Vec<DesktopEntry>>,
     toplevels: Rc<Vec<ToplevelInfo>>,
@@ -649,12 +577,9 @@ pub fn searchable_menu_items(
     out
 }
 
-/// Handles an action from any of the desktop menus.
 pub fn on_action(id: String) {
     let toplevels = Toplevels::get();
     let list = toplevels.list.read().clone();
-    // Settings is handled by the existing system helper so it activates an
-    // existing settings window or launches the real malaysia-settings binary.
     if id == "malaysia-settings" {
         system::on_system_action("system-settings".into(), &list, &[]);
         return;
@@ -672,8 +597,6 @@ pub fn on_action(id: String) {
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Injected version of [`on_action`]: decisions are pure and rely only on the
-/// supplied `toplevels` list and the caller-provided callbacks.
 pub fn on_action_with(
     id: String,
     toplevels: &[ToplevelInfo],
@@ -697,8 +620,6 @@ pub fn on_action_with(
         "file-new-window" => open_home(&mut open),
         "file-search" | "edit-search" => spawn("launcher", &[]),
         "file-new-folder-desktop" => create_desktop_folder(),
-        // Minimize every window that is not already minimized. Enabled only
-        // when at least one window is in that state.
         "desktop-hide-others" => {
             for (index, window) in toplevels.iter().enumerate() {
                 if !window.minimized {
@@ -706,7 +627,6 @@ pub fn on_action_with(
                 }
             }
         }
-        // Unminimize every minimized window.
         "desktop-show-all" | "window-front-all" => {
             for (index, window) in toplevels.iter().enumerate() {
                 if window.minimized {

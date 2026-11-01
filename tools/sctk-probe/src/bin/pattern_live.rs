@@ -1,16 +1,4 @@
-//! Maps a full-workspace toplevel filled with a quadrant colour pattern, held
-//! open so the debug capture can be validated against it (Bloque 7.3, 3a).
-//!
-//! The four quadrants are distinct solid colours (red, green, blue, white).
-//! A capture that preserves them in their exact positions proves the dump is
-//! not flipped, mirrored or stretched — a uniform wallpaper cannot detect
-//! that. The buffer is created and attached on the first configure (a buffer
-//! attached before the configure is discarded).
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin pattern_live
-//! ```
-
+//! Maps a toplevel with a four-colour quadrant pattern for capture validation.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{
@@ -38,20 +26,17 @@ use smithay_client_toolkit::{
     shm::{slot::SlotPool, Shm, ShmHandler},
 };
 
-/// How long to hold the window open, for the capture.
 const HOLD: Duration = Duration::from_secs(8);
 
-/// Fills the buffer with four solid-colour quadrants.
 fn fill_quadrants(canvas: &mut [u8], w: i32, h: i32) {
-    // ABGR (Xrgb8888 is little-endian RGBA in memory: bytes B,G,R,0).
     let (cw, ch) = (w as usize, h as usize);
     for y in 0..ch {
         for x in 0..cw {
             let (r, g, b) = match (x < cw / 2, y < ch / 2) {
-                (true, true) => (255, 0, 0),       // top-left red
-                (false, true) => (0, 255, 0),      // top-right green
-                (true, false) => (0, 0, 255),      // bottom-left blue
-                (false, false) => (255, 255, 255), // bottom-right white
+                (true, true) => (255, 0, 0),
+                (false, true) => (0, 255, 0),
+                (true, false) => (0, 0, 255),
+                (false, false) => (255, 255, 255),
             };
             let o = (y * w as usize + x) * 4;
             canvas[o] = b;
@@ -114,7 +99,6 @@ struct App {
 }
 
 impl App {
-    /// Fills the window's usable area with the quadrant pattern and commits.
     fn render(&mut self, size: (i32, i32)) {
         let (w, h) = size;
         let (buffer, canvas) = self

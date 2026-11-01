@@ -1,27 +1,4 @@
-//! Phase 6 acceptance harness: real applications under Malaysia.
-//!
-//! For each application in the table below it launches the application inside a
-//! fresh MalaysiaDreams, with `WAYLAND_DEBUG=1`, captures the client's protocol trace
-//! and asserts what the client negotiated:
-//!
-//! - which decoration protocol it bound (xdg-decoration, the KDE one, or none);
-//! - the mode Malaysia configured (server-side or client-side);
-//! - whether the client surface was inset by the titlebar: the xdg configure
-//!   width drops by the titlebar thickness exactly when MalaysiaDreams reserves chrome.
-//!
-//! The expectations are derived from the toolkits' sources (ADR 0019): Qt
-//! defers to the compositor, GTK3/GTK4 ask through the KDE protocol and keep
-//! their own chrome when they have a headerbar, libadwaita windows always have
-//! one, and a client that never negotiates is left alone.
-//!
-//! Applications are located through `MALAYSIA_APP_<NAME>` environment variables
-//! (see the crate README); a name with no binary is reported UNVERIFIED rather
-//! than skipped silently. Whether two titlebars are *visible* is not machine
-//! checkable here: it needs a pixel comparison against the decoration region,
-//! so it stays manual.
-//!
-//! Run from the dev shell, or `./dev.sh decoration` which builds and runs it.
-
+//! Harness: runs real applications under Malaysia and checks their decoration protocol use.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -30,12 +7,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// How long to wait for the compositor to create its socket.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long each application gets to start, negotiate and be killed.
 const APP_TIMEOUT: Duration = Duration::from_secs(6);
-/// The titlebar thickness MalaysiaDreams reserves, in logical pixels
-/// (`vow_design::TITLEBAR.thickness`).
 const TITLEBAR: i32 = 32;
 
 fn main() -> ExitCode {
@@ -51,84 +24,51 @@ fn main() -> ExitCode {
     }
 }
 
-/// The decoration protocol a client is expected to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Protocol {
-    /// `zxdg_decoration_manager_v1`.
     Xdg,
-    /// `org_kde_kwin_server_decoration_manager`.
     Kde,
-    /// Neither: the client never negotiates decorations.
     None,
 }
 
-/// The mode MalaysiaDreams is expected to end up configuring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Client,
     Server,
 }
 
-/// What one application should negotiate.
 #[derive(Debug, Clone, Copy)]
 struct Expectation {
-    /// The protocol the client binds.
     protocol: Protocol,
-    /// The final decoration mode, or `None` when no mode is negotiated.
     mode: Option<Mode>,
-    /// How much the xdg configure width should shrink below its maximum: the
-    /// titlebar thickness when MalaysiaDreams reserves chrome, zero when it does not.
     inset: i32,
 }
 
-/// One application under test.
 struct Case {
-    /// The name in the report.
     name: &'static str,
-    /// The `MALAYSIA_APP_<NAME>` variable that points at the binary.
     variable: &'static str,
-    /// A command to fall back to when the variable is unset.
     fallback: &'static str,
-    /// Arguments passed to the binary.
     args: Vec<String>,
-    /// Extra environment for this application.
     env: Vec<(String, String)>,
-    /// What the run must show.
     expectation: Expectation,
 }
 
-/// The verdict for one application.
 enum Outcome {
-    /// The observation matched the expectation.
     Pass,
-    /// The application could not be exercised here; reported, not failed.
     Unverified(String),
-    /// The observation contradicted the expectation.
     Fail(String),
 }
 
-/// What the trace actually showed.
-///
-/// Events after the client starts resizing or changing state itself are ignored:
-/// a host pointer can click into a window and make the client request an
-/// interactive resize, which changes the configured size for reasons that have
-/// nothing to do with decorations.
 #[derive(Debug, Default)]
 struct Observation {
-    /// The client bound `zxdg_decoration_manager_v1`.
     xdg_bound: bool,
-    /// The client bound `org_kde_kwin_server_decoration_manager`.
     kde_bound: bool,
-    /// Every decoration mode the client was configured with, in order.
     modes: Vec<Mode>,
-    /// Every `xdg_toplevel.configure` width the client received, in order.
     widths: Vec<i32>,
-    /// The width the compositor advertised for its output, from `wl_output`.
     output_width: Option<i32>,
 }
 
 impl Observation {
-    /// Reads a client's `WAYLAND_DEBUG` output.
     fn parse(lines: &[String]) -> Self {
         let mut observation = Self::default();
         let mut cutoff: Option<usize> = None;
@@ -193,7 +133,6 @@ impl Observation {
         observation
     }
 
-    /// The protocol the client actually used.
     fn protocol(&self) -> Protocol {
         if self.xdg_bound {
             Protocol::Xdg
@@ -204,16 +143,10 @@ impl Observation {
         }
     }
 
-    /// The last mode the compositor configured.
     fn mode(&self) -> Option<Mode> {
         self.modes.last().copied()
     }
 
-    /// How much narrower the client's surface was configured than the output.
-    ///
-    /// The compositor configures the outer size minus its insets, so the last
-    /// configure is the one to read. Where the output width is unknown (no
-    /// `wl_output` event seen), the spread of the configures is the fallback.
     fn inset(&self) -> i32 {
         let last = self.widths.last().copied();
         match (self.output_width, last) {
@@ -229,7 +162,6 @@ impl Observation {
     }
 }
 
-/// The protocol message on a `WAYLAND_DEBUG` line, or `None` for other output.
 fn body(line: &str) -> Option<&str> {
     let rest = line.strip_prefix('[')?;
     let close = rest.find(']')?;
@@ -241,7 +173,6 @@ fn body(line: &str) -> Option<&str> {
     }
 }
 
-/// The `interface@id.method` token on a protocol line, without the arguments.
 fn event_token(body: &str) -> Option<&str> {
     let start = body.rfind('.').map(|dot| {
         let before = &body[..dot];
@@ -257,12 +188,10 @@ fn event_token(body: &str) -> Option<&str> {
     }
 }
 
-/// The first integer argument on a protocol line.
 fn first_integer(body: &str) -> Option<i32> {
     nth_integer(body, 0)
 }
 
-/// The `n`-th integer argument on a protocol line, counting from zero.
 fn nth_integer(body: &str, n: usize) -> Option<i32> {
     let open = body.find('(')? + 1;
     let rest = &body[open..];
@@ -277,7 +206,6 @@ fn nth_integer(body: &str, n: usize) -> Option<i32> {
         .nth(n)
 }
 
-/// Runs every case against one MalaysiaDreams.
 fn run() -> Result<(), String> {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -314,10 +242,6 @@ fn run() -> Result<(), String> {
             );
             continue;
         };
-        // Apps such as Nautilus are single-instance over the session bus: a
-        // plain launch would activate the instance already running in the host
-        // GNOME session instead of creating a window here. A private bus makes
-        // the app a new process that connects to this MalaysiaDreams.
         let mut command = Command::new("dbus-run-session");
         command
             .arg("--")
@@ -328,7 +252,6 @@ fn run() -> Result<(), String> {
             .env("WAYLAND_DEBUG", "1")
             .env("GDK_BACKEND", "wayland")
             .env("QT_QPA_PLATFORM", "wayland")
-            // Clients under test must reach this MalaysiaDreams, not the host session.
             .env_remove("DISPLAY")
             .stdin(Stdio::null());
         for (key, value) in &case.env {
@@ -402,12 +325,6 @@ fn run() -> Result<(), String> {
     }
 }
 
-/// Runs the mode-change client against the same compositor.
-///
-/// This is the one policy rule the real applications cannot be made to
-/// exercise: a window that changes its decoration mode while it is mapped must
-/// be reconfigured with the new mode and the new usable size, leaving no stale
-/// titlebar (ADR 0019, rule 4).
 fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> {
     let client = std::env::var_os("MALAYSIA_DECORATION_CLIENT")
         .map(PathBuf::from)
@@ -461,9 +378,6 @@ fn run_mode_change(socket: &str, runtime: &Path) -> Result<Vec<String>, String> 
     }
 }
 
-/// Runs the ADR 0035 client against a fresh Malaysia configured with
-/// `force_server`, so the only reason a native app can lack a titlebar is the
-/// app-id prefix.
 fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, String> {
     let client = std::env::var_os("MALAYSIA_NATIVE_DECORATION")
         .map(PathBuf::from)
@@ -560,7 +474,6 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
     Ok(lines)
 }
 
-/// Compares one observation against its expectation.
 fn check(
     case: &Case,
     observation: &Observation,
@@ -570,17 +483,12 @@ fn check(
     if lines.is_empty() {
         return Outcome::Unverified("the application produced no output".to_string());
     }
-    // An application that created no toplevel was never decorated; passing it
-    // would be a vacuous result.
     if observation.widths.is_empty() {
-        // An application that never connected to this compositor is using
-        // another display; that is an environment fact, not a policy failure.
         if !lines.iter().any(|line| line.contains("wl_display#")) {
             return Outcome::Unverified(
                 "the application never connected to the Wayland display".to_string(),
             );
         }
-        // One that exits on its own never got to map a window either.
         return match exited {
             Some(status) => Outcome::Unverified(format!(
                 "the application exited with {status} before mapping a window"
@@ -613,7 +521,6 @@ fn check(
     Outcome::Pass
 }
 
-/// The applications under test and what each must negotiate.
 fn cases(runtime: &Path) -> Vec<Case> {
     let qml = runtime.join("probe.qml");
     let _ = fs::write(
@@ -633,11 +540,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "nautilus",
             args: vec!["--no-desktop".to_string()],
             env: Vec::new(),
-            // Nautilus 50 requests the KDE server-side mode explicitly, even
-            // though it is GTK4. ADR 0019 says the compositor honours that
-            // request; forcing client-side here would hide a real double
-            // decoration. The expectation is pinned to the version in the dev
-            // shell and must be revisited if Nautilus changes its mind.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Server),
@@ -650,7 +552,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk3-demo",
             args: Vec::new(),
             env: Vec::new(),
-            // Its window is built with a GtkHeaderBar, so it keeps CSD.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Client),
@@ -663,7 +564,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk3-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
-            // Its window is built with a GtkHeaderBar too, so client-side.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Client),
@@ -676,8 +576,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk3_plain",
             args: Vec::new(),
             env: Vec::new(),
-            // A plain GtkWindow with no headerbar: GTK3 requests server-side
-            // through the KDE protocol and MalaysiaDreams insets the surface.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Server),
@@ -690,8 +588,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk4-demo",
             args: Vec::new(),
             env: Vec::new(),
-            // This demo keeps client-side chrome of its own, so it never
-            // creates a decoration object; the policy leaves it alone.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: None,
@@ -704,7 +600,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk4-widget-factory",
             args: Vec::new(),
             env: Vec::new(),
-            // Its window sets a GtkHeaderBar as titlebar: client-side.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Client),
@@ -717,8 +612,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "gtk4_plain",
             args: Vec::new(),
             env: Vec::new(),
-            // A plain GtkWindow: GTK4 asks for server-side, and it asks before
-            // the xdg_toplevel exists, so this pins that ordering too.
             expectation: Expectation {
                 protocol: Protocol::Kde,
                 mode: Some(Mode::Server),
@@ -731,8 +624,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "qml",
             args: vec![qml.to_string_lossy().into_owned()],
             env: qt6,
-            // Qt creates the xdg-decoration object, unset_mode, and defers to
-            // the compositor: MalaysiaDreams chooses server-side.
             expectation: Expectation {
                 protocol: Protocol::Xdg,
                 mode: Some(Mode::Server),
@@ -745,7 +636,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "qmlscene",
             args: vec![qml.to_string_lossy().into_owned()],
             env: Vec::new(),
-            // Qt 5.15 has the same xdg-decoration handling as Qt 6.
             expectation: Expectation {
                 protocol: Protocol::Xdg,
                 mode: Some(Mode::Server),
@@ -758,8 +648,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             fallback: "onlyoffice-desktopeditors",
             args: Vec::new(),
             env: Vec::new(),
-            // It draws its own title area; if it is frameless Qt, no decoration
-            // object is created at all.
             expectation: Expectation {
                 protocol: Protocol::None,
                 mode: None,
@@ -769,7 +657,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
     ]
 }
 
-/// Resolves an application binary from its environment variable or `PATH`.
 fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
     if let Some(path) = std::env::var_os(variable) {
         let path = PathBuf::from(path);
@@ -780,7 +667,6 @@ fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
     which(fallback)
 }
 
-/// Looks a command up on `PATH`.
 fn which(command: &str) -> Option<PathBuf> {
     let paths = std::env::var_os("PATH")?;
     std::env::split_paths(&paths)
@@ -788,8 +674,6 @@ fn which(command: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// Spawns the compositor with its own runtime directory, reaching the host
-/// compositor through the absolute socket path resolved by the caller.
 fn host_wayland_display() -> Result<Option<String>, String> {
     let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
         return Ok(None);
@@ -802,7 +686,6 @@ fn host_wayland_display() -> Result<Option<String>, String> {
     Ok(Some(format!("{runtime}/{display}")))
 }
 
-/// Waits until the compositor has created a `wayland-*` socket.
 fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
     let deadline = Instant::now() + SOCKET_TIMEOUT;
     loop {
@@ -826,7 +709,6 @@ fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Resul
     }
 }
 
-/// The first (alphabetically) Wayland socket in a directory.
 fn find_socket(dir: &Path) -> Option<String> {
     let mut names: Vec<String> = fs::read_dir(dir)
         .ok()?
@@ -838,7 +720,6 @@ fn find_socket(dir: &Path) -> Option<String> {
     names.into_iter().next()
 }
 
-/// A child process that is killed and reaped when it drops.
 struct ChildGuard {
     child: Child,
 }
@@ -891,10 +772,8 @@ impl Drop for ChildGuard {
     }
 }
 
-/// A shared, thread-safe collection of captured output lines.
 type Sink = Arc<Mutex<Vec<String>>>;
 
-/// Reads `reader` line by line into a sink on its own thread.
 fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     thread::spawn(move || {
         for line in BufReader::new(reader).lines() {
@@ -906,12 +785,10 @@ fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     });
 }
 
-/// A copy of the lines captured so far.
 fn snapshot(sink: &Sink) -> Vec<String> {
     sink.lock().expect("capture sink poisoned").clone()
 }
 
-/// A runtime directory that is removed when it drops.
 struct TempDir(PathBuf);
 
 impl TempDir {
@@ -980,8 +857,6 @@ mod tests {
 
     #[test]
     fn a_single_inset_configure_is_still_a_titlebar() {
-        // GTK4 asks for server-side before the toplevel exists, so the initial
-        // configure already carries the inset and there is no full-size one.
         let lines = trace(&[
             "[1] wl_registry#2.global(7, \"org_kde_kwin_server_decoration_manager\", 1)",
             "[2] wl_output#11.mode(3, 1280, 800, 60000)",

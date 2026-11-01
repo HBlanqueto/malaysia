@@ -1,9 +1,4 @@
 #!/bin/sh
-# Guard against client filters that freeze the compositor (ADR 0039).
-#
-# Starts the real compositor without MALAYSIA_DEV, waits for its own socket and
-# connects a plain client (`wayland-info`) with a 5 s deadline. The client must
-# finish, and the private Infinity global must stay hidden from it.
 set -eu
 
 repo_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -31,7 +26,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Never inherit a developer's bypass: this exercises the filtered path.
 unset MALAYSIA_DEV MALAYSIA_SHELL_EXE
 MALAYSIA_CONFIG_DIR="$tmp/config" MALAYSIA_DATA_DIR="$tmp/data" \
     "$bin" >"$log" 2>&1 &

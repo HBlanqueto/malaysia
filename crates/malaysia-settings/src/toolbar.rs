@@ -1,4 +1,4 @@
-//! Barra de herramientas de Ajustes: cápsula Atrás/Adelante y título.
+//! Settings toolbar: back/forward capsule and title.
 
 use barrier_kit::ProbeExt;
 use barrier_kit::controls::{ToolButton, ToolGroup};
@@ -10,7 +10,6 @@ use vow_design::{SETTINGS, TITLE_2, TOOLGROUP};
 const BACK_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M10 3L5 8l5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 const FORWARD_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M6 3l5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 
-/// Barra de herramientas con cápsula de navegación y título de sección.
 pub fn toolbar(titlebar: Titlebar) -> Element {
     let capsule = rect()
         .width(Size::auto())

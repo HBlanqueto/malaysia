@@ -1,20 +1,4 @@
-//! Asserts that an active pointer lock reaches the client.
-//!
-//! With `MALAYSIA_TEST_INPUT=1` the compositor hovers the pointer over the first
-//! mapped window and presses, so this client gets a `wl_pointer.enter`. It then
-//! asks `zwp_pointer_constraints_v1` to lock the pointer to its surface
-//! (`Persistent`, no region) and waits for the `locked` event, which the
-//! compositor only sends after activating the constraint for the focused
-//! surface.
-//!
-//! A compositor that advertises the global but never activates the constraint
-//! times out here; one that activates it for a surface the pointer is not over
-//! would send `locked` before this client asked, which this client does not
-//! send a lock for.
-//!
-//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`, or
-//! `./dev.sh pointer-lock` once the helper exists.
-
+//! Probe: an active pointer lock reaches the client.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -57,9 +41,7 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long to wait for the compositor to activate the lock.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -73,8 +55,6 @@ fn main() {
     let mut pool = SlotPool::new((SIDE * SIDE * 4) as usize, &shm).expect("no shm pool");
 
     let surface = compositor.create_surface(&qh);
-    // Client-side decorations keep the pointer over the client's own surface,
-    // so the compositor's injected press starts no decoration grab.
     let window = xdg_shell.create_window(surface, WindowDecorations::RequestClient, &qh);
     let (buffer, canvas) = pool
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
@@ -146,7 +126,6 @@ struct App {
 }
 
 impl App {
-    /// Asks for a persistent pointer lock, once the pointer is over the window.
     fn request_lock(&mut self, qh: &QueueHandle<Self>) {
         let Some(pointer) = &self.pointer else {
             return;

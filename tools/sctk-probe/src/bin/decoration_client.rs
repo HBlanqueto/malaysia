@@ -1,21 +1,4 @@
-//! Exercises a decoration-mode change after a window has mapped.
-//!
-//! A client may change its mind: it can call `set_mode` again while it is
-//! already on screen. The compositor must then recompute the insets, send a
-//! configure carrying the new mode and the new usable size, and update what it
-//! stores, leaving no stale titlebar behind (ADR 0019, rule 4).
-//!
-//! The sequence:
-//!
-//! 1. the window is created asking for server-side decorations;
-//! 2. the compositor configures it server-side, one titlebar narrower;
-//! 3. on the first frame (so the window is mapped and drawn), the client asks
-//!    for client-side instead;
-//! 4. the compositor must configure it client-side, one titlebar wider.
-//!
-//! It exits non-zero if either configure never arrives or the sizes do not
-//! differ by exactly the titlebar thickness.
-
+//! Client that changes decoration mode after the window has mapped.
 use std::time::Duration;
 
 use smithay_client_toolkit::reexports::client::protocol::{
@@ -47,12 +30,8 @@ use smithay_client_toolkit::{
     },
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// The titlebar thickness the compositor reserves, in logical pixels
-/// (`vow_design::TITLEBAR.thickness`).
 const TITLEBAR: u32 = 32;
-/// How long to wait for both configures.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -69,8 +48,6 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: the initial xdg_surface.configure must
-    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -132,8 +109,6 @@ struct App {
 
 impl CompositorHandler for App {
     fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {
-        // The first frame means the window is mapped and drawn, so a mode
-        // change now happens while it is on screen.
         if !self.requested_change {
             self.requested_change = true;
             self.window
@@ -199,11 +174,6 @@ impl WindowHandler for App {
                 if self.server_width.is_none() {
                     println!("decoration_client: server configure {width}x");
                     self.server_width = Some(width);
-                    // Ask for a frame so the mode change happens after the
-                    // compositor has drawn the mapped window, not merely after
-                    // its first configure. The request goes in before the
-                    // commit, or it would only reach the compositor on a later
-                    // commit that never comes.
                     let surface = window.wl_surface().clone();
                     let _ = surface.frame(qh, surface.clone());
                 }
@@ -233,8 +203,6 @@ impl WindowHandler for App {
             self.attached = true;
             window.attach(Some(self.buffer.wl_buffer()), 0, 0);
         }
-        // Acknowledge the configure and commit, so the window maps and later
-        // configures flow.
         window.commit();
     }
 }

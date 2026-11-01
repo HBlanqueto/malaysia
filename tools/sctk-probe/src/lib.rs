@@ -1,16 +1,4 @@
-//! Shared setup for Malaysia's dev-only probe clients.
-//!
-//! `tools/sctk-probe` is **not** part of the compositor. It is a workspace
-//! member excluded from the default build, used to drive Malaysia as a Wayland
-//! client while developing. Its binaries are:
-//!
-//! - `parent_probe` — maps two toplevels and toggles a parent on the child to
-//!   check that the server recomputes decoration insets and reconfigures.
-//! - `smoke` — launches the compositor and a real client, captures the client's
-//!   `WAYLAND_DEBUG` trace and asserts the toplevel mapping sequence.
-//!
-//! See the crate README for the commands.
-
+//! Shared setup for the dev-only probe clients.
 pub mod dmabuf;
 
 use smithay_client_toolkit::reexports::{
@@ -26,12 +14,6 @@ use wayland_client::{
     Connection, Dispatch, QueueHandle,
 };
 
-/// Opens the Wayland connection named by the environment and returns an event
-/// loop with the connection already inserted as a source.
-///
-/// Neither the display nor the registry is chosen here: the probe connects to
-/// whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point at, so the caller can run
-/// it against Malaysia or against the host session without this crate knowing.
 pub fn init_connection<APP>() -> (EventLoop<'static, APP>, GlobalList, QueueHandle<APP>)
 where
     APP: Dispatch<WlRegistry, GlobalListContents> + 'static,

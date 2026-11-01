@@ -1,21 +1,12 @@
-//! Local help topics shown in the Help search field (14c).
-//!
-//! These pair a title with a documentation URL inside the repository. The
-//! "Show all help topics" entry always opens the documentation index.
-
-/// One help article the user can search from the menubar.
+//! Local help topics for the Help search field.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HelpTopic {
-    /// Localised title shown in the search results.
     pub title: &'static str,
-    /// Absolute URL to open when the topic is selected.
     pub url: &'static str,
 }
 
-/// The canonical index of MalaysiaDreams documentation.
 pub const DOCS_INDEX: &str = "https://github.com/HBlanqueto/malaysia/tree/main/docs";
 
-/// All help topics searchable from the Ayuda menu.
 pub fn topics() -> &'static [HelpTopic] {
     &[
         HelpTopic {

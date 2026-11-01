@@ -1,17 +1,4 @@
-//! Asserts that `wp_presentation` feedback reaches a client.
-//!
-//! Maps a client-decorated toplevel and commits three frames, requesting
-//! feedback for each one: two with damage (which must be presented with
-//! increasing timestamps) and one with no damage (which must be discarded or
-//! presented, never left unanswered). Every event is printed with its
-//! timestamp, refresh, sequence and flags.
-//!
-//! On `./dev.sh drm-vkms` (`PRESENTATION_REQUIRE_VSYNC=1`) every presented
-//! event must also carry a non-zero refresh and the `vsync` flag, which only
-//! the DRM backend can provide.
-//!
-//! Run against a running compositor, or `./dev.sh presentation`.
-
+//! Probe: `wp_presentation` feedback reaches the client.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -47,11 +34,8 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long to wait for each feedback event.
 const TIMEOUT: Duration = Duration::from_secs(10);
-/// Damaged frames committed before the no-damage one.
 const DAMAGED_FRAMES: u8 = 2;
 
 fn main() {
@@ -142,7 +126,6 @@ struct App {
     configured: bool,
     configure_at: std::time::Instant,
     started: bool,
-    /// 0..DAMAGED_FRAMES are damaged; DAMAGED_FRAMES is the no-damage commit.
     frame: u8,
     pending: u32,
     last_time: Option<(u64, u32)>,
@@ -153,7 +136,6 @@ struct App {
 }
 
 impl App {
-    /// Requests feedback and commits the current frame.
     fn commit(&mut self, qh: &QueueHandle<Self>) {
         self.presentation
             .feedback(self.window.wl_surface(), qh, self.frame);
@@ -166,7 +148,6 @@ impl App {
         println!("presentation: committed frame {}", self.frame);
     }
 
-    /// Moves to the next frame, or finishes after the no-damage one.
     fn advance(&mut self, qh: &QueueHandle<Self>) {
         if self.frame < DAMAGED_FRAMES {
             self.frame += 1;
@@ -231,8 +212,6 @@ impl WindowHandler for App {
         _: WindowConfigure,
         _: u32,
     ) {
-        // Wait for the decoration negotiation's burst of configures to settle,
-        // then attach and map once (the timer does the commit).
         if !self.configured {
             self.configured = true;
             self.configure_at = std::time::Instant::now();

@@ -1,32 +1,4 @@
-//! Maps one toplevel, applies a client size bound, and reports every size the
-//! compositor configures it to.
-//!
-//! `block4` uses this client to assert pointer-driven resizes: with
-//! `MALAYSIA_TEST_INPUT=1` the compositor presses an edge or corner of the
-//! window (aimed by `MALAYSIA_TEST_PRESS_AT`) and drags the grab with its
-//! scripted motions. The client prints each configure and, once the stream
-//! settles, the final size:
-//!
-//! ```text
-//! resize_client: configure width=1280 height=720 resizing=false
-//! resize_client: configure width=1328 height=752 resizing=true
-//! resize_client: final width=1328 height=752
-//! ```
-//!
-//! It is client-decorated, so its configured size is its window size and no
-//! decoration reconfigure races the first configure. The bound comes from the
-//! environment as an offset from the initial configure, in the surface
-//! coordinates `xdg_toplevel.set_min_size`/`set_max_size` take:
-//!
-//! - `MALAYSIA_RESIZE_MIN=10,10` — the minimum is the initial size minus
-//!   `(10, 10)`;
-//! - `MALAYSIA_RESIZE_MAX=10,10` — the maximum is the initial size plus
-//!   `(10, 10)`.
-//!
-//! Only one of the two is set per run. It exits non-zero if the window is never
-//! configured, or if no resize settles within the timeout, so a missed edge
-//! press fails loudly instead of reporting a stale size.
-
+//! Client that applies a size bound and reports every configured size.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{
@@ -58,11 +30,8 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long the size must hold still after a resizing configure to be final.
 const SETTLE: Duration = Duration::from_millis(400);
-/// How long to wait for a resize to settle.
 const TIMEOUT: Duration = Duration::from_secs(6);
 
 fn main() {
@@ -79,8 +48,6 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: the initial xdg_surface.configure must
-    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -153,8 +120,6 @@ struct App {
 }
 
 impl App {
-    /// Sets the client's minimum or maximum from the environment, relative to
-    /// the initial configure, before the mapping commit.
     fn apply_bounds(&self, width: u32, height: u32) {
         if let Some((dw, dh)) = offset("MALAYSIA_RESIZE_MIN") {
             self.window
@@ -168,12 +133,10 @@ impl App {
         }
     }
 
-    /// Whether a resizing configure has arrived and the size has held still.
     fn settled(&self) -> bool {
         self.saw_resizing && self.last.is_some() && self.last_configure.elapsed() >= SETTLE
     }
 
-    /// Prints the last configured size, once.
     fn print_final(&mut self) {
         if self.printed_final {
             return;
@@ -250,7 +213,6 @@ impl WindowHandler for App {
             self.attached = true;
             window.attach(Some(self.buffer.wl_buffer()), 0, 0);
         }
-        // Acknowledge and commit, so the window maps and later configures flow.
         window.commit();
     }
 }
@@ -277,7 +239,6 @@ impl ProvidesRegistryState for App {
     registry_handlers![OutputState,];
 }
 
-/// Reads an `x,y` offset pair from the environment.
 fn offset(name: &str) -> Option<(u32, u32)> {
     let value = std::env::var(name).ok()?;
     let (x, y) = value.split_once(',')?;

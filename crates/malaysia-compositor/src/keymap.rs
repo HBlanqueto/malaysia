@@ -1,26 +1,14 @@
-//! The system keyboard layout, read once at startup.
-//!
-//! Priority:
-//! 1. `XKB_DEFAULT_*` in the environment, an explicit override;
-//! 2. `org.freedesktop.locale1` on the system bus (`localectl status`);
-//! 3. xkbcommon's defaults.
-//!
-//! The query is blocking and runs before the event loop starts. A failure is
-//! logged and never prevents the compositor from starting.
+//! Reads the system keyboard layout once at startup.
 
 use std::env;
 
 use smithay::input::keyboard::XkbConfig;
 use tracing::{info, warn};
 
-/// Where the keymap values came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
-    /// `XKB_DEFAULT_*` environment variables.
     Environment,
-    /// `org.freedesktop.locale1`.
     Locale1,
-    /// xkbcommon's built-in defaults.
     Default,
 }
 
@@ -34,23 +22,16 @@ impl Source {
     }
 }
 
-/// The five xkbcommon rule names.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Keymap {
-    /// Rules file; empty means xkbcommon's default.
     pub rules: String,
-    /// Keyboard model.
     pub model: String,
-    /// Layout list.
     pub layout: String,
-    /// Variant list.
     pub variant: String,
-    /// xkb options.
     pub options: String,
 }
 
 impl Keymap {
-    /// Builds an `XkbConfig` borrowing these values. Empty options stay `None`.
     pub fn xkb_config(&self) -> XkbConfig<'_> {
         XkbConfig {
             rules: &self.rules,
@@ -61,7 +42,6 @@ impl Keymap {
         }
     }
 
-    /// Reads the explicit `XKB_DEFAULT_*` override, if any variable is set.
     fn from_environment() -> Option<Self> {
         let names = [
             "XKB_DEFAULT_RULES",
@@ -83,7 +63,6 @@ impl Keymap {
         })
     }
 
-    /// Queries `org.freedesktop.locale1` on the system bus.
     fn from_locale1() -> Result<Self, String> {
         use zbus::blocking::{Connection, Proxy};
 
@@ -110,10 +89,6 @@ impl Keymap {
     }
 }
 
-/// Chooses the keymap from the two sources, without touching D-Bus.
-///
-/// This is the testable half: the caller supplies the environment override
-/// and the locale1 result.
 fn choose(
     environment: Option<Keymap>,
     locale1: impl FnOnce() -> Result<Keymap, String>,
@@ -131,7 +106,6 @@ fn choose(
     }
 }
 
-/// Loads the keymap once at startup and logs the chosen source and layout.
 pub fn system() -> Keymap {
     let (keymap, source) = choose(Keymap::from_environment(), Keymap::from_locale1);
     info!(

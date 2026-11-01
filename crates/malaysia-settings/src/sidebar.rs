@@ -1,4 +1,4 @@
-//! Isla lateral de Ajustes: semáforos, buscador, cuenta y sección.
+//! Settings sidebar: traffic lights, search, account and section list.
 
 use barrier_kit::ProbeExt;
 use barrier_kit::controls::TextField;
@@ -14,7 +14,6 @@ const SEARCH_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\
 const CLEAR_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path d=\"M4 4l8 8M12 4l-8 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\"/></svg>";
 const APPEARANCE_ICON: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 22 22\"><circle cx=\"11\" cy=\"11\" r=\"9\" fill=\"currentColor\"/><path d=\"M11 2v18\" stroke=\"white\" stroke-width=\"2\"/><path d=\"M2 11h18\" stroke=\"white\" stroke-width=\"2\"/></svg>";
 
-/// Isla lateral completa.
 pub fn sidebar(
     search: State<String>,
     resolved: &Resolved,
@@ -90,7 +89,6 @@ fn spacer(height: u32) -> Rect {
     rect().width(Size::fill()).height(Size::px(height as f32))
 }
 
-/// Campo de búsqueda con lupa, texto y borrón.
 fn search_field(
     search: State<String>,
     palette: vow_design::SidebarPalette,
@@ -159,7 +157,6 @@ fn search_field(
         })
 }
 
-/// Fila de cuenta con avatar e iniciales.
 fn account_row(
     sidebar_palette: vow_design::SidebarPalette,
     scheme_palette: vow_design::Palette,
@@ -185,7 +182,6 @@ fn account_row(
                 .width(Size::px(SETTINGS.account_avatar as f32))
                 .height(Size::px(SETTINGS.account_avatar as f32))
                 .corner_radius((SETTINGS.account_avatar as f32 / 2.0).max(0.0))
-                // sys-gray de Tengen; el token no se exporta como const todavía.
                 .background(rgba(Rgba::rgb8(0x7d, 0x82, 0x8c)))
                 .center()
                 .child(
@@ -226,7 +222,6 @@ fn account_row(
         )
 }
 
-/// Elemento de la barra lateral.
 fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPalette) -> Rect {
     let (bg, fg, weight) = if selected {
         (
@@ -283,7 +278,6 @@ fn sidebar_item(label_text: &str, selected: bool, palette: vow_design::SidebarPa
         )
 }
 
-/// Semáforos interactivos de la isla lateral para ventanas de ancho fijo.
 fn sidebar_traffic_lights(
     on_close: Option<Callback<(), ()>>,
     on_minimize: Callback<(), ()>,

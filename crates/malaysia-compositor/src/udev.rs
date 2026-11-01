@@ -1,11 +1,4 @@
-//! The direct session: DRM/KMS atomic, libseat and libinput.
-//!
-//! Bloque 8a is deliberately small: one primary GPU, the internal panel in its
-//! preferred mode, one primary plane, no hotplug and no direct scanout. The
-//! shared [`State`] and every protocol handler are the same as the winit
-//! backend; only presentation and input differ. The development-only
-//! `--drm-device`/`--no-input` pair can move scanout to vkms while rendering
-//! on the boot GPU's render node.
+//! The direct session: DRM/KMS, libseat and libinput.
 
 #![allow(unsafe_code)]
 
@@ -50,12 +43,6 @@ use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::{ClientState, State};
 use vow_appearance::watch::AppearanceWatch;
 
-/// The render transform shared by DRM captures and screenshots.
-///
-/// OpenGL's framebuffer origin is bottom-left; Smithay's y-down space
-/// arrives inverted unless the render transform flips it. The theme fade
-/// snapshot uses `Transform::Normal` because it is an offscreen texture
-/// sampled 1:1, not the KMS primary plane.
 pub(crate) const fn render_transform() -> Transform {
     Transform::Flipped180
 }
@@ -84,21 +71,12 @@ struct Udev {
     appearance_watch: Option<AppearanceWatch>,
 }
 
-/// Development-only overrides for the direct session.
 #[derive(Debug, Clone, Default)]
 pub struct DrmOptions {
-    /// A specific KMS node instead of the seat's primary GPU.
     pub device: Option<PathBuf>,
-    /// Do not open libinput.
     pub no_input: bool,
 }
 
-/// Runs MalaysiaDreams on the primary DRM device, or on a development `--drm-device`.
-///
-/// No fallback: the caller asked for `--drm`, so a missing seat, GPU or eDP
-/// connector is a startup error, not a silent switch to winit. With a device
-/// override, GBM/EGL run on a render node and only scanout uses the named KMS
-/// node; libinput and the shell target are skipped.
 pub fn run(options: DrmOptions) -> Result<()> {
     let mut event_loop = EventLoop::<Udev>::try_new().context("creating the event loop")?;
     let loop_signal = event_loop.get_signal();
@@ -131,8 +109,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
                 .ok_or_else(|| anyhow!("the seat has no DRM device"))?;
             let node = DrmNode::from_path(&path)
                 .map_err(|error| anyhow!("{} is not a DRM node: {error}", path.display()))?;
-            // udev may hand us the render node; libseat and DRM master need
-            // the primary node for the same device.
             match node.node_with_type(NodeType::Primary) {
                 Some(Ok(primary)) => primary,
                 _ => node,
@@ -144,9 +120,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         .or_else(|| options.device.clone())
         .ok_or_else(|| anyhow!("the DRM device has no dev path"))?;
 
-    // A development override keeps rendering on the boot GPU's render node
-    // while scanout goes to the named KMS node (vkms). Production keeps the
-    // previous one-device behaviour.
     let render_node = if options.device.is_some() {
         find_render_node(&seat, &scanout_node)?
     } else {
@@ -183,9 +156,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let scanout_gbm =
         GbmDevice::new(scanout_fd.clone()).context("creating the scanout GBM device")?;
 
-    // SAFETY: the EGL display and context belong to this one thread and are
-    // never shared; the same is true of the GLES renderer. This is the scoped
-    // exception to ADR 0003 recorded in ADR 0030.
+    // SAFETY: the EGL display and context never leave this thread (ADR 0030).
     let egl_display = unsafe { EGLDisplay::new(render_gbm.clone()) }
         .map_err(|error| anyhow!("creating the EGL display: {error}"))?;
     let egl_context =
@@ -204,8 +175,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         .create_surface(crtc, mode, &[connector.handle()])
         .map_err(|error| anyhow!("creating the DRM surface: {error}"))?;
 
-    // Bloque 8a is one primary plane. Clearing overlay and cursor here makes
-    // DrmCompositor unable to hand anything else to KMS.
     let mut planes = surface.planes().clone();
     planes.overlay.clear();
     planes.cursor.clear();
@@ -251,15 +220,12 @@ pub fn run(options: DrmOptions) -> Result<()> {
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
-    // Compile the shared shaders once; failures are non-fatal and leave the
-    // optional fields as None.
     state.rounded_clip = crate::effects::compile_rounded_clip(&mut renderer);
     state.shadow = crate::effects::compile_shadow(&mut renderer);
     state.border = crate::effects::compile_border(&mut renderer);
 
     let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
 
-    // When a client dies, clean up its surfaces in the next event-loop cycle.
     let disconnect_queue = crate::state::ClientDisconnectQueue::default();
     let (disconnect_ping, disconnect_source) = smithay::reexports::calloop::ping::make_ping()
         .map_err(|error| anyhow!("creating the disconnect ping: {error}"))?;
@@ -295,8 +261,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         appearance_watch: None,
     };
 
-    // Rebuild the chrome theme when appearance.domain or wallpaper.state
-    // changes, without a restart.
     let appearance_watch = AppearanceWatch::new()
         .map_err(|error| anyhow!("creating the appearance watcher: {error}"))?;
     let appearance_fd = appearance_watch
@@ -334,7 +298,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         )
         .map_err(|error| anyhow!("inserting the theme watcher: {error}"))?;
 
-    // DRM events: VBlank is the pacing clock.
     loop_handle
         .insert_source(
             drm_notifier,
@@ -347,8 +310,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         )
         .map_err(|error| anyhow!("inserting the DRM source: {error}"))?;
 
-    // libinput is the only input source in 8a; no hotplug backend yet.
-    // `--no-input` skips it entirely, so a vkms test never opens /dev/input.
     let mut libinput = if options.no_input {
         info!("input disabled by --no-input");
         None
@@ -371,7 +332,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
             .map_err(|error| anyhow!("inserting the libinput source: {error}"))?;
     }
 
-    // Session pause/resume is the VT switch path.
     loop_handle
         .insert_source(
             session_notifier,
@@ -425,8 +385,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         })
         .map_err(|error| anyhow!("inserting the socket source: {error}"))?;
 
-    // A development device override is isolated: it must not start the
-    // user's shell units on the test output.
     let shell_started = if options.device.is_some() || options.no_input {
         info!("shell target skipped for the development DRM options");
         false
@@ -481,8 +439,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
     Ok(())
 }
 
-/// Starts the shell target after the socket exists. The target's units read
-/// `WAYLAND_DISPLAY` from the user manager, not from MalaysiaDreams's process.
 fn start_shell_session(socket: &str) -> bool {
     let import = systemctl(
         &[
@@ -490,7 +446,6 @@ fn start_shell_session(socket: &str) -> bool {
             "import-environment",
             "WAYLAND_DISPLAY",
             "XDG_CURRENT_DESKTOP",
-            // «Cerrar sesión…» terminates this logind session by id (14b-2).
             "XDG_SESSION_ID",
         ],
         Some(socket),
@@ -572,9 +527,6 @@ impl Udev {
     }
 
     fn after_input(&mut self) {
-        // Input sends keyboard and pointer events to clients; flush them now
-        // instead of waiting for the next client request, which an idle popup
-        // may never send (it cannot answer a frame callback it has not got).
         if let Err(error) = self.display.flush_clients() {
             warn!(%error, "flushing clients after input");
         }
@@ -703,7 +655,6 @@ impl Udev {
             }
         }
         if self.state.theme_fade.is_some() {
-            // The fade overlay changes alpha every frame; force a full redraw.
             self.compositor.reset_buffer_ages();
         }
         match self.compositor.render_frame(
@@ -738,9 +689,6 @@ impl Udev {
                         self.frame_was_empty = true;
                         tracing::debug!("frame skipped: no damage");
                     }
-                    // A commit that only asked for a frame callback has no damage
-                    // to queue, so there is no VBlank to send the callback. Answer
-                    // it here in the next ~refresh cycle instead of stalling.
                     let time = self.start_time.elapsed();
                     let refresh = self
                         .output
@@ -782,8 +730,6 @@ impl Udev {
         }
     }
 
-    /// Polls again after one refresh when a frame had no damage. VBlank only
-    /// arrives for queued frames, so an idle output needs this timer.
     fn schedule_repaint(&mut self) {
         if self.repaint_timer.is_some() {
             return;
@@ -808,7 +754,6 @@ impl Udev {
     }
 }
 
-/// Opens a DRM node through the session.
 fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDeviceFd> {
     let fd = session
         .open(
@@ -819,12 +764,6 @@ fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDevic
     Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
 }
 
-/// Finds a render node on a different device than `scanout`.
-///
-/// `primary_gpu` puts a boot VGA card first, so the normal case is the
-/// amdgpu render node while `scanout` is vkms. The fallback scans the seat's
-/// GPUs in case there is no boot VGA flag. Only paths are stat'ed here; this
-/// never opens the primary card.
 fn find_render_node(seat: &str, scanout: &DrmNode) -> Result<DrmNode> {
     let mut candidates = Vec::new();
     if let Ok(Some(path)) = primary_gpu(seat) {
@@ -850,7 +789,6 @@ fn find_render_node(seat: &str, scanout: &DrmNode) -> Result<DrmNode> {
     )
 }
 
-/// Picks the internal panel and its preferred mode, plus a usable CRTC.
 fn find_panel(
     drm: &DrmDevice,
 ) -> Result<(

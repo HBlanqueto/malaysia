@@ -1,22 +1,4 @@
-//! Asserts the surface-local coordinates a hovered client receives.
-//!
-//! MalaysiaDreams's test backend, with `MALAYSIA_TEST_INPUT=1`, presses on the first
-//! mapped window, follows the press with motions and releases. This client asks
-//! for client-side decorations, so its surface origin is its window origin, and
-//! sends `move` and `resize` with the press serial: the move makes the
-//! compositor's scripted drag move the window to a non-zero origin, and the
-//! resize makes the compositor release the button. It then hovers the pointer
-//! with no button held over the global points in `MALAYSIA_TEST_HOVER`.
-//!
-//! The client asserts that the `wl_pointer.enter` and `wl_pointer.motion` it
-//! receives for that hover carry the surface-local positions in
-//! `MALAYSIA_EXPECT_HOVER` (an `x,y` list separated by `;`). A compositor that
-//! hands Smithay the surface-local point where it expects the surface origin
-//! makes every client read the window origin instead, which fails here.
-//!
-//! Run it through `./dev.sh move`; `move_probe` sets both variables and checks
-//! the positions again from the printed lines.
-
+//! Client that asserts the surface-local coordinates of a hover.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -55,11 +37,8 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How many motions the gesture waits for before it asks for a move.
 const THRESHOLD_MOTIONS: usize = 3;
-/// How long to wait for the scripted hover.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -77,16 +56,11 @@ fn main() {
     let mut pool = SlotPool::new((SIDE * SIDE * 4) as usize, &shm).expect("no shm pool");
 
     let surface = compositor.create_surface(&qh);
-    // Client-side decorations keep the insets at zero, so a surface-local
-    // position is the global position minus the window origin, with no
-    // compositor-chosen chrome to account for.
     let window = xdg_shell.create_window(surface, WindowDecorations::RequestClient, &qh);
     let (buffer, canvas) = pool
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: the initial xdg_surface.configure must
-    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -163,8 +137,6 @@ struct App {
 }
 
 impl App {
-    /// Sends the move and resize a drag gesture makes, both with the press
-    /// serial: the move drives the scripted drag, the resize the release.
     fn request_move_and_resize(&self, serial: u32) {
         let Some(seat) = &self.seat else {
             return;
@@ -174,7 +146,6 @@ impl App {
         println!("hover_client: sent move/resize with serial {serial}");
     }
 
-    /// Records a post-release position and asserts it against the expectation.
     fn check(&mut self, kind: &str, position: (f64, f64)) {
         println!("hover_client: {kind} x={} y={}", position.0, position.1);
         let Some(expected) = self.expect.get(self.seen) else {
@@ -247,7 +218,6 @@ impl WindowHandler for App {
             self.attached = true;
             window.attach(Some(self.buffer.wl_buffer()), 0, 0);
         }
-        // Acknowledge and commit, so the window maps and later configures flow.
         window.commit();
     }
 }
@@ -350,7 +320,6 @@ impl ProvidesRegistryState for App {
     registry_handlers![OutputState,];
 }
 
-/// Parses the `;`-separated `x,y` points of an environment variable.
 fn parse_points(name: &str) -> Vec<(f64, f64)> {
     let Ok(value) = std::env::var(name) else {
         return Vec::new();

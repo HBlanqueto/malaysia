@@ -1,61 +1,40 @@
 //! Wallpaper image loading and dominant-colour extraction.
-//!
-//! Moved from `malaysia-shell/src/wallpaper.rs` with the GL/Freya parts
-//! stripped out. The decoded image is uploaded to the GPU by the caller and
-//! the CPU RGBA is dropped immediately afterwards.
-
 use std::path::{Path, PathBuf};
 
 use vow_design::Rgba;
 
-/// The embedded default wallpaper: a sRGB JPEG shipped with the package.
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../share/wallpapers/bandura.jpg"
 ));
 
-/// Pixel storage for a decoded wallpaper.
 #[derive(Clone, PartialEq)]
 pub enum Pixels {
-    /// RGBA8 in sRGB, top-down.
     Srgb8(Vec<u8>),
-    /// RGBA16 with the image's sRGB encoding (linear alpha), top-down.
     Srgb16(Vec<u16>),
 }
 
-/// A decoded picture, ready to become a GPU texture.
 #[derive(Clone, PartialEq)]
 pub struct DecodedImage {
-    /// Width and height in pixels.
     pub size: (u32, u32),
-    /// Top-down pixels.
     pub pixels: Pixels,
 }
 
-/// The image selection on disk and the decoded picture, if any.
 #[derive(Clone, Default, PartialEq)]
 pub struct Wallpaper {
-    /// The selected file path and scale string from the store.
     pub selection: Option<(PathBuf, String)>,
-    /// The decoded image, kept only until the GPU texture is uploaded.
     pub image: Option<LoadedImage>,
 }
 
-/// A successfully decoded image that has not been uploaded yet.
 #[derive(Clone, PartialEq)]
 pub struct LoadedImage {
-    /// The decoded picture.
     pub decoded: DecodedImage,
 }
 
-/// Loads the selection, decodes it, and writes the dominant colour for the
-/// compositor and the portal.
 pub fn load_snapshot(store_path: &Path, state_path: &Path) -> Wallpaper {
     reload(&Wallpaper::default(), store_path, state_path)
 }
 
-/// Re-reads the store. Keeps `current` when the new selection cannot be read
-/// or decoded, so a bad path never leaves the screen black.
 pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wallpaper {
     let selection = match load_wallpaper(store_path) {
         Ok(selection) => selection,
@@ -75,8 +54,6 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
                 return current.clone();
             }
             if !scale.is_empty() && scale != "fill" {
-                // shortcut: only "fill" is implemented; add a scale enum and shader UV
-                // branch when another scale is needed.
                 tracing::warn!(scale, "scale is not implemented yet; using 'fill'");
             }
             tracing::info!(?path, "loading wallpaper");
@@ -104,26 +81,17 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
     }
 }
 
-/// Decodes the embedded default image. This is the fallback when there is no
-/// valid selection or when a startup selection cannot be decoded.
 fn load_default_image() -> (Option<(PathBuf, String)>, DecodedImage) {
     match decode_image_bytes(DEFAULT_WALLPAPER_BYTES) {
         Ok(decoded) => (None, decoded),
         Err(error) => {
-            // The embedded asset is part of the build; failing here is a bug.
             panic!("embedded default wallpaper is corrupt: {error}")
         }
     }
 }
 
-// --- wallpaper store -------------------------------------------------------
-
-/// The `wallpaper.domain` store, as macOS keeps `com.apple.wallpaper`.
 #[derive(Debug, Default, serde::Deserialize)]
 struct WallpaperStore {
-    /// Kept for forward compatibility with existing `wallpaper.domain` files;
-    /// `malaysia-wallpaper` no longer uses this field because the default is
-    /// embedded.
     #[allow(dead_code)]
     #[serde(default)]
     dir: String,
@@ -139,12 +107,6 @@ struct Desktops {
     default: Option<String>,
 }
 
-/// Reads the current wallpaper image path from the store.
-///
-/// Returns `Some((path, scale))` only when the store has a valid
-/// `[desktops].default` entry. Any other case (no store, no selection, or a
-/// selection pointing to a missing file) returns `None`; the caller must then
-/// fall back to the embedded default image.
 pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, String)>> {
     let store: WallpaperStore = match std::fs::read_to_string(store_path) {
         Ok(text) => toml::from_str(&text)?,
@@ -158,7 +120,6 @@ pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<Option<(PathBuf, Stri
         .map(|path| (path, store.scale)))
 }
 
-/// Turns a `file://` URL into a path, decoding `%XX` escapes.
 fn file_url_to_path(url: &str) -> Option<PathBuf> {
     let rest = url.strip_prefix("file://")?;
     let bytes = percent_decode(rest.as_bytes());
@@ -192,12 +153,10 @@ fn hex(b: u8) -> Option<u8> {
     }
 }
 
-/// Decodes a PNG or JPEG file into top-down RGBA8 pixels.
 pub fn decode_image(path: &Path) -> anyhow::Result<DecodedImage> {
     decode_image_bytes(&std::fs::read(path)?)
 }
 
-/// Decodes a PNG or JPEG in memory into top-down RGBA8 pixels.
 pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     let start = std::time::Instant::now();
     let result = if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
@@ -211,13 +170,9 @@ pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     result
 }
 
-/// Decodes a PNG preserving 16-bit colour when present.
 #[allow(clippy::chunks_exact_to_as_chunks)]
 pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
-    // EXPAND normalises indexed and low-bit-depth greyscale to 8/16-bit RGB/RGBA.
-    // shortcut: se ignoran gAMA/iCCP y se asume sRGB; leerlos cuando entre la
-    // gestión de color (16c o posterior).
     decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info()?;
     let mut buf = vec![0; reader.output_buffer_size()];
@@ -297,7 +252,6 @@ pub fn decode_png(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     })
 }
 
-/// Decodes a JPEG into RGBA8 with `zune-jpeg`.
 pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     use zune_jpeg::zune_core::{
         bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions,
@@ -316,7 +270,6 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
 }
 
 impl DecodedImage {
-    /// Returns the RGBA8 value at `index` (top-down, four channels per pixel).
     pub fn rgba8_at(&self, index: usize) -> [u8; 4] {
         match &self.pixels {
             Pixels::Srgb8(v) => [v[index], v[index + 1], v[index + 2], v[index + 3]],
@@ -329,9 +282,6 @@ impl DecodedImage {
         }
     }
 
-    /// Returns a half-size version when the image exceeds `max` in either
-    /// dimension, averaging 2×2 blocks in linear light. Repeats until both
-    /// dimensions fit.
     pub fn downscale_to_fit(&self, max: u32) -> Self {
         let (mut width, mut height) = self.size;
         if width <= max && height <= max {
@@ -462,7 +412,6 @@ fn linear16_to_srgb(c: f32) -> u16 {
     (v * 65535.0).round() as u16
 }
 
-/// The dominant colour, sampled on a grid and weighted by chroma.
 pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     const SAMPLE_TARGET: f64 = 65_536.0;
     const MIN_CHROMA: f32 = 0.12;
@@ -503,11 +452,6 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
         }
     }
 
-    // Compute the 3×3×3 neighbourhood weight and weighted sum for every bucket.
-    // The winning bucket is the one whose neighbourhood is chromatically heaviest;
-    // its final colour is the weighted average of that neighbourhood, not just the
-    // central bucket. This keeps tones that straddle a bucket boundary from losing
-    // to a smaller but concentrated colour.
     let mut neighbourhood_weights = [0.0f32; 4096];
     let mut neighbourhood_sums = [[0.0f32; 3]; 4096];
     for bucket in 0..4096 {
@@ -544,9 +488,6 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     if *weight == 0.0 {
         return None;
     }
-    // We used to require `weight >= sampled * MIN_DOMINANT_SHARE`, but that
-    // discarded real-world photographs (forest, landscape) whose chroma is
-    // spread across many buckets. Keep the strongest chromatic neighbourhood.
     let sum = neighbourhood_sums[bucket];
     Some(normalize_lightness(Rgba {
         r: sum[0] / weight,
@@ -556,21 +497,15 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     }))
 }
 
-/// The 4-bit histogram bucket of a `0.0..=1.0` channel.
 fn bucket(channel: f32) -> usize {
     ((channel * 16.0) as usize).min(15)
 }
 
-/// Keeps the tint (and the traffic lights derived from it) in a readable
-/// lightness band: HSL lightness 45–65 %.
 fn normalize_lightness(color: Rgba) -> Rgba {
     let (hue, saturation, lightness) = color.to_hsl();
-    // shortcut: L clamped to 0.45–0.65, remove when all consumers use resolve() for fine contrast.
     Rgba::from_hsl(hue, saturation, lightness.clamp(0.45, 0.65), 1.0)
 }
 
-/// Writes the dominant colour for the compositor and the portal, or clears it
-/// when the wallpaper has no usable colour.
 pub fn write_state(path: &Path, dominant: Option<Rgba>) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -817,17 +752,10 @@ mod tests {
 
     #[test]
     fn a_green_gradient_across_bucket_boundaries_beats_a_concentrated_red() {
-        // 60 % of the image is a green gradient split between two adjacent
-        // buckets (~30 % each), 25 % is a concentrated red in one bucket, and
-        // 15 % is neutral grey (ignored because of MIN_CHROMA). No single green
-        // bucket beats the red one, so without neighbourhood sums red wins;
-        // with them the green neighbourhood wins.
         let mut rgba = Vec::new();
         for y in 0..64 {
             for x in 0..64 {
                 let (r, g, b) = if x < 38 {
-                    // Green gradient across buckets 7 and 8 in the 16³ histogram.
-                    // Keep red and blue very low so chroma stays high.
                     let t = y as f32 / 63.0;
                     (
                         (0.02 * 255.0) as u8,
@@ -835,10 +763,8 @@ mod tests {
                         (0.02 * 255.0) as u8,
                     )
                 } else if x >= 48 {
-                    // Concentrated red in bucket 15.
                     (255, 0, 0)
                 } else {
-                    // Neutral gap, ignored by MIN_CHROMA.
                     (128, 128, 128)
                 };
                 rgba.extend_from_slice(&[r, g, b, 255]);
@@ -896,8 +822,6 @@ mod tests {
     fn the_embedded_default_has_a_dominant_colour() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
         let color = dominant(&image).expect("bandura should have a dominant colour");
-        // Obtained empirically on 2026-10-31 from the shipped JPEG with 3×3×3
-        // neighbourhood weighting.
         assert!((color.r - 0.721986).abs() < 0.001);
         assert!((color.g - 0.684085).abs() < 0.001);
         assert!((color.b - 0.178014).abs() < 0.001);

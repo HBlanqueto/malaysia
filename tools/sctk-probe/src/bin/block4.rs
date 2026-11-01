@@ -1,33 +1,4 @@
-//! Block 4 acceptance harness: open and close many windows, assert the scene
-//! returns to empty, report the compositor's resident-memory delta, and resize
-//! windows from an edge and a corner.
-//!
-//! It launches a single nested compositor and the `window_stress` client, which
-//! opens fifty toplevels and then destroys them. The compositor logs
-//! `window removed` for each and `scene empty` when the last is gone; this
-//! harness asserts both, so a leak or a missed teardown fails loudly. Resident
-//! memory is measured before the client runs and after the scene empties and
-//! reported as a delta; it is **measured, not asserted** (a threshold would be
-//! flaky), so the numbers are printed for inspection.
-//!
-//! It then runs three resize scenarios, each with a fresh compositor, a fresh
-//! `resize_client` and `MALAYSIA_TEST_INPUT=1`: the compositor presses an edge
-//! or corner of the mapped window and its scripted motions drive the grab. The
-//! harness asserts the final size the client was configured to — unbounded
-//! growth from a corner, a client maximum clamping that growth, and a client
-//! minimum holding a shrunk width.
-//!
-//! Run from the dev shell, after building the compositor and probes:
-//!
-//! ```sh
-//! cargo build -p malaysia-compositor -p sctk-probe
-//! MALAYSIA_BIN=target/debug/malaysia-compositor MALAYSIA_STRESS_BIN=target/debug/window_stress \
-//!   MALAYSIA_RESIZE_BIN=target/debug/resize_client target/debug/block4
-//! ```
-//!
-//! Environment overrides: `MALAYSIA_BIN`, `MALAYSIA_STRESS_BIN`,
-//! `MALAYSIA_RESIZE_BIN`.
-
+//! Harness: opens and closes many windows, checks memory and edge/corner resizes.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -36,46 +7,24 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// How long to wait for the compositor to create its socket.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long to wait for the stress client to run and the scene to empty.
 const STRESS_TIMEOUT: Duration = Duration::from_secs(30);
-/// The compositor log line carrying the live-object counts.
 const LIVE_OBJECTS_LOG_LINE: &str = "live objects";
-/// The compositor log line emitted for each destroyed window.
 const WINDOW_REMOVED_LOG_LINE: &str = "window removed";
-/// How many windows each stress batch opens and closes.
 const WINDOWS: usize = 50;
-/// How many batches to run; the first is warm-up.
 const BATCHES: usize = 3;
-/// The largest batch-2-to-batch-3 resident-memory growth allowed, in kB.
-///
-/// After warm-up a batch should reuse the same allocations, so the growth is
-/// allocator noise (tens of kB). A per-window leak would be far larger: even
-/// ~20 kB per window over 50 windows is ~1 MB, so 1 MiB catches a real leak
-/// while staying well above noise.
 const GROWTH_THRESHOLD_KB: u64 = 1024;
-/// The pointer delta the compositor's scripted pre-threshold motions apply.
-///
-/// The seam follows the press with `TEST_DRAG_STEPS` motions of
-/// `TEST_DRAG_STEP` each: 4 × (12, 8).
 const EDGE_DRAG: (u32, u32) = (48, 32);
-/// How far the resize cases set a client bound from the initial size, in pixels.
 const BOUND_MARGIN: u32 = 10;
 
-/// Live-object counts reported by the compositor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct LiveObjects {
-    /// Connected clients.
     clients: i64,
-    /// Live `wl_surface` objects.
     surfaces: i64,
-    /// Tracked toplevels.
     toplevels: i64,
 }
 
 impl LiveObjects {
-    /// The counts from a `live objects` log line, if it is one.
     fn parse(line: &str) -> Option<Self> {
         let line = strip_ansi(line);
         if !line.contains(LIVE_OBJECTS_LOG_LINE) {
@@ -89,8 +38,6 @@ impl LiveObjects {
     }
 }
 
-/// Removes ANSI escape sequences, whose digits would otherwise be mistaken for
-/// field values.
 fn strip_ansi(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut chars = input.chars();
@@ -110,8 +57,6 @@ fn strip_ansi(input: &str) -> String {
     out
 }
 
-/// The first integer after `key` in a log line, skipping any formatting between
-/// the key and its value.
 fn field(line: &str, key: &str) -> Option<i64> {
     let start = line.find(key)? + key.len();
     let digits: String = line[start..]
@@ -181,10 +126,6 @@ fn run() -> Result<(), String> {
         .ok_or_else(|| "the compositor never logged its live-object baseline".to_string())?;
     println!("block4: baseline {baseline:?}");
 
-    // Three batches: the first is warm-up (allocators, GL objects, the damage
-    // tracker), and only the growth from the second to the third is compared
-    // against the threshold. Each batch is a fresh stress client that opens and
-    // closes WINDOWS toplevels.
     let mut resident = Vec::new();
     for batch in 1..=BATCHES {
         let mut client = ChildGuard::spawn(
@@ -231,12 +172,6 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// Resizes a window from a corner and an edge and asserts the final size.
-///
-/// The three scenarios cover the bound logic `resized` applies: no client
-/// maximum must leave the size unbounded (so the corner drag grows it), a
-/// client maximum must clamp that growth, and a client minimum must hold a
-/// shrunk width.
 fn run_resize_cases(binary: &Path, client: &Path) -> Result<(), String> {
     run_resize_case(
         binary,
@@ -265,11 +200,6 @@ fn run_resize_cases(binary: &Path, client: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Runs one resize scenario and asserts the final configured size.
-///
-/// `expect` maps the initial configured size to the expected final one. The
-/// press fraction aims the compositor's scripted press, and `bound` is the
-/// client's minimum or maximum offset from the initial size.
 fn run_resize_case(
     binary: &Path,
     client: &Path,
@@ -291,8 +221,6 @@ fn run_resize_case(
     let compositor_log = compositor.capture()?;
     let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
 
-    // The bound is the client's: it sets min_size/max_size from it before it
-    // maps, and the compositor's resize clamps to them.
     let mut command = Command::new(client);
     command
         .env("XDG_RUNTIME_DIR", runtime.path())
@@ -344,7 +272,6 @@ fn run_resize_case(
     Ok(())
 }
 
-/// The `width` and `height` fields of a `resize_client` size line.
 fn size_of(line: &str) -> Result<(u32, u32), String> {
     let width = field(line, "width")
         .and_then(|value| u32::try_from(value).ok())
@@ -355,8 +282,6 @@ fn size_of(line: &str) -> Result<(u32, u32), String> {
     Ok((width, height))
 }
 
-/// Resolves one of this package's probe binaries from its environment variable,
-/// the directory of this executable, or the debug target directory.
 fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
     std::env::var_os(variable)
         .map(PathBuf::from)
@@ -368,7 +293,6 @@ fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
         })
 }
 
-/// The first live-object line seen, used as the baseline.
 fn wait_for_baseline(log: &Sink, timeout: Duration) -> Option<LiveObjects> {
     let deadline = Instant::now() + timeout;
     loop {
@@ -382,8 +306,6 @@ fn wait_for_baseline(log: &Sink, timeout: Duration) -> Option<LiveObjects> {
     }
 }
 
-/// Waits until a batch has finished: at least `min_removed` windows have been
-/// removed and the live-object counts are back at the baseline.
 fn wait_for_batch(log: &Sink, baseline: LiveObjects, min_removed: usize) -> Result<(), String> {
     let deadline = Instant::now() + STRESS_TIMEOUT;
     loop {
@@ -407,7 +329,6 @@ fn wait_for_batch(log: &Sink, baseline: LiveObjects, min_removed: usize) -> Resu
     }
 }
 
-/// Waits until a client has exited, failing on a non-zero status.
 fn wait_for_client_exit(client: &mut ChildGuard, log: &Sink, what: &str) -> Result<(), String> {
     let deadline = Instant::now() + STRESS_TIMEOUT;
     loop {
@@ -430,7 +351,6 @@ fn wait_for_client_exit(client: &mut ChildGuard, log: &Sink, what: &str) -> Resu
     }
 }
 
-/// The most recent live-object counts in the log.
 fn latest_objects(log: &Sink) -> Option<LiveObjects> {
     snapshot(log)
         .iter()
@@ -438,7 +358,6 @@ fn latest_objects(log: &Sink) -> Option<LiveObjects> {
         .find_map(|line| LiveObjects::parse(line))
 }
 
-/// The compositor's resident set size in kB, from `/proc/<pid>/status`.
 fn resident_kb(pid: u32) -> u64 {
     let Ok(status) = fs::read_to_string(format!("/proc/{pid}/status")) else {
         return 0;
@@ -451,8 +370,6 @@ fn resident_kb(pid: u32) -> u64 {
         .unwrap_or(0)
 }
 
-/// Spawns the compositor with its own runtime directory, reaching the host
-/// compositor through the absolute socket path resolved by the caller.
 fn host_wayland_display() -> Result<Option<String>, String> {
     let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
         return Ok(None);
@@ -465,7 +382,6 @@ fn host_wayland_display() -> Result<Option<String>, String> {
     Ok(Some(format!("{runtime}/{display}")))
 }
 
-/// Waits until the compositor has created a `wayland-*` socket.
 fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
     let deadline = Instant::now() + SOCKET_TIMEOUT;
     loop {
@@ -489,7 +405,6 @@ fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Resul
     }
 }
 
-/// The first (alphabetically) Wayland socket in a directory.
 fn find_socket(dir: &Path) -> Option<String> {
     let mut names: Vec<String> = fs::read_dir(dir)
         .ok()?
@@ -501,7 +416,6 @@ fn find_socket(dir: &Path) -> Option<String> {
     names.into_iter().next()
 }
 
-/// A child process that is killed and reaped when it drops.
 struct ChildGuard {
     child: Child,
 }
@@ -553,10 +467,8 @@ impl Drop for ChildGuard {
     }
 }
 
-/// A shared, thread-safe collection of captured output lines.
 type Sink = Arc<Mutex<Vec<String>>>;
 
-/// Reads `reader` line by line into a sink on its own thread.
 fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     thread::spawn(move || {
         for line in BufReader::new(reader).lines() {
@@ -568,17 +480,14 @@ fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     });
 }
 
-/// A copy of the lines captured so far.
 fn snapshot(sink: &Sink) -> Vec<String> {
     sink.lock().expect("capture sink poisoned").clone()
 }
 
-/// A copy of the captured lines with ANSI colour escapes removed.
 fn stripped(sink: &Sink) -> Vec<String> {
     snapshot(sink).iter().map(|line| strip_ansi(line)).collect()
 }
 
-/// A runtime directory that is removed when it drops.
 struct TempDir(PathBuf);
 
 impl TempDir {

@@ -1,20 +1,4 @@
-//! The tracked toplevels, behind one boundary.
-//!
-//! Geometry — where a window is and how it stacks — lives in
-//! [`malaysia_scene::scene`]; this module owns what the scene cannot: the
-//! protocol surface and the configure handshake. A [`Window`] view joins the
-//! two for readers. See ADR 0015.
-//!
-//! Two things this module is careful about:
-//!
-//! - **The initial configure.** A toplevel that is tracked without being sent a
-//!   configure waits forever, with no error and no log. The configure is sent as
-//!   soon as the toplevel exists, before the client attaches a buffer.
-//! - **Insets are recomputed, never fixed.** Every commit reads the surface's
-//!   current role and state and recomputes the insets. A `set_parent` can arrive
-//!   after the window is mapped, and it can be unset again; a fullscreen change
-//!   can come at any time. A configure that froze the insets at map time would
-//!   be wrong from then on (ADR 0014).
+//! Tracked toplevel windows: protocol surface and configure handling.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -40,15 +24,8 @@ use vow_design::{NATIVE_APP_ID_PREFIX, TITLEBAR};
 
 use crate::decoration::{Insets, Role, WindowState};
 
-/// How long the compositor waits for an app to ack a resize configure before
-/// sending the next pending size. This protects apps that never ack from
-/// freezing the resize forever.
 const RESIZE_CONFIGURE_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
-/// Environment variable that overrides [`RESIZE_CONFIGURE_TIMEOUT`] in
-/// milliseconds, so measurements can drive the pointer faster than the default
-/// 100 ms throttle without changing production behavior.
 const RESIZE_CONFIGURE_TIMEOUT_MS_VAR: &str = "MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS";
-/// Lazily-evaluated resize configure timeout.
 static RESIZE_CONFIGURE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
     parse_resize_timeout(
         std::env::var(RESIZE_CONFIGURE_TIMEOUT_MS_VAR)
@@ -58,10 +35,6 @@ static RESIZE_CONFIGURE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
     )
 });
 
-/// Parses a millisecond duration from an optional environment value.
-///
-/// Empty or invalid values fall back to `default`. A value of `0` is treated
-/// as 1 ms so the event loop is not starved by a zero-duration timer.
 fn parse_resize_timeout(value: Option<&str>, default: Duration) -> Duration {
     match value.and_then(|v| v.parse::<u64>().ok()) {
         Some(0) => Duration::from_millis(1),
@@ -70,60 +43,41 @@ fn parse_resize_timeout(value: Option<&str>, default: Duration) -> Duration {
     }
 }
 
-/// A read-only view of one tracked window.
-///
-/// It borrows the window's data and its current scene geometry, so callers see
-/// one consistent snapshot without the scene and the surface bookkeeping being
-/// two separate lookups.
 pub struct Window<'a> {
-    /// The window's surface and configure state.
     data: &'a WindowData,
-    /// The window's decorated outer rectangle.
     outer: SceneRect<f64, SceneLogical>,
-    /// Who draws the window's chrome, from the scene (ADR 0019).
     decoration: Decoration,
 }
 
 impl Window<'_> {
-    /// The window's scene identity.
     pub fn id(&self) -> WindowId {
         self.data.id
     }
 
-    /// The client's surface.
     pub fn surface(&self) -> &WlSurface {
         self.data.toplevel.wl_surface()
     }
 
-    /// Whether the window is mapped and should be shown.
     pub fn is_mapped(&self) -> bool {
         self.data.mapped
     }
 
-    /// Whether the window is hidden from the scene: minimized, or on a space
-    /// that is not shown (ADR 0051).
     pub fn is_hidden(&self) -> bool {
         self.data.is_hidden()
     }
 
-    /// Whether the surface currently has a buffer attached.
     pub fn has_buffer(&self) -> bool {
         surface_has_buffer(self.surface())
     }
 
-    /// Whether the buffer has ever received damage.
     pub fn has_damage(&self) -> bool {
         self.data.damaged
     }
 
-    /// Whether the window geometry fits inside the current buffer.
     pub fn geometry_fits_buffer(&self) -> bool {
         self.data.geometry_fits_buffer()
     }
 
-    /// Whether the window is visible: mapped, not hidden, not minimized, with
-    /// a current buffer that has received damage and a window geometry inside
-    /// it.
     pub fn is_visible(&self, minimized: &HashSet<WindowId>) -> bool {
         self.is_mapped()
             && !self.is_hidden()
@@ -133,7 +87,6 @@ impl Window<'_> {
             && self.geometry_fits_buffer()
     }
 
-    /// The window's app id, as the client last set it.
     pub fn app_id(&self) -> String {
         with_states(self.surface(), |states| {
             states
@@ -144,22 +97,18 @@ impl Window<'_> {
         })
     }
 
-    /// The decorated outer rectangle, in logical coordinates.
     pub fn outer(&self) -> SceneRect<f64, SceneLogical> {
         self.outer
     }
 
-    /// The outer top-left of the window, in logical coordinates.
     pub fn location(&self) -> Point<i32, Logical> {
         Point::from((round(self.outer.x()), round(self.outer.y())))
     }
 
-    /// The outer window size, in logical coordinates.
     pub fn size(&self) -> Size<i32, Logical> {
         Size::from((round(self.outer.width()), round(self.outer.height())))
     }
 
-    /// The insets for the window's current role, state and decoration.
     pub fn insets(&self) -> Insets {
         Insets::for_window(
             self.data.role(),
@@ -169,28 +118,22 @@ impl Window<'_> {
         )
     }
 
-    /// The window state that affects decoration.
     pub fn state(&self) -> WindowState {
         self.data.state()
     }
 
-    /// Whether the window is in an interactive resize right now.
     pub fn is_resizing(&self) -> bool {
         self.data.resizing
     }
 
-    /// Whether this toplevel is a dialog, a normal window or a popup.
     pub fn role(&self) -> Role {
         self.data.role()
     }
 
-    /// Whether the client draws its own chrome (CSD).
     pub fn is_client_decorated(&self) -> bool {
         self.decoration == Decoration::Client
     }
 
-    /// The client's window geometry relative to its surface, or the buffer
-    /// size when the client did not set one.
     pub fn window_geometry(&self) -> Rectangle<i32, Logical> {
         window_geometry(self.surface()).unwrap_or_else(|| {
             Rectangle::new(
@@ -200,7 +143,6 @@ impl Window<'_> {
         })
     }
 
-    /// The window's title, as the client last set it.
     pub fn title(&self) -> String {
         with_states(self.surface(), |states| {
             states
@@ -215,84 +157,47 @@ impl Window<'_> {
         })
     }
 
-    /// The size configured to the client: the window minus its insets.
     pub fn usable_size(&self) -> Size<i32, Logical> {
         usable(self.size(), self.insets())
     }
 
-    /// Where the client's surface sits inside the window, past the left and top
-    /// insets.
     pub fn surface_location(&self) -> Point<i32, Logical> {
         let insets = self.insets();
         Point::from((round(insets.left), round(insets.top)))
     }
 
-    /// Whether a logical point falls inside the window's outer rectangle.
     pub fn contains(&self, point: Point<f64, Logical>) -> bool {
         self.outer.contains(ScenePoint::new(point.x, point.y))
     }
 }
 
-/// One tracked toplevel: its identity, surface and configure bookkeeping.
 struct WindowData {
-    /// The window's identity in the scene.
     id: WindowId,
-    /// The client's toplevel surface.
     toplevel: ToplevelSurface,
-    /// The decorated outer size, in logical coordinates.
     outer_size: Size<i32, Logical>,
-    /// Where the window was placed before its first map, in logical coords.
-    /// After mapping the position lives in the scene; this field is only used
-    /// for the initial placement and map.
     placement_origin: Point<i32, Logical>,
-    /// Rectangle saved before hiding, so restoring puts the window back exactly.
     hidden_rect: Option<SceneRect<f64, SceneLogical>>,
-    /// Whether the client has acknowledged a configure.
     acked: bool,
-    /// The serial of the configure most recently sent, awaiting an ack.
     pending_configure: Option<Serial>,
-    /// Whether the window is mapped and should be shown.
     mapped: bool,
-    /// Whether the window is hidden from the scene (minimized or otherwise).
     hidden: bool,
-    /// Whether the window lives on a space that is not shown (ADR 0051).
-    /// Kept apart from `hidden` so switching spaces never restores a
-    /// minimized window, and restoring one never shows it on the wrong space.
     off_space: bool,
-    /// The usable size last sent, so a state change can be noticed.
     configured: Option<Size<i32, Logical>>,
-    /// Whether the user is currently resizing, so the configure carries the
-    /// xdg `resizing` state.
     resizing: bool,
-    /// Which edge or corner is being dragged during an interactive resize.
     resize_edge: Option<Edge>,
-    /// Outer size most recently requested by the pointer while the app has not
-    /// acked+committed the previous configure.
     resize_pending_outer: Option<Size<i32, Logical>>,
-    /// When the last configure during an interactive resize was sent, so a
-    /// slow app is eventually reconfigured even if it never acks.
     resize_configure_sent: Option<Instant>,
-    /// Whether MalaysiaDreams's titlebar requested the maximized state.
     maximized: bool,
-    /// Whether the window is in fullscreen state, as the next configure says.
     fullscreen: bool,
-    /// Whether the window holds keyboard focus, as the next configure says.
     activated: bool,
-    /// The decoration mode the client last asked for, before policy. `None`
-    /// until `request_mode`; creating or unsetting the object does not count.
     requested: Option<Decoration>,
-    /// Whether the native-app warning was already emitted for this window.
     native_warned: bool,
-    /// Whether the initial centered placement has already been applied.
     placed: bool,
-    /// Whether any commit has ever carried damage for this window's buffer.
     damaged: bool,
-    /// Whether the invisible-window warning was already emitted.
     invisible_warned: bool,
 }
 
 impl WindowData {
-    /// A toplevel with a parent is a dialog; otherwise an ordinary toplevel.
     fn role(&self) -> Role {
         if self.toplevel.parent().is_some() {
             Role::Dialog
@@ -301,7 +206,6 @@ impl WindowData {
         }
     }
 
-    /// The window state that affects decoration, from the surface's state.
     fn state(&self) -> WindowState {
         let states = self.toplevel.with_committed_state(|state| {
             state.map(|state| state.states.clone()).unwrap_or_default()
@@ -315,26 +219,19 @@ impl WindowData {
         }
     }
 
-    /// The insets for the window's current role, state and decoration.
     fn insets(&self, decoration: Decoration) -> Insets {
         Insets::for_window(self.role(), self.state(), decoration, &TITLEBAR)
     }
 
-    /// Whether the window is out of the scene: minimized or on a space that is
-    /// not shown.
     fn is_hidden(&self) -> bool {
         self.hidden || self.off_space
     }
 
-    /// Whether the window geometry fits inside the current buffer.
     fn geometry_fits_buffer(&self) -> bool {
         let surface = self.toplevel.wl_surface();
         geometry_fits(window_geometry(surface), buffer_size(surface))
     }
 
-    /// The client's minimum and maximum usable size, in logical coordinates.
-    ///
-    /// A zero on an axis means the client did not constrain it.
     fn size_bounds(&self) -> (Size<i32, Logical>, Size<i32, Logical>) {
         let surface = self.toplevel.wl_surface();
         with_states(surface, |states| {
@@ -345,30 +242,17 @@ impl WindowData {
     }
 }
 
-/// Resize band outside a client-decorated frame, in logical pixels.
-///
-/// The client owns the interior, so this band only counts outside the frame.
 const CLIENT_RESIZE_BORDER: f64 = 6.0;
-/// Corner square outside a client-decorated frame, in logical pixels.
 const CLIENT_RESIZE_CORNER: f64 = 12.0;
 
-/// One window in the top-to-bottom resize hit test.
 struct EdgeTarget {
     id: WindowId,
-    /// The resize band: the scene outer for an SSD, the visible frame for a CSD.
     band: SceneRect<f64, SceneLogical>,
-    /// The rectangle that stops the search, including a CSD's invisible margin.
     blocking: SceneRect<f64, SceneLogical>,
-    /// Whether the band only counts outside `band` (a CSD owns its interior).
     exterior: bool,
-    /// Whether the window may start a resize.
     resizable: bool,
 }
 
-/// The first resize edge under `point`, searching top to bottom.
-///
-/// A point inside a higher window's blocking rectangle never reaches a lower
-/// window's band, so a CSD's invisible margin blocks the window below it.
 fn edge_hit(
     targets: impl Iterator<Item = EdgeTarget>,
     point: ScenePoint<f64, SceneLogical>,
@@ -400,29 +284,14 @@ fn edge_hit(
     None
 }
 
-/// The toplevels being tracked.
 #[derive(Default)]
 pub struct Windows {
-    /// Where the windows are and how they stack.
     scene: Scene,
-    /// The surface and configure bookkeeping, in creation order.
     windows: Vec<WindowData>,
-    /// Decoration modes requested for a surface whose toplevel is not tracked
-    /// yet, by surface object id.
-    ///
-    /// GTK4 creates its KDE decoration object during realize, before it creates
-    /// the xdg_toplevel at map time, so the request can arrive first. The id is
-    /// stored rather than the surface so a dead surface is not kept alive.
     pending_decorations: Vec<(ObjectId, Decoration)>,
-    /// The next scene id to hand out.
     next_id: u64,
 }
 
-/// Whether a commit should trigger a configure because the committed outer
-/// size no longer matches the last configured size.
-///
-/// During an interactive resize the configured size tracks the latest pointer
-/// request, not the committed size, so no extra configure is sent here.
 fn needs_configure_after_commit(
     placed: bool,
     resizing: bool,
@@ -437,22 +306,18 @@ fn needs_configure_after_commit(
 }
 
 impl Windows {
-    /// Creates an empty set of tracked windows.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// How many windows are tracked.
     pub fn len(&self) -> usize {
         self.windows.len()
     }
 
-    /// Whether no windows are tracked.
     pub fn is_empty(&self) -> bool {
         self.windows.is_empty()
     }
 
-    /// The tracked windows, back to front, so the last is drawn on top.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = Window<'_>> {
         self.scene.iter().filter_map(|(id, outer)| {
             self.windows
@@ -466,21 +331,13 @@ impl Windows {
         })
     }
 
-    /// Every tracked toplevel surface, whether mapped or not.
     pub fn surfaces(&self) -> impl Iterator<Item = &WlSurface> {
         self.windows.iter().map(|data| data.toplevel.wl_surface())
     }
 
-    /// Starts tracking `toplevel`; the caller then sends its initial configure.
-    ///
-    /// The initial configure carries 0×0 (the client chooses its own size), so
-    /// there is no size or origin to record yet: both are derived from the
-    /// first committed buffer in [`Windows::commit`].
     pub fn add_toplevel(&mut self, toplevel: ToplevelSurface) {
         let id = WindowId::new(self.next_id);
         self.next_id += 1;
-        // A mode negotiated before the toplevel existed is remembered now; the
-        // caller applies the policy and sends the initial configure.
         let object = toplevel.wl_surface().id();
         let mut requested = None;
         if let Some(index) = self
@@ -518,15 +375,6 @@ impl Windows {
         });
     }
 
-    /// Handles a surface commit.
-    ///
-    /// Recomputes the insets from current state and sends a fresh configure if
-    /// they changed. The first time a buffer is committed after the initial
-    /// configure, the window is centered on its committed geometry (window
-    /// geometry or buffer size), clamped to the workspace, and mapped. There is
-    /// no second configure: the client already chose and drew its size. Returns
-    /// the window's id the first time it becomes mapped, so the caller can give
-    /// it keyboard focus.
     pub fn commit(
         &mut self,
         surface: &WlSurface,
@@ -539,9 +387,6 @@ impl Windows {
         }
 
         if !self.windows[index].placed && self.windows[index].acked && surface_has_buffer(surface) {
-            // The initial configure was 0×0, so this first buffer is the
-            // client's own geometry. Center the window on what it actually
-            // drew; reconfiguring here would only make it flash.
             let insets = self.windows[index].insets(decoration);
             let is_dialog = self.windows[index].role() == Role::Dialog;
             let (outer_size, origin) = if is_dialog {
@@ -557,22 +402,10 @@ impl Windows {
             };
             self.windows[index].outer_size = outer_size;
             self.windows[index].placement_origin = origin;
-            // The client is already at this size: record it so the check below
-            // does not send a redundant configure.
             self.windows[index].configured = Some(usable(outer_size, insets));
             self.windows[index].placed = true;
         }
 
-        // A normal window may commit a buffer at a size other than the one it
-        // was configured (a terminal's cell grid, a client that ignored a
-        // resize). Follow the committed geometry so placement, rendering and
-        // hit-testing all stay on what the client actually drew.
-        //
-        // Only while the compositor also wants it normal: the committed state
-        // lags behind. A client that commits one more frame at its old size
-        // before acking a fullscreen or maximized configure (GTK closing the
-        // popover whose item asked for fullscreen) would otherwise have that
-        // old size adopted and sent back as the fullscreen size (ADR 0051).
         let should_resize = {
             let data = &self.windows[index];
             if !data.mapped
@@ -590,16 +423,11 @@ impl Windows {
             }
         };
         if let Some((id, outer_size)) = should_resize {
-            // The current position is the scene's outer rectangle; after a move
-            // or an arrange it no longer matches the placement origin.
             let current_origin = self
                 .scene
                 .outer(id)
                 .map(|outer| Point::from((round(outer.x()), round(outer.y()))))
                 .unwrap_or(self.windows[index].placement_origin);
-            // During an interactive resize the opposite edge must stay fixed,
-            // so the origin is recomputed from the committed size. Outside a
-            // resize the origin stays where it is (client-initiated changes).
             let origin = anchor_resize_origin(
                 current_origin,
                 self.windows[index].outer_size,
@@ -619,8 +447,6 @@ impl Windows {
                     "commit resized window"
                 );
                 if self.windows[index].resizing {
-                    // The client has caught up: the frame now follows the
-                    // committed size, and any newer pointer request is sent.
                     self.windows[index].resize_configure_sent = None;
                     if let Some(pending) = self.windows[index].resize_pending_outer.take() {
                         self.send_configure_with_outer(index, pending);
@@ -632,12 +458,6 @@ impl Windows {
             }
         }
 
-        // Before placement every configure is 0×0, so there is no usable size
-        // to compare; sending one here would invalidate the ack the client is
-        // about to make and leave the window unmapped.
-        // During an interactive resize the configure must carry the latest
-        // requested size, never the committed size; the resize block above
-        // already handles that.
         if needs_configure_after_commit(
             self.windows[index].placed,
             self.windows[index].resizing,
@@ -690,12 +510,6 @@ impl Windows {
         None
     }
 
-    /// Records that the client acknowledged a configure for `surface`.
-    ///
-    /// Only the serial of the configure most recently sent is accepted. An ack
-    /// for any other serial is stale — the client is acknowledging a configure
-    /// MalaysiaDreams has already replaced — so it is discarded rather than marking
-    /// the window ready.
     pub fn ack_configure(&mut self, surface: &WlSurface, configure: Configure) {
         let Configure::Toplevel(configure) = configure else {
             return;
@@ -716,10 +530,6 @@ impl Windows {
         }
     }
 
-    /// Stops tracking the toplevel for `surface`, returning its scene id.
-    ///
-    /// A decoration requested for a surface that never became a toplevel is
-    /// dropped too, so a dead surface is not remembered.
     pub fn remove(&mut self, surface: &WlSurface) -> Option<WindowId> {
         let object = surface.id();
         self.pending_decorations
@@ -730,7 +540,6 @@ impl Windows {
         Some(id)
     }
 
-    /// Stops tracking the window with `id` (used by destruction).
     pub fn remove_by_id(&mut self, id: WindowId) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -740,8 +549,6 @@ impl Windows {
         true
     }
 
-    /// Hides a window from the scene without dropping its state, or puts it
-    /// back with its last outer rectangle (minimize/restore).
     pub fn set_hidden(&mut self, id: WindowId, hidden: bool) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -754,8 +561,6 @@ impl Windows {
         self.apply_hidden(index, was)
     }
 
-    /// Hides a window because its space is not shown, or shows it again
-    /// because its space is (ADR 0051). Independent of minimize.
     pub fn set_off_space(&mut self, id: WindowId, off_space: bool) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -768,8 +573,6 @@ impl Windows {
         self.apply_hidden(index, was)
     }
 
-    /// Moves the scene rectangle out of the way or back when the effective
-    /// hidden state changed from `was`.
     fn apply_hidden(&mut self, index: usize, was: bool) -> bool {
         let id = self.windows[index].id;
         let hidden = self.windows[index].is_hidden();
@@ -797,7 +600,6 @@ impl Windows {
         self.scene.set_outer(id, rect)
     }
 
-    /// The scene id of the window for `surface`.
     pub fn id_of(&self, surface: &WlSurface) -> Option<WindowId> {
         self.windows
             .iter()
@@ -805,7 +607,6 @@ impl Windows {
             .map(|data| data.id)
     }
 
-    /// The client surface of the window with `id`.
     pub fn surface_of(&self, id: WindowId) -> Option<&WlSurface> {
         self.windows
             .iter()
@@ -813,21 +614,18 @@ impl Windows {
             .map(|data| data.toplevel.wl_surface())
     }
 
-    /// Whether the window for `surface` has been placed in the workspace.
     pub fn is_placed(&self, surface: &WlSurface) -> bool {
         self.index_of(surface)
             .map(|index| self.windows[index].placed)
             .unwrap_or(false)
     }
 
-    /// Whether the window for `surface` is mapped and should be shown.
     pub fn is_mapped(&self, surface: &WlSurface) -> bool {
         self.index_of(surface)
             .map(|index| self.windows[index].mapped)
             .unwrap_or(false)
     }
 
-    /// The window's title and app id, for the shell's active-window state.
     pub fn active_info(&self, id: WindowId) -> Option<(String, String)> {
         let index = self.index(id)?;
         let surface = self.windows[index].toplevel.wl_surface();
@@ -846,16 +644,10 @@ impl Windows {
         Some(info)
     }
 
-    /// Whether the client draws its own chrome (CSD).
     pub fn is_client_decorated(&self, id: WindowId) -> bool {
         self.decoration_of(id) == Decoration::Client
     }
 
-    /// Whether the window is currently visible.
-    ///
-    /// A window is visible when it is mapped, not hidden, not in the minimized
-    /// set kept by the compositor, and has a damaged buffer whose window
-    /// geometry fits inside it.
     pub fn is_visible(&self, id: WindowId, minimized: &HashSet<WindowId>) -> bool {
         self.index(id).is_some_and(|index| {
             let data = &self.windows[index];
@@ -868,10 +660,6 @@ impl Windows {
         })
     }
 
-    /// Whether the window is on screen in the lasting sense: mapped, not
-    /// hidden or minimized, with a buffer. Unlike [`Windows::is_visible`] it
-    /// ignores a single commit whose geometry does not fit its buffer or that
-    /// carries no damage yet, so focus does not flicker away on one.
     pub fn is_presented(&self, id: WindowId, minimized: &HashSet<WindowId>) -> bool {
         self.index(id).is_some_and(|index| {
             let data = &self.windows[index];
@@ -882,7 +670,6 @@ impl Windows {
         })
     }
 
-    /// The tracked windows that are currently visible, back to front.
     pub fn iter_visible<'a>(
         &'a self,
         minimized: &'a HashSet<WindowId>,
@@ -891,10 +678,6 @@ impl Windows {
             .filter(move |window| window.is_visible(minimized))
     }
 
-    /// Every window that can be drawn, back to front: the visible ones, plus
-    /// the ones only hidden because their space is not shown, at the
-    /// rectangle they keep on that space. Used while spaces slide (ADR 0051);
-    /// minimized windows are never included.
     pub fn iter_drawable<'a>(
         &'a self,
         minimized: &'a HashSet<WindowId>,
@@ -920,14 +703,12 @@ impl Windows {
         })
     }
 
-    /// The topmost visible window, if any.
     pub fn topmost_visible(&self, minimized: &HashSet<WindowId>) -> Option<WindowId> {
         self.iter_visible(minimized)
             .next_back()
             .map(|window| window.id())
     }
 
-    /// The scene id of the topmost visible window under a logical point.
     pub fn window_under(
         &self,
         point: Point<f64, Logical>,
@@ -938,15 +719,6 @@ impl Windows {
             .filter(|id| self.is_visible(*id, minimized))
     }
 
-    /// The topmost visible window under `point` and its resize edge zone, if any.
-    ///
-    /// One pass, top to bottom. Server-decorated windows use the configured
-    /// inside/outside band. Client-decorated windows only get an exterior band
-    /// measured against their visible frame (`window_geometry`), because the
-    /// client owns the interior and its buffer keeps an invisible shadow
-    /// margin. A point inside any higher window's outer rectangle never starts
-    /// a resize of a lower window. A maximized/fullscreen window offers no edge
-    /// but still blocks with its content.
     pub fn edge_under(
         &self,
         point: Point<f64, Logical>,
@@ -988,11 +760,6 @@ impl Windows {
         edge_hit(targets, scene_point(point), side, corner)
     }
 
-    /// The surface under a logical point, with the point in surface-local
-    /// coordinates.
-    ///
-    /// Only the client's own surface counts: a point over the decorated band
-    /// around it is over the window but not over the client.
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,
@@ -1009,7 +776,6 @@ impl Windows {
         Some((self.windows[index].toplevel.wl_surface().clone(), local))
     }
 
-    /// Moves a window's top-left corner, keeping its size.
     pub fn move_to(&mut self, id: WindowId, location: Point<i32, Logical>) -> bool {
         let Some(outer) = self.scene.outer(id) else {
             return false;
@@ -1021,12 +787,6 @@ impl Windows {
         self.scene.set_outer(id, moved)
     }
 
-    /// Applies a new decorated outer rectangle and configures the client.
-    ///
-    /// Used by an in-progress resize; the configure carries the `resizing`
-    /// state until the grab ends.  To keep the frame anchored to the committed
-    /// size while the app catches up, the scene outer is only updated when the
-    /// client commits a buffer.
     pub fn resize(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1046,7 +806,6 @@ impl Windows {
         true
     }
 
-    /// Sets whether the window is being resized and re-configures it.
     pub fn set_resizing(&mut self, id: WindowId, resizing: bool, edge: Option<Edge>) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1054,8 +813,6 @@ impl Windows {
         self.windows[index].resizing = resizing;
         self.windows[index].resize_edge = edge;
         if !resizing {
-            // Ending the resize: send the most recent pending request so the
-            // final size matches where the pointer released.
             self.windows[index].resize_configure_sent = None;
             if let Some(pending) = self.windows[index].resize_pending_outer.take() {
                 self.send_configure_with_outer(index, pending);
@@ -1066,17 +823,10 @@ impl Windows {
         true
     }
 
-    /// The smallest decorated outer size this window allows, from the client's
-    /// minimum size plus the insets.
-    ///
-    /// A client minimum of zero means no constraint on that axis, but the outer
-    /// size still never collapses below one pixel.
     pub fn minimum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {
         at_least_one_pixel(self.outer_size_bounds(id, |min, _| min))
     }
 
-    /// Whether the window can be zoomed: its client minimum is not a fixed
-    /// size shared with the maximum.
     pub fn zoom_supported(&self, id: WindowId) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1085,13 +835,10 @@ impl Windows {
         !(min.w > 0 && min.h > 0 && min == max)
     }
 
-    /// The largest decorated outer size, or zero where the client left it
-    /// unbounded.
     pub fn maximum_outer_size(&self, id: WindowId) -> SceneSize<f64, SceneLogical> {
         self.outer_size_bounds(id, |_, max| max)
     }
 
-    /// The client's minimum and maximum usable size, if the window is tracked.
     pub fn client_size_bounds(
         &self,
         id: WindowId,
@@ -1100,23 +847,19 @@ impl Windows {
         Some(self.windows[index].size_bounds())
     }
 
-    /// Raises a window to the top of the stack.
     pub fn raise(&mut self, id: WindowId) -> bool {
         self.scene.raise(id)
     }
 
-    /// The topmost window, if any.
     pub fn topmost(&self) -> Option<WindowId> {
         self.scene.topmost()
     }
 
-    /// The decoration insets for `id`, or `None` when it is not tracked.
     pub fn insets(&self, id: WindowId) -> Option<Insets> {
         let index = self.index(id)?;
         Some(self.windows[index].insets(self.decoration_of(id)))
     }
 
-    /// Sets the activated state the next configure carries and reconfigures.
     pub fn set_activated(&mut self, id: WindowId, activated: bool) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1129,10 +872,6 @@ impl Windows {
         true
     }
 
-    /// Sets the maximized state and outer rectangle, sending a single configure.
-    ///
-    /// Used for maximize/restore so the client receives one configure carrying
-    /// both the new state and the new size, instead of two intermediate ones.
     pub fn set_maximized_with_outer(
         &mut self,
         id: WindowId,
@@ -1150,7 +889,6 @@ impl Windows {
         state_changed
     }
 
-    /// Sets the fullscreen state and outer rectangle, sending a single configure.
     pub fn set_fullscreen_with_outer(
         &mut self,
         id: WindowId,
@@ -1162,8 +900,6 @@ impl Windows {
         };
         let state_changed = self.windows[index].fullscreen != fullscreen;
         self.windows[index].fullscreen = fullscreen;
-        // A window hidden on another space keeps its rectangle for when it is
-        // shown again; writing the scene would make it hittable while hidden.
         if self.windows[index].is_hidden() {
             self.windows[index].hidden_rect = Some(outer);
         } else {
@@ -1174,9 +910,6 @@ impl Windows {
         state_changed
     }
 
-    /// Moves a window's scene rectangle to a new top edge without a
-    /// configure: the client keeps its size. Used to slide a focus window
-    /// under the bar (ADR 0051). A hidden window keeps its stored rectangle.
     pub fn set_scene_y(&mut self, id: WindowId, y: f64) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1196,7 +929,6 @@ impl Windows {
         )
     }
 
-    /// Applies an outer rectangle from Infinity without changing any state bit.
     pub fn set_infinity_geometry(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) {
         let Some(index) = self.index(id) else {
             return;
@@ -1206,7 +938,6 @@ impl Windows {
         self.send_configure(index);
     }
 
-    /// Sets the maximized state the next configure carries and reconfigures.
     pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1219,16 +950,10 @@ impl Windows {
         true
     }
 
-    /// A window's decorated outer rectangle.
     pub fn outer(&self, id: WindowId) -> Option<SceneRect<f64, SceneLogical>> {
         self.scene.outer(id)
     }
 
-    /// A window's absolute usable rectangle — where its client surface sits —
-    /// in logical pixels.
-    ///
-    /// This is the rectangle popups anchor against when the window is their
-    /// parent (the `window_geometry` of the xdg protocol).
     pub fn usable_rect(&self, id: WindowId) -> Option<Rectangle<i32, Logical>> {
         let outer = self.scene.outer(id)?;
         let index = self.index(id)?;
@@ -1239,13 +964,6 @@ impl Windows {
         Some(Rectangle::new(location, size))
     }
 
-    // --- popups -------------------------------------------------------------
-    //
-    // The popup *geometry* lives in the scene, like windows (ADR 0015); the
-    // compositor's `Popups` tracker holds the protocol surface. These methods
-    // expose the scene's popup side to it.
-
-    /// Adds a popup to the scene stack.
     pub fn insert_popup(
         &mut self,
         id: PopupId,
@@ -1255,22 +973,18 @@ impl Windows {
         self.scene.insert_popup(id, parent, rect);
     }
 
-    /// Removes a popup from the scene.
     pub fn remove_popup(&mut self, id: PopupId) -> bool {
         self.scene.remove_popup(id)
     }
 
-    /// A popup's positioned rectangle.
     pub fn popup_rect(&self, id: PopupId) -> Option<SceneRect<f64, SceneLogical>> {
         self.scene.popup_rect(id)
     }
 
-    /// Replaces a popup's positioned rectangle.
     pub fn set_popup_rect(&mut self, id: PopupId, rect: SceneRect<f64, SceneLogical>) -> bool {
         self.scene.set_popup_rect(id, rect)
     }
 
-    /// Every popup, back to front.
     pub fn iter_popups(
         &self,
     ) -> impl DoubleEndedIterator<Item = (PopupId, PopupParent, SceneRect<f64, SceneLogical>)> + '_
@@ -1278,37 +992,28 @@ impl Windows {
         self.scene.iter_popups()
     }
 
-    /// The topmost popup under a logical point, if any.
     pub fn popup_under(&self, point: Point<f64, Logical>) -> Option<PopupId> {
         self.scene.popup_under(scene_point(point))
     }
 
-    /// The topmost popup, if any.
     pub fn topmost_popup(&self) -> Option<PopupId> {
         self.scene.topmost_popup()
     }
 
-    /// The popup ancestors of `id`, from the immediate parent upwards.
     pub fn popup_ancestors(&self, id: PopupId) -> Vec<PopupId> {
         self.scene.popup_ancestors(id)
     }
 
-    /// Every popup in the subtree rooted at `id`, including `id`.
     pub fn popup_subtree(&self, id: PopupId) -> Vec<PopupId> {
         self.scene.popup_subtree(id)
     }
 
-    /// Asks the client to close the window.
     pub fn send_close(&self, id: WindowId) {
         if let Some(index) = self.index(id) {
             self.windows[index].toplevel.send_close();
         }
     }
 
-    /// Stores the requested decoration mode without applying it.
-    ///
-    /// The caller resolves the policy and native-app rule, then stores the
-    /// effective mode with [`Windows::set_decoration`].
     pub fn set_requested_decoration(&mut self, surface: &WlSurface, requested: Decoration) {
         let object = surface.id();
         if let Some(index) = self.index_of(surface) {
@@ -1325,14 +1030,12 @@ impl Windows {
         }
     }
 
-    /// Clears the requested mode (`new_decoration` or `unset_mode`).
     pub fn clear_requested_decoration(&mut self, surface: &WlSurface) {
         if let Some(index) = self.index_of(surface) {
             self.windows[index].requested = None;
         }
     }
 
-    /// The decoration mode the client asked for, if it sent `request_mode`.
     pub fn requested_decoration(&self, surface: &WlSurface) -> Option<Decoration> {
         if let Some(index) = self.index_of(surface) {
             return self.windows[index].requested;
@@ -1344,8 +1047,6 @@ impl Windows {
             .map(|(_, requested)| *requested)
     }
 
-    /// Stores the effective mode without sending a configure (the initial
-    /// configure follows separately).
     pub fn set_initial_decoration(&mut self, surface: &WlSurface, decoration: Decoration) {
         if let Some(index) = self.index_of(surface) {
             let id = self.windows[index].id;
@@ -1353,15 +1054,12 @@ impl Windows {
         }
     }
 
-    /// Sends the first configure, once the initial decoration is stored.
     pub fn send_initial_configure(&mut self, surface: &WlSurface) {
         if let Some(index) = self.index_of(surface) {
             self.send_configure(index);
         }
     }
 
-    /// Stores a window's effective decoration mode and re-configures it if it
-    /// changed.
     pub fn set_decoration(&mut self, surface: &WlSurface, decoration: Decoration) -> bool {
         let Some(index) = self.index_of(surface) else {
             return false;
@@ -1376,7 +1074,6 @@ impl Windows {
         true
     }
 
-    /// The window's app id, as the client last set it.
     pub fn app_id(&self, surface: &WlSurface) -> String {
         with_states(surface, |states| {
             states
@@ -1387,12 +1084,10 @@ impl Windows {
         })
     }
 
-    /// Whether the window is one of Malaysia's own apps (ADR 0035).
     pub fn is_native(&self, surface: &WlSurface) -> bool {
         self.app_id(surface).starts_with(NATIVE_APP_ID_PREFIX)
     }
 
-    /// Marks the native-app warning as emitted; returns false if it was already.
     pub fn mark_native_warning(&mut self, surface: &WlSurface) -> bool {
         let Some(index) = self.index_of(surface) else {
             return false;
@@ -1404,15 +1099,10 @@ impl Windows {
         true
     }
 
-    /// The decoration mode of a window, or client-side when none was stored.
-    ///
-    /// A window that never negotiated has no stored mode; treating it as
-    /// self-decorating is the policy ADR 0019 sets.
     fn decoration_of(&self, id: WindowId) -> Decoration {
         self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
-    /// The tracked window id of a surface, if any.
     fn id_of_surface(&self, surface: &WlSurface) -> Option<WindowId> {
         self.windows
             .iter()
@@ -1420,23 +1110,16 @@ impl Windows {
             .map(|data| data.id)
     }
 
-    /// The parent window of a dialog or other transient toplevel, if tracked.
     pub(crate) fn parent_of(&self, id: WindowId) -> Option<WindowId> {
         self.dialog_parent(id)
     }
 
-    /// The parent window of a dialog, if it is tracked.
     fn dialog_parent(&self, id: WindowId) -> Option<WindowId> {
         let index = self.index(id)?;
         let parent = self.windows[index].toplevel.parent()?;
         self.id_of_surface(&parent)
     }
 
-    /// Sends a configure for the current state.
-    ///
-    /// Before the window is placed (its first buffer committed) every configure
-    /// carries 0×0, so the client chooses its own size. After that the configure
-    /// carries the usable size for the current outer size and state.
     fn send_configure(&mut self, index: usize) {
         let id = self.windows[index].id;
         let decoration = self.decoration_of(id);
@@ -1445,9 +1128,6 @@ impl Windows {
         let resizing = data.resizing;
         data.toplevel.with_pending_state(|state| {
             state.size = Some(configured);
-            // The configure carries the mode the client negotiated; a client
-            // with no decoration object ignores the field, and one with an
-            // object learns the choice before its first attach (ADR 0019).
             state.decoration_mode = Some(match decoration {
                 Decoration::Server => zxdg_toplevel_decoration_v1::Mode::ServerSide,
                 Decoration::Client => zxdg_toplevel_decoration_v1::Mode::ClientSide,
@@ -1476,9 +1156,6 @@ impl Windows {
         data.configured = Some(configured);
     }
 
-    /// Sends a configure using `outer_size` as the window size without changing
-    /// the scene rectangle. Used during an interactive resize so the requested
-    /// size reaches the client while the frame stays at the committed size.
     fn send_configure_with_outer(&mut self, index: usize, outer_size: Size<i32, Logical>) {
         let previous = self.windows[index].outer_size;
         self.windows[index].outer_size = outer_size;
@@ -1486,11 +1163,6 @@ impl Windows {
         self.windows[index].outer_size = previous;
     }
 
-    /// The outer size bounds from the client's usable minimum and maximum.
-    ///
-    /// A zero axis stays zero: the client set no bound on it, and for a maximum
-    /// that means unbounded. `resized` reads a zero maximum that way
-    /// (`malaysia-scene/src/scene.rs:283-304`).
     fn outer_size_bounds(
         &self,
         id: WindowId,
@@ -1506,26 +1178,17 @@ impl Windows {
         outer_size(bound, insets)
     }
 
-    /// The index of the window for `surface`.
     fn index_of(&self, surface: &WlSurface) -> Option<usize> {
         self.windows
             .iter()
             .position(|data| data.toplevel.wl_surface() == surface)
     }
 
-    /// The index of the window with `id`.
     fn index(&self, id: WindowId) -> Option<usize> {
         self.windows.iter().position(|data| data.id == id)
     }
 }
 
-/// The absolute top-left corner of a window's usable area.
-///
-/// Kept separate from [`Windows::usable_rect`] so the rounding can be tested
-/// without building a full [`Windows`] tracker. Uses `round` because the usable
-/// rectangle must fit inside the workspace: flooring the origin would push it
-/// toward the exclusive zones (e.g., the menubar), while ceiling it would push
-/// the opposite edge past the dock.
 fn usable_rect_location(
     outer: SceneRect<f64, SceneLogical>,
     insets: Insets,
@@ -1536,7 +1199,6 @@ fn usable_rect_location(
     ))
 }
 
-/// Maps an xdg resize edge to a scene edge, if it names one.
 pub(crate) fn from_xdg_resize_edge(edge: ResizeEdge) -> Option<Edge> {
     match edge {
         ResizeEdge::Top => Some(Edge::Top),
@@ -1551,17 +1213,10 @@ pub(crate) fn from_xdg_resize_edge(edge: ResizeEdge) -> Option<Edge> {
     }
 }
 
-/// A logical point in the scene's coordinate types.
 fn scene_point(point: Point<f64, Logical>) -> ScenePoint<f64, SceneLogical> {
     ScenePoint::new(point.x, point.y)
 }
 
-/// The decorated outer size for a client bound.
-///
-/// The insets are added to a bound the client set; a zero axis stays zero,
-/// because zero means the client set no bound there. `resized` reads a zero
-/// maximum as unbounded, so turning it into one pixel would collapse every
-/// pointer-driven resize.
 fn outer_size(bound: Size<i32, Logical>, insets: Insets) -> SceneSize<f64, SceneLogical> {
     let width = if bound.w > 0 {
         f64::from(bound.w) + insets.horizontal()
@@ -1576,12 +1231,10 @@ fn outer_size(bound: Size<i32, Logical>, insets: Insets) -> SceneSize<f64, Scene
     SceneSize::new(width, height)
 }
 
-/// Keeps an outer size from collapsing below one pixel on an axis.
 fn at_least_one_pixel(size: SceneSize<f64, SceneLogical>) -> SceneSize<f64, SceneLogical> {
     SceneSize::new(size.width.max(1.0), size.height.max(1.0))
 }
 
-/// Centers a window of `size` inside the workspace.
 fn center_origin(
     size: Size<i32, Logical>,
     workspace: Rectangle<i32, Logical>,
@@ -1592,7 +1245,6 @@ fn center_origin(
     ))
 }
 
-/// Centers a dialog over its parent window.
 fn dialog_placement(
     committed: Option<Size<i32, Logical>>,
     insets: Insets,
@@ -1609,12 +1261,6 @@ fn dialog_placement(
     Some((outer, origin))
 }
 
-/// The initial placement for a new window: centered in the workspace, from the
-/// client's committed geometry, clamped so it fits.
-///
-/// A client that committed nothing usable (0×0 and no content) still gets the
-/// default 640×420 window; that is rare, but without it the window would be a
-/// single pixel.
 fn initial_placement(
     committed: Option<Size<i32, Logical>>,
     insets: Insets,
@@ -1627,12 +1273,6 @@ fn initial_placement(
     (outer, origin)
 }
 
-/// The decorated outer size a window occupies: the committed client geometry
-/// (window geometry or buffer) plus the insets.
-///
-/// Hit-testing, rendering and placement all derive the window from this, never
-/// from a configured size the client has not drawn. A client that committed no
-/// usable geometry falls back to 640×420 (see [`initial_placement`]).
 fn committed_outer(committed: Option<Size<i32, Logical>>, insets: Insets) -> Size<i32, Logical> {
     let client = match committed {
         Some(size) if size.w > 0 && size.h > 0 => size,
@@ -1642,14 +1282,6 @@ fn committed_outer(committed: Option<Size<i32, Logical>>, insets: Insets) -> Siz
     Size::from((round(outer.width), round(outer.height)))
 }
 
-/// Fills the xdg_toplevel states for a configure.
-///
-/// A configure sent before the first buffer (the initial configure) carries no
-/// `Tiled*`: Firefox reads tiled on the initial 0×0 configure as a tiled
-/// request and opens at a tiny default size instead of its own. Once the window
-/// is placed, normal windows are advertised as tiled on all four sides so
-/// GTK/libadwaita and Firefox drop their client-side rounded corners and
-/// resize margin. Maximized and fullscreen keep their existing state behaviour.
 fn apply_configure_states(
     states: &mut ToplevelStateSet,
     placed: bool,
@@ -1693,8 +1325,6 @@ fn apply_configure_states(
     }
 }
 
-/// The client's committed geometry: the xdg window geometry when it set one,
-/// otherwise the committed buffer's logical size.
 fn committed_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
     with_states(surface, |states| {
         states
@@ -1707,15 +1337,12 @@ fn committed_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
     .or_else(|| with_renderer_surface_state(surface, |state| state.surface_size()).flatten())
 }
 
-/// The configured size: the outer size minus the insets, never below one pixel.
 fn usable(window: Size<i32, Logical>, insets: Insets) -> Size<i32, Logical> {
     let width = (f64::from(window.w) - insets.horizontal()).max(1.0).round();
     let height = (f64::from(window.h) - insets.vertical()).max(1.0).round();
     Size::from((width as i32, height as i32))
 }
 
-/// The size a configure carries: 0×0 before the window is placed (the client
-/// chooses), then the committed window geometry.
 fn configure_size(placed: bool, outer: Size<i32, Logical>, insets: Insets) -> Size<i32, Logical> {
     if placed {
         usable(outer, insets)
@@ -1724,12 +1351,10 @@ fn configure_size(placed: bool, outer: Size<i32, Logical>, insets: Insets) -> Si
     }
 }
 
-/// Rounds a logical length to whole pixels.
 fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-/// The client's explicit window geometry, if it set one.
 fn window_geometry(surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
     with_states(surface, |states| {
         states
@@ -1740,18 +1365,10 @@ fn window_geometry(surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
     })
 }
 
-/// The logical size of the surface's current buffer.
 fn buffer_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
     with_renderer_surface_state(surface, |state| state.buffer_size()).flatten()
 }
 
-/// Recomputes the origin for a committed size during an interactive resize,
-/// keeping the opposite edge fixed.
-///
-/// `old_size` is the configured outer size that anchored the opposite edge;
-/// `new_size` is what the client actually committed. For a left/top drag the
-/// origin moves so the right/bottom edge stays in place; for other edges the
-/// origin is unchanged.
 fn anchor_resize_origin(
     origin: Point<i32, Logical>,
     old_size: Size<i32, Logical>,
@@ -1773,10 +1390,6 @@ fn anchor_resize_origin(
     origin
 }
 
-/// Whether a window geometry lies inside its buffer.
-///
-/// A surface with no explicit geometry, or without a buffer yet, is not
-/// rejected here: the buffer check belongs to [`surface_has_buffer`].
 fn geometry_fits(
     geometry: Option<Rectangle<i32, Logical>>,
     buffer: Option<Size<i32, Logical>>,
@@ -1792,11 +1405,6 @@ fn geometry_fits(
         && geometry.loc.y + geometry.size.h <= buffer.h
 }
 
-/// Whether any commit has ever carried damage for the surface's buffer.
-///
-/// A new buffer's damage is moved into the renderer state by
-/// `on_commit_buffer_handler`; damage from a commit without a new buffer stays
-/// in `SurfaceAttributes`.
 fn surface_has_damage(surface: &WlSurface) -> bool {
     let pending = with_states(surface, |states| {
         !states
@@ -1813,17 +1421,10 @@ fn surface_has_damage(surface: &WlSurface) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether the surface currently has a buffer attached.
-///
-/// This reads the renderer's surface state, which `on_commit_buffer_handler`
-/// populates, because that call *consumes* the compositor's own buffer
-/// assignment, so `SurfaceAttributes` can no longer answer this.
 pub(crate) fn surface_has_buffer(surface: &WlSurface) -> bool {
     with_renderer_surface_state(surface, |state| state.buffer().is_some()).unwrap_or(false)
 }
 
-/// The client-surface-local point for `point`, or `None` when it falls on the
-/// decoration band around the client.
 fn client_point(
     outer: SceneRect<f64, SceneLogical>,
     insets: Insets,
@@ -1867,7 +1468,6 @@ mod tests {
         Size::from((width, height))
     }
 
-    /// The inset a server-decorated window reserves for its titlebar.
     fn titlebar() -> Insets {
         Insets {
             top: 32.0,
@@ -1912,8 +1512,6 @@ mod tests {
 
     #[test]
     fn an_unset_client_maximum_stays_unbounded() {
-        // A maximum of zero means the client set none. Reading it as one pixel
-        // clamped every pointer-driven resize to 1x1.
         assert_eq!(outer_size(size(0, 0), titlebar()), SceneSize::new(0.0, 0.0));
     }
 
@@ -1936,7 +1534,6 @@ mod tests {
 
     #[test]
     fn the_initial_configure_is_not_tiled_and_the_next_one_is() {
-        // Firefox opens at 500×304 when the 0×0 initial configure says Tiled.
         let mut initial = ToplevelStateSet::default();
         apply_configure_states(&mut initial, false, false, false, false, false);
         for state in tiled_states() {
@@ -1947,8 +1544,6 @@ mod tests {
             size(0, 0)
         );
 
-        // The first configure after the first buffer carries the committed
-        // size, never 0×0.
         let mut later = ToplevelStateSet::default();
         apply_configure_states(&mut later, true, false, false, false, false);
         for state in tiled_states() {
@@ -2018,14 +1613,10 @@ mod tests {
             SceneRect::new(ScenePoint::new(200.0, 150.0), SceneSize::new(186.0, 100.0)),
         );
 
-        // 10 px outside the above frame (past its 6 px band), inside its 20 px
-        // margin, and inside the below window's right band.
         let point = ScenePoint::new(390.0, 200.0);
         let targets = [above_target, below_target];
         assert_eq!(edge_hit(targets.into_iter(), point, 6.0, 12.0), None);
 
-        // The same point does hit the below band when the above window is out
-        // of the way, so the block comes from the above margin.
         let below_target = csd(
             below,
             SceneRect::new(ScenePoint::new(180.0, 130.0), SceneSize::new(226.0, 140.0)),
@@ -2036,7 +1627,6 @@ mod tests {
             Some((below, Edge::Right))
         );
 
-        // The above window's own band still wins.
         let above_target = csd(
             above,
             SceneRect::new(ScenePoint::new(100.0, 100.0), SceneSize::new(300.0, 200.0)),
@@ -2069,7 +1659,6 @@ mod tests {
             top: 44.0,
             ..Insets::ZERO
         };
-        // The bar is part of the window, but not of the client's surface.
         assert_eq!(client_point(outer, insets, Point::new(110.0, 60.0)), None);
         assert_eq!(
             client_point(outer, insets, Point::new(110.0, 100.0)),
@@ -2082,9 +1671,6 @@ mod tests {
         use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
         use malaysia_scene::scene::{Scene, WindowId};
 
-        // The compositor may have configured 1280×708, but the client drew a
-        // 640×420 buffer. Hit-testing walks the scene's committed geometry, so
-        // the empty strip outside the buffer is not part of the window.
         let outer = committed_outer(Some(size(640, 420)), Insets::ZERO);
         let mut scene = Scene::new();
         let window = WindowId::new(1);
@@ -2106,8 +1692,6 @@ mod tests {
 
     #[test]
     fn placement_centers_the_committed_geometry_not_the_configured_size() {
-        // 640×420 committed inside a 1280×708 workspace: the size is the
-        // client's and only the position comes from the workspace.
         let workspace = Rectangle::new(Point::from((0, 0)), size(1280, 708));
         let (outer, origin) = initial_placement(Some(size(640, 420)), Insets::ZERO, workspace);
         assert_eq!(outer, size(640, 420));
@@ -2183,8 +1767,6 @@ mod tests {
 
     #[test]
     fn a_left_resize_keeps_the_right_edge_fixed_after_a_move() {
-        // After a move/arrange the origin is no longer the placement origin;
-        // the resize must anchor against the current origin.
         let origin = Point::from((250, 180));
         let old_size = size(640, 420);
         let new_size = size(637, 420);
@@ -2203,12 +1785,6 @@ mod tests {
         assert_eq!(restored.y(), 456.0);
     }
 
-    /// The usable rectangle must stay inside the workspace. A window whose
-    /// outer rectangle exactly fills the workspace below a 24-logical menubar
-    /// must not push its usable area past the bottom edge. Ceiling the origin
-    /// would add one logical pixel and overflow; flooring would shrink it and
-    /// is safe, but round is the smallest behaviour that matches the existing
-    /// `usable()` and `surface_location()` helpers.
     #[test]
     fn usable_rect_location_fits_inside_the_workspace() {
         let workspace_height = 100.0;

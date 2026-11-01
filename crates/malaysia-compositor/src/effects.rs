@@ -1,10 +1,4 @@
-//! Compositor-side window effects: the rounded frame.
-//!
-//! ADR 0020 applies these to every toplevel window, client- or server-decorated.
-//! The shape clips the client surface to the window rectangle; a CSD client may
-//! attach a larger buffer (its own margins), and only the window rectangle is
-//! the window. The clip is done in the fragment stage with the ROUNDED_CLIP
-//! texture shader from `grade-graphics`; subsurfaces share the same clip rect.
+//! Compositor-side window effects: rounded frame, border and shadow.
 
 use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
@@ -17,7 +11,6 @@ use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
 
-/// Map a physical frame rectangle into a source texture's coordinate space.
 fn frame_to_texture_geometry(
     src: Rectangle<f64, BufferCoords>,
     dst: Rectangle<i32, Physical>,
@@ -32,7 +25,6 @@ fn frame_to_texture_geometry(
     [x as f32, y as f32, w as f32, h as f32]
 }
 
-/// Map a physical corner radius into a source texture's coordinate space.
 fn texture_radius(
     src: Rectangle<f64, BufferCoords>,
     dst: Rectangle<i32, Physical>,
@@ -42,8 +34,6 @@ fn texture_radius(
     (f64::from(radius) * scale) as f32
 }
 
-/// The logical `PixelShaderElement` area that covers `frame` plus `margin`
-/// physical pixels on every side, and never rounds the frame out of it.
 pub(crate) fn shader_area(
     frame: Rectangle<i32, Physical>,
     margin: i32,
@@ -59,12 +49,6 @@ pub(crate) fn shader_area(
     )
 }
 
-/// A surface or memory texture drawn with a rounded-rectangle clip.
-///
-/// This replaces the old CPU-banded `ClippedSurface`. One draw call per
-/// surface, no offscreen buffer. The clip rectangle and radius are in the
-/// coordinate space of the *window frame*; each subsurface gets the same frame
-/// rectangle, so the corners line up across the whole window.
 pub(crate) struct RoundedTextureElement {
     id: Id,
     commit_counter: CommitCounter,
@@ -75,17 +59,13 @@ pub(crate) struct RoundedTextureElement {
     transform: Transform,
     alpha: f32,
     kind: Kind,
-    /// The window frame rectangle in physical pixels; used for the clip.
     frame_rect: Rectangle<i32, Physical>,
-    /// Corner radius in physical pixels.
     radius: i32,
-    /// Superellipse exponent; `2.0` is a plain rounded corner.
     exponent: f32,
     program: GlesTexProgram,
 }
 
 impl RoundedTextureElement {
-    /// Wraps a Wayland surface element so it is clipped to `frame_rect`.
     pub(crate) fn from_surface_element(
         element: &WaylandSurfaceRenderElement<GlesRenderer>,
         frame_rect: Rectangle<i32, Physical>,
@@ -105,9 +85,6 @@ impl RoundedTextureElement {
             texture,
             texture_size,
             src: element.src(),
-            // `geometry(scale)` scales the surface's logical view to physical
-            // pixels; at 1.0 the content stays at its logical size inside a
-            // larger physical frame.
             dst: element.geometry(Scale::from(scale)),
             transform: element.transform(),
             alpha: element.alpha(),
@@ -119,11 +96,6 @@ impl RoundedTextureElement {
         })
     }
 
-    /// Moves and scales the element so the content that sat in `from` fills
-    /// `to`, both in physical pixels. Used while a window grows into focus
-    /// mode or shrinks out of it: its buffer is still at the other size, so
-    /// it is stretched onto the animated rectangle instead of leaving black
-    /// around it (ADR 0051).
     pub(crate) fn mapped(
         mut self,
         from: Rectangle<i32, Physical>,
@@ -133,7 +105,6 @@ impl RoundedTextureElement {
         self
     }
 
-    /// Wraps an already-imported texture so it is clipped to `frame_rect`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_texture(
         texture: GlesTexture,
@@ -250,7 +221,6 @@ impl RenderElement<GlesRenderer> for RoundedTextureElement {
     }
 }
 
-// Smithay re-exports the texture enum under a renderer-specific name.
 use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as WaylandSurfaceRenderElementTexture;
 
 #[cfg(test)]
@@ -261,8 +231,6 @@ mod tests {
 
     #[test]
     fn surface_geometry_scales_the_logical_view_to_physical() {
-        // A surface whose logical view is 694x488 must be drawn at its logical
-        // size on a 1.0 output and at 868x610 on a 1.25 output, not at 694x488.
         let view_dst = Size::<f64, Logical>::from((694.0, 488.0));
         let at_one: Size<i32, Physical> = view_dst.to_physical(Scale::from(1.0)).to_i32_round();
         let at_125: Size<i32, Physical> = view_dst.to_physical(Scale::from(1.25)).to_i32_round();
@@ -286,10 +254,8 @@ mod tests {
         let dst = Rectangle::new(Point::from((40, 50)), Size::from((200, 100)));
         let frame = Rectangle::new(Point::from((10, 20)), Size::from((300, 200)));
         let geo = frame_to_texture_geometry(src, dst, frame);
-        // Surface is shifted 30 physical px right/down; scaled by 2x -> -60 texture px.
         assert!((geo[0] - -60.0).abs() < 0.01);
         assert!((geo[1] - -60.0).abs() < 0.01);
-        // Frame size 300x200 scaled by 2x -> 600x400.
         assert!((geo[2] - 600.0).abs() < 0.01);
         assert!((geo[3] - 400.0).abs() < 0.01);
     }
@@ -315,9 +281,6 @@ mod tests {
 
     #[test]
     fn an_ssd_surface_is_clipped_at_the_frame_bottom() {
-        // A server-decorated window: the surface starts below the 32 px bar and
-        // still ends exactly at the frame's bottom edge, so the bottom corners
-        // are rounded by the shared clip rectangle.
         let src = Rectangle::from_size(Size::from((400.0, 268.0)));
         let dst = Rectangle::new(Point::from((10, 52)), Size::from((400, 268)));
         let frame = Rectangle::new(Point::from((10, 20)), Size::from((400, 300)));
@@ -331,7 +294,6 @@ mod tests {
         let dst = Rectangle::new(Point::from((10, 220)), Size::from((200, 100)));
         let frame = Rectangle::new(Point::from((10, 20)), Size::from((200, 300)));
         let geo = frame_to_texture_geometry(src, dst, frame);
-        // The subsurface buffer's bottom edge is the frame's bottom edge.
         assert!((geo[1] + geo[3] - src.size.h as f32).abs() < 0.01);
     }
 
@@ -343,8 +305,6 @@ mod tests {
     }
 }
 
-/// Maps `rect` by the affine map that takes `from` onto `to` (a move plus an
-/// independent scale on each axis), rounding to whole physical pixels.
 pub(crate) fn map_rect(
     rect: Rectangle<i32, Physical>,
     from: Rectangle<i32, Physical>,
@@ -363,8 +323,6 @@ pub(crate) fn map_rect(
     )
 }
 
-/// Compiles the rounded-clip texture shader. Returns `None` if the renderer
-/// fails to compile it; the caller can then fall back to `ClippedSurface`.
 pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
     let program = renderer.compile_custom_texture_shader(
         grade_graphics::shaders::ROUNDED_CLIP,
@@ -384,7 +342,6 @@ pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTe
     }
 }
 
-/// Compiles the shadow pixel shader. Returns `None` on failure.
 pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
     let program = renderer.compile_custom_pixel_shader(
         grade_graphics::shaders::SHADOW,
@@ -409,7 +366,6 @@ pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
     }
 }
 
-/// Compiles the border pixel shader. Returns `None` on failure.
 pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
     let program = renderer.compile_custom_pixel_shader(
         grade_graphics::shaders::BORDER,
@@ -451,12 +407,9 @@ mod map_tests {
 
     #[test]
     fn a_shrinking_window_fills_the_animated_rectangle() {
-        // The client already redrew at 600x400 while the animation is at
-        // 900x600: the buffer is stretched onto it, no black around.
         let content = r(0, 0, 600, 400);
         let animated = r(0, 0, 900, 600);
         assert_eq!(map_rect(content, content, animated), animated);
-        // A subsurface in the middle keeps its relative place.
         assert_eq!(
             map_rect(r(300, 200, 100, 100), content, animated),
             r(450, 300, 150, 150)

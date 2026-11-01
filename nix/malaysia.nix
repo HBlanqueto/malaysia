@@ -1,9 +1,4 @@
-# NixOS integration for MalaysiaDreams. The flake exposes this as `nixosModules.default`.
-#
-# The module installs the compositor, registers its Wayland session with the
-# display manager, creates the lock's PAM stack, and starts one shell process
-# per component in `malaysia-session.target` (ADR 0023). The compositor imports
-# `WAYLAND_DISPLAY` into the user manager and starts that target itself.
+# NixOS module for MalaysiaDreams, exposed as `nixosModules.default`.
 { self }:
 {
   config,
@@ -45,11 +40,6 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    # ADR 0052: replace the system libadwaita with a patched build that exports
-    # the primary menu as an application menubar over org.gtk.Menus. This avoids
-    # rebuilding every libadwaita application while still giving the shell a
-    # global menu for them. The same build hides AdwToolbarView top bars in
-    # focus mode (ADR 0053); ADW_DISABLE_FOCUS_MODE turns that off per app.
     system.replaceDependencies.replacements = lib.mkIf cfg.globalMenu.libadwaita.enable [
       {
         oldDependency = pkgs.libadwaita;
@@ -57,22 +47,15 @@ in
       }
     ];
 
-    # The UI typeface and its symbol fallback. Geist has no ⌃⌥⇧❖ glyphs;
-    # Inter provides all four from the same family.
     fonts.packages = [
       pkgs.geist-font
       pkgs.inter
     ];
 
-    # The session file in the package makes MalaysiaDreams selectable in GDM, SDDM and
-    # greetd.
     services.displayManager.sessionPackages = [ cfg.package ];
 
-    # Both the compositor and the shell render through GBM/EGL.
     hardware.graphics.enable = lib.mkDefault true;
 
-    # ADR 0031: MalaysiaDreams's backend serves Settings; GTK keeps FileChooser, Print
-    # and Notification. `UseIn=Malaysia` ties the backend to this session.
     xdg.portal = {
       enable = lib.mkDefault true;
       extraPortals = lib.mkAfter [
@@ -85,16 +68,12 @@ in
       };
     };
 
-    # The lock prefers this stack and falls back to `login` when it is absent.
     security.pam.services.malaysia-lock.text = ''
       auth include login
       account include login
       session include login
     '';
 
-    # The package already ships the per-component units in
-    # $out/lib/systemd/user with @out@ substituted. Install them system-wide
-    # and let the target pull in the configured subset.
     systemd.packages = [ cfg.package ];
 
     systemd.user.targets.malaysia-session = {
@@ -102,8 +81,6 @@ in
       wants =
         map (component: "malaysia-shell@${component}.service") cfg.shellComponents
         ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service"
-        # ADR 0050: the portal also keeps the GTK/libadwaita bridge, so it starts
-        # with the session instead of waiting for the first app to activate it.
         ++ [ "xdg-desktop-portal-malaysia.service" ];
     };
   };

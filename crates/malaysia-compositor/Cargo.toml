@@ -36,6 +36,4 @@ malaysia-scene.workspace = true
 infinity-protocol = { workspace = true, features = ["server"] }
 
 [dev-dependencies]
-# The import-queue test drives a real Wayland client against a real compositor
-# socket (session.rs), using sctk's client side like the shell does.
 sctk.workspace = true

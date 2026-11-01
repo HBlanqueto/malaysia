@@ -1,7 +1,4 @@
-//! Desktop entries: reading, localisation, Exec cleanup and launcher ranking.
-//!
-//! The parser is deliberately local to `malaysia-shell` (ADR 0023): it is shell
-//! logic, not part of BarrierKit.
+//! Desktop entries: parsing, localisation, Exec cleanup and launcher ranking.
 
 use std::{
     collections::HashMap,
@@ -9,34 +6,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// One application read from a `.desktop` file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
-    /// XDG desktop-file id (path relative to `applications`, `/` → `-`).
     pub id: String,
-    /// Localised `Name`.
     pub name: String,
-    /// Localised `GenericName`, when present.
     pub generic_name: Option<String>,
-    /// Localised `Keywords`.
     pub keywords: Vec<String>,
-    /// `Icon` (a name or an absolute path).
     pub icon: Option<String>,
-    /// `Exec`, split and without field codes.
     pub exec: Vec<String>,
-    /// `Path`, the working directory.
     pub path: Option<PathBuf>,
-    /// Whether the app needs a terminal.
     pub terminal: bool,
-    /// `StartupWMClass`, used to match running windows when present.
     pub startup_wm_class: Option<String>,
 }
 
-/// Reads every application visible to the MalaysiaDreams desktop.
-///
-/// Directories are visited in XDG precedence order and the first file wins for
-/// each id. NixOS's `~/.nix-profile/share` and `/run/current-system/sw/share`
-/// are ordinary `XDG_DATA_DIRS` entries, so they need no special case.
 pub fn read_entries() -> Vec<DesktopEntry> {
     let home = env::var_os("HOME").unwrap_or_else(|| "/".into());
     let data_home = env::var_os("XDG_DATA_HOME")
@@ -106,8 +88,6 @@ fn collect_desktop_files(
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        // The first file for an id wins even when it is Hidden: it masks the
-        // lower-priority entry, it does not fall through to it.
         seen.insert(id.clone(), ());
         if let Some(entry) = parse_desktop(&text, &id, locales) {
             out.push(entry);
@@ -115,7 +95,6 @@ fn collect_desktop_files(
     }
 }
 
-/// Parses one `[Desktop Entry]` group. `id` is the desktop-file id.
 pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<DesktopEntry> {
     let mut group = String::new();
     let mut values = HashMap::new();
@@ -195,7 +174,6 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
     })
 }
 
-/// `$LANG`-style locale candidates, most specific first (`es_ES`, then `es`).
 pub fn locale_candidates() -> Vec<String> {
     let source = ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
@@ -276,12 +254,6 @@ fn executable_exists(program: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Splits an `Exec` value and removes desktop-entry field codes.
-///
-/// The tokenizer follows the spec's quoting rules: double quotes protect
-/// whitespace, `\\` escapes a quote, backtick, dollar or backslash inside
-/// double quotes, and `%%` is a literal percent sign. Field codes (`%f`, `%F`,
-/// `%u`, `%U`, `%i`, `%c`, `%k`) are removed, as required by the launcher.
 pub fn parse_exec(value: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
@@ -372,7 +344,6 @@ fn unescape(value: &str) -> String {
     out
 }
 
-/// The ranking used by the launcher.
 pub fn rank<'a>(
     entries: &'a [DesktopEntry],
     query: &str,
@@ -443,7 +414,6 @@ fn word_start(name: &str, query: &str) -> bool {
     })
 }
 
-/// Lowercases and strips common Latin accents for accent-insensitive search.
 pub fn normalize(value: &str) -> String {
     value
         .to_lowercase()

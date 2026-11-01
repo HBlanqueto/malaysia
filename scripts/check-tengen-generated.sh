@@ -1,5 +1,4 @@
 #!/bin/sh
-# Fail when generated/ differs from what default.nix produces.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

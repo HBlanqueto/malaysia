@@ -1,14 +1,4 @@
-# Política de licencias de MalaysiaDreams.
-#
-# Solo se aceptan las licencias de la lista. Cualquier otra hace fallar
-# `cargo deny check licenses`.
-#
-# GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only, LGPL-2.1-or-later y
-# LGPL-3.0-or-later quedan fuera de `allow` a propósito: no se aceptan.
-#
-# MPL-2.0 tampoco está en `allow`: se concede crate por crate en `exceptions`,
-# con el motivo escrito al lado. No se añade una excepción sin reportarla.
-
+# Allowed licenses for `cargo deny check licenses`.
 [licenses]
 allow = [
     "MIT",
@@ -22,8 +12,6 @@ allow = [
 confidence-threshold = 0.8
 
 exceptions = [
-    # MPL-2.0 se concede así, crate por crate y con motivo:
-    # { crate = "nombre-del-crate", allow = ["MPL-2.0"], reason = "por qué" },
 ]
 
 [licenses.private]

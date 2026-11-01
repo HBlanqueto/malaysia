@@ -1,117 +1,62 @@
-//! The ordered set of windows, and the geometry queries over it.
-//!
-//! `malaysia-scene` cannot depend on Smithay, so a window here is only its
-//! identity and its decorated outer rectangle. The compositor keeps the
-//! protocol surface and the configure bookkeeping; this module owns stacking
-//! order, point hit-testing and the resize edge zones. See ADR 0015.
-//!
-//! The rectangle is the **decorated** bounds — titlebar and border included —
-//! not the client's surface: the two do not coincide (ADR 0014), and the edge
-//! zones that start a resize are measured against the decorated bounds, so a
-//! grab near the titlebar works even though no client surface is there.
+//! The ordered set of windows and geometry queries over it.
 
 use crate::geometry::{Logical, Point, Rect, Size};
 
-/// Identifies one window in a [`Scene`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WindowId(u64);
 
 impl WindowId {
-    /// Creates an id from a compositor-chosen number.
     pub fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// The number this id was created from.
     pub fn get(self) -> u64 {
         self.0
     }
 }
 
-/// Identifies one popup in a [`Scene`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PopupId(u64);
 
 impl PopupId {
-    /// Creates an id from a compositor-chosen number.
     pub fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// The number this id was created from.
     pub fn get(self) -> u64 {
         self.0
     }
 }
 
-/// What a popup is attached to: the surface it was created with as parent.
-///
-/// A popup's parent is either a toplevel window, another popup (a nested
-/// submenu), or a layer surface (a menubar menu). Popups are always stacked
-/// above every window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PopupParent {
-    /// A toplevel window.
     Window(WindowId),
-    /// Another popup.
     Popup(PopupId),
-    /// A layer surface (menubar or dock).
     Layer,
 }
 
-/// One side or corner of a decorated window's outer rectangle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
-    /// The top edge.
     Top,
-    /// The bottom edge.
     Bottom,
-    /// The left edge.
     Left,
-    /// The right edge.
     Right,
-    /// The top-left corner.
     TopLeft,
-    /// The top-right corner.
     TopRight,
-    /// The bottom-left corner.
     BottomLeft,
-    /// The bottom-right corner.
     BottomRight,
 }
 
-/// Who draws a window's decorations.
-///
-/// This is stored with the window, keyed by [`WindowId`], and is the one value
-/// the compositor reads for drawing, hit-testing and decoration insets. What a
-/// window's mode *is* — negotiation, defaults, changes — is the compositor's
-/// policy (ADR 0019); this crate only stores it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decoration {
-    /// The compositor draws the window's chrome.
     Server,
-    /// The client draws its own chrome, or asked not to be decorated.
     Client,
 }
 
-/// A stack of windows, back to front.
-///
-/// The last window is on top. Every query considers windows in stacking order,
-/// so what the user sees on top is also what the pointer hits.
 #[derive(Debug, Default)]
 pub struct Scene {
-    /// Back-to-front entries; the last is topmost.
     windows: Vec<Entry>,
-    /// Decoration modes, by window id.
-    ///
-    /// A separate table because a window negotiates its decorations *before* it
-    /// maps, and a scene entry only exists once it does: the mode must be
-    /// storable for an id that has no rectangle yet.
     decorations: Vec<(WindowId, Decoration)>,
-    /// Popups, back to front; the last is topmost.
-    ///
-    /// Popups are always above every window: an open menu is above its parent
-    /// window no matter how the windows are stacked (ADR 0015, Bloque 5).
     popups: Vec<PopupEntry>,
 }
 
@@ -129,29 +74,22 @@ struct PopupEntry {
 }
 
 impl Scene {
-    /// Creates an empty scene.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// How many windows are tracked.
     pub fn len(&self) -> usize {
         self.windows.len()
     }
 
-    /// Whether no windows are tracked.
     pub fn is_empty(&self) -> bool {
         self.windows.is_empty()
     }
 
-    /// Adds a window on top of the stack.
     pub fn insert(&mut self, id: WindowId, outer: Rect<f64, Logical>) {
         self.windows.push(Entry { id, outer });
     }
 
-    /// Removes a window, returning whether it was present.
-    ///
-    /// The stored decoration goes with it.
     pub fn remove(&mut self, id: WindowId) -> bool {
         let before = self.windows.len();
         self.windows.retain(|entry| entry.id != id);
@@ -159,10 +97,6 @@ impl Scene {
         self.windows.len() != before
     }
 
-    /// Stores a window's decoration mode, returning whether it changed.
-    ///
-    /// The window does not need a scene entry yet: a client negotiates before
-    /// it maps, and the mode has to be readable from the first configure on.
     pub fn set_decoration(&mut self, id: WindowId, decoration: Decoration) -> bool {
         match self.decorations.iter_mut().find(|(entry, _)| *entry == id) {
             Some((_, stored)) if *stored == decoration => false,
@@ -177,7 +111,6 @@ impl Scene {
         }
     }
 
-    /// The decoration mode stored for a window, if one was set.
     pub fn decoration(&self, id: WindowId) -> Option<Decoration> {
         self.decorations
             .iter()
@@ -185,7 +118,6 @@ impl Scene {
             .map(|(_, decoration)| *decoration)
     }
 
-    /// Moves a window to the top of the stack.
     pub fn raise(&mut self, id: WindowId) -> bool {
         let Some(index) = self.windows.iter().position(|entry| entry.id == id) else {
             return false;
@@ -195,7 +127,6 @@ impl Scene {
         true
     }
 
-    /// The decorated outer rectangle of a window.
     pub fn outer(&self, id: WindowId) -> Option<Rect<f64, Logical>> {
         self.windows
             .iter()
@@ -203,7 +134,6 @@ impl Scene {
             .map(|entry| entry.outer)
     }
 
-    /// Replaces a window's decorated outer rectangle.
     pub fn set_outer(&mut self, id: WindowId, outer: Rect<f64, Logical>) -> bool {
         let Some(entry) = self.windows.iter_mut().find(|entry| entry.id == id) else {
             return false;
@@ -212,12 +142,10 @@ impl Scene {
         true
     }
 
-    /// Every window, back to front, so the last is drawn on top.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (WindowId, Rect<f64, Logical>)> + '_ {
         self.windows.iter().map(|entry| (entry.id, entry.outer))
     }
 
-    /// The topmost window whose decorated rectangle contains `point`.
     pub fn topmost_at(&self, point: Point<f64, Logical>) -> Option<WindowId> {
         self.windows
             .iter()
@@ -226,24 +154,20 @@ impl Scene {
             .map(|entry| entry.id)
     }
 
-    /// The topmost window, if any.
     pub fn topmost(&self) -> Option<WindowId> {
         self.windows.last().map(|entry| entry.id)
     }
 
-    /// Adds a popup on top of the popup stack.
     pub fn insert_popup(&mut self, id: PopupId, parent: PopupParent, rect: Rect<f64, Logical>) {
         self.popups.push(PopupEntry { id, parent, rect });
     }
 
-    /// Removes a popup, returning whether it was present.
     pub fn remove_popup(&mut self, id: PopupId) -> bool {
         let before = self.popups.len();
         self.popups.retain(|entry| entry.id != id);
         self.popups.len() != before
     }
 
-    /// A popup's positioned rectangle.
     pub fn popup_rect(&self, id: PopupId) -> Option<Rect<f64, Logical>> {
         self.popups
             .iter()
@@ -251,7 +175,6 @@ impl Scene {
             .map(|entry| entry.rect)
     }
 
-    /// Replaces a popup's positioned rectangle.
     pub fn set_popup_rect(&mut self, id: PopupId, rect: Rect<f64, Logical>) -> bool {
         let Some(entry) = self.popups.iter_mut().find(|entry| entry.id == id) else {
             return false;
@@ -260,7 +183,6 @@ impl Scene {
         true
     }
 
-    /// A popup's parent, if it is tracked.
     pub fn popup_parent(&self, id: PopupId) -> Option<PopupParent> {
         self.popups
             .iter()
@@ -268,7 +190,6 @@ impl Scene {
             .map(|entry| entry.parent)
     }
 
-    /// Every popup, back to front, so the last is drawn on top.
     pub fn iter_popups(
         &self,
     ) -> impl DoubleEndedIterator<Item = (PopupId, PopupParent, Rect<f64, Logical>)> + '_ {
@@ -277,15 +198,10 @@ impl Scene {
             .map(|entry| (entry.id, entry.parent, entry.rect))
     }
 
-    /// The topmost popup, if any.
     pub fn topmost_popup(&self) -> Option<PopupId> {
         self.popups.last().map(|entry| entry.id)
     }
 
-    /// The topmost popup whose rectangle contains `point`.
-    ///
-    /// Popups are above windows, so a point over an open menu is over the menu
-    /// even when a window sits underneath.
     pub fn popup_under(&self, point: Point<f64, Logical>) -> Option<PopupId> {
         self.popups
             .iter()
@@ -294,11 +210,6 @@ impl Scene {
             .map(|entry| entry.id)
     }
 
-    /// The popup ancestors of `id`, from the immediate parent upwards.
-    ///
-    /// `id` itself is not included. Used to dismiss a whole menu tree: closing
-    /// a popup's parent closes the popup, so the ancestors of a popup are the
-    /// popups that must go with it.
     pub fn popup_ancestors(&self, id: PopupId) -> Vec<PopupId> {
         let mut chain = Vec::new();
         let mut current = id;
@@ -314,10 +225,6 @@ impl Scene {
         chain
     }
 
-    /// Every popup whose ancestry leads to `id` (including `id` itself).
-    ///
-    /// Used to dismiss a whole subtree: dismissing a popup takes its nested
-    /// submenus with it.
     pub fn popup_subtree(&self, id: PopupId) -> Vec<PopupId> {
         let mut subtree = vec![id];
         loop {
@@ -338,14 +245,8 @@ impl Scene {
     }
 }
 
-/// How far a corner L may enter the window, in logical pixels.
 const CORNER_INSET: f64 = 2.0;
 
-/// Which exterior resize zone of `outer` contains `point`, if any.
-///
-/// Sides are an exterior band of `side`; corners are an exterior L of length
-/// `corner` along each side, with a 2 px inward tolerance. There are no large
-/// squares inside the content: a point 30 px inside a corner is client area.
 pub fn edge_at(
     outer: Rect<f64, Logical>,
     point: Point<f64, Logical>,
@@ -398,13 +299,6 @@ pub fn edge_at(
     None
 }
 
-/// The outer rectangle produced by dragging one edge or corner of `start`.
-///
-/// `dx` and `dy` are the pointer's movement since the drag began, in logical
-/// pixels. Dragging a left or top edge moves the origin and keeps the opposite
-/// edge fixed. The size is clamped to `minimum` on both axes and to `maximum`
-/// where a maximum axis is non-zero (zero means unbounded); clamping a left or
-/// top edge again keeps the opposite edge fixed.
 pub fn resized(
     start: Rect<f64, Logical>,
     edge: Edge,
@@ -457,8 +351,6 @@ pub fn resized(
     Rect::new(Point::new(x, y), Size::new(width, height))
 }
 
-/// Clamps one axis' extent, moving `origin` so a leading-edge drag keeps the
-/// opposite edge fixed.
 fn clamp_axis(
     extent: f64,
     minimum: f64,
@@ -533,26 +425,20 @@ mod tests {
         let side = 10.0;
         let corner = 20.0;
 
-        // The side band enters 2 px: one pixel inside is still Right.
         assert_eq!(
             edge_at(outer, point(299.0, 150.0), side, corner),
             Some(Edge::Right)
         );
-        // Three pixels inside is client area.
         assert_eq!(edge_at(outer, point(297.0, 150.0), side, corner), None);
-        // Six pixels outside the right edge: the right band.
         assert_eq!(
             edge_at(outer, point(306.0, 150.0), side, corner),
             Some(Edge::Right)
         );
-        // Six pixels outside diagonally from the top-left corner: the corner L.
         assert_eq!(
             edge_at(outer, point(94.0, 94.0), side, corner),
             Some(Edge::TopLeft)
         );
-        // Thirty pixels inside a corner is content, not a 24 px square.
         assert_eq!(edge_at(outer, point(130.0, 130.0), side, corner), None);
-        // The sides still work away from the corners.
         assert_eq!(
             edge_at(outer, point(150.0, 94.0), side, corner),
             Some(Edge::Top)
@@ -703,9 +589,7 @@ mod tests {
             PopupParent::Window(window),
             rect(50.0, 50.0, 100.0, 80.0),
         );
-        // A point over both the window and the popup hits the popup.
         assert_eq!(scene.popup_under(point(80.0, 80.0)), Some(popup));
-        // A point over only the window hits no popup.
         assert_eq!(scene.popup_under(point(180.0, 180.0)), None);
         assert_eq!(scene.topmost_popup(), Some(popup));
     }
@@ -729,7 +613,6 @@ mod tests {
         );
         assert_eq!(scene.popup_ancestors(sub), vec![root]);
         assert_eq!(scene.popup_ancestors(root), Vec::<PopupId>::new());
-        // Dismissing the root takes the submenu with it.
         assert_eq!(scene.popup_subtree(root), vec![root, sub]);
     }
 
@@ -760,9 +643,6 @@ mod tests {
         scene.insert(middle, rect(0.0, 0.0, 100.0, 100.0));
         scene.insert(top, rect(0.0, 0.0, 100.0, 100.0));
 
-        // `iter` produces back-to-front order; the renderer reverses it to
-        // draw front-to-back. `topmost_at` also walks the same vector in
-        // reverse, so the same window is considered on top by both paths.
         let order: Vec<WindowId> = scene.iter().map(|(id, _)| id).collect();
         assert_eq!(order, vec![bottom, middle, top]);
         assert_eq!(scene.topmost_at(point(50.0, 50.0)), Some(top));

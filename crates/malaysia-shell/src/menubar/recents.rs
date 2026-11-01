@@ -1,6 +1,4 @@
-//! Recent items for the system menu: apps the user focused and documents from
-//! `recently-used.xbel`. State lives in `recents.domain`.
-
+//! Recent apps and documents for the system menu.
 use std::path::{Path, PathBuf};
 
 use barrier_kit::menu::{MenuIcon, MenuItem};
@@ -71,7 +69,6 @@ impl Recents {
     }
 }
 
-/// Moves `app_id` to the front of the recent apps.
 pub fn record_app(app_id: &str) {
     let path = store_path();
     let mut recents = Recents::load_from(&path);
@@ -80,7 +77,6 @@ pub fn record_app(app_id: &str) {
     }
 }
 
-/// Empties the menu: forgets the apps and hides documents used before now.
 pub fn clear() {
     let path = store_path();
     let recents = Recents {
@@ -140,7 +136,6 @@ fn timestamp(value: &str) -> i64 {
         .unwrap_or(0)
 }
 
-/// Local files in an xbel document, newest first.
 pub fn parse_xbel(text: &str) -> Vec<Document> {
     let mut documents: Vec<Document> = text
         .split("<bookmark ")
@@ -201,7 +196,6 @@ fn document_icon(path: &Path) -> &'static str {
     }
 }
 
-/// Items of the «Elementos recientes» submenu.
 pub fn menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     let recents = Recents::load_from(&store_path());
     build_items(&recents, &documents(recents.cleared_at), entries, |entry| {

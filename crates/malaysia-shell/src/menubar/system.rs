@@ -1,5 +1,4 @@
-//! The system menu title (snowflake) on the far left of the menubar.
-
+//! System menu title (snowflake) at the far left of the menubar.
 use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
@@ -61,7 +60,6 @@ fn logout_label(name: Option<&str>) -> String {
     }
 }
 
-/// Full name from the passwd GECOS field, else the login name.
 fn user_display_name() -> Option<String> {
     let pw = unsafe { libc::getpwuid(libc::getuid()) };
     if pw.is_null() {
@@ -112,11 +110,6 @@ pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[Deskt
     });
 }
 
-/// Injected version: `spawn` and `activate` are supplied by the caller.
-///
-/// For "system-settings", if a toplevel with `io.github.hblanqueto.malaysia.settings`
-/// exists it is activated; otherwise the binary is spawned. This keeps a single
-/// settings window.
 pub fn on_system_action_with(
     id: String,
     toplevels: &[ToplevelInfo],

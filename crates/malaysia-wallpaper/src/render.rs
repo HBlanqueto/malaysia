@@ -1,5 +1,4 @@
-//! Vulkan/WGPU rendering for one wallpaper texture shared across outputs.
-
+//! Vulkan/wgpu rendering of one wallpaper texture shared across outputs.
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -9,13 +8,11 @@ use wgpu::util::DeviceExt;
 
 use crate::image::{DecodedImage, Pixels};
 
-/// GPU state shared by every output surface.
 pub struct RenderContext {
     pub instance: wgpu::Instance,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    /// Maximum 2D texture dimension reported by the adapter.
     pub max_texture_dimension_2d: u32,
     pipeline: Option<wgpu::RenderPipeline>,
     mip_pipelines: HashMap<wgpu::TextureFormat, wgpu::RenderPipeline>,
@@ -25,7 +22,6 @@ pub struct RenderContext {
     surface_format: Option<wgpu::TextureFormat>,
 }
 
-/// A texture created from the current wallpaper.
 pub struct WallpaperTexture {
     pub bind_group: wgpu::BindGroup,
     pub size: (u32, u32),
@@ -46,10 +42,6 @@ const SHADER: &str = concat!(
 const MIP_SHADER: &str = concat!(include_str!("fullscreen.wgsl"), include_str!("mip.wgsl"));
 
 impl RenderContext {
-    /// Creates a Vulkan-only wgpu context and logs the chosen adapter.
-    ///
-    /// Returns an error with a clear message when no Vulkan adapter is
-    /// available; the caller exits with a non-zero status.
     pub async fn new() -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
@@ -174,12 +166,6 @@ impl RenderContext {
         })
     }
 
-    /// Creates a wgpu surface for a Wayland surface/display pair.
-    ///
-    /// # Safety
-    ///
-    /// The raw handles must remain valid for the lifetime of the returned
-    /// surface.
     pub unsafe fn create_surface(
         &self,
         display: RawDisplayHandle,
@@ -192,10 +178,6 @@ impl RenderContext {
         Ok(unsafe { self.instance.create_surface_unsafe(target) }?)
     }
 
-    /// Ensures the render pipeline exists for `format`.
-    ///
-    /// The pipeline target format must match the surface format, so it is
-    /// created lazily once the first surface reports its capabilities.
     pub fn ensure_pipeline(&mut self, format: wgpu::TextureFormat) {
         if self.surface_format == Some(format) && self.pipeline.is_some() {
             return;
@@ -244,7 +226,6 @@ impl RenderContext {
         self.surface_format = Some(format);
     }
 
-    /// Uploads a decoded image as a GPU texture with a full mip chain.
     pub fn upload_texture(&mut self, image: &DecodedImage) -> WallpaperTexture {
         let original_size = image.size;
         let image = image.downscale_to_fit(self.max_texture_dimension_2d);
@@ -360,8 +341,6 @@ impl RenderContext {
         }
     }
 
-    /// Updates the uniform buffer with the surface and image sizes for the
-    /// cover/fill UV calculation.
     pub fn set_uniforms(&self, surface_width: u32, surface_height: u32, image: (u32, u32)) {
         self.queue.write_buffer(
             &self.uniform_buffer,
@@ -374,7 +353,6 @@ impl RenderContext {
         );
     }
 
-    /// Encodes the wallpaper draw pass into `view` and submits it.
     pub fn draw(
         &mut self,
         view: &wgpu::TextureView,
@@ -410,10 +388,6 @@ impl RenderContext {
         self.queue.submit(std::iter::once(encoder.finish()));
     }
 
-    /// Renders one frame to `surface` using the shared texture.
-    ///
-    /// Surface-outdated errors are logged and ignored; surface-lost errors
-    /// are propagated so the caller can exit.
     pub fn render(
         &mut self,
         surface: &wgpu::Surface<'_>,
@@ -449,8 +423,6 @@ fn max_mip_levels(width: u32, height: u32) -> u32 {
     (u32::BITS - max.leading_zeros()).max(1)
 }
 
-/// Returns the number of mip levels for `format`, or 1 when the format cannot
-/// be filtered or used as a render target.
 pub fn mip_level_count(
     format: wgpu::TextureFormat,
     features: wgpu::Features,
@@ -474,7 +446,6 @@ pub fn mip_level_count(
     max_mip_levels(width, height)
 }
 
-/// Approximate GPU bytes for a texture plus its mip chain.
 fn gpu_texture_bytes(
     width: u32,
     height: u32,
@@ -495,7 +466,6 @@ fn gpu_texture_bytes(
     total
 }
 
-/// Converts sRGB-coded u16 samples to linear f16, leaving alpha linear.
 fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
     let start = std::time::Instant::now();
     static TABLE: LazyLock<[f16; 65536]> = LazyLock::new(|| {
@@ -515,7 +485,6 @@ fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
     let mut out = Vec::with_capacity(pixels.len() * 2);
     for (i, &v) in pixels.iter().enumerate() {
         let f = if (i + 1) % 4 == 0 {
-            // Alpha: linear.
             f16::from_f32(v as f32 / 65535.0)
         } else {
             TABLE[v as usize]
@@ -825,8 +794,6 @@ mod tests {
             (640, 400),
         ];
 
-        // Guard: the prompt asks for the 9 edge/corner/center points; if the
-        // image is too uniform at those spots the test cannot detect flips.
         let top_center = reference_color(&image, 640, 0, 1280, 800);
         let bottom_center = reference_color(&image, 640, 799, 1280, 800);
         let top_left = reference_color(&image, 0, 0, 1280, 800);
@@ -1173,9 +1140,6 @@ mod tests {
         let (w, h) = capture.size;
         let source = decode_default();
 
-        // Exact corners, edge centres and centre. If the compositor draws rounded
-        // corners over the background, the corner points are shifted inward by the
-        // design radius; the edges and centre stay put.
         let corner_inset = corner_inset_for_capture(w, h);
         let points: [(u32, u32); 9] = [
             (corner_inset, corner_inset),
@@ -1204,8 +1168,6 @@ mod tests {
     }
 
     fn corner_inset_for_capture(_w: u32, _h: u32) -> u32 {
-        // The background layer is not clipped by the window corner radius; the
-        // compositor rounds only window frames. Keep the exact corner samples.
         0
     }
 

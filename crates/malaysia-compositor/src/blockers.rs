@@ -1,9 +1,4 @@
-//! The two commit-blocker sources, type-erased for either backend.
-//!
-//! A dmabuf commit is held until its implicit fence or explicit acquire point
-//! becomes readable. Smithay hands back two concrete `EventSource` types; this
-//! enum gives them one type, and [`BlockerSink`] lets `State` insert it into
-//! the backend's loop without knowing whether that loop is winit or udev.
+//! Type-erased commit-blocker sources that hold dmabuf commits until their fence is ready.
 
 use std::io;
 
@@ -12,11 +7,8 @@ use smithay::backend::allocator::dmabuf::DmabufSource;
 use smithay::reexports::wayland_server::Client;
 use smithay::wayland::drm_syncobj::DrmSyncPointSource;
 
-/// A blocker source from either the explicit-sync or the dmabuf path.
 pub(crate) enum BlockerSource {
-    /// An explicit `wp_linux_drm_syncobj` acquire point.
     Sync(DrmSyncPointSource),
-    /// A dmabuf's implicit fence.
     Dmabuf(DmabufSource),
 }
 
@@ -75,10 +67,6 @@ impl EventSource for BlockerSource {
     }
 }
 
-/// Inserts a blocker into the backend's loop. The implementation lives in the
-/// backend because only it knows its loop's data type.
 pub(crate) trait BlockerSink {
-    /// Returns whether the source was inserted. A failed insertion leaves the
-    /// commit unblocked rather than blocked forever.
     fn insert(&mut self, source: BlockerSource, client: Client) -> bool;
 }

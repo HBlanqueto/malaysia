@@ -1,13 +1,5 @@
-//! PAM authentication for the lock screen, off the render thread.
-//!
-//! Adapted from Otto's `components/otto-auth-ui/src/pam.rs` (MIT,
-//! Copyright (c) 2024 Riccardo Canalicchio); see NOTICE. The design is the
-//! same: a small FFI to libpam, the blocking conversation on its own thread,
-//! prompts and answers over channels, and `Zeroizing` for the password.
-//!
-//! The compositor never links libpam. Only the lock process, which already
-//! runs as the session's user, authenticates that user.
-
+//! PAM authentication for the lock screen.
+//! Adapted from Otto's `components/otto-auth-ui/src/pam.rs` (MIT, Copyright (c) 2024 Riccardo Canalicchio); see NOTICE.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::{
     io::Write,
@@ -72,66 +64,45 @@ unsafe extern "C" {
     fn pam_strerror(pamh: *mut PamHandle, errnum: c_int) -> *const c_char;
 }
 
-/// Something PAM said.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    /// A question; `secret` is PAM's `ECHO_OFF` (the password field is masked
-    /// either way, but the label still says what is being asked).
     Prompt { text: String, secret: bool },
-    /// A hint, such as a fingerprint reader announcement.
     Info(String),
-    /// A refusal that is not the end of the conversation.
     Error(String),
 }
 
-/// How an attempt ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// The user and the account are good.
     Authenticated,
-    /// PAM said no; the text is its own wording.
     Denied(String),
 }
 
-/// The buffer the PAM thread pushes events into; the lock polls it from a
-/// Freya task. `Arc<Mutex<...>>` keeps the thread boundary explicit.
 pub type EventBuffer = Arc<Mutex<Vec<Event>>>;
 
-/// One event from the PAM thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    /// PAM said something.
     Said(Message),
-    /// The attempt is over.
     Ended(Outcome),
 }
 
-/// Which PAM stack the lock uses.
 #[derive(Debug, Clone, Copy)]
 pub struct Service {
-    /// Malaysia's own stack, `/etc/pam.d/malaysia-lock`.
     pub preferred: &'static str,
-    /// Used when MalaysiaDreams's file is not installed.
     pub fallback: &'static str,
 }
 
 impl Service {
-    /// The lock's stack: `malaysia-lock`, or `login` on a system that has not
-    /// installed the NixOS PAM service yet.
     pub const LOCK: Service = Service {
         preferred: "malaysia-lock",
         fallback: "login",
     };
 }
 
-/// One run of the stack, from `pam_start` to `pam_end`.
 pub struct Attempt {
     answers: Sender<Zeroizing<String>>,
 }
 
 impl Attempt {
-    /// Starts authenticating `user` against `service`, pushing events into
-    /// `events` from a dedicated thread.
     pub fn start(
         events: EventBuffer,
         notify: Option<UnixStream>,
@@ -157,14 +128,11 @@ impl Attempt {
         Self { answers }
     }
 
-    /// Answers the prompt PAM is waiting on. The `Zeroizing` value is wiped
-    /// when the PAM thread drops its copies.
     pub fn answer(&self, text: Zeroizing<String>) {
         let _ = self.answers.send(text);
     }
 }
 
-/// Resolves the service name, logging the fallback once.
 fn service_name(service: Service) -> CString {
     resolve_service(service, |name| {
         std::path::Path::new("/etc/pam.d").join(name).is_file()
@@ -189,7 +157,6 @@ fn resolve_service(service: Service, installed: impl Fn(&str) -> bool) -> CStrin
     CString::new(service.preferred).expect("no interior nul")
 }
 
-/// The whole conversation, on the PAM thread.
 fn converse(
     service: &Service,
     user: &str,
@@ -263,11 +230,6 @@ struct ConversationState<'a> {
     answers: &'a Receiver<Zeroizing<String>>,
 }
 
-/// Frees `count` responses, wiping every copied answer before releasing it.
-///
-/// # Safety
-///
-/// `responses` must point to `count` `calloc`'d `PamResponse`s whose `resp` fields are `strdup` allocations or null.
 unsafe fn discard_responses(responses: *mut PamResponse, count: usize) {
     for j in 0..count {
         let answer = unsafe { (*responses.add(j)).resp };
@@ -281,12 +243,6 @@ unsafe fn discard_responses(responses: *mut PamResponse, count: usize) {
     unsafe { libc::free(responses as *mut c_void) };
 }
 
-/// PAM's conversation callback, called on the PAM thread.
-///
-/// # Safety
-///
-/// `appdata_ptr` is the `ConversationState` passed to `pam_start`; the arrays
-/// are PAM's, laid out as `pam_message`/`pam_response` on Linux-PAM.
 unsafe extern "C" fn conversation(
     num_msg: c_int,
     msg: *mut *const PamMessage,
@@ -355,10 +311,7 @@ unsafe extern "C" fn conversation(
                 }
                 None
             }
-            _ => {
-                // An unknown style is answered with no response.
-                None
-            }
+            _ => None,
         };
 
         if let Some(answer) = answer {
@@ -388,8 +341,6 @@ unsafe extern "C" fn conversation(
     PAM_SUCCESS
 }
 
-/// The user this process runs as, taken from the uid rather than an
-/// environment variable a caller could spoof.
 pub fn current_user() -> Option<String> {
     let uid = unsafe { libc::getuid() };
     let pw = unsafe { libc::getpwuid(uid) };
@@ -403,8 +354,6 @@ pub fn current_user() -> Option<String> {
     )
 }
 
-/// PAM writes prompts for a terminal (`"Password: "`); the field label above
-/// the box reads better without the punctuation.
 pub fn prompt_label(text: &str) -> String {
     let label = text.trim().trim_end_matches(':').trim_end().to_string();
     if label.is_empty() {

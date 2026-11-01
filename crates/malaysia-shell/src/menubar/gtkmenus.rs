@@ -1,18 +1,4 @@
-//! `org.gtk.Menus` + `org.gtk.Actions` client for GTK apps (14f-2, ADR 0045).
-//!
-//! GTK exports its `GMenuModel` as numbered groups: `Start(au)` returns every
-//! menu of the requested groups, `:section` links point inside a group and
-//! `:submenu` links point to other groups, which are subscribed in turn.
-//! `Changed` splices the stored menus and `End(au)` drops the subscription.
-//!
-//! The model is translated into the dbusmenu [`RawItem`] shape (same property
-//! names) so the bar maps it with [`dbusmenu_map::menu_items`]: there is one
-//! menu model, not two. Items carry ids assigned in tree order; activation
-//! looks the id up and calls `org.gtk.Actions.Activate` on the `app.` or
-//! `win.` object.
-//!
-//! [`dbusmenu_map::menu_items`]: crate::menubar::dbusmenu_map::menu_items
-
+//! `org.gtk.Menus` and `org.gtk.Actions` client for GTK app menus.
 use std::collections::{BTreeSet, HashMap};
 
 use std::time::Instant;
@@ -25,20 +11,13 @@ use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, note_call, timed};
 
 pub const MENUS_INTERFACE: &str = "org.gtk.Menus";
 pub const ACTIONS_INTERFACE: &str = "org.gtk.Actions";
-/// Menubar attribute of the libadwaita fork (ADR 0052): the submenu is the
-/// window's primary menu and belongs under the app title.
 const ADW_APP_MENU: &str = "x-adw-app-menu";
 
 type Attributes = HashMap<String, OwnedValue>;
-/// `(group, menu, items)`, the reply of `Start`.
 type StartEntry = (u32, u32, Vec<Attributes>);
-/// `(group, menu, position, removed, added)`, one change of `Changed`.
 type MenuChange = (u32, u32, u32, u32, Vec<Attributes>);
-/// `(enabled, parameter type, state)`, the `DescribeAll` value.
 type ActionDescription = (bool, Signature, Vec<OwnedValue>);
 
-/// The address the bar uses for a GTK window: the bus name and the first
-/// exported menu path. Both menu sources share the bar's snapshot plumbing.
 pub fn address(menus: &GtkMenusAddress) -> AppMenuAddress {
     let path = if menus.menubar_path.is_empty() {
         &menus.app_menu_path
@@ -51,7 +30,6 @@ pub fn address(menus: &GtkMenusAddress) -> AppMenuAddress {
     }
 }
 
-/// One exported `GMenuModel` (the menubar or the app menu).
 #[derive(Debug, Default)]
 pub struct Export {
     pub path: String,
@@ -71,7 +49,6 @@ impl Export {
         self.subscribed.iter().copied().collect()
     }
 
-    /// Stores a `Start` reply for `groups`.
     pub fn started(&mut self, groups: &[u32], entries: Vec<StartEntry>) {
         self.subscribed.extend(groups);
         for (group, menu, items) in entries {
@@ -79,7 +56,6 @@ impl Export {
         }
     }
 
-    /// Applies a `Changed` signal; returns whether a stored menu changed.
     pub fn changed(&mut self, changes: Vec<MenuChange>) -> bool {
         let mut changed = false;
         for (group, menu, position, removed, added) in changes {
@@ -94,7 +70,6 @@ impl Export {
         changed
     }
 
-    /// Groups linked from the stored menus that are not subscribed yet.
     pub fn missing_groups(&self) -> Vec<u32> {
         let mut missing = BTreeSet::new();
         for items in self.menus.values() {
@@ -119,19 +94,16 @@ impl Export {
     }
 }
 
-/// The enabled flag and state of one action.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Action {
     pub enabled: bool,
     pub state: Option<OwnedValue>,
 }
 
-/// `app.*` and `win.*` actions keyed by their prefixed name.
 #[derive(Debug, Default)]
 pub struct Actions(HashMap<String, Action>);
 
 impl Actions {
-    /// Replaces the actions under `prefix` with a `DescribeAll` reply.
     pub fn describe_all(&mut self, prefix: &str, all: HashMap<String, ActionDescription>) {
         self.0.retain(|name, _| !name.starts_with(prefix));
         for (name, (enabled, _, state)) in all {
@@ -145,7 +117,6 @@ impl Actions {
         }
     }
 
-    /// Applies an `org.gtk.Actions.Changed` signal.
     pub fn changed(
         &mut self,
         prefix: &str,
@@ -183,14 +154,12 @@ impl Actions {
     }
 }
 
-/// What activating a menu id does: the prefixed action and its target.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Target {
     pub action: String,
     pub target: Option<OwnedValue>,
 }
 
-/// The dbusmenu-shaped tree and the action behind every item id.
 #[derive(Debug, Default, PartialEq)]
 pub struct Tree {
     pub items: Vec<RawItem>,
@@ -198,8 +167,6 @@ pub struct Tree {
 }
 
 impl Tree {
-    /// Builds the bar tree: the app menu as a submenu titled `app_name` (the
-    /// bar folds it into the bold app title), then the menubar.
     pub fn build(app_menu: &Export, menubar: &Export, actions: &Actions, app_name: &str) -> Self {
         let mut builder = Builder {
             actions,
@@ -224,7 +191,6 @@ impl Tree {
         }
     }
 
-    /// The children of the submenu `id`, or the root for `id == 0`.
     pub fn children(&self, id: i32) -> Option<Vec<RawItem>> {
         if id == 0 {
             return Some(self.items.clone());
@@ -261,8 +227,6 @@ impl Builder<'_> {
         let mut out = Vec::new();
         for attributes in export.menu(group, menu) {
             if let Some((group, menu)) = attributes.get(":section").and_then(link) {
-                // shortcut: a section label (GTK draws it as a header) is
-                // dropped; the separators already group the items.
                 out.push(separator(self.id()));
                 out.extend(self.menu(export, group, menu));
                 out.push(separator(self.id()));
@@ -270,9 +234,6 @@ impl Builder<'_> {
             }
             let label = string(attributes, "label").unwrap_or_default();
             if let Some((group, menu)) = attributes.get(":submenu").and_then(link) {
-                // libadwaita exports its primary (☰) menu as a submenu marked
-                // `x-adw-app-menu`. It is a flat list, so it is split by what
-                // each entry does, the way macOS lays out an app's menus.
                 if attributes
                     .get(ADW_APP_MENU)
                     .and_then(|value| bool::try_from(value.clone()).ok())
@@ -298,15 +259,6 @@ impl Builder<'_> {
         out
     }
 
-    /// Splits the libadwaita primary (☰) menu by GTK action (ADR 0052):
-    ///
-    /// - About, Preferences and Quit take their places in the app menu: they
-    ///   go in a submenu named after the app, labelled like the fallback
-    ///   entries they replace (`remote::compose` swaps them in).
-    /// - Help and keyboard shortcuts go to Ayuda.
-    /// - Fullscreen is left out: Ventana already has it.
-    /// - The rest keeps its sections in a title of its own, «Archivo» when it
-    ///   opens, creates or saves, «Opciones» otherwise.
     fn split_primary_menu(&mut self, children: Vec<RawItem>) -> Vec<RawItem> {
         let mut app = Vec::new();
         let mut help = Vec::new();
@@ -404,7 +356,6 @@ impl Builder<'_> {
     }
 }
 
-/// Where an entry of the libadwaita primary menu belongs on the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PrimarySlot {
     About,
@@ -415,7 +366,6 @@ enum PrimarySlot {
     Other,
 }
 
-/// The slot for a GTK action name (`app.about`, `win.show-help-overlay`…).
 fn primary_slot(action: &str) -> PrimarySlot {
     match action {
         "app.about" => PrimarySlot::About,
@@ -429,7 +379,6 @@ fn primary_slot(action: &str) -> PrimarySlot {
     }
 }
 
-/// Whether an action creates, opens or saves: its menu is then «Archivo».
 fn opens_files(action: &str) -> bool {
     let name = action.split_once('.').map_or(action, |(_, name)| name);
     ["new-window", "new-tab", "new", "open", "save"]
@@ -437,7 +386,6 @@ fn opens_files(action: &str) -> bool {
         .any(|word| name == *word || name.starts_with(&format!("{word}-")))
 }
 
-/// Gives a menu entry another label, keeping its action and state.
 fn relabel(mut item: RawItem, label: &str) -> RawItem {
     item.properties.insert("label".to_string(), text(label));
     item
@@ -479,8 +427,6 @@ fn link(value: &OwnedValue) -> Option<(u32, u32)> {
     value.downcast::<(u32, u32)>().ok()
 }
 
-/// Converts a GTK accelerator (`<Primary>s`, `<Shift><Control>z`) into the
-/// dbusmenu key list the kit formats with `⌃⌥⇧❖`. `<Primary>` is Ctrl.
 pub fn accel_keys(accel: &str) -> Option<Vec<String>> {
     let mut rest = accel.trim();
     let mut keys = Vec::new();
@@ -505,8 +451,6 @@ pub fn accel_keys(accel: &str) -> Option<Vec<String>> {
     Some(keys)
 }
 
-/// The visible name of a GDK key: single letters in upper case and the
-/// punctuation keysyms GTK menus use as their character.
 fn key_name(keysym: &str) -> String {
     let symbol = match keysym {
         "comma" => ",",
@@ -533,7 +477,6 @@ fn key_name(keysym: &str) -> String {
     symbol.to_string()
 }
 
-/// Splits `app.quit` into the object path that exports it and the bare name.
 pub fn action_object<'a>(
     menus: &'a GtkMenusAddress,
     action: &'a str,
@@ -547,7 +490,6 @@ pub fn action_object<'a>(
     (!path.is_empty()).then_some((path.as_str(), name))
 }
 
-/// The subscriptions of the focused GTK window and the tree built from them.
 pub struct Session {
     pub menus: GtkMenusAddress,
     pub address: AppMenuAddress,
@@ -560,7 +502,6 @@ pub struct Session {
 }
 
 impl Session {
-    /// Describes the actions and subscribes to every reachable group.
     pub async fn open(
         connection: &zbus::Connection,
         menus: GtkMenusAddress,
@@ -620,7 +561,6 @@ impl Session {
         session
     }
 
-    /// Drops the subscriptions; the app stops sending `Changed`.
     pub async fn close(&self, connection: &zbus::Connection) {
         for export in [&self.app_menu, &self.menubar] {
             let groups = export.subscribed();
@@ -650,8 +590,6 @@ impl Session {
         }
     }
 
-    /// Applies a `Changed` signal from this window's bus name; returns whether
-    /// the tree changed.
     pub async fn signal(&mut self, connection: &zbus::Connection, message: &zbus::Message) -> bool {
         let header = message.header();
         if header.sender().map(|sender| sender.as_str())
@@ -708,7 +646,6 @@ impl Session {
         false
     }
 
-    /// Activates the action behind the menu item `id`.
     pub async fn activate(&self, connection: &zbus::Connection, id: i32) {
         let Some(Target { action, target }) = self.tree.targets.get(&id) else {
             return;
@@ -744,8 +681,6 @@ impl Session {
     }
 }
 
-/// Starts group 0, then every group the stored menus link to, until none is
-/// missing. Each round is one `Start` call.
 async fn subscribe(connection: &zbus::Connection, bus: &str, export: &mut Export) {
     if export.path.is_empty() {
         return;
@@ -775,8 +710,6 @@ async fn subscribe(connection: &zbus::Connection, bus: &str, export: &mut Export
             }
             Err(error) => {
                 tracing::warn!(%error, path = %export.path, ?groups, "menubar: org.gtk.Menus Start failed");
-                // Marks the groups as tried so a broken group is not retried
-                // in a loop; the next focus starts over.
                 export.subscribed.extend(groups);
                 return;
             }
@@ -842,8 +775,6 @@ mod tests {
         actions
     }
 
-    /// The gtk3-demo-application shape: a menubar with a `_Preferences`
-    /// submenu in group 1, holding a section and a radio group.
     fn demo() -> Export {
         let mut export = Export::new("/org/gtk/Demo2/menus/menubar");
         export.started(
@@ -936,7 +867,6 @@ mod tests {
             .unwrap();
         assert_eq!(red.target, Some(text("red")));
         let preferences = tree.items[0].id;
-        // Separator, Prefer Dark, Red, separator; Gone is hidden.
         assert_eq!(tree.children(preferences).unwrap().len(), 4);
     }
 
@@ -1010,7 +940,6 @@ mod tests {
         assert_eq!(items[0].label(), Some("Demo"));
     }
 
-    /// The libadwaita ☰ of GNOME Calculator, as seen in Malaysia.
     fn calculator_primary_menu() -> (Export, Actions) {
         let mut menubar = Export::new("/org/gnome/Calculator/menus/menubar");
         let item =
@@ -1075,8 +1004,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             _ => panic!("expected a submenu"),
         };
-        // About and Preferences are named like the app-menu entries they
-        // take the place of.
         assert_eq!(children(0), vec!["Ajustes…", "Acerca de Calculadora"]);
         assert_eq!(children(1), vec!["Ventana nueva", "Limpiar histórico"]);
         assert_eq!(children(2), vec!["Atajos de teclado", "Ayuda"]);

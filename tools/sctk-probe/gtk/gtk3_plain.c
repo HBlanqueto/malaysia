@@ -1,14 +1,4 @@
-/*
- * A minimal GTK3 window with a plain titlebar: no GtkHeaderBar, so GTK asks
- * the compositor to decorate it through org_kde_kwin_server_decoration.
- *
- * Used by decoration_probe (MALAYSIA_APP_GTK3_PLAIN) to verify the server-side
- * branch of the decoration policy. Build it against the same GTK the probe
- * runs against, for example:
- *
- *   cc gtk3_plain.c -o gtk3_plain $(pkg-config --cflags --libs gtk+-3.0)
- */
-
+/* Minimal GTK3 window with a plain titlebar, for decoration_probe. */
 #include <gtk/gtk.h>
 
 static void activate(GtkApplication *app, gpointer data)

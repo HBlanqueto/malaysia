@@ -1,16 +1,4 @@
-//! Maps a toplevel and a popup anchored to its bottom edge, keeping them alive
-//! so the composed output can be captured (Bloque 7.2, verification by capture).
-//!
-//! Same setup as `popup_probe`: a toplevel sized so its bottom edge nears the
-//! output's bottom, and a popup with `gravity = bottom` that would land
-//! off-screen unless the compositor flips it up. Unlike the probe, it does not
-//! assert and exit immediately — it holds the surfaces for a few seconds so a
-//! `SIGUSR1` debug capture can show the flipped popup.
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin popup_live
-//! ```
-
+//! Maps a toplevel and an anchored popup and holds them open for output capture.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{
@@ -46,14 +34,10 @@ use smithay_client_toolkit::{
     },
 };
 
-/// The toplevel's surface size, in pixels.
 const SIDE: u32 = 1000;
-/// The popup's size.
 const POPUP_W: i32 = 200;
 const POPUP_H: i32 = 120;
-/// Where the popup anchors on the window, near its bottom edge.
 const ANCHOR_Y: i32 = 760;
-/// How long to hold the window and popup open, for the capture.
 const HOLD: Duration = Duration::from_secs(8);
 
 fn main() {
@@ -75,8 +59,6 @@ fn main() {
         )
         .expect("no buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: xdg-shell requires the initial configure
-    // before the client attaches anything.
     window.commit();
 
     let wm_base: XdgWmBase =

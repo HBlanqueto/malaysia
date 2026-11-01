@@ -1,8 +1,4 @@
 #!/bin/sh
-# Fails when a crate outside vow-design hardcodes a design value.
-#
-# Colours are checked in malaysia-compositor and malaysia-shell. Test modules are
-# skipped (the awk below stops at #[cfg(test)]).
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)

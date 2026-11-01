@@ -1,10 +1,4 @@
-//! MalaysiaDreams's server-side window chrome: the Tengen titlebar.
-//!
-//! Only windows that negotiated server-side decoration and reserve a titlebar
-//! inset get one. The bar is rasterized on the CPU into an RGBA buffer and
-//! cached per window; it is uploaded as a memory texture when the title,
-//! focus, width or scale changes. Client-side decorated windows (GTK) never
-//! come through here.
+//! Server-side window chrome: the titlebar and its controls.
 
 use std::collections::HashMap;
 use std::sync::Once;
@@ -34,11 +28,8 @@ use crate::config::Config;
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
 
-/// The colours the titlebar uses: the base palette plus the tint and the
-/// traffic-light colours selected by `appearance.domain`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
-    /// Resolved Tengen palette for the current appearance.
     pub(crate) palette: Palette,
     scheme: ColorScheme,
     lights: [Rgba; 3],
@@ -47,7 +38,6 @@ pub(crate) struct ChromeTheme {
 }
 
 impl ChromeTheme {
-    /// Builds the theme from the configuration and the current wallpaper.
     pub(crate) fn from_config(config: &Config) -> Self {
         let wallpaper = load_dominant();
         Self::from_parts(&config.appearance, wallpaper)
@@ -119,7 +109,6 @@ fn signature(
     hash
 }
 
-/// The titlebar texture cache, one entry per decorated window.
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
     text: TextEngine,
@@ -144,7 +133,6 @@ struct Key {
 }
 
 impl ChromeCache {
-    /// Creates an empty cache with its own text engine.
     pub(crate) fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -152,16 +140,10 @@ impl ChromeCache {
         }
     }
 
-    /// Drops the cached texture of a destroyed window.
     pub(crate) fn remove(&mut self, id: WindowId) {
         self.entries.remove(&id);
     }
 
-    /// The drop shadow behind a window, drawn with the GPU shadow shader.
-    ///
-    /// Returns one element per shadow layer (ambient + contact). If the shader
-    /// did not compile, no shadow is drawn. `window_rect` and `radius` are in
-    /// physical pixels, the same ones the frame clip uses.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn shadow_element(
         &self,
@@ -254,7 +236,6 @@ impl ChromeCache {
     }
 }
 
-/// Builds one [`PixelShaderElement`] for a single shadow layer.
 fn shadow_layer_element(
     program: &GlesPixelProgram,
     window_rect: Rectangle<i32, Physical>,
@@ -263,9 +244,6 @@ fn shadow_layer_element(
     scale: f64,
     layer: vow_design::ShadowLayer,
 ) -> Option<PixelShaderElement> {
-    // The shadow extends 3 sigma plus the offset on every side; with the CSS
-    // equivalence sigma = blur / 2 that is 1.5 * blur + |offset|, plus one
-    // physical pixel so the antialiased edge is not clipped.
     let margin = (f64::from(shadow_margin(layer)) * scale).ceil() as i32 + 1;
     if margin <= 0 {
         return None;
@@ -299,16 +277,10 @@ fn shadow_layer_element(
     ))
 }
 
-/// The space one shadow layer needs around the window, in logical pixels.
 fn shadow_margin(layer: vow_design::ShadowLayer) -> i32 {
     (f64::from(layer.blur) * 1.5 + f64::from(layer.y_offset.abs())).round() as i32
 }
 
-/// The centre of a titlebar button, in logical coordinates.
-///
-/// Used by the scripted-input hook to press an exact button, and by any future
-/// accessibility or testing surface. `None` when the window has no top titlebar
-/// or the kind is not in the bar.
 pub(crate) fn button_center(
     outer: SceneRect<f64, SceneLogical>,
     insets: Insets,
@@ -329,10 +301,6 @@ pub(crate) fn button_center(
     ))
 }
 
-/// The titlebar button at `location`, if any.
-///
-/// Only top titlebars take part; a window with no titlebar (client-side chrome,
-/// dialog, fullscreen) never matches.
 pub(crate) fn button_at(
     outer: SceneRect<f64, SceneLogical>,
     insets: Insets,
@@ -408,7 +376,6 @@ impl TextEngine {
         } else {
             palette.titlebar_bg.unfocused
         };
-        // Square: the rounded clip shader shapes the window corners.
         fill_rect(&mut pixels, w, h, 0, 0, w, h, background);
 
         let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale)
@@ -597,7 +564,6 @@ impl TextEngine {
     }
 }
 
-/// Draws one traffic-light glyph inside its button, scaled and centred.
 #[allow(clippy::too_many_arguments)]
 fn draw_glyph(
     pixels: &mut [u8],
@@ -849,8 +815,6 @@ fn blit_glyph(
     }
 }
 
-/// Premultiplied src-over: `dst` stores premultiplied RGBA, as the renderer
-/// expects, and its alpha is composed rather than forced opaque.
 fn blend(dst: &mut [u8], src: vow_design::Rgba, coverage: f32) {
     let a = (src.a * coverage).clamp(0.0, 1.0);
     let inverse = 1.0 - a;
@@ -966,8 +930,6 @@ mod tests {
         };
         let theme = ChromeTheme::from_parts(&appearance, Some(wallpaper));
         let factor = WINDOW_TINT_WALLPAPER[1];
-        // The accent is derived from the dominant for contrast; the tint itself
-        // and the traffic lights still use the raw dominant.
         let accent = theme.palette.accent;
         assert_ne!(accent, wallpaper);
         assert!(
@@ -1061,8 +1023,6 @@ mod tests {
 
     #[test]
     fn the_buttons_are_rounded_squares() {
-        // The top-left corner of the bounding box is outside the rounded
-        // square; its centre and edge midpoints are inside.
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
         let x = 100.0 + f64::from(TITLEBAR.buttons.margin_start);
         assert_eq!(

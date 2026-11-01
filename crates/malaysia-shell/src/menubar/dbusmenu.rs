@@ -1,9 +1,4 @@
-//! The app-menu D-Bus client and the `AppMenu.Registrar` owner (ADR 0040).
-//!
-//! One dedicated thread owns a single session connection. The render thread
-//! sends FIFO commands and drains immutable snapshots from another channel;
-//! it never waits for D-Bus. Registrar calls only need the shared map.
-
+//! App-menu D-Bus client and `AppMenu.Registrar` owner, running on its own thread.
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -23,8 +18,6 @@ pub const REGISTRAR_NAME: &str = "com.canonical.AppMenu.Registrar";
 pub const REGISTRAR_PATH: &str = "/com/canonical/AppMenu/Registrar";
 const DBUSMENU_INTERFACE: &str = "com.canonical.dbusmenu";
 pub(crate) const CALL_TIMEOUT: Duration = Duration::from_millis(500);
-/// `GetLayout(0, -1, [])` measures 354–478 ms in Kate, so the full tree gets
-/// its own budget instead of the 500 ms of the other calls.
 const FULL_TREE_TIMEOUT: Duration = Duration::from_secs(2);
 const FULL_TREE_DELAY: Duration = Duration::from_secs(1);
 const DEBOUNCE: Duration = Duration::from_millis(50);
@@ -32,7 +25,6 @@ const DEBOUNCE: Duration = Duration::from_millis(50);
 static RENDER_THREAD: OnceLock<ThreadId> = OnceLock::new();
 static RENDER_CALLS: AtomicUsize = AtomicUsize::new(0);
 
-/// Number of D-Bus calls made from the render thread during this session.
 pub fn render_calls() -> usize {
     RENDER_CALLS.load(Ordering::Relaxed)
 }
@@ -44,28 +36,23 @@ pub(crate) fn note_call() {
     }
 }
 
-/// One command for the D-Bus thread.
 #[derive(Clone, Debug)]
 pub enum Command {
     Focus {
         address: AppMenuAddress,
         generation: u64,
     },
-    /// The focused window has no dbusmenu but exports `org.gtk.Menus`
-    /// (ADR 0045: dbusmenu wins when both exist).
     GtkFocus {
         menus: GtkMenusAddress,
         app_name: String,
         generation: u64,
     },
-    /// The focused window has no menu; drops any pending full-tree prefetch.
     Unfocus,
     Open {
         address: AppMenuAddress,
         id: i32,
         generation: u64,
     },
-    /// Fetches the whole tree for the Help search.
     FullTree {
         address: AppMenuAddress,
         generation: u64,
@@ -75,11 +62,9 @@ pub enum Command {
         id: i32,
         timestamp: u32,
     },
-    /// Enables or disables the global menu at runtime.
     SetAppMenus(bool),
 }
 
-/// The properties and children of one dbusmenu node, before mapping.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawItem {
     pub id: i32,
@@ -87,8 +72,6 @@ pub struct RawItem {
     pub children: Vec<RawItem>,
 }
 
-/// One async answer for the bar: the children of the root (`parent = None`) or
-/// of a submenu. `items = None` means the call failed or timed out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MenuSnapshot {
     pub generation: u64,
@@ -98,7 +81,6 @@ pub struct MenuSnapshot {
     pub cached: bool,
 }
 
-/// Render-side handle: commands go in, snapshots come out.
 #[derive(Clone)]
 pub struct MenuClient {
     commands: Sender<Command>,
@@ -149,19 +131,16 @@ impl MenuClient {
         });
     }
 
-    /// Enables or disables the global menu on the D-Bus thread.
     pub fn set_app_menus(&self, enabled: bool) {
         let _ = self.commands.send_blocking(Command::SetAppMenus(enabled));
     }
 
-    /// Installs the render-loop wake used after every snapshot.
     pub fn set_wake(&self, wake: WakeHandle) {
         if let Ok(mut slot) = self.wake.lock() {
             *slot = Some(wake);
         }
     }
 
-    /// Returns the next ready snapshot without blocking.
     pub fn try_recv(&self) -> Option<MenuSnapshot> {
         self.snapshots.try_recv().ok()
     }
@@ -216,7 +195,6 @@ impl Registrar {
     }
 }
 
-/// Owns or releases the `AppMenu.Registrar` name and its object.
 async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows, enabled: bool) {
     if enabled {
         match connection.request_name(REGISTRAR_NAME).await {
@@ -262,8 +240,6 @@ async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows
     }
 }
 
-/// Starts the D-Bus thread. On connection failure the client keeps accepting
-/// commands and simply never answers; the bar stays on the 14c fallback.
 pub fn start(app_menus: bool) -> MenuClient {
     RENDER_THREAD.get_or_init(|| std::thread::current().id());
     let (commands, command_rx) = async_channel::unbounded();
@@ -292,8 +268,6 @@ struct CachedSubtree {
 #[derive(Default)]
 struct MenuCache {
     subtrees: HashMap<i32, CachedSubtree>,
-    /// The whole tree fetched for the Help search, kept until any
-    /// `LayoutUpdated` for this address reports a newer revision.
     full: Option<CachedSubtree>,
 }
 
@@ -314,7 +288,6 @@ impl MenuCache {
         self.full = Some(CachedSubtree { revision, items });
     }
 
-    /// Drops only `id` when `revision` is newer than the cached one.
     fn invalidate(&mut self, id: i32, revision: u32) -> bool {
         if self
             .subtrees
@@ -328,7 +301,6 @@ impl MenuCache {
         }
     }
 
-    /// Any `LayoutUpdated` with a newer revision invalidates the full tree.
     fn invalidate_full(&mut self, revision: u32) -> bool {
         if self
             .full
@@ -415,9 +387,6 @@ struct Pending {
     snapshot: bool,
 }
 
-/// The background full-tree fetch: at most one per address, one second after
-/// the window got the focus. A new focus on the same address keeps the first
-/// deadline and only updates the generation.
 #[derive(Default)]
 struct BackgroundFullTree {
     wait: Option<(AppMenuAddress, u64, Instant)>,
@@ -878,7 +847,6 @@ async fn run(
     }
 }
 
-/// The GTK session behind `address` while `generation` is current.
 fn gtk_for<'a>(
     gtk: &'a Option<gtkmenus::Session>,
     address: &AppMenuAddress,
@@ -894,8 +862,6 @@ async fn end_gtk(connection: &zbus::Connection, gtk: &mut Option<gtkmenus::Sessi
     }
 }
 
-/// Sends the GTK tree (`id == 0`) or one submenu of it. The whole tree is
-/// already loaded, so submenus answer from memory.
 async fn send_gtk(
     snapshots: &Sender<MenuSnapshot>,
     wake: &Arc<Mutex<Option<WakeHandle>>>,
@@ -1215,7 +1181,6 @@ fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
     }
 }
 
-/// dbusmenu, `org.gtk.Menus` and `org.gtk.Actions` signals in one stream.
 async fn menu_stream(
     connection: &zbus::Connection,
 ) -> zbus::Result<impl futures_lite::Stream<Item = zbus::Result<zbus::Message>> + Unpin> {
@@ -1272,7 +1237,6 @@ async fn proxy(
 
 type RawNode = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
 
-/// Converts a dbusmenu layout item's children into [`RawItem>] trees.
 #[allow(dead_code)]
 pub fn raw_items_from_layout(layout: &barrier_kit::app_menu::layout::LayoutItem) -> Vec<RawItem> {
     layout
@@ -1312,7 +1276,6 @@ async fn layout(
     Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
 }
 
-/// Resolves to `None` when `future` has not finished after `limit`.
 pub(crate) async fn timed<F: std::future::Future>(limit: Duration, future: F) -> Option<F::Output> {
     future::or(async move { Some(future.await) }, async move {
         async_io::Timer::after(limit).await;

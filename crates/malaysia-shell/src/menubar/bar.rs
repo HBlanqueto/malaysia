@@ -1,10 +1,4 @@
-//! The menubar container.
-//!
-//! Owns the layer-shell surface, schedules the clock and active-app polling,
-//! and lays out the modules left-to-right with the clock pushed to the right.
-//! Every menu title shares a single popup state so only one menu tree is open
-//! at a time.
-
+//! Menubar container: layer-shell surface, module layout, clock and active-app polling.
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -36,12 +30,8 @@ use barrier_kit::platform::AppMenuAddress;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
 
-/// Firefox sets its dbusmenu 249.3–299.0 ms after the window maps in the lab,
-/// over five fresh temporary profiles; Kate sets it 48.7–63.0 ms before the
-/// map. This wait is the Firefox maximum plus 100 ms.
 const MENU_GRACE: Duration = Duration::from_millis(399);
 
-/// Top-level menu labels remembered per app while the real menu loads.
 #[derive(Default)]
 struct MenuMemory {
     titles: HashMap<String, Vec<String>>,
@@ -51,8 +41,6 @@ struct MenuMemory {
 #[derive(Clone, Debug)]
 struct Grace {
     app_id: String,
-    // shortcut: one grace slot; a second window mapping during the wait
-    // replaces it. Upgrade: a deadline per app_id.
     deadline: Instant,
     showing_titles: bool,
 }
@@ -66,12 +54,10 @@ enum MenuChoice {
 
 struct Decision {
     choice: MenuChoice,
-    /// Set when this decision starts the grace and the caller must wake at it.
     started: Option<Instant>,
 }
 
 impl MenuMemory {
-    /// Replaces the remembered labels; returns whether they changed.
     fn remember(&mut self, app_id: &str, labels: Vec<String>) -> bool {
         let changed = self.titles.get(app_id) != Some(&labels);
         self.titles.insert(app_id.to_string(), labels);
@@ -96,8 +82,6 @@ impl MenuMemory {
         }
     }
 
-    /// What the bar shows for a focused window whose menu snapshot is not in
-    /// yet. `newly_mapped` only admits the bare app name, never the 14c menu.
     fn decide(
         &mut self,
         app_id: &str,
@@ -121,9 +105,6 @@ impl MenuMemory {
             }
             let showing_titles = grace.showing_titles;
             self.grace = None;
-            // An address that arrived keeps the titles (or the bare app name)
-            // until the real snapshot replaces them; only a window that never
-            // announced a menu loses them.
             if showing_titles && address.is_none() {
                 self.titles.remove(app_id);
             }
@@ -164,9 +145,6 @@ impl MenuMemory {
                 started: None,
             };
         }
-        // shortcut: an app that announces an address and never publishes a
-        // usable snapshot keeps the bare app name. Upgrade: carry the
-        // GetLayout failure in the snapshot to fall back.
         Decision {
             choice: MenuChoice::Waiting,
             started: None,
@@ -174,7 +152,6 @@ impl MenuMemory {
     }
 }
 
-/// Labels of the root dbusmenu items, as composed titles mirror them.
 fn title_labels(items: &[MenuItem]) -> Vec<String> {
     items
         .iter()
@@ -185,8 +162,6 @@ fn title_labels(items: &[MenuItem]) -> Vec<String> {
         .collect()
 }
 
-/// The mapped menu of the focused window, kept only while its generation is
-/// current.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RemoteMenu {
     pub generation: u64,
@@ -194,7 +169,6 @@ pub struct RemoteMenu {
     pub items: Vec<MenuItem>,
 }
 
-/// What decides which menu source the focused window uses.
 #[derive(Clone, Debug, PartialEq)]
 struct MenuKey {
     app_id: String,
@@ -275,11 +249,6 @@ impl App for BarApp {
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
-        // One source for the whole bar: the active toplevel when there is
-        // one, `active_app` (the store the compositor publishes) otherwise.
-        // The two can disagree while focus changes; mixing them showed the
-        // menus of the previous app next to the current one (Archivos ·
-        // Calculadora with Nautilus focused).
         let app_id = active_info
             .map(|info| info.app_id.clone())
             .or_else(|| active_app.clone());
@@ -303,12 +272,8 @@ impl App for BarApp {
                     && old.address().is_some()
                     && new.address().is_none()
                 {
-                    // shortcut: only the focused window's address is visible,
-                    // so focusing another window of the same app can look like
-                    // the app dropping its menu.
                     memory.borrow_mut().forget(&new.app_id);
                 }
-                // ADR 0045: dbusmenu, then org.gtk.Menus, then the 14c fallback.
                 match &key {
                     Some(key) if !key.enabled => {
                         tracing::info!(app_id = %key.app_id, "menubar: app_menus disabled");
@@ -338,11 +303,6 @@ impl App for BarApp {
                             generation = next_generation,
                             "menubar: org.gtk.Menus focus"
                         );
-                        // Name the menu after the window it comes from, not
-                        // after `active_app`, which can still name the
-                        // previous app while focus changes: the libadwaita
-                        // primary menu would be titled «TextEditor» on
-                        // Calculator and not fold into the bold title.
                         let menu_app = resolve_app_name(Some(app_id.as_str()), &self.entries);
                         self.dbus
                             .gtk_focus(menus.clone(), menu_app, next_generation);
@@ -352,9 +312,6 @@ impl App for BarApp {
                         self.dbus.unfocus();
                     }
                     None => {
-                        // The bar falls back to the Escritorio menu. Logged
-                        // with what the bar knew, to tell a cleared active
-                        // window from a toplevel list that lags behind.
                         tracing::info!(
                             active_app = ?active_app,
                             toplevels = toplevels.len(),
@@ -402,9 +359,6 @@ impl App for BarApp {
                         .as_deref()
                         .and_then(|id| toplevels.iter().position(|window| window.app_id == id))
                 });
-            // shortcut: a close and a map between two renders keep the
-            // length, so that new window misses the grace. Upgrade: expose a
-            // toplevel id instead of using positions.
             let previous = previous_len.get();
             let mut pending = pending_new.get();
             if toplevels.len() > previous {
@@ -455,16 +409,12 @@ impl App for BarApp {
             None
         };
         let palette = barrier_kit::theme::shell_palette(&resolved);
-        // Over a focus space the bar is absolute black with white text,
-        // whatever the appearance (ADR 0051).
         let over_focus = Toplevels::get().space.read().focus_bar.over_focus();
         let text = if over_focus {
             rgba(vow_design::FOCUS_BAR_TEXT)
         } else {
             rgba(palette.text)
         };
-        // Opaque by default; the blur for reduce_transparency = false will
-        // arrive with the compositor's surface effects (ADR 0024).
         let bar = if over_focus {
             rgba(vow_design::FOCUS_BAR_BACKGROUND)
         } else {
@@ -690,8 +640,6 @@ impl App for BarApp {
                     });
                 }
             } else if let Some(MenuChoice::Remembered(labels)) = choice.as_ref() {
-                // shortcut: remembered titles show «Cargando…» and leave the
-                // Help search unwired until the real snapshot arrives.
                 let sources = remote::MenuSources {
                     app_name: app_name.clone(),
                     app_items: app_items.clone(),
@@ -959,7 +907,6 @@ fn now_ms() -> u32 {
         .as_millis() as u32
 }
 
-/// `menubar.domain`; `app_menus` defaults to true.
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
 struct MenubarConfig {
@@ -1027,7 +974,6 @@ fn load_active_app(store_path: &PathBuf) -> Option<String> {
     (!app_id.is_empty()).then(|| app_id.to_string())
 }
 
-/// The layer-shell surface: top strip with its exclusive zone reserved.
 fn surface_spec() -> LayerSpec {
     LayerSpec {
         namespace: "malaysia-menubar".to_string(),
@@ -1039,7 +985,6 @@ fn surface_spec() -> LayerSpec {
     }
 }
 
-/// Connects to the compositor and runs the menu bar until closed.
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
     let menubar_store = config_dir().join("menubar.domain");

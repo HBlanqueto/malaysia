@@ -1,22 +1,4 @@
-//! Asserts `xdg-activation-v1` with two clients.
-//!
-//! The parent (client A) maps first, so it is focused and receives the
-//! compositor's scripted press. While focused it creates activation tokens:
-//! one to hand to the child (client B), two to restore its own focus between
-//! cases, one without a serial, and one that is left to expire.
-//!
-//! The child maps second and takes focus. A restores itself, then B activates
-//! itself with the token A passed it and must receive keyboard focus. The
-//! refused cases each run after A has restored its focus: a token without a
-//! serial, a token requested from B's unfocused surface, and a token older
-//! than 30 seconds must not move focus to B.
-//!
-//! Both clients are this same binary: the parent spawns it with
-//! `ACTIVATION_CHILD=1` and talks to it over stdin/stdout.
-//!
-//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`, or
-//! `./dev.sh activation`.
-
+//! Probe: asserts `xdg-activation-v1` between two clients.
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Write},
@@ -66,15 +48,10 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long an invalid token is given to (not) move focus.
 const REFUSAL_WAIT: Duration = Duration::from_secs(1);
-/// A token is only valid for 30 s; wait a little longer before using it.
 const TOKEN_EXPIRY: Duration = Duration::from_secs(31);
-/// Overall limit; the expired case alone waits 31 s.
 const TOTAL_TIMEOUT: Duration = Duration::from_secs(60);
-/// Tokens A creates while focused before B maps.
 const TOKEN_LABELS: [&str; 5] = ["valid", "restore1", "restore2", "noserial", "expired"];
 
 fn main() {
@@ -84,10 +61,6 @@ fn main() {
         run_parent();
     }
 }
-
-// ---------------------------------------------------------------------------
-// Parent (client A)
-// ---------------------------------------------------------------------------
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -253,7 +226,6 @@ impl Parent {
         match self.phase {
             Phase::Startup => {
                 if self.child_ready && self.attached {
-                    // A maps, so it is the first window and receives the press.
                     self.window.commit();
                     self.phase = Phase::WaitingPress;
                     self.phase_at = Instant::now();
@@ -471,7 +443,6 @@ impl WindowHandler for Parent {
         }
         self.attached = true;
         self.window.attach(Some(self.buffer.wl_buffer()), 0, 0);
-        // Mapping waits for the child to be ready, so A is the first window.
         if self.child_ready {
             self.window.commit();
             self.phase = Phase::WaitingPress;
@@ -630,10 +601,6 @@ delegate_seat!(Parent);
 delegate_shm!(Parent);
 delegate_xdg_shell!(Parent);
 delegate_xdg_window!(Parent);
-
-// ---------------------------------------------------------------------------
-// Child (client B)
-// ---------------------------------------------------------------------------
 
 struct ChildApp {
     registry_state: RegistryState,

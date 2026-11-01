@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Development harness for the shell (ADR 0023).
-#
-# The shell components run as separate processes, supervised by systemd user
-# units in a real session (see `share/systemd/user/` and the flake). In
-# development this script launches a component by hand against the running
-# compositor — `./dev.sh run` first, then `scripts/test.sh wallpaper`.
-#
-# Usage:
-#   scripts/test.sh [component]   # default: wallpaper
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"

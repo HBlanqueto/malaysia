@@ -1,22 +1,10 @@
 #!/bin/sh
-# dev.sh - build, run and inspect MalaysiaDreams during development.
-#
-# Wraps `cargo` for the common actions and manages a background instance of
-# the compositor through a PID file and a log file. It adds nothing else.
-#
-# POSIX shell only: no bashisms, and no tools beyond coreutils and cargo.
-# The devShell provides mold; the fallback below makes it explicit for every
-# cargo invocation made by this script.
 
 set -eu
 
-# 14b-2: power actions (Suspend, Reboot, PowerOff, logout) only log what they
-# would call. Set MALAYSIA_POWER_DRY_RUN=0 explicitly to run them for real; the
-# nested compositor forces 1 for every client it starts anyway.
 MALAYSIA_POWER_DRY_RUN=${MALAYSIA_POWER_DRY_RUN:-1}
 export MALAYSIA_POWER_DRY_RUN
 
-# Exit codes, grouped so callers can branch on the failure class.
 EXIT_USAGE=2
 EXIT_ALREADY_RUNNING=3
 EXIT_MISSING_TOOL=4
@@ -26,9 +14,6 @@ EXIT_NOT_DEVSHELL=7
 EXIT_WATCH=8
 EXIT_SMOKE=9
 EXIT_DRM_VKMS=10
-# status follows the LSB init-script conventions: 0 running, 1 dead with a
-# leftover pid file, 3 not running. Interrupting `watch` with Ctrl-C exits 130
-# (128 + SIGINT).
 EXIT_STATUS_DEAD=1
 EXIT_STATUS_NOT_RUNNING=3
 
@@ -73,7 +58,6 @@ Commands:
 EOF
 }
 
-# fail CODE MESSAGE... - report to stderr and exit.
 fail() {
     _code=$1
     shift
@@ -81,22 +65,16 @@ fail() {
     exit "$_code"
 }
 
-# require TOOL - fail if a tool is not on PATH.
 require() {
     command -v "$1" >/dev/null 2>&1 ||
         fail "$EXIT_MISSING_TOOL" "missing required tool: $1"
 }
 
-# require_devshell - compiling outside `nix develop` would omit the mold
-# linker flag and produce a differently linked binary, so it is forbidden. The
-# dev shell sets the marker (ADR 0007).
 require_devshell() {
     [ "${MALAYSIA_DEV_SHELL:-}" = "1" ] ||
         fail "$EXIT_NOT_DEVSHELL" "not inside the dev shell; run 'nix develop' first (see ADR 0007)"
 }
 
-# require_vulkan - fail when VK_DRIVER_FILES is missing or points to files that
-# do not exist. Shared by demo, lab and wallpaper-check.
 require_vulkan() {
     _vk_files=${VK_DRIVER_FILES:-}
     if [ -z "$_vk_files" ]; then
@@ -116,9 +94,6 @@ require_vulkan() {
     fi
 }
 
-# check_wallpaper_ready PREFIX - wait up to 5 s for demo-wallpaper.log to contain
-# "output configured" or for the wallpaper process to die. Prints a warning to
-# stderr if neither happens; the demo/lab continues either way.
 check_wallpaper_ready() {
     _prefix=$1
     _pid_file="$RUNTIME_DIR/demo-wallpaper.pid"
@@ -147,8 +122,6 @@ check_wallpaper_ready() {
     fi
 }
 
-# barrierkit_dir - print the absolute path to the sibling barrierkit checkout,
-# or empty if it does not exist.
 barrierkit_dir() {
     _dir="$script_dir/../barrierkit"
     if [ -d "$_dir/crates/barrier-kit" ]; then
@@ -156,31 +129,17 @@ barrierkit_dir() {
     fi
 }
 
-# kit_is_local - succeed when .cargo/config.toml patches the kit to ../barrierkit.
 kit_is_local() {
     [ -f "$script_dir/.cargo/config.toml" ]
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
-# The dev shell already exports RUSTFLAGS with mold and the runtime rpath. Keep
-# mold explicit for the script's own cargo calls too, without duplicating the
-# flag when the shell already set it.
 case "${RUSTFLAGS:-}" in
     *-fuse-ld=mold*) ;;
     *) RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-fuse-ld=mold"; export RUSTFLAGS ;;
 esac
 
-# Runtime files (the pid and the log) live under XDG_RUNTIME_DIR, or a
-# UID-scoped directory in /tmp when it is not set. They are kept in a
-# dev-specific directory so a pid or log never shares a path with anything the
-# host session owns. The compositor's Wayland socket is not here: it is
-# auto-named `wayland-N` in the compositor's own XDG_RUNTIME_DIR, which `start`
-# passes through from the caller.
-#
-# A short hash of the checkout path keeps two worktrees from sharing a pid,
-# log and demo logs. `git rev-parse` resolves the worktree root; a tarball
-# without git falls back to the script directory.
 checkout_hash() {
     _root=$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null ||
         printf '%s' "$script_dir")
@@ -204,7 +163,6 @@ ensure_runtime_dir() {
     mkdir -p "$RUNTIME_DIR"
 }
 
-# read_pid - print the saved PID, or fail if there is none or it is malformed.
 read_pid() {
     if [ ! -f "$PID_FILE" ]; then
         return 1
@@ -216,20 +174,14 @@ read_pid() {
     printf '%s\n' "$_saved"
 }
 
-# pid_is_malaysia_compositor PID - succeed only if the PID is alive and its comm is
-# "malaysia-compositor" or the wrapper's ".malaysia-compositor-wrapped". Linux /proc is assumed: this
-# project is single-machine.
 pid_is_malaysia_compositor() {
     kill -0 "$1" 2>/dev/null || return 1
     case "$(cat "/proc/$1/comm" 2>/dev/null)" in
-        # The Nix package's makeWrapper renames the real binary to
-        # `.malaysia-compositor-wrapped`; the wrapper execs it, so that is the comm.
         malaysia-compositor | .malaysia-compositor-wrapped) return 0 ;;
         *) return 1 ;;
     esac
 }
 
-# is_running - succeed only if the saved PID is a live MalaysiaDreams process.
 is_running() {
     _saved=$(read_pid) || return 1
     pid_is_malaysia_compositor "$_saved"
@@ -269,10 +221,6 @@ start() {
     if [ -n "${MALAYSIA_BIN:-}" ]; then
         _bin=$MALAYSIA_BIN
     elif [ -z "${MALAYSIA_DEV_SHELL:-}" ] && [ -x "$script_dir/result/bin/malaysia-compositor" ]; then
-        # Outside the dev shell the raw target binary has the RUNPATH but not
-        # the EGL vendor/driver environment. Prefer the packaged wrapper, which
-        # sets all three variables. Inside the shell the target binary is the
-        # dev build and already runs with the shell's environment.
         _bin="$script_dir/result/bin/malaysia-compositor"
     elif [ -n "$_release" ]; then
         _bin="$script_dir/target/release/malaysia-compositor"
@@ -282,28 +230,10 @@ start() {
     if [ ! -x "$_bin" ]; then
         fail "$EXIT_RUN_FAILED" "binary not built; run './dev.sh build' first"
     fi
-    # A stale pid file is not an error.
     rm -f "$PID_FILE"
     ensure_runtime_dir
     require setsid
-    # Each run writes a fresh log. Otherwise a failed start prints the tail of a
-    # file that still holds earlier successful runs, and the actual failure is
-    # buried among stale lines. `log` shows the current run for the same reason.
     : >"$LOG_FILE"
-    # setsid puts the compositor in its own session, so a watcher that kills its
-    # own children (cargo-watch does) or a closing terminal does not take the
-    # running instance down with it. It execs without forking here, so $! is the
-    # compositor's real PID.
-    #
-    # The compositor is itself a client of the host session, so winit must
-    # resolve the host display exactly as the calling shell does: the caller's
-    # environment is passed through unchanged, including XDG_RUNTIME_DIR and
-    # WAYLAND_DISPLAY. Rewriting either here broke startup, because a relative
-    # WAYLAND_DISPLAY then resolved against this script's runtime directory
-    # instead of the host's. `WAYLAND_DISPLAY` is only ever assigned for a
-    # client the compositor spawns, and nothing here spawns one. The compositor
-    # picks its own server socket with `ListeningSocketSource`, which binds the
-    # first free `wayland-1` (never the host's `wayland-0`).
     setsid "$_bin" >>"$LOG_FILE" 2>&1 &
     _saved=$!
     printf '%s\n' "$_saved" >"$PID_FILE"
@@ -318,12 +248,6 @@ start() {
     fi
 }
 
-# watch - rebuild and relaunch on every source change, in the foreground.
-#
-# Each change runs a build and then restarts the background instance. A failed
-# build aborts the cycle before the restart, so the instance on screen is left
-# alone and the compiler output stays on the terminal. Ctrl-C exits the watcher
-# and the EXIT trap stops the compositor, so nothing outlives the watcher.
 watch() {
     require_devshell
     require cargo
@@ -337,14 +261,11 @@ watch() {
         fail "$EXIT_USAGE" "unexpected argument for watch: $1"
     fi
 
-    # Watch the source trees. cargo-watch requires each path to exist, and the
-    # workspace has no top-level src/ yet.
     set -- -w "$script_dir/crates" --ignore "$script_dir/target"
     if [ -d "$script_dir/src" ]; then
         set -- "$@" -w "$script_dir/src"
     fi
 
-    # `&&` is deliberate: a failed build must not reach the restart.
     _cycle="$script_dir/dev.sh build"
     if [ -n "$_release" ]; then
         _cycle="$_cycle --release"
@@ -354,9 +275,6 @@ watch() {
         _cycle="$_cycle --release"
     fi
 
-    # A signal only raises a flag. `stop` is left to the EXIT trap so it runs
-    # to completion; exiting from inside a signal trap can cut it short before
-    # the compositor is signalled.
     trap 'stop' EXIT
     _interrupted=0
     trap '_interrupted=1' INT TERM
@@ -371,8 +289,6 @@ watch() {
     fi
 }
 
-# stop - terminate the saved process by PID. Signals the process only, never
-# the process group, so an invoking shell is never caught in the blast radius.
 stop() {
     _saved=$(read_pid) || return 0
     if ! pid_is_malaysia_compositor "$_saved"; then
@@ -434,13 +350,6 @@ clean() {
     rm -rf "$RUNTIME_DIR"
 }
 
-# check_display_env - fail unless `run` hands the compositor the caller's
-# display environment unchanged.
-#
-# A stub binary records what it inherited and sleeps, so this needs no display
-# and no real compositor. `MALAYSIA_BIN` points `run` at the stub. The values are
-# deliberately synthetic: if `run` rewrites either, the recorded pair differs
-# and the check fails.
 check_display_env() {
     _sentinel=$(mktemp -d)
     _probe="$_sentinel/probe"
@@ -527,12 +436,6 @@ check() {
     cargo test --workspace
 }
 
-# smoke - build the compositor and the probe harness, then run the mapping
-# smoke test.
-#
-# The harness launches its own compositor and a real client, so it must run in
-# the graphical session the compositor runs in; it fails loudly when there is no
-# host display. The harness's exit code is the verdict.
 smoke() {
     require_devshell
     require cargo
@@ -553,17 +456,11 @@ smoke() {
         cargo build -p malaysia-compositor -p sctk-probe ||
             fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
     fi
-    # MALAYSIA_BIN pins the binary just built, so the harness does not fall back
-    # to a different profile's compositor.
     MALAYSIA_BIN="$script_dir/target/$_profile/malaysia-compositor" \
         "$script_dir/target/$_profile/smoke" ||
         fail "$EXIT_SMOKE" "smoke test failed"
 }
 
-# block4 - open and close fifty windows and assert the scene returns to empty.
-#
-# Like smoke, the harness launches its own compositor and the stress client, so
-# it must run in the graphical session. The harness's exit code is the verdict.
 block4() {
     require_devshell
     require cargo
@@ -591,9 +488,6 @@ block4() {
         fail "$EXIT_SMOKE" "block4 test failed"
 }
 
-# titlebar - press and release each titlebar button with the scripted input and
-# check the compositor log. A real click cannot be synthesized from a probe, so
-# this uses the same test hook that moves the pointer to an exact button centre.
 titlebar() {
     require_devshell
     require cargo
@@ -640,12 +534,6 @@ titlebar() {
     done
 }
 
-# decoration - run real applications inside MalaysiaDreams and assert the decoration
-# protocol and mode each one negotiated (ADR 0019).
-#
-# Applications are found through MALAYSIA_APP_* variables (see the sctk-probe
-# README); one that is not available is reported UNVERIFIED and does not fail
-# the run, so the command works on a machine with no GTK or Qt demos.
 decoration() {
     require_devshell
     require cargo
@@ -671,8 +559,6 @@ decoration() {
         fail "$EXIT_SMOKE" "decoration probe failed"
 }
 
-# move - exercise client-initiated xdg_toplevel.move/resize with valid and
-# fabricated serials. Like the other harnesses it launches its own compositor.
 move() {
     require_devshell
     require cargo
@@ -700,9 +586,6 @@ move() {
         fail "$EXIT_SMOKE" "move probe failed"
 }
 
-# build_probes [--release] - build the compositor and the probe package.
-#
-# Sets `_profile` to the directory the probe binaries live in.
 build_probes() {
     _release=
     if [ "${1:-}" = "--release" ]; then
@@ -723,12 +606,6 @@ build_probes() {
     fi
 }
 
-# run_one_probe PROBE [--test-input] - run one probe against a fresh compositor.
-#
-# Starts the compositor, waits for its socket, runs the probe binary and stops
-# the compositor again. `--test-input` starts it with `MALAYSIA_TEST_INPUT=1`, whose
-# scripted press a probe cannot make itself. Fails the script when the probe
-# does.
 run_one_probe() {
     _probe=$1
     shift
@@ -764,13 +641,6 @@ run_one_probe() {
     stop >/dev/null 2>&1 || true
 }
 
-# pointers - run the pointer lock and relative motion probes, each against a
-# fresh compositor with the scripted input enabled.
-#
-# `pointer_lock` asserts the `locked` event arrives for a constraint on the
-# focused surface; `relative_pointer` asserts a non-zero relative motion reaches
-# the client. Each probe needs its own compositor: the scripted press is
-# injected once and stays held.
 pointers() {
     require_devshell
     require cargo
@@ -779,10 +649,6 @@ pointers() {
     run_one_probe relative_pointer --test-input
 }
 
-# screencopy - capture the output through `ext-image-copy-capture-v1`.
-#
-# `screencopy` opens capture sessions for the output over SHM and dma-buf, with
-# the cursor painted and omitted, and asserts the frame is ready and not blank.
 screencopy() {
     require_devshell
     require cargo
@@ -794,12 +660,6 @@ screencopy() {
     run_one_probe screencopy CAPTURE_DMABUF=1 CAPTURE_PAINT_CURSORS=1 CAPTURE_EXPECT_CURSOR=1
 }
 
-# screencopy-window - capture a window through `ext-image-copy-capture-v1`.
-#
-# `screencopy_window` maps a window, creates a capture source from its
-# `ext-foreign-toplevel-list` handle and asserts the frame is ready and shows
-# the window's own content, over SHM and dma-buf. `CAPTURE_SSD=1` requests
-# server-side decorations to check that the titlebar stays out of the capture.
 screencopy_window() {
     require_devshell
     require cargo
@@ -809,11 +669,6 @@ screencopy_window() {
     run_one_probe screencopy_window CAPTURE_SSD=1
 }
 
-# presentation - assert `wp_presentation` feedback reaches a client.
-#
-# `presentation` commits two damaged frames and one without damage, asking for
-# feedback on each. It asserts increasing timestamps, a response to every
-# commit, and (with PRESENTATION_REQUIRE_VSYNC=1) a non-zero refresh and Vsync.
 presentation() {
     require_devshell
     require cargo
@@ -821,11 +676,6 @@ presentation() {
     run_one_probe presentation
 }
 
-# activation - assert `xdg-activation-v1` focuses a window in the same client.
-#
-# `activation` runs two clients: A gets the scripted press and creates tokens,
-# B activates itself with the valid one. Tokens without a serial, from an
-# unfocused surface and older than 30 s must not move focus to B.
 activation() {
     require_devshell
     require cargo
@@ -834,13 +684,6 @@ activation() {
 }
 
 
-# demo - a nested session that shows the whole desktop, for a quick look.
-#
-# Starts the winit compositor (as `run` does), then connects the native shell
-# components and a couple of demo windows to its socket: wallpaper, menubar
-# and dock with tiles in it. Closing the host window or Ctrl-C ends it all.
-# `MALAYSIA_SCALE` passes through, so `MALAYSIA_SCALE=1.5 ./dev.sh demo` shows the
-# fractional-scale path.
 demo() {
     require_devshell
     require_vulkan
@@ -858,10 +701,6 @@ demo() {
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
     if [ -n "$_scheme" ]; then
-        # A throwaway preferences directory: the demo never writes to
-        # ~/.config/malaysia. Copy the user's config so the rest of it still
-        # applies, then force color_scheme at the top level of appearance.domain
-        # (TOML keys must precede any table).
         _demo_config=$(mktemp -d) ||
             fail "$EXIT_RUN_FAILED" "could not create the demo config directory"
         if [ -d "$HOME/.config/malaysia" ]; then
@@ -904,9 +743,6 @@ demo() {
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
             _example_dir="$_kit_dir/target/debug/examples"
-            # Always rebuild: cargo is incremental, and a binary that merely
-            # exists can predate the kit it should be running (stale examples
-            # kept the old green light after the kit changed).
             (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
                 fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
             _window_csd="$_example_dir/window_csd"
@@ -926,7 +762,6 @@ demo() {
             [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
-        # Packaged examples live in the barrierkit package, not here.
         _window_csd="$script_dir/result/bin/window_csd"
         _window_ssd="$script_dir/result/bin/window_ssd"
         _dialog="$script_dir/result/bin/dialog"
@@ -948,14 +783,10 @@ demo() {
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
 
-    # Make the repository's .desktop entries visible to the menubar so it can
-    # resolve native app ids (io.github.hblanqueto.malaysia.settings) to their
-    # localized names.
     _data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
     XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
     export XDG_DATA_DIRS
 
-    # Every component is its own Wayland client; one log per component.
     demo_client() {
         _name=$1
         shift
@@ -970,8 +801,6 @@ demo() {
     demo_client dock "$_shell_bin" dock
     check_wallpaper_ready demo
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
-    # Give the background layer a moment, then open windows so the dock has
-    # tiles and the menubar an active app.
     sleep 0.5
     if command -v foot >/dev/null 2>&1; then
         demo_client foot-1 foot -T "MalaysiaDreams"
@@ -1007,11 +836,6 @@ demo() {
     done
 }
 
-# lab - interactive manual-test session with shell, demo windows and optional
-# third-party apps.  It behaves like `demo`, but also launches nautilus, zenity
-# (or gnome-calculator), kate/kwrite, telegram-desktop and firefox when they are
-# available, each with its own log.  The session keeps running until the host
-# window closes or the user presses Ctrl-C.
 lab() {
     require_devshell
     require_vulkan
@@ -1029,7 +853,6 @@ lab() {
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
 
-    # Always use a throwaway config directory so we can clean it up on exit.
     _lab_config=$(mktemp -d) ||
         fail "$EXIT_RUN_FAILED" "could not create the lab config directory"
     if [ -d "$HOME/.config/malaysia" ]; then
@@ -1084,17 +907,11 @@ lab() {
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        # Rebuild only the binaries the lab actually uses. Avoid the full
-        # workspace build because auxiliary crates such as malaysia-settings may be
-        # broken.
         cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
             _example_dir="$_kit_dir/target/debug/examples"
-            # Always rebuild: cargo is incremental, and a binary that merely
-            # exists can predate the kit it should be running (stale examples
-            # kept the old green light after the kit changed).
             (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
                 fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
             _window_csd="$_example_dir/window_csd"
@@ -1163,9 +980,6 @@ lab() {
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
 
-    # Make the repository's .desktop entries visible to the menubar so it can
-    # resolve native app ids (io.github.hblanqueto.malaysia.settings) to their
-    # localized names.
     _data_dirs="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
     XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
     export XDG_DATA_DIRS
@@ -1180,10 +994,6 @@ lab() {
         printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
     }
 
-    # Launch a third-party app so it lands in the nested session and not in the
-    # host GNOME session.  It inherits the lab's private D-Bus bus (app and
-    # menubar must share it for the global menu) and the Wayland backend is
-    # forced so activation/portals do not hand off to the host.
     lab_app_client() {
         _name=$1
         shift
@@ -1220,9 +1030,6 @@ lab() {
         printf 'lab: window examples not found; skipping them\n' >&2
     fi
 
-    # Optional third-party apps, only if installed.  Each gets its own log.
-    # When MALAYSIA_TEST_INPUT drives the session we keep only the kit examples so
-    # Contador ends up on top and the scripted coordinates remain valid.
     if [ -z "${MALAYSIA_TEST_INPUT:-}" ]; then
         if command -v nautilus >/dev/null 2>&1; then
             lab_app_client nautilus nautilus
@@ -1271,7 +1078,6 @@ EOF
         fi
     fi
 
-    # Contador last so it stays on top for automated 14e acceptance.
     sleep 0.5
     if [ -x "$_contador" ]; then
         lab_client contador "$_contador"
@@ -1308,13 +1114,6 @@ EOF
     done
 }
 
-# example - run a BarrierKit example against the demo that is already running.
-#
-# Uses the same client environment as demo_client: the demo socket, no DISPLAY,
-# XDG_SESSION_TYPE=wayland and the dev shell's EGL/Mesa variables. LD_LIBRARY_PATH
-# keeps only Nix store entries, so a host glibc cannot leak into the client.
-# With --sin-menubar the demo's menubar process is closed first, so a test bar
-# owns the top strip.
 example() {
     require_devshell
     require cargo
@@ -1390,13 +1189,6 @@ example() {
         LD_LIBRARY_PATH="$_ld" "$_bin"
 }
 
-# drm-vkms - exercise the direct session on vkms, isolated from the panel.
-#
-# Loads vkms (if needed), runs the compositor with LIBSEAT_BACKEND=noop and
-# --drm-device <vkms> --no-input, connects pattern_live, asks for a SIGUSR1
-# capture, and checks that the four quadrants are in the presented frame. The
-# EXIT trap kills the compositor and unloads vkms even when a check fails.
-# `sudo` is required; run `sudo -v` first so the commands are non-interactive.
 drm_vkms() {
     require_devshell
     require cargo
@@ -1461,8 +1253,6 @@ drm_vkms() {
                 _vkms=$_dev
                 break
             fi
-            # Kernels with the faux bus expose vkms as faux_driver, so identify
-            # the device by its sysfs path instead of a card number.
             _sys=$(readlink -f "/sys/class/drm/$(basename "$_dev")/device" 2>/dev/null || true)
             case "$_sys" in
                 */vkms | */vkms/*)
@@ -1483,7 +1273,6 @@ drm_vkms() {
     _pattern="$script_dir/target/debug/pattern_live"
     _presentation="$script_dir/target/debug/presentation"
 
-    # The user's shell owns the log redirects, so the test can read them.
     # shellcheck disable=SC2024
     sudo env LIBSEAT_BACKEND=noop XDG_RUNTIME_DIR="$_run" \
         LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" \
@@ -1494,7 +1283,6 @@ drm_vkms() {
         "$_malaysia" --drm --drm-device "$_vkms" --no-input --log-level=debug \
         >"$_log" 2>&1 &
 
-    # The first sudo prompt can take a while; give it 30 seconds.
     _tries=0
     while [ "$_tries" -lt 300 ] && [ ! -s "$_pidfile" ]; do
         _tries=$((_tries + 1))
@@ -1583,8 +1371,6 @@ drm_vkms() {
     printf '  presentation: %s\n' "$(grep 'presentation: presented' "$_presentation_log" | tail -n 1)"
 }
 
-# wallpaper-check - start the compositor, run only malaysia-wallpaper, capture the
-# output and compare the captured pixels against the CPU reference.
 wallpaper_check() {
     require_devshell
     require_vulkan

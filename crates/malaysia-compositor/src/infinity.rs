@@ -1,9 +1,4 @@
-//! Infinity window manager protocol (ADR 0039).
-//!
-//! This module serves the private `infinity_window_manager_v1` protocol that
-//! malaysia-shell uses to ask the compositor for window geometry: halves, quarters,
-//! pairs, fill, center, restore and fullscreen. The global is only visible to
-//! the malaysia-shell binary or when `MALAYSIA_DEV=1`.
+//! Infinity window manager protocol: window geometry requests from the shell.
 
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -19,7 +14,6 @@ use malaysia_scene::scene::WindowId;
 
 use crate::state::{ClientState, State};
 
-/// Re-export of the generated Infinity protocol server bindings.
 pub(crate) mod protocol {
     pub use infinity_protocol::server::infinity_window_manager_v1::infinity_window_manager_v1;
 }
@@ -27,23 +21,12 @@ pub(crate) mod protocol {
 use protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
 use protocol::infinity_window_manager_v1::{Layout, PairLayout};
 
-/// Margin around the workspace for tiled windows, in logical pixels.
 const TILE_MARGIN: i32 = 8;
-/// Gap between tiled windows, in logical pixels.
 const TILE_GAP: i32 = 8;
 
-/// Data attached to the `infinity_window_manager_v1` global.
-///
-/// The trust decision is made when the client is accepted (see
-/// [`is_trusted_client`]) and stored on its [`ClientState`], never here: the
-/// visibility filter runs with the backend's state lock held.
 #[derive(Debug, Clone)]
 pub struct InfinityGlobalData;
 
-/// Whether the client connecting on `stream` is the trusted `malaysia-shell`.
-///
-/// Must be called before `insert_client`: reading the peer credentials needs
-/// the socket, and the global filter later runs with the backend lock held.
 pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
     if std::env::var("MALAYSIA_DEV").is_ok_and(|v| v == "1") {
         return true;
@@ -61,11 +44,6 @@ pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
     trusted_shell
 }
 
-/// Resolves the set of executable paths that are trusted as `malaysia-shell`.
-///
-/// Covers the binary next to the compositor, the dev-shell debug/release
-/// builds, the Nix package wrapper directory, and an explicit override so the
-/// demo, the packaged session and manual launches all agree.
 fn trusted_shell_exes() -> Vec<PathBuf> {
     let mut exes = Vec::new();
     if let Some(path) = std::env::var_os("MALAYSIA_SHELL_EXE")
@@ -152,15 +130,12 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
     }
 
     fn can_view(&self, client: &Client) -> bool {
-        // Called with the backend's state lock held: do not call the
-        // DisplayHandle here (get_credentials would deadlock).
         client
             .get_data::<ClientState>()
             .is_some_and(|state| state.trusted_shell)
     }
 }
 
-/// Whether `exe` matches any of the trusted `malaysia-shell` paths.
 fn is_trusted_shell_exe(exe: &std::path::Path, shell_exes: &[PathBuf]) -> bool {
     shell_exes.iter().any(|trusted| trusted == exe)
 }
@@ -204,8 +179,6 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
                 }
             }
             Request::Destroy => {}
-            // shortcut: future Infinity requests are ignored; handle them when
-            // the client starts sending them.
             _ => {}
         }
     }
@@ -216,7 +189,6 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
     }
 }
 
-/// Extracts the [`WindowId`] stored on a foreign-toplevel handle.
 fn window_id_from_handle(handle: &ZwlrForeignToplevelHandleV1) -> Option<WindowId> {
     handle.data::<WindowId>().copied()
 }
@@ -254,7 +226,6 @@ fn pair_layout_from_wenum(layout: WEnum<PairLayout>) -> PairLayout {
 }
 
 impl InfinityGlobalData {
-    /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         let data = InfinityGlobalData;
         display_handle.create_global::<State, InfinityWindowManagerV1, _>(5, data)
@@ -262,12 +233,6 @@ impl InfinityGlobalData {
 }
 
 impl State {
-    /// Kills the process behind a window (Infinity v4, «Forzar salida…»).
-    ///
-    /// SIGKILL, like macOS Force Quit: the shell asks only after the user
-    /// confirms, and a hung app would ignore both `close` and SIGTERM. The pid
-    /// comes from the client socket credentials, the only source the app
-    /// cannot fake.
     pub(crate) fn infinity_force_quit(&mut self, id: WindowId, dhandle: &DisplayHandle) {
         let Some(client) = self
             .windows
@@ -294,7 +259,6 @@ impl State {
         }
     }
 
-    /// Places a window in the requested Infinity layout.
     pub(crate) fn infinity_arrange(&mut self, id: WindowId, layout: Layout) {
         info!(window = id.get(), ?layout, "infinity arrange");
         let Some(outer) = self.windows.outer(id) else {
@@ -304,8 +268,6 @@ impl State {
             self.set_maximized(id, false);
         }
         if self.in_focus_mode(id) {
-            // Leaving focus mode animates back to the desktop; the arrange
-            // waits for the user to ask again there.
             self.exit_focus_mode(id);
             return;
         }
@@ -317,7 +279,6 @@ impl State {
         self.send_restorable(id);
     }
 
-    /// Tiles the active and previous windows as a pair.
     pub(crate) fn infinity_arrange_pair(&mut self, layout: PairLayout) {
         info!(?layout, "infinity arrange pair");
         let visible: Vec<WindowId> = self
@@ -338,7 +299,6 @@ impl State {
         self.apply_infinity_geometry(previous, second);
     }
 
-    /// Tiles the four most recent visible windows in quarters.
     pub(crate) fn infinity_arrange_quarters(&mut self) {
         info!("infinity arrange quarters");
         let visible: Vec<WindowId> = self
@@ -359,7 +319,6 @@ impl State {
         }
     }
 
-    /// Restores a window to the rectangle saved before the first arrange.
     pub(crate) fn infinity_restore(&mut self, id: WindowId) {
         let Some(saved) = self.arranged.remove(&id) else {
             return;
@@ -369,8 +328,6 @@ impl State {
         self.send_restorable(id);
     }
 
-    /// The shown space for the Infinity `space` event (ADR 0051): position,
-    /// count, desktop number (0 for a focus space) and the bar's state.
     pub(crate) fn space_state(
         &self,
     ) -> (
@@ -397,8 +354,6 @@ impl State {
         )
     }
 
-    /// Sends the shown space to every Infinity v5 client (the shell), when it
-    /// changed since the last send.
     pub(crate) fn send_space_state(&mut self) {
         let state = self.space_state();
         if self.last_space_state == Some(state) {
@@ -414,10 +369,6 @@ impl State {
         }
     }
 
-    /// Sets or unsets fullscreen through Infinity (the bar's «Ventana ›
-    /// Activar pantalla completa»). Fullscreen is focus mode: the window gets
-    /// a space of its own (ADR 0051); a plain fullscreen on the desktop would
-    /// leave the bar and the dock over it.
     pub(crate) fn infinity_set_fullscreen(&mut self, id: WindowId, fullscreen: bool) {
         info!(window = id.get(), fullscreen, "infinity set fullscreen");
         if fullscreen {
@@ -427,7 +378,6 @@ impl State {
         }
     }
 
-    /// Applies a target outer rectangle to a window, converting scene types.
     fn apply_infinity_geometry(&mut self, id: WindowId, target: SceneRect<f64, SceneLogical>) {
         info!(window = id.get(), outer = ?target, "infinity geometry");
         self.windows.set_infinity_geometry(id, target);
@@ -435,13 +385,11 @@ impl State {
         self.request_redraw();
     }
 
-    /// Workspace as a logical rectangle.
     fn workspace_rect(&self) -> Rectangle<i32, Logical> {
         let (origin, size) = self.workspace();
         Rectangle::new(origin, size)
     }
 
-    /// Sends the current restorable state of a window to every Infinity client.
     fn send_restorable(&mut self, id: WindowId) {
         let restorable = self.arranged.contains_key(&id);
         self.infinity_managers.retain(|manager| manager.is_alive());
@@ -456,8 +404,6 @@ impl State {
         }
     }
 
-    /// Sends the window's current app_menu address (or empty strings when it
-    /// has none) to every Infinity v2 client that has a handle for it.
     pub(crate) fn send_app_menu(&mut self, id: WindowId) {
         let address = self.appmenu_address(id).unwrap_or_default();
         self.infinity_managers.retain(|manager| manager.is_alive());
@@ -476,8 +422,6 @@ impl State {
         }
     }
 
-    /// Sends the window's current GTK menu address (or empty strings when it
-    /// has none) to every Infinity v3 client that has a handle for it.
     pub(crate) fn send_gtk_menus(&mut self, id: WindowId) {
         let address = self.gtk_menus_address(id).unwrap_or_default();
         self.infinity_managers.retain(|manager| manager.is_alive());
@@ -504,8 +448,6 @@ impl State {
         }
     }
 
-    /// Sends the window's pair to one client's Infinity v2 manager, if it has
-    /// one and the window has a pair. Used when a wlr handle is created.
     pub(crate) fn send_app_menu_to_client(
         &mut self,
         id: WindowId,
@@ -536,8 +478,6 @@ impl State {
         }
     }
 
-    /// Sends the window's GTK menu address to one client, when its wlr handle
-    /// is created. Used when a wlr handle is created.
     pub(crate) fn send_gtk_menus_to_client(
         &mut self,
         id: WindowId,
@@ -577,23 +517,18 @@ impl State {
     }
 }
 
-/// Whether a manager receives an event introduced in `since`.
-/// Never the compositor itself, init or an unknown pid.
 fn may_force_quit(pid: i32, own_pid: u32) -> bool {
     pid > 1 && u32::try_from(pid).ok() != Some(own_pid)
 }
 
-/// Pure so the bind-order and version rules can be tested without a protocol harness.
 fn delivers_event(manager_version: u32, since: u32, has_handle: bool) -> bool {
     manager_version >= since && has_handle
 }
 
-/// Rounds a logical length to whole pixels.
 fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-/// Pure geometry: workspace minus the outer margin.
 fn available(workspace: Rectangle<i32, Logical>) -> Rectangle<i32, Logical> {
     Rectangle::new(
         Point::from((workspace.loc.x + TILE_MARGIN, workspace.loc.y + TILE_MARGIN)),
@@ -604,7 +539,6 @@ fn available(workspace: Rectangle<i32, Logical>) -> Rectangle<i32, Logical> {
     )
 }
 
-/// Pure geometry: target rectangle for a single-window layout.
 fn arranged_rect(
     workspace: Rectangle<i32, Logical>,
     layout: Layout,
@@ -643,7 +577,6 @@ fn arranged_rect(
             half_w,
             half_h,
         ),
-        // shortcut: future Infinity layouts fall back to centered.
         _ => {
             let w = current_size.w.min(area.size.w);
             let h = current_size.h.min(area.size.h);
@@ -654,7 +587,6 @@ fn arranged_rect(
     }
 }
 
-/// Pure geometry: target rectangles for a pair of windows.
 fn pair_rects(
     workspace: Rectangle<i32, Logical>,
     layout: PairLayout,
@@ -689,7 +621,6 @@ fn pair_rects(
                 [bottom, top]
             }
         }
-        // shortcut: future Infinity pair layouts fall back to side-by-side.
         _ => {
             let left = rect(loc.x, loc.y, half_w, size.h);
             let right = rect(loc.x + half_w + TILE_GAP, loc.y, half_w, size.h);
@@ -698,7 +629,6 @@ fn pair_rects(
     }
 }
 
-/// Pure geometry: target rectangles for four recent windows.
 fn quarter_rects(workspace: Rectangle<i32, Logical>) -> [SceneRect<f64, SceneLogical>; 4] {
     let area = available(workspace);
     let loc = area.loc;
@@ -741,12 +671,10 @@ mod tests {
     use malaysia_scene::scene::WindowId;
 
     fn workspace() -> Rectangle<i32, Logical> {
-        // Output 1280×772, menu bar 32 px and dock 50 px.
         Rectangle::new(Point::from((0, 32)), Size::from((1280, 690)))
     }
 
     fn workspace_1280_800() -> Rectangle<i32, Logical> {
-        // Output 1280×800, menu bar 28 px and dock 50 px (mockup 23).
         Rectangle::new(Point::from((0, 28)), Size::from((1280, 722)))
     }
 
@@ -931,14 +859,12 @@ mod tests {
 
         let mut arranged = HashMap::new();
         arranged.entry(WindowId::new(1)).or_insert(first);
-        // A second arrange does not overwrite the saved rectangle.
         let saved = *arranged.get(&WindowId::new(1)).unwrap();
         assert_eq!(saved, first);
 
-        // Simulate restore: apply the saved rectangle and clear it.
         arranged.remove(&WindowId::new(1));
         assert!(!arranged.contains_key(&WindowId::new(1)));
-        assert_eq!(second, second); // target used by caller
+        assert_eq!(second, second);
     }
 
     #[test]
@@ -1017,12 +943,9 @@ mod tests {
 
     #[test]
     fn the_pair_reaches_the_bar_in_either_bind_order() {
-        // wlr manager first: the handle exists before Infinity binds.
         let manager = 2;
         let mut handle = true;
         assert!(delivers_event(manager, 2, handle));
-        // Infinity manager first: binding alone sends nothing; the handle
-        // created later by the wlr side completes the delivery.
         handle = false;
         assert!(!delivers_event(manager, 2, handle));
         handle = true;

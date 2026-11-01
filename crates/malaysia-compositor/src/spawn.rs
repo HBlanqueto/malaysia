@@ -1,13 +1,4 @@
-//! The one place the compositor starts another process.
-//!
-//! The Nix wrapper gives `malaysia-compositor` and `malaysia-shell` a private Mesa/EGL
-//! environment. That environment must not reach the clients they launch: a
-//! client has to resolve its own Mesa (the system one) and its own EGL vendor
-//! directory. The wrapper also saves the previous values in `MALAYSIA_ORIG_*`, so
-//! a child gets the same environment it would have had without the wrapper.
-//!
-//! Use [`command`] to build the command and [`spawn`] to start it. Do not call
-//! `Command::spawn` directly for a client.
+//! The single place where the compositor starts other processes.
 
 use std::ffi::{OsStr, OsString};
 use std::io;
@@ -15,7 +6,6 @@ use std::process::{Child, Command};
 
 use crate::config::Config;
 
-/// Variables the package wrapper sets for Malaysia itself.
 pub const WRAPPER_ENV: &[&str] = &[
     "LD_LIBRARY_PATH",
     "__EGL_VENDOR_LIBRARY_DIRS",
@@ -23,15 +13,8 @@ pub const WRAPPER_ENV: &[&str] = &[
     "GBM_BACKENDS_PATH",
 ];
 
-/// Prefix the wrapper uses to save the value each variable had before it.
 pub const ORIGINAL_PREFIX: &str = "MALAYSIA_ORIG_";
 
-/// Builds a command with the wrapper environment removed and the Qt
-/// decoration variable set according to the configuration.
-///
-/// The caller may still add arguments and its own environment; [`spawn`]
-/// applies the same cleanup again, so the final child cannot inherit the
-/// wrapper's Mesa paths.
 pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     let mut command = Command::new(program);
     sanitize(&mut command);
@@ -39,64 +22,41 @@ pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     command
 }
 
-/// Builds a command for another MalaysiaDreams process (the shell components).
-///
-/// Unlike a client, a shell component is part of Malaysia's own runtime and may
-/// need the EGL/GBM environment the compositor was started with — in
-/// development the dev shell exports it, and the packaged `malaysia-shell` wrapper
-/// sets it in production. The client sanitization is deliberately not applied
-/// here.
 pub fn shell_command(program: impl AsRef<OsStr>) -> Command {
     Command::new(program)
 }
 
-/// Starts a shell command without stripping Malaysia's own runtime environment.
 pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
     command.spawn()
 }
 
-/// Starts `command` with the wrapper environment removed and the Qt
-/// decoration variable applied.
 pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
     command.spawn()
 }
 
-/// Exports `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in the compositor's own
-/// environment, so every client launched in the session inherits it.
-///
-/// This is done once at startup and only when the value is not already set,
-/// letting the user or a wrapper override it.
 #[allow(unsafe_code)]
 pub fn export_session_env(config: &Config) {
     if !config.window.qt_server_decorations {
         return;
     }
     if std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION").is_none() {
-        // SAFETY: this runs single-threaded during compositor startup, before
-        // any other thread reads this environment variable.
+        // SAFETY: runs single-threaded during startup, before any other thread reads the environment.
         unsafe {
             std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
         }
     }
 }
 
-/// Puts the nested session in dry-run mode for power actions: the shell only
-/// logs what Suspend, Reboot, PowerOff and logout would call (14b-2), so a
-/// test never turns the host off. Every client the compositor starts
-/// inherits it.
 #[allow(unsafe_code)]
 pub fn mark_nested_session() {
-    // SAFETY: called once at the start of the nested backend, before any
-    // other thread exists.
+    // SAFETY: called once at nested-backend startup, before any other thread reads the environment.
     unsafe {
         std::env::set_var("MALAYSIA_POWER_DRY_RUN", "1");
     }
 }
 
-/// Adds the Qt decoration variable to a command when the configuration asks
-/// for it and the environment has not already set one.
 fn apply_qt_decoration(command: &mut Command, config: &Config) {
     if !config.window.qt_server_decorations {
         return;
@@ -106,8 +66,6 @@ fn apply_qt_decoration(command: &mut Command, config: &Config) {
     }
 }
 
-/// Removes every managed variable from `command` and restores its original
-/// when the wrapper saved a non-empty one.
 fn sanitize(command: &mut Command) {
     sanitize_with(command, |name| std::env::var_os(name));
 }
@@ -221,8 +179,6 @@ mod tests {
     #[test]
     #[allow(unsafe_code)]
     fn qt_server_decorations_are_exported_by_default() {
-        // The result must not depend on a value inherited from a previous test
-        // or from the cargo environment.
         let previous = std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION");
         // SAFETY: environment mutation is isolated to this single-threaded test.
         unsafe { std::env::remove_var("QT_WAYLAND_DISABLE_WINDOWDECORATION") };

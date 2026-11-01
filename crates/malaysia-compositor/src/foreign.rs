@@ -1,13 +1,4 @@
-//! The window list and control protocols the dock uses.
-//!
-//! - **`ext-foreign-toplevel-list-v1`** (smithay): the compositor publishes its
-//!   toplevels so the dock can list the running apps.
-//! - **`zwlr_foreign_toplevel_management_v1`** (served here): the dock
-//!   activates, closes and minimizes windows, and reports its icon rectangle
-//!   (`set_rectangle`) — what the minimize animation needs.
-//!
-//! The management global is not in smithay 0.7, so it is served manually. Both
-//! protocols are part of the shell model (ADR 0023).
+//! Foreign-toplevel list and management protocols used by the dock.
 
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::{
@@ -21,16 +12,12 @@ use smithay::wayland::foreign_toplevel_list::{ForeignToplevelHandle, ForeignTopl
 
 use crate::state::State;
 
-/// The foreign-toplevel state the compositor holds.
 pub struct ForeignState {
-    /// The `ext-foreign-toplevel-list-v1` global (smithay).
     pub list: ForeignToplevelListState,
-    /// The `zwlr_foreign_toplevel_management_v1` global (served manually).
     pub management: ForeignManagement,
 }
 
 impl ForeignState {
-    /// Creates both globals.
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
             list: ForeignToplevelListState::new::<State>(display),
@@ -39,7 +26,6 @@ impl ForeignState {
     }
 }
 
-/// The `zwlr_foreign_toplevel_management_v1` global.
 pub struct ForeignManagement {
     _global: GlobalId,
     instances: Vec<ZwlrForeignToplevelManagerV1>,
@@ -56,16 +42,11 @@ impl ForeignManagement {
         }
     }
 
-    /// Removes dead manager instances and handles.
     fn prune(&mut self) {
         self.instances.retain(|instance| instance.is_alive());
         self.handles.retain(|(_, handle)| handle.is_alive());
     }
 
-    /// Returns the live management handle for `id` owned by `client`.
-    ///
-    /// Handles are per client: sending one to another client's manager is a
-    /// protocol error, so callers that broadcast must pick their own.
     pub(crate) fn handle_for_client(
         &self,
         id: WindowId,
@@ -81,8 +62,6 @@ impl ForeignManagement {
     }
 }
 
-/// The array of `state` values for one window. The wlr event carries the full
-/// state, not a delta, so the client can rebuild `active`/`minimized`/etc.
 pub(crate) fn toplevel_states(
     activated: bool,
     minimized: bool,
@@ -105,8 +84,6 @@ pub(crate) fn toplevel_states(
     states
 }
 
-/// Creates a management handle for `id` on `manager` and sends its identity
-/// and state.
 fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignToplevelManagerV1) {
     let Some((title, app_id)) = state.windows.active_info(id) else {
         return;
@@ -144,7 +121,6 @@ impl smithay::reexports::wayland_server::GlobalDispatch<ZwlrForeignToplevelManag
     ) {
         let manager = data_init.init(resource, ());
         state.foreign.management.prune();
-        // Advertise every current toplevel to the new manager.
         let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
         for id in ids {
             advertise_to_manager(state, id, &manager);
@@ -186,9 +162,6 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
         let id = *data;
         match request {
             zwlr_foreign_toplevel_handle_v1::Request::Activate { seat: _ } => {
-                // The dock asks to activate this handle's window. The serial
-                // validated by the seat belongs to the dock's own press; the
-                // wlr protocol only names the seat here.
                 state.activate_window(id);
             }
             zwlr_foreign_toplevel_handle_v1::Request::Close => {
@@ -219,37 +192,25 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             zwlr_foreign_toplevel_handle_v1::Request::UnsetMaximized => {
                 state.set_maximized(id, false);
             }
-            _ => {
-                // set_fullscreen/unset_fullscreen and destroy are acknowledged
-                // but not implemented yet.
-            }
+            _ => {}
         }
     }
 }
 
 impl State {
-    /// The window's foreign handles were needed: creates the list handle and
-    /// advertises the management handle when a window maps.
     pub(crate) fn foreign_window_mapped(&mut self, id: WindowId) {
         let Some((title, app_id)) = self.windows.active_info(id) else {
             return;
         };
-        // The ext list handle: `new_toplevel` stores the identity, so it must
-        // be created empty and the identity sent explicitly (smithay's
-        // `send_title`/`send_app_id` dedupe against the stored value).
         let handle = self.foreign.list.new_toplevel::<State>("", "");
-        // The window id rides on the handle so a capture source created from it
-        // can resolve the window without a reverse lookup (image_capture_source).
         handle.user_data().insert_if_missing(|| id);
         handle.send_title(&title);
         handle.send_app_id(&app_id);
         handle.send_done();
         self.list_handles.push((id, handle));
-        // The management handles.
         self.advertise_foreign(id);
     }
 
-    /// Advertises `id` to every bound management manager.
     fn advertise_foreign(&mut self, id: WindowId) {
         self.foreign.management.prune();
         let managers = self.foreign.management.instances.clone();
@@ -258,8 +219,6 @@ impl State {
         }
     }
 
-    /// Drops a window's foreign handles on destroy (`closed` is sent by the
-    /// handle drop; management handles close when the resource is gone).
     pub(crate) fn foreign_window_destroyed(&mut self, id: WindowId) {
         self.list_handles.retain(|(wid, _)| *wid != id);
         self.foreign.management.handles.retain(|(wid, handle)| {
@@ -278,8 +237,6 @@ impl State {
             .retain(|instance| instance.is_alive());
     }
 
-    /// Sends the window's full wlr `state` (and `done`) to every management
-    /// handle of that window.
     pub(crate) fn foreign_state_changed(&mut self, id: WindowId) {
         let states = self.foreign_states_for(id);
         self.foreign.management.prune();
@@ -291,8 +248,6 @@ impl State {
         }
     }
 
-    /// Sends the window's current title and app id (and `done`) to both its
-    /// list handle and every management handle.
     pub(crate) fn foreign_identity_changed(&mut self, id: WindowId) {
         let Some((title, app_id)) = self.windows.active_info(id) else {
             return;
@@ -310,9 +265,6 @@ impl State {
                 handle.done();
             }
         }
-        // shortcut: falta un test con ventana real que pruebe que un cambio de
-        // título de la ventana activa llega a window.domain — mejora: escribirlo
-        // cuando exista un arnés de cliente compartido (lote L3 "arnés de test único").
         self.publish_active_if_focused(id);
     }
 
@@ -325,10 +277,7 @@ impl State {
         )
     }
 
-    /// Activates a window: restore it if minimized, then raise and focus.
     pub(crate) fn activate_window(&mut self, id: WindowId) {
-        // While the session is locked, no window may take the screen or the
-        // focus from the lock surface, even if the dock still asks (lock.rs).
         if self.locked {
             return;
         }
@@ -336,8 +285,6 @@ impl State {
         self.raise_and_focus(id);
     }
 
-    /// Minimizes or restores a window. A minimized window leaves the scene and
-    /// stops rendering (it keeps its state; the dock icon becomes its handle).
     pub(crate) fn set_minimized(&mut self, id: WindowId, minimized: bool) {
         let was = self.minimized.contains(&id);
         if was == minimized {
@@ -369,10 +316,8 @@ impl State {
     }
 }
 
-/// The list handles tracked by [`State::list_handles`].
 pub type ListHandles = Vec<(WindowId, ForeignToplevelHandle)>;
 
-/// Delegates the management global to [`ForeignManagement`].
 #[macro_export]
 macro_rules! delegate_foreign_management {
     ($ty: ty) => {

@@ -1,9 +1,4 @@
-//! `org_kde_kwin_appmenu`: the D-Bus address of each surface's global menu
-//! (ADR 0040).
-//!
-//! The compositor only stores the (service, path) pair announced by the client
-//! and forwards it to the shell through Infinity v2. It never talks dbusmenu
-//! and never draws a menu.
+//! `org_kde_kwin_appmenu`: stores each surface's global-menu D-Bus address and forwards it to the shell.
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -22,15 +17,12 @@ use wayland_protocols_plasma::appmenu::server::org_kde_kwin_appmenu_manager::{
 
 use crate::state::State;
 
-/// Where a window's dbusmenu lives.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AppMenuAddress {
     pub service: String,
     pub path: String,
 }
 
-/// Per-surface values, generic over the key and value so the state can be
-/// tested without a Wayland display and reused by `gtk_shell1`.
 #[derive(Debug)]
 pub(crate) struct AddressStore<K, V> {
     addresses: HashMap<K, V>,
@@ -62,14 +54,12 @@ impl<K: Eq + Hash, V> AddressStore<K, V> {
     }
 }
 
-/// The `org_kde_kwin_appmenu_manager` global and the live addresses.
 pub struct AppMenuState {
     _global: GlobalId,
     addresses: AddressStore<ObjectId, AppMenuAddress>,
 }
 
 impl AppMenuState {
-    /// Creates the global, visible to every client (apps need it).
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
             _global: display.create_global::<State, OrgKdeKwinAppmenuManager, ()>(2, ()),
@@ -158,8 +148,6 @@ impl Dispatch<OrgKdeKwinAppmenu, WlSurface, State> for AppMenuState {
 }
 
 impl State {
-    /// Stores the pair announced for `surface` and publishes it if the surface
-    /// already belongs to a mapped window.
     pub(crate) fn set_surface_appmenu(
         &mut self,
         surface: &WlSurface,
@@ -191,7 +179,6 @@ impl State {
         }
     }
 
-    /// Drops the pair for `surface`; a mapped window gets an empty app_menu.
     pub(crate) fn clear_surface_appmenu(&mut self, surface: &WlSurface) {
         if !self.appmenu.clear(surface) {
             return;
@@ -205,14 +192,12 @@ impl State {
         }
     }
 
-    /// The stored pair for a tracked window, if any.
     pub(crate) fn appmenu_address(&self, id: WindowId) -> Option<AppMenuAddress> {
         let surface = self.windows.surface_of(id)?;
         self.appmenu.get(surface).cloned()
     }
 }
 
-/// Delegates the appmenu interfaces to [`AppMenuState`].
 #[macro_export]
 macro_rules! delegate_appmenu {
     ($ty:ty) => {
@@ -242,8 +227,6 @@ mod tests {
 
     #[test]
     fn set_before_map_is_kept_for_the_map() {
-        // The surface is not a window yet: the state stores the pair and the
-        // map path will read it by surface id.
         let mut store = AddressStore::<u32, AppMenuAddress>::default();
         store.set(7, address(":1.2", "/MenuBar/1"));
         assert_eq!(store.get(&7), Some(&address(":1.2", "/MenuBar/1")));

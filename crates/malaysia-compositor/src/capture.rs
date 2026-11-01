@@ -1,13 +1,4 @@
-//! Captures: the debug PNG dump (Bloque 7.1) and the screencopy protocol.
-//!
-//! `SIGUSR1` sets a flag, and the next frame re-renders the output to an
-//! offscreen buffer (the same elements the window pass drew), reads it back,
-//! flips it vertically (GL reads bottom-up) and saves a PNG. It is a
-//! development tool for attaching captures to reports.
-//!
-//! The same offscreen render serves `ext-image-copy-capture-v1`: the frame
-//! handler queues a [`PendingCapture`] and the backend renders it into the
-//! client's SHM or DMA-BUF buffer (Bloque 11).
+//! Screenshots: the debug PNG dump and the screencopy protocol.
 
 use std::{
     fs,
@@ -30,38 +21,27 @@ use smithay::wayland::shm::with_buffer_contents_mut;
 
 use crate::cursor::OutputRenderElement;
 
-/// DMA-BUF allocation info for capture, derived from the renderer.
-///
-/// `State` never sees the renderer (ADR 0012), so the backend fills this in
-/// once after binding the renderer; `capture_constraints` serves it to clients.
 pub(crate) struct CaptureDma {
     pub node: DrmNode,
     pub formats: Vec<(Fourcc, Vec<Modifier>)>,
 }
 
-/// What a queued capture frame should draw.
 pub(crate) enum CaptureTarget {
-    /// The whole output, at its mode size.
-    Output { size: Size<i32, Physical> },
-    /// One toplevel, at its usable (client surface) size.
+    Output {
+        size: Size<i32, Physical>,
+    },
     Window {
         id: malaysia_scene::scene::WindowId,
         size: Size<i32, Physical>,
     },
 }
 
-/// A capture frame waiting for the next render pass.
-///
-/// `ImageCopyCaptureHandler::frame` runs on `State`, which has no renderer, so
-/// it queues the frame here and the backend completes it in `draw`/`render`.
 pub(crate) struct PendingCapture {
     pub frame: Frame,
     pub target: CaptureTarget,
-    /// Whether the client asked for the cursor to be composited.
     pub draw_cursor: bool,
 }
 
-/// Groups the renderer's formats by fourcc, keeping every modifier.
 fn group_modifiers(formats: impl IntoIterator<Item = Format>) -> Vec<(Fourcc, Vec<Modifier>)> {
     let mut grouped: Vec<(Fourcc, Vec<Modifier>)> = Vec::new();
     for format in formats {
@@ -73,7 +53,6 @@ fn group_modifiers(formats: impl IntoIterator<Item = Format>) -> Vec<(Fourcc, Ve
     grouped
 }
 
-/// Derives the DMA-BUF constraints for capture from the renderer's device.
 pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> {
     let node = EGLDevice::device_for_display(renderer.egl_context().display())
         .ok()
@@ -82,11 +61,6 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
     Some(CaptureDma { node, formats })
 }
 
-/// Captures the composed output to `$XDG_RUNTIME_DIR/malaysia-compositor/capture-*.png`.
-///
-/// The output is re-rendered offscreen (reading the presented buffer is
-/// unreliable), with the backend's render transform and output scale so the
-/// picture matches the screen. Returns the saved path and logs it.
 pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -110,10 +84,6 @@ pub(crate) fn capture_output(
     Ok(path)
 }
 
-/// Renders the whole output and encodes it as PNG bytes.
-///
-/// `clear` is the background: transparent for a window so only its content is
-/// kept, opaque for an output.
 pub(crate) fn screenshot_png(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -125,11 +95,6 @@ pub(crate) fn screenshot_png(
     render_png(renderer, elements, size, transform, scale, clear)
 }
 
-/// Renders the output, crops a logical region and encodes it as PNG bytes.
-///
-/// The whole output is rendered and then cropped, so the region sees exactly
-/// what is on screen. `region` is in logical coordinates; `scale` converts it
-/// to the physical pixels of the rendered buffer.
 pub(crate) fn screenshot_region_png(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -150,7 +115,6 @@ pub(crate) fn screenshot_region_png(
     encode_png(width, height, &cropped)
 }
 
-/// Writes PNG bytes to the screenshot path and logs it.
 pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
     let path = screenshot_path()?;
     write_png(&path, png)?;
@@ -158,7 +122,6 @@ pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-/// Renders `elements` and encodes them as PNG.
 fn render_png(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -171,7 +134,6 @@ fn render_png(
     encode_png(w, h, &rgba)
 }
 
-/// Crops a logical region out of a physical RGBA frame.
 fn crop_region(
     region: Rectangle<i32, Logical>,
     scale: f64,
@@ -179,8 +141,6 @@ fn crop_region(
     h: usize,
     rgba: &[u8],
 ) -> std::io::Result<(usize, usize, Vec<u8>)> {
-    // Round to the nearest physical pixel; the clamp below guarantees the
-    // crop never reads outside the output/window buffer.
     let x = (f64::from(region.loc.x) * scale).round() as i32;
     let y = (f64::from(region.loc.y) * scale).round() as i32;
     let width = (f64::from(region.size.w) * scale).round() as i32;
@@ -204,11 +164,6 @@ fn crop_region(
     Ok((width as usize, height as usize, cropped))
 }
 
-/// `Screenshot <date> at <time>.png` in the XDG Desktop directory.
-///
-/// `MALAYSIA_SCREENSHOT_DIR` is a test seam (like `MALAYSIA_SCALE`): it redirects the
-/// save so a check does not touch the user's real Desktop. A name already taken
-/// (two captures in the same second) gets a ` (2)`, ` (3)` suffix.
 fn screenshot_path() -> std::io::Result<PathBuf> {
     let dir = std::env::var_os("MALAYSIA_SCREENSHOT_DIR")
         .map(PathBuf::from)
@@ -225,7 +180,6 @@ fn screenshot_path() -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
-/// Milliseconds since the Unix epoch, for a unique file name.
 fn stamp() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -233,7 +187,6 @@ fn stamp() -> u128 {
         .unwrap_or(0)
 }
 
-/// Encodes RGBA8 pixels as a PNG.
 fn encode_png(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut encoder = png::Encoder::new(&mut bytes, width as u32, height as u32);
@@ -245,15 +198,10 @@ fn encode_png(width: usize, height: usize, rgba: &[u8]) -> std::io::Result<Vec<u
     Ok(bytes)
 }
 
-/// Writes already-encoded PNG bytes.
 fn write_png(path: &Path, png: &[u8]) -> std::io::Result<()> {
     fs::write(path, png)
 }
 
-/// Renders `elements` offscreen and reads them back top-down as RGBA8.
-///
-/// The GL framebuffer is bottom-up, so the readback rows are flipped. `clear`
-/// is the background the render starts from.
 fn render_and_read(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -265,8 +213,6 @@ fn render_and_read(
     let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
     let region = Rectangle::from_size(size_buf);
 
-    // Re-render the same elements offscreen, using the window's transform so
-    // the orientation matches what is presented.
     let mut offscreen: GlesTexture = renderer
         .create_buffer(Fourcc::Abgr8888, size_buf)
         .map_err(|error| std::io::Error::other(format!("create_buffer failed: {error}")))?;
@@ -277,8 +223,6 @@ fn render_and_read(
     let result = tracker
         .render_output(renderer, &mut target, 0, elements, clear)
         .map_err(|error| std::io::Error::other(format!("offscreen render failed: {error}")))?;
-    // The readback needs the GPU to have finished the render, or the mapping
-    // comes back empty (the window pass ignores this sync; the capture waits).
     result
         .sync
         .wait()
@@ -302,13 +246,6 @@ fn render_and_read(
     Ok((w, h, flipped))
 }
 
-/// Renders `elements` into the buffer attached to an `ext-image-copy-capture`
-/// frame.
-///
-/// Both paths render with `Transform::Flipped` to cancel GL's bottom-up
-/// framebuffer, so the buffer is top-down and the caller reports
-/// `Transform::Normal`. Only `Normal` output orientation is handled; a rotated
-/// output captures unrotated content.
 pub(crate) fn capture_into_buffer(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -335,7 +272,6 @@ fn capture_into_dmabuf(
     buffer: &WlBuffer,
 ) -> Result<(), String> {
     let dmabuf = get_dmabuf(buffer).map_err(|error| format!("not a dmabuf: {error}"))?;
-    // A clone shares the underlying buffer; binding needs a mutable handle.
     let mut dmabuf = dmabuf.clone();
     let mut target = renderer
         .bind(&mut dmabuf)
@@ -350,8 +286,6 @@ fn capture_into_dmabuf(
         .map_err(|error| format!("capture sync failed: {error}"))
 }
 
-/// Validates the client's SHM buffer against the capture size and returns the
-/// copy geometry: `(offset, stride, row_bytes, rows)`.
 fn shm_layout(
     pool_len: usize,
     data_offset: i32,
@@ -364,7 +298,6 @@ fn shm_layout(
     if width <= 0 || height <= 0 {
         return Err(format!("invalid capture size {width}x{height}"));
     }
-    // shortcut: a size mismatch fails with CaptureFailureReason::Unknown; switch to BufferConstraints if capture ever needs to scale.
     if data_width != width || data_height != height {
         return Err(format!(
             "shm buffer is {data_width}x{data_height}, capture is {width}x{height}"
@@ -394,8 +327,6 @@ fn shm_layout(
     Ok((offset, stride, row_bytes, rows))
 }
 
-/// Copies `height` rows of `width * 4` bytes from `src` into the client's SHM
-/// pool, honouring its offset and stride. Validates everything before writing.
 #[allow(clippy::too_many_arguments)]
 fn copy_into_shm_pool(
     pool: &mut [u8],
@@ -434,8 +365,7 @@ fn copy_into_shm_pool(
     Ok(())
 }
 
-#[allow(unsafe_code)] // the SHM pool is the client's shared memory; Smithay only
-// exposes it as a raw pointer for exactly this reason.
+#[allow(unsafe_code)]
 fn capture_into_shm(
     renderer: &mut GlesRenderer,
     elements: &[OutputRenderElement],
@@ -450,7 +380,6 @@ fn capture_into_shm(
             wl_shm::Format::Argb8888 => Fourcc::Argb8888,
             _ => return Err("unsupported shm capture format".to_string()),
         };
-        // Reject an unusable buffer before spending GPU time on the render.
         shm_layout(
             len,
             data.offset,
@@ -485,8 +414,7 @@ fn capture_into_shm(
                 .map_texture(&mapping)
                 .map_err(|error| format!("map_texture failed: {error}"))?;
 
-            // SAFETY: `ptr` and `len` are the client's whole SHM pool, as
-            // reported by Smithay, and the slice lives only for this closure.
+            // SAFETY: `ptr` and `len` cover the client's whole SHM pool, which stays mapped here.
             let pool = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
             copy_into_shm_pool(
                 pool,
@@ -503,7 +431,6 @@ fn capture_into_shm(
     .map_err(|error| format!("shm buffer access failed: {error}"))?
 }
 
-/// The directory for captures: `$XDG_RUNTIME_DIR/malaysia-compositor` (or `/tmp/malaysia-compositor`).
 fn capture_dir() -> PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -603,10 +530,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// The cropped physical rectangle must fit inside the buffer and a tiny
-    /// logical selection must not collapse to empty. The clamp at
-    /// `capture.rs:189-192` provides the guarantee for regions that touch or
-    /// exceed the edge.
     #[test]
     fn crop_region_stays_inside_buffer_and_keeps_small_selections() {
         let scale = 1.25;
@@ -614,13 +537,11 @@ mod tests {
         let h = 200;
         let rgba = vec![0u8; w * h * 4];
 
-        // A region larger than the buffer is clamped to the buffer bounds.
         let oversized = Rectangle::<i32, Logical>::new(Point::from((0, 0)), Size::from((200, 200)));
         let (width, height, _) = crop_region(oversized, scale, w, h, &rgba).unwrap();
         assert_eq!(width, w);
         assert_eq!(height, h);
 
-        // A one-logical-pixel selection stays non-empty.
         let tiny = Rectangle::<i32, Logical>::new(Point::from((1, 1)), Size::from((1, 1)));
         let (width, height, _) = crop_region(tiny, scale, w, h, &rgba).unwrap();
         assert_eq!(width, 1);

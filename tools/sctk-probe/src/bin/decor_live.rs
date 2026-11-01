@@ -1,17 +1,4 @@
-//! Maps a server-side-decorated toplevel that renders its content, holding it
-//! open so the composed output can be captured (Bloque 7.2, criterion 4).
-//!
-//! MalaysiaDreams reserves the titlebar band for a server-decorated window, so the
-//! client's content is inset by the titlebar thickness and a band shows above
-//! it in the capture; a client-decorated window fills its whole geometry. The
-//! buffer is created and attached on the first configure (a buffer attached
-//! before the configure is discarded), and the window is held for a few seconds
-//! so a `SIGUSR1` debug capture can show the inset.
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin decor_live
-//! ```
-
+//! Maps a server-decorated toplevel and holds it open for output capture.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{
@@ -39,7 +26,6 @@ use smithay_client_toolkit::{
     shm::{slot::SlotPool, Shm, ShmHandler},
 };
 
-/// How long to hold the window open, for the capture.
 const HOLD: Duration = Duration::from_secs(8);
 
 fn main() {
@@ -94,7 +80,6 @@ struct App {
 }
 
 impl App {
-    /// Fills the window's usable area with a solid colour and commits.
     fn render(&mut self, size: (i32, i32)) {
         let (w, h) = size;
         let (buffer, canvas) = self

@@ -1,4 +1,4 @@
-//! Controles de Ajustes: muestras de acento, radios y menú de semáforos.
+//! Settings controls: accent swatches, radios and the traffic-light menu.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -17,7 +17,6 @@ use vow_design::{CAPTION, MENU_POPOVER, SETTINGS, TEXT, TITLEBAR};
 
 use crate::state::{Rgba, TrafficLightStyle, load_dominant, rgba};
 
-/// Un círculo de acento con etiqueta solo cuando está elegido.
 pub fn accent_swatch(
     name: &'static str,
     color: Rgba,
@@ -80,7 +79,6 @@ pub fn accent_swatch(
     }
 }
 
-/// Botón radio con punto blanco cuando está elegido.
 #[allow(clippy::too_many_arguments)]
 pub fn radio(
     label_text: &str,
@@ -145,7 +143,6 @@ pub fn radio(
     row
 }
 
-/// Botón desplegable con los tres semáforos y el estilo actual.
 pub fn traffic_dropdown(
     current: TrafficLightStyle,
     lights: [Rgba; 3],
@@ -229,8 +226,6 @@ fn traffic_label(style: TrafficLightStyle) -> &'static str {
     }
 }
 
-/// Top-left of the popup relative to the dropdown: the checked row's traffic
-/// lights land exactly on the button's.
 pub(crate) fn traffic_menu_offset() -> (i32, i32) {
     let x = MENU_POPOVER.padding + MENU_POPOVER.item_padding_start + MENU_POPOVER.leading_column;
     (-(x.round() as i32), -(MENU_POPOVER.padding.round() as i32))
@@ -346,8 +341,6 @@ fn open_traffic_menu(
         PressEventData::Mouse(mouse) => (mouse.global_location, mouse.element_location),
         PressEventData::Touch(touch) => (touch.global_location, touch.element_location),
         PressEventData::Keyboard(_) => {
-            // shortcut: el runner aún no enfoca controles; la mejora es
-            // anclar al rect del elemento.
             return;
         }
     };

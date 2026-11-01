@@ -1,16 +1,8 @@
-//! Suspend, restart, shut down and log out through logind (14b-2).
-//!
-//! The shell talks to `org.freedesktop.login1.Manager` on the system bus, the
-//! same calls `systemctl suspend`/`reboot`/`poweroff` and `loginctl
-//! terminate-session` make; polkit decides whether the user may. With
-//! `MALAYSIA_POWER_DRY_RUN=1` (set by `./dev.sh` and forced by the nested
-//! compositor) nothing is called: the log says what would have been.
-
+//! Suspend, restart, shut down and log out through logind.
 const LOGIND: &str = "org.freedesktop.login1";
 const LOGIND_PATH: &str = "/org/freedesktop/login1";
 const MANAGER: &str = "org.freedesktop.login1.Manager";
 
-/// One power action of the system menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerAction {
     Suspend,
@@ -20,7 +12,6 @@ pub enum PowerAction {
 }
 
 impl PowerAction {
-    /// The `malaysia-shell power <name>` argument.
     pub fn from_arg(arg: &str) -> Option<Self> {
         match arg {
             "suspend" => Some(Self::Suspend),
@@ -40,7 +31,6 @@ impl PowerAction {
         }
     }
 
-    /// The logind method and its argument as the log shows them.
     fn call(self) -> (&'static str, Option<String>) {
         match self {
             Self::Suspend => ("Suspend", None),
@@ -51,12 +41,10 @@ impl PowerAction {
     }
 }
 
-/// Whether power actions only log (`MALAYSIA_POWER_DRY_RUN` set and not `0`).
 pub fn dry_run() -> bool {
     std::env::var("MALAYSIA_POWER_DRY_RUN").is_ok_and(|value| value != "0")
 }
 
-/// Runs `action`, or logs it in dry-run mode.
 pub fn run(action: PowerAction) {
     let (method, session) = action.call();
     if dry_run() {
@@ -67,8 +55,8 @@ pub fn run(action: PowerAction) {
         );
         return;
     }
-    let result = zbus::blocking::Connection::system().and_then(|connection| {
-        match (action, session) {
+    let result =
+        zbus::blocking::Connection::system().and_then(|connection| match (action, session) {
             (PowerAction::LogOut, Some(session)) => connection.call_method(
                 Some(LOGIND),
                 LOGIND_PATH,
@@ -79,10 +67,8 @@ pub fn run(action: PowerAction) {
             (PowerAction::LogOut, None) => Err(zbus::Error::Failure(
                 "XDG_SESSION_ID is not set; cannot end the session".to_string(),
             )),
-            // `interactive = true` lets polkit ask when the policy needs it.
             _ => connection.call_method(Some(LOGIND), LOGIND_PATH, Some(MANAGER), method, &(true,)),
-        }
-    });
+        });
     match result {
         Ok(_) => tracing::info!(method, "power: logind call sent"),
         Err(error) => tracing::error!(%error, method, "power: logind call failed"),

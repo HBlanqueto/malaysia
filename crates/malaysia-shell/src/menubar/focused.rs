@@ -1,9 +1,4 @@
-//! Menus for the focused application (14c).
-//!
-//! Apps without DBusMenu get the three menus macOS shows: the app menu,
-//! Ventana and Ayuda. The constructors are pure so the tests can drive them
-//! with fake [`ToplevelInfo`]s; [`on_action`] reads the live list again.
-
+//! Fallback menus (app, Window, Help) for the focused application.
 use barrier_kit::menu::{
     CheckState, MenuIcon, MenuItem, SearchLocation, SearchSource, SearchableEntry,
 };
@@ -13,7 +8,6 @@ use crate::menubar::{help_topics, icons, items, xdg_open};
 
 const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
 
-/// The app menu (`{App}`): about, settings, services, hide/show and quit.
 pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
     let other_unminimized = toplevels
@@ -87,8 +81,6 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
     ]
 }
 
-/// The Ventana menu for the focused app: window controls, layout submenus and
-/// the app's own windows.
 pub fn window_menu_items(
     app_name: &str,
     app_id: &str,
@@ -238,7 +230,6 @@ pub fn window_menu_items(
     items
 }
 
-/// The Ayuda menu for the focused app.
 pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     vec![
         MenuItem::SearchField {
@@ -276,9 +267,6 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     ]
 }
 
-/// All menu entries that the Help search field can reach, paired with their
-/// menu path and menubar location. Keeps labels in one place so tests and UI
-/// never drift apart.
 pub fn searchable_menu_items(
     app_name: &str,
     app_id: &str,
@@ -306,7 +294,6 @@ pub fn searchable_menu_items(
     out
 }
 
-/// Help topics surfaced by the Help search field.
 pub fn help_search_topics() -> Vec<SearchableEntry> {
     help_topics::topics()
         .iter()
@@ -373,7 +360,6 @@ pub(crate) fn collect_searchable(
     }
 }
 
-/// Handles an action from the focused-app menus.
 pub fn on_action(id: String) {
     let toplevels = Toplevels::get();
     let list = toplevels.list.read().clone();
@@ -862,17 +848,13 @@ mod tests {
             ]
         );
         assert!(matches!(layout[0], MenuItem::Header { .. }));
-        // All geometry actions are enabled because there is an active window.
         assert!(
             layout[1..18]
                 .iter()
                 .filter(|item| matches!(item, MenuItem::Action { .. } | MenuItem::Submenu { .. }))
                 .all(is_enabled)
         );
-        // Restore is disabled because the active window has no saved rectangle.
         assert!(!is_enabled(&layout[19]));
-        // The submenu actions carry the active window index, or `on_action`
-        // parses an empty argument and silently does nothing.
         assert!(matches!(
             &layout[1],
             MenuItem::Action { id, .. } if id == "app-move-left:0"

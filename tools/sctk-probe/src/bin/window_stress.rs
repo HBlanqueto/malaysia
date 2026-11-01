@@ -1,18 +1,4 @@
-//! Opens many toplevels, then closes them, so the compositor's teardown can be
-//! asserted from the outside.
-//!
-//! This is a dev-only client for the Block 4 acceptance check. It creates
-//! [`WINDOWS`] decorated toplevels, each with a small shared-memory buffer so
-//! they map, waits for their configures, then destroys every one and exits. The
-//! compositor is expected to return to an empty scene; the `block4` harness
-//! asserts that from the compositor's own report.
-//!
-//! Run against a running compositor:
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin window_stress
-//! ```
-
+//! Client that opens many toplevels, then closes them, for teardown checks.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -44,9 +30,7 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// How many windows to open and close.
 const WINDOWS: usize = 50;
-/// The side of each window's buffer, in pixels.
 const SIDE: i32 = 64;
 
 fn main() {
@@ -85,7 +69,6 @@ fn main() {
         .expect("event loop failed");
 }
 
-/// One window opened by the stress client.
 struct OpenWindow {
     window: Window,
     buffer: Buffer,
@@ -106,11 +89,6 @@ struct App {
 }
 
 impl App {
-    /// Creates every toplevel and asks for its initial configure.
-    ///
-    /// The first commit carries no buffer: xdg-shell requires the client to
-    /// wait for the initial configure before attaching anything. The buffer is
-    /// attached from [`WindowHandler::configure`].
     fn open_all(&mut self) {
         let qh = self.qh.clone();
         for _ in 0..WINDOWS {
@@ -194,8 +172,6 @@ impl WindowHandler for App {
         _: WindowConfigure,
         _: u32,
     ) {
-        // Attach the buffer on the first configure, then acknowledge and
-        // commit, so the window maps.
         if let Some(entry) = self
             .windows
             .iter_mut()

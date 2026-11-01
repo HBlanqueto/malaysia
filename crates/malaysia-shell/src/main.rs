@@ -1,11 +1,4 @@
-//! The Malaysia shell: one binary, many processes (ADR 0023).
-//!
-//! Each component runs as its own process and its own Wayland client, launched
-//! as `malaysia-shell <component>`: `menubar`, `dock`, `lock`, `launcher` and
-//! the system dialogs `power`, `force-quit` and `about`.
-//! A component must be able to crash and restart on its own without taking any
-//! other component (or the compositor) down.
-
+//! Entry point of the shell binary; each component runs as `malaysia-shell <component>`.
 mod desktop;
 mod dialogs;
 mod dock;
@@ -62,8 +55,6 @@ fn main() -> ExitCode {
     }
 }
 
-/// Installs the shell's tracing subscriber: `RUST_LOG` when set, `info`
-/// otherwise, always on stderr.
 fn init_logging() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));

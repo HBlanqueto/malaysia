@@ -1,14 +1,4 @@
-//! Asserts that an output can be captured through `ext-image-copy-capture-v1`.
-//!
-//! Binds the output capture source manager and the image copy capture manager,
-//! creates a source for the first `wl_output`, opens a session, and — once the
-//! compositor sends its buffer constraints (`BufferSize`, `ShmFormat`, `Done`)
-//! — allocates a matching SHM buffer, attaches it to a frame and captures.
-//! It passes when the frame's `Ready` event arrives; a `Failed`, or a timeout,
-//! fails.
-//!
-//! Run against a running compositor, or `./dev.sh screencopy`.
-
+//! Probe: an output can be captured through `ext-image-copy-capture-v1`.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -47,7 +37,6 @@ use smithay_client_toolkit::{
 };
 use wayland_client::protocol::{wl_buffer::WlBuffer, wl_output::WlOutput, wl_shm};
 
-/// How long to wait for the frame to become ready.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -152,7 +141,6 @@ struct App {
 }
 
 impl App {
-    /// Once the constraints are in, allocate a buffer and start the capture.
     fn start_capture(&mut self, qh: &QueueHandle<Self>) {
         if !self.done || self.frame.is_some() {
             return;
@@ -242,7 +230,6 @@ impl App {
         self.frame = Some(frame);
     }
 
-    /// Reads back the captured pixels and checks they are not blank.
     fn check_pixels(&mut self) {
         let Some((width, height)) = self.size else {
             return;
@@ -290,9 +277,6 @@ impl App {
         self.check_cursor(different);
     }
 
-    /// The scene is empty, so anything that differs from the background is the
-    /// cursor. The `paint_cursors` flag must make that difference appear or
-    /// disappear.
     fn check_cursor(&mut self, different: usize) {
         if std::env::var_os("CAPTURE_EXPECT_CURSOR").is_some() && different == 0 {
             eprintln!("screencopy: FAIL paint_cursors did not include the cursor");
@@ -486,7 +470,6 @@ impl Dispatch<WlBuffer, ()> for App {
     }
 }
 
-/// Only 32-bit packed formats can be inspected with a four-byte pixel read.
 fn is_linear_capture_format(format: u32) -> bool {
     matches!(format, 0x3432_5241 | 0x3432_5258)
 }

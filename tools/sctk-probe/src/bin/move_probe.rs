@@ -1,26 +1,4 @@
-//! Acceptance harness for the client-initiated move and resize path.
-//!
-//! It runs three cases, each with a fresh compositor and `MALAYSIA_TEST_INPUT=1`
-//! (so the compositor injects the button press, motions and release a probe
-//! cannot make itself):
-//!
-//! 1. `move_client` repeats a GTK-shaped gesture: press, motions past a
-//!    threshold, a second window that takes focus, then `xdg_toplevel.move`
-//!    and `resize` with the original press serial while the button is held.
-//!    The harness asserts both were accepted, that the window moved by the
-//!    injected pointer delta, and that the released and fabricated serials
-//!    were rejected.
-//! 2. `hover_client` asserts the surface-local coordinates of a buttonless
-//!    hover: after the scripted drag moves the window to a non-zero origin and
-//!    the release, the compositor hovers the pointer and the client must read
-//!    each point at the position it holds over the surface.
-//! 3. Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar
-//!    drag. The harness asserts its window moved by the injected delta. If
-//!    Nautilus is not installed, or never maps a window, the case is reported
-//!    UNVERIFIED rather than failed.
-//!
-//! Run from the dev shell, or `./dev.sh move` which builds and runs it.
-
+//! Harness for the client-initiated move and resize path.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -29,26 +7,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// How long to wait for the compositor to create its socket.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long to wait for the move client, which has its own shorter timeout.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
-/// How long Nautilus gets to start, map and be dragged.
 const NAUTILUS_TIMEOUT: Duration = Duration::from_secs(12);
-/// The pointer delta the scripted drag applies, matching `MALAYSIA_TEST_DRAG`.
 const DRAG: (f64, f64) = (60.0, 40.0);
-/// The hover points, relative to the dragged window's top-left.
-///
-/// The first is outside the window (the client gets a leave, so the next point
-/// enters); the other two are inside it, so the client sees an enter and then a
-/// motion. The probe reads the workspace centre from a real window and places
-/// the hovered window there instead of assuming (0, 0).
 const HOVER: [(f64, f64); 3] = [(-10.0, -10.0), (32.0, 32.0), (40.0, 40.0)];
-/// The hover client's surface side, matching `hover_client`'s `SIDE`.
-///
-/// Its window is client-decorated, so the outer rectangle is exactly this; the
-/// move client is server-decorated and its outer is taller, which is why the
-/// probe cannot reuse its origin directly.
 const HOVER_SIDE: f64 = 64.0;
 
 fn main() -> ExitCode {
@@ -93,8 +56,6 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-/// Resolves one of this package's probe binaries from its environment variable,
-/// the directory of this executable, or the debug target directory.
 fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
     std::env::var_os(variable)
         .map(PathBuf::from)
@@ -106,11 +67,6 @@ fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
         })
 }
 
-/// The GTK-shaped sequence through `move_client`.
-///
-/// Returns the centre of the workspace, read from the window's real outer
-/// rectangle before the drag. The hover case centres its own (client-decorated)
-/// window there instead of guessing (0, 0).
 fn run_move_case(binary: &Path, client: &Path) -> Result<(f64, f64), String> {
     let runtime = TempDir::create()?;
     let host_display = host_wayland_display()?;
@@ -226,11 +182,6 @@ fn run_move_case(binary: &Path, client: &Path) -> Result<(f64, f64), String> {
     Ok(centre)
 }
 
-/// The buttonless hover through `hover_client`, asserting where it arrived.
-///
-/// `centre` is the workspace centre read from the move case. The hover window
-/// is `HOVER_SIDE` square and centred there, and the scripted drag moves it by
-/// `DRAG`, so the hover points are that final origin plus [`HOVER`]'s offsets.
 fn run_hover_case(binary: &Path, repo: &Path, centre: (f64, f64)) -> Result<(), String> {
     let client = probe_binary(repo, "MALAYSIA_HOVER_BIN", "hover_client");
     if !client.is_file() {
@@ -258,8 +209,6 @@ fn run_hover_case(binary: &Path, repo: &Path, centre: (f64, f64)) -> Result<(), 
     let compositor_log = compositor.capture()?;
     let socket = wait_for_socket(runtime.path(), &mut compositor, &compositor_log)?;
 
-    // The client is client-decorated, so a surface-local position is the global
-    // point minus the window origin: exactly the relative offsets.
     let expect = points([HOVER[1], HOVER[2]]);
     let mut hover_client = ChildGuard::spawn(
         Command::new(&client)
@@ -305,7 +254,6 @@ fn run_hover_case(binary: &Path, repo: &Path, centre: (f64, f64)) -> Result<(), 
     Ok(())
 }
 
-/// Renders points as the `x,y` list separated by `;` the probes parse.
 fn points(list: impl IntoIterator<Item = (f64, f64)>) -> String {
     list.into_iter()
         .map(|(x, y)| format!("{x},{y}"))
@@ -313,7 +261,6 @@ fn points(list: impl IntoIterator<Item = (f64, f64)>) -> String {
         .join(";")
 }
 
-/// Asserts that a `hover_client` line reports a position.
 fn assert_position(line: &str, expected_x: f64, expected_y: f64) -> Result<(), String> {
     for (axis, expected) in [("x", expected_x), ("y", expected_y)] {
         let got = field(line, axis).ok_or_else(|| format!("`{axis}` is missing from `{line}`"))?;
@@ -326,7 +273,6 @@ fn assert_position(line: &str, expected_x: f64, expected_y: f64) -> Result<(), S
     Ok(())
 }
 
-/// A scripted headerbar drag on a real Nautilus window.
 fn run_nautilus_case(binary: &Path) -> Result<(), String> {
     let Some(nautilus) = resolve("MALAYSIA_APP_NAUTILUS", "nautilus") else {
         println!("move_probe: nautilus UNVERIFIED (not installed)");
@@ -339,7 +285,6 @@ fn run_nautilus_case(binary: &Path) -> Result<(), String> {
             .arg("--log-level=info")
             .env("XDG_RUNTIME_DIR", runtime.path())
             .env("MALAYSIA_TEST_INPUT", "1")
-            // The headerbar is a few percent below the window's top edge.
             .env("MALAYSIA_TEST_PRESS_AT", "0.5,0.05")
             .env("MALAYSIA_TEST_DRAG", format!("{},{}", DRAG.0, DRAG.1)),
         host_display.as_deref(),
@@ -399,7 +344,6 @@ fn run_nautilus_case(binary: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Waits until a probe client exits, failing on a non-zero status.
 fn wait_for_client(client: &mut ChildGuard, log: &Sink, what: &str) -> Result<(), String> {
     let deadline = Instant::now() + CLIENT_TIMEOUT;
     loop {
@@ -422,7 +366,6 @@ fn wait_for_client(client: &mut ChildGuard, log: &Sink, what: &str) -> Result<()
     }
 }
 
-/// Asserts that `to - from` equals `expected` in a `test drag applied` line.
 fn assert_delta(line: &str, from: &str, to: &str, expected: f64) -> Result<(), String> {
     let start = field(line, from).ok_or_else(|| format!("`{from}` is missing from `{line}`"))?;
     let end = field(line, to).ok_or_else(|| format!("`{to}` is missing from `{line}`"))?;
@@ -436,25 +379,21 @@ fn assert_delta(line: &str, from: &str, to: &str, expected: f64) -> Result<(), S
     Ok(())
 }
 
-/// Reads `name=<number>` from a tracing line.
 fn field(line: &str, name: &str) -> Option<f64> {
     let rest = line.split_once(&format!("{name}="))?.1;
     rest.split_whitespace().next()?.parse().ok()
 }
 
-/// The first number after `marker` on a client line.
 fn number_after(line: &str, marker: &str) -> Option<u32> {
     let rest = line.split_once(marker)?.1;
     let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
 }
 
-/// A copy of the captured lines with ANSI colour escapes removed.
 fn stripped(sink: &Sink) -> Vec<String> {
     snapshot(sink).iter().map(|line| strip_ansi(line)).collect()
 }
 
-/// Removes ANSI escape sequences, so tracing's coloured fields can be parsed.
 fn strip_ansi(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut chars = line.chars();
@@ -472,7 +411,6 @@ fn strip_ansi(line: &str) -> String {
     out
 }
 
-/// Resolves a client from its environment variable or `PATH`.
 fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
     if let Some(path) = std::env::var_os(variable) {
         let path = PathBuf::from(path);
@@ -483,7 +421,6 @@ fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
     which(fallback)
 }
 
-/// Looks a command up on `PATH`.
 fn which(command: &str) -> Option<PathBuf> {
     let paths = std::env::var_os("PATH")?;
     std::env::split_paths(&paths)
@@ -491,8 +428,6 @@ fn which(command: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// Spawns the compositor with its own runtime directory, reaching the host
-/// compositor through the absolute socket path resolved by the caller.
 fn host_wayland_display() -> Result<Option<String>, String> {
     let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
         return Ok(None);
@@ -505,7 +440,6 @@ fn host_wayland_display() -> Result<Option<String>, String> {
     Ok(Some(format!("{runtime}/{display}")))
 }
 
-/// Waits until the compositor has created a `wayland-*` socket.
 fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
     let deadline = Instant::now() + SOCKET_TIMEOUT;
     loop {
@@ -529,7 +463,6 @@ fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Resul
     }
 }
 
-/// The first (alphabetically) Wayland socket in a directory.
 fn find_socket(dir: &Path) -> Option<String> {
     let mut names: Vec<String> = fs::read_dir(dir)
         .ok()?
@@ -541,7 +474,6 @@ fn find_socket(dir: &Path) -> Option<String> {
     names.into_iter().next()
 }
 
-/// A child process that is killed and reaped when it drops.
 struct ChildGuard {
     child: Child,
 }
@@ -589,10 +521,8 @@ impl Drop for ChildGuard {
     }
 }
 
-/// A shared, thread-safe collection of captured output lines.
 type Sink = Arc<Mutex<Vec<String>>>;
 
-/// Reads `reader` line by line into a sink on its own thread.
 fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     thread::spawn(move || {
         for line in BufReader::new(reader).lines() {
@@ -604,12 +534,10 @@ fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     });
 }
 
-/// A copy of the lines captured so far.
 fn snapshot(sink: &Sink) -> Vec<String> {
     sink.lock().expect("capture sink poisoned").clone()
 }
 
-/// A runtime directory that is removed when it drops.
 struct TempDir(PathBuf);
 
 impl TempDir {

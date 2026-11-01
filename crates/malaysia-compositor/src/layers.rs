@@ -1,14 +1,4 @@
-//! Minimal `wlr_layer_shell_v1` support.
-//!
-//! MalaysiaDreams serves layer-shell for its shell and the wallpaper client (`malaysia-wallpaper`,
-//! ADR 0023 and ADR 0049). This module
-//! tracks the layer surfaces a client creates, computes their geometry from
-//! anchors/margins/size, sends the configures, and exposes them for rendering
-//! and hit-testing.
-//!
-//! The wallpaper lives on the [`Layer::Background`] layer — the lowest layer,
-//! behind every window — exactly as macOS draws its desktop picture behind the
-//! whole window stack.
+//! Minimal `wlr_layer_shell_v1` support for the shell and the wallpaper.
 
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_server::Resource;
@@ -19,28 +9,17 @@ use smithay::wayland::shell::wlr_layer::{
     Anchor, ExclusiveZone, KeyboardInteractivity, Layer, LayerSurface, LayerSurfaceCachedState,
 };
 
-/// A layer surface MalaysiaDreams has placed on the output.
 #[derive(Debug)]
 pub struct LayerEntry {
-    /// The layer surface.
     pub surface: LayerSurface,
-    /// Which stacking layer it sits in (background, bottom, top, overlay).
     pub layer: Layer,
-    /// The edges it is anchored to.
     pub anchors: Anchor,
-    /// Where it is on the output, in logical coordinates.
     pub geometry: Rectangle<i32, Logical>,
-    /// The exclusive zone it reserves, in logical pixels.
     pub exclusive_zone: i32,
-    /// Whether it may take keyboard focus.
     pub keyboard_interactivity: KeyboardInteractivity,
 }
 
 impl LayerEntry {
-    /// Whether this surface is a desktop's own bar: a Top/Overlay panel along
-    /// the whole top edge that reserves space (the menubar). Each desktop has
-    /// one and it slides with its desktop; the dock and other panels stay put
-    /// (ADR 0051).
     pub fn is_desktop_bar(&self) -> bool {
         matches!(self.layer, Layer::Top | Layer::Overlay)
             && self
@@ -50,9 +29,6 @@ impl LayerEntry {
             && self.exclusive_zone > 0
     }
 
-    /// Whether this surface is shell chrome a focus space hides: the desktop
-    /// bar, or a panel along the bottom edge (the dock). The launcher and
-    /// dialogs are not chrome and stay available (ADR 0051).
     pub fn is_shell_chrome(&self) -> bool {
         self.is_desktop_bar()
             || (matches!(self.layer, Layer::Top | Layer::Overlay)
@@ -61,57 +37,39 @@ impl LayerEntry {
     }
 }
 
-/// The compositor's registry of layer surfaces.
 #[derive(Debug, Default)]
 pub struct Layers {
-    /// Surfaces created but not yet configured. On their first commit we
-    /// compute geometry and send the initial configure.
     unmapped: Vec<LayerSurface>,
-    /// Surfaces that are placed and rendered.
     mapped: Vec<LayerEntry>,
-    /// Whether the shell chrome (bar and dock) is hidden because a focus
-    /// space is shown: it is neither drawn nor hit (ADR 0051).
     chrome_hidden: bool,
-    /// Whether the desktop bar is down over a focus space: then it takes
-    /// input even though the chrome is hidden.
     bar_revealed: bool,
 }
 
 impl Layers {
-    /// Creates an empty layer registry.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Records a new layer surface (`WlrLayerShellHandler::new_layer_surface`).
     pub fn add(&mut self, surface: LayerSurface) {
         self.unmapped.push(surface);
     }
 
-    /// Every tracked layer surface, mapped or not.
     pub fn surfaces(&self) -> impl Iterator<Item = &LayerSurface> {
         self.unmapped
             .iter()
             .chain(self.mapped.iter().map(|e| &e.surface))
     }
 
-    /// Forgets a destroyed layer surface.
     pub fn destroy(&mut self, surface: &WlSurface) {
         self.unmapped.retain(|s| s.wl_surface() != surface);
         self.mapped.retain(|e| e.surface.wl_surface() != surface);
     }
 
-    /// Handles a surface commit: configures a new layer surface, or re-places a
-    /// mapped one whose anchors/size changed.
-    ///
-    /// Returns the surface when it maps for the first time, so the caller can
-    /// apply the keyboard-focus policy exactly once.
     pub fn commit(
         &mut self,
         surface: &WlSurface,
         output_size: Size<i32, Logical>,
     ) -> Option<LayerSurface> {
-        // Prune any layer surface whose wl_surface died.
         self.mapped.retain(|e| e.surface.wl_surface().alive());
         self.unmapped.retain(|s| s.wl_surface().alive());
 
@@ -130,7 +88,6 @@ impl Layers {
             let geometry = geometry_of(&state, output_size);
             let exclusive_zone = exclusive_zone_of(&state);
             if geometry != entry.geometry || exclusive_zone != entry.exclusive_zone {
-                // Tell the client the new size, then place it.
                 entry.surface.with_pending_state(|pending| {
                     pending.size = Some(geometry.size);
                 });
@@ -142,20 +99,16 @@ impl Layers {
         None
     }
 
-    /// The tracked entry for a layer surface.
     pub fn entry_of(&self, surface: &WlSurface) -> Option<&LayerEntry> {
         self.mapped
             .iter()
             .find(|entry| entry.surface.wl_surface() == surface)
     }
 
-    /// Every mapped layer surface.
     pub fn mapped(&self) -> &[LayerEntry] {
         &self.mapped
     }
 
-    /// Places a newly committed layer surface: computes its geometry, sends the
-    /// initial configure, and marks it mapped.
     fn configure(&mut self, surface: &LayerSurface, output_size: Size<i32, Logical>) {
         let state = cached_state_of(surface.wl_surface());
         let geometry = geometry_of(&state, output_size);
@@ -179,15 +132,6 @@ impl Layers {
         });
     }
 
-    /// The surface, if any, under `point` among mapped input layers.
-    ///
-    /// `Background` and `Bottom` layers never take input; every mapped
-    /// `Top`/`Overlay` surface does, regardless of its keyboard interactivity.
-    /// Keyboard interactivity is a separate policy: it decides which layer
-    /// takes keyboard focus when clicked, not whether the pointer reaches it.
-    /// The surface's input region is honored (none means the whole surface).
-    /// Returns the surface and the surface-local coordinates, matching
-    /// `Windows::surface_under`.
     pub fn surface_under(
         &self,
         point: Point<f64, Logical>,
@@ -214,30 +158,22 @@ impl Layers {
             })
     }
 
-    /// Hides or shows the shell chrome (bar and dock) for a focus space.
     pub fn set_chrome_hidden(&mut self, hidden: bool) {
         self.chrome_hidden = hidden;
     }
 
-    /// Lets the desktop bar take input over a focus space, while it is down.
     pub fn set_bar_revealed(&mut self, revealed: bool) {
         self.bar_revealed = revealed;
     }
 
-    /// Whether the shell chrome is hidden because a focus space is shown.
     pub fn chrome_hidden(&self) -> bool {
         self.chrome_hidden
     }
 
-    /// The layer surfaces on a given layer, most recently added last.
     pub fn on_layer(&self, layer: Layer) -> impl Iterator<Item = &LayerEntry> {
         self.mapped.iter().filter(move |entry| entry.layer == layer)
     }
 
-    /// The geometry of a mapped layer surface, if it is tracked.
-    ///
-    /// Popups created through `zwlr_layer_surface_v1.get_popup` anchor against
-    /// this (the menubar's menus will do exactly that).
     pub fn geometry_of(&self, surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
         self.mapped
             .iter()
@@ -245,10 +181,6 @@ impl Layers {
             .map(|entry| entry.geometry)
     }
 
-    /// The workspace space reserved at the top edge, in logical pixels.
-    ///
-    /// Top/Overlay layers anchored to the top with an exclusive zone claim it
-    /// (the menu bar); windows start below it.
     pub fn exclusive_top(&self) -> i32 {
         self.mapped
             .iter()
@@ -260,7 +192,6 @@ impl Layers {
             .sum()
     }
 
-    /// The workspace space reserved at the bottom edge, in logical pixels.
     pub fn exclusive_bottom(&self) -> i32 {
         self.mapped
             .iter()
@@ -272,36 +203,22 @@ impl Layers {
             .sum()
     }
 
-    /// All configured layer surfaces, for frame callbacks.
     pub fn all(&self) -> impl Iterator<Item = &LayerEntry> {
         self.mapped.iter()
     }
 
-    /// Whether there are any configured layer surfaces.
     pub fn is_empty(&self) -> bool {
         self.mapped.is_empty()
     }
 }
 
-/// What to focus after a layer surface disappears.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LayerUnfocus<S> {
-    /// Nothing had this layer's focus.
     None,
-    /// Another exclusive layer takes over.
     Layer(S),
-    /// Focus returns to the window remembered before the layer took it, if it
-    /// still exists (`None` when it does not).
     Window(Option<WindowId>),
 }
 
-/// Keyboard-focus policy for layer surfaces, independent of Wayland types so it
-/// can be tested with plain ids.
-///
-/// Exclusive surfaces take the keyboard when they map and keep it while they
-/// exist. On-demand surfaces take it on a click and drop it when the click
-/// lands outside. The window that had focus before a layer took it is
-/// remembered only to restore it when that layer goes away.
 #[derive(Debug)]
 pub struct LayerFocus<S> {
     exclusive: Vec<S>,
@@ -322,7 +239,6 @@ impl<S> Default for LayerFocus<S> {
 }
 
 impl<S: Clone + Eq> LayerFocus<S> {
-    /// Records a newly mapped layer and returns whether it must take focus.
     pub fn mapped(
         &mut self,
         surface: S,
@@ -345,7 +261,6 @@ impl<S: Clone + Eq> LayerFocus<S> {
         }
     }
 
-    /// Records a click on a layer and returns whether it must take focus.
     pub fn clicked(
         &mut self,
         surface: S,
@@ -379,7 +294,6 @@ impl<S: Clone + Eq> LayerFocus<S> {
         }
     }
 
-    /// Clears an on-demand focus after a click outside. Exclusive focus stays.
     pub fn clicked_outside(&mut self) -> bool {
         let Some(focused) = self.focused.as_ref() else {
             return false;
@@ -393,7 +307,6 @@ impl<S: Clone + Eq> LayerFocus<S> {
         true
     }
 
-    /// Forgets a layer that disappeared and says where focus goes next.
     pub fn unmapped(&mut self, surface: &S) -> LayerUnfocus<S> {
         self.exclusive.retain(|entry| entry != surface);
         if self.on_demand.as_ref() == Some(surface) {
@@ -410,23 +323,15 @@ impl<S: Clone + Eq> LayerFocus<S> {
         LayerUnfocus::Window(self.previous_window.take())
     }
 
-    /// Whether an exclusive layer owns the keyboard, so a window click must not
-    /// take focus from it.
     pub fn blocks_window_focus(&self) -> bool {
         !self.exclusive.is_empty()
     }
 
-    /// The layer that currently owns the keyboard.
     pub fn focused(&self) -> Option<&S> {
         self.focused.as_ref()
     }
 }
 
-/// Reads the surface's input region from its cached committed state.
-///
-/// `None` means the whole surface is sensitive, as `wl_surface` specifies. A
-/// region with no rectangles (`set_input_region` with an empty `wl_region`) is
-/// not `None`: it rejects every point.
 fn input_region_of(surface: &WlSurface) -> Option<smithay::wayland::compositor::RegionAttributes> {
     with_states(surface, |states| {
         states
@@ -438,15 +343,10 @@ fn input_region_of(surface: &WlSurface) -> Option<smithay::wayland::compositor::
     })
 }
 
-/// Whether a surface's committed input region accepts `local`.
 pub(crate) fn surface_accepts_input(surface: &WlSurface, local: Point<f64, Logical>) -> bool {
     accepts_input(input_region_of(surface).as_ref(), local)
 }
 
-/// Whether a point is inside a surface's input region.
-///
-/// No region means the whole surface accepts input. An empty region means
-/// none of it does.
 fn accepts_input(
     region: Option<&smithay::wayland::compositor::RegionAttributes>,
     local: Point<f64, Logical>,
@@ -454,7 +354,6 @@ fn accepts_input(
     region.is_none_or(|region| region.contains(local.to_i32_round()))
 }
 
-/// Reads the client-committed layer state from the surface's cached state.
 fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
     with_states(surface, |states| {
         *states
@@ -464,7 +363,6 @@ fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
     })
 }
 
-/// Computes where a layer surface sits, from its anchors, margins and size.
 fn geometry_of(
     state: &LayerSurfaceCachedState,
     output_size: Size<i32, Logical>,
@@ -483,9 +381,6 @@ fn geometry_of(
         state.size.h
     };
 
-    // A surface with no horizontal anchor is centred (the launcher), and one
-    // with no vertical anchor is centred vertically. Layer-shell lets the
-    // compositor place unanchored surfaces; centring is the useful choice here.
     let x = if anchors.contains(Anchor::LEFT) {
         margins.left
     } else if anchors.contains(Anchor::RIGHT) {
@@ -507,7 +402,6 @@ fn geometry_of(
     )
 }
 
-/// The exclusive zone a layer surface reserves, as plain pixels.
 fn exclusive_zone_of(state: &LayerSurfaceCachedState) -> i32 {
     match state.exclusive_zone {
         ExclusiveZone::Exclusive(value) => value as i32,

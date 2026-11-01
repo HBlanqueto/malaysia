@@ -1,50 +1,17 @@
-//! How much room MalaysiaDreams reserves around a client's surface.
-//!
-//! A client draws its own content; MalaysiaDreams may draw a titlebar and other chrome
-//! around it. [`Insets`] is the space that chrome takes from each edge, in
-//! logical pixels, and it answers exactly one question: given this window, in
-//! this state, what insets? [`Insets::for_window`] is the one place that
-//! decision is made, and its precedence is role, then window state, then what
-//! the client negotiated. The reasoning is in ADR 0014.
-//!
-//! Three things are deliberately **not** here:
-//!
-//! - **Shadows.** They draw outside the window and reserve no layout space;
-//!   adjacent windows' shadows overlap. They belong to the scene graph, not to
-//!   insets.
-//! - **The input region.** It does not match the visual region: resize borders
-//!   extend a few pixels *outside* the visible window, so the input region can
-//!   be larger than the window. That is needed only once move and resize land,
-//!   and it will be a sibling calculation, not a field here.
-//! - **Widths and colors.** Nothing here hardcodes a number: the titlebar's
-//!   side and thickness come from [`vow_design`], and no caller may assume
-//!   "the titlebar is N tall".
-//!
-//! Insets are a function of current state, computed on each call, never a
-//! value captured when a window is mapped: fullscreen zeroes them today, and a
-//! maximized or tiled window may change them later.
+//! Space reserved around a client's surface for titlebar and other chrome.
 
 use malaysia_scene::scene::Decoration;
 use vow_design::{Titlebar, TitlebarPosition};
 
-/// The space reserved around a client's surface, in logical pixels.
-///
-/// All four values are non-negative while only visible chrome is modelled; a
-/// future input region may use negative values to extend outside the window.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Insets {
-    /// Space reserved above the surface, in logical pixels.
     pub top: f64,
-    /// Space reserved to the right of the surface, in logical pixels.
     pub right: f64,
-    /// Space reserved below the surface, in logical pixels.
     pub bottom: f64,
-    /// Space reserved to the left of the surface, in logical pixels.
     pub left: f64,
 }
 
 impl Insets {
-    /// No reserved space on any edge.
     pub const ZERO: Insets = Insets {
         top: 0.0,
         right: 0.0,
@@ -52,27 +19,14 @@ impl Insets {
         left: 0.0,
     };
 
-    /// The space reserved across the window's width.
     pub fn horizontal(&self) -> f64 {
         self.left + self.right
     }
 
-    /// The space reserved across the window's height.
     pub fn vertical(&self) -> f64 {
         self.top + self.bottom
     }
 
-    /// The insets for a window, with `titlebar` describing MalaysiaDreams's chrome.
-    ///
-    /// This is the single place the decision is resolved. In order: a popup or
-    /// a dialog (a toplevel with a parent) is never decorated; a fullscreen
-    /// window reserves nothing; a client that draws its own chrome reserves
-    /// nothing; only a normal or maximized toplevel with server-side chrome
-    /// gets the titlebar inset on the edge [`vow_design`] configures.
-    ///
-    /// `decoration` is the mode stored in the scene (ADR 0019): the negotiation
-    /// happened in a protocol handler, and this function only consumes its
-    /// result.
     pub fn for_window(
         role: Role,
         window: WindowState,
@@ -88,35 +42,20 @@ impl Insets {
     }
 }
 
-/// What a window is, from the shell protocol's point of view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// A normal application window: a toplevel with no parent.
     Toplevel,
-    /// A dialog: a toplevel that has a parent set.
     Dialog,
-    /// A popup: a menu, tooltip or similar transient surface.
     Popup,
 }
 
-/// The window state that affects decoration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowState {
-    /// Ordinary, floating.
     Normal,
-    /// Maximized. Keeps its titlebar today; may change later.
     Maximized,
-    /// Fullscreen: covers the output, so nothing is reserved.
     Fullscreen,
 }
 
-/// The effective decoration for one window.
-///
-/// Malaysia's own apps (`native`) always keep client-side chrome: their app-id
-/// prefix reserves the compositor titlebar, even under `force_server`. Any
-/// other window follows the configured policy exactly as before. This function
-/// is pure; the caller is responsible for warning when a native app did not
-/// request CSD.
 pub(crate) fn effective_decoration(
     policy: crate::config::DecorationPolicy,
     requested: Option<Decoration>,
@@ -132,7 +71,6 @@ pub(crate) fn effective_decoration(
     }
 }
 
-/// The inset that a titlebar occupies on the edge it is configured on.
 fn titlebar_inset(titlebar: &Titlebar) -> Insets {
     let thickness = f64::from(titlebar.thickness);
     match titlebar.position {
@@ -164,7 +102,6 @@ mod tests {
     use crate::config::DecorationPolicy;
     use malaysia_scene::scene::Decoration;
 
-    /// A titlebar on `position` with `thickness`, reusing the real metrics.
     fn titlebar(position: TitlebarPosition, thickness: u32) -> Titlebar {
         Titlebar {
             position,

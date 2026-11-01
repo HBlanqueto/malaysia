@@ -1,15 +1,4 @@
-//! The menu bar component: the bar at the top of the screen.
-//!
-//! A `Top` layer-shell surface with an exclusive zone, like macOS's menu bar.
-//! It is split into modules that each own a slice of the bar:
-//!
-//! - [`bar::BarApp`] lays out the surface and anchors root popups.
-//! - [`system`] owns the snowflake/system menu on the far left.
-//! - [`appmenu`] owns the desktop menus and the active app's name.
-//! - [`clock::clock_label`] is the clock on the right, pushed by the layout.
-//!
-//! Drawing is BarrierKit on Freya (ADR 0034).
-
+//! Menubar component: the top layer-shell bar.
 pub mod appmenu;
 pub mod bar;
 pub mod clock;
@@ -36,15 +25,6 @@ use std::time::{Duration, Instant};
 
 use crate::desktop::DesktopEntry;
 
-/// Resolves an app id to its menu-bar name.
-///
-/// 1. If a `.desktop` entry matches by id or `StartupWMClass`, use its
-///    localized `Name`.
-/// 2. Otherwise, if an entry's `Exec` matches the app id (by its last
-///    non-trivial segment), use that entry's `Name`.
-/// 3. Otherwise, use the last non-empty segment of the app id with an
-///    initial capital.
-/// 4. With no app id, the desktop is «Escritorio».
 pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> String {
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
         return "Escritorio".to_string();
@@ -55,8 +35,6 @@ pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> Strin
     }
 }
 
-/// The `.desktop` entry of `app_id`: by id or `StartupWMClass`, else by the
-/// binary its `Exec` runs.
 pub fn find_entry<'a>(app_id: &str, entries: &'a [DesktopEntry]) -> Option<&'a DesktopEntry> {
     let app_id = app_id.trim();
     entries
@@ -68,8 +46,6 @@ pub fn find_entry<'a>(app_id: &str, entries: &'a [DesktopEntry]) -> Option<&'a D
         })
 }
 
-/// Returns the last meaningful segment of an app id, skipping a trailing
-/// `.desktop` or generic suffixes like `desktop`.
 fn app_id_stem(app_id: &str) -> &str {
     for segment in app_id.rsplit('.') {
         if !segment.is_empty() && segment != "desktop" {
@@ -87,7 +63,6 @@ fn capitalize(value: &str) -> String {
     }
 }
 
-/// Whether the desktop entry's first `Exec` token contains the app id stem.
 fn exec_matches(entry: &DesktopEntry, stem: &str) -> bool {
     let needle = stem.to_lowercase();
     entry.exec.iter().any(|token| {
@@ -96,7 +71,6 @@ fn exec_matches(entry: &DesktopEntry, stem: &str) -> bool {
     })
 }
 
-/// The active window published by the compositor in `window.domain`.
 #[derive(Default, serde::Deserialize)]
 pub struct ActiveWindow {
     #[serde(default)]
@@ -111,7 +85,6 @@ struct ActiveWindowStore {
     active: ActiveWindow,
 }
 
-/// Reads the compositor's active-window store.
 pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
     let text = std::fs::read_to_string(store_path).ok()?;
     toml::from_str::<ActiveWindowStore>(&text)
@@ -119,29 +92,20 @@ pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
         .map(|store| store.active)
 }
 
-/// Converts a MalaysiaDreams design RGBA into a Freya colour.
 pub fn rgba(c: vow_design::Rgba) -> freya_core::prelude::Color {
     let [r, g, b, a] = c.to_rgba8();
     freya_core::prelude::Color::from_argb(a, r, g, b)
 }
 
-/// Spawns a `malaysia-shell` component detached, keeping the Wayland socket and the
-/// full kit environment (kit binaries need the same Mesa/runtime paths that the
-/// running `malaysia-shell` received; ADR 0007 only strips those for third-party
-/// apps).
 pub fn spawn_component(component: &str) {
     spawn_component_with(component, &[]);
 }
 
-/// [`spawn_component`] with extra arguments (`power restart`).
 pub fn spawn_component_with(component: &str, args: &[&str]) {
     let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
         eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
         return;
     };
-    // Prefer the Nix wrapper next to the running binary. `current_exe()` on a
-    // wrapped binary points at `.malaysia-shell-wrapped`; the wrapper sets the
-    // Mesa environment and is what systemd/input.rs launch, so use it here too.
     let program = env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|dir| dir.join("malaysia-shell")))
@@ -170,12 +134,6 @@ pub fn spawn_component_with(component: &str, args: &[&str]) {
     spawn_logged(&log_name, &program, command);
 }
 
-/// Spawns a standalone MalaysiaDreams app detached, keeping the Wayland socket.
-///
-/// Kit binaries (`malaysia-settings`, `malaysia-shell`) keep the same runtime
-/// environment as the shell so a dev build from `target/debug` still finds its
-/// libraries and Mesa configuration. Third-party apps continue to receive the
-/// sanitized environment from ADR 0007.
 pub fn spawn_app(binary: &str, args: &[&str]) {
     let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
         eprintln!("menubar: cannot spawn {binary}: WAYLAND_DISPLAY not set");
@@ -227,8 +185,6 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
     spawn_logged(binary, &program, command);
 }
 
-/// Resolves the `malaysia-settings` binary: first next to the running
-/// `malaysia-shell` binary, then in `PATH`.
 fn resolve_settings_binary() -> Option<PathBuf> {
     let current = env::current_exe().ok()?;
     let candidate = current.parent()?.join("malaysia-settings");
@@ -241,8 +197,6 @@ fn resolve_settings_binary() -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// Opens `path` with the user's default application, stripping the wrapper
-/// environment so it does not inherit Mesa debug paths from the compositor.
 pub fn xdg_open(path: impl AsRef<std::path::Path>) {
     let path = path.as_ref();
     let mut command = Command::new("xdg-open");
@@ -266,8 +220,6 @@ pub fn xdg_open(path: impl AsRef<std::path::Path>) {
     }
 }
 
-/// Resolves an XDG user dir (Documents, Downloads, Desktop...) or falls back
-/// to `HOME/<name>` when `xdg-user-dir` is unavailable.
 pub fn xdg_user_dir(kind: &str) -> Option<PathBuf> {
     let output = Command::new("xdg-user-dir").arg(kind).output().ok()?;
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -277,7 +229,6 @@ pub fn xdg_user_dir(kind: &str) -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
-/// Creates a new folder on the Desktop, appending a number if the name exists.
 pub fn create_desktop_folder() {
     let desktop = xdg_user_dir("DESKTOP")
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
@@ -312,15 +263,10 @@ fn sanitize_client_env(command: &mut Command) {
     }
 }
 
-/// Whether the binary is one of Malaysia's own kit binaries. These keep the shell's
-/// runtime environment instead of receiving the sanitized client environment.
 fn is_kit_binary(binary: &str) -> bool {
     matches!(binary, "malaysia-shell" | "malaysia-settings")
 }
 
-/// Restores the original Mesa/runtime paths saved by the Nix wrapper, if they
-/// exist. In a dev shell there are no `MALAYSIA_ORIG_*` variables, so the current
-/// environment (LD_LIBRARY_PATH, ...) is left untouched.
 fn prepare_kit_env(command: &mut Command) {
     for name in [
         "LD_LIBRARY_PATH",
@@ -336,7 +282,6 @@ fn prepare_kit_env(command: &mut Command) {
     }
 }
 
-/// Log path for a spawned kit binary: `$XDG_RUNTIME_DIR/malaysia/<name>.log`.
 fn kit_log_path(name: &str) -> Option<PathBuf> {
     let runtime = env::var_os("XDG_RUNTIME_DIR")?;
     let dir = PathBuf::from(runtime).join("malaysia-compositor");
@@ -357,7 +302,6 @@ fn open_log(path: &Path) -> Stdio {
     }
 }
 
-/// Spawns the command and logs its exit status if it dies within two seconds.
 fn spawn_logged(name: &str, program: &Path, mut command: Command) {
     tracing::info!(name, program = %program.display(), "spawning kit binary");
     match command.spawn() {
@@ -375,8 +319,6 @@ fn spawn_logged(name: &str, program: &Path, mut command: Command) {
                         }
                         Ok(None) => {
                             if start.elapsed() >= Duration::from_secs(2) {
-                                // It survived the grace window; we no longer
-                                // need to reap it here.
                                 break;
                             }
                             std::thread::sleep(Duration::from_millis(50));
@@ -509,8 +451,7 @@ mod tests {
 
     impl Drop for EnvGuard<'_> {
         fn drop(&mut self) {
-            // SAFETY: we only mutate the test process's environment while the
-            // test lock is held.
+            // SAFETY: the test lock is held while the environment changes.
             unsafe {
                 match &self.old {
                     Some(value) => env::set_var(self.name, value),

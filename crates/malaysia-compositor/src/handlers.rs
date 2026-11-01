@@ -1,13 +1,4 @@
 //! Protocol handler implementations and their delegation glue.
-//!
-//! Smithay's `delegate_dispatch2!` macro wires a state type to the protocol
-//! objects it serves, but it only works if the matching `*Handler` trait is
-//! implemented. The impls live here, next to the macro, so `state.rs` stays a
-//! plain data description and every handler is in one place.
-//!
-//! The globals split across two traits each: the handler trait is the
-//! compositor's behaviour, the macro is the plumbing that turns client
-//! requests into calls on that behaviour.
 
 use std::time::Duration;
 
@@ -82,7 +73,6 @@ use crate::delegate_foreign_management;
 use crate::delegate_gtk;
 use crate::state::{ClientState, State};
 
-/// How long a client-created activation token stays usable.
 const ACTIVATION_TOKEN_MAX_AGE: Duration = Duration::from_secs(30);
 
 impl CompositorHandler for State {
@@ -91,9 +81,6 @@ impl CompositorHandler for State {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        // The invariant: session.rs inserts every accepted client with
-        // ClientState, so a client being dispatched cannot lack it. If this
-        // fires, look at the socket handler, not at this call site.
         &client
             .get_data::<ClientState>()
             .expect("every client is inserted with ClientState in the socket handler")
@@ -101,11 +88,6 @@ impl CompositorHandler for State {
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
-        // A commit that attaches a dmabuf is held until the buffer is ready to
-        // read (Bloque 7b). One blocker path serves both syncs: the explicit
-        // acquire point when the client set one, otherwise the implicit fence.
-        // The resume happens from the event loop, so the compositor never
-        // blocks on a client; a frame is never shown half-rendered.
         add_pre_commit_hook::<Self, _>(surface, |state, _dh, surface| {
             let (has_dmabuf, dmabuf, acquire) = with_states(surface, |states| {
                 let acquire = states
@@ -132,9 +114,6 @@ impl CompositorHandler for State {
             };
 
             match pending_blocker(has_dmabuf, acquire.is_some()) {
-                // Explicit sync wins when present; the acquire point names
-                // exactly when the client finished writing. Otherwise the
-                // dmabuf's own implicit fence.
                 Some(BlockerKind::Explicit) => {
                     if let Some(acquire) = acquire
                         && let Ok((blocker, source)) = acquire.generate_blocker()
@@ -167,15 +146,8 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // At `trace` level, name the buffer type each committed surface uses.
-        // This is how a GPU client (wezterm, Firefox) is verified from the
-        // compositor side: `--log-level trace` and look for `Dma` against
-        // `Shm` (Bloque 7a).
         log_committed_buffer_type(surface);
-        // Let Smithay move the pending buffer into the surface's current state
-        // first; the window tracker then reads that state to decide on mapping.
         on_commit_buffer_handler::<Self>(surface);
-        // A layer surface gets configured and placed here too (ADR 0023).
         if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
             self.layer_surface_mapped(&layer);
         }
@@ -191,10 +163,6 @@ impl CompositorHandler for State {
             self.inject_test_press(mapped);
             self.inject_test_screenshot();
         }
-        // Only a window that really went away loses the focus: unmapped,
-        // hidden, minimized or without a buffer. A transient commit whose
-        // geometry does not fit its buffer (GTK going fullscreen) must not
-        // clear the active window, or the bar falls back to Escritorio.
         if let Some(id) = self.windows.id_of(surface)
             && self.focused_window() == Some(id)
             && !self.windows.is_presented(id, &self.minimized)
@@ -202,10 +170,6 @@ impl CompositorHandler for State {
             self.clear_keyboard_focus();
         }
         self.popup_commit(surface);
-        // A mapped surface that commits damage or asks for a frame callback
-        // must reach the next output repaint. Without this, a popup that
-        // updates while a sibling/parent surface is idle never gets a frame
-        // callback and stalls (Bloque 14a keyboard navigation).
         if commit_requests_redraw(surface) {
             self.request_redraw();
         }
@@ -218,8 +182,6 @@ impl CompositorHandler for State {
     }
 }
 
-/// Whether a committed surface needs the output to repaint (damage) or at
-/// least receive its pending frame callbacks in the next cycle.
 fn commit_requests_redraw(surface: &WlSurface) -> bool {
     with_states(surface, |states| {
         let mut cached = states.cached_state.get::<SurfaceAttributes>();
@@ -230,21 +192,12 @@ fn commit_requests_redraw(surface: &WlSurface) -> bool {
     })
 }
 
-/// Which commit blocker a pending dmabuf needs, if any (Bloque 7b).
-///
-/// This is the single decision that both syncs share: a commit only blocks
-/// when it attaches a dmabuf, and the explicit acquire point wins over the
-/// implicit fence when both are present. (An acquire point without a buffer is
-/// a protocol error smithay already rejects.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BlockerKind {
-    /// Wait on the client's explicit acquire point (`wp_linux_drm_syncobj`).
     Explicit,
-    /// Wait on the dmabuf's own implicit fence.
     Implicit,
 }
 
-/// The blocker kind for a commit with `has_dmabuf` and `has_acquire_point`.
 fn pending_blocker(has_dmabuf: bool, has_acquire_point: bool) -> Option<BlockerKind> {
     if !has_dmabuf {
         return None;
@@ -256,16 +209,6 @@ fn pending_blocker(has_dmabuf: bool, has_acquire_point: bool) -> Option<BlockerK
     })
 }
 
-/// Inserts a blocker's event source into the loop and, on success, blocks the
-/// surface's commit until the source fires.
-///
-/// The source is one-shot: when the dmabuf (implicit) or the acquire point
-/// (explicit) becomes readable, the callback resumes the commit with
-/// `CompositorClientState::blocker_cleared`. The callback only wakes the main
-/// loop through a channel, so the blocker loop does not depend on the backend.
-///
-/// Returns whether the source was inserted; a failed insertion (e.g. the loop
-/// is shutting down) leaves the commit unblocked rather than forever blocked.
 fn insert_blocker_source(
     state: &mut State,
     surface: &WlSurface,
@@ -280,14 +223,6 @@ fn insert_blocker_source(
     inserted
 }
 
-/// Logs the buffer type of the surface's just-committed buffer, at `trace`.
-///
-/// The pending buffer is read *before* `on_commit_buffer_handler` consumes it.
-/// Only buffers that were actually attached (a new buffer assignment) produce
-/// a line, so a `--log-level trace` run names which clients present through
-/// dmabuf and which through shm. It is the compositor-side observability of
-/// Bloque 7a; the path coverage itself is verified with WAYLAND_DEBUG per
-/// client (Bloque 7b).
 fn log_committed_buffer_type(surface: &WlSurface) {
     use smithay::backend::renderer::buffer_type;
     use smithay::wayland::compositor::{BufferAssignment, SurfaceAttributes, with_states};
@@ -309,9 +244,7 @@ fn log_committed_buffer_type(surface: &WlSurface) {
 }
 
 impl BufferHandler for State {
-    fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {
-        // Buffers are not retained yet; nothing to release.
-    }
+    fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {}
 }
 
 impl DmabufHandler for State {
@@ -325,10 +258,6 @@ impl DmabufHandler for State {
         dmabuf: Dmabuf,
         notifier: ImportNotifier,
     ) {
-        // The import into the GLES renderer happens in the session, which owns
-        // the renderer (ADR 0012); this handler only queues the buffer. The
-        // session drains the queue right after dispatching clients and answers
-        // the notifier there (see `session::dispatch_clients`).
         self.pending_dmabuf_imports
             .push(crate::state::PendingDmabufImport { dmabuf, notifier });
     }
@@ -356,8 +285,6 @@ impl OutputCaptureSourceHandler for State {
     }
 
     fn output_source_created(&mut self, source: ImageCaptureSource, output: &Output) {
-        // The source carries its output so `capture_constraints` and `frame`
-        // can resolve it back without tracking sources separately.
         source.user_data().insert_if_missing(|| output.downgrade());
     }
 }
@@ -372,7 +299,6 @@ impl ToplevelCaptureSourceHandler for State {
         source: ImageCaptureSource,
         toplevel: ForeignToplevelHandle,
     ) {
-        // The window id was stored on the handle when the window mapped.
         if let Some(id) = toplevel.user_data().get::<WindowId>().copied() {
             source.user_data().insert_if_missing(|| id);
         }
@@ -391,7 +317,6 @@ impl ImageCopyCaptureHandler for State {
         Some(BufferConstraints {
             size: Size::<i32, BufferCoords>::from((size.w, size.h)),
             shm: vec![wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888],
-            // DMA-BUF is offered only when the backend found a render node.
             dma: self.capture_dma.as_ref().map(|dma| DmabufConstraints {
                 node: dma.node,
                 formats: dma.formats.clone(),
@@ -407,9 +332,6 @@ impl ImageCopyCaptureHandler for State {
     }
 
     fn frame(&mut self, session: &SessionRef, frame: Frame) {
-        // Smithay 023b78b only exposes Unknown, BufferConstraints and Stopped as
-        // failure reasons (wayland-protocols 0.32 ext-image-copy-capture-v1);
-        // Unknown is the only existing runtime reason for "the session is locked".
         if self.locked {
             frame.fail(CaptureFailureReason::Unknown);
             return;
@@ -423,17 +345,11 @@ impl ImageCopyCaptureHandler for State {
             target,
             draw_cursor: session.draw_cursor(),
         });
-        // The backend completes it on the next render pass.
         self.request_redraw();
     }
 }
 
 impl State {
-    /// Resolves a capture source to what should be drawn, if it is still live.
-    ///
-    /// A source carries either its output or its window id (inserted when the
-    /// source was created); a window that has since closed resolves to `None`,
-    /// which rejects the session.
     fn capture_target(&self, source: &ImageCaptureSource) -> Option<CaptureTarget> {
         if let Some(output) = source
             .user_data()
@@ -453,9 +369,6 @@ impl State {
         Some(CaptureTarget::Window { id, size })
     }
 
-    /// Activates `surface` using a previously-created xdg-activation token,
-    /// enforcing token age and toplevel tracking. `source` names the caller for
-    /// the info log.
     pub(crate) fn activate_with_token(
         &mut self,
         token: XdgActivationToken,
@@ -483,8 +396,6 @@ impl PointerConstraintsHandler for State {
         surface: &WlSurface,
         pointer: &smithay::input::pointer::PointerHandle<Self>,
     ) {
-        // A constraint only binds while the pointer is over its surface; if it
-        // arrives for another surface it stays dormant until motion enters it.
         if pointer.current_focus().as_ref() != Some(surface) {
             return;
         }
@@ -504,8 +415,6 @@ impl TabletSeatHandler for State {
     type ToolFocus = WlSurface;
 
     fn tablet_tool_image(&mut self, _tool: &TabletToolDescriptor, image: CursorImageStatus) {
-        // Tablets share the compositor's single pointer image today. The
-        // request is already serial-checked by Smithay before this point.
         tracing::debug!(?image, "client set the pointer cursor");
         self.client_cursor = image.clone();
         self.cursor_status = image;
@@ -521,10 +430,6 @@ impl XdgActivationHandler for State {
     fn token_created(&mut self, _token: XdgActivationToken, data: XdgActivationTokenData) -> bool {
         self.activation_state
             .retain_tokens(|_, old| old.timestamp.elapsed() <= ACTIVATION_TOKEN_MAX_AGE);
-        // A token is only useful if it was created by a client that actually
-        // has keyboard focus, and it names the latest key/button press. This
-        // is the compositor's focus-stealing policy: without both, an app
-        // could activate itself from the background.
         let Some(surface) = data.surface.as_ref() else {
             return false;
         };
@@ -571,10 +476,6 @@ impl SeatHandler for State {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        // Smithay only reaches here for a `wl_pointer.set_cursor` whose serial
-        // matches the pointer's last enter serial, which this compositor
-        // generated from its single serial counter (see `cursor.rs`). No second
-        // counter is involved. Store the image; the draw path renders it.
         tracing::debug!(?image, "client set the pointer cursor");
         self.client_cursor = image.clone();
         self.cursor_status = image;
@@ -594,11 +495,9 @@ impl SelectionHandler for State {
         user_data: &Self::SelectionUserData,
     ) {
         if mime_type != "image/png" {
-            return; // dropping the fd gives the client an empty answer
+            return;
         }
         let bytes = user_data.clone();
-        // A paste may ask for the bytes long after the capture; never block the
-        // compositor on a slow reader's pipe.
         std::thread::spawn(move || {
             use std::io::Write;
             let mut file = std::fs::File::from(fd);
@@ -692,8 +591,6 @@ impl WlrLayerShellHandler for State {
         namespace: String,
     ) {
         tracing::info!(?layer, %namespace, surface = ?surface.wl_surface().id(), "new layer surface");
-        // The surface is configured on its first commit, when its anchors and
-        // size are known (see `Layers::commit`).
         self.layers.add(surface);
         self.request_redraw();
     }
@@ -706,9 +603,6 @@ impl WlrLayerShellHandler for State {
     }
 
     fn new_popup(&mut self, _parent: LayerSurface, popup: PopupSurface) {
-        // A layer-shell popup gets its parent only when `get_popup` runs, so
-        // xdg-shell's `new_popup` saw no parent and skipped it. Position and
-        // configure it here with the positioner the client already sent.
         let positioner = popup.with_pending_state(|state| state.positioner);
         self.add_popup(popup, positioner);
     }
@@ -716,10 +610,6 @@ impl WlrLayerShellHandler for State {
 
 impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
     fn new_fractional_scale(&mut self, surface: WlSurface) {
-        // Advertise the output's fractional scale. The shell renders its
-        // buffers at this scale and lets the viewport land them on the logical
-        // size; clients without fractional-scale support still get the
-        // integer value in `wl_output`.
         let scale = self.scale.fractional_scale();
         smithay::wayland::compositor::with_states(&surface, |states| {
             smithay::wayland::fractional_scale::with_fractional_scale(states, |state| {
@@ -735,10 +625,6 @@ impl XdgShellHandler for State {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        // Send the initial configure now, before the client attaches a buffer:
-        // a toplevel that never receives one waits forever, with no error.
-        // The configure carries 0×0 (the client chooses its size); the window
-        // is centered in the workspace on its first committed buffer.
         let wl_surface = surface.wl_surface().clone();
         self.windows.add_toplevel(surface);
         self.apply_initial_decoration(&wl_surface);
@@ -765,9 +651,6 @@ impl XdgShellHandler for State {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, serial: Serial) {
-        // The serial must name the pointer's implicit grab: a button press
-        // that is still held, made on this client's surface. A request with
-        // any other serial is ignored rather than starting a drag.
         let Some(start) = self.held_grab(serial) else {
             tracing::info!(
                 serial = ?serial,
@@ -846,8 +729,6 @@ impl XdgShellHandler for State {
         {
             tracing::info!(serial = ?serial, "accepted resize request");
             self.start_resize(id, edge, location);
-            // No drag motion for a resize: the probe asserts the request was
-            // accepted and the resizing configure, not a new size.
             self.inject_test_release();
         }
     }
@@ -857,18 +738,10 @@ impl XdgShellHandler for State {
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
-        // A client's own green light (its CSD titlebar) asks here. Reuse the
-        // compositor's maximize so the window grows to the workspace and the
-        // configure carries the maximized state.
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
         tracing::info!(window = id.get(), "maximize_request");
-        // With the green light set to focus, a CSD app's own green light
-        // enters focus mode too (ADR 0051).
-        // A fixed-width window (System Settings) only stretches vertically.
-        // A window already in focus mode (a client that only knows maximize)
-        // leaves it.
         if self.in_focus_mode(id) {
             self.exit_focus_mode(id);
         } else if self.config.window.green_button == crate::config::GreenButtonAction::Focus
@@ -885,8 +758,6 @@ impl XdgShellHandler for State {
         surface: ToplevelSurface,
         _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>,
     ) {
-        // F11 and friends: a client asking for fullscreen gets focus mode,
-        // which is fullscreen in a space of its own (ADR 0051).
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
@@ -903,8 +774,6 @@ impl XdgShellHandler for State {
     }
 
     fn minimize_request(&mut self, surface: ToplevelSurface) {
-        // A client's own yellow light asks here: reuse the compositor's
-        // minimize so focus moves on and the dock sees a minimized window.
         let Some(id) = self.windows.id_of(surface.wl_surface()) else {
             return;
         };
@@ -924,17 +793,11 @@ impl XdgShellHandler for State {
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
-        // Constraint adjustment, a configure before mapping, and tracking all
-        // happen in `popup.rs` (Bloque 5).
         self.add_popup(surface, positioner);
     }
 
     fn grab(&mut self, surface: PopupSurface, _seat: wl_seat::WlSeat, serial: Serial) {
         let wl_surface = surface.wl_surface().clone();
-        // A child popup inherits the grab of its parent's chain: hovering a
-        // submenu has no button press of its own. The parent frame carries the
-        // serial that began the chain, and the child may also use a later
-        // serial actually delivered to the same client.
         if let Some(parent) = surface.get_parent_surface()
             && self.popups.is_popup_surface(&parent)
         {
@@ -971,10 +834,6 @@ impl XdgShellHandler for State {
             return;
         }
 
-        // An explicit root grab means the popup must be dismissed when the
-        // pointer is pressed outside it. The serial must name the pointer's
-        // implicit grab (a button press still held) made on this client's
-        // surface; a stale serial is rejected.
         let Some(start) = self.held_grab(serial) else {
             tracing::info!(
                 serial = ?serial,
@@ -1008,11 +867,6 @@ impl XdgShellHandler for State {
     }
 }
 
-/// Whether a child popup may reuse its parent's grab serial.
-///
-/// The chain serial always works. A later serial works only when it is no
-/// newer than the last one actually delivered to this client, so a serial
-/// from another client is rejected.
 fn child_grab_serial_ok(
     parent_grabbed: bool,
     same_client: bool,
@@ -1027,34 +881,21 @@ fn child_grab_serial_ok(
                 && last_delivered.is_some_and(|last| serial <= last)))
 }
 
-/// The decoration a client asks for with an xdg-decoration mode.
-///
-/// The protocol has no "unset" value here: `request_mode` carries one of the
-/// two, and the compositor answers with the one it chose.
 fn decoration_for_xdg_mode(mode: Mode) -> Decoration {
     match mode {
         Mode::ClientSide => Decoration::Client,
-        // Server-side, and any value this build does not know: the compositor
-        // chooses, and it chooses server-side.
         _ => Decoration::Server,
     }
 }
 
-/// The decoration a client asks for with a KDE decoration mode.
-///
-/// `None` means "do not decorate me at all", which for Malaysia is the same as
-/// self-decorating: no chrome. `Server` and `Client` map directly.
 fn decoration_for_kde_mode(mode: KdeMode) -> Decoration {
     match mode {
         KdeMode::Server => Decoration::Server,
-        // Client-side, undecorated, and any unknown value: no compositor
-        // chrome, so an odd client cannot end up with a second titlebar.
         _ => Decoration::Client,
     }
 }
 
 impl State {
-    /// Records a requested mode, resolves the effective one and reconfigures.
     fn apply_requested_decoration(&mut self, surface: &WlSurface, requested: Option<Decoration>) {
         if let Some(requested) = requested {
             self.windows.set_requested_decoration(surface, requested);
@@ -1074,7 +915,6 @@ impl State {
         self.windows.set_decoration(surface, effective);
     }
 
-    /// Applies the initial decoration and sends the first configure.
     fn apply_initial_decoration(&mut self, surface: &WlSurface) {
         let requested = self.windows.requested_decoration(surface);
         let native = self.windows.is_native(surface);
@@ -1096,22 +936,15 @@ impl State {
 
 impl XdgDecorationHandler for State {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
-        // Remember the ADR 0019 default: joining the protocol without asking for
-        // a mode means the app accepts MalaysiaDreams's titlebar. Do not send a configure
-        // here: the initial configure (or the next one) already carries the mode.
         self.windows
             .set_requested_decoration(toplevel.wl_surface(), Decoration::Server);
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
-        // An explicit choice is honoured: a client that asks for client-side
-        // chrome keeps it, and one that accepts server-side gets MalaysiaDreams's.
         self.apply_requested_decoration(toplevel.wl_surface(), Some(decoration_for_xdg_mode(mode)));
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
-        // The client withdrew its choice, so the compositor chooses again:
-        // server-side, as for a fresh decoration object.
         self.windows
             .clear_requested_decoration(toplevel.wl_surface());
         self.apply_requested_decoration(toplevel.wl_surface(), Some(Decoration::Server));
@@ -1124,9 +957,6 @@ impl KdeDecorationHandler for State {
     }
 
     fn new_decoration(&mut self, surface: &WlSurface, decoration: &OrgKdeKwinServerDecoration) {
-        // GTK creates this object before its xdg_toplevel may exist. Announce
-        // MalaysiaDreams's preference (server-side) and remember the decision so the
-        // initial configure already carries it when the toplevel arrives.
         decoration.mode(KdeMode::Server);
         self.apply_requested_decoration(surface, Some(Decoration::Server));
     }
@@ -1140,15 +970,11 @@ impl KdeDecorationHandler for State {
         let WEnum::Value(mode) = mode else {
             return;
         };
-        // Acknowledge the request before acting on it: the client waits for the
-        // mode event to decide whether to draw its own titlebar (Otto).
         decoration.mode(mode);
         self.apply_requested_decoration(surface, Some(decoration_for_kde_mode(mode)));
     }
 
     fn release(&mut self, _decoration: &OrgKdeKwinServerDecoration, surface: &WlSurface) {
-        // The client dropped the object: fall back to Otto's own preference,
-        // the same one the manager advertises as its default mode.
         self.apply_requested_decoration(surface, Some(Decoration::Server));
     }
 }
@@ -1496,8 +1322,6 @@ mod capture_lock_tests {
         let frame = session.create_frame(qh, ());
         frame.attach_buffer(buffer.wl_buffer());
         frame.capture();
-        // Destroy the frame explicitly so a second capture on the same session
-        // does not trip the protocol's "one pending frame at a time" rule.
         drop(frame);
         conn.flush().expect("flush");
         (session, pool)

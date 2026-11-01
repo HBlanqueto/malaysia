@@ -1,10 +1,4 @@
-//! The lock component: the session-lock screen (`ext-session-lock-v1`).
-//!
-//! One BarrierKit/Freya surface per output (ADR 0034). PAM runs on its own
-//! thread exactly as in Bloque 10; the app polls its event buffer from a Freya
-//! task. If the surface cannot be rendered the process exits non-zero, so the
-//! compositor keeps the session locked (the never-unlock guarantee lives on
-//! the compositor side, `malaysia-compositor/src/lock.rs`).
+//! The lock component: the session-lock screen.
 
 use std::{
     cell::RefCell,
@@ -37,7 +31,6 @@ struct Model {
     theme_revision: u64,
 }
 
-/// What the compositor should do after one PAM event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     Continue,
@@ -71,8 +64,6 @@ fn apply_pam_event(model: &mut Model, field: &mut PasswordField, event: &pam::Ev
     }
 }
 
-/// Applies one key to the field. Returns the secret to send when Enter takes
-/// a non-empty value; keys are ignored while the field is verifying.
 fn handle_key(
     model: &mut Model,
     field: &mut PasswordField,
@@ -257,7 +248,6 @@ impl App for LockApp {
     }
 }
 
-/// Connects to the compositor, locks the session and runs the lock screen.
 pub fn run() -> anyhow::Result<()> {
     let events: EventBuffer = Arc::new(Mutex::new(Vec::new()));
     let attempt = Rc::new(RefCell::new(None));

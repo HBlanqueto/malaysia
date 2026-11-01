@@ -1,9 +1,4 @@
-//! Pure mapping from dbusmenu layouts to [`MenuItem`] (ADR 0040 §5).
-//!
-//! Property names and value types follow `com.canonical.dbusmenu`; anything
-//! the bar does not understand is logged once and ignored so a broken item
-//! never breaks the whole menu.
-
+//! Maps dbusmenu layouts to `MenuItem`.
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
@@ -25,10 +20,8 @@ const KNOWN_PROPERTIES: &[&str] = &[
     "icon-data",
 ];
 
-/// Maps a dbusmenu child list to menu items, dropping invisible entries.
 pub fn menu_items(items: &[RawItem]) -> Vec<MenuItem> {
     let mut mapped: Vec<MenuItem> = items.iter().filter_map(menu_item).collect();
-    // 14f-2's org.gtk.Menus mapper must call this same function.
     normalize_separators(&mut mapped);
     mapped
 }
@@ -49,9 +42,6 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
 
     let label = mnemonic(&string(props, "label").unwrap_or_default());
     let enabled = bool_prop(props, "enabled", true);
-    // App menus never draw icons (14d-4): only three of Kate's 89 entries
-    // carry one, and a mostly bare column looks broken. The kit keeps
-    // `MenuIcon::Image` for the apps of 14e and future use.
     for key in ["icon-name", "icon-data"] {
         if props.contains_key(key) {
             debug_once(key, props.get(key));
@@ -92,9 +82,6 @@ fn bool_prop(props: &HashMap<String, OwnedValue>, key: &str, default: bool) -> b
         .unwrap_or(default)
 }
 
-/// Turns the dbusmenu/GTK mnemonic underscore into the kit's mark: `_x`
-/// becomes `MNEMONIC_MARK` + `x` (underlined while Alt is held) and `__` a
-/// literal `_`. Only the first mnemonic is kept, as GTK and Qt do.
 fn mnemonic(text: &str) -> String {
     let mut out = String::new();
     let mut marked = false;
@@ -125,7 +112,6 @@ fn toggle(props: &HashMap<String, OwnedValue>) -> CheckState {
     }
 }
 
-/// Only the first key combination; the kit formats it with `⌃⌥⇧❖`.
 fn shortcut(props: &HashMap<String, OwnedValue>) -> Option<String> {
     let combinations = props
         .get("shortcut")

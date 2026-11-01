@@ -1,8 +1,4 @@
-//! The launcher: an Overlay layer surface with a search field and app results.
-//!
-//! One process per component (ADR 0023). The surface is exclusive so it owns
-//! the keyboard while open, centred because it has no anchors, and reads
-//! `.desktop` entries with the XDG precedence rules in [`crate::desktop`].
+//! The launcher: overlay with a search field and app results.
 
 use std::{
     cell::Cell,
@@ -36,7 +32,6 @@ use vow_design::{
 
 use crate::desktop::{self, DesktopEntry};
 
-/// A loaded icon. SVG bytes are kept for Skia; PNGs are passed by path.
 #[derive(Clone, PartialEq)]
 pub(crate) struct IconData {
     pub(crate) path: PathBuf,
@@ -77,8 +72,6 @@ impl App for LauncherApp {
             }
         });
 
-        // A compositor-level focus change (the lock, another exclusive layer)
-        // closes the launcher.
         let platform = Platform::get();
         let mut closing = self.closing;
         use_side_effect_with_deps(&*platform.is_app_focused.read(), move |focused| {
@@ -129,9 +122,6 @@ impl App for LauncherApp {
                 let fallback_entry = entry.clone();
                 let fallback_close = close.clone();
                 let fallback_launched = launched.clone();
-                // The compositor can refuse or delay the activation token.
-                // Launching without it after a short grace keeps Enter usable;
-                // the app still starts, only without the focus hand-off.
                 timers.after(Duration::from_millis(250), move || {
                     if !fallback_launched.replace(true) {
                         spawn_entry(&fallback_entry.desktop, None);
@@ -284,7 +274,6 @@ impl App for LauncherApp {
     }
 }
 
-/// An app icon at `size`, or its initial on an accent tile when it has none.
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
     match icon {
         Some(IconData {
@@ -439,7 +428,6 @@ fn rgba(color: Rgba) -> Color {
     Color::from_argb(a, r, g, b)
 }
 
-/// Connects to the compositor and runs the launcher.
 pub fn run() -> anyhow::Result<()> {
     let desktops = desktop::read_entries();
     let entries: Vec<AppEntry> = desktops
@@ -528,7 +516,6 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
             }
         }
     }
-    // A theme-less absolute name in the pixmaps fallback.
     for dir in std::iter::once(&data_home).chain(&data_dirs) {
         for extension in ["svg", "png"] {
             let candidate = dir.join("pixmaps").join(format!("{icon}.{extension}"));
@@ -555,7 +542,6 @@ fn icon_data(path: &std::path::Path) -> Option<IconData> {
     }
 }
 
-/// Launches a desktop entry detached, with the activation token when present.
 pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
     let terminal = env::var("MALAYSIA_TERMINAL")
         .or_else(|_| env::var("TERMINAL"))
@@ -585,7 +571,6 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // A shell component must not pass MalaysiaDreams's private Mesa environment to apps.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() < 0 {

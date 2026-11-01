@@ -1,13 +1,4 @@
 //! `ext-idle-notify-v1`, automatic locking and idle inhibition.
-//!
-//! The compositor owns the idle clock: every input event calls
-//! [`IdleState::note_activity`], which re-arms the client notifications and the
-//! auto-lock timer. A timer firing is delivered back to [`State`] through
-//! [`IdleHost`], so this module never needs a backend-specific loop handle.
-//!
-//! `zwp_idle_inhibit_manager_v1` suppresses both the client notifications and
-//! auto-lock while at least one inhibitor surface is alive. mpv in fullscreen
-//! creates one; a windowed video does not.
 
 use std::{
     collections::HashMap,
@@ -31,17 +22,11 @@ use tracing::error;
 
 use crate::state::State;
 
-/// The auto-lock timer has no notification resource, so it gets this id;
-/// client notifications start at 1.
 const AUTO_ID: u64 = 0;
-/// The lock-recovery timer shares the sink but is handled by `State`.
 pub(crate) const LOCK_RECOVERY_ID: u64 = u64::MAX;
 
-/// Where a backend's event loop inserts timers.
 pub trait TimerSink {
-    /// (Re)arms `id` for `duration`, replacing any timer already armed.
     fn insert(&self, id: u64, duration: Duration);
-    /// Cancels `id` if armed.
     fn remove(&self, id: u64);
 }
 
@@ -50,25 +35,18 @@ impl TimerSink for () {
     fn remove(&self, _id: u64) {}
 }
 
-/// A backend whose loop can host idle timers. Implemented by `Session` and
-/// `Udev`; the callback always reaches the shared [`State`].
 pub trait IdleHost {
-    /// The shared compositor state.
     fn idle_state(&mut self) -> &mut State;
 
-    /// Asks the backend for one frame, after a timer changed something that is
-    /// drawn (the shake-to-locate cursor animation).
     fn request_redraw(&mut self);
 }
 
-/// The concrete sink the two backends use.
 pub struct IdleTimers<D> {
     handle: LoopHandle<'static, D>,
     tokens: Arc<Mutex<HashMap<u64, RegistrationToken>>>,
 }
 
 impl<D> IdleTimers<D> {
-    /// Creates a sink over the backend's loop.
     pub fn new(handle: LoopHandle<'static, D>) -> Self {
         Self {
             handle,
@@ -117,7 +95,6 @@ struct Notification {
     ignore_inhibitor: bool,
 }
 
-/// The idle-notifier global, its clients and the auto-lock timer.
 pub struct IdleState {
     notifications: Vec<Notification>,
     next_id: u64,
@@ -126,12 +103,10 @@ pub struct IdleState {
     auto_timeout: Option<Duration>,
     sink: Box<dyn TimerSink>,
     auto_lock_child: Option<Child>,
-    /// The compositor's own Wayland socket, passed to the spawned lock.
     wayland_display: Option<String>,
 }
 
 impl IdleState {
-    /// Creates the global and arms the auto-lock timer.
     pub fn new(
         display: &DisplayHandle,
         sink: Box<dyn TimerSink>,
@@ -154,30 +129,22 @@ impl IdleState {
         idle
     }
 
-    /// Arms a timer owned by another part of `State` (the cursor shake
-    /// enlargement) through the same backend timer sink.
     pub(crate) fn arm(&self, id: u64, duration: Duration) {
         self.sink.insert(id, duration);
     }
 
-    /// Records the compositor's socket so a spawned lock connects to MalaysiaDreams, not
-    /// to the host session.
     pub fn set_wayland_display(&mut self, display: String) {
         self.wayland_display = Some(display);
     }
 
-    /// Schedules the lock-recovery watchdog/backoff. The id is reserved for
-    /// the lock module; `IdleState::idle_timer` never sees it.
     pub fn schedule_lock_recovery(&mut self, delay: Duration) {
         self.sink.insert(LOCK_RECOVERY_ID, delay);
     }
 
-    /// Cancels a pending lock-recovery timer.
     pub fn cancel_lock_recovery(&mut self) {
         self.sink.remove(LOCK_RECOVERY_ID);
     }
 
-    /// The session locked: auto-lock has nothing left to do.
     pub fn set_locked(&mut self, locked: bool) {
         self.locked = locked;
         if locked {
@@ -187,7 +154,6 @@ impl IdleState {
         }
     }
 
-    /// Re-arms the idle clock after input.
     pub fn note_activity(&mut self) {
         for notification in &mut self.notifications {
             if notification.idle {
@@ -209,7 +175,6 @@ impl IdleState {
         }
     }
 
-    /// An inhibitor appeared or disappeared.
     pub fn set_inhibited(&mut self, inhibited: bool) {
         if self.inhibited == inhibited {
             return;
@@ -240,8 +205,6 @@ impl IdleState {
         }
     }
 
-    /// A timer fired. Notification timers report `idled`; the auto-lock timer
-    /// starts `malaysia-shell lock`.
     pub fn idle_timer(&mut self, id: u64) {
         if id == AUTO_ID {
             self.auto_lock();
@@ -257,7 +220,6 @@ impl IdleState {
         notification.idle = true;
     }
 
-    /// Registers a client notification and arms its timer.
     pub fn add_notification(
         &mut self,
         resource: ExtIdleNotificationV1,
@@ -279,7 +241,6 @@ impl IdleState {
         id
     }
 
-    /// Drops a client notification, normally because its resource died.
     pub fn remove_notification(&mut self, id: u64) {
         self.sink.remove(id);
         self.notifications.retain(|n| n.id != id);
@@ -303,16 +264,10 @@ impl IdleState {
         }
     }
 
-    /// The compositor's own Wayland socket, for shell processes it launches.
     pub(crate) fn wayland_display(&self) -> Option<&str> {
         self.wayland_display.as_deref()
     }
 
-    /// Starts `malaysia-shell lock` if there is no live lock child.
-    ///
-    /// Shared by the idle timeout and by the compositor's lock recovery, so
-    /// both use the same shell command and the same `WAYLAND_DISPLAY`.
-    /// Returns whether a child is running (or was just started).
     pub(crate) fn spawn_lock_screen(&mut self) -> bool {
         if let Some(child) = &mut self.auto_lock_child {
             match child.try_wait() {
@@ -343,11 +298,9 @@ impl IdleState {
     }
 }
 
-/// Per-global marker data for the notifier.
 #[derive(Debug)]
 pub struct IdleGlobalData;
 
-/// Per-resource data for one notification.
 #[derive(Debug)]
 pub struct IdleNotificationData {
     id: std::sync::atomic::AtomicU64,
@@ -460,7 +413,6 @@ impl IdleInhibitHandler for State {
     }
 }
 
-/// A surface asked to keep the session awake.
 pub fn inhibit(
     state: &mut State,
     surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -478,7 +430,6 @@ pub fn inhibit(
     state.idle.set_inhibited(!state.idle_inhibitors.is_empty());
 }
 
-/// A surface stopped inhibiting, or died.
 pub fn uninhibit(
     state: &mut State,
     surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,

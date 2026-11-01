@@ -1,10 +1,4 @@
 //! GPU crossfade between the old and new appearance theme.
-//!
-//! When `appearance.domain` or `wallpaper.state` changes, the compositor captures
-//! the current output into a `GlesTexture` and draws it as a full-screen overlay
-//! that fades out over 420 ms. The cursor is rendered on top and keeps moving.
-//!
-//! See ADR 0044.
 
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -24,17 +18,10 @@ use tracing::warn;
 use crate::cursor::{Cursors, OutputRenderElement};
 use crate::state::State;
 
-/// Maximum time to wait for mapped surfaces to commit before forcing the fade.
 pub(crate) const WAIT_MAX: Duration = Duration::from_millis(vow_design::THEME_FADE_WAIT_MS);
 
-/// Fade duration from fully opaque snapshot to fully transparent.
 pub(crate) const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
 
-/// Debug hold before the snapshot starts fading.
-///
-/// shortcut: MALAYSIA_THEME_FADE_HOLD_MS is only for looking at the screen /
-/// taking a photo of the snapshot before it fades. Remove once the fade is
-/// verified on real hardware.
 fn hold_duration() -> Duration {
     std::env::var("MALAYSIA_THEME_FADE_HOLD_MS")
         .ok()
@@ -43,19 +30,13 @@ fn hold_duration() -> Duration {
         .unwrap_or(Duration::ZERO)
 }
 
-/// What happened to the fade on a frame tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FadeTick {
-    /// Still running; the frame should be submitted and another requested.
     Active,
-    /// Transitioned from `Waiting` to `Fading` this tick.
     Started,
-    /// The fade finished; the caller should drop it.
     Done,
 }
 
-/// Pure state machine of a theme crossfade: phase, timers and pending
-/// surfaces. It has no GPU state and can be unit-tested without EGL.
 #[derive(Debug)]
 pub(crate) struct FadeState {
     phase: Phase,
@@ -63,16 +44,12 @@ pub(crate) struct FadeState {
 
 #[derive(Debug)]
 enum Phase {
-    /// Drawing the snapshot opaquely, waiting for every mapped surface to
-    /// commit with the new theme or for the timeout.
     Waiting {
         since: Instant,
         pending_surfaces: HashSet<ObjectId>,
         initial_pending: usize,
     },
-    /// Fading the snapshot out.
     Fading {
-        /// Debug hold end; until this instant the snapshot stays opaque.
         hold_until: Instant,
     },
 }
@@ -88,8 +65,6 @@ impl FadeState {
         }
     }
 
-    /// Current opacity of the snapshot: `1.0` during the wait and the optional
-    /// debug hold, decreasing to `0.0` at the end of the fade.
     pub(crate) fn alpha(&self, now: Instant) -> f32 {
         match &self.phase {
             Phase::Waiting { .. } => 1.0,
@@ -103,7 +78,6 @@ impl FadeState {
         }
     }
 
-    /// Advances the state machine and returns what happened this tick.
     pub(crate) fn tick(&mut self, now: Instant) -> FadeTick {
         match &mut self.phase {
             Phase::Waiting {
@@ -152,8 +126,6 @@ impl FadeState {
         }
     }
 
-    /// Records that a surface committed a new buffer, removing it from the
-    /// wait list.
     pub(crate) fn mark_committed(&mut self, surface_id: ObjectId) {
         if let Phase::Waiting {
             pending_surfaces, ..
@@ -164,7 +136,6 @@ impl FadeState {
     }
 }
 
-/// A per-output theme crossfade.
 #[derive(Debug)]
 pub(crate) struct ThemeFade {
     state: FadeState,
@@ -172,10 +143,6 @@ pub(crate) struct ThemeFade {
 }
 
 impl ThemeFade {
-    /// Creates a new fade from an already-rendered snapshot texture.
-    ///
-    /// The texture is rendered upright by `take_snapshot`, so the overlay uses
-    /// `Transform::Normal` on both backends.
     pub(crate) fn new(
         renderer: &GlesRenderer,
         texture: GlesTexture,
@@ -190,22 +157,18 @@ impl ThemeFade {
         }
     }
 
-    /// Current opacity of the snapshot.
     pub(crate) fn alpha(&self, now: Instant) -> f32 {
         self.state.alpha(now)
     }
 
-    /// Advances the state machine.
     pub(crate) fn tick(&mut self, now: Instant) -> FadeTick {
         self.state.tick(now)
     }
 
-    /// Records that a surface committed a new buffer.
     pub(crate) fn mark_committed(&mut self, surface_id: ObjectId) {
         self.state.mark_committed(surface_id);
     }
 
-    /// Returns a render element covering the whole output with the given alpha.
     pub(crate) fn element(&self, alpha: f32) -> OutputRenderElement {
         TextureRenderElement::from_texture_buffer(
             Point::from((0.0, 0.0)),
@@ -219,7 +182,6 @@ impl ThemeFade {
     }
 }
 
-/// Normalised linear progress `t` in `[0, 1]`.
 fn progress(start: Instant, now: Instant, duration: Duration) -> f32 {
     if now <= start {
         return 0.0;
@@ -229,7 +191,6 @@ fn progress(start: Instant, now: Instant, duration: Duration) -> f32 {
     (elapsed / total).clamp(0.0, 1.0)
 }
 
-/// Cubic ease-in-out: smooth acceleration and deceleration.
 fn ease(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     if t < 0.5 {
@@ -240,8 +201,6 @@ fn ease(t: f32) -> f32 {
     }
 }
 
-/// Collects the `ObjectId`s of every mapped surface that the fade should wait
-/// for: visible toplevels and mapped layer surfaces.
 pub(crate) fn pending_surfaces(state: &State) -> HashSet<ObjectId> {
     let mut pending = HashSet::new();
     let visible: Vec<_> = state
@@ -260,10 +219,6 @@ pub(crate) fn pending_surfaces(state: &State) -> HashSet<ObjectId> {
     pending
 }
 
-/// Renders the current output (without the cursor) into a fresh `GlesTexture`.
-///
-/// The texture is in physical pixels and rendered with `Transform::Normal` so
-/// it can be sampled 1:1 with a `Transform::Normal` TextureBuffer.
 pub(crate) fn take_snapshot(
     state: &mut State,
     renderer: &mut GlesRenderer,
@@ -301,10 +256,6 @@ pub(crate) fn take_snapshot(
     Some(texture)
 }
 
-/// Starts a fade if motion is not reduced and the session is not locked.
-///
-/// On failure to create the snapshot, logs once and returns `None` so the theme
-/// still changes immediately.
 pub(crate) fn start_if_allowed(
     state: &mut State,
     renderer: &mut GlesRenderer,
@@ -321,8 +272,6 @@ pub(crate) fn start_if_allowed(
     Some(ThemeFade::new(renderer, texture, pending, now))
 }
 
-/// Logs a snapshot failure once and tells the caller to fall back to an
-/// immediate theme change.
 pub(crate) fn log_snapshot_failure(error: &str) {
     warn!(%error, "theme fade snapshot failed; changing theme immediately");
 }
@@ -438,11 +387,6 @@ mod tests {
         assert!((alpha_end).abs() < 1e-6, "alpha should reach 0 at end");
     }
 
-    /// A GLES renderer on the first EGL device, with no window.
-    ///
-    /// EGL context creation is unsafe by API. This is the only place this crate
-    /// allows it, compiled only for tests, and uses a render node rather than
-    /// the host session.
     #[allow(unsafe_code)]
     fn try_test_renderer() -> Option<GlesRenderer> {
         let device = EGLDevice::enumerate().ok()?.next()?;
@@ -478,7 +422,6 @@ mod tests {
         );
         let source_elements: Vec<super::OutputRenderElement> = vec![top.into(), bottom.into()];
 
-        // Texture A: the source scene rendered directly with Normal.
         let mut direct_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create direct texture");
@@ -493,7 +436,6 @@ mod tests {
                 .expect("direct sync");
         }
 
-        // Texture S: the snapshot path, identical to take_snapshot (Normal transform).
         let mut snapshot_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create snapshot texture");
@@ -511,7 +453,6 @@ mod tests {
         let start = Instant::now();
         let fade = ThemeFade::new(&renderer, snapshot_texture, HashSet::new(), start);
 
-        // Texture B: the fade element composited with Normal.
         let mut output_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)
                 .expect("create output texture");
@@ -546,7 +487,6 @@ mod tests {
         let direct_bytes = read(&mut direct_texture);
         let output_bytes = read(&mut output_texture);
 
-        // Guard against a flat image: direct render must have red top and blue bottom.
         let pixel = |bytes: &[u8], x: usize, y: usize| {
             let offset = (y * 64 + x) * 4;
             [
@@ -567,7 +507,6 @@ mod tests {
             "direct bottom-left should be blue"
         );
 
-        // The fade must reproduce the source scene byte-for-byte.
         assert_eq!(
             direct_bytes, output_bytes,
             "fade element must match the source scene exactly"

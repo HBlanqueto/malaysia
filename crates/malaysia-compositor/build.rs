@@ -1,6 +1,4 @@
-//! Fails the build when it runs outside the dev shell, where the mold linker
-//! flag is absent and the resulting binary would be linked differently
-//! (ADR 0007). `dev.sh` checks the same marker earlier and more cheaply.
+//! Fails the build when it runs outside the dev shell.
 
 fn main() {
     println!("cargo:rerun-if-env-changed=MALAYSIA_DEV_SHELL");

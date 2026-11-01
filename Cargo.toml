@@ -1,7 +1,4 @@
-# Malaysia is a Wayland compositor built on Smithay.
-#
-# This file is the workspace root: it holds no crate of its own, only the
-# shared settings and build profiles for the crates under `crates/`.
+# Workspace root: shared settings and build profiles for the crates.
 [workspace]
 resolver = "3"
 members = [
@@ -15,11 +12,6 @@ members = [
     "tools/sctk-probe",
 ]
 
-# The probe clients under `tools/` are development tools, not part of the
-# compositor: a plain `cargo build`/`cargo test` at the root does not build
-# them. Name the package (`-p sctk-probe`) to build one on purpose. `cargo
-# test --workspace` still covers them, which keeps them clippy- and
-# rustfmt-clean alongside the crates.
 default-members = [
     "crates/malaysia-compositor",
     "crates/malaysia-scene",
@@ -38,65 +30,39 @@ license = "MIT"
 repository = "https://github.com/HBlanqueto/malaysia"
 
 [workspace.dependencies]
-# Error handling.
-anyhow = "1"           # Ergonomic error context in `main` only.
-thiserror = "2"        # Typed error enums in library-shaped modules.
+anyhow = "1"
+thiserror = "2"
 
-# Logging and diagnostics.
-tracing = "0.1"                # Structured logging and spans, needed for later measurement.
-tracing-subscriber = "0.3"     # Installs the global subscriber that emits `tracing` events.
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
-# PAM FFI (the lock's authentication) and the C allocator it needs.
 libc = "0.2"
-# Zeroing secrets (the lock password) when they leave scope.
 zeroize = "1"
 
-# Process lifetime.
-calloop = { version = "0.14", features = ["signals"] }  # SIGUSR1 capture + SIGTERM/SIGINT (Bloque 7.1).
-# Blocking the shutdown signals before any thread starts, so every thread
-# inherits the mask and they all reach calloop's signalfd (not just the main
-# thread's). A safe wrapper over pthread_sigmask. `socket` reads SO_PEERCRED
-# when a client is accepted (Infinity trust).
+calloop = { version = "0.14", features = ["signals"] }
 nix = { version = "0.31", features = ["signal", "socket", "inotify", "poll"] }
 
-# Pointer cursor. The default arrow is read from the user's Xcursor theme; a
-# built-in arrow is drawn when no theme can be read.
-xcursor = "0.3"        # Parses Xcursor theme files; smithay ships no cursor loader.
+xcursor = "0.3"
 
-# Runtime configuration. `serde` + `toml` back the compositor's config file and
-# the documented option catalog (ADR 0021); the same structs will back the
-# future D-Bus surface and the settings app.
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 toml_edit = "0.22"
 
-# Keyboard handling (Esc closes a popup level): xkb keysym lookup. Pinned to
-# the same major smithay uses, so the Keysym type is the same crate.
 xkbcommon = "0.9"
 
-# System keymap: org.freedesktop.locale1 over the system bus (ADR 0021).
 zbus = { version = "5", features = ["p2p"] }
 
-# Shell clock (malaysia-shell menubar): local time formatting.
 chrono = "0.4"
 
-# Malaysia's own crates.
-grade-graphics = { path = "crates/grade-graphics" } # Shared GLSL shaders (compositor + shell).
-malaysia-compositor = { path = "crates/malaysia-compositor" }                 # The compositor library (config, xdg helpers).
-malaysia-scene = { path = "crates/malaysia-scene" }     # Window layout: geometry, stacking and hit-testing (ADR 0015).
+grade-graphics = { path = "crates/grade-graphics" }
+malaysia-compositor = { path = "crates/malaysia-compositor" }
+malaysia-scene = { path = "crates/malaysia-scene" }
 
-# BarrierKit lives in its own repository (ADR 0048). The rev is updated when
-# the toolkit is pushed; until then `dev.sh kit-local` overrides these to the
-# sibling checkout at ../barrierkit.
 barrier-kit = { git = "https://github.com/HBlanqueto/barrierkit", rev = "3841a09" }
 vow-design = { git = "https://github.com/HBlanqueto/barrierkit", rev = "3841a09" }
 vow-appearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "3841a09" }
 infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "3841a09" }
 
-# Freya's core crates for BarrierKit (ADR 0034), pinned exact: the Nix Skia
-# derivation and the client-only guard are written against these versions.
-# `freya-components` runs with default features off and no window backend.
-# Never add `freya` (defaults to winit) or `freya-winit`.
 freya-core = "=0.4.3"
 freya-components = { version = "=0.4.3", default-features = false }
 freya-animation = "=0.4.3"
@@ -109,71 +75,35 @@ async-channel = "2"
 futures-lite = "2"
 torin = "=0.4.3"
 ragnarok = "=0.4.3"
-# accesskit version Freya 0.4.3 generates; 0.24 for the shell's Unix adapter.
 futures-util = "0.3"
 futures-channel = "0.3"
 keyboard-types = "0.8"
 accesskit = "0.24"
 
-# Wayland client stack for `malaysia-shell` and the probe clients.
-# `system` enables `ObjectId::as_ptr`, which is how the EGL setup hands the
-# raw `wl_display*`/`wl_surface*` to libwayland-egl (see barrier-kit).
 wayland-client = { version = "0.31", features = ["system"] }
 wayland-egl = "0.32"
-# Protocol generation for the private Infinity protocol (ADR 0039).
 wayland-scanner = "0.31"
-# Standard Wayland protocols: staging for fractional_scale/viewporter (wallpaper)
-# and client for the shell.
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-# WLR protocols; the compositor uses server-side foreign-toplevel handles in
-# Infinity and the shell uses the client side.
 wayland-protocols-wlr = { version = "0.3.12", default-features = false }
-# KDE's appmenu protocol (ADR 0040): the compositor only stores the D-Bus
-# address per surface; the shell reads the menu.
 wayland-protocols-plasma = { version = "0.3.12", default-features = false }
 
-# BarrierKit's Wayland runner presents with EGL and hands the GL context to
-# Skia; there is no glutin and no `gl` crate (ADR 0034). `glow` is only for the
-# lock's GLES fallback while recovery is debugged.
 khronos-egl = "6"
 
-# Text shaping for the compositor's chrome (Smithay + cosmic-text). The kit
-# uses Skia's paragraph layout.
 cosmic-text = "0.19"
 
-# Grapheme-aware truncation of the titlebar title.
 unicode-segmentation = "1"
 
-# Wallpaper decoding (malaysia-shell): PNG via `png`, JPEG via `zune-jpeg` (light,
-# decode-only; no encoder or full image pipeline).
 png = "0.17"
 zune-jpeg = "0.5"
-# Half-precision floats for 16-bit wallpaper textures.
 half = { version = "2", features = ["bytemuck"] }
 
-# Dev-only probe clients (`tools/sctk-probe`): real Wayland clients that drive
-# Malaysia while developing. Only the probe package uses this, and the package
-# is excluded from the default build; winit already pulls it into the graph.
 smithay-client-toolkit = "0.19.2"
-# Same package, under the shorter name the shell uses (`sctk::...`).
 sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
 
-# Vulkan wallpaper (Bloque 16a). `wgpu` is restricted to the Vulkan backend and
-# the WGSL shading language (no GLES, no DX12, no Metal); `raw-window-handle`
-# wires the Wayland surface into wgpu without a window backend; `bytemuck`
-# uploads the per-surface uniforms.
 wgpu = { version = "24", default-features = false, features = ["wgsl"] }
 raw-window-handle = "0.6"
 bytemuck = { version = "1", features = ["derive"] }
 
-# Compositor framework, pinned to master by revision (ADR 0028). The rev is
-# what `Cargo.lock` resolves; bumping it is a deliberate change. Default
-# features are off so only the nested winit backend and the GLES2 renderer are
-# compiled (ADR 0009); `wayland_frontend` is needed for the protocol handlers
-# that follow. `backend_drm` is the module that knows render nodes:
-# `EGLDevice::try_get_render_node` (the dmabuf feedback's main device, Bloque 7a)
-# and the drm-syncobj explicit-sync protocol (Bloque 7b) both live behind it.
-# It adds the `drm`/`drm-ffi` userspace crates, not the kernel driver.
 smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca512767cacc07efca55fae8be4", default-features = false, features = [
     "backend_winit",
     "backend_drm",
@@ -186,9 +116,6 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca51
     "wayland_frontend",
 ] }
 
-# Fast-compiling development build. Dependencies get light optimisation while
-# Malaysia's own crates stay unoptimised, so incremental rebuilds of our code
-# are cheap but the third-party code we lean on is not painfully slow.
 [profile.dev]
 opt-level = 0
 debug = "line-tables-only"
@@ -196,24 +123,17 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 opt-level = 2
 
-# Same trade-off as `dev`, with debug info disabled for quicker links. Build
-# with `cargo build --profile dev-fast`. Use when iterating on compile errors
-# and the extra debug info is not needed.
 [profile.dev-fast]
 inherits = "dev"
 debug = false
 incremental = true
 
-# Shipping build: thin LTO and a single codegen unit for cross-crate
-# optimisation, abort on panic (no unwinding machinery), symbols stripped.
 [profile.release]
 lto = "thin"
 codegen-units = 16
 panic = "abort"
 strip = true
 
-# The installed build: fat LTO and one codegen unit. The Nix package sets
-# CARGO_PROFILE=dist; day-to-day use stays on dev/release.
 [profile.dist]
 inherits = "release"
 lto = "fat"

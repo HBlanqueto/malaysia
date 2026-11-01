@@ -1,4 +1,4 @@
-//! Grupos de Ajustes: títulos, filas, tarjetas y contenido desplazable.
+//! Settings groups: titles, rows, cards and scrollable content.
 
 use barrier_kit::ProbeExt;
 use barrier_kit::controls::{Checkbox, ScrollView, Slider};
@@ -26,7 +26,6 @@ use crate::state::{
     tint_scope_disabled,
 };
 
-/// Contenido principal desplazable con los grupos filtrados por búsqueda.
 pub fn content_scroll(
     query: &str,
     config: &AppearanceConfig,
@@ -244,7 +243,6 @@ fn appearance_group(
                             move |_| {
                                 let mut config = load_appearance();
                                 if config.color_scheme == ColorScheme::DarkTint {
-                                    // Keep dark-tint when the user presses "Dark".
                                 } else {
                                     config.color_scheme = ColorScheme::Dark;
                                 }

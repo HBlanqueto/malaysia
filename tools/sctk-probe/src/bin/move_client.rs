@@ -1,27 +1,4 @@
-//! Exercises the client-initiated move and resize path the way a real gesture
-//! does.
-//!
-//! A GTK headerbar drag does not ask for a move on the button press: the
-//! gesture waits for the pointer to pass a threshold, and a focus change can
-//! happen before the request. This client repeats that shape:
-//!
-//! 1. on the first injected press, remember the serial and wait;
-//! 2. after three motions, map a second window (the compositor focuses it),
-//!    then send `move` and `resize` with the original press serial, both while
-//!    the button is held;
-//! 3. after the compositor releases the button, send `move` and `resize` with
-//!    the same serial again (now released), and both with a fabricated serial;
-//! 4. the valid resize makes the compositor send a configure carrying the
-//!    `resizing` state, which is the success signal.
-//!
-//! The released and fabricated requests must be rejected; the valid ones must
-//! be accepted even though a raise, a focus change and a keyboard enter
-//! happened in between.
-//!
-//! `MALAYSIA_TEST_INPUT=1` makes the compositor press once, on the first window
-//! that maps, and hold the button; the motions and the release come from the
-//! same scripted input. Run from the dev shell, or `./dev.sh move`.
-
+//! Client that exercises client-initiated move and resize like a real gesture.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -60,13 +37,9 @@ use wayland_client::protocol::{
     wl_surface::WlSurface,
 };
 
-/// A serial no compositor could have issued for this session's presses.
 const FABRICATED_SERIAL: u32 = 0xdead_0001;
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How many motions the gesture waits for before it asks for a move.
 const THRESHOLD_MOTIONS: usize = 3;
-/// How long to wait for the resizing configure.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {
@@ -84,8 +57,6 @@ fn main() {
         .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
         .expect("failed to create a buffer");
     canvas.fill(0x40);
-    // Commit without a buffer first: the initial xdg_surface.configure must
-    // arrive before the client attaches anything.
     window.commit();
 
     let mut app = App {
@@ -166,8 +137,6 @@ struct App {
 }
 
 impl App {
-    /// Maps a second window, so the compositor raises and focuses it between
-    /// the press and the requests.
     fn map_second_window(&mut self, qh: &QueueHandle<Self>) {
         if self.second.is_some() {
             return;
@@ -181,15 +150,12 @@ impl App {
             .create_buffer(SIDE, SIDE, SIDE * 4, wl_shm::Format::Xrgb8888)
             .expect("failed to create a second buffer");
         canvas.fill(0x20);
-        // Commit without a buffer first; the buffer is attached when the
-        // initial configure arrives.
         window.commit();
         println!("move_client: mapped a second window to take focus");
         self.second = Some(window);
         self.second_buffer = Some(buffer);
     }
 
-    /// Sends move and resize with `serial`, the requests the gesture makes.
     fn request_move_and_resize(&self, serial: u32, note: &str) {
         let Some(seat) = &self.seat else {
             return;
@@ -199,7 +165,6 @@ impl App {
         println!("move_client: sent move/resize with serial {serial} {note}");
     }
 
-    /// Sends move and resize with the fabricated serial.
     fn send_fabricated(&self) {
         self.request_move_and_resize(FABRICATED_SERIAL, "(fabricated)");
     }
@@ -265,7 +230,6 @@ impl WindowHandler for App {
                 window.attach(Some(buffer.wl_buffer()), 0, 0);
             }
         }
-        // Acknowledge and commit, so the window maps and later configures flow.
         window.commit();
         if configure.is_resizing() {
             println!("move_client: received a configure with the resizing state");

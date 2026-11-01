@@ -1,15 +1,4 @@
-//! Asserts that relative pointer motion reaches the client.
-//!
-//! With `MALAYSIA_TEST_INPUT=1` the compositor hovers the pointer over the first
-//! mapped window and follows it with motions. This client binds
-//! `zwp_relative_pointer_manager_v1`, creates a relative pointer for the seat's
-//! pointer, and waits for a `relative_motion` event with a non-zero delta.
-//!
-//! A compositor that advertises the global but never forwards motion times out
-//! here.
-//!
-//! Run against a compositor started with `MALAYSIA_TEST_INPUT=1`.
-
+//! Probe: relative pointer motion reaches the client.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -54,9 +43,7 @@ use wayland_client::{
     },
 };
 
-/// Buffer side, in pixels.
 const SIDE: i32 = 64;
-/// How long to wait for the first relative motion.
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 fn main() {

@@ -1,10 +1,4 @@
-//! The dock component: the macOS-style dock at the screen edge.
-//!
-//! A layer-shell surface on the `Top` layer. It lists the running toplevels
-//! from `ext-foreign-toplevel-list-v1` and, on click, activates the window
-//! through `zwlr_foreign_toplevel_management_v1`. The active app is
-//! highlighted from the compositor's `window.domain` store. Drawing is
-//! BarrierKit on Freya (ADR 0034).
+//! The dock component: running apps at the screen edge.
 
 use std::path::PathBuf;
 
@@ -79,7 +73,6 @@ impl App for DockApp {
     }
 }
 
-/// Connects to the compositor and runs the dock.
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
     let app = AppComponent::new(DockApp { window_store });

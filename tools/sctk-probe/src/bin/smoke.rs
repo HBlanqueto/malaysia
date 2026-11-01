@@ -1,35 +1,4 @@
-//! Assertion-based smoke test for the toplevel mapping sequence.
-//!
-//! This is not part of the compositor. It launches a real nested session,
-//! starts a real Wayland client against it with `WAYLAND_DEBUG=1`, captures the
-//! client's protocol trace, and checks the sequence a mapped toplevel must
-//! produce. It exits non-zero if any step is missing or out of order, so it can
-//! be used as a pass/fail check instead of reading a debug log by eye.
-//!
-//! The sequence asserted, in order:
-//!
-//! 1. `xdg_toplevel.configure` precedes the first non-null `wl_surface.attach`.
-//! 2. The `xdg_surface.ack_configure` serial matches the configure's serial, and
-//!    the ack precedes the attach (the client must not attach before acking).
-//! 3. A commit carrying a non-null buffer occurs, and the compositor reports the
-//!    mapping.
-//! 4. `wl_keyboard.enter` is delivered to that mapped surface.
-//! 5. The `wl_callback.done` matching the specific id requested by
-//!    `wl_surface.frame` arrives. A bare `wl_callback.done` is not accepted: the
-//!    callback id is resolved from the frame request, and completions are
-//!    matched against it, so a `wl_display.sync` round-trip cannot be mistaken
-//!    for a frame.
-//!
-//! Run from the dev shell, after building the compositor:
-//!
-//! ```sh
-//! cargo build -p malaysia-compositor
-//! cargo run -p sctk-probe --bin smoke
-//! ```
-//!
-//! Environment overrides: `MALAYSIA_BIN` (path to the compositor binary) and
-//! `MALAYSIA_SMOKE_CLIENT` (the client to drive; defaults to `foot`).
-
+//! Smoke test for the toplevel mapping sequence in a nested session.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -38,19 +7,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// How long to wait for the compositor to create its socket.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long to wait for the client to complete the mapping sequence.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// The compositor log line emitted exactly when a window becomes mapped.
 const MAPPED_LOG_LINE: &str = "window mapped";
-/// The compositor log line emitted when it draws its own pointer.
-///
-/// There is no client cursor until the host pointer moves and the client
-/// receives `wl_pointer.enter`, which this harness cannot cause, so the
-/// compositor-drawn pointer is the cursor path it can exercise live. The line
-/// is a `debug` event, so the compositor is run at `--log-level=debug`.
 const DEFAULT_CURSOR_LOG_LINE: &str = "drawing a pointer cursor";
 
 fn main() -> ExitCode {
@@ -115,11 +75,8 @@ fn run() -> Result<(), String> {
     analyze(&lines, &compositor_lines)
 }
 
-/// Spawns the compositor with its own runtime directory, reaching the host
-/// compositor through the absolute socket path resolved by the caller.
 fn host_wayland_display() -> Result<Option<String>, String> {
     let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
-        // No Wayland host; winit may still start on X11 through DISPLAY.
         return Ok(None);
     };
     if display.starts_with('/') {
@@ -130,8 +87,6 @@ fn host_wayland_display() -> Result<Option<String>, String> {
     Ok(Some(format!("{runtime}/{display}")))
 }
 
-/// Waits until the compositor has created a `wayland-*` socket in its runtime
-/// directory, or the compositor exits or the deadline passes.
 fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
     let deadline = Instant::now() + SOCKET_TIMEOUT;
     loop {
@@ -155,7 +110,6 @@ fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Resul
     }
 }
 
-/// The first (alphabetically) Wayland socket in a directory.
 fn find_socket(dir: &Path) -> Option<String> {
     let mut names: Vec<String> = fs::read_dir(dir)
         .ok()?
@@ -167,8 +121,6 @@ fn find_socket(dir: &Path) -> Option<String> {
     names.into_iter().next()
 }
 
-/// Waits until the trace shows the specific frame callback completing, or the
-/// client exits, or the deadline passes.
 fn wait_for_sequence(trace: &Sink, client: &mut ChildGuard) -> Result<(), String> {
     let deadline = Instant::now() + CLIENT_TIMEOUT;
     loop {
@@ -191,7 +143,6 @@ fn wait_for_sequence(trace: &Sink, client: &mut ChildGuard) -> Result<(), String
     }
 }
 
-/// Whether a `wl_surface.frame` callback has completed for its own id.
 fn frame_callback_completed(lines: &[String]) -> bool {
     let mut requested = Vec::new();
     for raw in lines {
@@ -209,7 +160,6 @@ fn frame_callback_completed(lines: &[String]) -> bool {
     false
 }
 
-/// Checks every step of the mapping sequence and returns the first failure.
 fn analyze(lines: &[String], compositor_log: &[String]) -> Result<(), String> {
     let trace = Trace::parse(lines);
     let surface = trace.toplevel_surface.ok_or_else(|| {
@@ -348,13 +298,6 @@ fn analyze(lines: &[String], compositor_log: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Checks that every `wl_pointer.set_cursor` used the serial of a pointer enter
-/// the client had already received.
-///
-/// This is the client half of the cursor contract: the compositor's own serial
-/// check is Smithay's, against the pointer's last enter serial, which the
-/// compositor generated from its single counter. A trace with no pointer enter
-/// (the smoke cannot move the host pointer) has nothing to check and passes.
 fn check_pointer_cursor(trace: &Trace) -> Result<(), String> {
     for set in &trace.set_cursors {
         let matched = trace
@@ -374,7 +317,6 @@ fn check_pointer_cursor(trace: &Trace) -> Result<(), String> {
     Ok(())
 }
 
-/// A parsed `WAYLAND_DEBUG` line, split into direction and body.
 struct Line<'a> {
     request: bool,
     body: &'a str,
@@ -408,13 +350,11 @@ impl<'a> Line<'a> {
     }
 }
 
-/// One protocol event of interest, with the index of the line it came from.
 struct ToplevelConfigure {
     index: usize,
     toplevel: u64,
 }
 
-/// The events and object associations extracted from a trace.
 #[derive(Default)]
 struct Trace {
     toplevel_surface: Option<u64>,
@@ -479,7 +419,6 @@ struct PointerEnter {
 struct SetCursor {
     index: usize,
     serial: u64,
-    /// The cursor surface, or `None` for `nil` (hide the cursor).
     surface: Option<u64>,
 }
 
@@ -599,7 +538,6 @@ impl Trace {
             .find(|commit| commit.surface == surface && commit.index > index)
     }
 
-    /// The first server-side decoration configure.
     fn first_server_side_decoration(&self) -> Option<&DecorationConfigure> {
         self.decoration_configures
             .iter()
@@ -623,7 +561,6 @@ impl Trace {
     }
 }
 
-/// The callback id of a `wl_callback#N.done(...)` event, if the line is one.
 fn callback_done_id(line: &Line<'_>) -> Option<u64> {
     if line.request || !line.body.contains(".done(") {
         return None;
@@ -631,15 +568,12 @@ fn callback_done_id(line: &Line<'_>) -> Option<u64> {
     object_id(line.body, "wl_callback")
 }
 
-/// The id of an object `ty#N` at the start of a line body.
 fn object_id(body: &str, ty: &str) -> Option<u64> {
     let rest = body.strip_prefix(ty)?.strip_prefix('#')?;
     let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
     digits.parse().ok()
 }
 
-/// The first number following a `marker#` substring, e.g. the id in
-/// `wl_surface#3.attach(wl_buffer#48, 0, 0)`.
 fn find_id_after(body: &str, marker: &str) -> Option<u64> {
     let start = body.find(marker)? + marker.len();
     let digits: String = body[start..]
@@ -649,8 +583,6 @@ fn find_id_after(body: &str, marker: &str) -> Option<u64> {
     digits.parse().ok()
 }
 
-/// The first integer argument of a call, e.g. the serial in
-/// `xdg_surface#18.configure(2)`.
 fn first_argument(body: &str) -> Option<u64> {
     let rest = &body[body.find('(')? + 1..];
     let digits: String = rest
@@ -661,14 +593,11 @@ fn first_argument(body: &str) -> Option<u64> {
     digits.parse().ok()
 }
 
-/// A child process that is killed and reaped when it drops.
 struct ChildGuard {
     child: Child,
 }
 
 impl ChildGuard {
-    /// Spawns `command` with piped output and optionally an absolute
-    /// `WAYLAND_DISPLAY` for reaching the host compositor.
     fn spawn(command: &mut Command, wayland_display: Option<&str>) -> Result<Self, String> {
         if let Some(display) = wayland_display {
             command.env("WAYLAND_DISPLAY", display);
@@ -680,9 +609,6 @@ impl ChildGuard {
         Ok(Self { child })
     }
 
-    /// Starts draining the child's stdout and stderr into sinks. Both streams
-    /// are kept because the compositor logs to stdout while `WAYLAND_DEBUG`
-    /// client output goes to stderr.
     fn capture(&mut self) -> Result<Sink, String> {
         let stdout = self
             .child
@@ -700,7 +626,6 @@ impl ChildGuard {
         Ok(sink)
     }
 
-    /// Returns `Some(status)` once the child has exited.
     fn poll(&mut self) -> Result<Option<std::process::ExitStatus>, String> {
         self.child
             .try_wait()
@@ -715,10 +640,8 @@ impl Drop for ChildGuard {
     }
 }
 
-/// A shared, thread-safe collection of captured output lines.
 type Sink = Arc<Mutex<Vec<String>>>;
 
-/// Reads `reader` line by line into a sink on its own thread.
 fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     thread::spawn(move || {
         for line in BufReader::new(reader).lines() {
@@ -730,12 +653,10 @@ fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
     });
 }
 
-/// A copy of the lines captured so far.
 fn snapshot(sink: &Sink) -> Vec<String> {
     sink.lock().expect("capture sink poisoned").clone()
 }
 
-/// A runtime directory that is removed when it drops.
 struct TempDir(PathBuf);
 
 impl TempDir {
@@ -773,12 +694,10 @@ impl Drop for TempDir {
 mod tests {
     use super::{analyze, check_pointer_cursor, Trace, DEFAULT_CURSOR_LOG_LINE, MAPPED_LOG_LINE};
 
-    /// Wraps a body in the framing libwayland's debug output uses.
     fn line(body: &str) -> String {
         format!("[00:00:00.000000] {{Default Queue}} {body}")
     }
 
-    /// The smallest trace that satisfies every assertion.
     fn complete_trace() -> Vec<String> {
         vec![
             line(" -> xdg_wm_base#8.get_xdg_surface(new id xdg_surface#18, wl_surface#3)"),

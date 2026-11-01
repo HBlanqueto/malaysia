@@ -1,23 +1,4 @@
-//! Maps two toplevels and toggles a parent on the child, asserting that the
-//! server recomputes decoration insets and reconfigures on each transition.
-//!
-//! A client's decoration insets are a function of its current state, not of the
-//! state it had when it mapped: a toplevel gains a parent (becomes a dialog)
-//! and loses it again while it is already tracked. If the server froze the
-//! insets at map time, the child would keep the wrong size after the toggle.
-//!
-//! The probe checks the sizes rather than leaving them to be read by eye. A
-//! decorated window is configured one left-titlebar narrower than a dialog, so
-//! setting a parent must widen the child while keeping its height, and unsetting
-//! the parent must restore the original size exactly. Any other sequence exits
-//! non-zero, so the probe can be used as a pass/fail check.
-//!
-//! Run it against a running compositor:
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin parent_probe
-//! ```
-
+//! Probe: toggling a parent on a toplevel recomputes decoration insets.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -105,8 +86,6 @@ impl App {
                 self.child.commit();
             }
             3 => {
-                // The configure for the unset above arrives asynchronously; let
-                // one more tick pass so it is recorded before checking.
                 println!("probe: phase 3 (settling)");
             }
             _ => {
@@ -124,11 +103,6 @@ impl App {
         self.phase += 1;
     }
 
-    /// Checks the three child configures against the expected set/unset cycle.
-    ///
-    /// The initial size is the decorated one. Setting a parent makes the child
-    /// a dialog, so it widens by exactly the left titlebar and keeps its
-    /// height. Unsetting the parent restores the initial size exactly.
     fn verify(&self) -> Result<(), String> {
         let [initial, with_parent, restored] = self.child_configures[..] else {
             return Err(format!(

@@ -1,17 +1,4 @@
-//! Maps an xdg_toplevel and asserts it receives frame callbacks for commits
-//! that carry no damage.
-//!
-//! The first commit attaches a buffer so the surface maps. After that, every
-//! frame callback triggers a commit that only requests another frame callback.
-//! A compositor that answers frame callbacks only when there is damage will
-//! stall and the probe will time out.
-//!
-//! Run it against a fresh compositor:
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin toplevel_frame_probe
-//! ```
-
+//! Probe: an xdg_toplevel gets frame callbacks for commits without damage.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -48,7 +35,6 @@ use smithay_client_toolkit::{
     },
 };
 
-/// The toplevel's surface size, in pixels.
 const SIDE: u32 = 200;
 
 fn main() {
@@ -204,8 +190,6 @@ impl WindowHandler for App {
         }
         window.commit();
 
-        // The first configure carries no frame callback yet; request one so the
-        // no-damage cycle can start once the surface maps.
         if self.commit_count == 0 {
             self.commit_frame_only(qh);
         }

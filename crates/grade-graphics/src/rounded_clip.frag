@@ -18,6 +18,5 @@ void main() {
     float coverage = window_coverage(dist);
 
     vec4 color = texture2D(tex, v_coords);
-    // Smithay blends premultiplied; scale RGB together with alpha.
     gl_FragColor = color * (coverage * alpha);
 }

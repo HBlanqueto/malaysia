@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Medición de redimensionado interactivo L1f-2.
-#
-# Uso (dentro de `nix develop` en ~/src/malaysia):
-#   scripts/medir-redimensionado.sh [debug|release]
-#
-# Arrastra la esquina inferior derecha de window_csd y de foot desde su tamaño
-# inicial hasta 1100×700, y reporta configures/s, latencia configure→ack y
-# configure→commit, y tiempos de draw/swap del cliente.
 set -euo pipefail
 
 profile="${1:-debug}"
@@ -145,8 +137,6 @@ measure_client() {
     dx=$(awk "BEGIN { printf \"%.2f\", ($end_x - $start_x) / $steps }")
     dy=$(awk "BEGIN { printf \"%.2f\", ($end_y - $start_y) / $steps }")
 
-    # El ritmo del puntero sintético lo controla MALAYSIA_TEST_POINTER_STEP_MS
-    # (por defecto 100 ms); lo fijamos a 8 ms para medir a ~120 Hz.
     input="wait:3000;move:$start_x,$start_y;press:$start_x,$start_y"
     for i in $(seq 1 "$steps"); do
         x=$(awk "BEGIN { printf \"%.0f\", $start_x + $dx * $i }")
@@ -164,7 +154,6 @@ measure_client() {
     eval "$launch" >"$client_log" 2>&1 &
     client_pid=$!
 
-    # 60 movimientos × 8 ms + pasos iniciales/finales ≈ 4 s; dormimos 7 s.
     sleep 7
 
     kill "$client_pid" 2>/dev/null || true
@@ -248,7 +237,6 @@ for i, (t_send, serial) in enumerate(send_serials):
     if next_send is not None:
         commit_next_send.append((next_send - first_commit) * 1000)
 
-# client draw/swap times
 draw_start = []
 swap_done = []
 swap_us = []
@@ -276,7 +264,6 @@ if send:
 else:
     duration = 0
 
-# Refresh-rate estimate from commit spacing.
 commit_intervals = []
 for i in range(1, len(commit_times)):
     dt = (commit_times[i] - commit_times[i-1]) * 1000

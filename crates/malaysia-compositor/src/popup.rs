@@ -1,10 +1,4 @@
-//! The tracked popups, behind one boundary.
-//!
-//! Geometry — where a popup sits and how it nests — lives in the scene
-//! (`malaysia_scene`, ADR 0015); this module owns what the scene cannot: the
-//! `xdg_popup` surface and the configure handshake. This is the Bloque 5 work:
-//! constraint-adjusted positioning, a configure before mapping, dismissal on an
-//! outside click, and no orphans when a client dies.
+//! Tracked `xdg_popup` surfaces.
 
 use malaysia_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
@@ -18,70 +12,50 @@ use smithay::wayland::shell::xdg::{PopupSurface, PositionerState};
 use crate::state::State;
 use crate::window::surface_has_buffer;
 
-/// One tracked popup.
 struct PopupData {
     popup: PopupSurface,
     id: PopupId,
-    /// The surface the popup was created with as parent.
     parent_surface: WlSurface,
-    /// The parent in scene terms, for the popup tree.
     parent: PopupParent,
-    /// The absolute positioned rectangle, in logical pixels.
     geometry: Rectangle<i32, Logical>,
-    /// Whether the client has attached a buffer.
     mapped: bool,
 }
 
-/// What to do with keyboard focus after a popup subtree is removed.
 #[derive(Debug)]
 pub(crate) enum FocusRestore {
-    /// Focus the nearest still-alive parent popup.
     Popup(WlSurface),
-    /// Focus the layer surface the root popup hung from.
     Layer(WlSurface),
-    /// Focus the surface/window that had focus before the root popup opened.
     Previous(Option<WlSurface>, Option<WindowId>),
 }
 
 struct PopupFocusFrame {
     surface: WlSurface,
-    /// Serial of the input event that grabbed this popup.
     grab_serial: Serial,
-    /// If the root popup hung from a layer surface, its surface and interactivity.
     root_layer: Option<(WlSurface, KeyboardInteractivity)>,
-    /// Surface that had focus before the root popup opened.
     previous_focus: Option<WlSurface>,
-    /// Window that had focus before the root popup opened.
     previous_window: Option<WindowId>,
 }
 
-/// The tracked popups.
 #[derive(Default)]
 pub struct Popups {
     popups: Vec<PopupData>,
-    /// The next scene id to hand out.
     next_id: u64,
-    /// Stack of popups that have been explicitly given keyboard focus by grab.
     focus_stack: Vec<PopupFocusFrame>,
 }
 
 impl Popups {
-    /// Creates an empty set of tracked popups.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// How many popups are tracked.
     pub fn len(&self) -> usize {
         self.popups.len()
     }
 
-    /// Whether no popups are tracked.
     pub fn is_empty(&self) -> bool {
         self.popups.is_empty()
     }
 
-    /// The scene id of the popup for `surface`.
     pub fn id_of(&self, surface: &WlSurface) -> Option<PopupId> {
         self.popups
             .iter()
@@ -89,7 +63,6 @@ impl Popups {
             .map(|data| data.id)
     }
 
-    /// The client surface of the popup with `id`.
     pub fn surface_of(&self, id: PopupId) -> Option<&WlSurface> {
         self.popups
             .iter()
@@ -97,7 +70,6 @@ impl Popups {
             .map(|data| data.popup.wl_surface())
     }
 
-    /// The `PopupSurface` with `id`.
     pub fn popup_of(&self, id: PopupId) -> Option<&PopupSurface> {
         self.popups
             .iter()
@@ -105,7 +77,6 @@ impl Popups {
             .map(|data| &data.popup)
     }
 
-    /// Every tracked popup surface.
     pub fn surfaces(&self) -> impl Iterator<Item = &WlSurface> {
         self.popups.iter().map(|data| data.popup.wl_surface())
     }
@@ -135,7 +106,6 @@ impl Popups {
         });
     }
 
-    /// The serial that grabbed this popup, if it currently owns a grab.
     pub(crate) fn grab_serial_of(&self, surface: &WlSurface) -> Option<Serial> {
         self.focus_stack
             .iter()
@@ -144,8 +114,6 @@ impl Popups {
             .map(|frame| frame.grab_serial)
     }
 
-    /// Removes focus frames for popups in `surfaces`. If keyboard focus was in
-    /// the removed subtree, returns where it should go.
     pub(crate) fn remove_focus_frames(
         &mut self,
         surfaces: &[WlSurface],
@@ -171,12 +139,10 @@ impl Popups {
             return None;
         }
 
-        // The nearest surviving popup frame is now the parent.
         if let Some(parent) = self.focus_stack.last() {
             return Some(FocusRestore::Popup(parent.surface.clone()));
         }
 
-        // No parent popup: use the root frame's layer or previous focus.
         let root = removed
             .iter()
             .find(|frame| frame.root_layer.is_some())
@@ -195,7 +161,6 @@ impl Popups {
         ))
     }
 
-    /// The index of the popup for `surface`.
     fn index_of(&self, surface: &WlSurface) -> Option<usize> {
         self.popups
             .iter()
@@ -210,29 +175,22 @@ impl Popups {
         self.popups.retain(|data| data.id != id);
     }
 
-    /// The absolute geometry of the popup for `surface`, if tracked.
     pub fn geometry_of(&self, surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
         self.index_of(surface).map(|i| self.popups[i].geometry)
     }
 }
 
-/// The root of a popup cascade: the last ancestor, or the popup itself.
 fn popup_root(topmost: PopupId, ancestors: &[PopupId]) -> PopupId {
     ancestors.last().copied().unwrap_or(topmost)
 }
 
 impl State {
-    /// Handles `xdg_shell`'s `new_popup`: positions the popup against its
-    /// parent, configures it before it maps, and tracks it.
     pub(crate) fn add_popup(&mut self, popup: PopupSurface, positioner: PositionerState) {
         let Some(parent_surface) = popup.get_parent_surface() else {
             return;
         };
 
         let parent_geometry = self.parent_geometry(&parent_surface);
-        // The constraint target is the usable output area, relative to the
-        // parent's geometry (the coordinate space `get_unconstrained_geometry`
-        // works in). Panels will shrink this area once they exist.
         let usable = Rectangle::new(Point::from((0, 0)), self.logical_output_size());
         let target = Rectangle::new(usable.loc - parent_geometry.loc, usable.size);
         let relative = positioner.get_unconstrained_geometry(target);
@@ -265,8 +223,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// Handles a popup commit: maps it once the initial configure has been
-    /// sent and a buffer attached.
     pub(crate) fn popup_commit(&mut self, surface: &WlSurface) {
         let Some(index) = self.popups.index_of(surface) else {
             return;
@@ -282,7 +238,6 @@ impl State {
         }
     }
 
-    /// Handles a destroyed popup surface, removing its whole subtree.
     pub(crate) fn popup_destroyed(&mut self, surface: &WlSurface) {
         let Some(id) = self.popups.id_of(surface) else {
             return;
@@ -290,8 +245,6 @@ impl State {
         self.remove_popup_subtree(id);
     }
 
-    /// Applies a `xdg_popup.reposition`: recomputes the geometry with the new
-    /// positioner and confirms with `repositioned`.
     pub(crate) fn reposition_popup(
         &mut self,
         popup: PopupSurface,
@@ -322,8 +275,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// Dismisses the popup `seed` and its whole subtree: `popup_done` to each,
-    /// then they are untracked.
     pub(crate) fn dismiss_popups(&mut self, seed: PopupId) {
         let subtree = self.windows.popup_subtree(seed);
         tracing::info!(seed = seed.get(), ?subtree, "dismissing popups");
@@ -344,7 +295,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// Dismisses every open popup, including the whole cascade above its root.
     pub(crate) fn dismiss_all_popups(&mut self) {
         let Some(topmost) = self.windows.topmost_popup() else {
             return;
@@ -353,9 +303,6 @@ impl State {
         self.dismiss_popups(popup_root(topmost, &ancestors));
     }
 
-    /// Dismisses the topmost popup (and, with it, any submenus nested under it).
-    ///
-    /// This is what Esc does: close one menu level.
     pub(crate) fn dismiss_topmost_popup(&mut self) {
         let Some(topmost) = self.windows.topmost_popup() else {
             return;
@@ -363,8 +310,6 @@ impl State {
         self.dismiss_popups(topmost);
     }
 
-    /// Removes `id` and its popup descendants from tracking, without sending
-    /// `popup_done` (used when the client destroyed the popups itself).
     fn remove_popup_subtree(&mut self, id: PopupId) {
         let subtree = self.windows.popup_subtree(id);
         tracing::info!(root = id.get(), ?subtree, "popup subtree removed");
@@ -380,11 +325,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// The absolute geometry of a parent surface a popup anchors against.
-    ///
-    /// The parent may be a toplevel window (its usable rectangle — the xdg
-    /// `window_geometry`), another popup, or a layer surface (a menubar menu,
-    /// via `get_popup`).
     fn parent_geometry(&self, parent: &WlSurface) -> Rectangle<i32, Logical> {
         if let Some(window) = self.windows.id_of(parent)
             && let Some(rect) = self.windows.usable_rect(window)
@@ -402,7 +342,6 @@ impl State {
         Rectangle::new(Point::from((0, 0)), Size::from((1, 1)))
     }
 
-    /// Restores keyboard focus after a popup subtree disappears.
     fn restore_popup_focus(&mut self, surfaces: &[WlSurface]) {
         let current_focus = self
             .seat
@@ -416,7 +355,6 @@ impl State {
         }
     }
 
-    /// The popup's parent in scene terms.
     fn parent_kind(&self, parent: &WlSurface) -> PopupParent {
         if let Some(window) = self.windows.id_of(parent) {
             PopupParent::Window(window)
@@ -428,7 +366,6 @@ impl State {
     }
 }
 
-/// A scene rectangle from the compositor's logical rectangle.
 fn scene_rect(rect: Rectangle<i32, Logical>) -> SceneRect<f64, SceneLogical> {
     SceneRect::new(
         ScenePoint::new(rect.loc.x as f64, rect.loc.y as f64),
@@ -436,12 +373,6 @@ fn scene_rect(rect: Rectangle<i32, Logical>) -> SceneRect<f64, SceneLogical> {
     )
 }
 
-/// The compositor's logical rectangle from a scene rectangle.
-///
-/// This is protocol geometry: it reaches the client through
-/// `parent_geometry` → `xdg_popup.configure` (popup.rs:244-246 and 311-315),
-/// so it uses `round()`. ADR 0004's floor/ceil rule applies only to rectangles
-/// the compositor draws.
 fn smithay_rect(rect: SceneRect<f64, SceneLogical>) -> Rectangle<i32, Logical> {
     Rectangle::new(
         Point::from((rect.x().round() as i32, rect.y().round() as i32)),
@@ -474,9 +405,6 @@ mod tests {
         assert_eq!(popup_root(topmost, &[]), topmost);
     }
 
-    /// Protocol geometry rounds fractional logical values to the nearest
-    /// integer. ADR 0004's floor/ceil rule is for drawn rectangles, not for
-    /// values sent to the client via `xdg_popup.configure`.
     #[test]
     fn smithay_rect_rounds_fractional_protocol_geometry() {
         let rect = Rect::new(ScenePoint::new(10.4, 20.6), SceneSize::new(100.4, 100.6));

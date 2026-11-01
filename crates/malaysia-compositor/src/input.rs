@@ -1,14 +1,4 @@
-//! Translating backend input events into seat events.
-//!
-//! The winit backend reports input in Smithay's unified [`InputEvent`] form, so
-//! this module is backend-agnostic and will keep working when the Direct
-//! Session milestone replaces winit. Every serial comes from Smithay's single
-//! counter; none is invented.
-//!
-//! Interactive move and resize live here: a pointer button press on a window's
-//! decoration starts a grab, motion drives it, and release ends it. The grab is
-//! the compositor's own state, not a Smithay `PointerGrab`, because every event
-//! already passes through this module.
+//! Translates backend input events into seat events.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -40,49 +30,25 @@ use xkbcommon::xkb::{self, Keycode, keysyms};
 use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
 use crate::state::{Grab, ScreenshotRequest, State, TestPress};
 
-/// The Linux button code for the primary pointer button.
 const BUTTON_LEFT: u32 = 0x110;
-/// Default delay between two scripted pointer actions.
 const TEST_POINTER_STEP_DEFAULT: Duration = Duration::from_millis(100);
-/// Environment variable that overrides the delay between scripted pointer
-/// actions, in milliseconds. Allows measurements to run faster than the
-/// default 100 ms step.
 const TEST_POINTER_STEP_MS_VAR: &str = "MALAYSIA_TEST_POINTER_STEP_MS";
-/// Lazily-evaluated delay between scripted pointer actions.
 static TEST_POINTER_STEP: LazyLock<Duration> = LazyLock::new(|| {
     parse_ms(
         std::env::var(TEST_POINTER_STEP_MS_VAR).ok().as_deref(),
         TEST_POINTER_STEP_DEFAULT,
     )
 });
-/// How long a scripted click holds the button so a popup grab can use its
-/// serial before the release.
 const TEST_CLICK_HOLD: Duration = Duration::from_millis(150);
-/// How long a scripted key stays pressed before the matching release.
-///
-/// Keep it well under the 200 ms key-repeat delay: a slow frame between the
-/// press and the release would otherwise insert a repeated character.
 const TEST_KEY_HOLD: Duration = Duration::from_millis(20);
 
-/// A titlebar press remembered for double-click detection.
 pub(crate) type TitlebarClick = (WindowId, u64, Point<f64, Logical>);
 
-/// A scripted input sequence from `MALAYSIA_TEST_INPUT`.
-///
-/// The actions go through the same paths as a host pointer and keyboard;
-/// they do not call a client directly. `move:x,y` moves, `click:x,y` presses
-/// and releases after [`TEST_CLICK_HOLD`] (so an xdg popup can grab with the
-/// press serial), `doubleclick:x,y` sends two such clicks with no step between
-/// them, `key:<name>` presses and releases a named key after [`TEST_KEY_HOLD`],
-/// `key:ctrl+r` (also `shift`, `alt`, `super`) holds the modifiers, presses the
-/// key and releases everything in reverse order, and `wait:ms` pauses. Actions
-/// are separated by `;`.
 #[derive(Debug, Default)]
 pub(crate) struct TestPointer {
     actions: VecDeque<TestPointerAction>,
 }
 
-/// A scripted key injected through the real keyboard path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TestKey {
     Up,
@@ -123,7 +89,6 @@ impl TestKey {
         }
     }
 
-    /// xkb keycode for this key (evdev code + 8).
     fn code(self) -> Keycode {
         Keycode::new(match self {
             Self::Up => 111,
@@ -144,8 +109,6 @@ impl TestKey {
     }
 }
 
-/// Parses `key:<modifiers>+<key>` (e.g. `ctrl+r`, `ctrl+shift+s`, `super+Space`)
-/// into KeyDown/KeyUp actions that hold the modifiers while the key is pressed.
 fn parse_key_actions(rest: &str, actions: &mut VecDeque<TestPointerAction>) {
     let tokens: Vec<&str> = rest
         .split('+')
@@ -165,8 +128,6 @@ fn parse_key_actions(rest: &str, actions: &mut VecDeque<TestPointerAction>) {
                 if i == tokens.len() - 1 {
                     key = TestKey::from_name(token);
                 } else {
-                    // Unknown token before the last position: fall back to the
-                    // legacy single-key form so `key:Prior` still works.
                     key = TestKey::from_name(rest.trim());
                     modifiers.clear();
                     break;
@@ -189,7 +150,6 @@ fn parse_key_actions(rest: &str, actions: &mut VecDeque<TestPointerAction>) {
     }
 }
 
-/// xkb keycode for an unshifted ASCII letter or digit (evdev code + 8).
 fn ascii_keycode(ch: char) -> u32 {
     let evdev = match ch {
         'q' => 16,
@@ -244,8 +204,6 @@ enum TestPointerAction {
 }
 
 impl TestPointer {
-    /// Parses `MALAYSIA_TEST_INPUT`; returns `None` for the legacy `1` (a window
-    /// press on first map) or when there is no script.
     pub(crate) fn from_env() -> Option<Self> {
         Self::parse(std::env::var("MALAYSIA_TEST_INPUT").ok()?.as_str())
     }
@@ -288,8 +246,6 @@ impl TestPointer {
             } else if let Some(rest) = part.strip_prefix("doubleclick:") {
                 if let Some((x, y)) = parse_pair_value(rest) {
                     let point = Point::new(x, y);
-                    // Two presses close enough in time for the titlebar's
-                    // double-click rule, without the step between clicks.
                     actions.push_back(TestPointerAction::Move(point));
                     actions.push_back(TestPointerAction::Press(point));
                     actions.push_back(TestPointerAction::Wait(TEST_CLICK_HOLD));
@@ -310,10 +266,6 @@ impl TestPointer {
     }
 }
 
-/// Parses a millisecond duration from an optional environment value.
-///
-/// Empty or invalid values fall back to `default`. A value of `0` is treated
-/// as 1 ms so the event loop is not starved by a zero-duration timer.
 fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
     match value.and_then(|v| v.parse::<u64>().ok()) {
         Some(0) => Duration::from_millis(1),
@@ -322,38 +274,17 @@ fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
     }
 }
 
-/// The delay between two scripted pointer actions.
 pub(crate) fn test_pointer_delay() -> Duration {
     *TEST_POINTER_STEP
 }
-/// The number of motions the scripted input sends after its press.
-///
-/// A real drag gesture does not ask for a move on the press: GTK's, for one,
-/// waits until the pointer has passed a threshold. Following the press with
-/// several motions lets such a client send its request while the button is
-/// still held, which is what the protocol requires.
 const TEST_DRAG_STEPS: usize = 4;
-/// The pointer movement of each scripted pre-threshold motion, in logical
-/// pixels.
 const TEST_DRAG_STEP: (f64, f64) = (12.0, 8.0);
-/// The smallest horizontal movement a shake sample considers.
 const SHAKE_MIN_DX: f64 = 2.0;
-/// The horizontal travel one swing needs before it counts.
 const SHAKE_MIN_SWING: f64 = 24.0;
-/// The longest a single swing may take.
 const SHAKE_MAX_SWING: Duration = Duration::from_millis(300);
-/// The longest a whole shake may take.
 const SHAKE_MAX_TOTAL: Duration = Duration::from_secs(1);
-/// Direction changes needed to call the motion a shake (four swings).
 const SHAKE_REVERSALS: u8 = 3;
 
-/// Detects the rapid back-and-forth motion macOS calls "shake the mouse pointer
-/// to locate".
-///
-/// It ignores slow reversals and small jitter: a swing has to travel at least
-/// [`SHAKE_MIN_SWING`] logical pixels within [`SHAKE_MAX_SWING`], and the whole
-/// gesture has to fit in [`SHAKE_MAX_TOTAL`]. The trigger is the third
-/// direction change, i.e. left-right-left-right.
 #[derive(Debug, Default)]
 pub(crate) struct ShakeDetector {
     last_x: Option<f64>,
@@ -366,8 +297,6 @@ pub(crate) struct ShakeDetector {
 }
 
 impl ShakeDetector {
-    /// Feeds the pointer's x coordinate and the event time; returns `true`
-    /// exactly when the gesture completes.
     pub(crate) fn observe(&mut self, x: f64, now: Instant) -> bool {
         let Some(last) = self.last_x.replace(x) else {
             return false;
@@ -424,9 +353,6 @@ impl ShakeDetector {
         false
     }
 
-    /// The last moment the motion looked like part of a shake, if any. The
-    /// cursor stays enlarged while this is recent and starts shrinking as soon
-    /// as it is not.
     pub(crate) fn last_shake(&self) -> Option<Instant> {
         self.last_shake
     }
@@ -440,59 +366,32 @@ impl ShakeDetector {
     }
 }
 
-/// A compositor shortcut the shared input path handles itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CompositorShortcut {
-    /// Switch to this VT.
     Vt(u8),
-    /// Emergency exit, only when the session is not locked.
     Quit,
-    /// Ctrl+Alt+Backspace while locked: deactivate it, but do not quit.
     Blocked,
-    /// Ctrl+Alt+L: lock now, or relaunch the lock client if it is gone.
     Relock,
-    /// PrintScreen: save a screenshot of the focused window.
     Screenshot,
-    /// Shift+Super+3: capture the whole output.
     ScreenshotFull,
-    /// Shift+Super+4: drag a region (then optionally Space for a window).
     ScreenshotRegion,
-    /// Super+Space: open or close the launcher.
     Launcher,
-    /// Alt+Super+Escape: the «Forzar salida» dialog.
     ForceQuit,
-    /// Ctrl+Super+Left: place the focused window on the left half.
     ArrangeLeft,
-    /// Ctrl+Super+Right: place the focused window on the right half.
     ArrangeRight,
-    /// Ctrl+Super+Up: place the focused window on the top half.
     ArrangeUp,
-    /// Ctrl+Super+Down: place the focused window on the bottom half.
     ArrangeDown,
-    /// Ctrl+Shift+Super+Left: tile active and previous windows side by side.
     ArrangePairLeft,
-    /// Ctrl+Shift+Super+Right: tile active and previous windows side by side (reversed).
     ArrangePairRight,
-    /// Ctrl+Shift+Super+Up: tile active and previous windows stacked.
     ArrangePairUp,
-    /// Ctrl+Shift+Super+Down: tile active and previous windows stacked (reversed).
     ArrangePairDown,
-    /// Ctrl+Super+Return: fill the workspace margin.
     ArrangeFill,
-    /// Ctrl+Super+C: center the focused window at its current size.
     ArrangeCenter,
-    /// Ctrl+Super+R: restore the focused window to its pre-arrange rectangle.
     ArrangeRestore,
-    /// Ctrl+Super+F: toggle focus mode (fullscreen in its own space) on the
-    /// focused window.
     ToggleFullscreen,
-    /// Ctrl+Alt+Left: show the space to the left (ADR 0051).
     PreviousSpace,
-    /// Ctrl+Alt+Right: show the space to the right (ADR 0051).
     NextSpace,
-    /// Ctrl+Alt+N: add a desktop at the right end and show it (ADR 0051).
     AddDesktop,
-    /// Not a compositor shortcut.
     None,
 }
 
@@ -504,21 +403,18 @@ fn compositor_shortcut(
     syms: &[xkb::Keysym],
     locked: bool,
 ) -> CompositorShortcut {
-    // macOS shape: Shift+Super+3 whole screen, Shift+Super+4 a region.
     if shift && logo {
         for sym in syms {
             match u32::from(*sym) {
-                0x33 => return CompositorShortcut::ScreenshotFull, // '3'
-                0x34 => return CompositorShortcut::ScreenshotRegion, // '4'
+                0x33 => return CompositorShortcut::ScreenshotFull,
+                0x34 => return CompositorShortcut::ScreenshotRegion,
                 _ => {}
             }
         }
     }
-    // PrintScreen works on its own, so it is checked before the modifier gate.
     if syms.iter().any(|sym| u32::from(*sym) == keysyms::KEY_Print) {
         return CompositorShortcut::Screenshot;
     }
-    // Alt+Super+Escape opens «Forzar salida» (macOS ⌥⌘⎋). Not while locked.
     if alt && logo && !ctrl && !shift && is_escape(syms) {
         return if locked {
             CompositorShortcut::None
@@ -526,7 +422,6 @@ fn compositor_shortcut(
             CompositorShortcut::ForceQuit
         };
     }
-    // Super+Space is the launcher. While locked it is a no-op.
     if logo && !ctrl && !alt && !shift && syms.iter().any(|sym| u32::from(*sym) == 0x20) {
         return if locked {
             CompositorShortcut::None
@@ -534,7 +429,6 @@ fn compositor_shortcut(
             CompositorShortcut::Launcher
         };
     }
-    // Ctrl+Super window geometry shortcuts (Infinity).
     if ctrl && logo && !alt {
         for sym in syms {
             let sym = u32::from(*sym);
@@ -578,8 +472,6 @@ fn compositor_shortcut(
     if !(ctrl && alt) {
         return CompositorShortcut::None;
     }
-    // Spaces (ADR 0051). Plain Ctrl+arrows stay with the apps: on Linux they
-    // move by word, so the macOS chord gains Alt.
     if !shift && !logo && !locked {
         for sym in syms {
             match u32::from(*sym) {
@@ -609,16 +501,12 @@ fn compositor_shortcut(
     CompositorShortcut::None
 }
 
-/// What a press that hit no window, popup or Top/Overlay layer does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DesktopClick {
-    /// An open bar menu is the only target: close it and keep the focus.
     CloseMenu,
-    /// Nothing is focused by the press: leave no window focused (macOS).
     ClearFocus,
 }
 
-/// Resolves the desktop press. The compositor decides; the caller carries it out.
 fn desktop_click(menu_open: bool) -> DesktopClick {
     if menu_open {
         DesktopClick::CloseMenu
@@ -627,20 +515,11 @@ fn desktop_click(menu_open: bool) -> DesktopClick {
     }
 }
 
-/// Whether any raw sym of a key event is Escape.
-///
-/// `keysym_to_utf32` returns 0 for non-printable keys such as Escape, so the
-/// raw sym must be compared directly.
 fn is_escape(syms: &[xkb::Keysym]) -> bool {
     syms.iter()
         .any(|sym| u32::from(*sym) == keysyms::KEY_Escape)
 }
 
-/// The `Activated` updates for moving focus from `previous` to `next`.
-///
-/// The old window loses the state and the new one gains it; when both are the
-/// same window only one update is needed, and when focus leaves every window
-/// only the old one changes.
 fn activation_updates(previous: Option<WindowId>, next: Option<WindowId>) -> Vec<(WindowId, bool)> {
     let mut updates = Vec::new();
     if let Some(previous) = previous.filter(|previous| Some(*previous) != next) {
@@ -652,10 +531,6 @@ fn activation_updates(previous: Option<WindowId>, next: Option<WindowId>) -> Vec
     updates
 }
 
-/// Keeps a relative pointer inside the logical output.
-///
-/// The right and bottom edges subtract a small epsilon so a pointer at the
-/// maximum is still a hit-testable point, not one pixel outside the output.
 fn clamp_pointer(
     location: Point<f64, Logical>,
     size: smithay::utils::Size<i32, Logical>,
@@ -667,7 +542,6 @@ fn clamp_pointer(
 }
 
 impl State {
-    /// Handles one input event from the backend.
     pub(crate) fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         self.note_idle_activity();
         match event {
@@ -763,9 +637,6 @@ impl State {
         }
     }
 
-    /// Routes one key event through the seat's keyboard, handling compositor
-    /// shortcuts, Esc dismissal and client forwarding exactly like a real
-    /// backend keyboard event.
     fn keyboard_key(&mut self, key_code: Keycode, key_state: KeyState, time: InputTime) {
         let serial = SERIAL_COUNTER.next_serial();
         let pressed = key_state == KeyState::Pressed;
@@ -783,9 +654,6 @@ impl State {
                 serial,
                 time,
                 |state, mods, keysym| {
-                    // While picking a screenshot region or window, the
-                    // keyboard belongs to the screenshot: Esc cancels and
-                    // Space switches from region to window pick.
                     if state.screenshot_mode().is_some() {
                         if pressed {
                             for sym in keysym.raw_syms() {
@@ -798,11 +666,6 @@ impl State {
                         }
                         return FilterResult::Intercept(());
                     }
-                    // Compositor shortcuts are consumed here: the
-                    // focused client must not see Ctrl+Alt+F*,
-                    // Ctrl+Alt+Backspace or Ctrl+Alt+L. While locked,
-                    // Backspace is blocked outright; the way out is a
-                    // VT switch and killing MalaysiaDreams from another TTY.
                     match compositor_shortcut(
                         mods.ctrl,
                         mods.alt,
@@ -906,7 +769,6 @@ impl State {
                                         }
                                     }
                                     CompositorShortcut::ToggleFullscreen => {
-                                        // Fullscreen is focus mode (ADR 0051).
                                         if let Some(id) = state.focused_window() {
                                             state.toggle_focus_mode(id);
                                         }
@@ -926,7 +788,6 @@ impl State {
                             return FilterResult::Intercept(());
                         }
                     }
-                    // Esc closes one popup level (the topmost menu).
                     if pressed && is_escape(&keysym.raw_syms()) {
                         state.dismiss_topmost_popup();
                     }
@@ -942,42 +803,22 @@ impl State {
         }
     }
 
-    /// Handles a pointer button press at `location`.
-    ///
-    /// An edge band starts a resize; the primary button on the decorated band
-    /// off the client surface starts a move; over the client's own surface the
-    /// press just raises and focuses the window. A press outside every open
-    /// popup dismisses them first (leaf to root).
     fn pointer_press(&mut self, button: u32, location: Point<f64, Logical>, time: InputTime) {
-        // While the session is locked, presses target the lock surface only;
-        // the protocol event is still forwarded to it by the caller. No window
-        // may be raised, focused, moved or resized from under the lock.
         if self.locked {
             tracing::info!(?location, "press ignored: the session is locked");
             return;
         }
-        // The pointer focus may be stale: a window can map or be raised under
-        // a stationary pointer, and the press must reach the surface the
-        // compositor just hit-tested, not whatever held the focus before.
-        // Recompute it through the real motion path before the button goes out.
         self.pointer_motion(location, time);
-        // Top/Overlay layers are rendered above popups, so a press on the
-        // menubar (or any other front layer) must dismiss open popups first
-        // and then reach the layer itself.
         let layer_under = self.layers.surface_under(location);
         if layer_under.is_some() && self.windows.topmost_popup().is_some() {
             tracing::info!(?location, "press outside the popups dismissed them");
             self.dismiss_all_popups();
         }
-        // A press on an open popup targets the popup, not the window behind it.
         if layer_under.is_none() && self.popup_surface_under(location).is_some() {
             tracing::info!(?location, "press landed on a popup");
             return;
         }
 
-        // Top/Overlay layers (menubar, dock, OSD) win over the exterior band.
-        // The layer surface receives the press through the pointer focus set
-        // in `pointer_motion`; there is no window press to process.
         if let Some((surface, _)) = layer_under {
             tracing::info!(?location, "press landed on a layer surface");
             self.clear_chrome_pointer();
@@ -997,9 +838,6 @@ impl State {
             }
             return;
         }
-        // A click outside an on-demand layer releases its keyboard focus back
-        // to the active window without deactivating it; a click on the desktop
-        // below clears the active window, and one on another window focuses it.
         if self.layer_focus.clicked_outside() {
             self.apply_focus_restore(crate::popup::FocusRestore::Previous(
                 None,
@@ -1014,9 +852,6 @@ impl State {
             .edge_under(location, side, corner, &self.minimized);
         let under = self.windows.window_under(location, &self.minimized);
 
-        // The exterior band can reach outside every outer rectangle, so it is
-        // handled before `window_under`. If the band belongs to a window above
-        // the content under the pointer, the top window wins.
         if let Some((edge_id, edge)) = edge
             && (under != Some(edge_id) || self.windows.is_client_decorated(edge_id))
         {
@@ -1028,14 +863,10 @@ impl State {
 
         let Some(id) = under else {
             match desktop_click(self.windows.topmost_popup().is_some()) {
-                // The press only dismisses the open bar menu; the window behind
-                // keeps its focus.
                 DesktopClick::CloseMenu => {
                     tracing::info!(?location, "press outside the popups dismissed them");
                     self.dismiss_all_popups();
                 }
-                // macOS: a click on the wallpaper or the empty area leaves no
-                // window focused. The stack is untouched.
                 DesktopClick::ClearFocus => {
                     tracing::info!(?location, "press landed on the desktop; focus cleared");
                     self.clear_keyboard_focus();
@@ -1046,8 +877,6 @@ impl State {
         };
         self.raise_and_focus(id);
 
-        // A titlebar button wins over the resize band. The band only enters
-        // 2 px at a corner, but keeping this order makes the priority explicit.
         if button == BUTTON_LEFT
             && let Some(local) = self.titlebar_point(id, location)
         {
@@ -1069,12 +898,9 @@ impl State {
                 self.request_redraw();
                 return;
             }
-            // The titlebar shown over a focus window only offers its lights.
             if self.revealed_titlebar(id).is_some() {
                 return;
             }
-            // A double click on the bar, outside the lights, applies the
-            // configured action. The second press must not start a move.
             if self.register_titlebar_click(id, local, time).is_some() {
                 self.apply_titlebar_double_click(id);
                 return;
@@ -1103,14 +929,12 @@ impl State {
         }
     }
 
-    /// Raises a window and gives it keyboard focus.
     pub(crate) fn raise_and_focus(&mut self, id: WindowId) {
         self.windows.raise(id);
         self.focus_window(id);
         self.request_redraw();
     }
 
-    /// Applies a titlebar button.
     fn window_button(&mut self, id: WindowId, kind: vow_design::ButtonKind) {
         match kind {
             vow_design::ButtonKind::Close => self.windows.send_close(id),
@@ -1120,12 +944,10 @@ impl State {
         self.request_redraw();
     }
 
-    /// Runs the configured action for the green traffic light.
     fn green_button(&mut self, id: WindowId) {
         use crate::config::GreenButtonAction;
         match self.config.window.green_button {
             GreenButtonAction::Focus if self.has_fixed_width(id) => {
-                // A fixed-width window stretches vertically instead.
                 self.toggle_maximize(id);
             }
             GreenButtonAction::Focus => {
@@ -1149,14 +971,11 @@ impl State {
         }
     }
 
-    /// Whether the green light can be pressed: zoom needs a resizable window;
-    /// focus, fullscreen and none are always available.
     pub(crate) fn green_button_admitted(&self, id: WindowId) -> bool {
         self.config.window.green_button != crate::config::GreenButtonAction::Zoom
             || self.windows.zoom_supported(id)
     }
 
-    /// Maximizes or restores a window from MalaysiaDreams's titlebar.
     #[track_caller]
     pub(crate) fn toggle_maximize(&mut self, id: WindowId) {
         let location = std::panic::Location::caller();
@@ -1170,14 +989,6 @@ impl State {
         self.set_maximized(id, requested);
     }
 
-    /// Sets the maximized state of a window, restoring or saving its previous
-    /// rectangle. Idempotent: asking for the current state is a no-op, so a
-    /// duplicate client request cannot flip the window back.
-    ///
-    /// A window whose client width is fixed (`min_size.w == max_size.w > 0`)
-    /// only fills the available workspace height, keeping its current width and
-    /// horizontal position; the restore rectangle is the one saved before the
-    /// vertical expansion.
     #[track_caller]
     pub(crate) fn set_maximized(&mut self, id: WindowId, maximized: bool) {
         let location = std::panic::Location::caller();
@@ -1214,22 +1025,17 @@ impl State {
             );
             self.windows.set_maximized_with_outer(id, false, saved);
         }
-        // Keep the window focused and Activated through the state change.
         self.focus_window(id);
         self.foreign_state_changed(id);
         self.request_redraw();
     }
 
-    /// Whether the client fixes its width (min = max), like System Settings:
-    /// its green light stretches it vertically and it never enters focus
-    /// mode (ADR 0051).
     pub(crate) fn has_fixed_width(&self, id: WindowId) -> bool {
         self.windows
             .client_size_bounds(id)
             .is_some_and(|(min, max)| is_fixed_width(min, max))
     }
 
-    /// Computes the target rectangle for maximizing `id`.
     fn maximize_target(
         &self,
         id: WindowId,
@@ -1242,7 +1048,6 @@ impl State {
         maximize_target_rect(fixed_width, self.workspace(), outer)
     }
 
-    /// Logs the current window stack for debugging focus decisions.
     fn log_focus_stack(&self, focused: Option<WindowId>) {
         let mut lines = Vec::new();
         for window in self.windows.iter() {
@@ -1261,15 +1066,10 @@ impl State {
         tracing::info!(focused = ?focused, "focus stack (back-to-front):\n{}", lines.join("\n"));
     }
 
-    /// Gives keyboard focus to a window.
     pub(crate) fn focus_window(&mut self, id: WindowId) {
-        // While the session is locked, focus belongs to the lock surface; a
-        // window mapping or activating itself must not steal it (lock.rs).
         if self.locked {
             return;
         }
-        // An exclusive layer (the launcher) owns the keyboard while it exists;
-        // clicking or activating a window must not take focus from it.
         if self.layer_focus.blocks_window_focus() {
             tracing::info!(
                 window = id.get(),
@@ -1277,8 +1077,6 @@ impl State {
             );
             return;
         }
-        // Focusing a window on another space (dock, activation) shows that
-        // space first (ADR 0051).
         self.show_space_of(id);
         if !self.windows.is_visible(id, &self.minimized) {
             tracing::info!(
@@ -1297,9 +1095,6 @@ impl State {
         match self.seat.get_keyboard() {
             Some(keyboard) => {
                 tracing::info!("giving keyboard focus to a window");
-                // The clipboard and primary-selection focuses follow the
-                // keyboard focus: the focused client is the one that receives
-                // the current selection and offers the next one (Block 6).
                 let client = surface.client();
                 keyboard.set_focus(self, Some(surface), serial);
                 set_data_device_focus(&self.display_handle, &self.seat, client.clone());
@@ -1311,8 +1106,6 @@ impl State {
             for (window, activated) in activation_updates(previous, Some(id)) {
                 self.windows.set_activated(window, activated);
             }
-            // Publish the active window for the menu bar (the store the shell
-            // watches, same as the wallpaper).
             self.publish_active(Some(id));
             if let Some(previous) = previous {
                 self.foreign_state_changed(previous);
@@ -1322,7 +1115,6 @@ impl State {
         self.log_focus_stack(Some(id));
     }
 
-    /// Opens the launcher, or asks the running one to exit.
     pub(crate) fn toggle_launcher(&mut self) {
         if self.locked {
             return;
@@ -1340,7 +1132,6 @@ impl State {
         self.launcher_child = self.spawn_shell_component("launcher");
     }
 
-    /// Alt+Super+Escape: starts `malaysia-shell force-quit` unless one is open.
     pub(crate) fn open_force_quit(&mut self) {
         if self.locked {
             return;
@@ -1353,7 +1144,6 @@ impl State {
         self.force_quit_child = self.spawn_shell_component("force-quit");
     }
 
-    /// Starts `malaysia-shell <component>` next to the compositor binary.
     fn spawn_shell_component(&self, component: &str) -> Option<std::process::Child> {
         let shell = std::env::current_exe()
             .ok()
@@ -1376,9 +1166,6 @@ impl State {
         }
     }
 
-    /// The rectangle and insets the titlebar hit-tests use: the window's own,
-    /// or, for a focus window with the bar down, the titlebar the compositor
-    /// shows under the bar (ADR 0051).
     fn chrome_frame(
         &self,
         id: WindowId,
@@ -1390,7 +1177,6 @@ impl State {
             .or_else(|| self.windows.outer(id).zip(self.windows.insets(id)))
     }
 
-    /// The bar-relative point for `location`, when it is on a top titlebar.
     fn titlebar_point(
         &self,
         id: WindowId,
@@ -1515,7 +1301,6 @@ impl State {
         action
     }
 
-    /// Records that `serial` was delivered to the client owning `surface`.
     fn note_client_input_serial(&self, surface: &WlSurface, serial: Serial) {
         if let Some(client) = surface.client()
             && let Some(state) = client.get_data::<crate::state::ClientState>()
@@ -1524,16 +1309,12 @@ impl State {
         }
     }
 
-    /// The newest input serial delivered to the client owning `surface`.
     pub(crate) fn client_last_input_serial(&self, surface: &WlSurface) -> Option<Serial> {
         let client = surface.client()?;
         let state = client.get_data::<crate::state::ClientState>()?;
         state.last_input_serial()
     }
 
-    /// Sets keyboard focus to a popup surface, so keyboard navigation works
-    /// inside grabbed popups even when the parent layer surface has
-    /// `keyboard_interactivity = None`.
     pub(crate) fn focus_popup_surface(&mut self, surface: &WlSurface, serial: Serial) {
         if self.locked {
             return;
@@ -1567,7 +1348,6 @@ impl State {
         }
     }
 
-    /// Returns focus after a popup closes.
     pub(crate) fn apply_focus_restore(&mut self, restore: crate::popup::FocusRestore) {
         if self.locked {
             return;
@@ -1577,15 +1357,12 @@ impl State {
             crate::popup::FocusRestore::Popup(surface) => {
                 if let Some(keyboard) = self.seat.get_keyboard() {
                     keyboard.set_focus(self, Some(surface), serial);
-                    // data_device follows on the next keyboard focus event.
                 }
             }
             crate::popup::FocusRestore::Layer(surface) => {
                 self.focus_layer_surface(&surface);
             }
             crate::popup::FocusRestore::Previous(surface, window) => {
-                // The keyboard goes back to the active window; the remembered
-                // window/surface is only a fallback for when it is gone.
                 let target = self
                     .focused_window()
                     .or(window)
@@ -1623,9 +1400,6 @@ impl State {
             || self.layers.entry_of(surface).is_some()
     }
 
-    /// Sets keyboard focus to a layer surface without changing the active
-    /// window store: the menu bar keeps naming the app, as macOS does while
-    /// Spotlight is open.
     fn focus_layer_surface(&mut self, surface: &WlSurface) {
         if self.locked {
             return;
@@ -1640,7 +1414,6 @@ impl State {
         }
     }
 
-    /// Applies the focus policy for a layer surface that just mapped.
     pub(crate) fn layer_surface_mapped(&mut self, layer: &LayerSurface) {
         let surface = layer.wl_surface().clone();
         let Some(entry) = self.layers.entry_of(&surface) else {
@@ -1667,8 +1440,6 @@ impl State {
         }
     }
 
-    /// Releases a layer surface's focus, restoring the remembered window if it
-    /// still exists.
     pub(crate) fn layer_surface_destroyed(&mut self, surface: &WlSurface) {
         use crate::layers::LayerUnfocus;
         match self.layer_focus.unmapped(surface) {
@@ -1685,10 +1456,6 @@ impl State {
         }
     }
 
-    /// Drops keyboard focus and clears the active window.
-    ///
-    /// The caller is logged: a bar that falls back to the Escritorio menu
-    /// means the active window was cleared, and this says from where.
     #[track_caller]
     pub(crate) fn clear_keyboard_focus(&mut self) {
         let location = std::panic::Location::caller();
@@ -1718,7 +1485,6 @@ impl State {
         self.log_focus_stack(None);
     }
 
-    /// Publishes the active window (or its absence) to the shell's store.
     pub(crate) fn publish_active(&self, id: Option<WindowId>) {
         self.publish_active_to(&vow_appearance::data_dir(), id);
     }
@@ -1729,7 +1495,6 @@ impl State {
         crate::active::publish_to(dir, active.as_ref());
     }
 
-    /// Republishes the store when the window whose identity changed is the active one.
     pub(crate) fn publish_active_if_focused(&self, id: WindowId) {
         self.publish_active_if_focused_to(&vow_appearance::data_dir(), id);
     }
@@ -1740,12 +1505,6 @@ impl State {
         }
     }
 
-    /// Removes every reference to a destroyed window and moves focus on.
-    ///
-    /// The window is removed from the scene (which also removes it from the
-    /// stacking order and hit-testing), and any grab that named it is dropped.
-    /// If it held keyboard focus, the focus passes to the new topmost window,
-    /// or nowhere when none is left.
     pub(crate) fn forget_window(&mut self, surface: &WlSurface) {
         if self.leak_window(surface) {
             return;
@@ -1792,20 +1551,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// The implicit grab a client's move or resize request may act on.
-    ///
-    /// The protocol ties `xdg_toplevel.move`/`resize` to the pointer's
-    /// implicit grab: the serial must name a button press that is still held.
-    /// Smithay tracks exactly that: `DefaultGrab::button` installs a
-    /// [`ClickGrab`] keyed by the press serial and drops it when the last
-    /// button is released (`smithay-0.7.0/src/input/pointer/grab.rs:238-252`
-    /// and `:374-380`). The check is therefore `has_grab(serial)` plus the
-    /// grab's start data, as the reference compositor does
-    /// (`smithay-0.7.0/anvil/src/shell/xdg.rs:152-160`).
-    ///
-    /// Focus changes, raises, configures and keyboard enter do not touch the
-    /// grab, so none of them can invalidate a request made while the button is
-    /// held. A request after the release names no grab and is rejected.
     pub(crate) fn held_grab(&self, serial: Serial) -> Option<GrabStartData<State>> {
         let pointer = self.seat.get_pointer()?;
         if !pointer.has_grab(serial) {
@@ -1814,12 +1559,6 @@ impl State {
         pointer.grab_start_data()
     }
 
-    /// Test-only: leave one window (and with it its surface) behind.
-    ///
-    /// Only when `MALAYSIA_TEST_LEAK_WINDOW` is set. The first destroyed window,
-    /// and every repeat of that same surface's destruction, is not removed, so
-    /// the live-object counts cannot return to their baseline. The Block 4
-    /// harness runs it once to show that its teardown assertion can fail.
     fn leak_window(&mut self, surface: &WlSurface) -> bool {
         if std::env::var_os("MALAYSIA_TEST_LEAK_WINDOW").is_none() {
             return false;
@@ -1841,18 +1580,11 @@ impl State {
         true
     }
 
-    /// Advances a scripted `MALAYSIA_TEST_INPUT` pointer sequence by one action.
-    ///
-    /// Returns the delay before the next action, or `None` when the script is
-    /// finished or absent. The session owns the timer; this method only drives
-    /// the real input path.
     pub(crate) fn test_pointer_step(&mut self) -> Option<Duration> {
         let action = self.test_pointer.as_mut()?.actions.pop_front()?;
         tracing::info!(?action, "test input action");
         let delay = match &action {
             TestPointerAction::Wait(delay) => *delay,
-            // Keys must be released before the compositor's repeat delay,
-            // even when a slow frame follows the press.
             TestPointerAction::KeyDown(_) | TestPointerAction::KeyUp(_) => Duration::ZERO,
             _ => *TEST_POINTER_STEP,
         };
@@ -1879,7 +1611,6 @@ impl State {
         Some(delay)
     }
 
-    /// Presses the primary button at `location` through the real press path.
     fn test_pointer_press(&mut self, location: Point<f64, Logical>, time: InputTime) {
         self.pointer_press(BUTTON_LEFT, location, time);
         let Some(pointer) = self.seat.get_pointer() else {
@@ -1903,7 +1634,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// Releases the primary button through the real release path.
     fn test_pointer_release(&mut self, time: InputTime) {
         self.chrome_release();
         self.end_grab();
@@ -1928,16 +1658,6 @@ impl State {
         self.request_redraw();
     }
 
-    /// Test-only: press the primary button on the first window that maps.
-    ///
-    /// Only when `MALAYSIA_TEST_INPUT` is set. The client-initiated
-    /// move/resize path needs a real button press to supply a serial, which a
-    /// probe cannot make on its own; this moves the pointer onto the window (at
-    /// the fraction named by `MALAYSIA_TEST_PRESS_AT`, the center by default),
-    /// runs the compositor's real press path so click-to-focus happens, presses
-    /// and holds. Several motions follow, so a client whose drag gesture waits
-    /// for a threshold still sends its request while the button is held. The
-    /// release is sent by [`Self::inject_test_release`].
     pub(crate) fn inject_test_press(&mut self, id: WindowId) {
         if std::env::var_os("MALAYSIA_TEST_INPUT").is_none()
             || self.test_press.is_some()
@@ -1964,26 +1684,16 @@ impl State {
                 outer.y() + outer.height() * fy,
             )
         };
-        // The scripted press may land on the client or on the titlebar; the
-        // real press path decides what to do with it. It must land inside the
-        // window's decorated rectangle, which `outer` established above.
         if self.windows.outer(id).is_none() {
             return;
         }
         let time = InputTime::from_millis(0);
-        // The hover goes through the real motion path, as a host pointer's
-        // would, so the seam exercises the same focus-origin computation.
         self.pointer_motion(location, time);
-        // The compositor's own press logic runs before the protocol event, as in
-        // `process_input_event`: click-to-focus, and a move grab when the press
-        // lands on MalaysiaDreams's decoration rather than the client's surface.
         self.pointer_press(BUTTON_LEFT, location, time);
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
         let press = SERIAL_COUNTER.next_serial();
-        // A real press records the serial for xdg-activation tokens; the
-        // scripted press must too, or a probe cannot request a valid token.
         self.note_activation_serial(press);
         pointer.button(
             self,
@@ -2009,24 +1719,11 @@ impl State {
                 }
             }
         }
-        // A press on an edge band or the decorated band starts a compositor
-        // grab, and the scripted gesture is complete: end it now, or the grab
-        // would stay held and a real host pointer moving over the window would
-        // drag the window with it. A press on the client's surface starts no
-        // grab, and the client's own move or resize request is still to come,
-        // so the button stays held for it.
         if self.grab.is_some() || titlebar_button.is_some() {
             self.inject_test_release();
         }
     }
 
-    /// Test-only: drag the pressed window by `MALAYSIA_TEST_DRAG`.
-    ///
-    /// Called when the compositor accepts a client's move or resize request.
-    /// The motion goes through the normal input path, so the grab that just
-    /// started drives it, and the window's outer rectangle before and after is
-    /// logged for a harness to assert. The button stays held, so a client can
-    /// still make a second request with the same serial.
     pub(crate) fn inject_test_drag(&mut self, id: WindowId) {
         if std::env::var_os("MALAYSIA_TEST_INPUT").is_none() {
             return;
@@ -2060,7 +1757,6 @@ impl State {
         }
     }
 
-    /// Test-only: release the scripted press, ending any grab it started.
     pub(crate) fn inject_test_release(&mut self) {
         let Some(press) = self.test_press.take() else {
             return;
@@ -2084,10 +1780,6 @@ impl State {
         self.inject_test_hovers();
     }
 
-    /// Test-only: request a screenshot on the first mapped window.
-    ///
-    /// Only when `MALAYSIA_TEST_SCREENSHOT` is set. With `MALAYSIA_SCREENSHOT_DIR` it
-    /// lets a check exercise the PrintScreen path without the real key.
     pub(crate) fn inject_test_screenshot(&mut self) {
         let Ok(mode) = std::env::var("MALAYSIA_TEST_SCREENSHOT") else {
             return;
@@ -2103,12 +1795,6 @@ impl State {
         self.request_screenshot(request);
     }
 
-    /// Test-only: inject a rapid left-right motion that trips the shake
-    /// detector, so the locate enlargement can be seen without a real hand.
-    ///
-    /// Only when `MALAYSIA_TEST_SHAKE` is set. The motions go through the real
-    /// pointer path, so the same detector and draw path run as for a host
-    /// pointer; the four swings complete well inside the one-second window.
     pub(crate) fn inject_test_shake(&mut self) {
         if std::env::var_os("MALAYSIA_TEST_SHAKE").is_none() {
             return;
@@ -2123,8 +1809,6 @@ impl State {
         let size = self.logical_output_size();
         let center = clamp_pointer(location, size);
         let y = center.y;
-        // Four swings, then back to where it started: the pointer must not
-        // end up off-screen, which would draw a clipped cursor.
         for x in [
             center.x - 60.0,
             center.x + 60.0,
@@ -2137,20 +1821,12 @@ impl State {
         }
     }
 
-    /// Test-only: hover the pointer over the points in `MALAYSIA_TEST_HOVER`.
-    ///
-    /// The value is a `;`-separated list of global `x,y` points. They are
-    /// injected with no button held, through the same motion path a host
-    /// pointer takes, so a client can assert the surface-local coordinates it
-    /// receives. They land after the scripted release, when a grab can no
-    /// longer mask the focus.
     fn inject_test_hovers(&mut self) {
         for (x, y) in test_hover_points() {
             self.pointer_motion(Point::new(x, y), InputTime::from_millis(0));
         }
     }
 
-    /// Starts dragging a window from its decoration.
     pub(crate) fn start_move(&mut self, id: WindowId, location: Point<f64, Logical>) {
         self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
@@ -2160,7 +1836,6 @@ impl State {
         self.grab = Some(Grab::Move { window: id, offset });
     }
 
-    /// Starts resizing a window from an edge or corner.
     pub(crate) fn start_resize(&mut self, id: WindowId, edge: Edge, location: Point<f64, Logical>) {
         self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
@@ -2175,7 +1850,6 @@ impl State {
         });
     }
 
-    /// Ends an interactive move or resize.
     fn end_grab(&mut self) {
         if let Some(Grab::Resize { window, .. }) = self.grab {
             self.windows.set_resizing(window, false, None);
@@ -2183,12 +1857,6 @@ impl State {
         self.grab = None;
     }
 
-    /// Moves the pointer, driving a grab or updating focus and the edge cursor.
-    ///
-    /// The focus Smithay gets is the surface's origin in global coordinates,
-    /// not the surface-local point `surface_under` reports: Smithay subtracts
-    /// the origin itself before sending the client the surface-local position
-    /// (`smithay-0.7.0/src/input/pointer/mod.rs:220-243`).
     fn pointer_motion(&mut self, mut location: Point<f64, Logical>, time: InputTime) {
         let now = Instant::now();
         if self.shake.observe(location.x, now) {
@@ -2198,9 +1866,6 @@ impl State {
         }
 
         if let Some(grab) = self.grab {
-            // Update the pointer location and send the motion to the client
-            // before driving the grab, so the cursor does not appear frozen
-            // during move/resize.
             if let Some(pointer) = self.seat.get_pointer() {
                 let delta = location - pointer.current_location();
                 let serial = SERIAL_COUNTER.next_serial();
@@ -2229,9 +1894,6 @@ impl State {
             return;
         }
 
-        // While the session is locked the lock surface owns the pointer: it
-        // covers the whole output, so the pointer's focus is always it, at the
-        // origin. No edge cursor, no layer hit-testing.
         if self.locked {
             self.clear_chrome_pointer();
             let focus = self
@@ -2255,7 +1917,6 @@ impl State {
         }
 
         self.update_edge_cursor(location);
-        // The top edge of a focus space brings the bar down (ADR 0051).
         self.update_focus_reveal(location);
 
         let side = f64::from(self.config.window.resize_border);
@@ -2273,7 +1934,6 @@ impl State {
         if self.update_chrome_pointer(location, under_window, overlay_under) {
             self.request_redraw();
         }
-        // The titlebar shown over a focus window covers the client there.
         let over_revealed_titlebar = layer_under.is_none()
             && under_window.is_some_and(|id| {
                 self.titlebar_point(id, location).is_some() && self.revealed_titlebar(id).is_some()
@@ -2283,10 +1943,6 @@ impl State {
         let under = if blocked {
             None
         } else {
-            // Top/Overlay layer surfaces are rendered above popups (see
-            // `render_output`), so they must take pointer focus first. This
-            // lets a click on the menubar dismiss an open menu and reach the
-            // bar itself.
             layer_under
                 .or(popup_under)
                 .or_else(|| self.windows.surface_under(location, &self.minimized))
@@ -2300,13 +1956,8 @@ impl State {
         let Some(pointer) = self.seat.get_pointer() else {
             return;
         };
-        // A client's relative-pointer gets the raw delta of every motion.
         let delta = location - pointer.current_location();
 
-        // Pointer constraints (zwp_pointer_constraints_v1): an active lock keeps
-        // the pointer in place and only feeds relative motion; an active confine
-        // clamps the move to the surface-local region. A dormant constraint is
-        // activated the moment the pointer enters its region.
         let mut locked = false;
         let mut confined = None;
         if let Some((surface, local)) = &under {
@@ -2381,10 +2032,6 @@ impl State {
         pointer.frame(self);
     }
 
-    /// The popup surface under `location`, with surface-local coordinates.
-    ///
-    /// Popups hang above their parent layer or window and are tracked in the
-    /// scene, so they are hit-tested separately from both.
     fn popup_surface_under(
         &self,
         location: Point<f64, Logical>,
@@ -2396,7 +2043,6 @@ impl State {
         crate::layers::surface_accepts_input(&surface, local).then_some((surface, local))
     }
 
-    /// Advances an in-progress move or resize.
     fn drag(&mut self, grab: Grab, location: Point<f64, Logical>) {
         match grab {
             Grab::Move { window, offset } => {
@@ -2421,10 +2067,6 @@ impl State {
         }
     }
 
-    /// Shows a resize cursor over an edge band, or restores the default.
-    ///
-    /// A client-set surface cursor is left alone: the override only replaces a
-    /// named (compositor-drawn) cursor, which is what is active over decoration.
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
@@ -2438,9 +2080,6 @@ impl State {
         };
         match edge {
             Some((_, edge)) => {
-                // A client surface cursor owns its pixels; only a named cursor
-                // (the default arrow, a cursor-shape request, or a previous
-                // edge) yields to the decoration's resize shape.
                 if matches!(self.client_cursor, CursorImageStatus::Named(_)) {
                     self.cursor_status = CursorImageStatus::Named(edge_cursor(edge));
                 }
@@ -2453,7 +2092,6 @@ impl State {
         }
     }
 
-    /// Sends one scroll frame to the pointer.
     fn pointer_axis<I: InputBackend>(&mut self, event: &impl PointerAxisEvent<I>) {
         let source = event.source();
         let horizontal = event
@@ -2492,14 +2130,6 @@ impl State {
     }
 }
 
-/// Computes the target rectangle for maximizing a window.
-///
-/// Fixed-width windows keep their width and horizontal origin and fill only
-/// the workspace height; every other window fills the whole workspace.
-/// Whether the client's width is fixed regardless of height constraints.
-/// xdg_toplevel uses 0 to mean "unbounded" on each axis, so a fixed width
-/// requires a positive, equal min/max width; an unbounded height (0) must not
-/// prevent vertical maximization.
 fn is_fixed_width(min: Size<i32, Logical>, max: Size<i32, Logical>) -> bool {
     min.w > 0 && max.w > 0 && min.w == max.w
 }
@@ -2523,8 +2153,6 @@ fn maximize_target_rect(
     }
 }
 
-/// Whether a resize band above a different window must leave the pointer focus
-/// empty. A Top/Overlay layer over the band wins instead.
 fn pointer_focus_blocked(
     layer_under: bool,
     edge_window: Option<WindowId>,
@@ -2533,7 +2161,6 @@ fn pointer_focus_blocked(
     !layer_under && edge_window.is_some_and(|id| Some(id) != under_window)
 }
 
-/// The cursor shown while an edge or corner is resized.
 fn edge_cursor(edge: Edge) -> CursorIcon {
     use Edge;
     match edge {
@@ -2543,9 +2170,6 @@ fn edge_cursor(edge: Edge) -> CursorIcon {
         Edge::TopRight | Edge::BottomLeft => CursorIcon::NeswResize,
     }
 }
-/// Records a titlebar press and reports the configured double-click action.
-///
-/// Kept pure so the timing and slop rules can be tested without a window.
 fn double_click(
     previous: Option<TitlebarClick>,
     id: WindowId,
@@ -2570,23 +2194,14 @@ fn double_click(
     }
 }
 
-/// Rounds a logical position to whole pixels.
 fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-/// The window fraction the scripted press lands on, from `MALAYSIA_TEST_PRESS_AT`
-/// (`x,y` as fractions of the window's outer size), the center by default.
-///
-/// The Nautilus drag needs the press on its headerbar, a few percent below the
-/// top edge; the probes press the center.
 fn test_press_fraction() -> (f64, f64) {
     parse_pair("MALAYSIA_TEST_PRESS_AT").unwrap_or((0.5, 0.5))
 }
 
-/// The pointer delta the scripted drag applies once a grab starts, from
-/// Test-only: press an exact titlebar button (`close`, `minimize` or
-/// `maximize`) instead of a window fraction.
 fn test_titlebar_button() -> Option<vow_design::ButtonKind> {
     match std::env::var("MALAYSIA_TEST_TITLEBAR_BUTTON")
         .ok()?
@@ -2599,13 +2214,10 @@ fn test_titlebar_button() -> Option<vow_design::ButtonKind> {
     }
 }
 
-/// `MALAYSIA_TEST_DRAG` (`dx,dy` in logical pixels), `(60, 40)` by default.
 fn test_drag_delta() -> (f64, f64) {
     parse_pair("MALAYSIA_TEST_DRAG").unwrap_or((60.0, 40.0))
 }
 
-/// The global points the scripted hover visits, from `MALAYSIA_TEST_HOVER`
-/// (`x,y` points separated by `;`), none by default.
 fn test_hover_points() -> Vec<(f64, f64)> {
     let Ok(value) = std::env::var("MALAYSIA_TEST_HOVER") else {
         return Vec::new();
@@ -2616,15 +2228,10 @@ fn test_hover_points() -> Vec<(f64, f64)> {
         .collect::<Vec<_>>()
 }
 
-/// Reads an `x,y` pair of numbers from the environment.
-///
-/// Any missing or unparsable value is `None`, so a malformed variable falls
-/// back to the default rather than failing a run.
 fn parse_pair(name: &str) -> Option<(f64, f64)> {
     parse_pair_value(&std::env::var(name).ok()?)
 }
 
-/// Reads an `x,y` pair of numbers from a string.
 fn parse_pair_value(value: &str) -> Option<(f64, f64)> {
     let (x, y) = value.split_once(',')?;
     Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
@@ -2822,7 +2429,6 @@ mod tests {
             compositor_shortcut(false, false, false, false, &[print], false),
             CompositorShortcut::Screenshot
         ));
-        // It works with modifiers too, and never shadows Ctrl+Alt+L.
         assert!(matches!(
             compositor_shortcut(true, false, false, false, &[print], false),
             CompositorShortcut::Screenshot
@@ -2846,7 +2452,6 @@ mod tests {
             compositor_shortcut(false, false, true, true, &[four], false),
             CompositorShortcut::ScreenshotRegion
         ));
-        // Without Super (Command) it is not a compositor shortcut.
         assert!(matches!(
             compositor_shortcut(false, false, true, false, &[three], false),
             CompositorShortcut::None
@@ -2913,7 +2518,6 @@ mod tests {
             CompositorShortcut::ToggleFullscreen
         ));
 
-        // Alt breaks the Infinity chord so it does not shadow Ctrl+Alt+F.
         assert!(matches!(
             compositor_shortcut(true, true, false, true, &[left], false),
             CompositorShortcut::None
@@ -2937,12 +2541,10 @@ mod tests {
             compositor_shortcut(true, true, false, false, &[n], false),
             CompositorShortcut::AddDesktop
         ));
-        // Plain Ctrl+arrows move by word in apps; they are not taken.
         assert!(matches!(
             compositor_shortcut(true, false, false, false, &[left], false),
             CompositorShortcut::None
         ));
-        // Not while locked.
         assert!(matches!(
             compositor_shortcut(true, true, false, false, &[right], true),
             CompositorShortcut::None
@@ -2955,12 +2557,8 @@ mod tests {
         let now = std::time::Instant::now();
         state.cursor_boost_started = Some(now);
         state.shake.last_shake = Some(now);
-        // A motion while the shake is still active must not pin the pointer to
-        // full size before the growth has played.
         state.keep_cursor_boost_alive(now);
         let scale = state.cursor_boost_scale();
-        // Right after the shake starts the pointer is still near its normal
-        // size; pinning to full would put it at `CURSOR_SHAKE_SCALE` (3.0).
         assert!(
             scale < 1.5,
             "the growth was skipped: the pointer jumped to {scale}"
@@ -3009,7 +2607,6 @@ mod tests {
 
     #[test]
     fn a_layer_over_a_band_keeps_pointer_focus() {
-        // The menubar/dock sit on Top/Overlay: the band below is ignored.
         assert!(!pointer_focus_blocked(
             true,
             Some(WindowId::new(1)),
@@ -3020,11 +2617,8 @@ mod tests {
     #[test]
     fn a_band_over_another_window_clears_pointer_focus() {
         let edge = Some(WindowId::new(1));
-        // Band of the window above, content of another below.
         assert!(pointer_focus_blocked(false, edge, Some(WindowId::new(2))));
-        // Exterior band outside every window.
         assert!(pointer_focus_blocked(false, edge, None));
-        // The band belongs to the content under the pointer: keep focus.
         assert!(!pointer_focus_blocked(false, edge, edge));
     }
 
@@ -3040,7 +2634,6 @@ mod tests {
         assert_eq!(edge_cursor(Edge::BottomLeft), CursorIcon::NeswResize);
     }
 
-    /// Sends one button event through the pointer.
     fn press_button(state: &mut State, state_: ButtonState, serial: Serial) {
         let pointer = state.seat.get_pointer().expect("the seat has a pointer");
         pointer.button(
@@ -3091,15 +2684,12 @@ mod tests {
     fn a_held_press_survives_other_serial_traffic() {
         let (_display, mut state) = test_state((1280, 720));
         press_button(&mut state, ButtonState::Pressed, Serial::from(7u32));
-        // Serials allocated for other events, as click-to-focus, a configure or
-        // a keyboard enter would, do not touch the grab.
         for _ in 0..5 {
             let _ = SERIAL_COUNTER.next_serial();
         }
         assert!(state.held_grab(Serial::from(7u32)).is_some());
     }
 
-    /// The virtual device of the test backend.
     #[derive(Debug, PartialEq, Eq, Hash)]
     struct TestDevice;
 
@@ -3125,15 +2715,6 @@ mod tests {
         }
     }
 
-    /// A backend whose only real event is an absolute pointer motion.
-    ///
-    /// The compositor's input handling is generic over [`InputBackend`], and the
-    /// winit backend's event type cannot be constructed outside Smithay, so this
-    /// backend stands in for it. Its motion event mirrors the winit contract
-    /// exactly: the position is a fraction of the window with a top-left origin
-    /// (`smithay-0.7.0/src/backend/winit/mod.rs:481-490`) and `x_transformed`
-    /// multiplies that fraction by the target width
-    /// (`smithay-0.7.0/src/backend/winit/input.rs:100-110`).
     struct TestBackend;
 
     impl InputBackend for TestBackend {
@@ -3164,9 +2745,7 @@ mod tests {
         type SpecialEvent = ();
     }
 
-    /// An absolute motion carrying winit's normalized, top-left-origin position.
     struct TestMouseMove {
-        /// Position as a fraction of the window, `(x, y)`, top-left origin.
         fraction: (f64, f64),
     }
 
@@ -3200,18 +2779,13 @@ mod tests {
         }
     }
 
-    /// A compositor state with one output of `size`, built without a backend.
     fn test_state(size: (i32, i32)) -> (Display<State>, State) {
         use smithay::backend::allocator::{Format, Fourcc, Modifier};
         use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 
-        // The loop's data type is the session's; only the handle is needed
-        // here (it is a phantom in the type), so no session is constructed.
         let event_loop =
             EventLoop::<crate::session::Session>::try_new().expect("the test needs an event loop");
         let display = Display::<State>::new().expect("the test needs a display");
-        // A fake device and one linear format: `State` requires a feedback
-        // (there is no v3 fallback), but the tests never bind a client to it.
         let feedback = DmabufFeedbackBuilder::new(
             0,
             [Format {
@@ -3234,7 +2808,6 @@ mod tests {
         (display, state)
     }
 
-    /// Sends one absolute motion event with the given window fraction.
     fn move_pointer(state: &mut State, fraction: (f64, f64)) {
         state.process_input_event(InputEvent::<TestBackend>::PointerMotionAbsolute {
             event: TestMouseMove { fraction },
@@ -3359,10 +2932,7 @@ mod tests {
 
     #[test]
     fn a_click_on_the_desktop_clears_the_keyboard_focus() {
-        // No menu open: the press asks for no focused window (the compositor
-        // then drops the keyboard focus and publishes an empty active window).
         assert_eq!(desktop_click(false), DesktopClick::ClearFocus);
-        // An open bar menu takes the same press as "close me" and keeps focus.
         assert_eq!(desktop_click(true), DesktopClick::CloseMenu);
     }
 

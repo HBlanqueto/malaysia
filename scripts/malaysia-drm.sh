@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# malaysia-drm.sh — lanzar la sesión directa (Bloque 8a) sobre el panel real.
-#
-# Uso (desde la raíz del repo):
-#   scripts/malaysia-drm.sh setup          # desde GNOME: build + units de la shell
-#   scripts/malaysia-drm.sh run            # desde un TTY: arranca malaysia-compositor --drm
-#   scripts/malaysia-drm.sh client wezterm # desde otro TTY: abre un cliente en MalaysiaDreams
-#   scripts/malaysia-drm.sh lock           # desde otro TTY: bloquea la sesión
-#   scripts/malaysia-drm.sh status         # pid, socket y últimas líneas del log
-#   scripts/malaysia-drm.sh stop           # mata MalaysiaDreams (sirve con la sesión bloqueada)
-#
-# Regla de entorno: solo escribe en el repo y en $XDG_RUNTIME_DIR/malaysia.
-# No toca ~/nixdots, GDM ni sockets ajenos.
 
 set -euo pipefail
 
@@ -18,7 +6,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULT="$REPO/result"
 RUNDIR="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR no está definido}/malaysia"
 LATEST_LOG="$RUNDIR/drm-latest.log"
-PROC_NAME=".malaysia-compositor-wrapped"   # comm del binario envuelto por Nix
+PROC_NAME=".malaysia-compositor-wrapped"
 
 die()  { printf 'malaysia-drm: %s\n' "$*" >&2; exit 1; }
 info() { printf 'malaysia-drm: %s\n' "$*"; }
@@ -44,9 +32,6 @@ cmd_setup() {
 
     info "enlazando las units de la shell…"
     local user_units="$HOME/.config/systemd/user"
-    # `enable` pins each instance to the store path of the template it found.
-    # After a rebuild that path is gone and the old links make the units "bad",
-    # so `enable` fails. Drop them (and their wants links) before re-linking.
     for unit in malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service; do
         rm -f "$user_units/$unit" "$user_units/malaysia-session.target.wants/$unit"
     done
@@ -55,7 +40,6 @@ cmd_setup() {
     systemctl --user link --force "$units/malaysia-shell@.service"
     systemctl --user link --force "$units/malaysia-wallpaper.service"
     systemctl --user daemon-reload
-    # Sin --now: no deben arrancar dentro de GNOME. Las arranca MalaysiaDreams con el target.
     systemctl --user enable \
         malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service
 
@@ -98,7 +82,6 @@ cmd_client() {
     local name; name="$(basename "$1")"
     local clog="$RUNDIR/client-$name.log"
     info "lanzando '$*' en $sock (log: $clog)"
-    # Entorno limpio de display: que el cliente no intente hablar con X ni con GNOME.
     env -u DISPLAY WAYLAND_DISPLAY="$sock" XDG_SESSION_TYPE=wayland \
         setsid -f "$@" >"$clog" 2>&1 </dev/null
     info "vuelve al TTY de MalaysiaDreams (Ctrl+Alt+F4)"

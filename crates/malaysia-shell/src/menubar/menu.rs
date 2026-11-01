@@ -1,10 +1,4 @@
-//! Shared menubar popup machinery.
-//!
-//! Each title on the bar can open a root `MenuView` popup anchored to its own
-//! rectangle. Only one menu tree is open at a time; hovering over another title
-//! while a menu is open switches to that title's menu. The root menu can also
-//! navigate to the previous/next title with the Left/Right arrow keys.
-
+//! Shared popup machinery for menubar menus.
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -24,55 +18,34 @@ use vow_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDT
 
 use crate::menubar::{icons, rgba};
 
-/// Searchable entries split by source: menu actions and help topics.
 pub struct SearchableLists {
-    /// Menu actions paired with their parent menu path and menubar location.
     pub menu: Vec<SearchableEntry>,
-    /// Help topics paired with the "Temas de ayuda" path.
     pub help: Vec<SearchableEntry>,
 }
 
-/// Function that lazily returns a title's menu items.
 pub type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
 
-/// Function that lazily returns searchable menu entries.
 pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
 
-/// One title that can open a root menu popup.
 #[derive(Clone)]
 pub struct MenuTitleSpec {
     pub label: String,
-    /// Snowflake glyph drawn instead of `label`.
     pub glyph: Option<&'static [u8]>,
-    /// Draw the label in the bold app-name weight.
     pub bold: bool,
     pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
-    /// Optional searchable entries for the help search field.
     pub searchable: Option<SearchableItems>,
     pub on_activate: Rc<dyn Fn(String)>,
-    /// Re-reads the title's items on every render, so a remote menu updates
-    /// while its popup stays open.
     pub live_items: Option<MenuItems>,
-    /// Sends the lazy layout request for this title, if it has a remote id.
     pub on_open: Option<Rc<dyn Fn()>>,
-    /// Requests a remote title's children when the pointer enters it.
     pub on_hover_title: Option<Rc<dyn Fn()>>,
-    /// Requests the children of a nested remote submenu.
     pub on_open_submenu: Option<Rc<dyn Fn(String)>>,
-    /// Resolves the loaded children of a remote submenu by id.
     pub submenu_source: Option<SubmenuSource>,
-    /// Position and size of the title highlight, set by `on_sized`.
     pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
-    /// Optional external search-query store, used by the Help menu so the
-    /// query survives closing and reopening.
     pub query_state: Option<Rc<RefCell<barrier_kit::menu::SearchQuery>>>,
-    /// Root menus that can be revealed when a Help search result is
-    /// highlighted. The index matches [`SearchLocation::title_index`].
     pub reveal_roots: Option<RevealRoots>,
 }
 
-/// State shared by all menu titles on the bar.
 #[derive(Clone)]
 pub struct MenuState {
     pub root_id: Arc<Mutex<Option<PopupId>>>,
@@ -88,7 +61,6 @@ impl MenuState {
     }
 }
 
-/// Closes the currently open root popup, if any.
 pub fn close_root_menu(state: &MenuState) {
     if let Some(id) = state.root_id.lock().unwrap().take() {
         Popups::get().close(id);
@@ -96,7 +68,6 @@ pub fn close_root_menu(state: &MenuState) {
     state.open_label.borrow_mut().set(None);
 }
 
-/// Opens a root menu popup for `title_index`.
 pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
     let Some(spec) = titles.get(title_index) else {
         return;
@@ -175,8 +146,6 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
             flip_x: true,
             flip_y: true,
             slide_x: true,
-            // A long menu stays under the bar and gets shorter instead of
-            // sliding over it; MenuView then scrolls (Smithay slides first).
             slide_y: false,
             resize_y: true,
         },
@@ -204,7 +173,6 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     state.open_label.borrow_mut().set(Some(label));
 }
 
-/// Toggles a title's menu: open if closed, close if already open.
 pub fn toggle_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
     let Some(spec) = titles.get(title_index) else {
         return;
@@ -244,7 +212,6 @@ fn navigate_title(
     }
 }
 
-/// Renders one menubar title. When `enabled` is false it is a plain label.
 pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: MenuState) -> Element {
     let spec = &titles[title_index];
     let label_text = spec.label.clone();
@@ -255,7 +222,6 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let resolved = barrier_kit::theme::resolved();
     let palette =
         barrier_kit::theme::menu_palette(&resolved, barrier_kit::theme::SurfaceKind::LayerShell);
-    // Over a focus space the bar's titles are white on black (ADR 0051).
     let over_focus = barrier_kit::shell::Toplevels::get()
         .space
         .read()

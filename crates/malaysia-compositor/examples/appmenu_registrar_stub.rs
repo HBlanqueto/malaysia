@@ -1,8 +1,4 @@
-//! Dev-only `com.canonical.AppMenu.Registrar` diagnostic stub (ADR 0040).
-//!
-//! The bar owns the registrar name since 14d-2, so the lab no longer starts
-//! this example. It stays as a manual diagnostic for checking whether an app
-//! exports `org_kde_kwin_appmenu` without the bar running.
+//! Dev-only stub of `com.canonical.AppMenu.Registrar` for manual diagnostics.
 
 use std::time::Duration;
 

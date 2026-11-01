@@ -1,17 +1,4 @@
-//! Maps a toplevel and a popup with grab, then asserts the popup receives
-//! three `wl_callback.done` events when only the popup surface commits damage.
-//!
-//! The compositor is started with `MALAYSIA_TEST_INPUT=1`, which injects a press on
-//! the toplevel. The probe captures that press serial and uses it for the popup
-//! grab, then drives three damaged commits of the popup and counts the
-//! resulting frame callbacks.
-//!
-//! Run it against a fresh compositor:
-//!
-//! ```sh
-//! cargo run -p sctk-probe --bin popup_frame_probe
-//! ```
-
+//! Probe: a popup with grab gets frame callbacks when only it commits damage.
 use std::time::Duration;
 
 use smithay_client_toolkit::{
@@ -53,9 +40,7 @@ use smithay_client_toolkit::{
     },
 };
 
-/// The toplevel's surface size, in pixels.
 const SIDE: u32 = 400;
-/// The popup's size.
 const POPUP_W: i32 = 200;
 const POPUP_H: i32 = 120;
 
@@ -187,7 +172,6 @@ impl App {
             return;
         };
         self.commit_count += 1;
-        // Damage a small region so the compositor has surface damage to repaint.
         popup.wl_surface().damage_buffer(0, 0, POPUP_W, POPUP_H);
         popup
             .wl_surface()
