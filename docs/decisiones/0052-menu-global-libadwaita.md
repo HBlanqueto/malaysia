@@ -53,7 +53,9 @@ realizar la ventana (`gtkapplication-wayland.c`), y la exporta en
    derivado de `pkgs.libadwaita` con el parche del fork aplicado sobre el tag
    `1.9.3` de GNOME. El parche usa solo API de GTK <= 4.22 para coincidir con
    la libadwaita de nixpkgs. Desde el ADR 0053 lleva también el parche del
-   modo foco (`libadwaita-focus-mode.patch`), aplicado detrás de este.
+   modo foco (`libadwaita-focus-mode.patch`), aplicado detrás de este, y
+   desde el ADR 0055 el de la apariencia en vivo
+   (`libadwaita-live-appearance.patch`), el último.
 5. **Sin overlay, sin recompilar apps.** El módulo de NixOS usa
    `system.replaceDependencies.replacements` para sustituir la libadwaita del
    sistema por la versión parcheada. Las aplicaciones libadwaita existentes

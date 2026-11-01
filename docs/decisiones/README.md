@@ -59,5 +59,6 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0052 | Menú global para libadwaita | aceptado |
 | 0053 | Modo foco en libadwaita | aceptado |
 | 0054 | Titlebar superpuesta en foco | aceptado |
+| 0055 | Acento y tinte en vivo en libadwaita | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.

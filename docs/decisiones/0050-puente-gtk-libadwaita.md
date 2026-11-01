@@ -50,6 +50,8 @@ copia código ni plantillas (ChromaLeon es GPL-3.0, Malaysia es MIT).
 
 - Las apps libadwaita ven el mismo acento y tinte que las de barrier-kit.
 - GTK no relee `gtk.css`: un cambio de acento o tinte se ve al reabrir la app.
+  **Revisado por el ADR 0055:** la libadwaita parcheada lo recibe en vivo por
+  el portal; el archivo queda para Flatpak, GTK 3 y la libadwaita sin parche.
   Claro/oscuro sí es en vivo en GTK 4. Mientras tanto, libadwaita sigue
   recibiendo el acento redondeado por el portal, pero la variable del puente
   manda.

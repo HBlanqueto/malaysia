@@ -8,6 +8,12 @@
 //! publishes `color-scheme` as GNOME's string (`default` / `prefer-dark`) for
 //! apps that only read that key (libhandy, older Electron and Chromium). The
 //! same watcher keeps the GTK bridge (ADR 0050) in sync.
+//!
+//! `org.malaysia.appearance` carries what the standard namespace cannot
+//! (ADR 0055): `gtk4-css`, the libadwaita rules with the exact accent and the
+//! window tint, and `accent-color`, the exact accent. Malaysia's libadwaita
+//! follows them live. With `appearance.gtk_bridge = false` the stylesheet is
+//! empty and the accent unset, `(-1, -1, -1)`, and libadwaita is stock.
 
 use std::collections::HashMap;
 use std::os::fd::AsFd;
@@ -22,31 +28,43 @@ use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 
-use crate::gtk::Bridge;
+use crate::gtk::{self, Bridge};
 
 /// The standard namespace this backend publishes.
 pub const NAMESPACE: &str = "org.freedesktop.appearance";
 /// GNOME's namespace, published for apps that only read it.
 pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
+/// Malaysia's namespace, read by Malaysia's libadwaita (ADR 0055).
+pub const LIVE_NAMESPACE: &str = "org.malaysia.appearance";
 
 /// Every `(namespace, key)` this backend publishes.
-const KEYS: [(&str, &str); 5] = [
+const KEYS: [(&str, &str); 7] = [
     (NAMESPACE, "color-scheme"),
     (NAMESPACE, "accent-color"),
     (NAMESPACE, "contrast"),
     (NAMESPACE, "reduced-motion"),
     (GNOME_NAMESPACE, "color-scheme"),
+    (LIVE_NAMESPACE, "gtk4-css"),
+    (LIVE_NAMESPACE, "accent-color"),
 ];
+
+/// `org.malaysia.appearance` `accent-color` when there is none to give.
+const UNSET_ACCENT: (f64, f64, f64) = (-1.0, -1.0, -1.0);
 
 const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 
-/// The four standardized values, already mapped for D-Bus.
+/// The published values, already mapped for D-Bus.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Values {
     color_scheme: u32,
     accent: (f64, f64, f64),
     contrast: u32,
     reduced_motion: u32,
+    /// `org.malaysia.appearance` `gtk4-css`; empty without the bridge.
+    live_css: String,
+    /// `org.malaysia.appearance` `accent-color`; [`UNSET_ACCENT`] without
+    /// the bridge.
+    live_accent: (f64, f64, f64),
 }
 
 impl Values {
@@ -69,25 +87,33 @@ impl Values {
         } else {
             None
         };
-        Self::from_parts(appearance, dominant)
+        Self::from_parts(appearance, dominant, gtk::enabled())
     }
 
-    fn from_parts(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> Self {
+    fn from_parts(appearance: &AppearanceConfig, dominant: Option<Rgba>, bridge: bool) -> Self {
         let resolved = resolve(appearance, dominant);
         let color_scheme = match resolved.scheme {
             ColorScheme::Light => 2,
             ColorScheme::Dark | ColorScheme::DarkTint => 1,
             ColorScheme::Auto => 2,
         };
+        let accent = (
+            f64::from(resolved.accent.r),
+            f64::from(resolved.accent.g),
+            f64::from(resolved.accent.b),
+        );
+        let (live_css, live_accent) = if bridge {
+            (gtk::live_css(appearance, dominant), accent)
+        } else {
+            (String::new(), UNSET_ACCENT)
+        };
         Self {
             color_scheme,
-            accent: (
-                f64::from(resolved.accent.r),
-                f64::from(resolved.accent.g),
-                f64::from(resolved.accent.b),
-            ),
+            accent,
             contrast: u32::from(appearance.contrast),
             reduced_motion: u32::from(appearance.reduced_motion),
+            live_css,
+            live_accent,
         }
     }
 
@@ -98,6 +124,8 @@ impl Values {
             (NAMESPACE, "contrast") => Value::new(self.contrast),
             (NAMESPACE, "reduced-motion") => Value::new(self.reduced_motion),
             (GNOME_NAMESPACE, "color-scheme") => Value::new(self.gnome_color_scheme()),
+            (LIVE_NAMESPACE, "gtk4-css") => Value::new(self.live_css.clone()),
+            (LIVE_NAMESPACE, "accent-color") => Value::new(self.live_accent),
             _ => return None,
         };
         Some(owned(value))
@@ -316,7 +344,7 @@ mod tests {
             b: 0.9,
             a: 1.0,
         };
-        let accent = Values::from_parts(&appearance, Some(wallpaper)).accent;
+        let accent = Values::from_parts(&appearance, Some(wallpaper), true).accent;
         // The portal accent is derived from the dominant for contrast, not the
         // raw dominant.
         assert_ne!(
@@ -412,5 +440,56 @@ mod tests {
         );
         assert!(dark.all(GNOME_NAMESPACE).contains_key("color-scheme"));
         assert_eq!(dark.all(NAMESPACE).len(), 4);
+    }
+
+    #[test]
+    fn the_live_namespace_follows_the_bridge() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Accent,
+            ..AppearanceConfig::default()
+        };
+        let on = Values::from_parts(&appearance, None, true);
+        assert_eq!(on.live_css, gtk::live_css(&appearance, None));
+        assert!(on.live_css.contains("window_bg_color"));
+        assert_eq!(on.live_accent, on.accent);
+        assert_eq!(on.all(LIVE_NAMESPACE).len(), 2);
+
+        let off = Values::from_parts(&appearance, None, false);
+        assert!(off.live_css.is_empty());
+        assert_eq!(off.live_accent, UNSET_ACCENT);
+        // The standard namespace does not depend on the bridge.
+        assert_eq!(off.accent, on.accent);
+
+        let changed: Vec<_> = off
+            .changed(&on)
+            .into_iter()
+            .map(|(namespace, key, _)| (namespace, key))
+            .collect();
+        assert_eq!(
+            changed,
+            [
+                (LIVE_NAMESPACE, "gtk4-css"),
+                (LIVE_NAMESPACE, "accent-color")
+            ]
+        );
+    }
+
+    #[test]
+    fn a_new_tint_changes_only_the_live_stylesheet() {
+        let neutral = Values::from_parts(&AppearanceConfig::default(), None, true);
+        let tinted = Values::from_parts(
+            &AppearanceConfig {
+                window_color: WindowColorMode::Accent,
+                ..AppearanceConfig::default()
+            },
+            None,
+            true,
+        );
+        let changed: Vec<_> = tinted
+            .changed(&neutral)
+            .into_iter()
+            .map(|(namespace, key, _)| (namespace, key))
+            .collect();
+        assert_eq!(changed, [(LIVE_NAMESPACE, "gtk4-css")]);
     }
 }

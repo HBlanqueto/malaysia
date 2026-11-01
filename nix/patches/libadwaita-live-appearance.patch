@@ -1,0 +1,685 @@
+diff --git a/src/adw-live-appearance-private.h b/src/adw-live-appearance-private.h
+new file mode 100644
+index 0000000..e17d39a
+--- /dev/null
++++ b/src/adw-live-appearance-private.h
+@@ -0,0 +1,32 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#pragma once
++
++#if !defined(_ADWAITA_INSIDE) && !defined(ADWAITA_COMPILATION)
++#error "Only <adwaita.h> can be included directly."
++#endif
++
++#include <gtk/gtk.h>
++
++G_BEGIN_DECLS
++
++#define ADW_TYPE_LIVE_APPEARANCE (adw_live_appearance_get_type())
++
++G_DECLARE_FINAL_TYPE (AdwLiveAppearance, adw_live_appearance, ADW, LIVE_APPEARANCE, GObject)
++
++AdwLiveAppearance *adw_live_appearance_get_default (void);
++
++const char *adw_live_appearance_get_css    (AdwLiveAppearance *self);
++gboolean    adw_live_appearance_get_accent (AdwLiveAppearance *self,
++                                            GdkRGBA           *rgba);
++
++/* Tests: feed the values a SettingChanged would carry, without a portal. */
++void adw_live_appearance_set_for_testing (AdwLiveAppearance *self,
++                                          const char        *css,
++                                          const GdkRGBA     *accent);
++
++G_END_DECLS
+diff --git a/src/adw-live-appearance.c b/src/adw-live-appearance.c
+new file mode 100644
+index 0000000..ff29688
+--- /dev/null
++++ b/src/adw-live-appearance.c
+@@ -0,0 +1,342 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++/*
++ * Live appearance from the settings portal (MalaysiaDreams).
++ *
++ * The standard `org.freedesktop.appearance` namespace only carries the
++ * colour scheme and an accent that libadwaita rounds to one of its presets.
++ * A desktop that tints its windows (the exact accent, tinted window, sidebar
++ * and popover backgrounds) publishes the stylesheet for that in its own
++ * portal namespace:
++ *
++ *   org.malaysia.appearance
++ *     gtk4-css      s      Named colours and CSS variables for libadwaita,
++ *                          one `@media (prefers-color-scheme: …)` block per
++ *                          scheme. Empty when the desktop tints nothing.
++ *     accent-color  (ddd)  The exact accent, sRGB in [0, 1]; out of range
++ *                          when unset.
++ *
++ * Both are read once with ReadAll and followed through SettingChanged, so a
++ * change of accent or tint restyles running applications without reloading
++ * the user `gtk.css` (which GTK reads only at startup). AdwStyleManager loads
++ * the stylesheet into a provider above GTK_STYLE_PROVIDER_PRIORITY_USER: the
++ * same colours may also sit, stale, in the user `gtk.css` written for
++ * unpatched libraries, and the live ones have to win over them.
++ *
++ * Without the namespace (any other desktop) nothing is published and
++ * libadwaita keeps its stock behaviour. ADW_DISABLE_LIVE_APPEARANCE, or
++ * ADW_DISABLE_PORTAL, turn the module off.
++ */
++
++#include "config.h"
++
++#include "adw-live-appearance-private.h"
++
++#include "adw-settings-impl-private.h"
++
++#define PORTAL_BUS_NAME "org.freedesktop.portal.Desktop"
++#define PORTAL_OBJECT_PATH "/org/freedesktop/portal/desktop"
++#define PORTAL_SETTINGS_INTERFACE "org.freedesktop.portal.Settings"
++
++#define NAMESPACE "org.malaysia.appearance"
++#define KEY_CSS "gtk4-css"
++#define KEY_ACCENT "accent-color"
++
++struct _AdwLiveAppearance
++{
++  GObject parent_instance;
++
++  GDBusProxy *settings_portal;
++
++  char *css;
++  gboolean has_accent;
++  GdkRGBA accent;
++};
++
++G_DEFINE_FINAL_TYPE (AdwLiveAppearance, adw_live_appearance, G_TYPE_OBJECT)
++
++enum {
++  SIGNAL_CHANGED,
++  SIGNAL_LAST_SIGNAL,
++};
++
++static guint signals[SIGNAL_LAST_SIGNAL];
++
++static AdwLiveAppearance *default_instance = NULL;
++
++static gboolean
++set_css (AdwLiveAppearance *self,
++         const char        *css)
++{
++  if (css && !*css)
++    css = NULL;
++
++  if (!g_strcmp0 (self->css, css))
++    return FALSE;
++
++  g_free (self->css);
++  self->css = g_strdup (css);
++
++  return TRUE;
++}
++
++static gboolean
++set_accent (AdwLiveAppearance *self,
++            const GdkRGBA     *accent)
++{
++  if (!accent) {
++    if (!self->has_accent)
++      return FALSE;
++
++    self->has_accent = FALSE;
++
++    return TRUE;
++  }
++
++  if (self->has_accent && gdk_rgba_equal (&self->accent, accent))
++    return FALSE;
++
++  self->has_accent = TRUE;
++  self->accent = *accent;
++
++  return TRUE;
++}
++
++/* Returns whether anything changed. Values of the wrong type are ignored. */
++static gboolean
++apply_value (AdwLiveAppearance *self,
++             const char        *key,
++             GVariant          *value)
++{
++  if (!g_strcmp0 (key, KEY_CSS)) {
++    if (!g_variant_is_of_type (value, G_VARIANT_TYPE_STRING)) {
++      g_warning ("Invalid type for %s.%s: %s", NAMESPACE, key,
++                 g_variant_get_type_string (value));
++      return FALSE;
++    }
++
++    return set_css (self, g_variant_get_string (value, NULL));
++  }
++
++  if (!g_strcmp0 (key, KEY_ACCENT)) {
++    double r, g, b;
++    GdkRGBA rgba;
++
++    if (!g_variant_is_of_type (value, G_VARIANT_TYPE ("(ddd)"))) {
++      g_warning ("Invalid type for %s.%s: %s", NAMESPACE, key,
++                 g_variant_get_type_string (value));
++      return FALSE;
++    }
++
++    g_variant_get (value, "(ddd)", &r, &g, &b);
++
++    if (r < 0 || g < 0 || b < 0 || r > 1 || g > 1 || b > 1)
++      return set_accent (self, NULL);
++
++    rgba.red = r;
++    rgba.green = g;
++    rgba.blue = b;
++    rgba.alpha = 1;
++
++    return set_accent (self, &rgba);
++  }
++
++  return FALSE;
++}
++
++static void
++changed_cb (GDBusProxy        *proxy,
++            const char        *sender_name,
++            const char        *signal_name,
++            GVariant          *parameters,
++            AdwLiveAppearance *self)
++{
++  const char *namespace;
++  const char *key;
++  GVariant *value = NULL;
++
++  if (g_strcmp0 (signal_name, "SettingChanged"))
++    return;
++
++  if (!g_variant_is_of_type (parameters, G_VARIANT_TYPE ("(ssv)")))
++    return;
++
++  g_variant_get (parameters, "(&s&sv)", &namespace, &key, &value);
++
++  if (!g_strcmp0 (namespace, NAMESPACE) && apply_value (self, key, value))
++    g_signal_emit (self, signals[SIGNAL_CHANGED], 0);
++
++  g_variant_unref (value);
++}
++
++static void
++read_all (AdwLiveAppearance *self)
++{
++  const char *namespaces[] = { NAMESPACE, NULL };
++  GError *error = NULL;
++  GVariant *ret;
++  GVariant *all;
++  GVariant *settings;
++
++  ret = g_dbus_proxy_call_sync (self->settings_portal,
++                                "ReadAll",
++                                g_variant_new ("(^as)", namespaces),
++                                G_DBUS_CALL_FLAGS_NONE,
++                                -1,
++                                NULL,
++                                &error);
++  if (error) {
++    g_debug ("Couldn't read %s: %s", NAMESPACE, error->message);
++    g_error_free (error);
++    return;
++  }
++
++  all = g_variant_get_child_value (ret, 0);
++  settings = g_variant_lookup_value (all, NAMESPACE, G_VARIANT_TYPE_VARDICT);
++
++  if (settings) {
++    GVariantIter iter;
++    const char *key;
++    GVariant *value;
++
++    g_variant_iter_init (&iter, settings);
++    while (g_variant_iter_next (&iter, "{&sv}", &key, &value)) {
++      apply_value (self, key, value);
++      g_variant_unref (value);
++    }
++
++    g_variant_unref (settings);
++  }
++
++  g_variant_unref (all);
++  g_variant_unref (ret);
++}
++
++static void
++adw_live_appearance_dispose (GObject *object)
++{
++  AdwLiveAppearance *self = ADW_LIVE_APPEARANCE (object);
++
++  g_clear_object (&self->settings_portal);
++  g_clear_pointer (&self->css, g_free);
++
++  G_OBJECT_CLASS (adw_live_appearance_parent_class)->dispose (object);
++}
++
++static void
++adw_live_appearance_class_init (AdwLiveAppearanceClass *klass)
++{
++  GObjectClass *object_class = G_OBJECT_CLASS (klass);
++
++  object_class->dispose = adw_live_appearance_dispose;
++
++  signals[SIGNAL_CHANGED] =
++    g_signal_new ("changed",
++                  G_TYPE_FROM_CLASS (klass),
++                  G_SIGNAL_RUN_LAST,
++                  0,
++                  NULL, NULL, NULL,
++                  G_TYPE_NONE,
++                  0);
++}
++
++static void
++adw_live_appearance_init (AdwLiveAppearance *self)
++{
++}
++
++static void
++connect_portal (AdwLiveAppearance *self)
++{
++  GError *error = NULL;
++
++  if (g_getenv ("ADW_DISABLE_LIVE_APPEARANCE") || adw_get_disable_portal ())
++    return;
++
++  self->settings_portal =
++    g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SESSION,
++                                   G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
++                                   NULL,
++                                   PORTAL_BUS_NAME,
++                                   PORTAL_OBJECT_PATH,
++                                   PORTAL_SETTINGS_INTERFACE,
++                                   NULL,
++                                   &error);
++  if (error) {
++    g_debug ("Settings portal not found: %s", error->message);
++    g_error_free (error);
++    return;
++  }
++
++  read_all (self);
++
++  g_signal_connect_object (self->settings_portal,
++                           "g-signal",
++                           G_CALLBACK (changed_cb),
++                           self,
++                           0);
++}
++
++/*
++ * The process-wide instance. It always exists; it publishes nothing when
++ * disabled or when the portal doesn't have the namespace.
++ */
++AdwLiveAppearance *
++adw_live_appearance_get_default (void)
++{
++  if (!default_instance) {
++    default_instance = g_object_new (ADW_TYPE_LIVE_APPEARANCE, NULL);
++    connect_portal (default_instance);
++  }
++
++  return default_instance;
++}
++
++/*
++ * The stylesheet to load above the user CSS, or NULL.
++ */
++const char *
++adw_live_appearance_get_css (AdwLiveAppearance *self)
++{
++  g_return_val_if_fail (ADW_IS_LIVE_APPEARANCE (self), NULL);
++
++  return self->css;
++}
++
++/*
++ * The exact accent, when the desktop publishes one.
++ */
++gboolean
++adw_live_appearance_get_accent (AdwLiveAppearance *self,
++                                GdkRGBA           *rgba)
++{
++  g_return_val_if_fail (ADW_IS_LIVE_APPEARANCE (self), FALSE);
++
++  if (!self->has_accent)
++    return FALSE;
++
++  if (rgba)
++    *rgba = self->accent;
++
++  return TRUE;
++}
++
++void
++adw_live_appearance_set_for_testing (AdwLiveAppearance *self,
++                                     const char        *css,
++                                     const GdkRGBA     *accent)
++{
++  gboolean changed;
++
++  g_return_if_fail (ADW_IS_LIVE_APPEARANCE (self));
++
++  changed = set_css (self, css);
++  changed = set_accent (self, accent) || changed;
++
++  if (changed)
++    g_signal_emit (self, signals[SIGNAL_CHANGED], 0);
++}
+diff --git a/src/adw-style-manager.c b/src/adw-style-manager.c
+index eb832fd..0c4c8cc 100644
+--- a/src/adw-style-manager.c
++++ b/src/adw-style-manager.c
+@@ -11,6 +11,7 @@
+ #include "adw-style-manager-private.h"
+ 
+ #include "adw-accent-color-private.h"
++#include "adw-live-appearance-private.h"
+ #include "adw-main-private.h"
+ #include "adw-settings-private.h"
+ #include <gtk/gtk.h>
+@@ -68,6 +69,9 @@ struct _AdwStyleManager
+   GtkCssProvider *provider;
+   GtkCssProvider *accent_provider;
+   GtkCssProvider *fonts_provider;
++  GtkCssProvider *live_provider;
++
++  AdwLiveAppearance *live;
+ 
+   AdwColorScheme color_scheme;
+   gboolean dark;
+@@ -257,6 +261,12 @@ update_stylesheet (AdwStyleManager       *self,
+     g_free (accent_css);
+   }
+ 
++  if (flags & UPDATE_ACCENT_COLOR && self->live_provider) {
++    const char *live_css = adw_live_appearance_get_css (self->live);
++
++    gtk_css_provider_load_from_string (self->live_provider, live_css ? live_css : "");
++  }
++
+   if (flags & UPDATE_FONTS && self->fonts_provider) {
+     char *fonts_css = generate_fonts_css (self);
+     gtk_css_provider_load_from_string (self->fonts_provider, fonts_css);
+@@ -274,6 +284,9 @@ update_stylesheet (AdwStyleManager       *self,
+     if (self->provider)
+       g_object_set (self->provider, "prefers-color-scheme", color_scheme, NULL);
+ 
++    if (self->live_provider)
++      g_object_set (self->live_provider, "prefers-color-scheme", color_scheme, NULL);
++
+     if (gtk_check_version (4, 23, 1) != NULL) {
+       self->changing_gtk_settings = TRUE;
+ 
+@@ -301,6 +314,9 @@ update_stylesheet (AdwStyleManager       *self,
+     if (self->provider)
+       g_object_set (self->provider, "prefers-contrast", contrast, NULL);
+ 
++    if (self->live_provider)
++      g_object_set (self->live_provider, "prefers-contrast", contrast, NULL);
++
+     g_object_set (self->gtk_settings,
+                   "gtk-interface-contrast", contrast,
+                   NULL);
+@@ -464,6 +480,14 @@ notify_high_contrast_cb (AdwStyleManager *self)
+   g_object_notify_by_pspec (G_OBJECT (self), props[PROP_HIGH_CONTRAST]);
+ }
+ 
++static void
++live_appearance_changed_cb (AdwStyleManager *self)
++{
++  update_stylesheet (self, UPDATE_ACCENT_COLOR);
++
++  g_object_notify_by_pspec (G_OBJECT (self), props[PROP_ACCENT_COLOR_RGBA]);
++}
++
+ static void
+ adw_style_manager_constructed (GObject *object)
+ {
+@@ -510,6 +534,13 @@ adw_style_manager_constructed (GObject *object)
+       gtk_style_context_add_provider_for_display (self->display,
+                                                   GTK_STYLE_PROVIDER (self->fonts_provider),
+                                                   GTK_STYLE_PROVIDER_PRIORITY_THEME);
++
++      /* Above the user gtk.css: it may hold a stale copy of the same
++       * colours (see adw-live-appearance.c). */
++      self->live_provider = gtk_css_provider_new ();
++      gtk_style_context_add_provider_for_display (self->display,
++                                                  GTK_STYLE_PROVIDER (self->live_provider),
++                                                  GTK_STYLE_PROVIDER_PRIORITY_USER + 1);
+     }
+ 
+     self->animations_provider = gtk_css_provider_new ();
+@@ -529,6 +560,13 @@ adw_style_manager_constructed (GObject *object)
+                            G_CONNECT_SWAPPED);
+ 
+   self->settings = adw_settings_get_default ();
++  self->live = adw_live_appearance_get_default ();
++
++  g_signal_connect_object (self->live,
++                           "changed",
++                           G_CALLBACK (live_appearance_changed_cb),
++                           self,
++                           G_CONNECT_SWAPPED);
+ 
+   g_signal_connect_object (self->settings,
+                            "notify::system-supports-color-schemes",
+@@ -586,6 +624,7 @@ adw_style_manager_dispose (GObject *object)
+   g_clear_object (&self->animations_provider);
+   g_clear_object (&self->accent_provider);
+   g_clear_object (&self->fonts_provider);
++  g_clear_object (&self->live_provider);
+   g_clear_pointer (&self->document_font_name, g_free);
+   g_clear_pointer (&self->monospace_font_name, g_free);
+ 
+@@ -1154,7 +1193,9 @@ adw_style_manager_get_accent_color (AdwStyleManager *self)
+  * Gets the current system accent color as a `GdkRGBA`.
+  *
+  * Equivalent to calling [func@AccentColor.to_rgba] on the value of
+- * [property@StyleManager:accent-color].
++ * [property@StyleManager:accent-color], unless the desktop publishes an exact
++ * accent through the `org.malaysia.appearance` portal namespace: then that
++ * color is returned.
+  *
+  * This is a background color. The matching foreground color is white.
+  *
+@@ -1170,6 +1211,9 @@ adw_style_manager_get_accent_color_rgba (AdwStyleManager *self)
+ 
+   g_return_val_if_fail (ADW_IS_STYLE_MANAGER (self), NULL);
+ 
++  if (adw_live_appearance_get_accent (self->live, &rgba))
++    return gdk_rgba_copy (&rgba);
++
+   color = adw_style_manager_get_accent_color (self);
+ 
+   adw_accent_color_to_rgba (color, &rgba);
+diff --git a/src/meson.build b/src/meson.build
+index 7787e5f..b8524d0 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -306,6 +306,7 @@ libadwaita_private_sources += files([
+   'adw-global-menu.c',
+   'adw-gtkbuilder-utils.c',
+   'adw-indicator-bin.c',
++  'adw-live-appearance.c',
+   'adw-inspector-page.c',
+   'adw-link-row.c',
+   'adw-settings.c',
+diff --git a/tests/meson.build b/tests/meson.build
+index 869cc3e..f5732db 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -69,6 +69,7 @@ test_names = [
+   'test-header-bar',
+   'test-inline-view-switcher',
+   'test-leaflet',
++  'test-live-appearance',
+   'test-message-dialog',
+   'test-multi-layout-view',
+   'test-navigation-split-view',
+diff --git a/tests/test-live-appearance.c b/tests/test-live-appearance.c
+new file mode 100644
+index 0000000..f080463
+--- /dev/null
++++ b/tests/test-live-appearance.c
+@@ -0,0 +1,142 @@
++/*
++ * Copyright (C) 2026 Malaysia contributors
++ *
++ * SPDX-License-Identifier: LGPL-2.1-or-later
++ */
++
++#include <adwaita.h>
++
++#include "adw-live-appearance-private.h"
++
++#define LIVE_CSS \
++  "@media (prefers-color-scheme: light) {\n" \
++  "  @define-color accent_bg_color #ff0000;\n" \
++  "  @define-color window_bg_color #fff0f0;\n" \
++  "}\n" \
++  "@media (prefers-color-scheme: dark) {\n" \
++  "  @define-color accent_bg_color #0000ff;\n" \
++  "  @define-color window_bg_color #10102a;\n" \
++  "}\n"
++
++static void
++increment (int *data)
++{
++  (*data)++;
++}
++
++static void
++assert_named_color (GtkWidget  *widget,
++                    const char *name,
++                    const char *expected)
++{
++  GtkStyleContext *context = gtk_widget_get_style_context (widget);
++  GdkRGBA color, expected_color;
++
++  g_assert_true (gdk_rgba_parse (&expected_color, expected));
++  g_assert_true (gtk_style_context_lookup_color (context, name, &color));
++  g_assert_true (gdk_rgba_equal (&color, &expected_color));
++}
++
++static void
++test_accent_rgba (void)
++{
++  AdwStyleManager *manager = adw_style_manager_get_default ();
++  AdwLiveAppearance *live = adw_live_appearance_get_default ();
++  GdkRGBA exact = { 0.2, 0.4, 0.6, 1 };
++  GdkRGBA preset;
++  GdkRGBA *rgba;
++  int notified = 0;
++
++  g_signal_connect_swapped (manager, "notify::accent-color-rgba",
++                            G_CALLBACK (increment), &notified);
++
++  adw_accent_color_to_rgba (adw_style_manager_get_accent_color (manager), &preset);
++
++  rgba = adw_style_manager_get_accent_color_rgba (manager);
++  g_assert_true (gdk_rgba_equal (rgba, &preset));
++  gdk_rgba_free (rgba);
++
++  adw_live_appearance_set_for_testing (live, NULL, &exact);
++  g_assert_cmpint (notified, ==, 1);
++
++  rgba = adw_style_manager_get_accent_color_rgba (manager);
++  g_assert_true (gdk_rgba_equal (rgba, &exact));
++  gdk_rgba_free (rgba);
++
++  /* The same values again change nothing. */
++  adw_live_appearance_set_for_testing (live, NULL, &exact);
++  g_assert_cmpint (notified, ==, 1);
++
++  adw_live_appearance_set_for_testing (live, NULL, NULL);
++  g_assert_cmpint (notified, ==, 2);
++
++  rgba = adw_style_manager_get_accent_color_rgba (manager);
++  g_assert_true (gdk_rgba_equal (rgba, &preset));
++  gdk_rgba_free (rgba);
++
++  g_signal_handlers_disconnect_by_func (manager, increment, &notified);
++}
++
++static void
++test_stylesheet (void)
++{
++  AdwStyleManager *manager = adw_style_manager_get_default ();
++  AdwLiveAppearance *live = adw_live_appearance_get_default ();
++  GtkWidget *window = gtk_window_new ();
++  GtkWidget *label = gtk_label_new ("");
++  GdkRGBA stock;
++
++  gtk_window_set_child (GTK_WINDOW (window), label);
++
++  adw_style_manager_set_color_scheme (manager, ADW_COLOR_SCHEME_FORCE_LIGHT);
++  g_assert_true (gtk_style_context_lookup_color (gtk_widget_get_style_context (label),
++                                                 "window_bg_color", &stock));
++
++  /* A stale copy at the user priority, as the gtk.css bridge leaves it. */
++  {
++    GtkCssProvider *user = gtk_css_provider_new ();
++
++    gtk_css_provider_load_from_string (user, "@define-color accent_bg_color #00ff00;");
++    gtk_style_context_add_provider_for_display (gdk_display_get_default (),
++                                                GTK_STYLE_PROVIDER (user),
++                                                GTK_STYLE_PROVIDER_PRIORITY_USER);
++    g_object_unref (user);
++  }
++
++  adw_live_appearance_set_for_testing (live, LIVE_CSS, NULL);
++  assert_named_color (label, "accent_bg_color", "#ff0000");
++  assert_named_color (label, "window_bg_color", "#fff0f0");
++
++  /* The scheme the application forces picks the block. */
++  adw_style_manager_set_color_scheme (manager, ADW_COLOR_SCHEME_FORCE_DARK);
++  assert_named_color (label, "accent_bg_color", "#0000ff");
++  assert_named_color (label, "window_bg_color", "#10102a");
++
++  /* Nothing published: the stock colours come back. */
++  adw_style_manager_set_color_scheme (manager, ADW_COLOR_SCHEME_FORCE_LIGHT);
++  adw_live_appearance_set_for_testing (live, "", NULL);
++  assert_named_color (label, "accent_bg_color", "#00ff00");
++  {
++    GdkRGBA color;
++
++    g_assert_true (gtk_style_context_lookup_color (gtk_widget_get_style_context (label),
++                                                   "window_bg_color", &color));
++    g_assert_true (gdk_rgba_equal (&color, &stock));
++  }
++
++  adw_style_manager_set_color_scheme (manager, ADW_COLOR_SCHEME_DEFAULT);
++  gtk_window_destroy (GTK_WINDOW (window));
++}
++
++int
++main (int   argc,
++      char *argv[])
++{
++  gtk_test_init (&argc, &argv, NULL);
++  adw_init ();
++
++  g_test_add_func ("/Adwaita/LiveAppearance/accent_rgba", test_accent_rgba);
++  g_test_add_func ("/Adwaita/LiveAppearance/stylesheet", test_stylesheet);
++
++  return g_test_run ();
++}

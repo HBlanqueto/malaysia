@@ -117,7 +117,10 @@ sin sombra). Pruebas: `./dev.sh presentation`, `activation`, `pointers`,
 `UseIn=Malaysia` y GTK de fallback) y `org.gnome.desktop.interface`
 `color-scheme`. **Puente GTK hecho (2026-10-31, ADR 0050):** acento exacto y
 tinte en GTK 3/4 y libadwaita por CSS de usuario; GTK 3 oscuro por
-`settings.ini`; el portal arranca con `malaysia-session.target`. Prueba:
+`settings.ini`; el portal arranca con `malaysia-session.target`. **En vivo
+(2026-11-01, ADR 0055):** el portal publica `org.malaysia.appearance`
+(`gtk4-css`, `accent-color`) y la libadwaita parcheada cambia acento y tinte
+sin reabrir la app; Flatpak y GTK 3 siguen al reabrir. Prueba:
 `cargo test -p xdg-desktop-portal-malaysia`, y en sesión abrir Nautilus con
 `window_color = "wallpaper"`. Faltan `Screenshot`/`ScreenCast` y los
 diálogos de permiso. **12b pendiente:** notificaciones, polkit, keyring/Secret

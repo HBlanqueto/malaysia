@@ -19,6 +19,11 @@
 //!
 //! The idea (marked `@import` plus `@define-color` overrides) comes from the
 //! ChromaLeon GNOME extension; no code or template was copied from it.
+//!
+//! GTK reads `gtk.css` only at startup. The same GTK 4 rules are also
+//! published live in the portal namespace `org.malaysia.appearance`
+//! ([`live_css`], ADR 0055); Malaysia's libadwaita loads them above the user
+//! CSS, so running apps follow a new accent or tint without reopening.
 
 use std::fs;
 use std::io;
@@ -107,7 +112,7 @@ impl SchemeColors {
         let mut colors = vec![
             ("accent_bg_color", resolved.accent),
             ("accent_fg_color", on_accent),
-            ("accent_color", resolved.accent),
+            ("accent_color", standalone_accent(resolved.accent, dark)),
         ];
         // Increase contrast wins over decoration: no tint, only the accent.
         if !appearance.contrast {
@@ -182,6 +187,78 @@ fn tinted_backgrounds(
     colors
 }
 
+/// The lightness libadwaita clamps an accent to when it is used as text or an
+/// icon on the window background (`adw_rgba_to_standalone`): at most this in
+/// light. Like [`ADWAITA_LIGHT`], libadwaita's value, not a design token.
+const ADWAITA_STANDALONE_MAX_L_LIGHT: f32 = 0.5;
+/// At least this in dark.
+const ADWAITA_STANDALONE_MIN_L_DARK: f32 = 0.85;
+
+/// `accent_color`: the accent as text or an icon, with libadwaita's
+/// contrast rule. libadwaita 1.6+ derives `--accent-color` itself from
+/// `--accent-bg-color`; the named colour, read by older code, is overridden
+/// here with the same rule so it never loses contrast.
+fn standalone_accent(accent: Rgba, dark: bool) -> Rgba {
+    let [l, a, b] = srgb_to_oklab(accent);
+    let l = if dark {
+        l.max(ADWAITA_STANDALONE_MIN_L_DARK)
+    } else {
+        l.min(ADWAITA_STANDALONE_MAX_L_LIGHT)
+    };
+    let [r, g, bl] = oklab_to_srgb([l, a, b]);
+    Rgba {
+        r: r.clamp(0.0, 1.0),
+        g: g.clamp(0.0, 1.0),
+        b: bl.clamp(0.0, 1.0),
+        a: accent.a,
+    }
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+/// Björn Ottosson's OKLab, as `adw_rgb_to_oklab` computes it.
+fn srgb_to_oklab(color: Rgba) -> [f32; 3] {
+    let (r, g, b) = (
+        srgb_to_linear(color.r),
+        srgb_to_linear(color.g),
+        srgb_to_linear(color.b),
+    );
+    let l = (0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
+    let m = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
+    let s = (0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b).cbrt();
+    [
+        0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
+        1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
+        0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
+    ]
+}
+
+fn oklab_to_srgb([l, a, b]: [f32; 3]) -> [f32; 3] {
+    let l_ = l + 0.396_337_78 * a + 0.215_803_76 * b;
+    let m_ = l - 0.105_561_346 * a - 0.063_854_17 * b;
+    let s_ = l - 0.089_484_18 * a - 1.291_485_5 * b;
+    let (l, m, s) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_);
+    [
+        linear_to_srgb(4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s),
+        linear_to_srgb(-1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s),
+        linear_to_srgb(-0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s),
+    ]
+}
+
 /// The concrete light and dark schemes for `appearance`: the dark one is
 /// `dark_tint` when the user picked it.
 fn schemes(appearance: &AppearanceConfig) -> (ColorScheme, ColorScheme) {
@@ -232,6 +309,16 @@ const HEADER: &str = "/* Generado por xdg-desktop-portal-malaysia desde appearan
                       * (ADR 0050). Se reescribe en cada cambio: no lo edites; tus reglas\n \
                       * van en gtk.css, debajo del bloque malaysia:gtk-bridge. */\n";
 
+/// One `@media (prefers-color-scheme: …)` block per scheme.
+fn push_media_blocks(out: &mut String, light: &SchemeColors, dark: &SchemeColors) {
+    for (query, colors) in [("light", light), ("dark", dark)] {
+        out.push_str(&format!("\n@media (prefers-color-scheme: {query}) {{\n"));
+        push_variables(out, colors, "  ");
+        push_define_colors(out, colors, "  ");
+        out.push_str("}\n");
+    }
+}
+
 /// The GTK 4 / libadwaita stylesheet: the current scheme at the top level for
 /// GTK < 4.16, then one `@media` block per scheme for live switching.
 fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
@@ -249,12 +336,20 @@ fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let mut out = String::from(HEADER);
     out.push('\n');
     push_define_colors(&mut out, current, "");
-    for (query, colors) in [("light", &light), ("dark", &dark)] {
-        out.push_str(&format!("\n@media (prefers-color-scheme: {query}) {{\n"));
-        push_variables(&mut out, colors, "  ");
-        push_define_colors(&mut out, colors, "  ");
-        out.push_str("}\n");
-    }
+    push_media_blocks(&mut out, &light, &dark);
+    out
+}
+
+/// The rules published live in `org.malaysia.appearance` `gtk4-css` (ADR
+/// 0055): the same colours as [`gtk4_css`], only behind the media queries.
+/// Malaysia's libadwaita sets `prefers-color-scheme` on the provider that
+/// loads them, so the block of the scheme the app shows applies.
+pub fn live_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
+    let (light, dark) = schemes(appearance);
+    let light = SchemeColors::new(appearance, dominant, light);
+    let dark = SchemeColors::new(appearance, dominant, dark);
+    let mut out = String::new();
+    push_media_blocks(&mut out, &light, &dark);
     out
 }
 
@@ -570,6 +665,42 @@ mod tests {
         assert!(!css.contains("@media"));
         assert!(css.contains("@define-color theme_selected_bg_color"));
         assert!(css.contains("@define-color theme_bg_color"));
+    }
+
+    #[test]
+    fn the_live_rules_carry_only_the_media_blocks() {
+        let appearance = AppearanceConfig {
+            window_color: WindowColorMode::Accent,
+            ..AppearanceConfig::default()
+        };
+        let live = live_css(&appearance, None);
+        assert!(
+            live.trim_start()
+                .starts_with("@media (prefers-color-scheme: light)")
+        );
+        assert!(live.contains("@media (prefers-color-scheme: dark)"));
+        assert!(live.contains("window_bg_color"));
+        assert!(!live.contains("Generado"));
+        // The file carries the same blocks after its header.
+        assert!(gtk4_css(&appearance, None).ends_with(&live));
+    }
+
+    #[test]
+    fn the_standalone_accent_keeps_libadwaitas_contrast() {
+        let light_accent = Rgba::rgb8(0x9a, 0xc8, 0xff);
+        let light = standalone_accent(light_accent, false);
+        assert!(srgb_to_oklab(light)[0] <= ADWAITA_STANDALONE_MAX_L_LIGHT + 1e-3);
+        let dark_accent = Rgba::rgb8(0x50, 0x58, 0x68);
+        let dark = standalone_accent(dark_accent, true);
+        assert!(srgb_to_oklab(dark)[0] >= ADWAITA_STANDALONE_MIN_L_DARK - 1e-3);
+        // A saturated accent leaves the sRGB gamut and is clipped, as in
+        // libadwaita; it still gets lighter.
+        let navy = Rgba::rgb8(0x1a, 0x3a, 0x80);
+        assert!(srgb_to_oklab(standalone_accent(navy, true))[0] > srgb_to_oklab(navy)[0] + 0.3);
+        // An accent already within the bound is kept.
+        let blue = Rgba::rgb8(0x0b, 0x3d, 0x91);
+        let kept = standalone_accent(blue, false);
+        assert!((kept.r - blue.r).abs() < 2e-3 && (kept.b - blue.b).abs() < 2e-3);
     }
 
     #[test]

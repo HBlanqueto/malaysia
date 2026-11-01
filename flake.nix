@@ -210,12 +210,14 @@
         "malaysia-shell" = malaysia;
         skia-binaries = skia;
         # The fork's patches over the nixpkgs libadwaita (1.9.3): the global
-        # menu (ADR 0052) and focus mode, which links wayland-client for
-        # infinity_focus_v1 (ADR 0053). The name stays for the NixOS module.
+        # menu (ADR 0052), focus mode, which links wayland-client for
+        # infinity_focus_v1 (ADR 0053), and the live accent and tint from the
+        # portal (ADR 0055). The name stays for the NixOS module.
         libadwaita-global-menu = pkgs.libadwaita.overrideAttrs (old: {
           patches = (old.patches or []) ++ [
             ./nix/patches/libadwaita-global-menu.patch
             ./nix/patches/libadwaita-focus-mode.patch
+            ./nix/patches/libadwaita-live-appearance.patch
           ];
           nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ pkgs.wayland-scanner ];
           buildInputs = (old.buildInputs or []) ++ [ pkgs.wayland ];
