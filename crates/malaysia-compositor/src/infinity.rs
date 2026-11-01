@@ -303,8 +303,11 @@ impl State {
         if self.maximized.contains_key(&id) {
             self.set_maximized(id, false);
         }
-        if self.fullscreen.contains_key(&id) {
-            self.infinity_set_fullscreen(id, false);
+        if self.in_focus_mode(id) {
+            // Leaving focus mode animates back to the desktop; the arrange
+            // waits for the user to ask again there.
+            self.exit_focus_mode(id);
+            return;
         }
         self.arranged.entry(id).or_insert_with(|| outer);
         let workspace = self.workspace_rect();
@@ -411,22 +414,17 @@ impl State {
         }
     }
 
-    /// Sets or unsets fullscreen through Infinity.
+    /// Sets or unsets fullscreen through Infinity (the bar's «Ventana ›
+    /// Activar pantalla completa»). Fullscreen is focus mode: the window gets
+    /// a space of its own (ADR 0051); a plain fullscreen on the desktop would
+    /// leave the bar and the dock over it.
     pub(crate) fn infinity_set_fullscreen(&mut self, id: WindowId, fullscreen: bool) {
         info!(window = id.get(), fullscreen, "infinity set fullscreen");
-        let Some(outer) = self.windows.outer(id) else {
-            return;
-        };
         if fullscreen {
-            self.fullscreen.entry(id).or_insert(outer);
-            let full = self.output_rect();
-            self.windows.set_fullscreen_with_outer(id, true, full);
+            self.enter_focus_mode(id);
         } else {
-            let saved = self.fullscreen.remove(&id).unwrap_or(outer);
-            self.windows.set_fullscreen_with_outer(id, false, saved);
+            self.exit_focus_mode(id);
         }
-        self.foreign_state_changed(id);
-        self.request_redraw();
     }
 
     /// Applies a target outer rectangle to a window, converting scene types.
@@ -441,15 +439,6 @@ impl State {
     fn workspace_rect(&self) -> Rectangle<i32, Logical> {
         let (origin, size) = self.workspace();
         Rectangle::new(origin, size)
-    }
-
-    /// Whole output as a logical rectangle.
-    fn output_rect(&self) -> SceneRect<f64, SceneLogical> {
-        let size = self.logical_output_size();
-        SceneRect::new(
-            ScenePoint::new(0.0, 0.0),
-            SceneSize::new(f64::from(size.w), f64::from(size.h)),
-        )
     }
 
     /// Sends the current restorable state of a window to every Infinity client.
