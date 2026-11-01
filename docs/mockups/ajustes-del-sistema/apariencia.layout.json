@@ -5320,7 +5320,7 @@
      87
     ],
     "app": "card_container",
-    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "background": "color(srgb 0.951059 0.966118 0.993647)",
     "radius": 16
    },
    {
@@ -5436,7 +5436,7 @@
      352
     ],
     "app": "card_container",
-    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "background": "color(srgb 0.951059 0.966118 0.993647)",
     "radius": 16
    },
    {
@@ -6004,7 +6004,7 @@
      46
     ],
     "app": "card_container",
-    "background": "color(srgb 0.970635 0.979671 0.996188)",
+    "background": "color(srgb 0.951059 0.966118 0.993647)",
     "radius": 16
    },
    {
@@ -7308,7 +7308,7 @@
      87
     ],
     "app": "card_container",
-    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "background": "color(srgb 0.163314 0.18449 0.218902)",
     "radius": 16
    },
    {
@@ -7424,7 +7424,7 @@
      352
     ],
     "app": "card_container",
-    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "background": "color(srgb 0.163314 0.18449 0.218902)",
     "radius": 16
    },
    {
@@ -7992,7 +7992,7 @@
      46
     ],
     "app": "card_container",
-    "background": "color(srgb 0.157596 0.170302 0.190949)",
+    "background": "color(srgb 0.163314 0.18449 0.218902)",
     "radius": 16
    },
    {

@@ -321,6 +321,7 @@ fn open_render_node(node: &DrmNode) -> std::io::Result<DrmDeviceFd> {
 /// This blocks the calling thread, driving the calloop event loop. It returns
 /// once the loop has stopped and is safe to call after the logger is set up.
 pub fn run() -> Result<(), SessionError> {
+    crate::spawn::mark_nested_session();
     let mut event_loop: EventLoop<Session> = EventLoop::try_new()?;
     let loop_signal = event_loop.get_signal();
 

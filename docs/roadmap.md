@@ -6,8 +6,8 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
 
 ## Ahora (2026-10-31)
 
-- **Menú global (Bloque 14).** Falta aceptar 14f-2 (cliente `org.gtk.Menus`) y
-  hacer 14b-2
+- **Menú global (Bloque 14).** 14f-2 aceptado (2026-11-01); falta aceptar
+  14b-2 (diálogos del sistema)
   (diálogos del sistema), subrayado de mnemónicos con Alt y scroll de menús
   largos. 14d-1, 14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
   y los menús de una app real.
@@ -163,14 +163,25 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
 
 **Pendientes:**
 
-- 14f-2: implementado 2026-11-01 (`menubar/gtkmenus.rs`, `capabilities` 3
-  con `menubar.app_menus`, ADR 0045 §5–6); falta la aceptación en anidado:
-  `gtk3-demo-application` con su menú real, gnome-text-editor y
-  gnome-calculator al respaldo, Kate por dbusmenu, foot al respaldo, `End` en
-  el log al cambiar de app y capturas en `docs/img/14f/`.
-- 14b-2: Suspender, Reiniciar…, Apagar…, Cerrar sesión…, Forzar salida… y
-  Acerca de este equipo siguen con `enabled: false`
-  (`crates/malaysia-shell/src/menubar/system.rs`).
+- 14f-2: aceptado 2026-11-01 en sesión anidada con
+  `gtk3-demo-application` (menú Preferences en la barra; `7a8199d`,
+  `menubar/gtkmenus.rs`, ADR 0045 §5–6).
+- 14b-2: implementado 2026-11-01, falta aceptarlo en anidado.
+  - Suspender va directo; Reiniciar…, Apagar… y Cerrar sesión… abren
+    `malaysia-shell power <acción>` (confirmación con Esc/Cancelar y Enter).
+    logind: `Suspend`/`Reboot`/`PowerOff(true)` y `TerminateSession` con
+    `XDG_SESSION_ID`, que el compositor importa al user manager
+    (`crates/malaysia-shell/src/power.rs`).
+  - `MALAYSIA_POWER_DRY_RUN=1` (por defecto en `./dev.sh`, forzado en el
+    compositor anidado) solo escribe la llamada en el log.
+  - Forzar salida… (⌥❖Esc o el menú ❄): `malaysia-shell force-quit` lista
+    una fila por app de `zwlr_foreign_toplevel` con su icono; el botón pide
+    `force_quit` (Infinity v4, barrierkit `8b96ae7`) y el compositor envía
+    SIGKILL al pid de las credenciales del socket.
+  - Acerca de este equipo: `malaysia-shell about` lee nombre del equipo,
+    sistema (`/etc/os-release`), CPU (`/proc/cpuinfo`), GPU (`/sys/class/drm`
+    + `pci.ids`), memoria (`/proc/meminfo`) y versión del paquete
+    (`crates/malaysia-shell/src/dialogs.rs`).
 - Mnemónicos subrayados al pulsar Alt (no existe en `menu.rs`).
 - Scroll de menús más altos que la salida (`menu.rs` solo desplaza los
   resultados de búsqueda).

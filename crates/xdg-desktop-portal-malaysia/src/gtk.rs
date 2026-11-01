@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, palette, resolve};
-use vow_design::{LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_SURFACE, Rgba};
+use vow_design::{LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba};
 
 /// First line of the block this bridge owns inside `gtk.css`.
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
@@ -168,27 +168,15 @@ fn tinted_backgrounds(
             ),
         ]);
     }
-    // Cards keep the window's full tint one elevation step lighter, the same
-    // rule barrier-kit uses for its groups (`surfaces.surface`).
     if parts.groups
         && let Some(card) = base.card
     {
-        let window = mix(base.window, 1.0);
-        let step = |w: f32, b: f32, c: f32| (w + c - b).clamp(0.0, 1.0);
-        colors.push((
-            "card_bg_color",
-            Rgba {
-                r: step(window.r, base.window.r, card.r),
-                g: step(window.g, base.window.g, card.g),
-                b: step(window.b, base.window.b, card.b),
-                a: card.a,
-            },
-        ));
+        colors.push(("card_bg_color", mix(card, LAYER_FACTOR_SURFACE)));
     }
     if parts.menus {
         colors.extend([
-            ("dialog_bg_color", mix(base.dialog, LAYER_FACTOR_SURFACE)),
-            ("popover_bg_color", mix(base.popover, LAYER_FACTOR_SURFACE)),
+            ("dialog_bg_color", mix(base.dialog, LAYER_FACTOR_RAISED)),
+            ("popover_bg_color", mix(base.popover, LAYER_FACTOR_RAISED)),
         ]);
     }
     colors

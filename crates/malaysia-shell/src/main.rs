@@ -1,16 +1,19 @@
 //! The Malaysia shell: one binary, many processes (ADR 0023).
 //!
 //! Each component runs as its own process and its own Wayland client, launched
-//! as `malaysia-shell <component>`: `menubar`, `dock`, `lock` and `launcher`.
+//! as `malaysia-shell <component>`: `menubar`, `dock`, `lock`, `launcher` and
+//! the system dialogs `power`, `force-quit` and `about`.
 //! A component must be able to crash and restart on its own without taking any
 //! other component (or the compositor) down.
 
 mod desktop;
+mod dialogs;
 mod dock;
 mod launcher;
 mod lock;
 mod menubar;
 mod pam;
+mod power;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;
@@ -23,6 +26,10 @@ components:
   dock        the app dock at the bottom (running apps), Top layer
   lock        the session lock screen (ext-session-lock-v1)
   launcher    the application launcher on the Overlay layer
+  power <restart|shutdown|logout>
+              confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
+  force-quit  the «Forzar salida» list of running apps
+  about       «Acerca de este equipo»
 ";
 
 fn main() -> ExitCode {
@@ -33,6 +40,9 @@ fn main() -> ExitCode {
         Some("dock") => dock::run(),
         Some("lock") => lock::run(),
         Some("launcher") => launcher::run(),
+        Some("power") => dialogs::run_confirm(std::env::args().nth(2).as_deref()),
+        Some("force-quit") => dialogs::run_force_quit(),
+        Some("about") => dialogs::run_about(),
         Some(other) => {
             eprintln!("malaysia-shell: unknown component '{other}'");
             eprintln!("{USAGE}");

@@ -3,7 +3,8 @@
 use barrier_kit::menu::{CheckState, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
-use crate::menubar::{spawn_app, spawn_component};
+use crate::menubar::{spawn_app, spawn_component, spawn_component_with};
+use crate::power::{self, PowerAction};
 
 const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
 
@@ -13,22 +14,22 @@ pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 /// Items for the system menu.
 pub fn system_menu_items() -> Vec<MenuItem> {
     vec![
-        action("about-this-computer", "Acerca de este equipo", None, false),
+        action("about-this-computer", "Acerca de este equipo", None, true),
         action("system-settings", "Ajustes del sistema…", None, true),
         MenuItem::Separator,
         action(
             "force-quit",
             "Forzar salida…",
             Some("Alt+Super+Escape"),
-            false,
+            true,
         ),
         MenuItem::Separator,
-        action("sleep", "Suspender", None, false),
-        action("restart", "Reiniciar…", None, false),
-        action("shutdown", "Apagar…", None, false),
+        action("sleep", "Suspender", None, true),
+        action("restart", "Reiniciar…", None, true),
+        action("shutdown", "Apagar…", None, true),
         MenuItem::Separator,
         action("lock-screen", "Bloquear pantalla", Some("Ctrl+Alt+L"), true),
-        action("logout", "Cerrar sesión…", None, false),
+        action("logout", "Cerrar sesión…", None, true),
     ]
 }
 
@@ -63,6 +64,13 @@ pub fn on_system_action_with(
 ) {
     match id.as_str() {
         "lock-screen" => spawn_component("lock"),
+        "about-this-computer" => spawn_component("about"),
+        "force-quit" => spawn_component("force-quit"),
+        // Suspend has no «…»: macOS runs it at once.
+        "sleep" => power::run(PowerAction::Suspend),
+        "restart" => spawn_component_with("power", &[PowerAction::Restart.arg()]),
+        "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),
+        "logout" => spawn_component_with("power", &[PowerAction::LogOut.arg()]),
         "system-settings" => {
             if let Some(index) = toplevels
                 .iter()

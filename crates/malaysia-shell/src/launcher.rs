@@ -38,7 +38,7 @@ use crate::desktop::{self, DesktopEntry};
 
 /// A loaded icon. SVG bytes are kept for Skia; PNGs are passed by path.
 #[derive(Clone, PartialEq)]
-struct IconData {
+pub(crate) struct IconData {
     path: PathBuf,
     svg: Option<Vec<u8>>,
 }
@@ -284,6 +284,42 @@ impl App for LauncherApp {
     }
 }
 
+/// An app icon at `size`, or its initial on an accent tile when it has none.
+pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
+    match icon {
+        Some(IconData {
+            path,
+            svg: Some(bytes),
+        }) => SvgViewer::new((path.clone(), bytes::Bytes::from(bytes.clone())))
+            .width(Size::px(size))
+            .height(Size::px(size))
+            .into_element(),
+        Some(IconData { path, svg: None }) => ImageViewer::new(path.clone())
+            .width(Size::px(size))
+            .height(Size::px(size))
+            .into_element(),
+        None => {
+            let resolved = barrier_kit::theme::resolved();
+            let text = rgba(vow_appearance::palette(resolved.scheme).text.focused);
+            let mut fill = resolved.accent;
+            fill.a = 0.22;
+            rect()
+                .width(Size::px(size))
+                .height(Size::px(size))
+                .corner_radius(size / 4.0)
+                .background(rgba(fill))
+                .center()
+                .child(
+                    label()
+                        .text(name.chars().next().unwrap_or('?').to_string())
+                        .font_size(LAUNCHER_FONT_SIZE)
+                        .color(text),
+                )
+                .into_element()
+        }
+    }
+}
+
 fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> Element {
     let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
     let text = rgba(palette.text.focused);
@@ -291,38 +327,11 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
     let mut selected_bg = barrier_kit::theme::resolved().accent;
     selected_bg.a = 0.18;
     let selected_bg = rgba(selected_bg);
-    let initial = entry.desktop.name.chars().next().unwrap_or('?').to_string();
-
-    let icon = match &entry.icon {
-        Some(IconData {
-            path,
-            svg: Some(bytes),
-        }) => SvgViewer::new((path.clone(), bytes::Bytes::from(bytes.clone())))
-            .width(Size::px(LAUNCHER_ICON_SIZE as f32))
-            .height(Size::px(LAUNCHER_ICON_SIZE as f32))
-            .into_element(),
-        Some(IconData { path, svg: None }) => ImageViewer::new(path.clone())
-            .width(Size::px(LAUNCHER_ICON_SIZE as f32))
-            .height(Size::px(LAUNCHER_ICON_SIZE as f32))
-            .into_element(),
-        None => {
-            let mut fill = barrier_kit::theme::resolved().accent;
-            fill.a = 0.22;
-            rect()
-                .width(Size::px(LAUNCHER_ICON_SIZE as f32))
-                .height(Size::px(LAUNCHER_ICON_SIZE as f32))
-                .corner_radius(LAUNCHER_ICON_SIZE as f32 / 4.0)
-                .background(rgba(fill))
-                .center()
-                .child(
-                    label()
-                        .text(initial)
-                        .font_size(LAUNCHER_FONT_SIZE)
-                        .color(text),
-                )
-                .into_element()
-        }
-    };
+    let icon = app_icon(
+        entry.icon.as_ref(),
+        &entry.desktop.name,
+        LAUNCHER_ICON_SIZE as f32,
+    );
 
     let subtitle = entry.desktop.generic_name.clone().unwrap_or_default();
     rect()
@@ -474,7 +483,7 @@ pub fn run() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
-fn load_icon(icon: Option<&str>) -> Option<IconData> {
+pub(crate) fn load_icon(icon: Option<&str>) -> Option<IconData> {
     let icon = icon?;
     let direct = PathBuf::from(icon);
     if direct.is_absolute() && direct.is_file() {

@@ -168,7 +168,7 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
         _client: &Client,
         _resource: &InfinityWindowManagerV1,
         request: <InfinityWindowManagerV1 as Resource>::Request,
-        _dhandle: &DisplayHandle,
+        dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
         use protocol::infinity_window_manager_v1::Request;
@@ -192,6 +192,11 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
             Request::SetFullscreen { handle, fullscreen } => {
                 if let Some(id) = window_id_from_handle(&handle) {
                     state.infinity_set_fullscreen(id, fullscreen != 0);
+                }
+            }
+            Request::ForceQuit { handle } => {
+                if let Some(id) = window_id_from_handle(&handle) {
+                    state.infinity_force_quit(id, dhandle);
                 }
             }
             Request::Destroy => {}
@@ -248,11 +253,43 @@ impl InfinityGlobalData {
     /// Creates the `infinity_window_manager_v1` global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
         let data = InfinityGlobalData;
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(3, data)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(4, data)
     }
 }
 
 impl State {
+    /// Kills the process behind a window (Infinity v4, «Forzar salida…»).
+    ///
+    /// SIGKILL, like macOS Force Quit: the shell asks only after the user
+    /// confirms, and a hung app would ignore both `close` and SIGTERM. The pid
+    /// comes from the client socket credentials, the only source the app
+    /// cannot fake.
+    pub(crate) fn infinity_force_quit(&mut self, id: WindowId, dhandle: &DisplayHandle) {
+        let Some(client) = self
+            .windows
+            .surface_of(id)
+            .and_then(|surface| surface.client())
+        else {
+            return;
+        };
+        let Ok(credentials) = client.get_credentials(dhandle) else {
+            tracing::warn!(window = id.get(), "force quit: no client credentials");
+            return;
+        };
+        let pid = credentials.pid;
+        if !may_force_quit(pid, std::process::id()) {
+            tracing::warn!(window = id.get(), pid, "force quit refused");
+            return;
+        }
+        match nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(pid),
+            nix::sys::signal::Signal::SIGKILL,
+        ) {
+            Ok(()) => info!(window = id.get(), pid, "force quit: SIGKILL sent"),
+            Err(error) => tracing::warn!(window = id.get(), pid, %error, "force quit failed"),
+        }
+    }
+
     /// Places a window in the requested Infinity layout.
     pub(crate) fn infinity_arrange(&mut self, id: WindowId, layout: Layout) {
         info!(window = id.get(), ?layout, "infinity arrange");
@@ -503,6 +540,11 @@ impl State {
 }
 
 /// Whether a manager receives an event introduced in `since`.
+/// Never the compositor itself, init or an unknown pid.
+fn may_force_quit(pid: i32, own_pid: u32) -> bool {
+    pid > 1 && u32::try_from(pid).ok() != Some(own_pid)
+}
+
 /// Pure so the bind-order and version rules can be tested without a protocol harness.
 fn delivers_event(manager_version: u32, since: u32, has_handle: bool) -> bool {
     manager_version >= since && has_handle
@@ -656,7 +698,7 @@ mod tests {
 
     use super::{
         Layout, PairLayout, arranged_rect, available, delivers_event, is_trusted_shell_exe,
-        pair_rects, quarter_rects, trusted_shell_exes,
+        may_force_quit, pair_rects, quarter_rects, trusted_shell_exes,
     };
     use malaysia_scene::scene::WindowId;
 
@@ -668,6 +710,15 @@ mod tests {
     fn workspace_1280_800() -> Rectangle<i32, Logical> {
         // Output 1280×800, menu bar 28 px and dock 50 px (mockup 23).
         Rectangle::new(Point::from((0, 28)), Size::from((1280, 722)))
+    }
+
+    #[test]
+    fn force_quit_never_targets_the_compositor_or_init() {
+        assert!(may_force_quit(4242, 100));
+        assert!(!may_force_quit(100, 100));
+        assert!(!may_force_quit(1, 100));
+        assert!(!may_force_quit(0, 100));
+        assert!(!may_force_quit(-1, 100));
     }
 
     #[test]

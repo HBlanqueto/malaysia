@@ -55,6 +55,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `Ctrl+Alt+F1..F12` | cambia de VT |
 | `Shift+Super+3` / `Shift+Super+4` | captura de pantalla / región |
 | `PrintScreen` | captura la ventana enfocada |
+| `Alt+Super+Escape` | abre `malaysia-shell force-quit` («Forzar salida…»); no con la sesión bloqueada |
 
 ---
 
@@ -280,6 +281,11 @@ hace que el compositor difumine lo que hay detrás (vibrancy tipo macOS).
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
 | `debug.damage_highlight` | bool | `false` | datos | render (resaltar daño por frame) |
+
+`MALAYSIA_POWER_DRY_RUN=1` (variable de entorno, no de dominio): Suspender,
+Reiniciar, Apagar y Cerrar sesión solo escriben en el log la llamada a logind
+que harían. `./dev.sh` la pone por defecto (`0` la desactiva) y el compositor
+anidado la fuerza para todo lo que lanza.
 
 ---
 

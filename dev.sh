@@ -10,6 +10,12 @@
 
 set -eu
 
+# 14b-2: power actions (Suspend, Reboot, PowerOff, logout) only log what they
+# would call. Set MALAYSIA_POWER_DRY_RUN=0 explicitly to run them for real; the
+# nested compositor forces 1 for every client it starts anyway.
+MALAYSIA_POWER_DRY_RUN=${MALAYSIA_POWER_DRY_RUN:-1}
+export MALAYSIA_POWER_DRY_RUN
+
 # Exit codes, grouped so callers can branch on the failure class.
 EXIT_USAGE=2
 EXIT_ALREADY_RUNNING=3

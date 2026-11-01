@@ -1,6 +1,6 @@
 # 0045 — GTK `gtk_shell1` y `org.gtk.Menus`
 
-Estado: aceptado (2026-10-27). 14f-1 aceptado el 2026-10-28; 14f-2 implementado el 2026-11-01, pendiente de aceptación en sesión anidada.
+Estado: aceptado (2026-10-27). 14f-1 aceptado el 2026-10-28; 14f-2 aceptado el 2026-11-01 en sesión anidada (gtk3-demo-application).
 
 ## Contexto
 

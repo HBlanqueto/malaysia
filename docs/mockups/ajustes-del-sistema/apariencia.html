@@ -207,13 +207,14 @@ html[data-window="acento"] .win,html[data-window="fondo"] .win{
   --mix-sunken:calc(var(--tint-k) * var(--appearance-layer-factors-bg-sunken) * 100%);
   --mix-window:calc(var(--tint-k) * var(--appearance-layer-factors-bg-window) * 100%);
   --mix-surface:calc(var(--tint-k) * var(--appearance-layer-factors-bg-surface) * 100%);
+  --mix-raised:calc(var(--tint-k) * var(--appearance-layer-factors-bg-raised) * 100%);
   --mix-control:calc(var(--tint-k) * var(--appearance-layer-factors-bg-control) * 100%);
   --mix-line:calc(var(--tint-k) * var(--appearance-layer-factors-line) * 100%)}
 html[data-parts~="barras"] .win{--window-sidebar-island-bg:color-mix(in srgb,var(--tint-src) var(--mix-sunken),var(--raw-sidebar))}
 html[data-parts~="ventana"] .win{--bg-window:color-mix(in srgb,var(--tint-src) var(--mix-window),var(--raw-window))}
 html[data-parts~="tarjetas"] .win{--bg-surface:color-mix(in srgb,var(--tint-src) var(--mix-surface),var(--raw-surface));--line:color-mix(in srgb,var(--tint-src) var(--mix-line),var(--raw-line))}
 html[data-parts~="controles"] .win{--bg-control:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-control));--bg-hover:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-hover));--window-toolgroup-bg:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-toolgroup))}
-html[data-parts~="menus"] .win{--bg-raised:color-mix(in srgb,var(--tint-src) var(--mix-surface),var(--raw-raised))}
+html[data-parts~="menus"] .win{--bg-raised:color-mix(in srgb,var(--tint-src) var(--mix-raised),var(--raw-raised))}
 </style>
 </head>
 <body>

@@ -191,6 +191,8 @@ pub struct State {
     pub(crate) last_activation_serial: Option<(Serial, Instant)>,
     /// The `malaysia-shell launcher` child while it is running.
     pub(crate) launcher_child: Option<std::process::Child>,
+    /// The «Forzar salida» dialog started by Alt+Super+Escape.
+    pub(crate) force_quit_child: Option<std::process::Child>,
     /// When the shake enlargement started; `None` when the pointer is at its
     /// normal size. The scale is derived from this instant so the growth and
     /// shrink are animated rather than snapped.
@@ -557,6 +559,7 @@ impl State {
             capture_dma_checked: false,
             last_activation_serial: None,
             launcher_child: None,
+            force_quit_child: None,
             cursor_boost_started: None,
             shake: ShakeDetector::default(),
             xdg_shell_state,

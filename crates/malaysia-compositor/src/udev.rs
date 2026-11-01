@@ -484,6 +484,8 @@ fn start_shell_session(socket: &str) -> bool {
             "import-environment",
             "WAYLAND_DISPLAY",
             "XDG_CURRENT_DESKTOP",
+            // «Cerrar sesión…» terminates this logind session by id (14b-2).
+            "XDG_SESSION_ID",
         ],
         Some(socket),
     );

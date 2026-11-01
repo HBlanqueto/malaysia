@@ -48,17 +48,23 @@ pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> Strin
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
         return "Escritorio".to_string();
     };
-    if let Some(entry) = entries
+    match find_entry(app_id, entries) {
+        Some(entry) => entry.name.clone(),
+        None => capitalize(app_id_stem(app_id)),
+    }
+}
+
+/// The `.desktop` entry of `app_id`: by id or `StartupWMClass`, else by the
+/// binary its `Exec` runs.
+pub fn find_entry<'a>(app_id: &str, entries: &'a [DesktopEntry]) -> Option<&'a DesktopEntry> {
+    let app_id = app_id.trim();
+    entries
         .iter()
         .find(|entry| entry.id == app_id || entry.startup_wm_class.as_deref() == Some(app_id))
-    {
-        return entry.name.clone();
-    }
-    let stem = app_id_stem(app_id);
-    if let Some(entry) = entries.iter().find(|entry| exec_matches(entry, stem)) {
-        return entry.name.clone();
-    }
-    capitalize(stem)
+        .or_else(|| {
+            let stem = app_id_stem(app_id);
+            entries.iter().find(|entry| exec_matches(entry, stem))
+        })
 }
 
 /// Returns the last meaningful segment of an app id, skipping a trailing
@@ -123,6 +129,11 @@ pub fn rgba(c: vow_design::Rgba) -> freya_core::prelude::Color {
 /// running `malaysia-shell` received; ADR 0007 only strips those for third-party
 /// apps).
 pub fn spawn_component(component: &str) {
+    spawn_component_with(component, &[]);
+}
+
+/// [`spawn_component`] with extra arguments (`power restart`).
+pub fn spawn_component_with(component: &str, args: &[&str]) {
     let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
         eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
         return;
@@ -131,6 +142,7 @@ pub fn spawn_component(component: &str) {
     let mut command = Command::new(&program);
     command
         .arg(component)
+        .args(args)
         .env("WAYLAND_DISPLAY", display)
         .stdin(Stdio::null());
     let log_name = format!("malaysia-shell-{component}");

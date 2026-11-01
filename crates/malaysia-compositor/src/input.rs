@@ -459,6 +459,8 @@ enum CompositorShortcut {
     ScreenshotRegion,
     /// Super+Space: open or close the launcher.
     Launcher,
+    /// Alt+Super+Escape: the «Forzar salida» dialog.
+    ForceQuit,
     /// Ctrl+Super+Left: place the focused window on the left half.
     ArrangeLeft,
     /// Ctrl+Super+Right: place the focused window on the right half.
@@ -508,6 +510,14 @@ fn compositor_shortcut(
     // PrintScreen works on its own, so it is checked before the modifier gate.
     if syms.iter().any(|sym| u32::from(*sym) == keysyms::KEY_Print) {
         return CompositorShortcut::Screenshot;
+    }
+    // Alt+Super+Escape opens «Forzar salida» (macOS ⌥⌘⎋). Not while locked.
+    if alt && logo && !ctrl && !shift && is_escape(syms) {
+        return if locked {
+            CompositorShortcut::None
+        } else {
+            CompositorShortcut::ForceQuit
+        };
     }
     // Super+Space is the launcher. While locked it is a no-op.
     if logo && !ctrl && !alt && !shift && syms.iter().any(|sym| u32::from(*sym) == 0x20) {
@@ -825,6 +835,9 @@ impl State {
                                     }
                                     CompositorShortcut::Launcher => {
                                         state.toggle_launcher();
+                                    }
+                                    CompositorShortcut::ForceQuit => {
+                                        state.open_force_quit();
                                     }
                                     CompositorShortcut::ArrangeLeft => {
                                         if let Some(id) = state.focused_window() {
@@ -1277,21 +1290,42 @@ impl State {
             self.launcher_child = None;
         }
 
+        self.launcher_child = self.spawn_shell_component("launcher");
+    }
+
+    /// Alt+Super+Escape: starts `malaysia-shell force-quit` unless one is open.
+    pub(crate) fn open_force_quit(&mut self) {
+        if self.locked {
+            return;
+        }
+        if let Some(child) = &mut self.force_quit_child
+            && child.try_wait().ok().flatten().is_none()
+        {
+            return;
+        }
+        self.force_quit_child = self.spawn_shell_component("force-quit");
+    }
+
+    /// Starts `malaysia-shell <component>` next to the compositor binary.
+    fn spawn_shell_component(&self, component: &str) -> Option<std::process::Child> {
         let shell = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(|dir| dir.join("malaysia-shell")))
             .unwrap_or_else(|| "malaysia-shell".into());
         let mut command = crate::spawn::shell_command(shell);
-        command.arg("launcher");
+        command.arg(component);
         if let Some(display) = self.idle.wayland_display() {
             command.env("WAYLAND_DISPLAY", display);
         }
         match crate::spawn::spawn_shell(command) {
             Ok(child) => {
-                self.launcher_child = Some(child);
-                tracing::info!("Super+Space: started the launcher");
+                tracing::info!(component, "started a shell component");
+                Some(child)
             }
-            Err(error) => tracing::error!(%error, "starting the launcher"),
+            Err(error) => {
+                tracing::error!(%error, component, "starting a shell component");
+                None
+            }
         }
     }
 
@@ -2555,6 +2589,23 @@ mod tests {
         assert_eq!(
             compositor_shortcut(true, true, false, false, &backspace, true),
             CompositorShortcut::Blocked
+        );
+    }
+
+    #[test]
+    fn alt_super_escape_opens_force_quit_when_unlocked() {
+        let escape = [keysyms::KEY_Escape.into()];
+        assert_eq!(
+            compositor_shortcut(false, true, false, true, &escape, false),
+            CompositorShortcut::ForceQuit
+        );
+        assert_eq!(
+            compositor_shortcut(false, true, false, true, &escape, true),
+            CompositorShortcut::None
+        );
+        assert_eq!(
+            compositor_shortcut(true, true, false, true, &escape, false),
+            CompositorShortcut::None
         );
     }
 

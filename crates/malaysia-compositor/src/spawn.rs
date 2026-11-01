@@ -82,6 +82,19 @@ pub fn export_session_env(config: &Config) {
     }
 }
 
+/// Puts the nested session in dry-run mode for power actions: the shell only
+/// logs what Suspend, Reboot, PowerOff and logout would call (14b-2), so a
+/// test never turns the host off. Every client the compositor starts
+/// inherits it.
+#[allow(unsafe_code)]
+pub fn mark_nested_session() {
+    // SAFETY: called once at the start of the nested backend, before any
+    // other thread exists.
+    unsafe {
+        std::env::set_var("MALAYSIA_POWER_DRY_RUN", "1");
+    }
+}
+
 /// Adds the Qt decoration variable to a command when the configuration asks
 /// for it and the environment has not already set one.
 fn apply_qt_decoration(command: &mut Command, config: &Config) {
