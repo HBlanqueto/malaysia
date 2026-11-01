@@ -55,5 +55,6 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0048 | BarrierKit en su repo | aceptado |
 | 0049 | Fondo en Vulkan | aceptado |
 | 0050 | Puente GTK/libadwaita | aceptado |
+| 0051 | Espacios y modo foco | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.

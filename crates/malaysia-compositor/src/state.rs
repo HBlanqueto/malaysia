@@ -300,6 +300,9 @@ pub struct State {
     pub list_handles: ListHandles,
     /// Windows minimized to the dock (kept out of the scene).
     pub minimized: std::collections::HashSet<WindowId>,
+    /// The row of desktops and focus spaces, and where each window lives
+    /// (ADR 0051).
+    pub(crate) spaces: malaysia_scene::spaces::Spaces,
     /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
@@ -594,6 +597,7 @@ impl State {
             list_handles: Vec::new(),
             infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
             minimized: std::collections::HashSet::new(),
+            spaces: malaysia_scene::spaces::Spaces::new(),
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),

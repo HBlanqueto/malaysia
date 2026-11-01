@@ -485,6 +485,12 @@ enum CompositorShortcut {
     ArrangeRestore,
     /// Ctrl+Super+F: toggle fullscreen on the focused window.
     ToggleFullscreen,
+    /// Ctrl+Alt+Left: show the space to the left (ADR 0051).
+    PreviousSpace,
+    /// Ctrl+Alt+Right: show the space to the right (ADR 0051).
+    NextSpace,
+    /// Ctrl+Alt+N: add a desktop at the right end and show it (ADR 0051).
+    AddDesktop,
     /// Not a compositor shortcut.
     None,
 }
@@ -570,6 +576,18 @@ fn compositor_shortcut(
     }
     if !(ctrl && alt) {
         return CompositorShortcut::None;
+    }
+    // Spaces (ADR 0051). Plain Ctrl+arrows stay with the apps: on Linux they
+    // move by word, so the macOS chord gains Alt.
+    if !shift && !logo && !locked {
+        for sym in syms {
+            match u32::from(*sym) {
+                keysyms::KEY_Left => return CompositorShortcut::PreviousSpace,
+                keysyms::KEY_Right => return CompositorShortcut::NextSpace,
+                keysyms::KEY_n | keysyms::KEY_N => return CompositorShortcut::AddDesktop,
+                _ => {}
+            }
+        }
     }
     for sym in syms {
         let sym = u32::from(*sym);
@@ -891,6 +909,15 @@ impl State {
                                             let fullscreen = !state.fullscreen.contains_key(&id);
                                             state.infinity_set_fullscreen(id, fullscreen);
                                         }
+                                    }
+                                    CompositorShortcut::PreviousSpace => {
+                                        state.previous_space();
+                                    }
+                                    CompositorShortcut::NextSpace => {
+                                        state.next_space();
+                                    }
+                                    CompositorShortcut::AddDesktop => {
+                                        state.add_desktop();
                                     }
                                     CompositorShortcut::None => {}
                                 }
@@ -1233,6 +1260,9 @@ impl State {
             );
             return;
         }
+        // Focusing a window on another space (dock, activation) shows that
+        // space first (ADR 0051).
+        self.show_space_of(id);
         if !self.windows.is_visible(id, &self.minimized) {
             tracing::info!(
                 window = id.get(),
@@ -1695,6 +1725,7 @@ impl State {
             self.titlebar_click = None;
         }
         self.foreign_window_destroyed(id);
+        self.space_window_removed(id);
         self.maximized.remove(&id);
         self.chrome.remove(id);
         if self.grab.map(Grab::window) == Some(id) {
@@ -2833,6 +2864,35 @@ mod tests {
         // Alt breaks the Infinity chord so it does not shadow Ctrl+Alt+F.
         assert!(matches!(
             compositor_shortcut(true, true, false, true, &[left], false),
+            CompositorShortcut::None
+        ));
+    }
+
+    #[test]
+    fn ctrl_alt_arrows_switch_spaces_and_ctrl_alt_n_adds_a_desktop() {
+        let left = xkb::Keysym::from(keysyms::KEY_Left);
+        let right = xkb::Keysym::from(keysyms::KEY_Right);
+        let n = xkb::Keysym::from(keysyms::KEY_n);
+        assert!(matches!(
+            compositor_shortcut(true, true, false, false, &[left], false),
+            CompositorShortcut::PreviousSpace
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, true, false, false, &[right], false),
+            CompositorShortcut::NextSpace
+        ));
+        assert!(matches!(
+            compositor_shortcut(true, true, false, false, &[n], false),
+            CompositorShortcut::AddDesktop
+        ));
+        // Plain Ctrl+arrows move by word in apps; they are not taken.
+        assert!(matches!(
+            compositor_shortcut(true, false, false, false, &[left], false),
+            CompositorShortcut::None
+        ));
+        // Not while locked.
+        assert!(matches!(
+            compositor_shortcut(true, true, false, false, &[right], true),
             CompositorShortcut::None
         ));
     }

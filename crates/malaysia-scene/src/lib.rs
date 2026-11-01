@@ -6,10 +6,12 @@
 //! a running compositor. See ADR 0001.
 //!
 //! [`geometry`] is the coordinate vocabulary. [`scene`] is the ordered set of
-//! windows and the hit-testing over it (ADR 0015).
+//! windows and the hit-testing over it (ADR 0015). [`spaces`] is the row of
+//! desktops and focus spaces (ADR 0051).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod geometry;
 pub mod scene;
+pub mod spaces;

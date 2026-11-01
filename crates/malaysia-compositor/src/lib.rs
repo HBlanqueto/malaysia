@@ -38,6 +38,7 @@ mod layers;
 mod lock;
 mod popup;
 pub mod session;
+mod spaces;
 pub mod spawn;
 pub mod state;
 mod theme_fade;

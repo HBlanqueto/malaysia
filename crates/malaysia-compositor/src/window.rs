@@ -100,9 +100,10 @@ impl Window<'_> {
         self.data.mapped
     }
 
-    /// Whether the window is hidden from the scene (minimize or similar).
+    /// Whether the window is hidden from the scene: minimized, or on a space
+    /// that is not shown (ADR 0051).
     pub fn is_hidden(&self) -> bool {
-        self.data.hidden
+        self.data.is_hidden()
     }
 
     /// Whether the surface currently has a buffer attached.
@@ -254,6 +255,10 @@ struct WindowData {
     mapped: bool,
     /// Whether the window is hidden from the scene (minimized or otherwise).
     hidden: bool,
+    /// Whether the window lives on a space that is not shown (ADR 0051).
+    /// Kept apart from `hidden` so switching spaces never restores a
+    /// minimized window, and restoring one never shows it on the wrong space.
+    off_space: bool,
     /// The usable size last sent, so a state change can be noticed.
     configured: Option<Size<i32, Logical>>,
     /// Whether the user is currently resizing, so the configure carries the
@@ -313,6 +318,12 @@ impl WindowData {
     /// The insets for the window's current role, state and decoration.
     fn insets(&self, decoration: Decoration) -> Insets {
         Insets::for_window(self.role(), self.state(), decoration, &TITLEBAR)
+    }
+
+    /// Whether the window is out of the scene: minimized or on a space that is
+    /// not shown.
+    fn is_hidden(&self) -> bool {
+        self.hidden || self.off_space
     }
 
     /// Whether the window geometry fits inside the current buffer.
@@ -490,6 +501,7 @@ impl Windows {
             pending_configure: None,
             mapped: false,
             hidden: false,
+            off_space: false,
             configured: None,
             resizing: false,
             resize_edge: None,
@@ -727,8 +739,34 @@ impl Windows {
         if self.windows[index].hidden == hidden {
             return false;
         }
+        let was = self.windows[index].is_hidden();
+        self.windows[index].hidden = hidden;
+        self.apply_hidden(index, was)
+    }
+
+    /// Hides a window because its space is not shown, or shows it again
+    /// because its space is (ADR 0051). Independent of minimize.
+    pub fn set_off_space(&mut self, id: WindowId, off_space: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if self.windows[index].off_space == off_space {
+            return false;
+        }
+        let was = self.windows[index].is_hidden();
+        self.windows[index].off_space = off_space;
+        self.apply_hidden(index, was)
+    }
+
+    /// Moves the scene rectangle out of the way or back when the effective
+    /// hidden state changed from `was`.
+    fn apply_hidden(&mut self, index: usize, was: bool) -> bool {
+        let id = self.windows[index].id;
+        let hidden = self.windows[index].is_hidden();
+        if hidden == was {
+            return false;
+        }
         let data = &mut self.windows[index];
-        data.hidden = hidden;
         let rect = if hidden {
             data.hidden_rect = self.scene.outer(id);
             SceneRect::new(ScenePoint::new(0.0, 0.0), SceneSize::new(0.0, 0.0))
@@ -812,7 +850,7 @@ impl Windows {
         self.index(id).is_some_and(|index| {
             let data = &self.windows[index];
             data.mapped
-                && !data.hidden
+                && !data.is_hidden()
                 && !minimized.contains(&id)
                 && surface_has_buffer(data.toplevel.wl_surface())
                 && data.damaged
@@ -1299,6 +1337,11 @@ impl Windows {
             .iter()
             .find(|data| data.toplevel.wl_surface() == surface)
             .map(|data| data.id)
+    }
+
+    /// The parent window of a dialog or other transient toplevel, if tracked.
+    pub(crate) fn parent_of(&self, id: WindowId) -> Option<WindowId> {
+        self.dialog_parent(id)
     }
 
     /// The parent window of a dialog, if it is tracked.

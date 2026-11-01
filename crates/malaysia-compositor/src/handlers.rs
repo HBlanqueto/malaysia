@@ -184,6 +184,7 @@ impl CompositorHandler for State {
             Rectangle::new(origin, size)
         };
         if let Some(mapped) = self.windows.commit(surface, workspace) {
+            self.space_window_mapped(mapped);
             self.raise_and_focus(mapped);
             self.foreign_window_mapped(mapped);
             self.inject_test_shake();

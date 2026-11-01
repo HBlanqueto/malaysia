@@ -11,9 +11,10 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   largos; la pantalla completa desde el menú Ventana sigue pendiente. 14d-1,
   14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
   y los menús de una app real.
-- **Modo foco.** `window.green_button = "focus"` solo registra la petición
-  (`GreenButtonAction::Focus`); falta atenuar el resto y mantener la ventana al
-  frente.
+- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a hecho: fila de
+  espacios y cambio instantáneo con `Ctrl+Alt+←/→` y `Ctrl+Alt+N`. Siguen el
+  deslizamiento (17b) y el modo foco (17c); hasta entonces
+  `window.green_button = "focus"` solo registra la petición.
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
@@ -221,6 +222,29 @@ sobre layer-shell, escala fraccional, mipmaps, dmabuf sin copias y recarga por
 inotify de `wallpaper.domain` (ADR 0049). **16b** (HEIC por defecto) y **16c**
 (fondos dinámicos y throttling de frame callbacks) pendientes. Prueba:
 `./dev.sh wallpaper-check`.
+
+### 17 — Espacios y modo foco
+
+Concepto y plan en el ADR 0051.
+
+- **17a — Fila de espacios. Hecho (2026-11-01), sin aceptar en sesión.**
+  `malaysia_scene::spaces` guarda la fila (hasta 99 escritorios; los de foco
+  no cuentan) y dónde vive cada ventana. El compositor saca de la escena las
+  ventanas de otros espacios (`Windows::set_off_space`, aparte de minimizar).
+  `Ctrl+Alt+←/→` cambia de espacio y `Ctrl+Alt+N` añade un escritorio. Una
+  ventana nueva va al escritorio mostrado y un diálogo va con su padre.
+  Enfocar una ventana de otro espacio (dock, activación) muestra su espacio.
+  Prueba: `./dev.sh demo`, abrir ventanas, `Ctrl+Alt+N`, abrir otra y alternar
+  con `Ctrl+Alt+←/→`; el log muestra `space shown`.
+- **17b — Deslizamiento.** Separador negro, barra superior por escritorio y
+  dock fijo. Pendiente.
+- **17c — Modo foco.** Espacio de foco, estado `fullscreen` y animación de
+  crecer y deslizar a la vez. Pendiente.
+- **17d — Borde superior.** Panel negro, titlebar SSD encima en apps ajenas y
+  deslizamiento de 28 px en barrierkit y libadwaita. Pendiente.
+- **17e — Infinity.** Espacio actual para la shell y aviso de foco para
+  barrierkit. Pendiente.
+- **17f — libadwaita.** Experimento con el fork. Pendiente.
 
 ### Transversal — NixOS
 
