@@ -1165,6 +1165,27 @@ fn append_revealed_titlebar(
     ) {
         elements.push(element.into());
     }
+    // The titlebar colour may be translucent (it sits over the wallpaper on a
+    // desktop). Here it covers the client's content, so it gets an opaque
+    // backing of the same colour behind it.
+    let background = if focused {
+        theme.palette.titlebar_bg.focused
+    } else {
+        theme.palette.titlebar_bg.unfocused
+    };
+    let [r, g, b, _] = background.to_rgba8();
+    append_solid(
+        rect.loc,
+        rect.size,
+        [
+            f32::from(r) / 255.0,
+            f32::from(g) / 255.0,
+            f32::from(b) / 255.0,
+            1.0,
+        ],
+        scale,
+        elements,
+    );
 }
 
 /// Draws a window growing into focus mode or shrinking out of it (ADR 0051):
