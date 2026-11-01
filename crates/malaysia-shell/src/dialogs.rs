@@ -13,7 +13,8 @@ use std::rc::Rc;
 use barrier_kit::controls::Button;
 use barrier_kit::platform::{Decorations, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
-use barrier_kit::titlebar::{window_drag_handler, window_traffic_lights};
+use barrier_kit::titlebar::window_drag_handler;
+use barrier_kit::traffic::TrafficLights;
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
@@ -21,7 +22,7 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
-    CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, Rgba, TEXT, TITLE_1, TITLEBAR,
+    ButtonKind, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, Rgba, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -32,13 +33,22 @@ use crate::power::{self, PowerAction};
 /// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (380, 160);
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-/// macOS «Acerca de este Mac» measures 280×430, titlebar included.
-const ABOUT_SIZE: (u32, u32) = (280, 430);
-/// The laptop drawing keeps the SVG's 1024×680 aspect.
-const ABOUT_DRAWING: (f32, f32) = (130.0, 86.0);
-const ABOUT_COLUMN_GAP: f32 = 8.0;
-/// Label and value column weights: the widest label is «Disco de arranque».
-const ABOUT_COLUMNS: (f32, f32) = (0.85, 1.15);
+/// «Acerca de este equipo» takes its measurements from eqsh's About window
+/// (eq-desktop/eqsh, `About.qml`, Apache-2.0; only the numbers, no code):
+/// 335×550 with the titlebar, the drawing in a 175×125 box 75 px from the top,
+/// the title 20 px below it, label and value columns of 120 and 160 px with a
+/// 5 px gap and 5 px between rows, the button 20 px below the rows and the
+/// footer 20 px above the bottom edge.
+const ABOUT_SIZE: (u32, u32) = (335, 550);
+const ABOUT_DRAWING_TOP: f32 = 75.0;
+/// The 175×125 box, keeping the SVG's 1024×680 aspect.
+const ABOUT_DRAWING: (f32, f32) = (175.0, 116.0);
+const ABOUT_DRAWING_BOX_HEIGHT: f32 = 125.0;
+const ABOUT_GAP: f32 = 20.0;
+const ABOUT_LABEL_WIDTH: f32 = 120.0;
+const ABOUT_VALUE_WIDTH: f32 = 160.0;
+const ABOUT_ROW_GAP: f32 = 5.0;
+const ABOUT_FOOTER_GAP: f32 = 8.0;
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
@@ -529,7 +539,8 @@ impl App for AboutApp {
 }
 
 /// A client-side copy of the compositor's titlebar: its 32 px height and its
-/// traffic lights at the same place, but no title, like macOS. The kit's CSD
+/// traffic lights at the same place (only close works), but no title, like
+/// macOS. The kit's CSD
 /// `Titlebar` is the taller client bar (`titlebar-h`), so it is not used here.
 fn about_titlebar(focused: bool, fixed: bool) -> Element {
     let (x, ..) = vow_appearance::traffic::group_rect();
@@ -540,11 +551,16 @@ fn about_titlebar(focused: bool, fixed: bool) -> Element {
         .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .on_mouse_down(window_drag_handler(fixed))
-        .child(window_traffic_lights(
-            Some(Callback::new(|_| close())),
-            focused,
-            fixed,
-        ))
+        .child(
+            TrafficLights::new()
+                .focused(focused)
+                .close_only(true)
+                .on_action(|kind| {
+                    if kind == ButtonKind::Close {
+                        close();
+                    }
+                }),
+        )
         .into_element()
 }
 
@@ -552,113 +568,124 @@ fn about_titlebar(focused: bool, fixed: bool) -> Element {
 /// the titlebar colour: `surfaces.window` with focus, `surfaces.sunken`
 /// without, exactly as the compositor's `ChromeTheme` paints its bar.
 fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoElement + use<> {
-    {
-        let resolved = barrier_kit::theme::resolved();
-        let palette = vow_appearance::palette(resolved.scheme);
-        let mut rows = vec![
-            ("Procesador", info.cpu.clone()),
-            ("Memoria", info.memory.clone()),
-            ("Disco de arranque", info.disk.clone()),
-        ];
-        if let Some(serial) = &info.serial {
-            rows.push(("Número de serie", serial.clone()));
-        }
-        rows.push(("Malaysia", env!("CARGO_PKG_VERSION").to_string()));
-        let rows = rows.into_iter().map(|(name, value)| {
-            rect()
-                .width(Size::fill())
-                .direction(Direction::Horizontal)
-                .content(Content::flex())
-                .spacing(ABOUT_COLUMN_GAP)
-                .child(
-                    label()
-                        .text(name)
-                        .width(Size::flex(ABOUT_COLUMNS.0))
-                        .text_align(TextAlign::Right)
-                        .font_size(CALLOUT.size as f32)
-                        .color(rgba(palette.text.focused)),
-                )
-                .child(
-                    label()
-                        .text(value)
-                        .width(Size::flex(ABOUT_COLUMNS.1))
-                        .font_size(CALLOUT.size as f32)
-                        .color(rgba(palette.text.unfocused)),
-                )
-                .into_element()
-        });
-        let drawing = if info.thinkpad {
-            THINKPAD_SVG
-        } else {
-            GENERIC_SVG
-        };
-        rect()
-            .width(Size::fill())
-            .height(Size::fill())
-            .background(rgba(if focused {
-                resolved.surfaces.window
-            } else {
-                resolved.surfaces.sunken
-            }))
-            .direction(Direction::Vertical)
-            .on_global_key_down(|event: Event<KeyboardEventData>| {
-                if matches!(event.key, Key::Named(NamedKey::Escape)) {
-                    close();
-                }
-            })
-            .child(titlebar)
-            .child(
-                rect()
-                    .width(Size::fill())
-                    .height(Size::flex(1.0))
-                    .padding(Gaps::new(
-                        0.0,
-                        DIALOG_PADDING / 2.0,
-                        DIALOG_PADDING,
-                        DIALOG_PADDING / 2.0,
-                    ))
-                    .direction(Direction::Vertical)
-                    .main_align(Alignment::Center)
-                    .cross_align(Alignment::Center)
-                    .spacing(DIALOG_PADDING / 2.0)
-                    .child(
-                        SvgViewer::new(drawing)
-                            .width(Size::px(ABOUT_DRAWING.0))
-                            .height(Size::px(ABOUT_DRAWING.1)),
-                    )
-                    .child(
-                        label()
-                            .text(info.model.clone())
-                            .text_align(TextAlign::Center)
-                            .width(Size::fill())
-                            .font_size(TITLE_1.size as f32)
-                            .font_weight(FontWeight::BOLD)
-                            .color(rgba(palette.text.focused)),
-                    )
-                    .child(
-                        label()
-                            .text(info.subtitle.clone())
-                            .font_size(CAPTION.size as f32)
-                            .color(rgba(palette.text.unfocused)),
-                    )
-                    .child(
-                        rect()
-                            .width(Size::fill())
-                            .direction(Direction::Vertical)
-                            .spacing(4.0)
-                            .children(rows),
-                    )
-                    .child(
-                        Button::new()
-                            .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[]))
-                            .child(
-                                label()
-                                    .text("Más información…")
-                                    .font_size(CALLOUT.size as f32),
-                            ),
-                    ),
-            )
+    let resolved = barrier_kit::theme::resolved();
+    let palette = vow_appearance::palette(resolved.scheme);
+    let mut rows = vec![
+        ("Procesador", info.cpu.clone()),
+        ("Memoria", info.memory.clone()),
+        ("Disco de arranque", info.disk.clone()),
+    ];
+    if let Some(serial) = &info.serial {
+        rows.push(("Número de serie", serial.clone()));
     }
+    rows.push(("Malaysia", env!("CARGO_PKG_VERSION").to_string()));
+    let rows = rows.into_iter().map(|(name, value)| {
+        rect()
+            .direction(Direction::Horizontal)
+            .spacing(ABOUT_ROW_GAP)
+            .child(
+                label()
+                    .text(name)
+                    .width(Size::px(ABOUT_LABEL_WIDTH))
+                    .text_align(TextAlign::Right)
+                    .font_size(TEXT.size as f32)
+                    .font_weight(FontWeight::SEMI_BOLD)
+                    .color(rgba(palette.text.focused)),
+            )
+            .child(
+                label()
+                    .text(value)
+                    .width(Size::px(ABOUT_VALUE_WIDTH))
+                    .font_size(TEXT.size as f32)
+                    .color(rgba(palette.text.unfocused)),
+            )
+            .into_element()
+    });
+    let drawing = if info.thinkpad {
+        THINKPAD_SVG
+    } else {
+        GENERIC_SVG
+    };
+    let muted = rgba(palette.text.unfocused);
+    let footer = |text: &str| {
+        label()
+            .text(text.to_string())
+            .font_size(CAPTION.size as f32)
+            .color(muted)
+    };
+    rect()
+        .width(Size::fill())
+        .height(Size::fill())
+        .background(rgba(if focused {
+            resolved.surfaces.window
+        } else {
+            resolved.surfaces.sunken
+        }))
+        .direction(Direction::Vertical)
+        .content(Content::flex())
+        .cross_align(Alignment::Center)
+        .on_global_key_down(|event: Event<KeyboardEventData>| {
+            if matches!(event.key, Key::Named(NamedKey::Escape)) {
+                close();
+            }
+        })
+        .child(titlebar)
+        .child(
+            rect()
+                .width(Size::px(ABOUT_DRAWING.0))
+                .height(Size::px(ABOUT_DRAWING_BOX_HEIGHT))
+                .margin(Gaps::new(
+                    ABOUT_DRAWING_TOP - TITLEBAR.thickness as f32,
+                    0.0,
+                    ABOUT_GAP,
+                    0.0,
+                ))
+                .center()
+                .child(
+                    SvgViewer::new(drawing)
+                        .width(Size::px(ABOUT_DRAWING.0))
+                        .height(Size::px(ABOUT_DRAWING.1)),
+                ),
+        )
+        .child(
+            label()
+                .text(info.model.clone())
+                .text_align(TextAlign::Center)
+                .width(Size::fill())
+                .font_size(DISPLAY.size as f32)
+                .font_weight(FontWeight::BOLD)
+                .color(rgba(palette.text.focused)),
+        )
+        .child(
+            label()
+                .text(info.subtitle.clone())
+                .margin(Gaps::new(0.0, 0.0, ABOUT_GAP, 0.0))
+                .font_size(CALLOUT.size as f32)
+                .color(muted),
+        )
+        .child(
+            rect()
+                .direction(Direction::Vertical)
+                .spacing(ABOUT_ROW_GAP)
+                .children(rows),
+        )
+        .child(
+            rect().margin(Gaps::new(ABOUT_GAP, 0.0, 0.0, 0.0)).child(
+                Button::new()
+                    .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[]))
+                    .child(label().text("Más información…").font_size(TEXT.size as f32)),
+            ),
+        )
+        .child(rect().width(Size::fill()).height(Size::flex(1.0)))
+        .child(
+            rect()
+                .direction(Direction::Vertical)
+                .cross_align(Alignment::Center)
+                .spacing(ABOUT_FOOTER_GAP)
+                .margin(Gaps::new(0.0, 0.0, ABOUT_GAP, 0.0))
+                .child(footer("™ y © 2026 MalaysiaDreams"))
+                .child(footer("Todos los derechos reservados.")),
+        )
 }
 
 /// `malaysia-shell about`: a fixed-size window like macOS «Acerca de este Mac».
