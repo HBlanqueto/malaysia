@@ -1,0 +1,64 @@
+1:2026-11-01T14:29:42.184149Z  WARN Requesting name `com.canonical.AppMenu.Registrar` before setting up the object server. Method calls arriving before interfaces are registered may be lost. Consider using `connection::Builder::serve_at()` and `::name()` instead.
+29:2026-11-01T14:29:42.806690Z  INFO menubar: app_menu none app_id=foot
+30:2026-11-01T14:29:42.806733Z  INFO menubar: gtk_menus none app_id=foot
+39:2026-11-01T14:29:42.888781Z  INFO menubar: app_menu none app_id=io.github.hblanqueto.malaysia.demo.ssd
+40:2026-11-01T14:29:42.888824Z  INFO menubar: gtk_menus none app_id=io.github.hblanqueto.malaysia.demo.ssd
+42:2026-11-01T14:29:42.908882Z  INFO menubar: app_menu none app_id=io.github.hblanqueto.malaysia.demo.csd
+43:2026-11-01T14:29:42.908919Z  INFO menubar: gtk_menus none app_id=io.github.hblanqueto.malaysia.demo.csd
+57:2026-11-01T14:29:46.198162Z  INFO menubar: app_menu none app_id=io.github.hblanqueto.malaysia.demo.parent
+58:2026-11-01T14:29:46.198227Z  INFO menubar: gtk_menus none app_id=io.github.hblanqueto.malaysia.demo.parent
+75:2026-11-01T14:29:47.463918Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=6
+76:2026-11-01T14:29:47.463952Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+78:2026-11-01T14:29:47.465106Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+79:2026-11-01T14:29:47.465475Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+80:2026-11-01T14:29:47.465582Z  INFO menubar: org.gtk.Menus root snapshot generation=6 bus=:1.2825 titles=1 ms=1
+82:2026-11-01T14:29:47.511822Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.TextEditor generation=7
+83:2026-11-01T14:29:47.511861Z  INFO menubar: gtk_menus app_id=org.gnome.TextEditor bus=:1.2826 menubar=/org/gnome/TextEditor/menus/menubar appmenu=
+85:2026-11-01T14:29:47.515891Z  INFO menubar: org.gtk.Menus End bus=:1.2825 path=/org/gnome/Calculator/menus/menubar groups=[0, 1]
+86:2026-11-01T14:29:47.527325Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/TextEditor/menus/menubar groups=[0] menus=0
+87:2026-11-01T14:29:47.527372Z  INFO menubar: org.gtk.Menus root snapshot generation=7 bus=:1.2826 titles=0 ms=11
+96:2026-11-01T14:29:54.270993Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=8
+97:2026-11-01T14:29:54.271036Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+99:2026-11-01T14:29:54.272110Z  INFO menubar: org.gtk.Menus End bus=:1.2826 path=/org/gnome/TextEditor/menus/menubar groups=[0]
+100:2026-11-01T14:29:54.276038Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+101:2026-11-01T14:29:54.276690Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+102:2026-11-01T14:29:54.276829Z  INFO menubar: org.gtk.Menus root snapshot generation=8 bus=:1.2825 titles=1 ms=4
+143:2026-11-01T14:30:09.238418Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.TextEditor generation=9
+144:2026-11-01T14:30:09.238463Z  INFO menubar: gtk_menus app_id=org.gnome.TextEditor bus=:1.2826 menubar=/org/gnome/TextEditor/menus/menubar appmenu=
+147:2026-11-01T14:30:09.239457Z  INFO menubar: org.gtk.Menus End bus=:1.2825 path=/org/gnome/Calculator/menus/menubar groups=[0, 1]
+148:2026-11-01T14:30:09.244093Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/TextEditor/menus/menubar groups=[0] menus=0
+149:2026-11-01T14:30:09.244129Z  INFO menubar: org.gtk.Menus root snapshot generation=9 bus=:1.2826 titles=0 ms=4
+167:2026-11-01T14:30:09.721247Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=10
+168:2026-11-01T14:30:09.721290Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+170:2026-11-01T14:30:09.725838Z  INFO menubar: org.gtk.Menus End bus=:1.2826 path=/org/gnome/TextEditor/menus/menubar groups=[0]
+171:2026-11-01T14:30:09.727773Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+172:2026-11-01T14:30:09.728322Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+173:2026-11-01T14:30:09.728464Z  INFO menubar: org.gtk.Menus root snapshot generation=10 bus=:1.2825 titles=1 ms=2
+461:2026-11-01T14:30:27.479979Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.TextEditor generation=11
+462:2026-11-01T14:30:27.480028Z  INFO menubar: gtk_menus app_id=org.gnome.TextEditor bus=:1.2826 menubar=/org/gnome/TextEditor/menus/menubar appmenu=
+465:2026-11-01T14:30:27.481352Z  INFO menubar: org.gtk.Menus End bus=:1.2825 path=/org/gnome/Calculator/menus/menubar groups=[0, 1]
+466:2026-11-01T14:30:27.487060Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/TextEditor/menus/menubar groups=[0] menus=0
+467:2026-11-01T14:30:27.487091Z  INFO menubar: org.gtk.Menus root snapshot generation=11 bus=:1.2826 titles=0 ms=5
+485:2026-11-01T14:30:27.965237Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=12
+486:2026-11-01T14:30:27.965302Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+488:2026-11-01T14:30:27.969486Z  INFO menubar: org.gtk.Menus End bus=:1.2826 path=/org/gnome/TextEditor/menus/menubar groups=[0]
+489:2026-11-01T14:30:27.970686Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+490:2026-11-01T14:30:27.971142Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+491:2026-11-01T14:30:27.971272Z  INFO menubar: org.gtk.Menus root snapshot generation=12 bus=:1.2825 titles=1 ms=1
+575:2026-11-01T14:30:34.169207Z  INFO menubar: org.gtk.Menus End bus=:1.2825 path=/org/gnome/Calculator/menus/menubar groups=[0, 1]
+587:2026-11-01T14:30:35.545583Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=14
+588:2026-11-01T14:30:35.545633Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+590:2026-11-01T14:30:35.550383Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+591:2026-11-01T14:30:35.550857Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+592:2026-11-01T14:30:35.550991Z  INFO menubar: org.gtk.Menus root snapshot generation=14 bus=:1.2825 titles=1 ms=5
+613:2026-11-01T14:30:38.195747Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.TextEditor generation=15
+614:2026-11-01T14:30:38.195787Z  INFO menubar: gtk_menus app_id=org.gnome.TextEditor bus=:1.2826 menubar=/org/gnome/TextEditor/menus/menubar appmenu=
+616:2026-11-01T14:30:38.197141Z  INFO menubar: org.gtk.Menus End bus=:1.2825 path=/org/gnome/Calculator/menus/menubar groups=[0, 1]
+617:2026-11-01T14:30:38.201996Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/TextEditor/menus/menubar groups=[0] menus=0
+618:2026-11-01T14:30:38.202026Z  INFO menubar: org.gtk.Menus root snapshot generation=15 bus=:1.2826 titles=0 ms=4
+629:2026-11-01T14:30:41.603769Z  INFO menubar: org.gtk.Menus focus app_id=org.gnome.Calculator generation=16
+630:2026-11-01T14:30:41.603824Z  INFO menubar: gtk_menus app_id=org.gnome.Calculator bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+632:2026-11-01T14:30:41.605579Z  INFO menubar: org.gtk.Menus End bus=:1.2826 path=/org/gnome/TextEditor/menus/menubar groups=[0]
+633:2026-11-01T14:30:41.608775Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[0] menus=1
+634:2026-11-01T14:30:41.609157Z  INFO menubar: org.gtk.Menus Start path=/org/gnome/Calculator/menus/menubar groups=[1] menus=5
+635:2026-11-01T14:30:41.609259Z  INFO menubar: org.gtk.Menus root snapshot generation=16 bus=:1.2825 titles=1 ms=3

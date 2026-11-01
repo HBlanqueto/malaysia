@@ -1,0 +1,21 @@
+92:2026-11-01T14:29:47.426804Z  INFO gtk_menus set window=5 bus=:1.2825 menubar=/org/gnome/Calculator/menus/menubar appmenu=
+94:2026-11-01T14:29:47.426921Z  INFO unmaximize_request window=5
+101:2026-11-01T14:29:47.463488Z  INFO gtk_menus set window=6 bus=:1.2826 menubar=/org/gnome/TextEditor/menus/menubar appmenu=
+149:2026-11-01T14:29:57.571410Z  INFO toggle_maximize window=5 maximize=true origin="crates/malaysia-compositor/src/state.rs:743"
+190:2026-11-01T14:30:01.814314Z  INFO toggle_maximize window=5 maximize=false origin="crates/malaysia-compositor/src/state.rs:743"
+219:2026-11-01T14:30:05.675519Z  INFO focus mode entered window=5 index=1
+220:2026-11-01T14:30:05.675549Z  INFO space shown index=1 spaces=2 focus=true
+233:2026-11-01T14:30:06.155687Z  INFO focus transition handed over window=5 committed=Some(Size<smithay::utils::geometry::Logical> { w: 1280, h: 800 }) output=Size<smithay::utils::geometry::Logical> { w: 1280, h: 800 } late_ms=0
+254:2026-11-01T14:30:09.237672Z  INFO focus mode left window=5
+255:2026-11-01T14:30:09.237700Z  INFO space shown index=0 spaces=2 desktop=1 focus=false
+268:2026-11-01T14:30:09.719798Z  INFO space shown index=0 spaces=1 desktop=1 focus=false
+339:2026-11-01T14:30:18.284245Z  INFO infinity set fullscreen window=5 fullscreen=true
+340:2026-11-01T14:30:18.284329Z  INFO focus mode entered window=5 index=1
+346:2026-11-01T14:30:18.284534Z  INFO space shown index=1 spaces=2 focus=true
+354:2026-11-01T14:30:18.766277Z  INFO focus transition handed over window=5 committed=Some(Size<smithay::utils::geometry::Logical> { w: 1280, h: 800 }) output=Size<smithay::utils::geometry::Logical> { w: 1280, h: 800 } late_ms=1
+371:2026-11-01T14:30:22.062252Z  INFO focus space bar window=5 shown=true
+427:2026-11-01T14:30:27.479239Z  INFO focus mode left window=5
+428:2026-11-01T14:30:27.479260Z  INFO space shown index=0 spaces=2 desktop=1 focus=false
+441:2026-11-01T14:30:27.963487Z  INFO space shown index=0 spaces=1 desktop=1 focus=false
+501:2026-11-01T14:30:33.921846Z  INFO space shown index=1 spaces=2 desktop=2 focus=false
+518:2026-11-01T14:30:35.544935Z  INFO space shown index=0 spaces=2 desktop=1 focus=false
