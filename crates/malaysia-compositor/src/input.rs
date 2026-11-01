@@ -1052,9 +1052,7 @@ impl State {
             && let Some(local) = self.titlebar_point(id, location)
         {
             let button_kind = self
-                .windows
-                .outer(id)
-                .zip(self.windows.insets(id))
+                .chrome_frame(id)
                 .and_then(|(outer, insets)| crate::chrome::button_at(outer, insets, location));
             if let Some(kind) = button_kind {
                 self.clear_chrome_pointer();
@@ -1069,6 +1067,10 @@ impl State {
                 }
                 entry.1.on_press(Some(kind), true);
                 self.request_redraw();
+                return;
+            }
+            // The titlebar shown over a focus window only offers its lights.
+            if self.revealed_titlebar(id).is_some() {
                 return;
             }
             // A double click on the bar, outside the lights, applies the
@@ -1361,6 +1363,20 @@ impl State {
         }
     }
 
+    /// The rectangle and insets the titlebar hit-tests use: the window's own,
+    /// or, for a focus window with the bar down, the titlebar the compositor
+    /// shows under the bar (ADR 0051).
+    fn chrome_frame(
+        &self,
+        id: WindowId,
+    ) -> Option<(
+        malaysia_scene::geometry::Rect<f64, malaysia_scene::geometry::Logical>,
+        crate::decoration::Insets,
+    )> {
+        self.revealed_titlebar(id)
+            .or_else(|| self.windows.outer(id).zip(self.windows.insets(id)))
+    }
+
     /// The bar-relative point for `location`, when it is on a top titlebar.
     fn titlebar_point(
         &self,
@@ -1370,8 +1386,7 @@ impl State {
         if TITLEBAR.position != vow_design::TitlebarPosition::Top {
             return None;
         }
-        let outer = self.windows.outer(id)?;
-        let insets = self.windows.insets(id)?;
+        let (outer, insets) = self.chrome_frame(id)?;
         if insets.top < f64::from(TITLEBAR.thickness) {
             return None;
         }
@@ -2213,6 +2228,8 @@ impl State {
         }
 
         self.update_edge_cursor(location);
+        // The top edge of a focus space brings the bar down (ADR 0051).
+        self.update_focus_reveal(location);
 
         let side = f64::from(self.config.window.resize_border);
         let corner = f64::from(self.config.window.resize_corner);
@@ -2229,7 +2246,13 @@ impl State {
         if self.update_chrome_pointer(location, under_window, overlay_under) {
             self.request_redraw();
         }
-        let blocked = pointer_focus_blocked(overlay_under, edge.map(|(id, _)| id), under_window);
+        // The titlebar shown over a focus window covers the client there.
+        let over_revealed_titlebar = layer_under.is_none()
+            && under_window.is_some_and(|id| {
+                self.titlebar_point(id, location).is_some() && self.revealed_titlebar(id).is_some()
+            });
+        let blocked = over_revealed_titlebar
+            || pointer_focus_blocked(overlay_under, edge.map(|(id, _)| id), under_window);
         let under = if blocked {
             None
         } else {

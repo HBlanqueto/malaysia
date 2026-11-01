@@ -13,7 +13,7 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
   y los menús de una app real.
 - **Espacios y modo foco (Bloque 17, ADR 0051).** 17a, 17b y 17c
   hechos: fila de espacios, deslizamiento con franja negra y modo foco con el
-  botón verde. Sigue el borde superior en foco (17d).
+  botón verde, y el borde superior en foco (17d). Sigue Infinity (17e).
 - **Captura de ventana con marco.** La captura de ventana devuelve solo el
   contenido del cliente; falta incluir la titlebar Tengen y los efectos.
 - **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
@@ -254,10 +254,23 @@ Concepto y plan en el ADR 0051.
   quedar tapado. En el espacio de foco la barra y el dock no se dibujan ni
   reciben clics, y el fondo es negro. Salir hace lo inverso y borra el espacio
   al terminar; cerrar la ventana lo borra al instante. Durante la animación se
-  ignoran `Ctrl+Alt+←/→`. Prueba: `./dev.sh demo`, botón verde de una ventana
-  SSD, `Ctrl+Alt+←/→` entre el escritorio y el foco, y verde otra vez.
-- **17d — Borde superior.** Panel negro, titlebar SSD encima en apps ajenas y
-  deslizamiento de 28 px en barrierkit y libadwaita. Pendiente.
+  ignoran `Ctrl+Alt+←/→`. Al terminar de crecer, la animación sigue
+  dibujando la ventana a pantalla completa hasta que el cliente entrega su
+  buffer a ese tamaño (máximo 300 ms), para no mostrar un frame negro; el log
+  `focus transition handed over` dice cuánto esperó. Prueba: `./dev.sh demo`,
+  botón verde de una ventana SSD, `Ctrl+Alt+←/→` entre el escritorio y el
+  foco, y verde otra vez.
+- **17d — Borde superior. Hecho (2026-11-01), sin aceptar en sesión.** En un
+  espacio de foco quieto, el puntero en el borde superior baja la barra sobre
+  una franja negra (`DURATION_BASE`, 220 ms). Una ventana SSD recupera su
+  titlebar Tengen bajo la barra, encima del contenido y a lo ancho; sus
+  semáforos funcionan (el verde sale del foco) y esa franja no llega al
+  cliente. Una ventana CSD (barrierkit, libadwaita) baja entera la altura de
+  la barra, también para la entrada, y su propia barra queda visible. La barra
+  sube cuando el puntero baja más de dos titlebars por debajo de ella, salvo
+  con un menú abierto. Falta que la barra se pinte en negro puro con texto
+  blanco: es la shell quien la dibuja (17e). Prueba: `./dev.sh demo`, modo
+  foco con una ventana SSD y con una CSD, y el puntero arriba.
 - **17e — Infinity.** Espacio actual para la shell y aviso de foco para
   barrierkit. Pendiente.
 - **17f — libadwaita.** Experimento con el fork. Pendiente.

@@ -17,6 +17,12 @@
 //! the focus space the bar and the dock are hidden and the background is
 //! black. Leaving runs the same animation backwards and only then removes the
 //! space, so the black space is what slides away.
+//!
+//! The top edge (17d): in a still focus space, the pointer at the top edge
+//! brings the bar down over black ([`FocusReveal`]). A window the compositor
+//! decorates (SSD) also gets its titlebar back, under the bar, over its
+//! content. A client-decorated window (barrierkit, libadwaita) slides down by
+//! the bar's height instead, so its own bar stays visible under the panel.
 
 use std::time::{Duration, Instant};
 
@@ -31,6 +37,13 @@ use crate::state::State;
 
 /// How long one slide takes (Tengen, `vow-design`).
 const SLIDE: Duration = Duration::from_millis(vow_design::SPACE_SLIDE_MS);
+
+/// How long a window that grew into focus mode may keep being drawn by the
+/// transition after the slide, waiting for the client to commit a buffer at
+/// the output size. Without the wait, the frame where the transition hands
+/// over shows the old, smaller buffer over black: a black flash. Not a design
+/// value: a protocol timeout for slow clients.
+const HANDOVER_WAIT: Duration = Duration::from_millis(300);
 
 /// A slide of the row in progress: from a row position (in spaces, so `1.5`
 /// is halfway between the second and third space) to a space.
@@ -104,7 +117,186 @@ fn lerp_rect(
     )
 }
 
+/// How long the bar takes to come down or go up at the top edge.
+const REVEAL: Duration = Duration::from_millis(vow_design::DURATION_BASE);
+
+/// The bar coming down in a focus space, and where its animation is.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct FocusReveal {
+    /// Whether the bar is (going) down.
+    shown: bool,
+    /// The progress when the last change started.
+    from: f64,
+    /// When the last change started; `None` while at rest.
+    start: Option<Instant>,
+    /// The client-decorated window moved down by the bar's height, to move
+    /// back when the bar goes up.
+    shifted: Option<WindowId>,
+}
+
+impl FocusReveal {
+    /// How far down the bar is, from 0 (hidden) to 1 (down).
+    pub(crate) fn progress(&self, now: Instant) -> f64 {
+        let target = if self.shown { 1.0 } else { 0.0 };
+        let Some(start) = self.start else {
+            return target;
+        };
+        let t = now.saturating_duration_since(start).as_secs_f64() / REVEAL.as_secs_f64();
+        lerp(
+            self.from,
+            target,
+            cubic_bezier(vow_design::SPACE_SLIDE_EASE, t),
+        )
+    }
+
+    /// Whether the bar is still moving.
+    pub(crate) fn animating(&self, now: Instant) -> bool {
+        self.start
+            .is_some_and(|start| now.saturating_duration_since(start) < REVEAL)
+    }
+}
+
+/// One frame of the top-edge reveal in a focus space.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RevealFrame {
+    /// The window that owns the focus space.
+    pub(crate) owner: WindowId,
+    /// How far down the bar is, from 0 to 1.
+    pub(crate) progress: f64,
+    /// The bar's height, in logical pixels.
+    pub(crate) bar: i32,
+    /// Whether the compositor decorates the window (it gets its titlebar
+    /// back) or the client does (it slides down).
+    pub(crate) server_decorated: bool,
+}
+
 impl State {
+    /// The window owning the shown focus space, while nothing slides.
+    pub(crate) fn focus_owner(&self) -> Option<WindowId> {
+        if self.space_slide.is_some() || self.focus_transition.is_some() {
+            return None;
+        }
+        match self.spaces.current().kind {
+            SpaceKind::Focus { owner, .. } => Some(owner),
+            SpaceKind::Desktop => None,
+        }
+    }
+
+    /// The height of the desktop bar: its layer surface's, or the token.
+    pub(crate) fn desktop_bar_height(&self) -> i32 {
+        self.layers
+            .mapped()
+            .iter()
+            .find(|entry| entry.is_desktop_bar())
+            .map(|entry| entry.geometry.size.h)
+            .unwrap_or(vow_design::MENUBAR_HEIGHT)
+    }
+
+    /// Shows or hides the bar in the focus space. A client-decorated window
+    /// moves down by the bar's height at once for input; the drawing follows
+    /// the animation.
+    pub(crate) fn set_focus_reveal(&mut self, shown: bool) {
+        if self.focus_reveal.shown == shown {
+            return;
+        }
+        let Some(owner) = self.focus_owner() else {
+            return;
+        };
+        let now = Instant::now();
+        let from = self.focus_reveal.progress(now);
+        let mut shifted = self.focus_reveal.shifted.take();
+        if shown && self.windows.is_client_decorated(owner) {
+            self.windows
+                .set_scene_y(owner, f64::from(self.desktop_bar_height()));
+            shifted = Some(owner);
+        } else if !shown && let Some(window) = shifted.take() {
+            self.windows.set_scene_y(window, 0.0);
+        }
+        self.focus_reveal = FocusReveal {
+            shown,
+            from,
+            start: Some(now),
+            shifted,
+        };
+        self.layers.set_bar_revealed(shown);
+        tracing::info!(window = owner.get(), shown, "focus space bar");
+        self.request_redraw();
+    }
+
+    /// Follows the pointer for the top edge: at the very top the bar comes
+    /// down; well below the bar (and the titlebar it brings) it goes up. An
+    /// open bar menu keeps it down.
+    pub(crate) fn update_focus_reveal(&mut self, location: Point<f64, Logical>) {
+        if self.focus_owner().is_none() {
+            return;
+        }
+        if location.y <= 1.0 {
+            self.set_focus_reveal(true);
+            return;
+        }
+        if !self.focus_reveal.shown || self.windows.topmost_popup().is_some() {
+            return;
+        }
+        // Below the bar there is the SSD titlebar the compositor shows, or the
+        // client's own bar (a libadwaita headerbar is about 47 px): two
+        // titlebars of room cover both before the bar goes up.
+        let reach =
+            f64::from(self.desktop_bar_height()) + 2.0 * f64::from(vow_design::TITLEBAR.thickness);
+        if location.y > reach {
+            self.set_focus_reveal(false);
+        }
+    }
+
+    /// The reveal for the frame being drawn, or `None` when the bar is up
+    /// and still, or no focus space is shown.
+    pub(crate) fn reveal_frame(&self, now: Instant) -> Option<RevealFrame> {
+        let owner = self.focus_owner()?;
+        let progress = self.focus_reveal.progress(now);
+        (progress > 0.0).then(|| RevealFrame {
+            owner,
+            progress,
+            bar: self.desktop_bar_height(),
+            server_decorated: !self.windows.is_client_decorated(owner),
+        })
+    }
+
+    /// The titlebar a server-decorated focus window shows while the bar is
+    /// down: its outer rectangle and insets for the chrome hit-tests. `None`
+    /// otherwise.
+    pub(crate) fn revealed_titlebar(
+        &self,
+        id: WindowId,
+    ) -> Option<(SceneRect<f64, SceneLogical>, crate::decoration::Insets)> {
+        if self.focus_owner() != Some(id)
+            || !self.focus_reveal.shown
+            || self.windows.is_client_decorated(id)
+        {
+            return None;
+        }
+        let size = self.logical_output_size();
+        let thickness = f64::from(vow_design::TITLEBAR.thickness);
+        let outer = SceneRect::new(
+            ScenePoint::new(0.0, f64::from(self.desktop_bar_height())),
+            SceneSize::new(f64::from(size.w), thickness),
+        );
+        let insets = crate::decoration::Insets {
+            top: thickness,
+            right: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+        };
+        Some((outer, insets))
+    }
+
+    /// Puts the bar up at once, without animation (leaving a focus space).
+    fn reset_focus_reveal(&mut self) {
+        if let Some(window) = self.focus_reveal.shifted {
+            self.windows.set_scene_y(window, 0.0);
+        }
+        self.focus_reveal = FocusReveal::default();
+        self.layers.set_bar_revealed(false);
+    }
+
     /// Whether a window is in focus mode (has a focus space).
     pub(crate) fn in_focus_mode(&self, id: WindowId) -> bool {
         self.spaces.focus_space_of(id).is_some()
@@ -178,6 +370,7 @@ impl State {
         };
         self.show_space_of(id);
         self.space_slide = None;
+        self.reset_focus_reveal();
         let saved = self
             .fullscreen
             .remove(&id)
@@ -224,7 +417,35 @@ impl State {
     pub(crate) fn focus_transition_frame(&mut self, now: Instant) -> Option<FocusFrame> {
         let transition = self.focus_transition?;
         let elapsed = now.saturating_duration_since(transition.start);
-        if elapsed >= SLIDE || self.windows.outer(transition.window).is_none() {
+        let size = self.logical_output_size();
+        let full = Rectangle::new(Point::from((0, 0)), size);
+        let committed = self
+            .windows
+            .iter()
+            .find(|window| window.id() == transition.window)
+            .map(|window| window.window_geometry().size);
+        if transition.entering
+            && elapsed >= SLIDE
+            && elapsed < SLIDE + HANDOVER_WAIT
+            && committed.is_some_and(|committed| committed != size)
+        {
+            // Hold the full rectangle until the client catches up.
+            return Some(FocusFrame {
+                window: transition.window,
+                rect: full,
+                radius: 0.0,
+            });
+        }
+        if elapsed >= SLIDE || committed.is_none() {
+            if transition.entering {
+                tracing::info!(
+                    window = transition.window.get(),
+                    ?committed,
+                    output = ?size,
+                    late_ms = elapsed.saturating_sub(SLIDE).as_millis() as u64,
+                    "focus transition handed over"
+                );
+            }
             self.focus_transition = None;
             if !transition.entering {
                 self.finish_focus_exit(transition.window);
@@ -235,8 +456,6 @@ impl State {
             vow_design::SPACE_SLIDE_EASE,
             elapsed.as_secs_f64() / SLIDE.as_secs_f64(),
         );
-        let size = self.logical_output_size();
-        let full = Rectangle::new(Point::from((0, 0)), size);
         let corner = f64::from(vow_design::WINDOW.corner_radius);
         let (rect, radius) = if transition.entering {
             (
@@ -403,6 +622,9 @@ impl State {
     /// Hides every window off the shown space and shows the ones on it, then
     /// moves keyboard focus onto the shown space.
     fn sync_space_visibility(&mut self) {
+        // The bar of a focus space goes up with the space, before the window
+        // that slid down under it is hidden.
+        self.reset_focus_reveal();
         // Menus belong to a window or to the bar of the space being left.
         self.dismiss_all_popups();
         let ids: Vec<WindowId> = self.windows.iter().map(|window| window.id()).collect();

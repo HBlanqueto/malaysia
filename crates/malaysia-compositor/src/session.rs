@@ -966,12 +966,41 @@ pub(crate) fn build_output_elements(
             append_focus_transition(state, renderer, frame, scale, &mut elements);
         }
         let chrome_hidden = slide.is_none() && state.layers.chrome_hidden();
+        // The top edge of a still focus space: the bar comes down over black,
+        // with an SSD window's titlebar under it (ADR 0051, 17d).
+        let reveal = state.reveal_frame(now);
+        let reveal_drop = reveal.map(|frame| {
+            let travel = frame.bar
+                + if frame.server_decorated {
+                    vow_design::TITLEBAR.thickness as i32
+                } else {
+                    0
+                };
+            ((frame.progress - 1.0) * f64::from(travel)).round() as i32
+        });
+        if let (Some(frame), Some(drop)) = (reveal, reveal_drop) {
+            append_layers(
+                state,
+                renderer,
+                &mut elements,
+                LayerSide::Front,
+                Point::from((0, drop)),
+                |entry| entry.is_desktop_bar(),
+            );
+            append_solid(
+                Point::from((0, drop)),
+                Size::from((state.logical_output_size().w, frame.bar)),
+                vow_design::SPACE_GAP_COLOR,
+                scale,
+                &mut elements,
+            );
+        }
         append_layers(
             state,
             renderer,
             &mut elements,
             LayerSide::Front,
-            0,
+            Point::from((0, 0)),
             |entry| {
                 (slide.is_none() || !entry.is_desktop_bar())
                     && !(chrome_hidden && entry.is_shell_chrome())
@@ -994,6 +1023,18 @@ pub(crate) fn build_output_elements(
                 .map(|e| e.into()),
             );
         }
+        if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
+            && frame.server_decorated
+        {
+            append_revealed_titlebar(
+                state,
+                renderer,
+                frame.owner,
+                drop + frame.bar,
+                scale,
+                &mut elements,
+            );
+        }
         if let Some(position) = slide {
             append_sliding_spaces(state, renderer, position, scale, moving, &mut elements);
         } else {
@@ -1006,15 +1047,21 @@ pub(crate) fn build_output_elements(
                 .filter(|id| Some(*id) != moving)
                 .collect();
             for id in window_ids {
-                append_window_frame(
-                    state,
-                    renderer,
-                    id,
-                    focused,
-                    scale,
-                    Point::from((0, 0)),
-                    &mut elements,
-                );
+                // A client-decorated focus window slides under the bar: its
+                // scene rectangle is already down (for input); the drawing
+                // follows the animation.
+                let offset = match reveal {
+                    Some(frame) if frame.owner == id && !frame.server_decorated => {
+                        let scene_y = state
+                            .windows
+                            .outer(id)
+                            .map_or(0, |outer| outer.y().round() as i32);
+                        let drawn = (frame.progress * f64::from(frame.bar)).round() as i32;
+                        Point::from((0, drawn - scene_y))
+                    }
+                    _ => Point::from((0, 0)),
+                };
+                append_window_frame(state, renderer, id, focused, scale, offset, &mut elements);
             }
             let focus_space = matches!(
                 state.spaces.current().kind,
@@ -1029,7 +1076,14 @@ pub(crate) fn build_output_elements(
                     &mut elements,
                 );
             } else {
-                append_layers(state, renderer, &mut elements, LayerSide::Back, 0, |_| true);
+                append_layers(
+                    state,
+                    renderer,
+                    &mut elements,
+                    LayerSide::Back,
+                    Point::from((0, 0)),
+                    |_| true,
+                );
             }
         }
     }
@@ -1054,6 +1108,65 @@ pub(crate) fn window_frame_rect(window: &crate::window::Window<'_>) -> Rectangle
     }
 }
 
+/// Draws the titlebar of a server-decorated focus window with its top at `y`,
+/// across the output and square, while the bar is down (ADR 0051, 17d). The
+/// lights react to the pointer like any other titlebar.
+fn append_revealed_titlebar(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    id: malaysia_scene::scene::WindowId,
+    y: i32,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let Some(title) = state
+        .windows
+        .iter()
+        .find(|window| window.id() == id)
+        .map(|window| window.title())
+    else {
+        return;
+    };
+    let Some(program) = state.rounded_clip.clone() else {
+        return;
+    };
+    let width = state.logical_output_size().w;
+    let rect = Rectangle::new(
+        Point::from((0, y)),
+        Size::from((width, vow_design::TITLEBAR.thickness as i32)),
+    );
+    let focused = state.focused_window() == Some(id);
+    let pointer = state
+        .chrome_pointer
+        .as_ref()
+        .filter(|(held, _)| *held == id)
+        .map(|(_, pointer)| pointer);
+    let input = vow_appearance::traffic::TrafficInput {
+        focused,
+        group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
+        pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
+        zoom_supported: state.green_button_admitted(id),
+    };
+    let theme = state.chrome_theme;
+    if let Some(element) = state.chrome.element(
+        renderer,
+        id,
+        &title,
+        focused,
+        input,
+        width,
+        rect.loc,
+        scale,
+        &theme,
+        program,
+        physical_rect(rect, scale),
+        0,
+        frame_exponent(crate::decoration::Role::Toplevel),
+    ) {
+        elements.push(element.into());
+    }
+}
+
 /// Draws a window growing into focus mode or shrinking out of it (ADR 0051):
 /// its client surface, with the window geometry's corner at the frame's
 /// corner, clipped to the moving rounded rectangle over black. The SSD bar is
@@ -1065,10 +1178,13 @@ fn append_focus_transition(
     scale: f64,
     elements: &mut Vec<OutputRenderElement>,
 ) {
+    // Any mapped buffer will do: a client resizing to fullscreen can commit
+    // one frame whose geometry does not fit its buffer, and skipping it here
+    // would flash the black behind it.
     let Some(surface) = state
         .windows
-        .iter_drawable(&state.minimized)
-        .find(|window| window.id() == frame.window)
+        .iter()
+        .find(|window| window.id() == frame.window && window.is_mapped() && window.has_buffer())
         .map(|window| (window.surface().clone(), window.window_geometry().loc))
     else {
         return;
@@ -1140,9 +1256,14 @@ fn append_sliding_spaces(
     for (space, kind, x) in shown {
         let desktop = kind == malaysia_scene::spaces::SpaceKind::Desktop;
         if desktop {
-            append_layers(state, renderer, elements, LayerSide::Front, x, |entry| {
-                entry.is_desktop_bar()
-            });
+            append_layers(
+                state,
+                renderer,
+                elements,
+                LayerSide::Front,
+                Point::from((x, 0)),
+                |entry| entry.is_desktop_bar(),
+            );
         }
         let window_ids: Vec<_> = state
             .windows
@@ -1163,7 +1284,14 @@ fn append_sliding_spaces(
             );
         }
         if desktop {
-            append_layers(state, renderer, elements, LayerSide::Back, x, |_| true);
+            append_layers(
+                state,
+                renderer,
+                elements,
+                LayerSide::Back,
+                Point::from((x, 0)),
+                |_| true,
+            );
         }
     }
     append_solid(
@@ -1743,7 +1871,10 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         let mut request_redraw = false;
         let now = Instant::now();
         // A slide between spaces moves every frame (ADR 0051).
-        if session.state.space_slide.is_some() || session.state.focus_transition.is_some() {
+        if session.state.space_slide.is_some()
+            || session.state.focus_transition.is_some()
+            || session.state.focus_reveal.animating(now)
+        {
             request_redraw = true;
         }
         if let Some(fade) = session.state.theme_fade.as_mut() {
@@ -1999,7 +2130,7 @@ fn append_layers(
     renderer: &mut GlesRenderer,
     elements: &mut Vec<OutputRenderElement>,
     side: LayerSide,
-    offset_x: i32,
+    offset: Point<i32, Logical>,
     include: impl Fn(&crate::layers::LayerEntry) -> bool,
 ) {
     let layers = match side {
@@ -2009,7 +2140,7 @@ fn append_layers(
     let scale = state.scale.fractional_scale();
     for layer in layers {
         for entry in state.layers.on_layer(layer).filter(|entry| include(entry)) {
-            let location = physical_point(entry.geometry.loc + Point::from((offset_x, 0)), scale);
+            let location = physical_point(entry.geometry.loc + offset, scale);
             elements.extend(
                 render_elements_from_surface_tree::<
                     GlesRenderer,

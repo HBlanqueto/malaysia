@@ -1144,6 +1144,28 @@ impl Windows {
         state_changed
     }
 
+    /// Moves a window's scene rectangle to a new top edge without a
+    /// configure: the client keeps its size. Used to slide a focus window
+    /// under the bar (ADR 0051). A hidden window keeps its stored rectangle.
+    pub fn set_scene_y(&mut self, id: WindowId, y: f64) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if self.windows[index].is_hidden() {
+            if let Some(rect) = self.windows[index].hidden_rect.as_mut() {
+                *rect = SceneRect::new(ScenePoint::new(rect.x(), y), rect.size());
+            }
+            return true;
+        }
+        let Some(outer) = self.scene.outer(id) else {
+            return false;
+        };
+        self.scene.set_outer(
+            id,
+            SceneRect::new(ScenePoint::new(outer.x(), y), outer.size()),
+        )
+    }
+
     /// Applies an outer rectangle from Infinity without changing any state bit.
     pub fn set_infinity_geometry(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) {
         let Some(index) = self.index(id) else {

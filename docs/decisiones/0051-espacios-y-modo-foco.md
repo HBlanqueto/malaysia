@@ -1,6 +1,6 @@
 # 0051 — Espacios y modo foco
 
-Estado: aceptado (2026-11-01). Pasos 1–3 implementados; 4–6 pendientes.
+Estado: aceptado (2026-11-01). Pasos 1–4 implementados; 5–6 pendientes.
 
 ## Contexto
 
@@ -66,6 +66,10 @@ app.
    redondeado que crece o se encoge, sin la barra SSD; si el cliente aún no
    redibujó a su nuevo tamaño, el resto del rectángulo se ve negro.
 4. Borde superior: panel negro, titlebar SSD encima y deslizamiento de 28 px.
+   **Hecho** en el compositor: la barra baja sobre una franja negra y la
+   ventana CSD se mueve en la escena, no solo en el dibujo. La barra en negro
+   puro con texto blanco necesita que la shell sepa que está sobre un foco
+   (paso 5).
 5. Infinity: espacio actual para la shell y aviso de foco/panel para
    barrierkit.
 6. Experimento con un fork de libadwaita

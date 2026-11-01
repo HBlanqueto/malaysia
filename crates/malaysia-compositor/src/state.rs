@@ -307,6 +307,8 @@ pub struct State {
     pub(crate) space_slide: Option<crate::spaces::SpaceSlide>,
     /// A window growing into focus mode or shrinking out of it (ADR 0051, 17c).
     pub(crate) focus_transition: Option<crate::spaces::FocusTransition>,
+    /// The bar coming down at the top edge of a focus space (ADR 0051, 17d).
+    pub(crate) focus_reveal: crate::spaces::FocusReveal,
     /// Windows maximized by MalaysiaDreams's titlebar, with the rectangle to restore.
     pub(crate) maximized: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     /// Windows placed by Infinity, with the rectangle to restore.
@@ -604,6 +606,7 @@ impl State {
             spaces: malaysia_scene::spaces::Spaces::new(),
             space_slide: None,
             focus_transition: None,
+            focus_reveal: crate::spaces::FocusReveal::default(),
             maximized: HashMap::new(),
             arranged: HashMap::new(),
             fullscreen: HashMap::new(),

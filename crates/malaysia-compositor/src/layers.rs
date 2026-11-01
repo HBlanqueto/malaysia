@@ -72,6 +72,9 @@ pub struct Layers {
     /// Whether the shell chrome (bar and dock) is hidden because a focus
     /// space is shown: it is neither drawn nor hit (ADR 0051).
     chrome_hidden: bool,
+    /// Whether the desktop bar is down over a focus space: then it takes
+    /// input even though the chrome is hidden.
+    bar_revealed: bool,
 }
 
 impl Layers {
@@ -194,7 +197,9 @@ impl Layers {
             .rev()
             .find(|entry| {
                 if !matches!(entry.layer, Layer::Top | Layer::Overlay)
-                    || (self.chrome_hidden && entry.is_shell_chrome())
+                    || (self.chrome_hidden
+                        && entry.is_shell_chrome()
+                        && !(self.bar_revealed && entry.is_desktop_bar()))
                     || !entry.surface.wl_surface().alive()
                     || !entry.geometry.to_f64().contains(point)
                 {
@@ -212,6 +217,11 @@ impl Layers {
     /// Hides or shows the shell chrome (bar and dock) for a focus space.
     pub fn set_chrome_hidden(&mut self, hidden: bool) {
         self.chrome_hidden = hidden;
+    }
+
+    /// Lets the desktop bar take input over a focus space, while it is down.
+    pub fn set_bar_revealed(&mut self, revealed: bool) {
+        self.bar_revealed = revealed;
     }
 
     /// Whether the shell chrome is hidden because a focus space is shown.
