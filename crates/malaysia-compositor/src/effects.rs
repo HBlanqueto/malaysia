@@ -9,7 +9,9 @@
 use smithay::backend::renderer::Texture;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
-use smithay::backend::renderer::gles::{GlesRenderer, GlesTexProgram, GlesTexture, Uniform};
+use smithay::backend::renderer::gles::{
+    GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
+};
 use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
 use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
@@ -359,6 +361,76 @@ pub(crate) fn map_rect(
         (left, top).into(),
         ((right - left).max(1), (bottom - top).max(1)).into(),
     )
+}
+
+/// Compiles the rounded-clip texture shader. Returns `None` if the renderer
+/// fails to compile it; the caller can then fall back to `ClippedSurface`.
+pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
+    let program = renderer.compile_custom_texture_shader(
+        grade_graphics::shaders::ROUNDED_CLIP,
+        &[
+            UniformName::new("texture_size", UniformType::_2f),
+            UniformName::new("geometry", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile rounded-clip shader");
+            None
+        }
+    }
+}
+
+/// Compiles the shadow pixel shader. Returns `None` on failure.
+pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
+    let program = renderer.compile_custom_pixel_shader(
+        grade_graphics::shaders::SHADOW,
+        &[
+            UniformName::new("size", UniformType::_2f),
+            UniformName::new("rect", UniformType::_4f),
+            UniformName::new("window_rect", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+            UniformName::new("blur", UniformType::_1f),
+            UniformName::new("offset", UniformType::_2f),
+            UniformName::new("scale", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
+            UniformName::new("color", UniformType::_4f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile shadow shader");
+            None
+        }
+    }
+}
+
+/// Compiles the border pixel shader. Returns `None` on failure.
+pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
+    let program = renderer.compile_custom_pixel_shader(
+        grade_graphics::shaders::BORDER,
+        &[
+            UniformName::new("size", UniformType::_2f),
+            UniformName::new("rect", UniformType::_4f),
+            UniformName::new("radius", UniformType::_1f),
+            UniformName::new("width", UniformType::_1f),
+            UniformName::new("side", UniformType::_1f),
+            UniformName::new("scale", UniformType::_1f),
+            UniformName::new("exponent", UniformType::_1f),
+            UniformName::new("color", UniformType::_4f),
+        ],
+    );
+    match program {
+        Ok(program) => Some(program),
+        Err(error) => {
+            tracing::warn!(?error, "failed to compile border shader");
+            None
+        }
+    }
 }
 
 #[cfg(test)]

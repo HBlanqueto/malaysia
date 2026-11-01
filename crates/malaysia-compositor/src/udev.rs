@@ -190,7 +190,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         .map_err(|error| anyhow!("creating the EGL display: {error}"))?;
     let egl_context =
         EGLContext::new(&egl_display).map_err(|error| anyhow!("creating EGL: {error}"))?;
-    let renderer = unsafe { GlesRenderer::new(egl_context) }
+    let mut renderer = unsafe { GlesRenderer::new(egl_context) }
         .map_err(|error| anyhow!("creating GLES: {error}"))?;
     let (connector, crtc, mode) = find_panel(&drm)?;
     info!(
@@ -239,7 +239,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
     let syncobj = supports_syncobj_eventfd(&render_fd).then_some(render_fd);
     let loop_handle = event_loop.handle();
-    let state = State::new_with_output(
+    let mut state = State::new_with_output(
         loop_signal.clone(),
         &display.handle(),
         smithay::utils::Size::from((i32::from(mode.size().0), i32::from(mode.size().1))),
@@ -250,6 +250,12 @@ pub fn run(options: DrmOptions) -> Result<()> {
         Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
+
+    // Compile the shared shaders once; failures are non-fatal and leave the
+    // optional fields as None.
+    state.rounded_clip = crate::effects::compile_rounded_clip(&mut renderer);
+    state.shadow = crate::effects::compile_shadow(&mut renderer);
+    state.border = crate::effects::compile_border(&mut renderer);
 
     let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
 
