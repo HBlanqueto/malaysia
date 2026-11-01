@@ -259,8 +259,7 @@ impl App for BarApp {
         let resolved = barrier_kit::theme::resolved();
 
         let now = self.clock.read().clone();
-        let app_id = self.active_app.read().clone();
-        let focused = app_id.is_some();
+        let active_app = self.active_app.read().clone();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
         let last_gtk_menus =
@@ -272,18 +271,20 @@ impl App for BarApp {
         let _ = *menu_tick.read();
         let toplevels = Toplevels::get().list.read().clone();
         let active_info = toplevels.iter().find(|window| window.active).or_else(|| {
-            app_id
+            active_app
                 .as_deref()
                 .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
         });
-        // The bold title and the menus follow the same window: the active
-        // toplevel when there is one, `active_app` otherwise.
-        let app = resolve_app_name(
-            active_info
-                .map(|info| info.app_id.as_str())
-                .or(app_id.as_deref()),
-            &self.entries,
-        );
+        // One source for the whole bar: the active toplevel when there is
+        // one, `active_app` (the store the compositor publishes) otherwise.
+        // The two can disagree while focus changes; mixing them showed the
+        // menus of the previous app next to the current one (Archivos ·
+        // Calculadora with Nautilus focused).
+        let app_id = active_info
+            .map(|info| info.app_id.clone())
+            .or_else(|| active_app.clone());
+        let focused = app_id.is_some();
+        let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let key = active_info.map(|info| MenuKey {
             app_id: info.app_id.clone(),
             app_menu: info.app_menu.clone(),
@@ -355,7 +356,7 @@ impl App for BarApp {
                         // with what the bar knew, to tell a cleared active
                         // window from a toplevel list that lags behind.
                         tracing::info!(
-                            active_app = ?app_id,
+                            active_app = ?active_app,
                             toplevels = toplevels.len(),
                             active = toplevels.iter().filter(|window| window.active).count(),
                             "menubar: no active window, Escritorio menu"
