@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
-use barrier_kit::menu::{CheckState, MenuItem, normalize_separators};
+use barrier_kit::menu::{CheckState, MNEMONIC_MARK, MenuItem, normalize_separators};
 use zbus::zvariant::OwnedValue;
 
 use crate::menubar::dbusmenu::RawItem;
@@ -92,19 +92,22 @@ fn bool_prop(props: &HashMap<String, OwnedValue>, key: &str, default: bool) -> b
         .unwrap_or(default)
 }
 
-/// Removes the dbusmenu mnemonic underline: `_x` becomes `x` and `__` becomes
-/// a literal `_`. No underline is drawn.
+/// Turns the dbusmenu/GTK mnemonic underscore into the kit's mark: `_x`
+/// becomes `MNEMONIC_MARK` + `x` (underlined while Alt is held) and `__` a
+/// literal `_`. Only the first mnemonic is kept, as GTK and Qt do.
 fn mnemonic(text: &str) -> String {
     let mut out = String::new();
+    let mut marked = false;
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
-        if ch == '_' {
-            if chars.peek() == Some(&'_') {
-                chars.next();
-                out.push('_');
-            }
-        } else {
+        if ch != '_' {
             out.push(ch);
+        } else if chars.peek() == Some(&'_') {
+            chars.next();
+            out.push('_');
+        } else if !marked && chars.peek().is_some() {
+            marked = true;
+            out.push(MNEMONIC_MARK);
         }
     }
     out
@@ -151,6 +154,7 @@ mod tests {
     use super::*;
     use barrier_kit::app_menu::server::TestMenuServer;
     use barrier_kit::app_menu::{AppMenu, Menu, RawItem as KitRawItem};
+    use barrier_kit::menu::strip_mnemonic;
     use barrier_kit::menu::{CheckState, MenuItem};
     use std::collections::HashMap;
 
@@ -211,15 +215,22 @@ mod tests {
     }
 
     #[test]
-    fn mnemonics_are_removed() {
+    fn mnemonics_become_the_kit_mark() {
         let items = menu_items(&[
             item(1, &[("label", text("_Archivo"))], Vec::new()),
             item(2, &[("label", text("Sele_cción"))], Vec::new()),
             item(3, &[("label", text("a__b"))], Vec::new()),
+            item(4, &[("label", text("_Uno _Dos"))], Vec::new()),
         ]);
+        let mark = MNEMONIC_MARK;
         assert_eq!(
             items.iter().filter_map(label).collect::<Vec<_>>(),
-            vec!["Archivo", "Selección", "a_b"]
+            vec![
+                format!("{mark}Archivo").as_str(),
+                format!("Sele{mark}cción").as_str(),
+                "a_b",
+                format!("{mark}Uno Dos").as_str(),
+            ]
         );
     }
 
@@ -444,7 +455,7 @@ mod tests {
                 label,
                 items,
                 ..
-            } if id == "7" && label == "Archivo" && items.is_empty()
+            } if id == "7" && strip_mnemonic(label) == "Archivo" && items.is_empty()
         ));
     }
 

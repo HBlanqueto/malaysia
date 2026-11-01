@@ -7,9 +7,9 @@ cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md
 ## Ahora (2026-10-31)
 
 - **Menú global (Bloque 14).** 14f-2 aceptado (2026-11-01); falta aceptar
-  14b-2 (diálogos del sistema)
-  (diálogos del sistema), subrayado de mnemónicos con Alt y scroll de menús
-  largos. 14d-1, 14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
+  14b-2 (diálogos del sistema), los mnemónicos con Alt y el scroll de menús
+  largos; la pantalla completa desde el menú Ventana sigue pendiente. 14d-1,
+  14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
   y los menús de una app real.
 - **Modo foco.** `window.green_button = "focus"` solo registra la petición
   (`GreenButtonAction::Focus`); falta atenuar el resto y mantener la ventana al
@@ -185,11 +185,19 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
     (EDID). Filas cortas: procesador, memoria, disco de arranque («SSD de 512
     GB», siguiendo LUKS/LVM), número de serie si es legible y versión; «Más información…»
     abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`). Mide 280×430 como en macOS y muestra solo procesador, memoria, disco, serie y versión.
-- Mnemónicos subrayados al pulsar Alt (no existe en `menu.rs`).
-- Scroll de menús más altos que la salida (`menu.rs` solo desplaza los
-  resultados de búsqueda).
-- Espacio activa también con Ctrl/Alt (`menu.rs`, rama `Key::Character(" ")`):
-  decidir si se filtra con `inserts_text`.
+- Mnemónicos, Espacio y scroll: implementados 2026-11-01, falta aceptarlos en
+  anidado (barrierkit `bdbd583` y `a2394a6`, `menu.rs`).
+  - dbusmenu y GTK convierten `_` en `MNEMONIC_MARK` (U+2063, invisible y sin
+    ancho); con Alt pulsado la fila subraya esa letra y al soltarlo vuelve al
+    texto normal. Las comparaciones de títulos y la búsqueda la ignoran.
+  - Espacio activa solo sin Ctrl ni Alt (`inserts_text`): Ctrl+Espacio es del
+    método de entrada y Alt+Espacio del menú de ventana. En la búsqueda de
+    Ayuda un espacio se escribe en la consulta.
+  - Menús más altos que la salida: el menú raíz pide `resize_y` sin `slide_y`
+    (no se sube encima de la barra) y los submenús `slide_y` + `resize_y`.
+    `MenuView` muestra franjas ▲/▼ que desplazan al pasar el cursor, la rueda
+    desplaza y el foco del teclado queda a la vista; los submenús se anclan a
+    la fila visible (`PopupHandle::scroll_shift`).
 - «Ajustes del sistema…» del menú ❄ no abre el cliente con
   `MALAYSIA_TEST_INPUT` en la sesión anidada.
 - Aceptación en DRM de 14a, 14b-1 y 14c.

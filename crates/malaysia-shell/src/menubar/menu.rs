@@ -175,7 +175,10 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
             flip_x: true,
             flip_y: true,
             slide_x: true,
-            slide_y: true,
+            // A long menu stays under the bar and gets shorter instead of
+            // sliding over it; MenuView then scrolls (Smithay slides first).
+            slide_y: false,
+            resize_y: true,
         },
         grab: true,
         on_dismissed: None,

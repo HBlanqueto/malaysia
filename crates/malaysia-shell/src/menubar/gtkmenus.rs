@@ -684,6 +684,7 @@ where
 mod tests {
     use super::*;
     use crate::menubar::dbusmenu_map::menu_items;
+    use barrier_kit::menu::strip_mnemonic;
     use barrier_kit::menu::{CheckState, MenuItem};
 
     fn attrs(pairs: &[(&str, OwnedValue)]) -> Attributes {
@@ -775,7 +776,7 @@ mod tests {
         let MenuItem::Submenu { label, items, .. } = &items[0] else {
             panic!("Preferences is a submenu");
         };
-        assert_eq!(label, "Preferences");
+        assert_eq!(strip_mnemonic(label), "Preferences");
         assert_eq!(
             items.len(),
             2,
@@ -790,7 +791,7 @@ mod tests {
         else {
             panic!("an action");
         };
-        assert_eq!(label, "Prefer Dark");
+        assert_eq!(strip_mnemonic(label), "Prefer Dark");
         assert_eq!(shortcut.as_deref(), Some("Control+D"));
         assert_eq!(*check, CheckState::Checkbox(true));
         assert!(matches!(
@@ -849,7 +850,10 @@ mod tests {
         let tree = Tree::build(&app, &demo(), &actions, "Demo");
         let items = menu_items(&tree.items);
         assert_eq!(items[0].label(), Some("Demo"));
-        assert_eq!(items[1].label(), Some("Preferences"));
+        assert_eq!(
+            items[1].label().map(strip_mnemonic).as_deref(),
+            Some("Preferences")
+        );
     }
 
     #[test]

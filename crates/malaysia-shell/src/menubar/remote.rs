@@ -64,7 +64,7 @@ pub fn unavailable() -> MenuItem {
 
 /// Lowercase and strip accents for title matching.
 pub fn normalize(label: &str) -> String {
-    label
+    barrier_kit::menu::strip_mnemonic(label)
         .trim()
         .to_lowercase()
         .replace('á', "a")
@@ -187,7 +187,7 @@ pub fn searchable(titles: &[Title]) -> Vec<SearchableEntry> {
     for (title_index, title) in titles.iter().enumerate() {
         collect(
             &title.items,
-            &title.label,
+            &barrier_kit::menu::strip_mnemonic(&title.label),
             SearchLocation {
                 title_index,
                 indices: Vec::new(),
@@ -219,6 +219,8 @@ fn collect(
             MenuItem::Submenu { label, items, .. } => {
                 let mut location = location.clone();
                 location.indices.push(index);
+                // Paths are display and search text: no mnemonic marks.
+                let label = barrier_kit::menu::strip_mnemonic(label);
                 collect(items, &format!("{path} › {label}"), location, out);
             }
             _ => {}
@@ -514,7 +516,10 @@ mod tests {
                     .label()
                     .is_some_and(|label| label.to_lowercase().contains("nuev"))
             })
-            .map(|entry| format!("{} › {}", entry.path, entry.item.label().unwrap()))
+            .map(|entry| {
+                let label = barrier_kit::menu::strip_mnemonic(entry.item.label().unwrap());
+                format!("{} › {label}", entry.path)
+            })
             .collect();
         assert!(
             hits.contains(&"Archivo › Nuevo".to_string()),
@@ -524,7 +529,10 @@ mod tests {
 
         let nested = entries
             .iter()
-            .find(|entry| entry.item.label() == Some("documento.txt"))
+            .find(|entry| {
+                entry.item.label().map(barrier_kit::menu::strip_mnemonic)
+                    == Some("documento.txt".to_string())
+            })
             .expect("a nested leaf is indexed");
         assert_eq!(nested.path, "Archivo › Abrir reciente");
         assert_eq!(nested.source, SearchSource::Menu);
@@ -534,7 +542,10 @@ mod tests {
 
         let disabled = entries
             .iter()
-            .find(|entry| entry.item.label() == Some("Guardar"))
+            .find(|entry| {
+                entry.item.label().map(barrier_kit::menu::strip_mnemonic)
+                    == Some("Guardar".to_string())
+            })
             .expect("a disabled action is still indexed");
         assert!(matches!(
             &disabled.item,

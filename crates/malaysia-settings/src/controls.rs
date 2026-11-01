@@ -369,6 +369,7 @@ fn open_traffic_menu(
             flip_y: true,
             slide_x: true,
             slide_y: true,
+            resize_y: false,
         },
         grab: true,
         on_dismissed: None,
