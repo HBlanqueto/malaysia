@@ -11,13 +11,16 @@ use std::path::Path;
 use std::rc::Rc;
 
 use barrier_kit::controls::Button;
+use barrier_kit::platform::{Decorations, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use barrier_kit::titlebar::Titlebar;
+use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
-use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_design::{DIALOG, DIALOG_PADDING, HEADLINE, Rgba, TEXT};
+use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
+use vow_design::{CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, Rgba, TEXT};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
@@ -27,7 +30,10 @@ use crate::power::{self, PowerAction};
 /// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (380, 160);
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-const ABOUT_SIZE: (u32, u32) = (400, 300);
+const ABOUT_SIZE: (u32, u32) = (360, 480);
+/// The laptop drawing keeps the SVG's 1024×680 aspect.
+const ABOUT_DRAWING: (f32, f32) = (220.0, 146.0);
+const ABOUT_COLUMN_GAP: f32 = 8.0;
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
@@ -306,26 +312,135 @@ pub fn run_force_quit() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+/// The laptop drawings of «Acerca de este equipo».
+const THINKPAD_SVG: &[u8] = include_bytes!("about/thinkpad.svg");
+const GENERIC_SVG: &[u8] = include_bytes!("about/generic.svg");
+
 /// What «Acerca de este equipo» lists, read from the running system.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct AboutInfo {
+    model: String,
+    thinkpad: bool,
     hostname: String,
     system: String,
     cpu: String,
     gpu: String,
     memory: String,
+    disk: String,
+    /// `product_serial` is root-only on most systems: `None` hides the row.
+    serial: Option<String>,
 }
 
 impl AboutInfo {
     fn read() -> Self {
         let read = |path: &str| std::fs::read_to_string(path).unwrap_or_default();
+        let dmi = |key: &str| read(&format!("/sys/class/dmi/id/{key}")).trim().to_string();
+        let model = model_name(
+            &dmi("sys_vendor"),
+            &dmi("product_name"),
+            &dmi("product_version"),
+            &dmi("product_family"),
+        );
         Self {
+            thinkpad: model.contains("ThinkPad"),
+            model,
             hostname: read("/proc/sys/kernel/hostname").trim().to_string(),
             system: os_name(&read("/etc/os-release")),
             cpu: cpu_name(&read("/proc/cpuinfo")),
             gpu: gpu_name(),
             memory: memory(&read("/proc/meminfo")),
+            disk: startup_disk(&read("/proc/mounts")),
+            serial: Some(dmi("product_serial")).filter(|serial| is_real(serial)),
         }
+    }
+}
+
+/// Firmware placeholders that are not a name.
+fn is_real(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    !value.is_empty()
+        && ![
+            "to be filled",
+            "system product",
+            "default string",
+            "not specified",
+            "o.e.m.",
+        ]
+        .iter()
+        .any(|placeholder| lower.contains(placeholder))
+}
+
+/// The marketing name of the machine. Lenovo keeps it in `product_version`
+/// («ThinkPad L14 Gen 2») and the machine type in `product_name` («20X1…»).
+fn model_name(vendor: &str, name: &str, version: &str, family: &str) -> String {
+    if vendor.eq_ignore_ascii_case("lenovo")
+        && let Some(model) = [version, family].into_iter().find(|value| is_real(value))
+    {
+        return model.to_string();
+    }
+    [name, family]
+        .into_iter()
+        .find(|value| is_real(value))
+        .map(str::to_string)
+        .unwrap_or_else(|| "Este equipo".to_string())
+}
+
+/// The disk that holds `/`: its model and size, following partitions and
+/// device-mapper layers (LUKS, LVM) down to the physical disk.
+fn startup_disk(mounts: &str) -> String {
+    let Some(device) = mounts.lines().find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let device = fields.next()?;
+        (fields.next() == Some("/")).then_some(device)
+    }) else {
+        return "Desconocido".to_string();
+    };
+    let Some(name) = std::fs::canonicalize(device)
+        .ok()
+        .and_then(|path| path.file_name()?.to_str().map(str::to_string))
+    else {
+        return "Desconocido".to_string();
+    };
+    let disk = physical_disk(&name);
+    let block = Path::new("/sys/class/block").join(&disk);
+    let model = std::fs::read_to_string(block.join("device/model"))
+        .map(|model| model.trim().to_string())
+        .unwrap_or_else(|_| disk.clone());
+    let size = std::fs::read_to_string(block.join("size"))
+        .ok()
+        .and_then(|sectors| sectors.trim().parse::<u64>().ok())
+        .map(|sectors| format!(" ({})", disk_size(sectors * 512)))
+        .unwrap_or_default();
+    format!("{model}{size}")
+}
+
+/// `nvme0n1p2` → `nvme0n1`, `dm-0` → its first slave, recursively.
+fn physical_disk(name: &str) -> String {
+    let block = Path::new("/sys/class/block").join(name);
+    if let Some(slave) = std::fs::read_dir(block.join("slaves"))
+        .ok()
+        .and_then(|mut slaves| slaves.next())
+        .and_then(|slave| slave.ok()?.file_name().into_string().ok())
+    {
+        return physical_disk(&slave);
+    }
+    if block.join("partition").exists()
+        && let Some(parent) = std::fs::canonicalize(&block)
+            .ok()
+            .and_then(|path| path.parent()?.file_name()?.to_str().map(str::to_string))
+    {
+        return parent;
+    }
+    name.to_string()
+}
+
+/// Bytes in decimal GB or TB, the way disks are sold.
+fn disk_size(bytes: u64) -> String {
+    let gb = bytes as f64 / 1e9;
+    if gb >= 1000.0 {
+        format!("{:.1} TB", gb / 1000.0)
+    } else {
+        format!("{gb:.0} GB")
     }
 }
 
@@ -451,63 +566,126 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
-        let rows = [
-            ("Sistema", &self.info.system),
-            ("Procesador", &self.info.cpu),
-            ("Gráficos", &self.info.gpu),
-            ("Memoria", &self.info.memory),
-        ]
-        .into_iter()
-        .map(|(name, value)| {
+        about_view(&self.info, Titlebar::new().on_close(|()| close()))
+    }
+}
+
+/// The window content; the titlebar is a parameter so tests can pass a
+/// preview one that needs no Wayland window.
+fn about_view(info: &AboutInfo, titlebar: Titlebar) -> impl IntoElement + use<> {
+    {
+        let resolved = barrier_kit::theme::resolved();
+        let palette = vow_appearance::palette(resolved.scheme);
+        let mut rows = vec![
+            ("Procesador", info.cpu.clone()),
+            ("Gráficos", info.gpu.clone()),
+            ("Memoria", info.memory.clone()),
+            ("Disco de arranque", info.disk.clone()),
+        ];
+        if let Some(serial) = &info.serial {
+            rows.push(("Número de serie", serial.clone()));
+        }
+        rows.push(("Sistema", info.system.clone()));
+        rows.push(("Malaysia", env!("CARGO_PKG_VERSION").to_string()));
+        let rows = rows.into_iter().map(|(name, value)| {
             rect()
                 .width(Size::fill())
                 .direction(Direction::Horizontal)
-                .spacing(12.0)
+                .content(Content::flex())
+                .spacing(ABOUT_COLUMN_GAP)
                 .child(
                     label()
                         .text(name)
-                        .width(Size::px(96.0))
-                        .font_size(TEXT.size as f32)
-                        .color(rgba(palette.text.unfocused)),
+                        .width(Size::flex(1.0))
+                        .text_align(TextAlign::Right)
+                        .font_size(CAPTION.size as f32)
+                        .color(rgba(palette.text.focused)),
                 )
                 .child(
                     label()
-                        .text(value.clone())
-                        .width(Size::flex(1.0))
-                        .font_size(TEXT.size as f32)
-                        .color(rgba(palette.text.focused)),
+                        .text(value)
+                        .width(Size::flex(1.2))
+                        .font_size(CAPTION.size as f32)
+                        .color(rgba(palette.text.unfocused)),
                 )
                 .into_element()
         });
-        panel()
+        let drawing = if info.thinkpad {
+            THINKPAD_SVG
+        } else {
+            GENERIC_SVG
+        };
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(rgba(resolved.surfaces.window))
+            .direction(Direction::Vertical)
             .on_global_key_down(|event: Event<KeyboardEventData>| {
-                if matches!(event.key, Key::Named(NamedKey::Escape | NamedKey::Enter)) {
+                if matches!(event.key, Key::Named(NamedKey::Escape)) {
                     close();
                 }
             })
-            .cross_align(Alignment::Center)
-            .child(title(&self.info.hostname))
-            .child(body(&format!("Malaysia {}", env!("CARGO_PKG_VERSION"))))
+            .child(titlebar)
             .child(
                 rect()
                     .width(Size::fill())
                     .height(Size::flex(1.0))
+                    .padding(Gaps::new(
+                        0.0,
+                        DIALOG_PADDING,
+                        DIALOG_PADDING,
+                        DIALOG_PADDING,
+                    ))
                     .direction(Direction::Vertical)
-                    .main_align(Alignment::Center)
-                    .spacing(6.0)
-                    .children(rows),
+                    .cross_align(Alignment::Center)
+                    .spacing(DIALOG_PADDING / 2.0)
+                    .child(
+                        SvgViewer::new(drawing)
+                            .width(Size::px(ABOUT_DRAWING.0))
+                            .height(Size::px(ABOUT_DRAWING.1)),
+                    )
+                    .child(
+                        label()
+                            .text(info.model.clone())
+                            .text_align(TextAlign::Center)
+                            .width(Size::fill())
+                            .font_size(DISPLAY.size as f32)
+                            .font_weight(FontWeight::BOLD)
+                            .color(rgba(palette.text.focused)),
+                    )
+                    .child(
+                        label()
+                            .text(info.hostname.clone())
+                            .font_size(CAPTION.size as f32)
+                            .color(rgba(palette.text.unfocused)),
+                    )
+                    .child(
+                        rect()
+                            .width(Size::fill())
+                            .direction(Direction::Vertical)
+                            .spacing(4.0)
+                            .children(rows),
+                    )
+                    .child(
+                        Button::new()
+                            .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[]))
+                            .child(label().text("Más información…").font_size(TEXT.size as f32)),
+                    ),
             )
     }
 }
 
-/// `malaysia-shell about`.
+/// `malaysia-shell about`: a fixed-size window like macOS «Acerca de este Mac».
 pub fn run_about() -> anyhow::Result<()> {
     let info = AboutInfo::read();
     tracing::info!(?info, "about this computer");
-    run_layer(
+    run_window(
         AppComponent::new(AboutApp { info }),
-        spec("malaysia-dialog", ABOUT_SIZE),
+        WindowOptions::new("Acerca de este equipo", "about")
+            .decorations(Decorations::Client)
+            .size(ABOUT_SIZE)
+            .min_size(Some(ABOUT_SIZE))
+            .max_size(Some(ABOUT_SIZE)),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
@@ -548,6 +726,32 @@ mod tests {
     }
 
     #[test]
+    fn thinkpads_are_named_from_product_version() {
+        let model = model_name(
+            "LENOVO",
+            "20X1S0QE00",
+            "ThinkPad L14 Gen 2",
+            "ThinkPad L14 Gen 2",
+        );
+        assert_eq!(model, "ThinkPad L14 Gen 2");
+        assert!(model.contains("ThinkPad"));
+        assert_eq!(
+            model_name("Dell Inc.", "XPS 13 9310", "", "XPS"),
+            "XPS 13 9310"
+        );
+        assert_eq!(
+            model_name("ASUS", "System Product Name", "", "To be filled by O.E.M."),
+            "Este equipo"
+        );
+    }
+
+    #[test]
+    fn disk_sizes_read_like_a_label() {
+        assert_eq!(disk_size(512_110_190_592), "512 GB");
+        assert_eq!(disk_size(2_000_398_934_016), "2.0 TB");
+    }
+
+    #[test]
     fn pci_ids_name_the_gpu() {
         let ids = "# comment\n1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\t1636  Renoir\n\t1638  Cezanne\n1022  Advanced Micro Devices, Inc. [AMD]\n\t1638  Wrong vendor\n";
         assert_eq!(pci_name(ids, 0x1002, 0x1638), "AMD Cezanne");
@@ -565,6 +769,44 @@ mod tests {
             let (question, _, button) = confirm_text(action);
             assert!(question.ends_with('?'));
             assert!(!button.is_empty());
+        }
+    }
+}
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+    use barrier_kit::platform::{DecorationResponse, WindowStatus};
+    use freya_testing::TestingRunner;
+    use torin::prelude::Size2D;
+
+    struct Preview(AboutInfo);
+
+    impl App for Preview {
+        fn render(&self) -> impl IntoElement {
+            let status = WindowStatus {
+                activated: true,
+                maximized: false,
+                decoration: DecorationResponse::Client,
+                fixed: true,
+            };
+            about_view(&self.0, Titlebar::preview(status, "", true))
+        }
+    }
+
+    #[test]
+    fn the_about_window_renders_for_both_drawings() {
+        for thinkpad in [true, false] {
+            let info = AboutInfo {
+                model: "ThinkPad L14 Gen 2".into(),
+                thinkpad,
+                memory: "15.0 GB".into(),
+                ..AboutInfo::default()
+            };
+            let size = Size2D::new(ABOUT_SIZE.0 as f32, ABOUT_SIZE.1 as f32);
+            let (mut test, _) =
+                TestingRunner::new(AppComponent::new(Preview(info)), size, |_| {}, 1.0);
+            test.sync_and_update();
+            assert!(!test.render().as_ref().is_empty());
         }
     }
 }

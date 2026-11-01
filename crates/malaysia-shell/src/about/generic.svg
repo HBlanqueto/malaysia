@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="680" viewBox="0 0 1024 680">
+  <!-- The ground shadow is a plain translucent ellipse: Skia's SVG module drops
+       stop-opacity in radial gradients (solid black) and ignores feGaussianBlur. -->
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#7ab4f2"/>
+      <stop offset="0.55" stop-color="#4f93e6"/>
+      <stop offset="1" stop-color="#2f74d6"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2c2f"/>
+      <stop offset="1" stop-color="#151518"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c8cacf"/>
+      <stop offset="1" stop-color="#8e9096"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f6f8"/>
+      <stop offset="0.4" stop-color="#dcdde0"/>
+      <stop offset="1" stop-color="#a3a5aa"/>
+    </linearGradient>
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.16"/>
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="scr"><rect x="194" y="92" width="636" height="432" rx="8"/></clipPath>
+  </defs>
+
+  <ellipse cx="512" cy="598" rx="400" ry="12" fill="#000" opacity="0.16"/>
+
+  <!-- aluminium rim behind lid -->
+  <rect x="168" y="62" width="688" height="488" rx="24" fill="url(#rim)"/>
+  <!-- bezel -->
+  <rect x="172" y="66" width="680" height="480" rx="21" fill="url(#lid)"/>
+
+  <!-- camera in bezel -->
+  <circle cx="512" cy="79" r="4" fill="#0b0b0d"/>
+  <circle cx="512" cy="79" r="2" fill="#26303c"/>
+
+  <!-- screen -->
+  <rect x="194" y="92" width="636" height="432" rx="8" fill="url(#screen)"/>
+  <g clip-path="url(#scr)">
+    <!-- soft wave for depth -->
+    <path d="M194 420 C 360 360, 520 470, 830 380 V524 H194 Z" fill="#ffffff" opacity="0.07"/>
+    <path d="M194 470 C 400 420, 600 520, 830 440 V524 H194 Z" fill="#ffffff" opacity="0.06"/>
+    <rect x="194" y="92" width="636" height="432" fill="url(#glare)"/>
+  </g>
+
+  <!-- base: single slim wedge -->
+  <path d="M110 548 H914 a10 10 0 0 1 10 10 c0 16 -20 26 -48 26 H148 c-28 0 -48 -10 -48 -26 a10 10 0 0 1 10 -10 z" fill="url(#base)"/>
+  <path d="M112 549.5 H912" stroke="#fff" stroke-opacity="0.95" stroke-width="2"/>
+  <path d="M150 583 H874" stroke="#7d7f84" stroke-opacity="0.6" stroke-width="1.5"/>
+
+  <!-- front lip groove (wide & shallow, distinct from the earlier scoop) -->
+  <rect x="392" y="550" width="240" height="5" rx="2.5" fill="#b9bbbf"/>
+</svg>

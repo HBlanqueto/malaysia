@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="680" viewBox="0 0 1024 680">
+  <!-- The ground shadow is a plain translucent ellipse: Skia's SVG module drops
+       stop-opacity in radial gradients (solid black) and ignores feGaussianBlur. -->
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#7ab4f2"/>
+      <stop offset="0.55" stop-color="#4f93e6"/>
+      <stop offset="1" stop-color="#2f74d6"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a2b"/>
+      <stop offset="1" stop-color="#1a1a1b"/>
+    </linearGradient>
+    <linearGradient id="lidEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a4a4c"/>
+      <stop offset="1" stop-color="#2c2c2e"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b3b3d"/>
+      <stop offset="0.35" stop-color="#262628"/>
+      <stop offset="1" stop-color="#121213"/>
+    </linearGradient>
+    <linearGradient id="hinge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3a3c"/>
+      <stop offset="0.5" stop-color="#151516"/>
+      <stop offset="1" stop-color="#2a2a2c"/>
+    </linearGradient>
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.14"/>
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="scr"><rect x="200" y="100" width="624" height="414" rx="2"/></clipPath>
+  </defs>
+
+  <ellipse cx="512" cy="600" rx="400" ry="12" fill="#000" opacity="0.16"/>
+
+  <!-- lid: boxy, small corner radius, thick bezel -->
+  <rect x="168" y="60" width="688" height="486" rx="10" fill="url(#lidEdge)"/>
+  <rect x="171" y="63" width="682" height="480" rx="8" fill="url(#lid)"/>
+
+  <!-- camera + IR sensor + privacy-shutter strip in top bezel -->
+  <rect x="482" y="74" width="60" height="14" rx="7" fill="#111112"/>
+  <circle cx="500" cy="81" r="4" fill="#0a0a0b"/>
+  <circle cx="500" cy="81" r="2" fill="#253040"/>
+  <circle cx="524" cy="81" r="2.5" fill="#1f1f22"/>
+
+  <!-- screen: matte, nearly square corners -->
+  <rect x="200" y="100" width="624" height="414" rx="2" fill="url(#screen)"/>
+  <g clip-path="url(#scr)">
+    <path d="M200 410 C 360 350, 520 460, 824 370 V514 H200 Z" fill="#fff" opacity="0.07"/>
+    <path d="M200 460 C 400 410, 600 510, 824 430 V514 H200 Z" fill="#fff" opacity="0.06"/>
+    <rect x="200" y="100" width="624" height="414" fill="url(#glare)"/>
+  </g>
+  <rect x="200" y="100" width="624" height="414" rx="2" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="1.5"/>
+
+  <!-- barrel hinges -->
+  <rect x="218" y="538" width="150" height="16" rx="8" fill="url(#hinge)"/>
+  <rect x="656" y="538" width="150" height="16" rx="8" fill="url(#hinge)"/>
+  <rect x="368" y="544" width="288" height="6" fill="#1b1b1c"/>
+
+  <!-- base: thick, flat-sided slab -->
+  <path d="M104 552 H920 a6 6 0 0 1 6 6 v18 a8 8 0 0 1 -8 8 H106 a8 8 0 0 1 -8 -8 v-18 a6 6 0 0 1 6 -6 z" fill="url(#base)"/>
+  <path d="M106 553.5 H918" stroke="#5a5a5d" stroke-width="1.5"/>
+  <path d="M110 578 H914" stroke="#000" stroke-opacity="0.5" stroke-width="1"/>
+
+  <!-- side status LED -->
+  <circle cx="140" cy="566" r="2.5" fill="#d8323a"/>
+  <circle cx="140" cy="566" r="5" fill="#d8323a" opacity="0.2"/>
+
+  <!-- rubber feet -->
+  <rect x="140" y="584" width="56" height="5" rx="2.5" fill="#0c0c0d"/>
+  <rect x="828" y="584" width="56" height="5" rx="2.5" fill="#0c0c0d"/>
+</svg>

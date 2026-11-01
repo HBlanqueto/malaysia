@@ -178,10 +178,13 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
     una fila por app de `zwlr_foreign_toplevel` con su icono; el botón pide
     `force_quit` (Infinity v4, barrierkit `8b96ae7`) y el compositor envía
     SIGKILL al pid de las credenciales del socket.
-  - Acerca de este equipo: `malaysia-shell about` lee nombre del equipo,
-    sistema (`/etc/os-release`), CPU (`/proc/cpuinfo`), GPU (`/sys/class/drm`
-    + `pci.ids`), memoria (`/proc/meminfo`) y versión del paquete
-    (`crates/malaysia-shell/src/dialogs.rs`).
+  - Acerca de este equipo: `malaysia-shell about`, ventana fija con semáforos
+    como «Acerca de este Mac». Modelo por DMI (Lenovo guarda «ThinkPad …» en
+    `product_version`); dibujo `about/thinkpad.svg` para ThinkPad y
+    `about/generic.svg` para el resto. Lista procesador, gráficos (`pci.ids`),
+    memoria, disco de arranque (siguiendo LUKS/LVM hasta el disco), número de
+    serie si es legible, sistema (`os-release`) y versión; «Más información…»
+    abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`).
 - Mnemónicos subrayados al pulsar Alt (no existe en `menu.rs`).
 - Scroll de menús más altos que la salida (`menu.rs` solo desplaza los
   resultados de búsqueda).
