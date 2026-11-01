@@ -141,6 +141,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_square_clip_covers_its_whole_interior() {
+        // Radius 0 (fullscreen, a revealed titlebar) must not halve the
+        // interior: the old distance was 0 everywhere inside.
+        assert!(shaders::ROUNDED_CLIP.contains("min(max(corner.x, corner.y), 0.0)"));
+        let rect = (0.0, 0.0, 100.0, 40.0);
+        for p in [(50.0, 20.0), (1.0, 1.0), (99.0, 39.0), (50.0, 1.0)] {
+            assert_eq!(coverage(window_sdf(p, rect, 0.0, 2.0)), 1.0, "{p:?}");
+        }
+        assert_eq!(coverage(window_sdf((101.0, 20.0), rect, 0.0, 2.0)), 0.0);
+    }
+
+    #[test]
+    fn rounded_corners_keep_their_edge_distance() {
+        let rect = (0.0, 0.0, 100.0, 100.0);
+        // Near an edge the distance is unchanged by the interior term.
+        let edge = window_sdf((50.0, 0.25), rect, 16.0, 2.0);
+        assert!((edge + 0.25).abs() < 1e-4);
+        // The corner itself is cut away.
+        assert_eq!(coverage(window_sdf((0.5, 0.5), rect, 16.0, 2.0)), 0.0);
+        // Deep inside is fully covered.
+        assert_eq!(coverage(window_sdf((50.0, 50.0), rect, 16.0, 2.0)), 1.0);
+    }
+
     /// Abramowitz & Stegun 7.1.26 approximation, matching the shader.
     fn erf(x: f32) -> f32 {
         let a = x.abs();
@@ -205,7 +229,7 @@ mod tests {
     fn rounded_rect_sdf(px: (f32, f32), center: (f32, f32), size: (f32, f32), radius: f32) -> f32 {
         let dx = (px.0 - center.0).abs() - size.0 / 2.0 + radius;
         let dy = (px.1 - center.1).abs() - size.1 / 2.0 + radius;
-        (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() - radius
+        (dx.max(0.0).powi(2) + dy.max(0.0).powi(2)).sqrt() + dx.max(dy).min(0.0) - radius
     }
 
     /// 1-pixel antialiased coverage from the signed distance.
@@ -217,9 +241,10 @@ mod tests {
     fn window_sdf(px: (f32, f32), rect: (f32, f32, f32, f32), radius: f32, exponent: f32) -> f32 {
         let half = (rect.2 * 0.5, rect.3 * 0.5);
         let center = (rect.0 + half.0, rect.1 + half.1);
-        let qx = ((px.0 - center.0).abs() - half.0 + radius).max(0.0);
-        let qy = ((px.1 - center.1).abs() - half.1 + radius).max(0.0);
-        (qx.powf(exponent) + qy.powf(exponent)).powf(1.0 / exponent) - radius
+        let cx = (px.0 - center.0).abs() - half.0 + radius;
+        let cy = (px.1 - center.1).abs() - half.1 + radius;
+        let (qx, qy) = (cx.max(0.0), cy.max(0.0));
+        (qx.powf(exponent) + qy.powf(exponent)).powf(1.0 / exponent) + cx.max(cy).min(0.0) - radius
     }
 
     fn assert_close(actual: f32, expected: f32, context: &str) {
