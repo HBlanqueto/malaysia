@@ -38,6 +38,14 @@ use crate::state::State;
 /// How long one slide takes (Tengen, `vow-design`).
 const SLIDE: Duration = Duration::from_millis(vow_design::SPACE_SLIDE_MS);
 
+/// When a window leaving focus mode is told it is no longer fullscreen, as a
+/// fraction of the shrink. With the slide curve the rectangle is then almost
+/// at its desktop size: the client redraws small in time for the end, and
+/// its new buffer is barely scaled up on the last frames. Telling it at the
+/// end left the shrunken full-screen image on screen for up to a second
+/// (Nautilus); at the start, the small image was blown up and blurry.
+const RELEASE_AT: f64 = 0.6;
+
 /// How long a window that grew into focus mode may keep being drawn by the
 /// transition after the slide, waiting for the client to commit a buffer at
 /// the output size. Without the wait, the frame where the transition hands
@@ -468,10 +476,22 @@ impl State {
                 radius: 0.0,
             });
         }
+        if !transition.entering
+            && transition.released.is_none()
+            && committed.is_some()
+            && elapsed.as_secs_f64() >= SLIDE.as_secs_f64() * RELEASE_AT
+        {
+            self.release_focus_window(transition.window);
+            self.focus_transition = Some(FocusTransition {
+                released: Some(now),
+                ..transition
+            });
+        }
+        let transition = self.focus_transition.unwrap_or(transition);
         if !transition.entering && committed.is_some() && elapsed >= SLIDE {
-            // The shrink is done: release the window, then hold it on its
-            // desktop rectangle until it commits a buffer that is no longer
-            // the output size (or the wait runs out).
+            // The shrink is done: hold the window on its desktop rectangle
+            // until it commits a buffer that is no longer the output size (or
+            // the wait, counted from the release, runs out).
             let released = match transition.released {
                 Some(released) => released,
                 None => {
