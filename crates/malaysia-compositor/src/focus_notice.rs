@@ -1,9 +1,16 @@
 //! `infinity_focus_v1`: focus-mode notices for applications (ADR 0051).
 //!
 //! Open to every client: it grants nothing and only says when the bar comes
-//! down over a client-decorated window in focus mode (`bar(1)`, the window
-//! is moved down under it) and when it goes up again (`bar(0)`). A barrierkit
-//! app shows its traffic lights only in between, like Finder.
+//! down over a client-decorated window in focus mode (`bar(1)`) and when it
+//! goes up again (`bar(0)`). A barrierkit app shows its traffic lights only
+//! in between, like Finder.
+//!
+//! Version 1 objects get their window moved down under the bar. A version 2
+//! object that sent `set_overlay` draws its titlebar over its content below
+//! the bar itself, so the window stays put and `bar_height` precedes every
+//! `bar(1)` (ADR 0054).
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -28,12 +35,18 @@ pub struct FocusNoticeGlobalData;
 #[derive(Debug)]
 pub struct FocusNoticeSurfaceData {
     surface: WlSurface,
+    /// The client draws its titlebar over its content (`set_overlay`).
+    overlay: AtomicBool,
 }
 
+/// The global's version: 2 adds `set_overlay` and `bar_height`.
+const VERSION: u32 = 2;
+
 impl FocusNoticeGlobalData {
-    /// Creates the global (version 1).
+    /// Creates the global.
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        display_handle.create_global::<State, InfinityFocusManagerV1, _>(1, FocusNoticeGlobalData)
+        display_handle
+            .create_global::<State, InfinityFocusManagerV1, _>(VERSION, FocusNoticeGlobalData)
     }
 }
 
@@ -65,6 +78,7 @@ impl Dispatch2<InfinityFocusManagerV1, State> for FocusNoticeGlobalData {
                 id,
                 FocusNoticeSurfaceData {
                     surface: surface.clone(),
+                    overlay: AtomicBool::new(false),
                 },
             );
             state.focus_notices.push(notice);
@@ -78,11 +92,14 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
         _state: &mut State,
         _client: &Client,
         _resource: &InfinityFocusSurfaceV1,
-        _request: infinity_focus_surface_v1::Request,
+        request: infinity_focus_surface_v1::Request,
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
-        // Only `destroy`, handled by `destroyed`.
+        // `destroy` is handled by `destroyed`.
+        if let infinity_focus_surface_v1::Request::SetOverlay = request {
+            self.overlay.store(true, Ordering::Relaxed);
+        }
     }
 
     fn destroyed(&self, state: &mut State, _client: ClientId, resource: &InfinityFocusSurfaceV1) {
@@ -92,20 +109,39 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
 }
 
 impl State {
+    /// Whether the window's client draws its titlebar over its content in
+    /// focus mode (`set_overlay`), so the bar must not move the window.
+    pub(crate) fn focus_overlay(&self, window: WindowId) -> bool {
+        let Some(surface) = self.windows.surface_of(window) else {
+            return false;
+        };
+        self.focus_notices.iter().any(|notice| {
+            notice.is_alive()
+                && notice.data::<FocusNoticeSurfaceData>().is_some_and(|data| {
+                    data.surface == *surface && data.overlay.load(Ordering::Relaxed)
+                })
+        })
+    }
+
     /// Tells the window's client that the bar came down over it (`true`) or
-    /// went up (`false`).
+    /// went up (`false`). An overlay client first gets the bar's height.
     pub(crate) fn send_focus_bar(&mut self, window: WindowId, revealed: bool) {
         let Some(surface) = self.windows.surface_of(window).cloned() else {
             return;
         };
+        let height = u32::try_from(self.desktop_bar_height()).unwrap_or(0);
         self.focus_notices.retain(|notice| notice.is_alive());
         for notice in &self.focus_notices {
-            let ours = notice
-                .data::<FocusNoticeSurfaceData>()
-                .is_some_and(|data| data.surface == surface);
-            if ours {
-                notice.bar(u32::from(revealed));
+            let Some(data) = notice.data::<FocusNoticeSurfaceData>() else {
+                continue;
+            };
+            if data.surface != surface {
+                continue;
             }
+            if revealed && data.overlay.load(Ordering::Relaxed) {
+                notice.bar_height(height);
+            }
+            notice.bar(u32::from(revealed));
         }
     }
 }

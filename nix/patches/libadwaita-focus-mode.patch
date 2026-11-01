@@ -1,9 +1,9 @@
 diff --git a/src/adw-focus-mode-private.h b/src/adw-focus-mode-private.h
 new file mode 100644
-index 0000000..1152cc6
+index 0000000..bbfb857
 --- /dev/null
 +++ b/src/adw-focus-mode-private.h
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,34 @@
 +/*
 + * Copyright (C) 2026 Malaysia contributors
 + *
@@ -32,13 +32,18 @@ index 0000000..1152cc6
 +                                           gboolean   fullscreen,
 +                                           gboolean   bar_revealed);
 +
++/* Tests: act as if the compositor took the overlaid titlebar, with the bar
++ * this high (-1: version 1, no overlay). Applies on the next state. */
++void adw_focus_mode_set_overlay_for_testing (GtkWindow *window,
++                                             int        offset);
++
 +G_END_DECLS
 diff --git a/src/adw-focus-mode.c b/src/adw-focus-mode.c
 new file mode 100644
-index 0000000..aa15607
+index 0000000..3be3ba2
 --- /dev/null
 +++ b/src/adw-focus-mode.c
-@@ -0,0 +1,586 @@
+@@ -0,0 +1,631 @@
 +/*
 + * Copyright (C) 2026 Malaysia contributors
 + *
@@ -57,6 +62,13 @@ index 0000000..aa15607
 + * With that global, a fullscreen window behaves like a fullscreen macOS
 + * window: its `AdwToolbarView`s hide their top bars and show them only while
 + * the bar is down. Leaving fullscreen shows them again.
++ *
++ * With version 2 of the global the window asks for an overlaid titlebar
++ * (`set_overlay`, MalaysiaDreams ADR 0054): the compositor no longer moves
++ * the window for the bar. The taken views then extend their content to the
++ * top edge for the whole fullscreen, and their top bars come in over the
++ * content, opaque, right below the bar (`bar_height`). With version 1 the
++ * window is moved down and the bars push the content as usual.
 + *
 + * Without the global, or with ADW_DISABLE_FOCUS_MODE set, nothing changes.
 + *
@@ -117,6 +129,8 @@ index 0000000..aa15607
 +  gboolean active;
 +  gboolean fullscreen;
 +  gboolean bar_revealed;
++  /* The top bars go over the content, this far down; -1 without overlay */
++  int overlay_offset;
 +
 +  gboolean applying;
 +  guint idle_id;
@@ -170,8 +184,10 @@ index 0000000..aa15607
 +release_view (WindowState *state,
 +              ViewRecord  *record)
 +{
-+  if (record->taken && !record->app_owned)
++  if (record->taken && !record->app_owned) {
++    adw_toolbar_view_set_focus_overlay (record->view, -1);
 +    set_reveal (state, record->view, TRUE);
++  }
 +
 +  record->taken = FALSE;
 +  record->app_owned = FALSE;
@@ -208,6 +224,8 @@ index 0000000..aa15607
 +      record->taken = TRUE;
 +    }
 +
++    /* The offset first, so the bars come in at their place */
++    adw_toolbar_view_set_focus_overlay (record->view, state->overlay_offset);
 +    set_reveal (state, record->view, state->bar_revealed);
 +  }
 +}
@@ -267,6 +285,7 @@ index 0000000..aa15607
 +
 +  /* Not our change: the app drives this view now */
 +  if (record && record->taken) {
++    adw_toolbar_view_set_focus_overlay (view, -1);
 +    record->taken = FALSE;
 +    record->app_owned = TRUE;
 +  }
@@ -295,8 +314,20 @@ index 0000000..aa15607
 +  queue_apply (state);
 +}
 +
++static void
++notice_bar_height_cb (void                             *data,
++                      struct infinity_focus_surface_v1 *notice,
++                      uint32_t                          height)
++{
++  WindowState *state = data;
++
++  /* Comes right before bar(1), which queues the update */
++  state->overlay_offset = (int) MIN (height, G_MAXINT);
++}
++
 +static const struct infinity_focus_surface_v1_listener notice_listener = {
 +  notice_bar_cb,
++  notice_bar_height_cb,
 +};
 +
 +static void
@@ -325,6 +356,13 @@ index 0000000..aa15607
 +  infinity_focus_surface_v1_add_listener (state->notice, &notice_listener,
 +                                          state);
 +
++  /* Version 2: the window stays put and the bars go over the content */
++  if (infinity_focus_surface_v1_get_version (state->notice) >=
++      INFINITY_FOCUS_SURFACE_V1_SET_OVERLAY_SINCE_VERSION) {
++    infinity_focus_surface_v1_set_overlay (state->notice);
++    state->overlay_offset = 0;
++  }
++
 +  state->active = TRUE;
 +  state->bar_revealed = FALSE;
 +  state->fullscreen = gtk_window_is_fullscreen (state->window);
@@ -340,6 +378,7 @@ index 0000000..aa15607
 +
 +  state->active = FALSE;
 +  state->bar_revealed = FALSE;
++  state->overlay_offset = -1;
 +
 +  if (restore)
 +    apply (state);
@@ -360,7 +399,8 @@ index 0000000..aa15607
 +    return;
 +
 +  display->manager =
-+    wl_registry_bind (registry, name, &infinity_focus_manager_v1_interface, 1);
++    wl_registry_bind (registry, name, &infinity_focus_manager_v1_interface,
++                      MIN (version, 2));
 +  display->manager_name = name;
 +
 +  for (l = display->windows; l; l = l->next)
@@ -522,6 +562,7 @@ index 0000000..aa15607
 +  state->window = window;
 +  state->views = g_ptr_array_new_with_free_func (g_free);
 +  state->fullscreen = gtk_window_is_fullscreen (window);
++  state->overlay_offset = -1;
 +
 +  g_object_set_data_full (G_OBJECT (window), WINDOW_KEY, state,
 +                          window_state_free);
@@ -625,12 +666,21 @@ index 0000000..aa15607
 +
 +  apply (state);
 +}
++
++void
++adw_focus_mode_set_overlay_for_testing (GtkWindow *window,
++                                        int        offset)
++{
++  g_return_if_fail (GTK_IS_WINDOW (window));
++
++  get_window_state (window)->overlay_offset = MAX (offset, -1);
++}
 diff --git a/src/adw-toolbar-view-private.h b/src/adw-toolbar-view-private.h
 new file mode 100644
-index 0000000..c106f2e
+index 0000000..1fd922e
 --- /dev/null
 +++ b/src/adw-toolbar-view-private.h
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,23 @@
 +/*
 + * Copyright (C) 2026 Malaysia contributors
 + *
@@ -649,9 +699,13 @@ index 0000000..c106f2e
 +
 +gboolean adw_toolbar_view_has_top_bars (AdwToolbarView *self);
 +
++void adw_toolbar_view_set_focus_overlay (AdwToolbarView *self,
++                                         int             offset);
++int  adw_toolbar_view_get_focus_overlay (AdwToolbarView *self);
++
 +G_END_DECLS
 diff --git a/src/adw-toolbar-view.c b/src/adw-toolbar-view.c
-index 848fa0a..ab2cd4d 100644
+index 848fa0a..f735e3d 100644
 --- a/src/adw-toolbar-view.c
 +++ b/src/adw-toolbar-view.c
 @@ -7,8 +7,9 @@
@@ -665,7 +719,96 @@ index 848fa0a..ab2cd4d 100644
  #include "adw-gtkbuilder-utils-private.h"
  #include "adw-widget-utils-private.h"
  
-@@ -508,6 +509,22 @@ adw_toolbar_view_set_property (GObject      *object,
+@@ -187,8 +188,18 @@ struct _AdwToolbarView
+ 
+   int top_bar_height;
+   int bottom_bar_height;
++
++  /* MalaysiaDreams focus mode (adw-focus-mode.c): the top bars go over the
++   * content, this far from the top edge; -1 when off */
++  int focus_overlay;
+ };
+ 
++static inline gboolean
++extends_to_top_edge (AdwToolbarView *self)
++{
++  return self->extend_content_to_top_edge || self->focus_overlay >= 0;
++}
++
+ static void adw_toolbar_view_buildable_init (GtkBuildableIface *iface);
+ 
+ G_DEFINE_FINAL_TYPE_WITH_CODE (AdwToolbarView, adw_toolbar_view, GTK_TYPE_WIDGET,
+@@ -216,7 +227,7 @@ static void
+ update_undershoots (AdwToolbarView *self)
+ {
+   if (self->top_bar_style == ADW_TOOLBAR_FLAT &&
+-      !self->extend_content_to_top_edge &&
++      !extends_to_top_edge (self) &&
+       gtk_widget_get_height (self->top_bar) > 0) {
+     gtk_widget_add_css_class (GTK_WIDGET (self), "undershoot-top");
+   } else {
+@@ -286,7 +297,7 @@ adw_toolbar_view_measure (GtkWidget      *widget,
+ 
+   if (self->content) {
+     if (for_size < 0 || orientation == GTK_ORIENTATION_VERTICAL ||
+-        (self->extend_content_to_top_edge && self->extend_content_to_bottom_edge)) {
++        (extends_to_top_edge (self) && self->extend_content_to_bottom_edge)) {
+       gtk_widget_measure (self->content, orientation, for_size,
+                           &content_min, &content_nat, NULL, NULL);
+     } else {
+@@ -300,7 +311,7 @@ adw_toolbar_view_measure (GtkWidget      *widget,
+                           &bottom_min_height, &bottom_nat_height, NULL, NULL);
+ 
+       for_size_min = for_size_nat = for_size;
+-      if (!self->extend_content_to_top_edge) {
++      if (!extends_to_top_edge (self)) {
+         for_size_min -= top_min_height;
+         for_size_nat -= top_nat_height;
+       }
+@@ -328,10 +339,10 @@ adw_toolbar_view_measure (GtkWidget      *widget,
+     int min = content_min;
+     int nat = content_nat;
+ 
+-    if (self->extend_content_to_top_edge && self->extend_content_to_bottom_edge) {
++    if (extends_to_top_edge (self) && self->extend_content_to_bottom_edge) {
+       min = MAX (min, top_min + bottom_min);
+       nat = MAX (nat, top_nat + bottom_nat);
+-    } else if (self->extend_content_to_top_edge) {
++    } else if (extends_to_top_edge (self)) {
+       min = MAX (min, top_min) + bottom_min;
+       nat = MAX (nat, top_nat) + bottom_nat;
+     } else if (self->extend_content_to_bottom_edge) {
+@@ -374,7 +385,7 @@ adw_toolbar_view_size_allocate (GtkWidget *widget,
+     gtk_widget_measure (self->content, GTK_ORIENTATION_VERTICAL, width,
+                         &content_min, NULL, NULL, NULL);
+ 
+-  if (self->extend_content_to_top_edge)
++  if (extends_to_top_edge (self))
+     content_min -= top_min;
+ 
+   if (self->extend_content_to_bottom_edge)
+@@ -388,7 +399,7 @@ adw_toolbar_view_size_allocate (GtkWidget *widget,
+   content_height = height;
+   content_offset = 0;
+ 
+-  if (!self->extend_content_to_top_edge) {
++  if (!extends_to_top_edge (self)) {
+     content_height -= top_height;
+     content_offset = top_height;
+   }
+@@ -406,7 +417,10 @@ adw_toolbar_view_size_allocate (GtkWidget *widget,
+     g_object_notify_by_pspec (G_OBJECT (self), props[PROP_BOTTOM_BAR_HEIGHT]);
+   }
+ 
+-  gtk_widget_allocate (self->top_bar, width, top_height, -1, NULL);
++  gtk_widget_allocate (self->top_bar, width, top_height, -1,
++                       self->focus_overlay > 0 ?
++                         gsk_transform_translate (NULL, &GRAPHENE_POINT_INIT (0, self->focus_overlay)) :
++                         NULL);
+   gtk_widget_allocate (self->bottom_bar, width, bottom_height, -1,
+                        gsk_transform_translate (NULL, &GRAPHENE_POINT_INIT (0, height - bottom_height)));
+ 
+@@ -508,6 +522,22 @@ adw_toolbar_view_set_property (GObject      *object,
    }
  }
  
@@ -688,7 +831,7 @@ index 848fa0a..ab2cd4d 100644
  static void
  adw_toolbar_view_class_init (AdwToolbarViewClass *klass)
  {
-@@ -523,6 +540,8 @@ adw_toolbar_view_class_init (AdwToolbarViewClass *klass)
+@@ -523,6 +553,8 @@ adw_toolbar_view_class_init (AdwToolbarViewClass *klass)
    widget_class->size_allocate = adw_toolbar_view_size_allocate;
    widget_class->focus = adw_widget_focus_child;
    widget_class->compute_expand = adw_widget_compute_expand;
@@ -697,7 +840,26 @@ index 848fa0a..ab2cd4d 100644
  
    /**
     * AdwToolbarView:content:
-@@ -1369,3 +1388,23 @@ adw_toolbar_view_get_bottom_bar_height (AdwToolbarView *self)
+@@ -730,6 +762,7 @@ adw_toolbar_view_init (AdwToolbarView *self)
+ 
+   self->top_bar_style = ADW_TOOLBAR_FLAT;
+   self->bottom_bar_style = ADW_TOOLBAR_FLAT;
++  self->focus_overlay = -1;
+ 
+   gtk_widget_set_overflow (GTK_WIDGET (self), GTK_OVERFLOW_HIDDEN);
+ 
+@@ -1010,7 +1043,9 @@ adw_toolbar_view_set_top_bar_style (AdwToolbarView  *self,
+ 
+   switch (style) {
+     case ADW_TOOLBAR_FLAT:
+-      gtk_widget_remove_css_class (self->top_bar, "raised");
++      /* Over the content, the bars stay opaque */
++      if (self->focus_overlay < 0)
++        gtk_widget_remove_css_class (self->top_bar, "raised");
+       gtk_widget_remove_css_class (self->top_bar, "border");
+       break;
+     case ADW_TOOLBAR_RAISED:
+@@ -1369,3 +1404,60 @@ adw_toolbar_view_get_bottom_bar_height (AdwToolbarView *self)
  
    return self->bottom_bar_height;
  }
@@ -720,6 +882,43 @@ index 848fa0a..ab2cd4d 100644
 +  }
 +
 +  return FALSE;
++}
++
++/*
++ * Focus mode with an overlaid titlebar (adw-focus-mode.c): with @offset >= 0
++ * the content takes the whole height, as with extend-content-to-top-edge,
++ * and the top bars go over it, @offset pixels from the top edge, with an
++ * opaque background. -1 turns it off. Public properties don't change.
++ */
++void
++adw_toolbar_view_set_focus_overlay (AdwToolbarView *self,
++                                    int             offset)
++{
++  g_return_if_fail (ADW_IS_TOOLBAR_VIEW (self));
++
++  offset = MAX (offset, -1);
++
++  if (self->focus_overlay == offset)
++    return;
++
++  self->focus_overlay = offset;
++
++  if (self->top_bar_style == ADW_TOOLBAR_FLAT) {
++    if (offset >= 0)
++      gtk_widget_add_css_class (self->top_bar, "raised");
++    else
++      gtk_widget_remove_css_class (self->top_bar, "raised");
++  }
++
++  gtk_widget_queue_resize (GTK_WIDGET (self));
++}
++
++int
++adw_toolbar_view_get_focus_overlay (AdwToolbarView *self)
++{
++  g_return_val_if_fail (ADW_IS_TOOLBAR_VIEW (self), -1);
++
++  return self->focus_overlay;
 +}
 diff --git a/src/meson.build b/src/meson.build
 index 1a6a63f..7787e5f 100644
@@ -768,15 +967,15 @@ index 1a6a63f..7787e5f 100644
    libadwaita_public_sources,
 diff --git a/src/protocols/infinity-focus-v1.xml b/src/protocols/infinity-focus-v1.xml
 new file mode 100644
-index 0000000..d779a73
+index 0000000..3cb8b7e
 --- /dev/null
 +++ b/src/protocols/infinity-focus-v1.xml
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,106 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +<!--
 +  Copied verbatim (below this comment) from MalaysiaDreams' barrierkit:
 +  https://github.com/HBlanqueto/barrierkit, file
-+  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision c8965c3.
++  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision 3841a09.
 +  It is MIT-licensed (notice in <copyright>); keep both copies in step.
 +-->
 +<protocol name="infinity_focus_v1">
@@ -803,17 +1002,21 @@ index 0000000..d779a73
 +    DEALINGS IN THE SOFTWARE.
 +  </copyright>
 +
-+  <interface name="infinity_focus_manager_v1" version="1">
++  <interface name="infinity_focus_manager_v1" version="2">
 +    <description summary="focus mode notices for applications">
 +      MalaysiaDreams focus mode (ADR 0051): a maximized window gets a space of
 +      its own and the xdg fullscreen state. In that space, the pointer at the
-+      top edge brings the bar down; a client-decorated window is moved down
-+      by the bar's height so its own titlebar stays visible under it.
++      top edge brings the bar down over the window.
 +
 +      This global tells a client-decorated application when that happens, so
-+      it can hide its window controls while in focus mode and show them with
-+      the bar, as macOS does. It carries no geometry and grants nothing, so
-+      every client may bind it.
++      it can show its titlebar or window controls only with the bar, as
++      macOS does. It grants nothing, so every client may bind it.
++
++      With version 1 objects, or without set_overlay, the compositor moves a
++      client-decorated window down by the bar's height while the bar is down,
++      so its own titlebar stays visible under it. With set_overlay (version
++      2) the window stays put and the client draws its titlebar over its
++      content, below the bar (MalaysiaDreams ADR 0054).
 +    </description>
 +
 +    <request name="destroy" type="destructor">
@@ -832,7 +1035,7 @@ index 0000000..d779a73
 +    </request>
 +  </interface>
 +
-+  <interface name="infinity_focus_surface_v1" version="1">
++  <interface name="infinity_focus_surface_v1" version="2">
 +    <description summary="focus mode notices for one toplevel"/>
 +
 +    <request name="destroy" type="destructor">
@@ -842,12 +1045,35 @@ index 0000000..d779a73
 +    <event name="bar">
 +      <description summary="the bar came down or went up over the window">
 +        Sent while the toplevel is in focus mode (it has the xdg fullscreen
-+        state). revealed is 1 when the bar is down over the window, which has
-+        been moved down by the bar's height, and 0 when the bar is up again.
++        state). revealed is 1 when the bar is down over the window and 0 when
++        the bar is up again. Without set_overlay, the window has been moved
++        down by the bar's height while revealed is 1.
 +        A client shows its window controls only while revealed is 1. Leaving
 +        focus mode sends 0 if the bar was down.
++
++        After set_overlay the window is not moved: the client draws its
++        titlebar from the bar_height sent just before bar(1).
 +      </description>
 +      <arg name="revealed" type="uint"/>
++    </event>
++
++    <request name="set_overlay" since="2">
++      <description summary="the client draws its titlebar over its content">
++        Tells the compositor that, in focus mode, this client hides its
++        titlebar and, while the bar is down, draws it over its content right
++        below the bar. The compositor then never moves the window for the
++        bar. It applies from the next time the bar comes down and lasts for
++        the object's lifetime.
++      </description>
++    </request>
++
++    <event name="bar_height" since="2">
++      <description summary="how much of the window the bar covers">
++        Sent just before every bar(1) to a client that called set_overlay:
++        the height, in surface-local logical pixels, of the bar over the top
++        of the window. The titlebar goes right below it.
++      </description>
++      <arg name="height" type="uint"/>
 +    </event>
 +  </interface>
 +</protocol>
@@ -865,10 +1091,10 @@ index 36ce9f0..869cc3e 100644
    'test-leaflet',
 diff --git a/tests/test-focus-mode.c b/tests/test-focus-mode.c
 new file mode 100644
-index 0000000..55efb82
+index 0000000..5e12c1f
 --- /dev/null
 +++ b/tests/test-focus-mode.c
-@@ -0,0 +1,280 @@
+@@ -0,0 +1,337 @@
 +/*
 + * Copyright (C) 2026 Malaysia contributors
 + *
@@ -878,6 +1104,7 @@ index 0000000..55efb82
 +#include <adwaita.h>
 +
 +#include "adw-focus-mode-private.h"
++#include "adw-toolbar-view-private.h"
 +
 +typedef struct {
 +  GtkWindow *window;
@@ -1101,6 +1328,59 @@ index 0000000..55efb82
 +  g_assert_true (revealed (view));
 +}
 +
++/* Version 2: the taken views keep their bars over the content, below the
++ * bar, for the whole fullscreen */
++static void
++test_overlay (Fixture       *fixture,
++              gconstpointer  data)
++{
++  adw_focus_mode_set_overlay_for_testing (fixture->window, 28);
++
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, -1);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_false (revealed (fixture->view));
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, 28);
++  g_assert_false (adw_toolbar_view_get_extend_content_to_top_edge (fixture->view));
++  g_assert_cmpint (adw_toolbar_view_get_top_bar_style (fixture->view), ==, ADW_TOOLBAR_FLAT);
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_true (revealed (fixture->view));
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, 28);
++
++  set_state (fixture, TRUE, FALSE, FALSE);
++  g_assert_true (revealed (fixture->view));
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, -1);
++}
++
++/* Version 1: no overlay, the bars push the content as before */
++static void
++test_no_overlay (Fixture       *fixture,
++                 gconstpointer  data)
++{
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_true (revealed (fixture->view));
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, -1);
++}
++
++/* An app taking a view over gets it back without the overlay */
++static void
++test_overlay_app_takes_over (Fixture       *fixture,
++                             gconstpointer  data)
++{
++  adw_focus_mode_set_overlay_for_testing (fixture->window, 28);
++
++  set_state (fixture, TRUE, TRUE, FALSE);
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, 28);
++
++  adw_toolbar_view_set_reveal_top_bars (fixture->view, TRUE);
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, -1);
++
++  set_state (fixture, TRUE, TRUE, TRUE);
++  g_assert_cmpint (adw_toolbar_view_get_focus_overlay (fixture->view), ==, -1);
++}
++
 +/* ADW_DISABLE_FOCUS_MODE: views are never followed */
 +static void
 +test_disabled (void)
@@ -1142,6 +1422,9 @@ index 0000000..55efb82
 +  ADD ("view_added", test_view_added);
 +  ADD ("nested", test_nested);
 +  ADD ("no_top_bars", test_no_top_bars);
++  ADD ("overlay", test_overlay);
++  ADD ("no_overlay", test_no_overlay);
++  ADD ("overlay_app_takes_over", test_overlay_app_takes_over);
 +
 +#undef ADD
 +

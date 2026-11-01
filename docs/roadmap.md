@@ -275,7 +275,8 @@ Concepto y plan en el ADR 0051.
   titlebar Tengen bajo la barra, encima del contenido y a lo ancho; sus
   semáforos funcionan (el verde sale del foco) y esa franja no llega al
   cliente. Una ventana CSD (barrierkit, libadwaita) baja entera la altura de
-  la barra, también para la entrada, y su propia barra queda visible. La barra
+  la barra, también para la entrada, y su propia barra queda visible (desde
+  el 17g, solo los clientes v1 de `infinity_focus_v1`). La barra
   sube cuando el puntero baja más de dos titlebars por debajo de ella, salvo
   con un menú abierto. La barra negra con texto blanco llega con el 17e. Prueba: `./dev.sh demo`, modo
   foco con una ventana SSD y con una CSD, y el puntero arriba.
@@ -307,6 +308,16 @@ Concepto y plan en el ADR 0051.
   desde el dev shell; en foco sin headerbar, puntero arriba (aparece bajo la
   barra), puntero abajo (se va), salir del foco (siempre visible). Con
   `ADW_DISABLE_FOCUS_MODE=1`, comportamiento upstream.
+- **17g — Titlebar superpuesta. Hecho (2026-11-01), sin aceptar en sesión.**
+  `infinity_focus_v1` v2 (barrierkit `3841a09`, ADR 0054): con
+  `set_overlay` el compositor no mueve la ventana CSD al bajar la barra y le
+  envía `bar_height` antes de `bar(1)`. barrierkit saca la titlebar del
+  layout en fullscreen y la dibuja sobre el contenido debajo de la barra;
+  libadwaita (fork `605edc1`) extiende el contenido y muestra sus barras
+  superiores encima, opacas. Los clientes v1 siguen deslizándose. Prueba:
+  `./dev.sh demo`, modo foco con una app de barrierkit y con
+  gnome-calculator; puntero arriba: la titlebar aparece bajo la barra negra
+  y el contenido no se mueve ni pierde la parte de abajo.
 - **14f-3 — Menú global para apps libadwaita.** Implementado: parche
   `nix/patches/libadwaita-global-menu.patch`, paquete
   `packages.<system>.libadwaita-global-menu` y opción de NixOS

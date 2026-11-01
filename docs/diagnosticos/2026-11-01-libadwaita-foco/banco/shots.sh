@@ -10,7 +10,7 @@ FOCUS_SIM_BARS="5000:1,8000:0" weston --backend=headless --renderer=pixman --she
 wpid=$!
 for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/sim-$tag" ] && break; sleep 0.2; done
 env -u DISPLAY WAYLAND_DISPLAY=sim-$tag GDK_BACKEND=wayland GSK_RENDERER=cairo \
-  LD_LIBRARY_PATH="$PATCHED/lib" ADW_DISABLE_PORTAL=1 NO_AT_BRIDGE=1 GTK_A11Y=none "$@" >"$out/app.log" 2>&1 &
+  LD_LIBRARY_PATH="${ADW_LIB:-$PATCHED/lib}" ADW_DISABLE_PORTAL=1 NO_AT_BRIDGE=1 GTK_A11Y=none "$@" >"$out/app.log" 2>&1 &
 apid=$!
 cd "$out"
 for t in 3.5 3 3; do sleep $t; WAYLAND_DISPLAY=sim-$tag weston-screenshooter >/dev/null 2>&1; done

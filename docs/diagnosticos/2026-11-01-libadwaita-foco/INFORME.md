@@ -73,3 +73,34 @@ gcc -shared -fPIC -o /tmp/malaysia-sim/focus-sim.so focus-sim.c infinity-focus-v
 
 Weston usa su propio socket (`sim-<tag>`) en un `XDG_RUNTIME_DIR` propio
 bajo `/tmp/malaysia-sim`; no toca la sesión del host.
+
+## Addendum — titlebar superpuesta (ADR 0054)
+
+Mismo banco. El módulo de weston ofrece ahora la versión 2
+(`FOCUS_SIM_VERSION`, 2 por defecto), registra `set_overlay` y envía
+`bar_height(28)` antes de cada `bar(1)`.
+
+- gnome-calculator y gnome-text-editor con el paquete
+  `libadwaita-global-menu` (`/nix/store/7wklqrbw…-libadwaita-1.9.3`): ligan
+  la v2 y piden `set_overlay`. Con `bar(1)` la headerbar aparece opaca, con
+  sombra, a 28 px del borde y encima del contenido. Comparando las capturas
+  sin barra y con barra, solo cambian las filas 27–79 (headerbar y sombra):
+  el contenido no se mueve. En
+  [`capturas/v2-superpuesta.png`](capturas/v2-superpuesta.png) y
+  [`capturas/v2-calculadora-detalle.png`](capturas/v2-calculadora-detalle.png)
+  la franja negra de 28 px está pintada encima de la captura para simular la
+  barra de Malaysia; weston no la dibuja.
+- Con `FOCUS_SIM_VERSION=1`: sin `set_overlay` ni `bar_height`; la
+  headerbar empuja el contenido como antes (en Malaysia, la ventana baja).
+- El probe (`run.sh`) da los mismos estados que con la v1.
+- Tests del fork: 13 casos en `test-focus-mode` (3 nuevos para la
+  superposición); la suite del paquete, 71/71.
+- barrierkit: los ejemplos `window_csd` y `sidebar` ligan la v2, envían
+  `set_overlay` y reciben `bar_height`/`bar`, pero no pintan en weston sin
+  GPU (pantalla negra), así que no hay captura. El layout está cubierto por
+  tres tests nuevos del kit (`overlay_titlebar_tests`): en fullscreen el
+  contenido empieza en y=0, la titlebar no está sin la barra y aparece en
+  y≥28 con ella sin mover el contenido.
+- El compositor no se ha podido compilar aquí (sin dev shell, ADR 0007).
+  Sí se comprobó la API generada del protocolo v2 (`bar_height`,
+  `Request::SetOverlay`) con un crate aparte, y que rustfmt no cambia nada.

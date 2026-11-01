@@ -39,14 +39,16 @@ app.
    del tipo de app:
    - **App ajena con SSD** (Qt/KDE como Kate, Firefox): el compositor baja su
      titlebar Tengen encima del contenido, debajo del panel.
-   - **App de barrierkit con CSD**: el compositor desliza la ventana entera 28
-     px hacia abajo y la app vuelve a mostrar sus semáforos, como Finder. La
-     app se entera por un evento de Infinity.
+   - **App de barrierkit con CSD**: la app vuelve a mostrar su titlebar y
+     sus semáforos, como Finder. La app se entera por
+     `infinity_focus_v1`. Desde el ADR 0054 la ventana no se mueve: la
+     titlebar se dibuja sobre el contenido, debajo del panel. Antes (y con
+     clientes v1) el compositor desliza la ventana entera 28 px hacia abajo.
    - **libadwaita/GTK**: se usa lo mismo que con barrierkit. La app conserva
      su headerbar (ADR 0020 §1). Las apps con modo inmersivo esconden el
      headerbar ellas mismas al recibir `fullscreen`. Con el fork de
      libadwaita (ADR 0053), la headerbar se esconde en foco y aparece con la
-     barra, como los semáforos de barrierkit.
+     barra sobre el contenido (ADR 0054).
 7. **Modelo sin Smithay.** La fila vive en `malaysia_scene::spaces` (ADR
    0001). El compositor saca de la escena las ventanas de espacios no
    mostrados con `Windows::set_off_space`, que es independiente de minimizar,
@@ -91,8 +93,8 @@ app.
    (ADR 0053): con el global `infinity_focus_manager_v1`, las
    `AdwToolbarView` exteriores de una ventana fullscreen ponen
    `reveal-top-bars = FALSE` y lo devuelven a `TRUE` con `bar(1)` y al salir
-   de fullscreen; las que la app ya gestiona no se tocan. El compositor no
-   cambia: sigue bajando 28 px la ventana. Parche
+   de fullscreen; las que la app ya gestiona no se tocan. Con el ADR 0054 la
+   ventana ya no baja 28 px: la headerbar va sobre el contenido. Parche
    `nix/patches/libadwaita-focus-mode.patch`, en el mismo paquete que el menú
    global. Falta aceptarlo en sesión.
 

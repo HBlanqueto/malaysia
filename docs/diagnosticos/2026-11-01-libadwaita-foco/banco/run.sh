@@ -11,7 +11,7 @@ FOCUS_SIM_BARS="${FOCUS_SIM_BARS-4000:1,6000:0,8000:1,10000:0,14000:1}" \
 wpid=$!
 for _ in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/sim-$tag" ] && break; sleep 0.2; done
 env -u DISPLAY WAYLAND_DISPLAY=sim-$tag GDK_BACKEND=wayland GSK_RENDERER=cairo \
-  LD_LIBRARY_PATH="$PATCHED/lib" ADW_DISABLE_PORTAL=1 NO_AT_BRIDGE=1 GTK_A11Y=none "$@" >"$out/app.log" 2>&1 &
+  LD_LIBRARY_PATH="${ADW_LIB:-$PATCHED/lib}" ADW_DISABLE_PORTAL=1 NO_AT_BRIDGE=1 GTK_A11Y=none "$@" >"$out/app.log" 2>&1 &
 apid=$!
 sleep "${RUN_SECONDS:-17}"
 grep -o '/nix/store/[^ ]*libadwaita[^/]*' /proc/$apid/maps 2>/dev/null | sort -u >"$out/libs.txt"

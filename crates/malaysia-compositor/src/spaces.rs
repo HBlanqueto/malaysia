@@ -21,8 +21,10 @@
 //! The top edge (17d): in a still focus space, the pointer at the top edge
 //! brings the bar down over black ([`FocusReveal`]). A window the compositor
 //! decorates (SSD) also gets its titlebar back, under the bar, over its
-//! content. A client-decorated window (barrierkit, libadwaita) slides down by
-//! the bar's height instead, so its own bar stays visible under the panel.
+//! content. A client-decorated window (barrierkit, libadwaita) is told by
+//! `infinity_focus_v1`; one that draws its titlebar over its content
+//! (`set_overlay`, ADR 0054) stays put, any other slides down by the bar's
+//! height so its own bar stays visible under the panel.
 
 use std::time::{Duration, Instant};
 
@@ -141,9 +143,13 @@ pub(crate) struct FocusReveal {
     from: f64,
     /// When the last change started; `None` while at rest.
     start: Option<Instant>,
-    /// The client-decorated window moved down by the bar's height, to move
-    /// back when the bar goes up.
-    shifted: Option<WindowId>,
+    /// The client-decorated window told the bar is down (`bar(1)`), to tell
+    /// when it goes up.
+    notified: Option<WindowId>,
+    /// Whether the client-decorated window was moved down by the bar's
+    /// height on the last `bar(1)` (it did not ask for an overlaid
+    /// titlebar). Kept while the bar goes up, for the drawing.
+    shifted: bool,
 }
 
 impl FocusReveal {
@@ -183,8 +189,11 @@ pub(crate) struct RevealFrame {
     /// The bar's height, in logical pixels.
     pub(crate) bar: i32,
     /// Whether the compositor decorates the window (it gets its titlebar
-    /// back) or the client does (it slides down).
+    /// back) or the client does.
     pub(crate) server_decorated: bool,
+    /// Whether the client-decorated window slides down with the bar (it
+    /// did not ask for an overlaid titlebar, ADR 0054).
+    pub(crate) slides: bool,
 }
 
 impl State {
@@ -221,20 +230,31 @@ impl State {
         };
         let now = Instant::now();
         let from = self.focus_reveal.progress(now);
-        let mut shifted = self.focus_reveal.shifted.take();
+        let mut notified = self.focus_reveal.notified.take();
+        let mut shifted = self.focus_reveal.shifted;
         if shown && self.windows.is_client_decorated(owner) {
-            self.windows
-                .set_scene_y(owner, f64::from(self.desktop_bar_height()));
-            shifted = Some(owner);
+            // A client drawing its titlebar over its content stays put.
+            shifted = !self.focus_overlay(owner);
+            if shifted {
+                self.windows
+                    .set_scene_y(owner, f64::from(self.desktop_bar_height()));
+            }
+            notified = Some(owner);
             self.send_focus_bar(owner, true);
-        } else if !shown && let Some(window) = shifted.take() {
-            self.windows.set_scene_y(window, 0.0);
+        } else if shown {
+            shifted = false;
+        } else if let Some(window) = notified.take() {
+            // `shifted` stays: the drawing follows the bar back up.
+            if shifted {
+                self.windows.set_scene_y(window, 0.0);
+            }
             self.send_focus_bar(window, false);
         }
         self.focus_reveal = FocusReveal {
             shown,
             from,
             start: Some(now),
+            notified,
             shifted,
         };
         self.layers.set_bar_revealed(shown);
@@ -277,6 +297,7 @@ impl State {
             progress,
             bar: self.desktop_bar_height(),
             server_decorated: !self.windows.is_client_decorated(owner),
+            slides: self.focus_reveal.shifted && self.windows.is_client_decorated(owner),
         })
     }
 
@@ -310,8 +331,10 @@ impl State {
 
     /// Puts the bar up at once, without animation (leaving a focus space).
     fn reset_focus_reveal(&mut self) {
-        if let Some(window) = self.focus_reveal.shifted {
-            self.windows.set_scene_y(window, 0.0);
+        if let Some(window) = self.focus_reveal.notified {
+            if self.focus_reveal.shifted {
+                self.windows.set_scene_y(window, 0.0);
+            }
             self.send_focus_bar(window, false);
         }
         self.focus_reveal = FocusReveal::default();

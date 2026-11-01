@@ -11,6 +11,7 @@
 struct step { int ms; int value; };
 struct notice {
   struct wl_resource *resource;
+  int overlay;
   struct wl_event_source *timer;
   struct step steps[32];
   int n, next, elapsed;
@@ -24,7 +25,12 @@ static void log_msg (const char *fmt, ...) {
 }
 
 static void notice_destroy_req (struct wl_client *c, struct wl_resource *r) { wl_resource_destroy (r); }
-static const struct infinity_focus_surface_v1_interface notice_impl = { notice_destroy_req };
+static void notice_set_overlay (struct wl_client *c, struct wl_resource *r) {
+  struct notice *n = wl_resource_get_user_data (r);
+  n->overlay = 1;
+  log_msg ("set_overlay");
+}
+static const struct infinity_focus_surface_v1_interface notice_impl = { notice_destroy_req, notice_set_overlay };
 
 static void notice_free (struct wl_resource *r) {
   struct notice *n = wl_resource_get_user_data (r);
@@ -36,6 +42,10 @@ static void notice_free (struct wl_resource *r) {
 static int timer_cb (void *data) {
   struct notice *n = data;
   if (n->next >= n->n) return 0;
+  if (n->overlay && n->steps[n->next].value) {
+    log_msg ("bar_height(28)");
+    infinity_focus_surface_v1_send_bar_height (n->resource, 28);
+  }
   log_msg ("bar(%d) at %d ms", n->steps[n->next].value, n->steps[n->next].ms);
   infinity_focus_surface_v1_send_bar (n->resource, n->steps[n->next].value);
   n->elapsed = n->steps[n->next].ms;
@@ -49,7 +59,8 @@ static void get_focus_surface (struct wl_client *client, struct wl_resource *man
                                uint32_t id, struct wl_resource *surface) {
   struct notice *n = calloc (1, sizeof *n);
   const char *bars = getenv ("FOCUS_SIM_BARS");
-  n->resource = wl_resource_create (client, &infinity_focus_surface_v1_interface, 1, id);
+  n->resource = wl_resource_create (client, &infinity_focus_surface_v1_interface,
+                                    wl_resource_get_version (manager), id);
   wl_resource_set_implementation (n->resource, &notice_impl, n, notice_free);
   struct wl_event_loop *loop = wl_display_get_event_loop (wl_client_get_display (client));
   n->timer = wl_event_loop_add_timer (loop, timer_cb, n);
@@ -68,13 +79,14 @@ static const struct infinity_focus_manager_v1_interface manager_impl = { manager
 static void bind_manager (struct wl_client *client, void *data, uint32_t version, uint32_t id) {
   struct wl_resource *r = wl_resource_create (client, &infinity_focus_manager_v1_interface, version, id);
   wl_resource_set_implementation (r, &manager_impl, NULL, NULL);
-  log_msg ("manager bound");
+  log_msg ("manager bound, version %u", version);
 }
 
 WL_EXPORT int
 wet_module_init (struct weston_compositor *ec, int *argc, char *argv[])
 {
-  wl_global_create (ec->wl_display, &infinity_focus_manager_v1_interface, 1, NULL, bind_manager);
+  const char *v = getenv ("FOCUS_SIM_VERSION");
+  wl_global_create (ec->wl_display, &infinity_focus_manager_v1_interface, v ? atoi (v) : 2, NULL, bind_manager);
   log_msg ("global created");
   return 0;
 }

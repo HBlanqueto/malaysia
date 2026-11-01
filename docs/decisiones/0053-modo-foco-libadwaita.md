@@ -47,7 +47,9 @@ La opción C es que lo haga la app: `AdwToolbarView` ya tiene
    - Al salir de fullscreen se olvida todo y el siguiente vuelve a mirar.
 6. **El compositor no cambia.** Sigue bajando 28 px la ventana CSD con la
    barra: es lo que deja la headerbar recién mostrada bajo el panel, igual
-   que los semáforos de barrierkit.
+   que los semáforos de barrierkit. **Revisado por el ADR 0054:** con la
+   versión 2 del protocolo la ventana no baja y las barras van sobre el
+   contenido, a `bar_height`.
 7. **Paquete Nix.** `nix/patches/libadwaita-focus-mode.patch` se aplica
    detrás del del menú global sobre el tag `1.9.3`, con `wayland-scanner` y
    `wayland` añadidos al paquete. Usa solo API de GTK <= 4.22 y entra por el
@@ -64,6 +66,7 @@ La opción C es que lo haga la app: `AdwToolbarView` ya tiene
   con el puntero arriba, como barrierkit y como macOS.
 - La headerbar reaparece redimensionando el contenido (no se superpone):
   es lo que hace `reveal-top-bars` sin `extend-content-to-top-edge`.
+  Solo con compositores v1; con la v2 se superpone (ADR 0054).
 - Al salir del foco con la barra bajada, el compositor envía `bar(0)` al
   empezar la animación y fullscreen termina al final: la headerbar se
   esconde durante la reducción y vuelve después. Pasa lo mismo con los

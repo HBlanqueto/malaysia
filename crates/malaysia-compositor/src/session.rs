@@ -1047,11 +1047,12 @@ pub(crate) fn build_output_elements(
                 .filter(|id| Some(*id) != moving)
                 .collect();
             for id in window_ids {
-                // A client-decorated focus window slides under the bar: its
-                // scene rectangle is already down (for input); the drawing
-                // follows the animation.
+                // A client-decorated focus window that slides under the bar:
+                // its scene rectangle is already down (for input); the
+                // drawing follows the animation. One that overlays its
+                // titlebar (ADR 0054) stays put.
                 let offset = match reveal {
-                    Some(frame) if frame.owner == id && !frame.server_decorated => {
+                    Some(frame) if frame.owner == id && frame.slides => {
                         let scene_y = state
                             .windows
                             .outer(id)
