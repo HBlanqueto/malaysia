@@ -11,8 +11,9 @@ use std::path::Path;
 use std::rc::Rc;
 
 use barrier_kit::controls::Button;
-use barrier_kit::platform::{Decorations, WindowOptions, run_window};
+use barrier_kit::platform::{Decorations, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use barrier_kit::titlebar::{window_drag_handler, window_traffic_lights};
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
@@ -31,9 +32,8 @@ use crate::power::{self, PowerAction};
 /// Dialog surfaces, in logical px. The panel fills the layer.
 const CONFIRM_SIZE: (u32, u32) = (380, 160);
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-/// macOS «Acerca de este Mac» measures 280×430 with its titlebar; the
-/// compositor adds its own, so the client area is that much shorter.
-const ABOUT_SIZE: (u32, u32) = (280, 430 - TITLEBAR.thickness);
+/// macOS «Acerca de este Mac» measures 280×430, titlebar included.
+const ABOUT_SIZE: (u32, u32) = (280, 430);
 /// The laptop drawing keeps the SVG's 1024×680 aspect.
 const ABOUT_DRAWING: (f32, f32) = (130.0, 86.0);
 const ABOUT_COLUMN_GAP: f32 = 8.0;
@@ -522,15 +522,36 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        about_view(&self.info, *Platform::get().is_app_focused.read())
+        let controls = WindowControls::get();
+        let focused = controls.status.read().activated;
+        about_view(&self.info, focused, about_titlebar(focused, controls.fixed))
     }
 }
 
-/// The window content. The compositor draws the titlebar (same height as every
-/// server-side window) and there is no divider, so the whole window takes the
-/// titlebar colour: `surfaces.window` with focus, `surfaces.sunken` without,
-/// exactly as `ChromeTheme` paints the bar.
-fn about_view(info: &AboutInfo, focused: bool) -> impl IntoElement + use<> {
+/// A client-side copy of the compositor's titlebar: its 32 px height and its
+/// traffic lights at the same place, but no title, like macOS. The kit's CSD
+/// `Titlebar` is the taller client bar (`titlebar-h`), so it is not used here.
+fn about_titlebar(focused: bool, fixed: bool) -> Element {
+    let (x, ..) = vow_appearance::traffic::group_rect();
+    rect()
+        .width(Size::fill())
+        .height(Size::px(TITLEBAR.thickness as f32))
+        .padding(Gaps::new(0.0, 0.0, 0.0, x as f32))
+        .direction(Direction::Horizontal)
+        .cross_align(Alignment::Center)
+        .on_mouse_down(window_drag_handler(fixed))
+        .child(window_traffic_lights(
+            Some(Callback::new(|_| close())),
+            focused,
+            fixed,
+        ))
+        .into_element()
+}
+
+/// The window content. The titlebar has no divider, so the whole window takes
+/// the titlebar colour: `surfaces.window` with focus, `surfaces.sunken`
+/// without, exactly as the compositor's `ChromeTheme` paints its bar.
+fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoElement + use<> {
     {
         let resolved = barrier_kit::theme::resolved();
         let palette = vow_appearance::palette(resolved.scheme);
@@ -585,12 +606,13 @@ fn about_view(info: &AboutInfo, focused: bool) -> impl IntoElement + use<> {
                     close();
                 }
             })
+            .child(titlebar)
             .child(
                 rect()
                     .width(Size::fill())
                     .height(Size::flex(1.0))
                     .padding(Gaps::new(
-                        DIALOG_PADDING,
+                        0.0,
                         DIALOG_PADDING / 2.0,
                         DIALOG_PADDING,
                         DIALOG_PADDING / 2.0,
@@ -645,10 +667,8 @@ pub fn run_about() -> anyhow::Result<()> {
     tracing::info!(?info, "about this computer");
     run_window(
         AppComponent::new(AboutApp { info }),
-        // An empty title like macOS; the compositor's titlebar keeps the
-        // traffic lights and the height of every other window.
-        WindowOptions::new("", "about")
-            .decorations(Decorations::Server)
+        WindowOptions::new("Acerca de este equipo", "about")
+            .decorations(Decorations::Client)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
             .max_size(Some(ABOUT_SIZE)),
@@ -755,7 +775,11 @@ mod render_tests {
 
     impl App for Preview {
         fn render(&self) -> impl IntoElement {
-            about_view(&self.0, self.1)
+            let titlebar = rect()
+                .width(Size::fill())
+                .height(Size::px(TITLEBAR.thickness as f32))
+                .into_element();
+            about_view(&self.0, self.1, titlebar)
         }
     }
 
