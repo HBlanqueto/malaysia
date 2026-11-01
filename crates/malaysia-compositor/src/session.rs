@@ -1189,9 +1189,9 @@ fn append_revealed_titlebar(
 }
 
 /// Draws a window growing into focus mode or shrinking out of it (ADR 0051):
-/// its client surface, with the window geometry's corner at the frame's
-/// corner, clipped to the moving rounded rectangle over black. The SSD bar is
-/// left out: in focus mode the window has none.
+/// its client surface, its window geometry stretched onto the moving rounded
+/// rectangle (the buffer is often still at the other size), over black. The
+/// SSD bar is left out: in focus mode the window has none.
 fn append_focus_transition(
     state: &State,
     renderer: &mut GlesRenderer,
@@ -1206,12 +1206,17 @@ fn append_focus_transition(
         .windows
         .iter()
         .find(|window| window.id() == frame.window && window.is_mapped() && window.has_buffer())
-        .map(|window| (window.surface().clone(), window.window_geometry().loc))
+        .map(|window| (window.surface().clone(), window.window_geometry()))
     else {
         return;
     };
-    let (surface, geometry_origin) = surface;
+    let (surface, geometry) = surface;
+    let geometry_origin = geometry.loc;
     let rect_physical = physical_rect(frame.rect, scale);
+    // Where the client's window geometry lands when the surface is drawn
+    // unscaled at the frame's corner; it is stretched from there onto the
+    // animated rectangle, so a buffer still at the old size fills it.
+    let content_physical = physical_rect(Rectangle::new(frame.rect.loc, geometry.size), scale);
     let radius = (frame.radius * scale).round() as i32;
     let exponent = frame_exponent(crate::decoration::Role::Toplevel);
     let surface_elements = render_elements_from_surface_tree::<
@@ -1235,6 +1240,7 @@ fn append_focus_transition(
                 scale,
                 program,
             )
+            .map(|rounded| rounded.mapped(content_physical, rect_physical))
         });
         match clipped {
             Some(rounded) => elements.push(rounded.into()),

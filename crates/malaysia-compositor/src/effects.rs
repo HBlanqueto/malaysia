@@ -117,6 +117,20 @@ impl RoundedTextureElement {
         })
     }
 
+    /// Moves and scales the element so the content that sat in `from` fills
+    /// `to`, both in physical pixels. Used while a window grows into focus
+    /// mode or shrinks out of it: its buffer is still at the other size, so
+    /// it is stretched onto the animated rectangle instead of leaving black
+    /// around it (ADR 0051).
+    pub(crate) fn mapped(
+        mut self,
+        from: Rectangle<i32, Physical>,
+        to: Rectangle<i32, Physical>,
+    ) -> Self {
+        self.dst = map_rect(self.dst, from, to);
+        self
+    }
+
     /// Wraps an already-imported texture so it is clipped to `frame_rect`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_texture(
@@ -324,5 +338,56 @@ mod tests {
         let src = Rectangle::from_size(Size::from((400.0, 200.0)));
         let dst = Rectangle::new(Point::from((0, 0)), Size::from((200, 100)));
         assert!((texture_radius(src, dst, 16) - 32.0).abs() < 0.01);
+    }
+}
+
+/// Maps `rect` by the affine map that takes `from` onto `to` (a move plus an
+/// independent scale on each axis), rounding to whole physical pixels.
+pub(crate) fn map_rect(
+    rect: Rectangle<i32, Physical>,
+    from: Rectangle<i32, Physical>,
+    to: Rectangle<i32, Physical>,
+) -> Rectangle<i32, Physical> {
+    let sx = f64::from(to.size.w) / f64::from(from.size.w.max(1));
+    let sy = f64::from(to.size.h) / f64::from(from.size.h.max(1));
+    let along_x = |x: i32| (f64::from(to.loc.x) + f64::from(x - from.loc.x) * sx).round() as i32;
+    let along_y = |y: i32| (f64::from(to.loc.y) + f64::from(y - from.loc.y) * sy).round() as i32;
+    let (left, top) = (along_x(rect.loc.x), along_y(rect.loc.y));
+    let right = along_x(rect.loc.x + rect.size.w);
+    let bottom = along_y(rect.loc.y + rect.size.h);
+    Rectangle::new(
+        (left, top).into(),
+        ((right - left).max(1), (bottom - top).max(1)).into(),
+    )
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::map_rect;
+    use smithay::utils::{Physical, Rectangle};
+
+    fn r(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Physical> {
+        Rectangle::new((x, y).into(), (w, h).into())
+    }
+
+    #[test]
+    fn the_source_rectangle_lands_exactly_on_the_target() {
+        let from = r(100, 50, 400, 300);
+        let to = r(0, 0, 1280, 800);
+        assert_eq!(map_rect(from, from, to), to);
+    }
+
+    #[test]
+    fn a_shrinking_window_fills_the_animated_rectangle() {
+        // The client already redrew at 600x400 while the animation is at
+        // 900x600: the buffer is stretched onto it, no black around.
+        let content = r(0, 0, 600, 400);
+        let animated = r(0, 0, 900, 600);
+        assert_eq!(map_rect(content, content, animated), animated);
+        // A subsurface in the middle keeps its relative place.
+        assert_eq!(
+            map_rect(r(300, 200, 100, 100), content, animated),
+            r(450, 300, 150, 150)
+        );
     }
 }
