@@ -18,6 +18,10 @@ in
   options.programs.malaysia = {
     enable = lib.mkEnableOption "the MalaysiaDreams Wayland compositor";
 
+    globalMenu.libadwaita.enable = lib.mkEnableOption "global menu support for libadwaita applications" // {
+      default = true;
+    };
+
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -40,6 +44,17 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
+
+    # ADR 0052: replace the system libadwaita with a patched build that exports
+    # the primary menu as an application menubar over org.gtk.Menus. This avoids
+    # rebuilding every libadwaita application while still giving the shell a
+    # global menu for them.
+    system.replaceDependencies.replacements = lib.mkIf cfg.globalMenu.libadwaita.enable [
+      {
+        oldDependency = pkgs.libadwaita;
+        newDependency = self.packages.${pkgs.stdenv.hostPlatform.system}.libadwaita-global-menu;
+      }
+    ];
 
     # The UI typeface and its symbol fallback. Geist has no ⌃⌥⇧❖ glyphs;
     # Inter provides all four from the same family.

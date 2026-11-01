@@ -209,6 +209,9 @@
         default = malaysia;
         "malaysia-shell" = malaysia;
         skia-binaries = skia;
+        libadwaita-global-menu = pkgs.libadwaita.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [ ./nix/patches/libadwaita-global-menu.patch ];
+        });
       });
 
       checks = forAllSystems (system: let
