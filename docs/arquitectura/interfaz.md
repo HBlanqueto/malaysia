@@ -37,3 +37,4 @@ Temas `light`/`dark`/`dark-tint`; radio 16, semáforos 12 (radio 4), titlebar SS
 - **SSD:** titlebar de 32 px, semáforos, título centrado; cerrar, minimizar, maximizar, arrastrar y redimensionar.
 - **CSD:** GTK/Libadwaita, wezterm y apps que lo piden conservan su chrome; `force_server` puede forzar la barra (con riesgo de duplicarla).
 - **Marco:** esquinas de 16, sombra, borde exterior y hairline para todas; fullscreen lo elimina, maximizado lo conserva. Diálogos centrados sobre el padre.
+- **Popups:** el compositor les da el mismo marco (borde exterior, hairline y sombra) con esquinas de 12 (`vow_design::POPUP`), recortado a su geometría xdg. El cliente solo pinta el fondo y las filas.

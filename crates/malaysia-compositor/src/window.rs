@@ -1355,7 +1355,7 @@ fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
-fn window_geometry(surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
+pub(crate) fn window_geometry(surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
     with_states(surface, |states| {
         states
             .cached_state

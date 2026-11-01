@@ -2039,7 +2039,11 @@ impl State {
         let id = self.windows.popup_under(location)?;
         let rect = self.windows.popup_rect(id)?;
         let surface = self.popups.surface_of(id)?.clone();
-        let local = Point::new(location.x - rect.x(), location.y - rect.y());
+        let geometry = crate::window::window_geometry(&surface).unwrap_or_default();
+        let local = Point::new(
+            location.x - rect.x() + f64::from(geometry.loc.x),
+            location.y - rect.y() + f64::from(geometry.loc.y),
+        );
         crate::layers::surface_accepts_input(&surface, local).then_some((surface, local))
     }
 

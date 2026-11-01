@@ -746,21 +746,40 @@ pub(crate) fn build_output_elements(
                     && !(chrome_hidden && entry.is_shell_chrome())
             },
         );
-        for (id, _parent, rect) in state.windows.iter_popups().rev() {
-            let Some(surface) = state.popups.surface_of(id) else {
+        let popups: Vec<_> = state.windows.iter_popups().rev().collect();
+        for (id, _parent, rect) in popups {
+            let Some(surface) = state.popups.surface_of(id).cloned() else {
                 continue;
             };
-            let location = physical_point(
+            let frame = Rectangle::new(
                 Point::from((rect.x().round() as i32, rect.y().round() as i32)),
-                scale,
+                Size::from((rect.width().round() as i32, rect.height().round() as i32)),
             );
-            elements.extend(
-                render_elements_from_surface_tree::<
-                    GlesRenderer,
-                    WaylandSurfaceRenderElement<GlesRenderer>,
-                >(renderer, surface, location, scale, 1.0, Kind::Unspecified)
-                .into_iter()
-                .map(|e| e.into()),
+            let geometry = crate::window::window_geometry(&surface).unwrap_or_default();
+            let surface_elements = render_elements_from_surface_tree::<
+                GlesRenderer,
+                WaylandSurfaceRenderElement<GlesRenderer>,
+            >(
+                renderer,
+                &surface,
+                physical_point(frame.loc - geometry.loc, scale),
+                scale,
+                1.0,
+                Kind::Unspecified,
+            );
+            append_frame(
+                state,
+                Vec::new(),
+                surface_elements,
+                Frame {
+                    rect: physical_rect(frame, scale),
+                    radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
+                    exponent: vow_design::POPUP.superellipse_exponent,
+                    focused: true,
+                    bordered: true,
+                },
+                scale,
+                &mut elements,
             );
         }
         if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
@@ -1149,7 +1168,6 @@ fn append_window_frame(
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
     let exponent = frame_exponent(data.role);
 
-    let rounded_program = state.rounded_clip.clone();
     let mut content: Vec<OutputRenderElement> = Vec::new();
     if data.insets.top > 0.0 {
         let pointer = state
@@ -1163,7 +1181,7 @@ fn append_window_frame(
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
             zoom_supported: state.green_button_admitted(id),
         };
-        if let Some(program) = rounded_program.clone()
+        if let Some(program) = state.rounded_clip.clone()
             && let Some(element) = state.chrome.element(
                 renderer,
                 id,
@@ -1195,8 +1213,43 @@ fn append_window_frame(
         1.0,
         Kind::Unspecified,
     );
+    append_frame(
+        state,
+        content,
+        surface_elements,
+        Frame {
+            rect: frame_rect_physical,
+            radius: radius_physical,
+            exponent,
+            focused: is_focused,
+            bordered: frame_has_border(data.state),
+        },
+        scale,
+        elements,
+    );
+}
 
-    if let Some(program) = rounded_program.filter(|_| frame_has_border(data.state)) {
+struct Frame {
+    rect: Rectangle<i32, Physical>,
+    radius: i32,
+    exponent: f32,
+    focused: bool,
+    bordered: bool,
+}
+
+fn append_frame(
+    state: &State,
+    mut content: Vec<OutputRenderElement>,
+    surface_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>>,
+    frame: Frame,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let frame_rect_physical = frame.rect;
+    let radius_physical = frame.radius;
+    let exponent = frame.exponent;
+    let is_focused = frame.focused;
+    if let Some(program) = state.rounded_clip.clone().filter(|_| frame.bordered) {
         for element in surface_elements {
             if let Some(rounded) = crate::effects::RoundedTextureElement::from_surface_element(
                 &element,
@@ -1218,7 +1271,7 @@ fn append_window_frame(
     let mut outer = None;
     let mut inner = None;
     let mut shadow = Vec::new();
-    if frame_has_border(data.state) {
+    if frame.bordered {
         let palette = &state.chrome_theme.palette;
         if let Some(program) = state.border.as_ref() {
             if let Some(color) = palette.inner_line
