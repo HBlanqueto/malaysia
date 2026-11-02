@@ -1,11 +1,12 @@
-//! Settings preview cards for theme and window color.
+//! Miniatures of the desktop for the theme and window colour cards.
 
-use barrier_kit::ProbeExt;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
 use vow_design::SETTINGS;
 
-use crate::state::{AppearanceConfig, ColorScheme, Resolved, Rgba, WindowColorMode, resolve, rgba};
+use barrier_kit::theme::color as rgba;
+use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, WindowColorMode, resolve};
+use vow_design::Rgba;
 
 fn preview_for_theme(
     base_config: &AppearanceConfig,
@@ -19,44 +20,12 @@ fn preview_for_theme(
     resolve(&test_config, dominant)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn theme_card(
-    caption: &'static str,
-    scheme: ColorScheme,
-    selected_scheme: ColorScheme,
-    card_bg: Rgba,
-    dominant: Option<Rgba>,
-    accent: Rgba,
-    scheme_palette: vow_design::Palette,
-    base_config: &AppearanceConfig,
-    probe: &'static str,
-    preview_probe: &'static str,
-    on_select: impl FnMut(Event<PressEventData>) + 'static,
-) -> Element {
-    let is_selected = selected_scheme == scheme;
-    let preview_resolved = preview_for_theme(base_config, scheme, dominant);
-
-    selectable_card(
-        caption,
-        card_bg,
-        theme_preview(scheme, base_config, dominant, &preview_resolved),
-        is_selected,
-        accent,
-        preview_resolved.surfaces.surface,
-        scheme_palette,
-        probe,
-        preview_probe,
-        on_select,
-    )
-}
-
 pub fn theme_preview(
     scheme: ColorScheme,
     base_config: &AppearanceConfig,
     dominant: Option<Rgba>,
-    preview_resolved: &Resolved,
 ) -> Rect {
-    let accent = preview_resolved.accent;
+    let accent = preview_for_theme(base_config, scheme, dominant).accent;
     let light = preview_for_theme(base_config, ColorScheme::Light, dominant);
     let dark = preview_for_theme(base_config, ColorScheme::Dark, dominant);
 
@@ -180,42 +149,18 @@ fn preview_app(resolved: &Resolved) -> Rect {
         )
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn window_color_card(
-    caption: &'static str,
-    mode: WindowColorMode,
-    selected: WindowColorMode,
-    card_bg: Rgba,
+pub fn window_color_preview(
     base_config: &AppearanceConfig,
-    resolved: Resolved,
+    mode: WindowColorMode,
     dominant: Option<Rgba>,
-    probe: &'static str,
-    preview_probe: &'static str,
-    on_select: impl FnMut(Event<PressEventData>) + 'static,
-) -> Element {
-    let test_config = AppearanceConfig {
-        window_color: mode,
-        ..base_config.clone()
-    };
-    let preview_resolved = resolve(&test_config, dominant);
-    let is_selected = selected == mode;
-    let scheme_palette = crate::state::palette(resolved.scheme);
-
-    selectable_card(
-        caption,
-        card_bg,
-        window_color_preview(&preview_resolved),
-        is_selected,
-        resolved.accent,
-        resolved.surfaces.surface,
-        scheme_palette,
-        probe,
-        preview_probe,
-        on_select,
-    )
-}
-
-pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
+) -> Rect {
+    let preview_resolved = resolve(
+        &AppearanceConfig {
+            window_color: mode,
+            ..base_config.clone()
+        },
+        dominant,
+    );
     let window_bg = preview_resolved.surfaces.window;
     let sunken = preview_resolved.surfaces.sunken;
     let x = SETTINGS.preview_tint_window_x as f32;
@@ -242,85 +187,6 @@ pub fn window_color_preview(preview_resolved: &Resolved) -> Rect {
                     .background(rgba(sunken)),
             ),
     )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn selectable_card(
-    caption: &'static str,
-    card_bg: Rgba,
-    preview: Rect,
-    is_selected: bool,
-    accent: Rgba,
-    bg_surface: Rgba,
-    scheme_palette: vow_design::Palette,
-    probe: &'static str,
-    preview_probe: &'static str,
-    on_select: impl FnMut(Event<PressEventData>) + 'static,
-) -> Element {
-    let card = rect()
-        .width(Size::px(SETTINGS.card_width as f32))
-        .height(Size::px(SETTINGS.card_height as f32))
-        .corner_radius(SETTINGS.card_radius as f32)
-        .background(rgba(card_bg))
-        .border(
-            Border::new()
-                .width(1.0)
-                .alignment(BorderAlignment::Inner)
-                .fill(rgba(SETTINGS.card_outline)),
-        )
-        .overflow(Overflow::Clip)
-        .child(preview.probe(preview_probe));
-
-    let wrapper = rect()
-        .width(Size::auto())
-        .height(Size::auto())
-        .corner_radius(SETTINGS.card_radius as f32)
-        .background(rgba(bg_surface))
-        .border(
-            Border::new()
-                .width(if is_selected {
-                    SETTINGS.card_ring as f32
-                } else {
-                    0.0
-                })
-                .alignment(BorderAlignment::Outer)
-                .fill(rgba(accent)),
-        )
-        .child(card);
-
-    let caption_weight = if is_selected {
-        FontWeight::SEMI_BOLD
-    } else {
-        FontWeight::from(SETTINGS.card_caption_font.weight as i32)
-    };
-    let caption_color = if is_selected {
-        scheme_palette.ink_strong
-    } else {
-        scheme_palette.text.unfocused
-    };
-
-    rect()
-        .width(Size::auto())
-        .height(Size::auto())
-        .direction(Direction::Vertical)
-        .spacing(SETTINGS.card_caption_gap as f32)
-        .cross_align(Alignment::Center)
-        .child(wrapper)
-        .child(
-            label()
-                .text(caption)
-                .line_height(
-                    SETTINGS.card_caption_font.line_height as f32
-                        / SETTINGS.card_caption_font.size as f32,
-                )
-                .font_size(SETTINGS.card_caption_font.size as f32)
-                .font_weight(caption_weight)
-                .color(rgba(caption_color))
-                .max_lines(1),
-        )
-        .probe(probe)
-        .on_press(on_select)
-        .into_element()
 }
 
 #[cfg(test)]

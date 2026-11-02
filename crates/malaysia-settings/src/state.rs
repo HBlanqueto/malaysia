@@ -1,16 +1,6 @@
-//! Shared settings state: config, filter, account and color helpers.
+//! Writing the appearance domain and naming the local account.
 
-pub use vow_appearance::{
-    AppearanceConfig, ColorScheme, Resolved, TintParts, TintStrength, TrafficLightStyle,
-    WindowColorMode, WindowTintScope, load_appearance, load_dominant, palette, resolve,
-    write_appearance,
-};
-pub use vow_design::Rgba;
-
-pub fn rgba(color: Rgba) -> freya_core::prelude::Color {
-    let [r, g, b, a] = color.to_rgba8();
-    freya_core::prelude::Color::from_argb(a, r, g, b)
-}
+use vow_appearance::{AppearanceConfig, write_appearance};
 
 pub fn save_config(config: &AppearanceConfig) -> Option<String> {
     write_appearance(&vow_appearance::appearance_path(), config)
@@ -49,32 +39,4 @@ pub fn initials(name: &str) -> String {
         .take(2)
         .collect::<String>()
         .to_uppercase()
-}
-
-pub fn matches_filter(query: &str, haystack: &str) -> bool {
-    if query.is_empty() {
-        return true;
-    }
-    let normalized = normalize(query);
-    normalize(haystack)
-        .split_whitespace()
-        .any(|word| word.contains(&normalized))
-}
-
-fn normalize(s: &str) -> String {
-    s.to_lowercase()
-        .replace('á', "a")
-        .replace('é', "e")
-        .replace('í', "i")
-        .replace('ó', "o")
-        .replace('ú', "u")
-        .replace('ñ', "n")
-}
-
-pub fn card_background(dominant: Option<Rgba>, accent: Rgba) -> Rgba {
-    dominant.unwrap_or(accent)
-}
-
-pub fn tint_scope_disabled(window_color: WindowColorMode) -> bool {
-    window_color == WindowColorMode::Neutral
 }
