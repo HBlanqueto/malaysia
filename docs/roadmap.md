@@ -155,8 +155,8 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
 - 14d-2/3 (cliente dbusmenu, árbol completo): 2026-10-26.
 - 14d-5/6 (títulos recordados, `MENU_GRACE`, separadores): 2026-10-27.
 - 14e (apps propias exportan dbusmenu): aceptado 2026-10-26 con el ejemplo
-  `contador` (barrierkit `crates/barrier-kit/examples/contador.rs`,
-  `crates/barrier-kit/src/platform/app_menu_export.rs`).
+  `contador`, retirado el 2026-11-02; hoy lo prueba Ondina (barrierkit
+  `crates/ondina`, `crates/barrier-kit/src/platform/app_menu_export.rs`).
 - 14f-1 (`gtk_shell1` v5 + evento `gtk_menus` de Infinity v3): aceptado
   2026-10-28 en sesión anidada (`crates/malaysia-compositor/src/gtk.rs`; la
   barra solo registra la dirección, `crates/malaysia-shell/src/menubar/bar.rs`).

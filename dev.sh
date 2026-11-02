@@ -31,7 +31,7 @@ Commands:
                         Nested session with shell + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
-    example <name>      Run target/debug/examples/<name> against the running demo
+    app <name>          Run tengen-app-show or ondina from ../barrierkit against the running demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
@@ -742,17 +742,14 @@ demo() {
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
-            _example_dir="$_kit_dir/target/debug/examples"
-            (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
-                fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
-            _window_csd="$_example_dir/window_csd"
-            _window_ssd="$_example_dir/window_ssd"
-            _dialog="$_example_dir/dialog"
+            (cd "$_kit_dir" && cargo build -p tengen-app-show -p ondina) ||
+                fail "$EXIT_RUN_FAILED" "could not build the barrierkit apps in ../barrierkit"
+            _show="$_kit_dir/target/debug/tengen-app-show"
+            _ondina="$_kit_dir/target/debug/ondina"
         else
-            printf 'demo: barrier-kit examples skipped (use kit-local to enable them)\n' >&2
-            _window_csd=
-            _window_ssd=
-            _dialog=
+            printf 'demo: barrierkit apps skipped (use kit-local to enable them)\n' >&2
+            _show=
+            _ondina=
         fi
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
@@ -762,9 +759,8 @@ demo() {
             [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
-        _window_csd="$script_dir/result/bin/window_csd"
-        _window_ssd="$script_dir/result/bin/window_ssd"
-        _dialog="$script_dir/result/bin/dialog"
+        _show="$script_dir/result/bin/tengen-app-show"
+        _ondina="$script_dir/result/bin/ondina"
     fi
 
     start
@@ -810,12 +806,11 @@ demo() {
     else
         printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
     fi
-    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
-        demo_client window-csd "$_window_csd"
-        demo_client window-ssd "$_window_ssd"
-        demo_client dialog "$_dialog"
+    if [ -x "$_show" ] && [ -x "$_ondina" ]; then
+        demo_client tengen-app-show "$_show"
+        demo_client ondina "$_ondina"
     else
-        printf 'demo: window examples not found; skipping them\n' >&2
+        printf 'demo: barrierkit apps not found; skipping them\n' >&2
     fi
 
     printf 'demo: wallpaper, menubar and dock on %s\n' "$_sock"
@@ -911,19 +906,14 @@ lab() {
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
-            _example_dir="$_kit_dir/target/debug/examples"
-            (cd "$_kit_dir" && cargo build -p barrier-kit --examples) ||
-                fail "$EXIT_RUN_FAILED" "could not build the window examples in ../barrierkit"
-            _window_csd="$_example_dir/window_csd"
-            _window_ssd="$_example_dir/window_ssd"
-            _dialog="$_example_dir/dialog"
-            _contador="$_example_dir/contador"
+            (cd "$_kit_dir" && cargo build -p tengen-app-show -p ondina) ||
+                fail "$EXIT_RUN_FAILED" "could not build the barrierkit apps in ../barrierkit"
+            _show="$_kit_dir/target/debug/tengen-app-show"
+            _ondina="$_kit_dir/target/debug/ondina"
         else
-            printf 'lab: barrier-kit examples skipped (use kit-local to enable them)\n' >&2
-            _window_csd=
-            _window_ssd=
-            _dialog=
-            _contador=
+            printf 'lab: barrierkit apps skipped (use kit-local to enable them)\n' >&2
+            _show=
+            _ondina=
         fi
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
@@ -933,10 +923,8 @@ lab() {
             [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
-        _window_csd="$script_dir/result/bin/window_csd"
-        _window_ssd="$script_dir/result/bin/window_ssd"
-        _dialog="$script_dir/result/bin/dialog"
-        _contador="$script_dir/result/bin/contador"
+        _show="$script_dir/result/bin/tengen-app-show"
+        _ondina="$script_dir/result/bin/ondina"
     fi
 
     if ! command -v dbus-daemon >/dev/null 2>&1; then
@@ -1022,12 +1010,10 @@ lab() {
         printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
     fi
 
-    if [ -x "$_window_csd" ] && [ -x "$_window_ssd" ] && [ -x "$_dialog" ]; then
-        lab_client window-csd "$_window_csd"
-        lab_client window-ssd "$_window_ssd"
-        lab_client dialog "$_dialog"
+    if [ -x "$_show" ]; then
+        lab_client tengen-app-show "$_show"
     else
-        printf 'lab: window examples not found; skipping them\n' >&2
+        printf 'lab: tengen-app-show not found; skipping it\n' >&2
     fi
 
     if [ -z "${MALAYSIA_TEST_INPUT:-}" ]; then
@@ -1079,8 +1065,8 @@ EOF
     fi
 
     sleep 0.5
-    if [ -x "$_contador" ]; then
-        lab_client contador "$_contador"
+    if [ -x "$_ondina" ]; then
+        lab_client ondina "$_ondina"
     fi
 
     cat <<'EOF'
@@ -1088,8 +1074,8 @@ EOF
 lab session running. Manual checklist:
     1) Ventana > Trasladar > Izquierda/Superior izquierdo/Regresar con foot.
     2) ^Win+Left y ^Win+Return (if the host eats the combo, use the menu).
-    3) Resize window_csd, window_ssd and "Padre" from 4 corners and 4 edges:
-       no jumps, buttons keep responding.
+    3) Resize Tengen App Show and Ondina from 4 corners and 4 edges:
+       no jumps, buttons keep responding; Ondina changes layout at 900 and 620.
     4) Resize foot with another window behind it: the back window does not focus.
     5) Nautilus must NOT have the MalaysiaDreams titlebar; kate MUST have it.
     6) Help > type "oc": no other menu opens; Down reveals Foot.
@@ -1114,7 +1100,7 @@ EOF
     done
 }
 
-example() {
+app() {
     require_devshell
     require cargo
     _sin_menubar=
@@ -1122,21 +1108,20 @@ example() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
             --sin-menubar) _sin_menubar=1 ;;
-            -*) fail "$EXIT_USAGE" "unknown option for example: $1" ;;
+            -*) fail "$EXIT_USAGE" "unknown option for app: $1" ;;
             *)
-                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh example [--sin-menubar] <name>"
+                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|ondina"
                 _name=$1
                 ;;
         esac
         shift
     done
     if [ -z "$_name" ]; then
-        fail "$EXIT_USAGE" "usage: dev.sh example [--sin-menubar] <name>"
+        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|ondina"
     fi
     case "$_name" in
-        '' | *[!A-Za-z0-9_-]*)
-            fail "$EXIT_USAGE" "invalid example name: $_name"
-            ;;
+        tengen-app-show | ondina) ;;
+        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show or ondina)" ;;
     esac
     if ! is_running; then
         fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
@@ -1149,12 +1134,12 @@ example() {
 
     _kit_dir=$(barrierkit_dir)
     if ! kit_is_local || [ -z "$_kit_dir" ]; then
-        fail "$EXIT_RUN_FAILED" "example requires kit-local with ../barrierkit"
+        fail "$EXIT_RUN_FAILED" "app requires kit-local with ../barrierkit"
     fi
-    (cd "$_kit_dir" && cargo build -p barrier-kit --example "$_name") ||
-        fail "$EXIT_RUN_FAILED" "could not build the example $_name"
-    _bin="$_kit_dir/target/debug/examples/$_name"
-    [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the example binary is missing: $_bin"
+    (cd "$_kit_dir" && cargo build -p "$_name") ||
+        fail "$EXIT_RUN_FAILED" "could not build $_name"
+    _bin="$_kit_dir/target/debug/$_name"
+    [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the app binary is missing: $_bin"
 
     if [ -n "$_sin_menubar" ]; then
         _pid_file="$RUNTIME_DIR/demo-menubar.pid"
@@ -1520,7 +1505,7 @@ case "$command_name" in
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
     lab) lab "$@" ;;
-    example) example "$@" ;;
+    app) app "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
     *)
