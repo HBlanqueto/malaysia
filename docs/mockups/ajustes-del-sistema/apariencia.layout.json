@@ -1790,7 +1790,7 @@
      620
     ],
     "kit": "PreferencesWindow",
-    "background": "rgb(30, 30, 30)"
+    "background": "rgb(35, 35, 35)"
    },
    {
     "id": "sidebar.search",
@@ -1878,7 +1878,7 @@
     ],
     "kit": "Titlebar",
     "text": "Apariencia",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(234, 234, 234)",
     "font": [
      13,
      18,
@@ -1895,7 +1895,7 @@
     ],
     "kit": "Row",
     "text": "Apariencia",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -1934,7 +1934,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Automático",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      12,
      16,
@@ -1962,7 +1962,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Claro",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      12,
      16,
@@ -1991,7 +1991,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Oscuro",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      12,
      16,
@@ -2008,7 +2008,7 @@
     ],
     "kit": "Section",
     "text": "COLOR",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2025,7 +2025,7 @@
     ],
     "kit": "Row",
     "text": "Color de acento",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2064,7 +2064,7 @@
     ],
     "kit": "ColorWell",
     "text": "Azul",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2158,7 +2158,7 @@
     ],
     "kit": "Row",
     "text": "Color de las ventanas",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2175,7 +2175,7 @@
     ],
     "kit": "Row",
     "text": "Grises sin tinte.",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2215,7 +2215,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Neutro",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      12,
      16,
@@ -2243,7 +2243,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Acento",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      12,
      16,
@@ -2271,7 +2271,7 @@
     ],
     "kit": "ChoiceCards",
     "text": "Fondo",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      12,
      16,
@@ -2288,7 +2288,7 @@
     ],
     "kit": "Row",
     "text": "Intensidad del tinte",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2305,7 +2305,7 @@
     ],
     "kit": "Row",
     "text": "Acento y Fondo guardan cada uno la suya.",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2322,7 +2322,7 @@
     ],
     "kit": "Slider",
     "text": "Sutil",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      11,
      14,
@@ -2339,7 +2339,7 @@
     ],
     "kit": "Slider",
     "text": "Intenso",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      11,
      14,
@@ -2356,7 +2356,7 @@
     ],
     "kit": "Row",
     "text": "Teñir en las ventanas",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2373,7 +2373,7 @@
     ],
     "kit": "Row",
     "text": "Lo que no marques queda en gris neutro.",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2530,7 +2530,7 @@
     ],
     "kit": "Row",
     "text": "Aplicar el tinte a",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2614,7 +2614,7 @@
     ],
     "kit": "Section",
     "text": "VENTANAS",
-    "color": "rgb(155, 155, 155)",
+    "color": "rgb(159, 159, 159)",
     "font": [
      11,
      14,
@@ -2631,7 +2631,7 @@
     ],
     "kit": "Row",
     "text": "Semáforos",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,
@@ -2659,7 +2659,7 @@
     ],
     "kit": "PopUpButton",
     "text": "Automático",
-    "color": "rgb(245, 245, 245)",
+    "color": "rgb(223, 223, 223)",
     "font": [
      13,
      18,

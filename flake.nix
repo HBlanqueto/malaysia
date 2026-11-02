@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/f0b04ec";
+      url = "github:HBlanqueto/barrierkit/9663c94";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -85,8 +85,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=f0b04ec#f0b04ecc16ef28aad438067641154e23f546de0e" =
-              "sha256-2lpzMEDyUP8tfz5kf2PLeuF7s/kgDSpT2z9BBRxrCNU=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=9663c94#9663c9445982854b9b24d16bbc44b268e194e005" =
+              "sha256-sFo1dQq60xl/YXOQJiIctA1HQbXqA13OBU+sn4RgkV0=";
           };
 
           env = {
