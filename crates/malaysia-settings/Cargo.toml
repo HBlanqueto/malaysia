@@ -19,7 +19,6 @@ vow-design.workspace = true
 libc.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
-freya-engine.workspace = true
 torin.workspace = true
 
 [dev-dependencies]

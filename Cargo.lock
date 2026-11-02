@@ -1932,7 +1932,6 @@ dependencies = [
  "vow-design",
  "wayland-backend",
  "wayland-protocols-plasma",
- "wayland-protocols-wlr",
  "wayland-scanner",
  "wayland-server",
  "xcursor",
@@ -1951,7 +1950,6 @@ dependencies = [
  "barrier-kit",
  "freya-components",
  "freya-core",
- "freya-engine",
  "freya-testing",
  "libc",
  "png",
@@ -2012,7 +2010,6 @@ dependencies = [
  "vow-design",
  "wayland-client",
  "wayland-protocols",
- "wayland-protocols-wlr",
  "wgpu",
  "zune-jpeg",
 ]

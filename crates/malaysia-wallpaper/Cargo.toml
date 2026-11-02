@@ -28,7 +28,6 @@ vow-design.workspace = true
 
 wayland-client = { workspace = true, features = ["system"] }
 wayland-protocols = { workspace = true, features = ["client", "staging"] }
-wayland-protocols-wlr = { workspace = true, default-features = false }
 sctk = { workspace = true }
 
 wgpu.workspace = true
