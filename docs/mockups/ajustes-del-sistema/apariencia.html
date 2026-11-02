@@ -63,7 +63,7 @@ span,b,small{display:block;white-space:nowrap}
 
 /* Form / Section / Row */
 .hdr{display:flex;padding:var(--list-group-section-header-padding);color:var(--list-group-section-header-color)}
-.card{border-radius:var(--list-group-radius);background:var(--list-group-bg);box-shadow:inset 0 0 0 1px var(--list-group-border);overflow:hidden}
+.card{border-radius:var(--list-group-radius);background:var(--list-group-bg);box-shadow:inset 0 0 0 1px var(--card-border);overflow:hidden}
 .sep{height:1px;margin-left:var(--list-group-separator-inset-left);background:var(--list-group-separator-color)}
 .row{display:flex;align-items:center;gap:var(--space-3);min-height:var(--list-group-row-min-height);padding:var(--space-2) var(--list-group-row-padding-x)}
 .row .lbl{display:flex;flex-direction:column;align-items:flex-start}
@@ -86,10 +86,9 @@ span,b,small{display:block;white-space:nowrap}
 
 /* Slider por pasos */
 .sld{position:relative;width:var(--settings-strength-width);height:calc(var(--slider-knob) + var(--settings-strength-label-gap) + var(--type-caption-line-height));opacity:var(--switch-disabled-opacity)}
-.sld .trk{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc((var(--slider-knob) - var(--slider-track)) / 2);height:var(--slider-track);border-radius:var(--radius-pill);background:var(--slider-track-color)}
-.sld .knb{position:absolute;left:calc((var(--settings-strength-width) - var(--slider-knob)) / 3);top:0;width:var(--slider-knob);height:var(--slider-knob);border-radius:var(--radius-pill);background:var(--bg-surface);box-shadow:var(--shadow-knob)}
-.sld .lbs{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc(var(--slider-knob) + var(--settings-strength-label-gap));display:flex;justify-content:space-between;color:var(--ink-muted)}
-.sld .lbs [data-state~="selected"]{color:var(--ink-strong)}
+.sld .trk{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc((var(--slider-knob) - var(--settings-strength-track)) / 2);height:var(--settings-strength-track);border-radius:var(--radius-pill);background:var(--slider-track-color)}
+.sld .knb{position:absolute;left:calc((var(--settings-strength-width) - var(--slider-knob)) / 3);top:0;width:var(--slider-knob);height:var(--slider-knob);border-radius:var(--radius-pill);background:var(--bg-raised);box-shadow:var(--shadow-knob)}
+.sld .lbs{position:absolute;left:0;right:0;top:calc(var(--slider-knob) + var(--settings-strength-label-gap));display:flex;justify-content:space-between;color:var(--ink-strong)}
 
 /* Casillas y radios (deshabilitados en Neutro) */
 .checks{display:flex;flex-direction:column;align-items:flex-start;gap:var(--settings-check-row-gap)}
@@ -179,8 +178,6 @@ html[data-query] .it[data-state~="selected"]{background:var(--window-sidebar-ite
             <div class="lbl"><span class="t-body" data-id="row.intensidad" data-kit="Row">Intensidad del tinte</span><small class="t-caption" data-id="row.intensidad.detail" data-kit="Row">Acento y Fondo guardan cada uno la suya.</small></div>
             <div class="acc"><div class="sld" data-kit="Slider"><i class="trk"></i><i class="knb"></i><div class="lbs t-caption">
               <span data-id="intensidad.sutil" data-kit="Slider">Sutil</span>
-              <span data-id="intensidad.normal" data-kit="Slider" data-state="selected">Normal</span>
-              <span data-id="intensidad.fuerte" data-kit="Slider">Fuerte</span>
               <span data-id="intensidad.intenso" data-kit="Slider">Intenso</span>
             </div></div></div>
           </div>
