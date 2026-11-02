@@ -143,8 +143,9 @@ build_kit_apps() {
         _kit_rev=$(sed -n 's/^barrier-kit = .*rev = "\([0-9a-f]*\)".*/\1/p' "$script_dir/Cargo.toml")
         _kit_root="$script_dir/target/barrierkit-apps"
         _kit_bin="$_kit_root/bin"
-        cargo install --quiet --debug --locked --git https://github.com/HBlanqueto/barrierkit \
-            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$_kit_root/build" "$@" ||
+        printf 'dev.sh: building %s from barrierkit %s (the first time takes a few minutes)\n' "$*" "$_kit_rev" >&2
+        cargo install --debug --locked --git https://github.com/HBlanqueto/barrierkit \
+            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$script_dir/target" "$@" ||
             fail "$EXIT_RUN_FAILED" "could not build $* from barrierkit $_kit_rev"
     fi
 }
