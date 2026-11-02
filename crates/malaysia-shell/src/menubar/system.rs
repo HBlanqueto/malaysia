@@ -118,7 +118,15 @@ pub fn on_system_action_with(
 ) {
     match id.as_str() {
         "lock-screen" => spawn_component("lock"),
-        "about-this-computer" => spawn_component("about"),
+        "about-this-computer" => {
+            if let Some(index) = toplevels.iter().position(|window| {
+                window.app_id.strip_prefix(vow_design::NATIVE_APP_ID_PREFIX) == Some("about")
+            }) {
+                activate(index);
+            } else {
+                spawn_component("about");
+            }
+        }
         "sleep" => power::run(PowerAction::Suspend),
         "restart" => spawn_component_with("power", &[PowerAction::Restart.arg()]),
         "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),
@@ -220,5 +228,20 @@ mod tests {
 
         assert_eq!(activated, Some(1), "must activate the settings window");
         assert!(launched.is_none(), "must not spawn when the window exists");
+    }
+
+    #[test]
+    fn about_this_computer_activates_its_only_window() {
+        let mut activated: Option<usize> = None;
+        let about = format!("{}about", vow_design::NATIVE_APP_ID_PREFIX);
+
+        on_system_action_with(
+            "about-this-computer".to_string(),
+            &[toplevel("foot"), toplevel(&about)],
+            |_, _| {},
+            |index| activated = Some(index),
+        );
+
+        assert_eq!(activated, Some(1));
     }
 }

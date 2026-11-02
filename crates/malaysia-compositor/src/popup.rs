@@ -185,6 +185,22 @@ fn popup_root(topmost: PopupId, ancestors: &[PopupId]) -> PopupId {
 }
 
 impl State {
+    pub(crate) fn popup_has_kit_frame(&self, id: PopupId) -> bool {
+        let Some(mut surface) = self.popups.surface_of(id).cloned() else {
+            return false;
+        };
+        while let Some(parent) = self
+            .popups
+            .popups
+            .iter()
+            .find(|data| data.popup.wl_surface() == &surface)
+            .map(|data| data.parent_surface.clone())
+        {
+            surface = parent;
+        }
+        self.windows.is_native(&surface) || self.layers.entry_of(&surface).is_some()
+    }
+
     pub(crate) fn add_popup(&mut self, popup: PopupSurface, positioner: PositionerState) {
         let Some(parent_surface) = popup.get_parent_surface() else {
             return;

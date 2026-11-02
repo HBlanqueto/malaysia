@@ -767,6 +767,10 @@ pub(crate) fn build_output_elements(
                 1.0,
                 Kind::Unspecified,
             );
+            if !state.popup_has_kit_frame(id) {
+                elements.extend(surface_elements.into_iter().map(|e| e.into()));
+                continue;
+            }
             append_frame(
                 state,
                 Vec::new(),
