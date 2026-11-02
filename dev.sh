@@ -143,9 +143,12 @@ build_kit_apps() {
         _kit_rev=$(sed -n 's/^barrier-kit = .*rev = "\([0-9a-f]*\)".*/\1/p' "$script_dir/Cargo.toml")
         _kit_root="$script_dir/target/barrierkit-apps"
         _kit_bin="$_kit_root/bin"
+        _kit_build="$_kit_root/build/$_kit_rev"
+        find "$_kit_root/build" -mindepth 1 -maxdepth 1 ! -name "$_kit_rev" -exec rm -rf {} + 2>/dev/null || true
         printf 'dev.sh: building %s from barrierkit %s (the first time takes a few minutes)\n' "$*" "$_kit_rev" >&2
+        # Cargo hashes workspace crates by their relative path, so two revs sharing a target dir reuse stale build-script output.
         cargo install --debug --locked --git https://github.com/HBlanqueto/barrierkit \
-            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$script_dir/target" "$@" ||
+            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$_kit_build" "$@" ||
             fail "$EXIT_RUN_FAILED" "could not build $* from barrierkit $_kit_rev"
     fi
 }
