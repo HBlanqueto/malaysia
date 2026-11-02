@@ -736,7 +736,7 @@ demo() {
     }
     trap _demo_cleanup EXIT INT TERM
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
-        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper ||
+        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
             fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
@@ -902,7 +902,7 @@ lab() {
     if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper ||
+        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
         _kit_dir=$(barrierkit_dir)
         if kit_is_local && [ -n "$_kit_dir" ]; then
