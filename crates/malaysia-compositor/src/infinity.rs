@@ -264,12 +264,15 @@ impl State {
         let Some(outer) = self.windows.outer(id) else {
             return;
         };
+        if self.in_focus_mode(id) {
+            info!(
+                window = id.get(),
+                "arrange refused: a full-screen window stays put"
+            );
+            return;
+        }
         if self.maximized.contains_key(&id) {
             self.set_maximized(id, false);
-        }
-        if self.in_focus_mode(id) {
-            self.exit_focus_mode(id);
-            return;
         }
         self.arranged.entry(id).or_insert_with(|| outer);
         let workspace = self.workspace_rect();
@@ -379,6 +382,13 @@ impl State {
     }
 
     fn apply_infinity_geometry(&mut self, id: WindowId, target: SceneRect<f64, SceneLogical>) {
+        if self.in_focus_mode(id) {
+            info!(
+                window = id.get(),
+                "infinity geometry refused: a full-screen window stays put"
+            );
+            return;
+        }
         info!(window = id.get(), outer = ?target, "infinity geometry");
         self.windows.set_infinity_geometry(id, target);
         self.foreign_state_changed(id);

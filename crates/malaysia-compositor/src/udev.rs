@@ -279,15 +279,16 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     let now = Instant::now();
                     let output_size = data.state.output_size;
                     let scale = data.state.scale.fractional_scale();
-                    let fade = crate::theme_fade::start_if_allowed(
-                        &mut data.state,
-                        &mut data.renderer,
-                        &data.cursor,
-                        output_size,
-                        scale,
-                        now,
-                    );
-                    data.state.theme_fade = fade;
+                    if events.iter().any(|event| event.restyles()) {
+                        data.state.theme_fade = crate::theme_fade::start_if_allowed(
+                            &mut data.state,
+                            &mut data.renderer,
+                            &data.cursor,
+                            output_size,
+                            scale,
+                            now,
+                        );
+                    }
                     data.state.refresh_theme();
                     if data.state.take_redraw_request() {
                         data.render();

@@ -1828,6 +1828,13 @@ impl State {
     }
 
     pub(crate) fn start_move(&mut self, id: WindowId, location: Point<f64, Logical>) {
+        if self.in_focus_mode(id) {
+            tracing::info!(
+                window = id.get(),
+                "move refused: a full-screen window stays put"
+            );
+            return;
+        }
         self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
             return;
@@ -1838,6 +1845,13 @@ impl State {
     }
 
     pub(crate) fn start_resize(&mut self, id: WindowId, edge: Edge, location: Point<f64, Logical>) {
+        if self.in_focus_mode(id) {
+            tracing::info!(
+                window = id.get(),
+                "resize refused: a full-screen window stays put"
+            );
+            return;
+        }
         self.clear_chrome_pointer();
         let Some(outer) = self.windows.outer(id) else {
             return;

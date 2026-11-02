@@ -315,20 +315,22 @@ pub fn run() -> Result<(), SessionError> {
                     let now = Instant::now();
                     let output_size = session.state.output_size;
                     let scale = session.state.scale.fractional_scale();
-                    if let Ok((renderer, _)) = session.backend.bind() {
-                        let fade = crate::theme_fade::start_if_allowed(
-                            &mut session.state,
-                            renderer,
-                            &session.cursor,
-                            output_size,
-                            scale,
-                            now,
-                        );
-                        session.state.theme_fade = fade;
-                    } else {
-                        crate::theme_fade::log_snapshot_failure(
-                            "could not bind the renderer for the theme fade snapshot",
-                        );
+                    if events.iter().any(|event| event.restyles()) {
+                        match session.backend.bind() {
+                            Ok((renderer, _)) => {
+                                session.state.theme_fade = crate::theme_fade::start_if_allowed(
+                                    &mut session.state,
+                                    renderer,
+                                    &session.cursor,
+                                    output_size,
+                                    scale,
+                                    now,
+                                );
+                            }
+                            Err(_) => crate::theme_fade::log_snapshot_failure(
+                                "could not bind the renderer for the theme fade snapshot",
+                            ),
+                        }
                     }
                     session.state.refresh_theme();
                     if session.state.take_redraw_request() {
