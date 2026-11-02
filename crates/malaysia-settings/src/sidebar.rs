@@ -1,8 +1,8 @@
 //! Settings sidebar: traffic lights, search, account and section list.
 
 use barrier_kit::ProbeExt;
-use barrier_kit::controls::TextField;
 use barrier_kit::traffic::TrafficLights;
+use freya_components::input::Input as TextField;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Position, Size};

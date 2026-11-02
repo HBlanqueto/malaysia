@@ -5,12 +5,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use barrier_kit::controls::Button;
+use barrier_kit::controls::{Button, ButtonStyle};
 use barrier_kit::platform::{Decorations, Timers, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use barrier_kit::titlebar::window_drag_handler;
 use barrier_kit::traffic::TrafficLights;
-use freya_components::button::ButtonLayoutThemePartialExt;
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
@@ -102,17 +101,12 @@ fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) 
         .direction(Direction::Horizontal)
         .main_align(Alignment::End)
         .spacing(DIALOG_PADDING / 2.0)
+        .child(Button::new("Cancelar").on_press(|_| close()))
         .child(
-            Button::new()
-                .on_press(|_| close())
-                .child(label().text("Cancelar")),
-        )
-        .child(
-            Button::new()
-                .filled()
-                .enabled(enabled)
-                .on_press(move |_| on_default())
-                .child(label().text(default_label.to_string())),
+            Button::new(default_label.to_string())
+                .style(ButtonStyle::Primary)
+                .disabled(!enabled)
+                .on_press(move |_| on_default()),
         )
 }
 
@@ -210,19 +204,15 @@ fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> Rect {
         .content(Content::Flex)
         .spacing(CONFIRM_BUTTON_GAP)
         .child(
-            Button::new()
+            Button::new("Cancelar")
                 .width(Size::flex(1.0))
-                .padding(Gaps::new(6.0, 8.0, 6.0, 8.0))
-                .on_press(|_| close())
-                .child(label().text("Cancelar").max_lines(1)),
+                .on_press(|_| close()),
         )
         .child(
-            Button::new()
-                .filled()
+            Button::new(default_label.to_string())
+                .style(ButtonStyle::Primary)
                 .width(Size::flex(1.0))
-                .padding(Gaps::new(6.0, 8.0, 6.0, 8.0))
-                .on_press(move |_| on_default())
-                .child(label().text(default_label.to_string()).max_lines(1)),
+                .on_press(move |_| on_default()),
         )
 }
 
@@ -751,9 +741,8 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
         )
         .child(
             rect().margin(Gaps::new(ABOUT_GAP, 0.0, 0.0, 0.0)).child(
-                Button::new()
-                    .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[]))
-                    .child(label().text("Más información…").font_size(TEXT.size as f32)),
+                Button::new("Más información…")
+                    .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[])),
             ),
         )
         .child(rect().width(Size::fill()).height(Size::flex(1.0)))
