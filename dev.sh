@@ -31,7 +31,7 @@ Commands:
                         Nested session with shell + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
-    app <name>          Run tengen-app-show or ondina from ../barrierkit against the running demo
+    app <name>          Run tengen-app-show or ondina (pinned rev, or ../barrierkit with kit-local) in the demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
@@ -131,6 +131,22 @@ barrierkit_dir() {
 
 kit_is_local() {
     [ -f "$script_dir/.cargo/config.toml" ]
+}
+
+build_kit_apps() {
+    _kit_dir=$(barrierkit_dir)
+    if kit_is_local && [ -n "$_kit_dir" ]; then
+        (cd "$_kit_dir" && cargo build $(printf -- '-p %s ' "$@")) ||
+            fail "$EXIT_RUN_FAILED" "could not build $* in ../barrierkit"
+        _kit_bin="$_kit_dir/target/debug"
+    else
+        _kit_rev=$(sed -n 's/^barrier-kit = .*rev = "\([0-9a-f]*\)".*/\1/p' "$script_dir/Cargo.toml")
+        _kit_root="$script_dir/target/barrierkit-apps"
+        _kit_bin="$_kit_root/bin"
+        cargo install --quiet --debug --locked --git https://github.com/HBlanqueto/barrierkit \
+            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$_kit_root/build" "$@" ||
+            fail "$EXIT_RUN_FAILED" "could not build $* from barrierkit $_kit_rev"
+    fi
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -740,17 +756,9 @@ demo() {
             fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        _kit_dir=$(barrierkit_dir)
-        if kit_is_local && [ -n "$_kit_dir" ]; then
-            (cd "$_kit_dir" && cargo build -p tengen-app-show -p ondina) ||
-                fail "$EXIT_RUN_FAILED" "could not build the barrierkit apps in ../barrierkit"
-            _show="$_kit_dir/target/debug/tengen-app-show"
-            _ondina="$_kit_dir/target/debug/ondina"
-        else
-            printf 'demo: barrierkit apps skipped (use kit-local to enable them)\n' >&2
-            _show=
-            _ondina=
-        fi
+        build_kit_apps tengen-app-show ondina
+        _show="$_kit_bin/tengen-app-show"
+        _ondina="$_kit_bin/ondina"
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
         _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
@@ -904,17 +912,9 @@ lab() {
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
         cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-        _kit_dir=$(barrierkit_dir)
-        if kit_is_local && [ -n "$_kit_dir" ]; then
-            (cd "$_kit_dir" && cargo build -p tengen-app-show -p ondina) ||
-                fail "$EXIT_RUN_FAILED" "could not build the barrierkit apps in ../barrierkit"
-            _show="$_kit_dir/target/debug/tengen-app-show"
-            _ondina="$_kit_dir/target/debug/ondina"
-        else
-            printf 'lab: barrierkit apps skipped (use kit-local to enable them)\n' >&2
-            _show=
-            _ondina=
-        fi
+        build_kit_apps tengen-app-show ondina
+        _show="$_kit_bin/tengen-app-show"
+        _ondina="$_kit_bin/ondina"
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
         _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
@@ -1132,13 +1132,8 @@ app() {
     [ -n "$_sock" ] ||
         fail "$EXIT_RUN_FAILED" "the demo has no Wayland socket yet; see: ./dev.sh log"
 
-    _kit_dir=$(barrierkit_dir)
-    if ! kit_is_local || [ -z "$_kit_dir" ]; then
-        fail "$EXIT_RUN_FAILED" "app requires kit-local with ../barrierkit"
-    fi
-    (cd "$_kit_dir" && cargo build -p "$_name") ||
-        fail "$EXIT_RUN_FAILED" "could not build $_name"
-    _bin="$_kit_dir/target/debug/$_name"
+    build_kit_apps "$_name"
+    _bin="$_kit_bin/$_name"
     [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the app binary is missing: $_bin"
 
     if [ -n "$_sin_menubar" ]; then
