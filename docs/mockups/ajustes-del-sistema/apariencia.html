@@ -42,7 +42,7 @@ span,b,small{display:block;white-space:nowrap}
 .tl{position:absolute;left:var(--window-sidebar-island-traffic-x);top:var(--window-sidebar-island-traffic-y);display:flex;gap:var(--window-traffic-lights-gap)}
 .tl i{width:var(--window-traffic-lights-size);height:var(--window-traffic-lights-size);border-radius:var(--radius-pill);background:var(--sys-gray)}
 .srch{display:flex;align-items:center;gap:var(--settings-search-gap);height:var(--text-field-height);margin:var(--settings-sidebar-lights-gap) 0 var(--settings-sidebar-search-gap);padding:0 var(--settings-search-padding-x);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-faint)}
-.srch i{width:var(--settings-search-icon);height:var(--settings-search-icon);flex:none}
+.srch > i{width:var(--settings-search-icon);height:var(--settings-search-icon);flex:none}
 .srch .q{color:var(--ink-strong)}
 .acct{display:flex;align-items:center;gap:var(--settings-account-gap);height:var(--settings-account-height);padding:0 var(--settings-account-padding-x);flex:none}
 .av{width:var(--settings-account-avatar);height:var(--settings-account-avatar);border-radius:var(--radius-pill);background:var(--ink-muted);color:var(--on-accent);display:grid;place-items:center;flex:none}
@@ -104,22 +104,29 @@ span,b,small{display:block;white-space:nowrap}
 .pop i{display:block;width:var(--symbol-grid);height:var(--symbol-grid)}
 .pop u{display:block;width:var(--settings-popup-chevron);height:var(--settings-popup-chevron)}
 
-html[data-query] .acct,html[data-query] .it[data-id="sidebar.item.apariencia"]{display:none}
-.it.hit{display:none;font-weight:500}
-html[data-query] .it.hit{display:flex}
+.srch{position:relative}
+.spop{display:none;position:absolute;left:0;right:0;top:calc(var(--text-field-height) + var(--settings-search-popover-gap));padding:var(--menu-popover-padding);border-radius:var(--list-group-radius);background:var(--bg-raised);box-shadow:0 0 0 1px var(--line);z-index:1}
+html[data-query] .spop{display:block}
+.res div{display:flex;flex-direction:column;align-items:flex-start}
+.res{display:flex;align-items:center;gap:var(--window-sidebar-item-gap);height:var(--settings-search-result-height);padding:0 var(--menu-popover-item-padding-start)}
+.res span{color:var(--ink-strong)}
+.res small{color:var(--ink-muted)}
+html[data-query] .it[data-state~="selected"]{background:var(--window-sidebar-item-inactive-selected-bg);color:var(--window-sidebar-item-ink)}
 </style>
 </head>
 <body>
 <div class="win" data-id="window" data-kit="PreferencesWindow">
   <aside class="side" data-kit="Sidebar">
     <div class="tl"><i></i><i></i><i></i></div>
-    <div class="srch t-body" data-id="sidebar.search" data-kit="SearchField" aria-label="Buscar"><i></i><span class="ph">Buscar</span></div>
+    <div class="srch t-body" data-id="sidebar.search" data-kit="SearchField" aria-label="Buscar"><i></i><span class="ph">Buscar</span>
+      <div class="spop" data-kit="PreferencesWindow">
+        <div class="res" data-id="sidebar.result.acento" data-kit="PreferencesWindow" aria-label="Color de acento"><i class="tile" style="background:var(--settings-accent-swatch-gris)"></i><div><span class="t-body" data-id="sidebar.result.acento.title" data-kit="PreferencesWindow">Color de acento</span><small class="t-caption" data-id="sidebar.result.acento.pane" data-kit="PreferencesWindow">Apariencia</small></div></div>
+      </div></div>
     <div class="acct" data-id="sidebar.account" data-kit="SidebarAccount" data-diff="ignore">
       <div class="av t-headline">R</div>
       <div><b class="t-headline">Usuario</b><small class="t-callout">Cuenta local</small></div>
     </div>
     <div class="it" data-id="sidebar.item.apariencia" data-kit="SidebarItem" data-state="selected"><i class="tile"></i><span data-id="sidebar.item.apariencia.label" data-kit="SidebarItem">Apariencia</span></div>
-    <div class="it hit" data-id="sidebar.hit.acento" data-kit="SidebarItem"><span data-id="sidebar.hit.acento.label" data-kit="SidebarItem">Color de acento</span></div>
   </aside>
 
   <main class="main">

@@ -2798,31 +2798,89 @@
     "radius": 999
    },
    {
-    "id": "sidebar.hit.acento",
+    "id": "sidebar.result.acento",
+    "rect": [
+     23,
+     95,
+     190,
+     40
+    ],
+    "name": "Color de acento",
+    "kit": "PreferencesWindow"
+   },
+   {
+    "id": "sidebar.result.acento.title",
+    "rect": [
+     59,
+     99,
+     94,
+     18
+    ],
+    "kit": "PreferencesWindow",
+    "text": "Color de acento",
+    "color": "rgb(13, 18, 25)",
+    "font": [
+     13,
+     18,
+     400
+    ]
+   },
+   {
+    "id": "sidebar.result.acento.pane",
+    "rect": [
+     59,
+     117,
+     54.5,
+     14
+    ],
+    "kit": "PreferencesWindow",
+    "text": "Apariencia",
+    "color": "rgb(85, 101, 126)",
+    "font": [
+     11,
+     14,
+     500
+    ]
+   },
+   {
+    "id": "sidebar.account",
     "rect": [
      18,
      96,
      200,
+     48
+    ],
+    "kit": "SidebarAccount",
+    "diff": "ignore"
+   },
+   {
+    "id": "sidebar.item.apariencia",
+    "rect": [
+     18,
+     144,
+     200,
      30
     ],
     "kit": "SidebarItem",
+    "state": "selected",
+    "background": "rgb(221, 227, 235)",
     "radius": 8
    },
    {
-    "id": "sidebar.hit.acento.label",
+    "id": "sidebar.item.apariencia.label",
     "rect": [
-     26,
-     102,
-     96.5,
+     56,
+     150,
+     66.5,
      18
     ],
     "kit": "SidebarItem",
-    "text": "Color de acento",
+    "text": "Apariencia",
     "color": "rgb(27, 35, 48)",
     "font": [
      13,
      18,
-     500
+     600
     ]
    },
    {
