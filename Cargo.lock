@@ -257,7 +257,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "barrier-kit"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=99425e5#99425e5c2157a7c8315cace735ecf860f09ae02d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=16f99e1#16f99e18051b871596e7eb77dc4ffc588ec19629"
 dependencies = [
  "accesskit",
  "ash",
@@ -283,10 +283,8 @@ dependencies = [
  "tracing",
  "vow-appearance",
  "vow-design",
- "wayland-client",
  "wayland-protocols",
  "wayland-protocols-plasma",
- "wayland-scanner",
  "zbus",
  "zeroize",
 ]
@@ -1618,7 +1616,7 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=99425e5#99425e5c2157a7c8315cace735ecf860f09ae02d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=16f99e1#16f99e18051b871596e7eb77dc4ffc588ec19629"
 dependencies = [
  "wayland-backend",
  "wayland-client",
@@ -3838,7 +3836,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vow-appearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=99425e5#99425e5c2157a7c8315cace735ecf860f09ae02d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=16f99e1#16f99e18051b871596e7eb77dc4ffc588ec19629"
 dependencies = [
  "nix",
  "serde",
@@ -3851,7 +3849,7 @@ dependencies = [
 [[package]]
 name = "vow-design"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=99425e5#99425e5c2157a7c8315cace735ecf860f09ae02d"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=16f99e1#16f99e18051b871596e7eb77dc4ffc588ec19629"
 dependencies = [
  "serde_json",
 ]
@@ -4226,7 +4224,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
