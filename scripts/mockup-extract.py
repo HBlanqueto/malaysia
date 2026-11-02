@@ -49,6 +49,7 @@ COLLECT = r"""
       id,
       rect: [round(r.left - win.left), round(r.top - win.top), round(r.width), round(r.height)],
     };
+    if (el.getAttribute('aria-label')) node.name = el.getAttribute('aria-label');
     for (const key of ['kit', 'app', 'state', 'variant', 'diff']) {
       if (el.dataset[key]) node[key] = el.dataset[key];
     }

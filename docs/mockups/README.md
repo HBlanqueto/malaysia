@@ -26,7 +26,10 @@ que la app tiene que cumplir, y un test lo comprueba. Cada pantalla tiene:
   border son del compositor (`data-layer="compositor"`, solo visible con
   `?compositor=1`).
 - Atributos:
-  - `data-id`: identificador estable y único; es lo que busca el test.
+  - `data-id`: identificador estable y único.
+  - `aria-label`: nombre accesible del control. El test busca cada nodo por
+    su texto o por este nombre, no por un id puesto en la app: los nodos de
+    los componentes de `barrier-kit` no llevan ids propios.
   - `data-kit`: componente de `barrier-kit` (`Sidebar`, `ToolGroup`…).
   - `data-app`: función de la app que lo dibuja (`theme_card`, `row_card`…).
   - `data-state`, `data-variant`: estado y variante que debe tener.
@@ -42,4 +45,5 @@ que la app tiene que cumplir, y un test lo comprueba. Cada pantalla tiene:
    `layout.json` y los PNG. `./dev.sh check` corre el mismo script con
    `--check` y falla si quedaron viejos.
 3. El test de la app renderiza cada variante con `freya-testing` a la misma
-   medida y compara nodo a nodo (±1 px) y por píxel.
+   medida y compara nodo a nodo: rectángulo (±1 px; ±2 px de ancho en los
+   textos), color y fuente del texto.

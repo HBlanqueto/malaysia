@@ -5,15 +5,12 @@
 <meta name="viewport" content="width=760">
 <title>Ajustes del sistema › Apariencia (mockup de contrato)</title>
 <!--
-  Mockup de contrato. Reglas (docs/mockups/README.md):
-  - Solo variables de tengen.css y de los tokens de componentes; ningún color
-    ni medida suelta, salvo dentro de [data-diff="ignore"].
-  - data-id: identificador estable que el test de la app busca. Único.
-  - data-kit: componente de barrier-kit. data-app: función de malaysia-settings.
-  - data-state / data-variant: estado y variante que el nodo debe tener.
-  - data-layer="compositor": lo dibuja el compositor; la app dibuja cuadrado.
-  - data-diff="ignore": contenido que depende del sistema (fondo, usuario);
-    su geometría sí se compara, sus píxeles no.
+  Mockup de contrato (docs/mockups/README.md). Ajustes es un PreferencesWindow
+  de barrier-kit (ADR 0047, fase 6): cada nodo marcado lo dibuja el kit.
+  - data-id: identificador estable y único.
+  - El test busca cada nodo por su texto o por su aria-label (nombre
+    accesible del control) y compara rectángulo, color y fuente.
+  - data-diff="ignore": depende del sistema (usuario); no se compara.
 -->
 <link rel="stylesheet" href="../tengen.css">
 <script type="application/json" id="mockup-variants">
@@ -21,432 +18,220 @@
   "size": [760, 620],
   "variants": {
     "claro":           { "theme": "light", "query": "" },
-    "claro-morado":    { "theme": "light", "query": "", "accent": "morado" },
+    "claro-morado":    { "theme": "light", "query": "", "accent": "Morado" },
     "oscuro":          { "theme": "dark",  "query": "" },
-    "busqueda-acento": { "theme": "light", "query": "acento" },
-    "sin-resultados":  { "theme": "light", "query": "zzz" },
-    "semaforos-menu":  { "theme": "light", "query": "", "menu": "semaforos" },
-    "acento-normal":      { "theme": "light", "query": "", "window": "acento", "strength": 1 },
-    "acento-solo-barras": { "theme": "light", "query": "", "accent": "morado", "window": "acento", "strength": 2, "parts": ["barras"] },
-    "fondo-oscuro":       { "theme": "dark",  "query": "", "window": "fondo", "strength": 2, "parts": ["barras", "ventana", "tarjetas", "controles", "menus"] }
+    "busqueda-acento": { "theme": "light", "query": "acento" }
   }
 }
 </script>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;width:760px;height:620px;overflow:hidden;background:#808080}
-button{font:inherit;appearance:none;border:0;background:transparent;padding:0;margin:0;color:inherit}
-input{font:inherit}
-svg.ico{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
-
-/* Tipografía: estilos de tokens.json › font.styles */
+html,body{margin:0;width:760px;height:620px;overflow:hidden;background:var(--bg-window)}
 .t-body{font-size:var(--type-body-size);line-height:var(--type-body-line-height);font-weight:var(--type-body-weight)}
 .t-headline{font-size:var(--type-headline-size);line-height:var(--type-headline-line-height);font-weight:var(--type-headline-weight)}
 .t-callout{font-size:var(--type-callout-size);line-height:var(--type-callout-line-height);font-weight:var(--type-callout-weight)}
-.t-caption{font-size:var(--type-caption-size);line-height:var(--type-caption-line-height);font-weight:var(--type-caption-weight);letter-spacing:var(--type-caption-tracking)}
-.t-title-2{font-size:var(--type-title-2-size);line-height:var(--type-title-2-line-height);font-weight:var(--type-title-2-weight)}
+.t-caption{font-size:var(--type-caption-size);line-height:var(--type-caption-line-height);font-weight:var(--type-caption-weight)}
+span,b,small{display:block;white-space:nowrap}
 
-/* Ventana: la app dibuja un rectángulo cuadrado de 760×620 */
-.win{position:relative;width:var(--settings-window-width);height:var(--settings-window-height);background:var(--bg-window);color:var(--ink);font-family:var(--font-sans);overflow:hidden}
+.win{position:relative;width:var(--settings-window-width);height:var(--settings-window-height);background:var(--bg-window);color:var(--ink-strong);font-family:var(--font-sans);overflow:hidden}
 
-/* Capa del compositor: solo para previsualizar (?compositor=1). La extracción la oculta. */
-.comp{position:absolute;inset:0;pointer-events:none;border-radius:var(--window-radius);box-shadow:inset 0 0 0 1px var(--window-outer),inset 0 0 0 2px var(--window-inner);display:none}
-html[data-compositor] .comp{display:block}
-html[data-compositor] .win{border-radius:var(--window-radius)}
-
-/* Barra lateral en isla */
+/* SplitView + Sidebar en isla */
 .side{position:absolute;left:var(--window-sidebar-island-inset);top:var(--window-sidebar-island-inset);bottom:var(--window-sidebar-island-inset);width:var(--window-sidebar-width);
-  padding:var(--settings-sidebar-padding-top) var(--window-sidebar-island-padding-x) var(--settings-sidebar-padding-bottom);
-  border-radius:var(--window-sidebar-island-radius);background:var(--window-sidebar-island-bg);
-  box-shadow:inset 0 0 0 var(--window-sidebar-island-rim-width) var(--window-sidebar-island-rim);display:flex;flex-direction:column}
-.tl{display:flex;gap:var(--window-traffic-lights-gap);height:var(--window-traffic-lights-size);margin-left:calc(var(--window-sidebar-island-traffic-x) - var(--window-sidebar-island-padding-x));align-self:flex-start}
-.tl i{width:var(--window-traffic-lights-size);height:var(--window-traffic-lights-size);border-radius:var(--window-traffic-lights-radius);box-shadow:inset 0 0 0 0.5px var(--traffic-rim);display:block}
-.srch{display:flex;align-items:center;gap:var(--settings-search-gap);height:var(--settings-search-height);margin-top:var(--settings-sidebar-lights-gap);padding:0 var(--settings-search-padding-x);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-muted)}
-.srch .ico{width:var(--settings-search-icon);height:var(--settings-search-icon)}
-.srch span{flex:1;min-width:0;white-space:nowrap;overflow:hidden}
-.srch span.q{color:var(--ink-strong)}
-.acct{display:flex;align-items:center;gap:var(--settings-account-gap);height:var(--settings-account-height);margin-top:var(--settings-sidebar-search-gap);padding:0 var(--settings-account-padding-x)}
-.av{width:var(--settings-account-avatar);height:var(--settings-account-avatar);border-radius:var(--radius-pill);background:var(--sys-gray);color:var(--on-accent);display:grid;place-items:center;flex:none}
-.acct .who{display:flex;flex-direction:column}
-.acct .who b{color:var(--ink-strong)}
-.acct .who small{color:var(--ink-muted)}
-.items{display:flex;flex-direction:column;gap:var(--settings-sidebar-item-gap);margin-top:var(--settings-section-gap)}
-.it{display:flex;align-items:center;gap:var(--window-sidebar-item-gap);height:var(--window-sidebar-item-height);padding:0 var(--window-sidebar-item-padding-x);border-radius:var(--window-sidebar-item-radius);color:var(--ink-strong)}
-.it[data-state~="selected"]{background:var(--window-sidebar-item-selected-bg);color:var(--window-sidebar-item-selected-ink);font-weight:var(--window-sidebar-item-selected-weight)}
-.appico{width:var(--window-sidebar-item-app-icon);height:var(--window-sidebar-item-app-icon);border-radius:var(--radius-sm);background:var(--settings-section-icon-bg);color:var(--on-accent);display:grid;place-items:center;flex:none}
-.appico .ico{width:var(--settings-sidebar-app-icon-glyph);height:var(--settings-sidebar-app-icon-glyph)}
+  padding:calc(var(--window-sidebar-island-traffic-y) + var(--window-traffic-lights-size)) var(--window-sidebar-island-padding-x) var(--window-sidebar-island-padding-x);
+  border-radius:var(--window-sidebar-island-radius);background:var(--window-sidebar-island-bg);display:flex;flex-direction:column}
+.tl{position:absolute;left:var(--window-sidebar-island-traffic-x);top:var(--window-sidebar-island-traffic-y);display:flex;gap:var(--window-traffic-lights-gap)}
+.tl i{width:var(--window-traffic-lights-size);height:var(--window-traffic-lights-size);border-radius:var(--radius-pill);background:var(--sys-gray)}
+.srch{display:flex;align-items:center;gap:var(--settings-search-gap);height:var(--text-field-height);margin:var(--settings-sidebar-lights-gap) 0 var(--settings-sidebar-search-gap);padding:0 var(--settings-search-padding-x);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-faint)}
+.srch i{width:var(--settings-search-icon);height:var(--settings-search-icon);flex:none}
+.srch .q{color:var(--ink-strong)}
+.acct{display:flex;align-items:center;gap:var(--settings-account-gap);height:var(--settings-account-height);padding:0 var(--settings-account-padding-x);flex:none}
+.av{width:var(--settings-account-avatar);height:var(--settings-account-avatar);border-radius:var(--radius-pill);background:var(--ink-muted);color:var(--on-accent);display:grid;place-items:center;flex:none}
+.acct b{color:var(--ink)}
+.acct small{color:var(--ink-muted)}
+.it{display:flex;align-items:center;gap:var(--window-sidebar-item-gap);height:var(--window-sidebar-item-height);padding:0 var(--window-sidebar-item-padding-x);border-radius:var(--window-sidebar-item-radius);color:var(--window-sidebar-item-ink);font-size:var(--window-sidebar-item-text-size);line-height:var(--type-body-line-height);font-weight:500;flex:none}
+.it[data-state~="selected"]{background:var(--window-sidebar-item-selected-bg);color:var(--window-sidebar-item-selected-ink);font-weight:600}
+.tile{width:var(--window-sidebar-item-app-icon);height:var(--window-sidebar-item-app-icon);border-radius:var(--window-sidebar-item-radius);background:var(--sys-gray);flex:none}
+.it[data-state~="selected"] .tile{box-shadow:inset 0 0 0 1px var(--window-sidebar-item-selected-icon-rim)}
 
-/* Columna de contenido */
+/* Columna de detalle */
 .main{position:absolute;top:0;bottom:0;right:0;left:calc(var(--window-sidebar-island-inset) * 2 + var(--window-sidebar-width));display:flex;flex-direction:column}
-.tb{height:var(--settings-toolbar-height);flex:none;display:flex;align-items:center;gap:var(--settings-toolbar-gap);padding:var(--settings-toolbar-padding-top) var(--settings-toolbar-padding-x) 0}
-.grp{display:flex;align-items:center;height:var(--window-toolgroup-height);padding:0 var(--window-toolgroup-padding-x);border-radius:var(--radius-pill);background:var(--window-toolgroup-bg)}
-.tbb{width:var(--window-toolgroup-button-w);height:var(--window-toolgroup-button-h);border-radius:var(--radius-pill);display:grid;place-items:center;color:var(--window-toolgroup-ink)}
-.tbb[data-state~="disabled"]{color:var(--window-toolgroup-disabled-ink)}
-.tbb .ico{width:16px;height:16px}
-.gsep{width:var(--window-toolgroup-separator-w);height:var(--window-toolgroup-separator-h);background:var(--window-toolgroup-separator)}
-.ttl{color:var(--ink-strong);white-space:nowrap;margin-left:auto;margin-right:auto}
-.scroll{flex:1;min-height:0;overflow:hidden}
-.cont{padding:var(--settings-content-padding-top) var(--settings-group-content-padding-x) var(--settings-content-padding-bottom);display:flex;flex-direction:column;gap:var(--settings-content-gap)}
-.cap{color:var(--ink-strong);margin:calc(var(--settings-group-title-margin-top) - var(--settings-content-gap)) 0 calc(var(--settings-group-title-margin-bottom) - var(--settings-content-gap)) var(--settings-group-title-indent)}
-.grpc{background:var(--bg-surface);border-radius:var(--settings-group-radius);box-shadow:inset 0 0 0 1px var(--line)}
-.row{position:relative;display:flex;align-items:center;gap:var(--settings-row-gap);min-height:var(--settings-group-row-min-height);padding:var(--settings-group-row-padding-y) var(--settings-group-row-padding-x)}
-.row + .row::before{content:"";position:absolute;top:0;left:var(--settings-group-row-padding-x);right:var(--settings-group-row-padding-x);height:1px;background:var(--line)}
-.row .tx{flex:0 0 var(--settings-label-column);min-width:0;display:flex;flex-direction:column;gap:var(--settings-group-desc-gap)}
-/* v6.1: las opciones se centran en el espacio que deja la columna de etiquetas. */
-.row > .tx + *{margin-inline:auto}
-.row .tx b{font-weight:inherit;color:var(--ink-strong)}
-.row .tx small{color:var(--ink-muted)}
-.row[data-state~="disabled"] .tx b{color:var(--ink-faint)}
-.row[data-state~="disabled"] .radios{opacity:.4}
-.row[data-state~="disabled"] .cb{color:var(--ink-faint)}
+.bar{display:flex;align-items:center;height:var(--settings-toolbar-height);padding:var(--settings-toolbar-padding-top) var(--settings-toolbar-padding-x) 0;flex:none}
+.nav{display:flex}
+.nav i{width:var(--icon-button-size);height:var(--icon-button-size);display:block}
+.ttl{flex:1;display:flex;justify-content:center;font-size:var(--type-headline-size);line-height:var(--type-headline-line-height);font-weight:var(--type-headline-weight)}
+.scroll{padding:var(--space-2) var(--list-group-row-padding-x);display:flex;flex-direction:column;gap:var(--space-4)}
 
-/* Tarjetas con vista previa */
+/* Form / Section / Row */
+.hdr{display:flex;padding:var(--list-group-section-header-padding);color:var(--list-group-section-header-color)}
+.card{border-radius:var(--list-group-radius);background:var(--list-group-bg);box-shadow:inset 0 0 0 1px var(--list-group-border);overflow:hidden}
+.sep{height:1px;margin-left:var(--list-group-separator-inset-left);background:var(--list-group-separator-color)}
+.row{display:flex;align-items:center;gap:var(--space-3);min-height:var(--list-group-row-min-height);padding:var(--space-2) var(--list-group-row-padding-x)}
+.row .lbl{display:flex;flex-direction:column;align-items:flex-start}
+.row .acc{flex:1;display:flex;justify-content:flex-end;align-items:center}
+.row small{color:var(--ink-muted)}
+
+/* ChoiceCards */
 .cards{display:flex;gap:var(--settings-card-gap)}
-.card{display:flex;flex-direction:column;align-items:center;gap:var(--settings-card-caption-gap);color:var(--ink-muted)}
-.card[data-state~="selected"] .capt{color:var(--ink-strong);font-weight:var(--type-headline-weight)}
-.pv{position:relative;display:block;width:var(--settings-card-width);height:var(--settings-card-height);border-radius:var(--settings-card-radius);overflow:hidden;box-shadow:0 0 0 1px var(--settings-card-outline)}
-.card[data-state~="selected"] .pv{box-shadow:0 0 0 var(--settings-card-ring-gap) var(--bg-surface),0 0 0 calc(var(--settings-card-ring-gap) + var(--settings-card-ring)) var(--accent)}
-/* Interior de las miniaturas: depende del fondo de pantalla real, no se compara por píxel. */
-/* Fondo de las miniaturas: degradado del acento, no el fondo de pantalla. */
-.pv .wall{position:absolute;inset:0;background:linear-gradient(var(--settings-preview-wall-angle),color-mix(in srgb,var(--accent),#ffffff var(--settings-preview-wall-light)),var(--accent),color-mix(in srgb,var(--accent),#000000 var(--settings-preview-wall-dark)))}
-.pv .sc{position:absolute;inset:0}
-.pv .sc.lt{--pv-window:var(--preview-light-window);--pv-sunken:var(--preview-light-sunken);--pv-line:var(--preview-light-control)}
-.pv .sc.dk{--pv-window:var(--preview-dark-window);--pv-sunken:var(--preview-dark-sunken);--pv-line:var(--preview-dark-control)}
-.pv .sc.half-r{clip-path:inset(0 0 0 50%)}
-.pv .pn{position:absolute;left:0;top:0;right:0;height:var(--settings-preview-panel-h);background:color-mix(in srgb,var(--pv-window) 88%,transparent)}
-.pv .mn{position:absolute;left:var(--settings-preview-menu-x);top:var(--settings-preview-menu-y);width:var(--settings-preview-menu-w);height:var(--settings-preview-menu-h);padding:2px;border-radius:var(--settings-preview-radius);background:var(--pv-window);box-shadow:var(--settings-preview-shadow);display:flex;flex-direction:column;gap:2px}
-.pv .mn i{display:block;height:2px;width:70%;margin-left:2px;border-radius:1px;background:var(--pv-line)}
-.pv .mn i.hl{height:4px;width:auto;margin:0;background:var(--accent)}
-.pv .ap{position:absolute;right:var(--settings-preview-app-inset);bottom:var(--settings-preview-app-inset);width:var(--settings-preview-app-w);height:var(--settings-preview-app-h);border-radius:var(--settings-preview-radius);background:var(--pv-window);box-shadow:var(--settings-preview-shadow);overflow:hidden}
-.pv .ap .sd{position:absolute;left:0;top:0;bottom:0;width:var(--settings-preview-app-side-w);background:var(--pv-sunken)}
-.pv .ap .dots{position:absolute;left:2px;top:2px;display:flex;gap:1px}
-.pv .ap .dots i{width:var(--settings-preview-light);height:var(--settings-preview-light);border-radius:1px;display:block}
-.pv .tw{position:absolute;left:var(--settings-preview-tint-window-x);top:var(--settings-preview-tint-window-y);right:var(--settings-preview-tint-window-x);bottom:-4px;border-radius:var(--settings-preview-window-radius) var(--settings-preview-window-radius) 0 0}
-.pv .tw i{position:absolute;left:3px;top:3px;bottom:3px;width:var(--settings-preview-tint-side-w);border-radius:3px}
+.cc{display:flex;flex-direction:column;align-items:center;gap:var(--settings-card-caption-gap);color:var(--ink-muted)}
+.cc i{display:block;width:var(--settings-card-width);height:var(--settings-card-height);border-radius:var(--settings-card-radius);background:var(--accent);box-shadow:inset 0 0 0 1px var(--settings-card-outline)}
+.cc[data-state~="selected"]{color:var(--ink-strong)}
+.cc[data-state~="selected"] span{font-weight:600}
+.cc[data-state~="selected"] i{outline:var(--focus-ring-width) solid var(--accent);outline-offset:var(--focus-ring-offset)}
 
-/* Acento */
-.sws{display:flex;gap:var(--settings-swatch-gap)}
-.swc{display:flex;flex-direction:column;align-items:center;gap:var(--settings-swatch-name-gap);width:var(--settings-swatch-column)}
-.sw{width:var(--settings-swatch-size);height:var(--settings-swatch-size);border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
-.swc[data-state~="selected"] .sw{box-shadow:0 0 0 2px var(--bg-surface),0 0 0 4px var(--ink-muted)}
-.swc small{color:var(--ink-muted);white-space:nowrap}
+/* ColorWell */
+.well{display:flex;gap:var(--settings-swatch-gap)}
+.sw{width:var(--settings-swatch-column);display:flex;flex-direction:column;align-items:center;gap:var(--settings-swatch-name-gap);color:var(--ink-muted)}
+.sw i{display:block;width:var(--settings-swatch-size);height:var(--settings-swatch-size);border-radius:var(--radius-pill)}
+.sw small{height:var(--type-caption-line-height)}
 
-/* Radios */
+/* Slider por pasos */
+.sld{position:relative;width:var(--settings-strength-width);height:calc(var(--slider-knob) + var(--settings-strength-label-gap) + var(--type-caption-line-height));opacity:var(--switch-disabled-opacity)}
+.sld .trk{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc((var(--slider-knob) - var(--slider-track)) / 2);height:var(--slider-track);border-radius:var(--radius-pill);background:var(--slider-track-color)}
+.sld .knb{position:absolute;left:calc((var(--settings-strength-width) - var(--slider-knob)) / 3);top:0;width:var(--slider-knob);height:var(--slider-knob);border-radius:var(--radius-pill);background:var(--bg-surface);box-shadow:var(--shadow-knob)}
+.sld .lbs{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc(var(--slider-knob) + var(--settings-strength-label-gap));display:flex;justify-content:space-between;color:var(--ink-muted)}
+.sld .lbs [data-state~="selected"]{color:var(--ink-strong)}
+
+/* Casillas y radios (deshabilitados en Neutro) */
+.checks{display:flex;flex-direction:column;align-items:flex-start;gap:var(--settings-check-row-gap)}
+.chk,.rad{display:flex;align-items:center;gap:var(--settings-radio-gap);color:var(--ink-faint)}
+.chk i,.rad i{display:block;width:var(--checkbox-size);height:var(--checkbox-size);flex:none}
+.chk i{border-radius:var(--checkbox-radius);box-shadow:inset 0 0 0 1px var(--checkbox-border)}
+.rad i{border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px var(--radio-border)}
 .radios{display:flex;gap:var(--settings-radio-spacing)}
-.rd{display:inline-flex;align-items:center;gap:var(--settings-radio-gap);color:var(--ink-strong)}
-.rd i{width:var(--settings-radio-size);height:var(--settings-radio-size);border-radius:var(--radius-pill);background:var(--bg-control);box-shadow:inset 0 0 0 .5px var(--traffic-rim);display:grid;place-items:center}
-.rd[data-state~="selected"] i{background:var(--accent)}
-.rd[data-state~="selected"] i::after{content:"";width:var(--settings-radio-dot);height:var(--settings-radio-dot);border-radius:var(--radius-pill);background:var(--on-accent)}
 
-/* Desplegable de semáforos */
-.pop{display:inline-flex;align-items:center;gap:var(--settings-popup-text-gap);height:var(--settings-popup-height);color:var(--ink-strong)}
-.prev{display:inline-flex;gap:var(--settings-popup-light-gap)}
-.prev i{width:var(--settings-dropdown-preview-light);height:var(--settings-dropdown-preview-light);border-radius:var(--window-traffic-lights-radius);box-shadow:inset 0 0 0 .5px var(--traffic-rim);display:block}
-.chev{width:var(--settings-popup-chevron);height:var(--settings-popup-chevron);border-radius:var(--radius-pill);background:var(--bg-control);color:var(--ink-muted);display:grid;place-items:center}
-.chev .ico{width:var(--settings-dropdown-chevron-glyph);height:var(--settings-dropdown-chevron-glyph);stroke-width:1.8}
+/* PopUpButton */
+.pop{display:flex;align-items:center;gap:var(--settings-popup-text-gap);height:var(--settings-popup-height)}
+.pop i{display:block;width:var(--symbol-grid);height:var(--symbol-grid)}
+.pop u{display:block;width:var(--settings-popup-chevron);height:var(--settings-popup-chevron)}
 
-/* Sin resultados */
-.empty{display:none;flex-direction:column;align-items:center;gap:var(--settings-empty-gap);padding:var(--settings-empty-padding-y) var(--space-4);color:var(--ink-muted);text-align:center}
-.empty .ico{width:var(--settings-empty-icon);height:var(--settings-empty-icon)}
-.empty b{color:var(--ink-strong)}
-html[data-no-results] .empty{display:flex}
-[hidden]{display:none!important}
-
-/* Colores de semáforo y muestras: tokens y components.json › settings.accent-swatches */
-.c-close{background:var(--traffic-close)} .c-min{background:var(--traffic-min)} .c-zoom{background:var(--traffic-zoom)}
-/* Estilo «Acento»: cerrar y minimizar = acento hacia negro; ampliar = acento hacia blanco. «Fondo»: la misma fórmula con el color del fondo. */
-.tl-accent{--tl-src:var(--accent)} .tl-wall{--tl-src:#4169aa}
-.tl-accent .c-close,.tl-accent .c-min,.tl-wall .c-close,.tl-wall .c-min{background:color-mix(in srgb,var(--tl-src),#000000 calc(var(--window-traffic-lights-styles-accent-close-minimize-darken) * 100%))}
-.tl-accent .c-zoom,.tl-wall .c-zoom{background:color-mix(in srgb,var(--tl-src),#ffffff calc(var(--window-traffic-lights-styles-accent-zoom-lighten) * 100%))}
-
-/* Menú del desplegable: es un popup (otra superficie), no parte de la ventana. */
-.popw{position:relative}
-/* Como un popup de macOS: el menú se abre encima del botón y la opción marcada cae justo sobre él (semáforos sobre semáforos, texto sobre texto). */
-.menu{position:absolute;left:calc(-1 * (var(--menu-popover-padding) + var(--menu-popover-item-padding-start) + var(--menu-popover-check) + var(--menu-popover-item-gap)));top:calc(-1 * var(--menu-popover-padding));min-width:var(--menu-popover-min-width);padding:var(--menu-popover-padding);border-radius:var(--menu-popover-radius);background:var(--bg-raised);box-shadow:var(--shadow-float);display:none;flex-direction:column;z-index:10}
-html[data-menu="semaforos"] .menu{display:flex}
-.mi{display:flex;align-items:center;gap:var(--menu-popover-item-gap);height:var(--menu-popover-item-height);padding:0 var(--menu-popover-item-padding-x) 0 var(--menu-popover-item-padding-start);border-radius:var(--menu-popover-item-radius);color:var(--ink-strong);white-space:nowrap}
-.mi[data-state~="hover"]{background:var(--accent);color:var(--on-accent)}
-.mi .ck{width:var(--menu-popover-check);height:var(--menu-popover-check);stroke-width:2;visibility:hidden}
-.mi[data-state~="checked"] .ck{visibility:visible}
-.msep{height:1px;margin:var(--menu-popover-separator-margin) var(--menu-popover-item-padding-x);background:var(--line);flex:none}
-
-/* Intensidad del tinte: deslizador por pasos (data-kit="Slider" data-variant="stepped"). */
-.sld{position:relative;width:var(--settings-strength-width);height:calc(var(--slider-knob) + var(--settings-strength-label-gap) + var(--type-caption-line-height));flex:none;--sld-steps:3;--sld-run:calc(var(--settings-strength-width) - var(--slider-knob));--sld-pos:0}
-.sld-tick,.sld-lb{--i:0}
-html{--tint-src:transparent}
-.sld-track{position:absolute;left:calc(var(--slider-knob) / 2);right:calc(var(--slider-knob) / 2);top:calc((var(--slider-knob) - var(--slider-track)) / 2);height:var(--slider-track);border-radius:var(--radius-pill);background:var(--slider-track-color)}
-.sld-fill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sld-run) * var(--sld-pos) / var(--sld-steps));border-radius:var(--radius-pill);background:var(--slider-fill-color)}
-.sld-tick{position:absolute;top:calc((var(--slider-knob) - var(--settings-strength-tick)) / 2);width:var(--settings-strength-tick);height:var(--settings-strength-tick);margin-left:calc(var(--settings-strength-tick) / -2);border-radius:var(--radius-pill);background:var(--line-strong);left:calc(var(--slider-knob) / 2 + var(--sld-run) * var(--i) / var(--sld-steps))}
-.sld-tick.on{background:var(--on-accent)}
-.sld-knob{position:absolute;top:0;left:calc(var(--sld-run) * var(--sld-pos) / var(--sld-steps));width:var(--slider-knob);height:var(--slider-knob);border-radius:var(--radius-pill);background:var(--switch-knob-color);box-shadow:var(--shadow-knob)}
-.sld-lbs{position:absolute;top:calc(var(--slider-knob) + var(--settings-strength-label-gap));left:calc(var(--slider-knob) / 2);width:var(--sld-run);display:flex;justify-content:space-between;color:var(--ink-muted)}
-.sld-lb[data-state~="selected"]{color:var(--ink-strong)}
-.sld-lb{white-space:nowrap}
-
-/* Teñir en las ventanas: casillas (data-kit="Checkbox"). */
-.checks{display:grid;grid-template-columns:1fr 1fr;column-gap:var(--settings-check-column-gap);row-gap:var(--settings-check-row-gap)}
-.cb{display:inline-flex;align-items:center;gap:var(--settings-check-gap);color:var(--ink-strong);white-space:nowrap}
-.cb i{width:var(--checkbox-size);height:var(--checkbox-size);border-radius:var(--checkbox-radius);background:var(--bg-surface);box-shadow:inset 0 0 0 1px var(--checkbox-border);display:grid;place-items:center;flex:none;color:var(--on-accent)}
-.cb i svg{width:calc(var(--checkbox-size) - 4px);height:calc(var(--checkbox-size) - 4px);stroke-width:var(--checkbox-check-stroke);visibility:hidden}
-.cb[data-state~="checked"] i{background:var(--checkbox-on);box-shadow:none}
-.cb[data-state~="checked"] i svg{visibility:visible}
-.row[data-state~="disabled"] .sld{opacity:.4}
-
-/* Simulación del tinte en la propia ventana (lo hará vow-appearance). Solo en las variantes con "window". */
-html{--raw-window:var(--bg-window);--raw-sidebar:var(--sidebar-island-bg);--raw-surface:var(--bg-surface);--raw-raised:var(--bg-raised);--raw-control:var(--bg-control);--raw-hover:var(--bg-hover);--raw-line:var(--line);--raw-toolgroup:var(--toolbar-glass-bg);
-  --tint-strength:var(--appearance-tint-strength-normal);--tint-k:calc(var(--tint-base, 0) * var(--tint-strength))}
-html[data-window="acento"]{--tint-base:var(--appearance-modes-accent-windows-light)}
-html[data-window="acento"][data-theme="dark"]{--tint-base:var(--appearance-modes-accent-windows-dark)}
-html[data-window="fondo"]{--tint-base:var(--appearance-modes-wallpaper-scope-windows-windows-light)}
-html[data-window="fondo"][data-theme="dark"]{--tint-base:var(--appearance-modes-wallpaper-scope-windows-windows-dark)}
-html[data-strength="0"]{--tint-strength:var(--appearance-tint-strength-subtle)}
-html[data-strength="1"]{--tint-strength:var(--appearance-tint-strength-normal)}
-html[data-strength="2"]{--tint-strength:var(--appearance-tint-strength-strong)}
-html[data-strength="3"]{--tint-strength:var(--appearance-tint-strength-intense)}
-html[data-window="acento"] .win,html[data-window="fondo"] .win{
-  --mix-sunken:calc(var(--tint-k) * var(--appearance-layer-factors-bg-sunken) * 100%);
-  --mix-window:calc(var(--tint-k) * var(--appearance-layer-factors-bg-window) * 100%);
-  --mix-surface:calc(var(--tint-k) * var(--appearance-layer-factors-bg-surface) * 100%);
-  --mix-raised:calc(var(--tint-k) * var(--appearance-layer-factors-bg-raised) * 100%);
-  --mix-control:calc(var(--tint-k) * var(--appearance-layer-factors-bg-control) * 100%);
-  --mix-line:calc(var(--tint-k) * var(--appearance-layer-factors-line) * 100%)}
-html[data-parts~="barras"] .win{--window-sidebar-island-bg:color-mix(in srgb,var(--tint-src) var(--mix-sunken),var(--raw-sidebar))}
-html[data-parts~="ventana"] .win{--bg-window:color-mix(in srgb,var(--tint-src) var(--mix-window),var(--raw-window))}
-html[data-parts~="tarjetas"] .win{--bg-surface:color-mix(in srgb,var(--tint-src) var(--mix-surface),var(--raw-surface));--line:color-mix(in srgb,var(--tint-src) var(--mix-line),var(--raw-line))}
-html[data-parts~="controles"] .win{--bg-control:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-control));--bg-hover:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-hover));--window-toolgroup-bg:color-mix(in srgb,var(--tint-src) var(--mix-control),var(--raw-toolgroup))}
-html[data-parts~="menus"] .win{--bg-raised:color-mix(in srgb,var(--tint-src) var(--mix-raised),var(--raw-raised))}
+html[data-query] .acct,html[data-query] .it[data-id="sidebar.item.apariencia"]{display:none}
+.it.hit{display:none;font-weight:500}
+html[data-query] .it.hit{display:flex}
 </style>
 </head>
 <body>
-<section class="win" data-id="window" data-kit="Window" data-variant="fixed-width">
-
-  <aside class="side" data-id="sidebar" data-kit="Sidebar" data-variant="island">
-    <div class="tl" data-id="sidebar.traffic" data-kit="TrafficLights" data-variant="standard fixed-width">
-      <i class="c-close" data-id="sidebar.traffic.close"></i>
-      <i class="c-min" data-id="sidebar.traffic.minimize"></i>
-      <i class="c-zoom" data-id="sidebar.traffic.zoom"></i>
+<div class="win" data-id="window" data-kit="PreferencesWindow">
+  <aside class="side" data-kit="Sidebar">
+    <div class="tl"><i></i><i></i><i></i></div>
+    <div class="srch t-body" data-id="sidebar.search" data-kit="SearchField" aria-label="Buscar"><i></i><span class="ph">Buscar</span></div>
+    <div class="acct" data-id="sidebar.account" data-kit="SidebarAccount" data-diff="ignore">
+      <div class="av t-headline">R</div>
+      <div><b class="t-headline">Usuario</b><small class="t-callout">Cuenta local</small></div>
     </div>
-    <label class="srch t-body" data-id="sidebar.search" data-app="search_field">
-      <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
-      <span data-id="sidebar.search.text">Buscar</span>
-    </label>
-    <div class="acct" data-id="sidebar.account" data-app="account_row" data-diff="ignore">
-      <span class="av t-headline" data-id="sidebar.account.avatar">HB</span>
-      <span class="who"><b class="t-headline" data-id="sidebar.account.name">Humberto Blanqueto</b><small class="t-callout" data-id="sidebar.account.detail">Cuenta local</small></span>
-    </div>
-    <nav class="items">
-      <a class="it t-body" data-id="sidebar.item.apariencia" data-kit="SidebarItem" data-app="sidebar_item" data-state="selected">
-        <span class="appico" data-id="sidebar.item.apariencia.icon"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11"/><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" stroke="none"/></svg></span>
-        <span data-id="sidebar.item.apariencia.label">Apariencia</span>
-      </a>
-    </nav>
+    <div class="it" data-id="sidebar.item.apariencia" data-kit="SidebarItem" data-state="selected"><i class="tile"></i><span data-id="sidebar.item.apariencia.label" data-kit="SidebarItem">Apariencia</span></div>
+    <div class="it hit" data-id="sidebar.hit.acento" data-kit="SidebarItem"><span data-id="sidebar.hit.acento.label" data-kit="SidebarItem">Color de acento</span></div>
   </aside>
 
-  <div class="main">
-    <header class="tb">
-      <div class="grp" data-id="toolbar.nav" data-kit="ToolGroup" data-variant="island">
-        <button class="tbb" data-id="toolbar.nav.back" data-kit="ToolButton" data-state="disabled" aria-label="Atrás"><svg class="ico" viewBox="0 0 16 16"><path d="m10 3-5 5 5 5"/></svg></button>
-        <span class="gsep"></span>
-        <button class="tbb" data-id="toolbar.nav.forward" data-kit="ToolButton" data-state="disabled" aria-label="Adelante"><svg class="ico" viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
-      </div>
-      <span class="ttl t-title-2" data-id="toolbar">Apariencia</span>
-    </header>
-
-    <div class="scroll" data-id="content" data-app="content_scroll">
-      <div class="cont">
-
-        <div class="grpc" data-id="group.apariencia" data-app="card_container" data-search="apariencia claro oscuro automatico tema modo">
-          <div class="row" data-id="group.apariencia.row" data-app="row_card">
-            <div class="tx"><b class="t-body" data-id="group.apariencia.label">Apariencia</b></div>
-            <div class="cards">
-              <button class="card" data-id="group.apariencia.card.automatico" data-app="theme_card">
-                <span class="pv" data-id="group.apariencia.card.automatico.preview"><i class="wall"></i><span class="sc lt"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span></span><span class="sc dk half-r"><i class="pn"></i></span><span class="sc dk"><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
-                <span class="capt t-callout">Automático</span>
-              </button>
-              <button class="card" data-id="group.apariencia.card.claro" data-app="theme_card" data-select-theme="light">
-                <span class="pv" data-id="group.apariencia.card.claro.preview"><i class="wall"></i><span class="sc lt"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
-                <span class="capt t-callout">Claro</span>
-              </button>
-              <button class="card" data-id="group.apariencia.card.oscuro" data-app="theme_card" data-select-theme="dark">
-                <span class="pv" data-id="group.apariencia.card.oscuro.preview"><i class="wall"></i><span class="sc dk"><i class="pn"></i><span class="mn"><i class="hl"></i><i></i><i></i></span><span class="ap"><i class="sd"></i><span class="dots"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span></span></span></span>
-                <span class="capt t-callout">Oscuro</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="t-headline cap" data-id="group.color.title" data-app="group_title" data-search-group="color">Color</div>
-        <div class="grpc" data-id="group.color" data-app="card_container" data-search-group="color">
-          <div class="row" data-id="group.color.acento" data-app="row_card" data-search="color de acento azul morado rosa rojo naranja amarillo verde gris">
-            <div class="tx"><b class="t-body" data-id="group.color.acento.label">Color de acento</b></div>
-            <div class="sws">
-              <span class="swc" data-id="group.color.swatch.azul" data-name="Azul" data-app="accent_swatch" data-state="selected"><i class="sw" style="background:#2f6fe4"></i><small class="t-caption">Azul</small></span>
-              <span class="swc" data-id="group.color.swatch.morado" data-name="Morado" data-app="accent_swatch"><i class="sw" style="background:#8e5bd8"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.rosa" data-name="Rosa" data-app="accent_swatch"><i class="sw" style="background:#e5458f"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.rojo" data-name="Rojo" data-app="accent_swatch"><i class="sw" style="background:#ec4646"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.naranja" data-name="Naranja" data-app="accent_swatch"><i class="sw" style="background:#f07c26"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.amarillo" data-name="Amarillo" data-app="accent_swatch"><i class="sw" style="background:#f5c02c"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.verde" data-name="Verde" data-app="accent_swatch"><i class="sw" style="background:#4fb848"></i><small class="t-caption"></small></span>
-              <span class="swc" data-id="group.color.swatch.gris" data-name="Gris" data-app="accent_swatch"><i class="sw" style="background:#8e8e93"></i><small class="t-caption"></small></span>
-            </div>
-          </div>
-          <div class="row" data-id="group.color.ventanas" data-app="row_card" data-search="color de las ventanas tinte neutro acento fondo de pantalla">
-            <div class="tx"><b class="t-body" data-id="group.color.ventanas.label">Color de las ventanas</b><small class="t-callout" data-id="group.color.ventanas.help">Grises sin tinte.</small></div>
-            <div class="cards">
-              <button class="card" data-id="group.color.ventanas.card.neutro" data-app="window_color_card" data-state="selected">
-                <span class="pv" data-id="group.color.ventanas.card.neutro.preview"><i class="wall"></i><span class="tw" style="background:var(--bg-window)"><i style="background:var(--bg-sunken)"></i></span></span>
-                <span class="capt t-callout">Neutro</span>
-              </button>
-              <button class="card" data-id="group.color.ventanas.card.acento" data-app="window_color_card">
-                <span class="pv" data-id="group.color.ventanas.card.acento.preview"><i class="wall"></i><span class="tw" style="background:color-mix(in srgb,var(--bg-window) 94%,var(--accent))"><i style="background:color-mix(in srgb,var(--bg-sunken) 91.6%,var(--accent))"></i></span></span>
-                <span class="capt t-callout">Acento</span>
-              </button>
-              <button class="card" data-id="group.color.ventanas.card.fondo" data-app="window_color_card">
-                <span class="pv" data-id="group.color.ventanas.card.fondo.preview" data-diff="ignore"><i class="wall"></i><span class="tw" style="background:color-mix(in srgb,var(--bg-window) 93%,#4169aa)"><i style="background:color-mix(in srgb,var(--bg-sunken) 90.2%,#4169aa)"></i></span></span>
-                <span class="capt t-callout">Fondo</span>
-              </button>
-            </div>
-          </div>
-          <div class="row" data-id="group.color.intensidad" data-app="row_card" data-state="disabled" data-search="intensidad del tinte fuerza sutil normal fuerte intenso acento fondo de pantalla">
-            <div class="tx"><b class="t-body" data-id="group.color.intensidad.label">Intensidad del tinte</b><small class="t-callout" data-id="group.color.intensidad.help">Acento y Fondo guardan cada uno la suya.</small></div>
-            <div class="sld" data-id="group.color.intensidad.slider" data-kit="Slider" data-variant="stepped" data-app="tint_strength_slider" style="--sld-pos:1">
-              <span class="sld-track"><i class="sld-fill"></i></span><i class="sld-tick" style="--i:0"></i><i class="sld-tick" style="--i:1"></i><i class="sld-tick" style="--i:2"></i><i class="sld-tick" style="--i:3"></i><i class="sld-knob" data-id="group.color.intensidad.knob"></i><span class="sld-lbs"><span class="sld-lb t-caption first" data-id="group.color.intensidad.step.sutil" style="--i:0">Sutil</span><span class="sld-lb t-caption" data-id="group.color.intensidad.step.normal" style="--i:1">Normal</span><span class="sld-lb t-caption" data-id="group.color.intensidad.step.fuerte" style="--i:2">Fuerte</span><span class="sld-lb t-caption last" data-id="group.color.intensidad.step.intenso" style="--i:3">Intenso</span></span>
-            </div>
-          </div>
-          <div class="row" data-id="group.color.partes" data-app="row_card" data-state="disabled" data-search="tenir en las ventanas partes barras laterales sidebar fondo de la ventana grupos tarjetas controles menus dialogos tinte">
-            <div class="tx"><b class="t-body" data-id="group.color.partes.label">Teñir en las ventanas</b><small class="t-callout" data-id="group.color.partes.help">Lo que no marques queda en gris neutro.</small></div>
-            <div class="checks">
-              <span class="cb t-body" data-id="group.color.partes.barras" data-kit="Checkbox" data-app="tint_part" data-part="barras" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Barras laterales</span>
-              <span class="cb t-body" data-id="group.color.partes.ventana" data-kit="Checkbox" data-app="tint_part" data-part="ventana" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Fondo de la ventana</span>
-              <span class="cb t-body" data-id="group.color.partes.tarjetas" data-kit="Checkbox" data-app="tint_part" data-part="tarjetas" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Grupos y tarjetas</span>
-              <span class="cb t-body" data-id="group.color.partes.controles" data-kit="Checkbox" data-app="tint_part" data-part="controles" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Controles</span>
-              <span class="cb t-body" data-id="group.color.partes.menus" data-kit="Checkbox" data-app="tint_part" data-part="menus" data-state="checked"><i><svg class="ico" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg></i>Menús y diálogos</span>
-            </div>
-          </div>
-          <div class="row" data-id="group.color.alcance" data-app="row_card" data-state="disabled" data-search="aplicar el tinte escritorio barra de menus dock fondo de pantalla">
-            <div class="tx"><b class="t-body" data-id="group.color.alcance.label">Aplicar el tinte a</b></div>
-            <div class="radios">
-              <span class="rd t-body" data-id="group.color.alcance.ventanas" data-app="radio" data-state="selected"><i></i>Solo las ventanas</span>
-              <span class="rd t-body" data-id="group.color.alcance.escritorio" data-app="radio"><i></i>Todo el escritorio</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="t-headline cap" data-id="group.ventanas.title" data-app="group_title" data-search-group="ventanas">Ventanas</div>
-        <div class="grpc" data-id="group.ventanas" data-app="card_container" data-search-group="ventanas">
-          <div class="row" data-id="group.ventanas.semaforos" data-app="row_card" data-search="ventanas semaforos botones cerrar minimizar ampliar clasico acento fondo">
-            <div class="tx"><b class="t-body" data-id="group.ventanas.semaforos.label">Semáforos</b></div>
-            <div class="popw">
-            <button class="pop t-body" data-id="group.ventanas.semaforos.dropdown" data-app="traffic_dropdown">
-              <span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span>
-              <span>Automático</span>
-              <span class="chev"><svg class="ico" viewBox="0 0 10 10"><path d="m3 4 2-2 2 2M3 6l2 2 2-2"/></svg></span>
-            </button>
-            <div class="menu" data-id="group.ventanas.semaforos.menu" data-kit="MenuView" data-layer="popup" role="menu"><div class="mi t-body" data-id="group.ventanas.semaforos.menu.automatico" data-state="checked"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Automático</span></div><i class="msep"></i><div class="mi t-body" data-id="group.ventanas.semaforos.menu.clasico"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Clásico</span></div><div class="mi t-body" data-id="group.ventanas.semaforos.menu.acento" data-state="hover"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev tl-accent"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Acento</span></div><div class="mi t-body" data-id="group.ventanas.semaforos.menu.fondo" data-diff="ignore"><svg class="ico ck" viewBox="0 0 12 12"><path d="m2.5 6.2 2.3 2.3 4.7-4.8"/></svg><span class="prev tl-wall"><i class="c-close"></i><i class="c-min"></i><i class="c-zoom"></i></span><span>Fondo</span></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="empty t-body" data-id="empty" data-app="no_results">
-          <svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg>
-          <b class="t-headline">Sin resultados</b>
-          <span data-id="empty.text">No hay ninguna opción que coincida con «<span class="q-echo"></span>».</span>
-        </div>
-
-      </div>
+  <main class="main">
+    <div class="bar" data-kit="Titlebar">
+      <div class="nav"><i data-id="toolbar.atras" data-kit="navigation_buttons" aria-label="Atrás"></i><i data-id="toolbar.adelante" data-kit="navigation_buttons" aria-label="Adelante"></i></div>
+      <div class="ttl"><span data-id="toolbar.title" data-kit="Titlebar">Apariencia</span></div>
     </div>
-  </div>
 
-  <div class="comp" data-layer="compositor" aria-hidden="true"></div>
-</section>
+    <div class="scroll" data-kit="Form">
+      <section>
+        <div class="card">
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.apariencia" data-kit="Row">Apariencia</span></div>
+            <div class="acc"><div class="cards" data-id="apariencia.cards" data-kit="ChoiceCards" aria-label="Apariencia">
+              <div class="cc" data-id="apariencia.automatico" data-kit="ChoiceCards" aria-label="Automático"><i></i><span class="t-callout" data-id="apariencia.automatico.caption" data-kit="ChoiceCards">Automático</span></div>
+              <div class="cc" data-id="apariencia.claro" data-kit="ChoiceCards" aria-label="Claro" data-theme-card="light"><i></i><span class="t-callout" data-id="apariencia.claro.caption" data-kit="ChoiceCards">Claro</span></div>
+              <div class="cc" data-id="apariencia.oscuro" data-kit="ChoiceCards" aria-label="Oscuro" data-theme-card="dark"><i></i><span class="t-callout" data-id="apariencia.oscuro.caption" data-kit="ChoiceCards">Oscuro</span></div>
+            </div></div>
+          </div>
+        </div>
+      </section>
 
+      <section>
+        <div class="hdr t-caption"><span data-id="color.header" data-kit="Section">COLOR</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.acento" data-kit="Row">Color de acento</span></div>
+            <div class="acc"><div class="well" data-id="acento.well" data-kit="ColorWell" aria-label="Color de acento">
+              <div class="sw" data-name="Azul" aria-label="Azul" data-id="acento.azul" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-azul)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Morado" aria-label="Morado" data-id="acento.morado" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-morado)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Rosa" aria-label="Rosa" data-id="acento.rosa" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-rosa)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Rojo" aria-label="Rojo" data-id="acento.rojo" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-rojo)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Naranja" aria-label="Naranja" data-id="acento.naranja" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-naranja)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Amarillo" aria-label="Amarillo" data-id="acento.amarillo" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-amarillo)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Verde" aria-label="Verde" data-id="acento.verde" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-verde)"></i><small class="t-caption"></small></div>
+              <div class="sw" data-name="Gris" aria-label="Gris" data-id="acento.gris" data-kit="ColorWell"><i style="background:var(--settings-accent-swatch-gris)"></i><small class="t-caption"></small></div>
+            </div></div>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.ventanas" data-kit="Row">Color de las ventanas</span><small class="t-caption" data-id="row.ventanas.detail" data-kit="Row">Grises sin tinte.</small></div>
+            <div class="acc"><div class="cards" data-id="ventanas.cards" data-kit="ChoiceCards" aria-label="Color de las ventanas">
+              <div class="cc" data-id="ventanas.neutro" data-kit="ChoiceCards" aria-label="Neutro" data-state="selected"><i></i><span class="t-callout" data-id="ventanas.neutro.caption" data-kit="ChoiceCards">Neutro</span></div>
+              <div class="cc" data-id="ventanas.acento" data-kit="ChoiceCards" aria-label="Acento"><i></i><span class="t-callout" data-id="ventanas.acento.caption" data-kit="ChoiceCards">Acento</span></div>
+              <div class="cc" data-id="ventanas.fondo" data-kit="ChoiceCards" aria-label="Fondo"><i></i><span class="t-callout" data-id="ventanas.fondo.caption" data-kit="ChoiceCards">Fondo</span></div>
+            </div></div>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.intensidad" data-kit="Row">Intensidad del tinte</span><small class="t-caption" data-id="row.intensidad.detail" data-kit="Row">Acento y Fondo guardan cada uno la suya.</small></div>
+            <div class="acc"><div class="sld" data-kit="Slider"><i class="trk"></i><i class="knb"></i><div class="lbs t-caption">
+              <span data-id="intensidad.sutil" data-kit="Slider">Sutil</span>
+              <span data-id="intensidad.normal" data-kit="Slider" data-state="selected">Normal</span>
+              <span data-id="intensidad.fuerte" data-kit="Slider">Fuerte</span>
+              <span data-id="intensidad.intenso" data-kit="Slider">Intenso</span>
+            </div></div></div>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.partes" data-kit="Row">Teñir en las ventanas</span><small class="t-caption" data-id="row.partes.detail" data-kit="Row">Lo que no marques queda en gris neutro.</small></div>
+            <div class="acc"><div class="checks t-body">
+              <div class="chk" data-id="partes.barras" data-kit="Checkbox" aria-label="Barras laterales"><i></i><span data-id="partes.barras.text" data-kit="Checkbox">Barras laterales</span></div>
+              <div class="chk" data-id="partes.tarjetas" data-kit="Checkbox" aria-label="Grupos y tarjetas"><i></i><span data-id="partes.tarjetas.text" data-kit="Checkbox">Grupos y tarjetas</span></div>
+              <div class="chk" data-id="partes.menus" data-kit="Checkbox" aria-label="Menús y diálogos"><i></i><span data-id="partes.menus.text" data-kit="Checkbox">Menús y diálogos</span></div>
+              <div class="chk" data-id="partes.ventana" data-kit="Checkbox" aria-label="Fondo de la ventana"><i></i><span data-id="partes.ventana.text" data-kit="Checkbox">Fondo de la ventana</span></div>
+              <div class="chk" data-id="partes.controles" data-kit="Checkbox" aria-label="Controles"><i></i><span data-id="partes.controles.text" data-kit="Checkbox">Controles</span></div>
+            </div></div>
+          </div>
+          <div class="sep"></div>
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.alcance" data-kit="Row">Aplicar el tinte a</span></div>
+            <div class="acc"><div class="radios t-body" data-id="alcance.radios" data-kit="RadioGroup" aria-label="Aplicar el tinte a">
+              <div class="rad" data-id="alcance.ventanas" data-kit="RadioGroup" aria-label="Solo las ventanas"><i></i><span data-id="alcance.ventanas.text" data-kit="RadioGroup">Solo las ventanas</span></div>
+              <div class="rad" data-id="alcance.escritorio" data-kit="RadioGroup" aria-label="Todo el escritorio"><i></i><span data-id="alcance.escritorio.text" data-kit="RadioGroup">Todo el escritorio</span></div>
+            </div></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="hdr t-caption"><span data-id="ventanas.header" data-kit="Section">VENTANAS</span></div>
+        <div class="card">
+          <div class="row">
+            <div class="lbl"><span class="t-body" data-id="row.semaforos" data-kit="Row">Semáforos</span></div>
+            <div class="acc"><div class="pop t-body" data-id="semaforos.popup" data-kit="PopUpButton" aria-label="Semáforos"><i></i><span data-id="semaforos.popup.text" data-kit="PopUpButton">Automático</span><u></u></div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
 <script>
-// Única lógica del mockup: aplicar la variante (?v=nombre) y filtrar por búsqueda.
+// Única lógica del mockup: aplicar la variante (?v=nombre).
 (function () {
   var spec = JSON.parse(document.getElementById('mockup-variants').textContent);
-  var params = new URLSearchParams(location.search);
-  // En un iframe sin query (el visor del artefacto) la variante llega por window.name.
-  var name = params.get('v') || window.name || 'claro';
+  var name = new URLSearchParams(location.search).get('v') || window.name || 'claro';
   var v = spec.variants[name];
   if (!v) throw new Error('variante desconocida: ' + name);
   var root = document.documentElement;
   root.dataset.theme = v.theme;
-  root.dataset.variant = name;
-  if (v.menu) root.dataset.menu = v.menu;
-  if (params.get('compositor') === '1') root.dataset.compositor = '';
-
-  if (v.accent) {
-    var pick = document.querySelector('[data-id="group.color.swatch.' + v.accent + '"]');
-    document.querySelectorAll('[data-app="accent_swatch"]').forEach(function (sw) {
-      sw.removeAttribute('data-state');
-      sw.querySelector('small').textContent = '';
-    });
-    pick.dataset.state = 'selected';
-    pick.querySelector('small').textContent = pick.dataset.name;
-    root.style.setProperty('--accent', pick.querySelector('.sw').style.background);
-  }
-  document.querySelectorAll('[data-select-theme]').forEach(function (card) {
-    if (card.dataset.selectTheme === v.theme) card.dataset.state = 'selected';
-  });
-
-
-  // Color de las ventanas, intensidad y partes teñidas.
-  var mode = v.window || 'neutro';
-  root.dataset.window = mode;
-  document.querySelectorAll('[data-app="window_color_card"]').forEach(function (card) {
-    if (card.dataset.id === 'group.color.ventanas.card.' + mode) card.dataset.state = 'selected';
-    else card.removeAttribute('data-state');
-  });
-  var help = { neutro: 'Grises sin tinte.', acento: 'Toman un poco del color de acento.', fondo: 'Toman el color del fondo de pantalla.' };
-  document.querySelector('[data-id="group.color.ventanas.help"]').textContent = help[mode];
-  if (mode !== 'neutro') {
-    ['alcance', 'intensidad', 'partes'].forEach(function (id) {
-      document.querySelector('[data-id="group.color.' + id + '"]').removeAttribute('data-state');
-    });
-    // Valor del ejemplo; en la app sale del color dominante.
-    var src = mode === 'fondo' ? '#4169aa' : getComputedStyle(root).getPropertyValue('--accent').trim();
-    if (mode === 'fondo') root.style.setProperty('--accent', src);
-    root.style.setProperty('--tint-src', src);
-    var style = mode === 'fondo' ? 'tl-wall' : 'tl-accent';
-    document.querySelector('[data-id="sidebar.traffic"]').classList.add(style);
-    document.querySelector('[data-id="group.ventanas.semaforos.dropdown"] .prev').classList.add(style);
-    document.querySelector('[data-id="group.ventanas.semaforos.menu.automatico"] .prev').classList.add(style);
-  }
-  var strength = v.strength == null ? 1 : v.strength;
-  root.dataset.strength = String(strength);
-  var slider = document.querySelector('[data-id="group.color.intensidad.slider"]');
-  slider.style.setProperty('--sld-pos', strength);
-  slider.dataset.value = String(strength);
-  slider.querySelectorAll('.sld-lb').forEach(function (lb, k) { if (k === strength) lb.dataset.state = 'selected'; });
-  slider.querySelectorAll('.sld-tick').forEach(function (t, k) { if (k <= strength) t.classList.add('on'); });
-  var parts = v.parts || ['barras', 'ventana', 'tarjetas', 'controles', 'menus'];
-  if (mode !== 'neutro') root.dataset.parts = parts.join(' ');
-  document.querySelectorAll('[data-app="tint_part"]').forEach(function (box) {
-    if (parts.indexOf(box.dataset.part) >= 0) box.dataset.state = 'checked';
-    else box.removeAttribute('data-state');
-  });
-
-  var norm = function (s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
-  var q = norm(v.query.trim());
-  if (q) {
-    var text = document.querySelector('[data-id="sidebar.search.text"]');
+  document.querySelector('[data-theme-card="' + v.theme + '"]').dataset.state = 'selected';
+  var accent = document.querySelector('.sw[data-name="' + (v.accent || 'Azul') + '"]');
+  accent.querySelector('small').textContent = accent.dataset.name;
+  accent.querySelector('small').dataset.id = 'acento.nombre';
+  accent.querySelector('small').dataset.kit = 'ColorWell';
+  if (v.accent) root.style.setProperty('--accent', accent.querySelector('i').style.background);
+  if (v.query) {
+    root.dataset.query = v.query;
+    var text = document.querySelector('.srch .ph');
     text.textContent = v.query;
     text.classList.add('q');
-    var any = false;
-    document.querySelectorAll('[data-search]').forEach(function (row) {
-      var hit = norm(row.dataset.search).indexOf(q) >= 0;
-      row.hidden = !hit;
-      any = any || hit;
-    });
-    // Un grupo (y su título) solo se ve si le queda alguna fila visible.
-    document.querySelectorAll('.grpc[data-search-group]').forEach(function (group) {
-      var visible = group.querySelector('.row:not([hidden])') !== null;
-      document.querySelectorAll('[data-search-group="' + group.dataset.searchGroup + '"]').forEach(function (el) { el.hidden = !visible; });
-    });
-    if (!any) {
-      root.dataset.noResults = '';
-      document.querySelector('.q-echo').textContent = v.query;
-    }
+    document.querySelector('[data-id="sidebar.search"]').setAttribute('aria-label', v.query);
   }
   root.dataset.ready = '';
 })();

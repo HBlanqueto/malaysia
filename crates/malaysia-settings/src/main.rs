@@ -37,14 +37,16 @@ impl App for SettingsApp {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::env;
     use std::fs;
     use std::sync::Mutex;
 
     use freya_components::theming::hooks::use_init_theme;
     use freya_core::integration::AppComponent;
-    use freya_core::prelude::{Label, State};
+    use freya_core::prelude::{Fill, Label, State};
     use freya_testing::TestingRunner;
+    use serde::Deserialize;
     use torin::prelude::Size2D;
     use vow_appearance::{
         AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
@@ -97,6 +99,7 @@ mod tests {
             move |runner| runner.provide_root_context(|| State::create(resolved)),
             1.0,
         );
+        test.set_default_fonts(&[std::borrow::Cow::Borrowed("Geist")]);
         test.sync_and_update();
         test
     }
@@ -268,5 +271,168 @@ mod tests {
     fn initials_takes_first_two_words() {
         assert_eq!(state::initials("ana lopez"), "AL");
         assert_eq!(state::initials("pedro"), "P");
+    }
+
+    const MOCKUP: &str =
+        include_str!("../../../docs/mockups/ajustes-del-sistema/apariencia.layout.json");
+
+    #[derive(Deserialize)]
+    struct Mockup {
+        variants: BTreeMap<String, Vec<MockupNode>>,
+    }
+
+    #[derive(Deserialize)]
+    struct MockupNode {
+        id: String,
+        rect: [f32; 4],
+        text: Option<String>,
+        name: Option<String>,
+        color: Option<String>,
+        font: Option<[f32; 3]>,
+        diff: Option<String>,
+    }
+
+    struct Found {
+        rect: [f32; 4],
+        color: Option<[u8; 3]>,
+        font: Option<[f32; 2]>,
+    }
+
+    fn variant_config(variant: &str) -> (AppearanceConfig, Option<&'static str>) {
+        let light = AppearanceConfig {
+            color_scheme: ColorScheme::Light,
+            ..Default::default()
+        };
+        match variant {
+            "claro" => (light, None),
+            "oscuro" => (
+                AppearanceConfig {
+                    color_scheme: ColorScheme::Dark,
+                    ..Default::default()
+                },
+                None,
+            ),
+            "claro-morado" => {
+                let purple = ACCENT_SWATCHES[1].1;
+                (
+                    AppearanceConfig {
+                        accent_color: Some([purple.r, purple.g, purple.b]),
+                        ..light
+                    },
+                    None,
+                )
+            }
+            "busqueda-acento" => (light, Some("acento")),
+            other => panic!("variante sin configuración: {other}"),
+        }
+    }
+
+    fn parse_rgb(css: &str) -> Option<[u8; 3]> {
+        let inner = css.split_once('(')?.1.trim_end_matches(')');
+        let mut parts = inner.split(',').map(|part| part.trim().parse::<f32>().ok());
+        Some([
+            parts.next()?? as u8,
+            parts.next()?? as u8,
+            parts.next()?? as u8,
+        ])
+    }
+
+    fn find(test: &TestingRunner, node: &MockupNode) -> Vec<Found> {
+        test.find_many(|found, el| {
+            let area = found.layout().area;
+            let rect = [
+                area.origin.x,
+                area.origin.y,
+                area.size.width,
+                area.size.height,
+            ];
+            if let Some(label) = Label::try_downcast(el) {
+                if node.text.as_deref() != Some(label.text.as_ref()) {
+                    return None;
+                }
+                let style = &label.text_style_data;
+                let color = match style.color.clone() {
+                    Some(Fill::Color(color)) => Some([color.r(), color.g(), color.b()]),
+                    _ => None,
+                };
+                let font = style
+                    .font_size
+                    .zip(style.font_weight)
+                    .map(|(size, weight)| [*size as f32, i32::from(weight) as f32]);
+                return Some(Found { rect, color, font });
+            }
+            (node.text.is_none() && el.accessibility().builder.label() == node.name.as_deref())
+                .then_some(Found {
+                    rect,
+                    color: None,
+                    font: None,
+                })
+        })
+    }
+
+    fn mismatches(node: &MockupNode, found: &Found) -> Vec<String> {
+        let mut problems = Vec::new();
+        for (index, axis) in ["x", "y", "ancho", "alto"].iter().enumerate() {
+            let tolerance = if index == 2 && node.text.is_some() {
+                2.0
+            } else {
+                1.0
+            };
+            if (found.rect[index] - node.rect[index]).abs() > tolerance {
+                problems.push(format!(
+                    "{axis}: esperado {}, obtenido {:.1}",
+                    node.rect[index], found.rect[index]
+                ));
+            }
+        }
+        if let (Some(expected), Some(got)) =
+            (node.color.as_deref().and_then(parse_rgb), found.color)
+            && expected.iter().zip(got).any(|(a, b)| a.abs_diff(b) > 2)
+        {
+            problems.push(format!("color: esperado {expected:?}, obtenido {got:?}"));
+        }
+        if let (Some(expected), Some(got)) = (node.font, found.font)
+            && (expected[0] != got[0] || expected[2] != got[1])
+        {
+            problems.push(format!("fuente: esperado {expected:?}, obtenido {got:?}"));
+        }
+        problems
+    }
+
+    #[test]
+    fn the_settings_window_matches_its_mockup() {
+        let mockup: Mockup = serde_json::from_str(MOCKUP).expect("layout.json válido");
+        let mut failures = Vec::new();
+        for (variant, nodes) in &mockup.variants {
+            let (config, query) = variant_config(variant);
+            let mut test = run_app(config);
+            if let Some(query) = query {
+                let search = find_label(&test, "Buscar").expect("hay buscador");
+                click_node(&mut test, search);
+                test.write_text(query);
+                test.sync_and_update();
+            }
+            for node in nodes {
+                if node.diff.is_some() || (node.text.is_none() && node.name.is_none()) {
+                    continue;
+                }
+                let best = find(&test, node)
+                    .into_iter()
+                    .map(|found| (mismatches(node, &found), found))
+                    .min_by_key(|(problems, _)| problems.len());
+                match best {
+                    None => failures.push(format!("{variant} {}: no está", node.id)),
+                    Some((problems, _)) if !problems.is_empty() => {
+                        failures.push(format!("{variant} {}: {}", node.id, problems.join("; ")))
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "Ajustes no cumple su mockup:\n{}",
+            failures.join("\n")
+        );
     }
 }
