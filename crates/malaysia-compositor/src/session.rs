@@ -694,6 +694,7 @@ pub(crate) fn build_output_elements(
             );
         }
     } else {
+        crate::popup_fade::start_requested(state, renderer, scale);
         reset_dead_cursor(state);
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
@@ -746,46 +747,8 @@ pub(crate) fn build_output_elements(
                     && !(chrome_hidden && entry.is_shell_chrome())
             },
         );
-        let popups: Vec<_> = state.windows.iter_popups().rev().collect();
-        for (id, _parent, rect) in popups {
-            let Some(surface) = state.popups.surface_of(id).cloned() else {
-                continue;
-            };
-            let frame = Rectangle::new(
-                Point::from((rect.x().round() as i32, rect.y().round() as i32)),
-                Size::from((rect.width().round() as i32, rect.height().round() as i32)),
-            );
-            let geometry = crate::window::window_geometry(&surface).unwrap_or_default();
-            let surface_elements = render_elements_from_surface_tree::<
-                GlesRenderer,
-                WaylandSurfaceRenderElement<GlesRenderer>,
-            >(
-                renderer,
-                &surface,
-                physical_point(frame.loc - geometry.loc, scale),
-                scale,
-                1.0,
-                Kind::Unspecified,
-            );
-            if !state.popup_has_kit_frame(id) {
-                elements.extend(surface_elements.into_iter().map(|e| e.into()));
-                continue;
-            }
-            append_frame(
-                state,
-                Vec::new(),
-                surface_elements,
-                Frame {
-                    rect: physical_rect(frame, scale),
-                    radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
-                    exponent: vow_design::POPUP.superellipse_exponent,
-                    focused: true,
-                    bordered: true,
-                },
-                scale,
-                &mut elements,
-            );
-        }
+        crate::popup_fade::append(state, Instant::now(), &mut elements);
+        append_popups(state, renderer, scale, &mut elements, |_| true);
         if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
             && frame.server_decorated
         {
@@ -1241,6 +1204,60 @@ struct Frame {
     bordered: bool,
 }
 
+pub(crate) fn append_popups(
+    state: &State,
+    renderer: &mut GlesRenderer,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+    shown: impl Fn(malaysia_scene::scene::PopupId) -> bool,
+) {
+    let popups: Vec<_> = state
+        .windows
+        .iter_popups()
+        .rev()
+        .filter(|(id, _, _)| shown(*id))
+        .collect();
+    for (id, _parent, rect) in popups {
+        let Some(surface) = state.popups.surface_of(id).cloned() else {
+            continue;
+        };
+        let frame = Rectangle::new(
+            Point::from((rect.x().round() as i32, rect.y().round() as i32)),
+            Size::from((rect.width().round() as i32, rect.height().round() as i32)),
+        );
+        let geometry = crate::window::window_geometry(&surface).unwrap_or_default();
+        let surface_elements = render_elements_from_surface_tree::<
+            GlesRenderer,
+            WaylandSurfaceRenderElement<GlesRenderer>,
+        >(
+            renderer,
+            &surface,
+            physical_point(frame.loc - geometry.loc, scale),
+            scale,
+            1.0,
+            Kind::Unspecified,
+        );
+        if !state.popup_has_kit_frame(id) {
+            elements.extend(surface_elements.into_iter().map(|e| e.into()));
+            continue;
+        }
+        append_frame(
+            state,
+            Vec::new(),
+            surface_elements,
+            Frame {
+                rect: physical_rect(frame, scale),
+                radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
+                exponent: vow_design::POPUP.superellipse_exponent,
+                focused: true,
+                bordered: true,
+            },
+            scale,
+            elements,
+        );
+    }
+}
+
 fn append_frame(
     state: &State,
     mut content: Vec<OutputRenderElement>,
@@ -1599,6 +1616,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         let now = Instant::now();
         if session.state.space_slide.is_some()
             || session.state.focus_transition.is_some()
+            || !session.state.popup_fades.is_empty()
             || session.state.focus_reveal.animating(now)
         {
             request_redraw = true;

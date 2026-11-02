@@ -50,7 +50,7 @@ impl ChromeTheme {
         palette.accent = resolved.accent;
         palette.titlebar_bg = FocusPair {
             focused: resolved.surfaces.window,
-            unfocused: resolved.surfaces.sunken,
+            unfocused: resolved.surfaces.titlebar_inactive,
         };
         palette.hairline = resolved.surfaces.line;
 
@@ -834,9 +834,8 @@ mod tests {
     use super::*;
     use malaysia_scene::geometry::Rect;
     use vow_design::{
-        BG_SUNKEN_LIGHT, BG_WINDOW_LIGHT, ButtonKind, DARK, DARK_TINT, LIGHT,
-        TRAFFIC_CLOSE_MINIMIZE_DARKEN, TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN,
-        WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+        BG_WINDOW_LIGHT, ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
+        TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
     };
 
     fn outer() -> SceneRect<f64, SceneLogical> {
@@ -900,7 +899,7 @@ mod tests {
         );
         assert_eq!(
             theme.palette.titlebar_bg.unfocused,
-            BG_SUNKEN_LIGHT.mix(accent, factor * vow_design::LAYER_FACTOR_BG_SUNKEN)
+            LIGHT.titlebar_bg.unfocused.mix(accent, factor)
         );
         assert_eq!(
             theme.palette.hairline,
@@ -942,7 +941,7 @@ mod tests {
         );
         assert_eq!(
             theme.palette.titlebar_bg.unfocused,
-            vow_design::BG_SUNKEN_DARK.mix(wallpaper, factor * vow_design::LAYER_FACTOR_BG_SUNKEN)
+            DARK.titlebar_bg.unfocused.mix(wallpaper, factor)
         );
         assert_eq!(
             theme.palette.hairline,
@@ -962,7 +961,7 @@ mod tests {
         assert_eq!(theme.palette, DARK_TINT);
         assert_eq!(theme.palette.title.focused, Rgba::rgb8(0xf4, 0xf5, 0xf6));
         assert_eq!(theme.palette.title.unfocused, Rgba::rgb8(0x99, 0x9c, 0xa3));
-        assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x55, 0x65, 0x7e));
+        assert_eq!(LIGHT.title.unfocused, Rgba::rgb8(0x6e, 0x6e, 0x6e));
     }
 
     #[test]

@@ -20,6 +20,7 @@ mod keymap;
 mod layers;
 mod lock;
 mod popup;
+mod popup_fade;
 pub mod session;
 mod spaces;
 pub mod spawn;

@@ -1834,6 +1834,7 @@ impl State {
         };
         let offset = ScenePoint::new(location.x - outer.x(), location.y - outer.y());
         self.grab = Some(Grab::Move { window: id, offset });
+        self.fade_out_popups_of(id);
     }
 
     pub(crate) fn start_resize(&mut self, id: WindowId, edge: Edge, location: Point<f64, Logical>) {

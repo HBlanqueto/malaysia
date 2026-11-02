@@ -689,7 +689,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
         .background(rgba(if focused {
             resolved.surfaces.window
         } else {
-            resolved.surfaces.sunken
+            resolved.surfaces.titlebar_inactive
         }))
         .direction(Direction::Vertical)
         .content(Content::flex())

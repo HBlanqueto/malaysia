@@ -311,6 +311,28 @@ impl State {
         self.request_redraw();
     }
 
+    pub(crate) fn root_popups_of(&self, window: WindowId) -> Vec<PopupId> {
+        self.windows
+            .iter_popups()
+            .filter(|(_, parent, _)| *parent == PopupParent::Window(window))
+            .map(|(id, _, _)| id)
+            .collect()
+    }
+
+    pub(crate) fn fade_out_popups_of(&mut self, window: WindowId) {
+        if self.root_popups_of(window).is_empty() {
+            return;
+        }
+        if self.config.appearance.reduced_motion {
+            for root in self.root_popups_of(window) {
+                self.dismiss_popups(root);
+            }
+            return;
+        }
+        self.popup_fade_request = Some(window);
+        self.request_redraw();
+    }
+
     pub(crate) fn dismiss_all_popups(&mut self) {
         let Some(topmost) = self.windows.topmost_popup() else {
             return;
