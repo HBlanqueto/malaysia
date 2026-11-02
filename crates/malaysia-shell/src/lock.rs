@@ -21,6 +21,7 @@ use vow_design::{
 };
 
 use crate::pam::{self, EventBuffer};
+use barrier_kit::theme;
 use zeroize::Zeroizing;
 
 #[derive(Clone, PartialEq)]
@@ -166,11 +167,11 @@ impl App for LockApp {
 
         let view = self.model.read();
         let palette = barrier_kit::theme::lock_palette(&barrier_kit::theme::resolved());
-        let background = rgba(palette.bg_surface);
-        let ink = rgba(palette.ink);
-        let muted = rgba(palette.ink_muted);
-        let accent = rgba(palette.accent);
-        let danger = rgba(palette.danger);
+        let background = theme::color(palette.bg_surface);
+        let ink = theme::color(palette.ink);
+        let muted = theme::color(palette.ink_muted);
+        let accent = theme::color(palette.accent);
+        let danger = theme::color(palette.danger);
         let status = view.status.clone();
 
         rect()
@@ -312,11 +313,6 @@ fn submit(
     if let Some(attempt) = attempt.borrow().as_ref() {
         attempt.answer(secret);
     }
-}
-
-fn rgba(c: vow_design::Rgba) -> Color {
-    let [r, g, b, a] = c.to_rgba8();
-    Color::from_argb(a, r, g, b)
 }
 
 fn theme_revision() -> u64 {

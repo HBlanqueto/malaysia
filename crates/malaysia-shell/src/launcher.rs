@@ -27,10 +27,11 @@ use vow_design::{
     LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
     LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
     LAUNCHER_RESULT_GAP, LAUNCHER_RESULT_HEIGHT, LAUNCHER_SCALE_FROM, LAUNCHER_SEARCH_HEIGHT,
-    LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH, Rgba,
+    LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH,
 };
 
 use crate::desktop::{self, DesktopEntry};
+use barrier_kit::theme;
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct IconData {
@@ -202,12 +203,12 @@ impl App for LauncherApp {
 
         let resolved = barrier_kit::theme::resolved();
         let palette = vow_appearance::palette(resolved.scheme);
-        let background = rgba(barrier_kit::theme::surface_background(
+        let background = theme::color(barrier_kit::theme::surface_background(
             &resolved,
             barrier_kit::theme::SurfaceKind::LayerShell,
         ));
-        let _text = rgba(palette.text.focused);
-        let muted = rgba(palette.text.unfocused);
+        let _text = theme::color(palette.text.focused);
+        let muted = theme::color(palette.text.unfocused);
 
         let list = if results.is_empty() {
             rect()
@@ -289,14 +290,14 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
             .into_element(),
         None => {
             let resolved = barrier_kit::theme::resolved();
-            let text = rgba(vow_appearance::palette(resolved.scheme).text.focused);
+            let text = theme::color(vow_appearance::palette(resolved.scheme).text.focused);
             let mut fill = resolved.accent;
             fill.a = 0.22;
             rect()
                 .width(Size::px(size))
                 .height(Size::px(size))
                 .corner_radius(size / 4.0)
-                .background(rgba(fill))
+                .background(theme::color(fill))
                 .center()
                 .child(
                     label()
@@ -311,11 +312,11 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
 
 fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> Element {
     let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
-    let text = rgba(palette.text.focused);
-    let muted = rgba(palette.text.unfocused);
+    let text = theme::color(palette.text.focused);
+    let muted = theme::color(palette.text.unfocused);
     let mut selected_bg = barrier_kit::theme::resolved().accent;
     selected_bg.a = 0.18;
-    let selected_bg = rgba(selected_bg);
+    let selected_bg = theme::color(selected_bg);
     let icon = app_icon(
         entry.icon.as_ref(),
         &entry.desktop.name,
@@ -421,11 +422,6 @@ impl Animation {
             done();
         }
     }
-}
-
-fn rgba(color: Rgba) -> Color {
-    let [r, g, b, a] = color.to_rgba8();
-    Color::from_argb(a, r, g, b)
 }
 
 pub fn run() -> anyhow::Result<()> {
@@ -667,15 +663,15 @@ mod golden_tests {
                 None,
             );
             let palette = vow_appearance::palette(scheme);
-            let background = rgba(barrier_kit::theme::surface_background(
+            let background = theme::color(barrier_kit::theme::surface_background(
                 &resolved,
                 barrier_kit::theme::SurfaceKind::LayerShell,
             ));
-            let text = rgba(palette.text.focused);
-            let search = rgba(palette.titlebar_bg.unfocused);
+            let text = theme::color(palette.text.focused);
+            let search = theme::color(palette.titlebar_bg.unfocused);
             let mut selected = palette.accent;
             selected.a = 0.18;
-            let selected = rgba(selected);
+            let selected = theme::color(selected);
             let rows = self.results.iter().enumerate().map(|(index, name)| {
                 rect()
                     .width(Size::fill())

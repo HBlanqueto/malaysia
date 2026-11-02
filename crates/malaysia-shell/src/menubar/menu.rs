@@ -16,7 +16,8 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Gaps, Size};
 use vow_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH};
 
-use crate::menubar::{icons, rgba};
+use crate::menubar::icons;
+use barrier_kit::theme;
 
 pub struct SearchableLists {
     pub menu: Vec<SearchableEntry>,
@@ -232,7 +233,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     } else {
         barrier_kit::theme::shell_palette(&resolved).text
     };
-    let fg = rgba(fg_rgba);
+    let fg = theme::color(fg_rgba);
 
     let mut container = rect()
         .height(Size::px(MENUBAR_HEIGHT as f32))
@@ -251,7 +252,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         });
 
     if is_open {
-        title = title.background(rgba(palette.bar_title_open_bg));
+        title = title.background(theme::color(palette.bar_title_open_bg));
     }
 
     let content = if let Some(glyph) = spec.glyph {

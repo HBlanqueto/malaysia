@@ -17,13 +17,14 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
-    ButtonKind, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, Rgba, TEXT, TITLEBAR,
+    ButtonKind, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
 use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
+use barrier_kit::theme;
 
 const CONFIRM_SIZE: (u32, u32) = (280, 250);
 const CONFIRM_BUTTON_GAP: f32 = 10.0;
@@ -39,11 +40,6 @@ const ABOUT_ROW_GAP: f32 = 5.0;
 const ABOUT_FOOTER_GAP: f32 = 8.0;
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
-
-fn rgba(color: Rgba) -> Color {
-    let [r, g, b, a] = color.to_rgba8();
-    Color::from_argb(a, r, g, b)
-}
 
 fn spec(namespace: &str, size: (u32, u32)) -> LayerSpec {
     LayerSpec {
@@ -65,7 +61,7 @@ fn panel() -> Rect {
     rect()
         .width(Size::fill())
         .height(Size::fill())
-        .background(rgba(resolved.surfaces.raised))
+        .background(theme::color(resolved.surfaces.raised))
         .corner_radius(DIALOG.corner_radius as f32)
         .padding(Gaps::new(
             DIALOG_PADDING,
@@ -83,7 +79,7 @@ fn title(text: &str) -> Label {
         .text(text.to_string())
         .font_size(HEADLINE.size as f32)
         .font_weight(FontWeight::BOLD)
-        .color(rgba(palette.text.focused))
+        .color(theme::color(palette.text.focused))
 }
 
 fn body(text: &str) -> Label {
@@ -91,7 +87,7 @@ fn body(text: &str) -> Label {
     label()
         .text(text.to_string())
         .font_size(TEXT.size as f32)
-        .color(rgba(palette.text.unfocused))
+        .color(theme::color(palette.text.unfocused))
 }
 
 fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) -> Rect {
@@ -184,7 +180,7 @@ fn power_badge(glyph: &'static str) -> Rect {
         .width(Size::px(POWER_ICON_SIZE))
         .height(Size::px(POWER_ICON_SIZE))
         .corner_radius(POWER_ICON_SIZE / 2.0)
-        .background(rgba(disc))
+        .background(theme::color(disc))
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
         .child(
@@ -255,14 +251,14 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
                 .text(text.question)
                 .font_size(TEXT.size as f32)
                 .font_weight(FontWeight::BOLD)
-                .color(rgba(palette.text.focused)),
+                .color(theme::color(palette.text.focused)),
         )
         .child(
             label()
                 .width(Size::fill())
                 .text(countdown_text(text.outcome, seconds))
                 .font_size(CALLOUT.size as f32)
-                .color(rgba(palette.text.focused)),
+                .color(theme::color(palette.text.focused)),
         )
         .child(
             rect()
@@ -342,7 +338,7 @@ impl App for ForceQuitApp {
         let apps = running_apps(&app_ids);
         let selected = (*self.selected.read()).min(apps.len().saturating_sub(1));
         let resolved = barrier_kit::theme::resolved();
-        let text = rgba(vow_appearance::palette(resolved.scheme).text.focused);
+        let text = theme::color(vow_appearance::palette(resolved.scheme).text.focused);
         let mut highlight = resolved.accent;
         highlight.a = 0.18;
 
@@ -364,7 +360,7 @@ impl App for ForceQuitApp {
                 .height(Size::px(ROW_HEIGHT))
                 .corner_radius(DIALOG.corner_radius as f32 / 2.0)
                 .background(if row == selected {
-                    rgba(highlight)
+                    theme::color(highlight)
                 } else {
                     Color::TRANSPARENT
                 })
@@ -660,14 +656,14 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                     .text_align(TextAlign::Right)
                     .font_size(TEXT.size as f32)
                     .font_weight(FontWeight::SEMI_BOLD)
-                    .color(rgba(palette.text.focused)),
+                    .color(theme::color(palette.text.focused)),
             )
             .child(
                 label()
                     .text(value)
                     .width(Size::px(ABOUT_VALUE_WIDTH))
                     .font_size(TEXT.size as f32)
-                    .color(rgba(palette.text.unfocused)),
+                    .color(theme::color(palette.text.unfocused)),
             )
             .into_element()
     });
@@ -676,7 +672,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
     } else {
         GENERIC_SVG
     };
-    let muted = rgba(palette.text.unfocused);
+    let muted = theme::color(palette.text.unfocused);
     let footer = |text: &str| {
         label()
             .text(text.to_string())
@@ -686,7 +682,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
     rect()
         .width(Size::fill())
         .height(Size::fill())
-        .background(rgba(if focused {
+        .background(theme::color(if focused {
             resolved.surfaces.window
         } else {
             resolved.surfaces.titlebar_inactive
@@ -724,7 +720,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                 .width(Size::fill())
                 .font_size(DISPLAY.size as f32)
                 .font_weight(FontWeight::BOLD)
-                .color(rgba(palette.text.focused)),
+                .color(theme::color(palette.text.focused)),
         )
         .child(
             label()

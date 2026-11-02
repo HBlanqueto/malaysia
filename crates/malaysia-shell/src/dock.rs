@@ -8,6 +8,7 @@ use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
+use barrier_kit::theme;
 use vow_appearance::data_dir;
 
 struct DockApp {
@@ -21,14 +22,14 @@ impl App for DockApp {
         let active = load_active_title(&self.window_store).unwrap_or_default();
         let resolved = barrier_kit::theme::resolved();
         let palette = barrier_kit::theme::shell_palette(&resolved);
-        let background = rgba(barrier_kit::theme::surface_background(
+        let background = theme::color(barrier_kit::theme::surface_background(
             &resolved,
             barrier_kit::theme::SurfaceKind::LayerShell,
         ));
-        let tile = rgba(palette.tile);
-        let active_tile = rgba(palette.tile_active);
-        let text = rgba(palette.text);
-        let active_text = rgba(palette.tile_text_active);
+        let tile = theme::color(palette.tile);
+        let active_tile = theme::color(palette.tile_active);
+        let text = theme::color(palette.text);
+        let active_text = theme::color(palette.tile_text_active);
 
         let tiles = entries.iter().enumerate().map(|(index, entry)| {
             let toplevels = toplevels.clone();
@@ -89,11 +90,6 @@ pub fn run() -> anyhow::Result<()> {
         },
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
-}
-
-fn rgba(c: vow_design::Rgba) -> Color {
-    let [r, g, b, a] = c.to_rgba8();
-    Color::from_argb(a, r, g, b)
 }
 
 fn load_active_title(store_path: &PathBuf) -> anyhow::Result<String> {

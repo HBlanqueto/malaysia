@@ -4,6 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use vow_appearance::backdrop::Oklab;
 use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, palette, resolve};
 use vow_design::{LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba};
 
@@ -149,63 +150,16 @@ const ADWAITA_STANDALONE_MAX_L_LIGHT: f32 = 0.5;
 const ADWAITA_STANDALONE_MIN_L_DARK: f32 = 0.85;
 
 fn standalone_accent(accent: Rgba, dark: bool) -> Rgba {
-    let [l, a, b] = srgb_to_oklab(accent);
-    let l = if dark {
-        l.max(ADWAITA_STANDALONE_MIN_L_DARK)
+    let mut lab = Oklab::from_rgba(accent);
+    lab.l = if dark {
+        lab.l.max(ADWAITA_STANDALONE_MIN_L_DARK)
     } else {
-        l.min(ADWAITA_STANDALONE_MAX_L_LIGHT)
+        lab.l.min(ADWAITA_STANDALONE_MAX_L_LIGHT)
     };
-    let [r, g, bl] = oklab_to_srgb([l, a, b]);
     Rgba {
-        r: r.clamp(0.0, 1.0),
-        g: g.clamp(0.0, 1.0),
-        b: bl.clamp(0.0, 1.0),
         a: accent.a,
+        ..lab.to_rgba()
     }
-}
-
-fn srgb_to_linear(c: f32) -> f32 {
-    if c <= 0.04045 {
-        c / 12.92
-    } else {
-        ((c + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn linear_to_srgb(c: f32) -> f32 {
-    if c <= 0.003_130_8 {
-        c * 12.92
-    } else {
-        1.055 * c.powf(1.0 / 2.4) - 0.055
-    }
-}
-
-fn srgb_to_oklab(color: Rgba) -> [f32; 3] {
-    let (r, g, b) = (
-        srgb_to_linear(color.r),
-        srgb_to_linear(color.g),
-        srgb_to_linear(color.b),
-    );
-    let l = (0.412_221_47 * r + 0.536_332_55 * g + 0.051_445_995 * b).cbrt();
-    let m = (0.211_903_5 * r + 0.680_699_5 * g + 0.107_396_96 * b).cbrt();
-    let s = (0.088_302_46 * r + 0.281_718_85 * g + 0.629_978_7 * b).cbrt();
-    [
-        0.210_454_26 * l + 0.793_617_8 * m - 0.004_072_047 * s,
-        1.977_998_5 * l - 2.428_592_2 * m + 0.450_593_7 * s,
-        0.025_904_037 * l + 0.782_771_77 * m - 0.808_675_77 * s,
-    ]
-}
-
-fn oklab_to_srgb([l, a, b]: [f32; 3]) -> [f32; 3] {
-    let l_ = l + 0.396_337_78 * a + 0.215_803_76 * b;
-    let m_ = l - 0.105_561_346 * a - 0.063_854_17 * b;
-    let s_ = l - 0.089_484_18 * a - 1.291_485_5 * b;
-    let (l, m, s) = (l_ * l_ * l_, m_ * m_ * m_, s_ * s_ * s_);
-    [
-        linear_to_srgb(4.076_741_7 * l - 3.307_711_6 * m + 0.230_969_94 * s),
-        linear_to_srgb(-1.268_438 * l + 2.609_757_4 * m - 0.341_319_38 * s),
-        linear_to_srgb(-0.004_196_086_3 * l - 0.703_418_6 * m + 1.707_614_7 * s),
-    ]
 }
 
 fn schemes(appearance: &AppearanceConfig) -> (ColorScheme, ColorScheme) {
@@ -604,12 +558,12 @@ mod tests {
     fn the_standalone_accent_keeps_libadwaitas_contrast() {
         let light_accent = Rgba::rgb8(0x9a, 0xc8, 0xff);
         let light = standalone_accent(light_accent, false);
-        assert!(srgb_to_oklab(light)[0] <= ADWAITA_STANDALONE_MAX_L_LIGHT + 1e-3);
+        assert!(Oklab::from_rgba(light).l <= ADWAITA_STANDALONE_MAX_L_LIGHT + 1e-3);
         let dark_accent = Rgba::rgb8(0x50, 0x58, 0x68);
         let dark = standalone_accent(dark_accent, true);
-        assert!(srgb_to_oklab(dark)[0] >= ADWAITA_STANDALONE_MIN_L_DARK - 1e-3);
+        assert!(Oklab::from_rgba(dark).l >= ADWAITA_STANDALONE_MIN_L_DARK - 1e-3);
         let navy = Rgba::rgb8(0x1a, 0x3a, 0x80);
-        assert!(srgb_to_oklab(standalone_accent(navy, true))[0] > srgb_to_oklab(navy)[0] + 0.3);
+        assert!(Oklab::from_rgba(standalone_accent(navy, true)).l > Oklab::from_rgba(navy).l + 0.3);
         let blue = Rgba::rgb8(0x0b, 0x3d, 0x91);
         let kept = standalone_accent(blue, false);
         assert!((kept.r - blue.r).abs() < 2e-3 && (kept.b - blue.b).abs() < 2e-3);

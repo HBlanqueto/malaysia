@@ -92,11 +92,6 @@ pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
         .map(|store| store.active)
 }
 
-pub fn rgba(c: vow_design::Rgba) -> freya_core::prelude::Color {
-    let [r, g, b, a] = c.to_rgba8();
-    freya_core::prelude::Color::from_argb(a, r, g, b)
-}
-
 pub fn spawn_component(component: &str) {
     spawn_component_with(component, &[]);
 }

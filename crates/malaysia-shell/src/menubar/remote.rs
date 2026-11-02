@@ -54,15 +54,7 @@ pub fn unavailable() -> MenuItem {
 }
 
 pub fn normalize(label: &str) -> String {
-    barrier_kit::menu::strip_mnemonic(label)
-        .trim()
-        .to_lowercase()
-        .replace('á', "a")
-        .replace('é', "e")
-        .replace('í', "i")
-        .replace('ó', "o")
-        .replace(['ú', 'ü'], "u")
-        .replace('ñ', "n")
+    barrier_kit::views::search::fold(barrier_kit::menu::strip_mnemonic(label).trim())
 }
 
 impl MenuSources {

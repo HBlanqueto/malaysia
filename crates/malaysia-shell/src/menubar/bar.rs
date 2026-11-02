@@ -24,9 +24,10 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuItems, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
-use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, rgba, system};
+use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, system};
 use barrier_kit::menu::{RevealRoots, SearchQuery};
 use barrier_kit::platform::AppMenuAddress;
+use barrier_kit::theme;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
 
@@ -411,14 +412,14 @@ impl App for BarApp {
         let palette = barrier_kit::theme::shell_palette(&resolved);
         let over_focus = Toplevels::get().space.read().focus_bar.over_focus();
         let text = if over_focus {
-            rgba(vow_design::FOCUS_BAR_TEXT)
+            theme::color(vow_design::FOCUS_BAR_TEXT)
         } else {
-            rgba(palette.text)
+            theme::color(palette.text)
         };
         let bar = if over_focus {
-            rgba(vow_design::FOCUS_BAR_BACKGROUND)
+            theme::color(vow_design::FOCUS_BAR_BACKGROUND)
         } else {
-            rgba(barrier_kit::theme::surface_background(
+            theme::color(barrier_kit::theme::surface_background(
                 &resolved,
                 barrier_kit::theme::SurfaceKind::LayerShell,
             ))

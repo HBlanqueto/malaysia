@@ -1,5 +1,6 @@
 //! Desktop entries: parsing, localisation, Exec cleanup and launcher ranking.
 
+use barrier_kit::views::search::fold;
 use std::{
     collections::HashMap,
     env,
@@ -349,14 +350,11 @@ pub fn rank<'a>(
     query: &str,
     running_apps: &[String],
 ) -> Vec<&'a DesktopEntry> {
-    let query = normalize(query.trim());
-    let running: Vec<String> = running_apps.iter().map(|app| normalize(app)).collect();
+    let query = fold(query.trim());
+    let running: Vec<String> = running_apps.iter().map(|app| fold(app)).collect();
     let is_running = |entry: &DesktopEntry| {
-        let id = normalize(&entry.id);
-        let wm_class = entry
-            .startup_wm_class
-            .as_ref()
-            .map(|value| normalize(value));
+        let id = fold(&entry.id);
+        let wm_class = entry.startup_wm_class.as_ref().map(|value| fold(value));
         running
             .iter()
             .any(|app| *app == id || wm_class.as_ref() == Some(app))
@@ -364,7 +362,7 @@ pub fn rank<'a>(
 
     if query.is_empty() {
         let mut out: Vec<&DesktopEntry> = entries.iter().collect();
-        out.sort_by_key(|entry| (!is_running(entry), normalize(&entry.name)));
+        out.sort_by_key(|entry| (!is_running(entry), fold(&entry.name)));
         return out;
     }
 
@@ -372,12 +370,12 @@ pub fn rank<'a>(
         .iter()
         .filter_map(|entry| score(entry, &query).map(|score| (score, entry)))
         .collect();
-    scored.sort_by_key(|(score, entry)| (*score, normalize(&entry.name)));
+    scored.sort_by_key(|(score, entry)| (*score, fold(&entry.name)));
     scored.into_iter().map(|(_, entry)| entry).collect()
 }
 
 fn score(entry: &DesktopEntry, query: &str) -> Option<u8> {
-    let name = normalize(&entry.name);
+    let name = fold(&entry.name);
     if name.starts_with(query) {
         return Some(0);
     }
@@ -390,12 +388,12 @@ fn score(entry: &DesktopEntry, query: &str) -> Option<u8> {
     let generic = entry
         .generic_name
         .as_ref()
-        .map(|value| normalize(value))
+        .map(|value| fold(value))
         .unwrap_or_default();
     if entry
         .keywords
         .iter()
-        .any(|keyword| normalize(keyword).contains(query))
+        .any(|keyword| fold(keyword).contains(query))
         || generic.contains(query)
     {
         return Some(3);
@@ -412,23 +410,6 @@ fn word_start(name: &str, query: &str) -> bool {
         let boundary = before.is_none_or(|ch| !ch.is_alphanumeric());
         boundary && name[index..].starts_with(query)
     })
-}
-
-pub fn normalize(value: &str) -> String {
-    value
-        .to_lowercase()
-        .chars()
-        .map(|ch| match ch {
-            'á' | 'à' | 'ä' | 'â' | 'ã' | 'å' => 'a',
-            'é' | 'è' | 'ë' | 'ê' => 'e',
-            'í' | 'ì' | 'ï' | 'î' => 'i',
-            'ó' | 'ò' | 'ö' | 'ô' | 'õ' => 'o',
-            'ú' | 'ù' | 'ü' | 'û' => 'u',
-            'ñ' => 'n',
-            'ç' => 'c',
-            other => other,
-        })
-        .collect()
 }
 
 #[cfg(test)]
