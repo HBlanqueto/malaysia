@@ -49,6 +49,7 @@ mod tests {
     use vow_appearance::{
         AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
     };
+    use vow_design::ACCENT_SWATCHES;
 
     use super::*;
 
