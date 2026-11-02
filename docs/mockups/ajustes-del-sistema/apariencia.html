@@ -56,6 +56,8 @@ span,b,small{display:block;white-space:nowrap}
 /* Columna de detalle */
 .main{position:absolute;top:0;bottom:0;right:0;left:calc(var(--window-sidebar-island-inset) * 2 + var(--window-sidebar-width));display:flex;flex-direction:column}
 .bar{display:flex;align-items:center;height:var(--settings-toolbar-height);padding:var(--settings-toolbar-padding-top) var(--settings-toolbar-padding-x) 0;flex:none}
+.lead{display:flex;align-items:center;gap:var(--space-2)}
+.lead > i{width:var(--icon-button-size);height:var(--icon-button-size);display:block}
 .nav{display:flex}
 .nav i{width:var(--icon-button-size);height:var(--icon-button-size);display:block}
 .ttl{flex:1;display:flex;justify-content:center;font-size:var(--type-headline-size);line-height:var(--type-headline-line-height);font-weight:var(--type-headline-weight);color:var(--titlebar-title)}
@@ -130,7 +132,7 @@ html[data-query] .it[data-state~="selected"]{background:var(--window-sidebar-ite
 
   <main class="main">
     <div class="bar" data-kit="Titlebar">
-      <div class="nav"><i data-id="toolbar.atras" data-kit="navigation_buttons" aria-label="Atrás"></i><i data-id="toolbar.adelante" data-kit="navigation_buttons" aria-label="Adelante"></i></div>
+      <div class="lead"><i data-id="toolbar.sidebar" data-kit="SidebarToggle" aria-label="Mostrar u ocultar la barra lateral"></i><div class="nav"><i data-id="toolbar.atras" data-kit="navigation_buttons" aria-label="Atrás"></i><i data-id="toolbar.adelante" data-kit="navigation_buttons" aria-label="Adelante"></i></div></div>
       <div class="ttl"><span data-id="toolbar.title" data-kit="Titlebar">Apariencia</span></div>
     </div>
 

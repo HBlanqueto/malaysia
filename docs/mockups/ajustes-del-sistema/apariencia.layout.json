@@ -73,9 +73,20 @@
     ]
    },
    {
-    "id": "toolbar.atras",
+    "id": "toolbar.sidebar",
     "rect": [
      250,
+     15,
+     30,
+     30
+    ],
+    "name": "Mostrar u ocultar la barra lateral",
+    "kit": "SidebarToggle"
+   },
+   {
+    "id": "toolbar.atras",
+    "rect": [
+     288,
      15,
      30,
      30
@@ -86,7 +97,7 @@
    {
     "id": "toolbar.adelante",
     "rect": [
-     280,
+     318,
      15,
      30,
      30
@@ -97,7 +108,7 @@
    {
     "id": "toolbar.title",
     "rect": [
-     495,
+     514,
      21,
      66.5,
      18
@@ -960,9 +971,20 @@
     ]
    },
    {
-    "id": "toolbar.atras",
+    "id": "toolbar.sidebar",
     "rect": [
      250,
+     15,
+     30,
+     30
+    ],
+    "name": "Mostrar u ocultar la barra lateral",
+    "kit": "SidebarToggle"
+   },
+   {
+    "id": "toolbar.atras",
+    "rect": [
+     288,
      15,
      30,
      30
@@ -973,7 +995,7 @@
    {
     "id": "toolbar.adelante",
     "rect": [
-     280,
+     318,
      15,
      30,
      30
@@ -984,7 +1006,7 @@
    {
     "id": "toolbar.title",
     "rect": [
-     495,
+     514,
      21,
      66.5,
      18
@@ -1847,9 +1869,20 @@
     ]
    },
    {
-    "id": "toolbar.atras",
+    "id": "toolbar.sidebar",
     "rect": [
      250,
+     15,
+     30,
+     30
+    ],
+    "name": "Mostrar u ocultar la barra lateral",
+    "kit": "SidebarToggle"
+   },
+   {
+    "id": "toolbar.atras",
+    "rect": [
+     288,
      15,
      30,
      30
@@ -1860,7 +1893,7 @@
    {
     "id": "toolbar.adelante",
     "rect": [
-     280,
+     318,
      15,
      30,
      30
@@ -1871,7 +1904,7 @@
    {
     "id": "toolbar.title",
     "rect": [
-     495,
+     514,
      21,
      66.5,
      18
@@ -2779,9 +2812,20 @@
     ]
    },
    {
-    "id": "toolbar.atras",
+    "id": "toolbar.sidebar",
     "rect": [
      250,
+     15,
+     30,
+     30
+    ],
+    "name": "Mostrar u ocultar la barra lateral",
+    "kit": "SidebarToggle"
+   },
+   {
+    "id": "toolbar.atras",
+    "rect": [
+     288,
      15,
      30,
      30
@@ -2792,7 +2836,7 @@
    {
     "id": "toolbar.adelante",
     "rect": [
-     280,
+     318,
      15,
      30,
      30
@@ -2803,7 +2847,7 @@
    {
     "id": "toolbar.title",
     "rect": [
-     495,
+     514,
      21,
      66.5,
      18
