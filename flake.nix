@@ -31,29 +31,8 @@
         fontconfig
         vulkan-loader
       ];
-
-      mockupExtract = pkgs: pkgs.writeShellApplication {
-        name = "mockup-extract";
-        text = ''
-          export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
-          export FONTCONFIG_FILE="${pkgs.makeFontsConf {
-            fontDirectories = [ pkgs.geist-font ];
-          }}"
-          exec ${pkgs.python3.withPackages (ps: [ ps.playwright ])}/bin/python3 \
-            ${./scripts/mockup-extract.py} "$@"
-        '';
-      };
     in
     {
-      apps = forAllSystems (system: let
-        pkgs = import nixpkgs { inherit system; };
-      in {
-        mockup-extract = {
-          type = "app";
-          program = "${mockupExtract pkgs}/bin/mockup-extract";
-        };
-      });
-
       packages = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
@@ -214,7 +193,6 @@
       devShells = forAllSystems (system: let
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
-        mockup-extract = mockupExtract pkgs;
         skia = barrierkit.packages.${system}.skia-binaries;
         hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         weston = pkgs.weston.overrideAttrs (final: prev: {
@@ -260,7 +238,6 @@
             wayland-utils
             weston
             amdgpu_top
-            mockup-extract
           ] ++ labApps;
 
           buildInputs = deps ++ [

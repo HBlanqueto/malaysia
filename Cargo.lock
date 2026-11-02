@@ -1950,8 +1950,6 @@ dependencies = [
  "freya-core",
  "freya-testing",
  "libc",
- "serde",
- "serde_json",
  "torin",
  "vow-appearance",
  "vow-design",

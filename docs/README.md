@@ -25,8 +25,7 @@ docs/
 │   └── malaysia-y-shell.svg diagrama del reparto
 ├── decisiones/          ADRs
 ├── configuracion/
-│   └── opciones.md      catálogo canónico de opciones
-└── mockups/             lienzos de diseño; no se editan a mano
+    └── opciones.md      catálogo canónico de opciones
 ```
 
 ## Compilar y probar
