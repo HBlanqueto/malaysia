@@ -76,14 +76,20 @@ struct OutputSurface {
     surface: WlSurface,
     layer_surface: LayerSurface,
     viewport: WpViewport,
-    #[allow(dead_code)]
-    fractional_scale: Option<WpFractionalScaleV1>,
+    fractional_scale: WpFractionalScaleV1,
     logical_size: (u32, u32),
     scale: f64,
     configured: bool,
     surface_format: wgpu::TextureFormat,
     pending_redraw: bool,
     first_frame_presented: bool,
+}
+
+impl Drop for OutputSurface {
+    fn drop(&mut self) {
+        self.viewport.destroy();
+        self.fractional_scale.destroy();
+    }
 }
 
 impl App {
@@ -300,11 +306,9 @@ impl App {
         let viewport = self
             .viewporter
             .get_viewport(&surface, &self.qh, surface.clone());
-        let fractional_scale = Some(self.fractional_manager.get_fractional_scale(
-            &surface,
-            &self.qh,
-            surface.clone(),
-        ));
+        let fractional_scale =
+            self.fractional_manager
+                .get_fractional_scale(&surface, &self.qh, surface.clone());
 
         self.set_opaque_region(&surface, 1, 1);
         layer_surface.commit();
@@ -338,9 +342,7 @@ impl App {
     }
 
     fn destroy_output_surface(&mut self, output: &WlOutput) {
-        if let Some(output) = self.outputs.remove(&output.id()) {
-            output.viewport.destroy();
-            output.surface.destroy();
+        if self.outputs.remove(&output.id()).is_some() {
             info!("output removed, wallpaper surface destroyed");
         }
     }

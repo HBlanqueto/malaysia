@@ -221,7 +221,7 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option
                     continue;
                 }
             };
-            if events.is_empty() {
+            if !events.iter().any(|event| event.restyles()) {
                 continue;
             }
             let appearance = match read_appearance() {
