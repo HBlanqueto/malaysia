@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/849b2b3";
+      url = "github:HBlanqueto/barrierkit/103bd21";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
