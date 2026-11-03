@@ -1,5 +1,7 @@
 # Malaysia
 
+![Malaysia Compositor](docs/assets/marca/malaysia-banner.jpg)
+
 Escritorio Wayland para NixOS. Su compositor, *Malaysia Compositor*
 (`malaysia-compositor`), está construido sobre Smithay y se desarrolla bloque a bloque. La
 documentación completa vive en [`docs/`](docs/README.md); el estado, en
