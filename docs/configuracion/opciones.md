@@ -76,6 +76,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `appearance.accent_color` | `[r,g,b]` en `[0,1]` o `null` | `null` | **activa** | portal, shell, efectos, **Ajustes del sistema** |
 | `appearance.contrast` | bool | `false` | **activa** | portal (`org.freedesktop.appearance` `contrast`) |
 | `appearance.reduced_motion` | bool | `false` | **activa** | portal (`reduced-motion`) |
+| `appearance.scroll_bars` | `"when_scrolling"` \| `"always"` | `"when_scrolling"` | **activa** | `ScrollView` del kit: la barra solo al desplazarse o siempre visible, **Ajustes del sistema** |
 | `appearance.reduce_transparency` | bool | `true` | **activa** | shell y kit: fondos sólidos; `false` habilitará el blur del compositor (ADR 0038) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor, **Ajustes del sistema** |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %), **Ajustes del sistema** |
@@ -345,6 +346,7 @@ accent_color = [0.208, 0.518, 0.894]
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 reduce_transparency = true      # Reduce transparency (fondos sólidos; false = blur futuro)
+scroll_bars = "when_scrolling"  # when_scrolling | always
 window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tiñe menubar/dock)
 traffic_lights = "auto"         # auto | standard | accent | wallpaper

@@ -11,8 +11,8 @@ use barrier_kit::views::form::{Form, Row, Section};
 use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
 use vow_appearance::{
-    AppearanceConfig, ColorScheme, Resolved, TintParts, TintStrength, TrafficLightStyle,
-    WindowColorMode, WindowTintScope, derived_lights, load_appearance,
+    AppearanceConfig, ColorScheme, Resolved, ScrollBars, TintParts, TintStrength,
+    TrafficLightStyle, WindowColorMode, WindowTintScope, derived_lights, load_appearance,
 };
 use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS, TITLEBAR};
 
@@ -32,6 +32,7 @@ const STRENGTHS: [TintStrength; 4] = [
     TintStrength::Intense,
 ];
 const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
+const SCROLL_BARS: [ScrollBars; 2] = [ScrollBars::WhenScrolling, ScrollBars::Always];
 const TRAFFIC: [(TrafficLightStyle, &str); 4] = [
     (TrafficLightStyle::Auto, "Automático"),
     (TrafficLightStyle::Standard, "Clásico"),
@@ -173,11 +174,25 @@ fn appearance(
                 ),
         )
         .section(
-            Section::titled("Ventanas").row(
-                Row::new("Semáforos")
-                    .keywords(&["botones", "cerrar", "minimizar", "ampliar"])
-                    .control(traffic_popup(config, dominant, resolved, error)),
-            ),
+            Section::titled("Ventanas")
+                .row(
+                    Row::new("Semáforos")
+                        .keywords(&["botones", "cerrar", "minimizar", "ampliar"])
+                        .control(traffic_popup(config, dominant, resolved, error)),
+                )
+                .row(
+                    Row::new("Mostrar barras de desplazamiento")
+                        .keywords(&["scroll", "desplazamiento", "barras"])
+                        .control(
+                            RadioGroup::new("Mostrar barras de desplazamiento")
+                                .option("Al desplazarse")
+                                .option("Siempre")
+                                .selected(position(&SCROLL_BARS, config.scroll_bars))
+                                .on_change(edit(error, |config, index: usize| {
+                                    config.scroll_bars = SCROLL_BARS[index];
+                                })),
+                        ),
+                ),
         )
 }
 
