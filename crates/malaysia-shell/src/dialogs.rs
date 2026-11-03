@@ -8,8 +8,8 @@ use std::rc::Rc;
 use barrier_kit::controls::{Button, ButtonStyle};
 use barrier_kit::platform::{Decorations, Timers, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
-use barrier_kit::titlebar::window_drag_handler;
-use barrier_kit::traffic::TrafficLights;
+use barrier_kit::style::Palette;
+use barrier_kit::titlebar::Titlebar;
 use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
@@ -17,7 +17,7 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
-    ButtonKind, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, TEXT, TITLEBAR,
+    CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, TEXT, TITLEBAR_CLIENT_HEIGHT,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -74,20 +74,20 @@ fn panel() -> Rect {
 }
 
 fn title(text: &str) -> Label {
-    let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
+    let palette = Palette::current();
     label()
         .text(text.to_string())
         .font_size(HEADLINE.size as f32)
         .font_weight(FontWeight::BOLD)
-        .color(theme::color(palette.text.focused))
+        .color(theme::color(palette.label))
 }
 
 fn body(text: &str) -> Label {
-    let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
+    let palette = Palette::current();
     label()
         .text(text.to_string())
         .font_size(TEXT.size as f32)
-        .color(theme::color(palette.text.unfocused))
+        .color(theme::color(palette.secondary_label))
 }
 
 fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) -> Rect {
@@ -172,9 +172,7 @@ fn schedule_tick(timers: Timers, remaining: State<u32>, action: PowerAction) {
 }
 
 fn power_badge(glyph: &'static str) -> Rect {
-    let resolved = barrier_kit::theme::resolved();
-    let palette = vow_appearance::palette(resolved.scheme);
-    let mut disc = palette.text.unfocused;
+    let mut disc = Palette::current().secondary_label;
     disc.a = 0.55;
     rect()
         .width(Size::px(POWER_ICON_SIZE))
@@ -234,7 +232,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
         close();
     };
     let text = confirm_text(action);
-    let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
+    let palette = Palette::current();
     panel()
         .spacing(0.0)
         .content(Content::Flex)
@@ -251,14 +249,14 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
                 .text(text.question)
                 .font_size(TEXT.size as f32)
                 .font_weight(FontWeight::BOLD)
-                .color(theme::color(palette.text.focused)),
+                .color(theme::color(palette.label)),
         )
         .child(
             label()
                 .width(Size::fill())
                 .text(countdown_text(text.outcome, seconds))
                 .font_size(CALLOUT.size as f32)
-                .color(theme::color(palette.text.focused)),
+                .color(theme::color(palette.label)),
         )
         .child(
             rect()
@@ -337,9 +335,9 @@ impl App for ForceQuitApp {
             .collect();
         let apps = running_apps(&app_ids);
         let selected = (*self.selected.read()).min(apps.len().saturating_sub(1));
-        let resolved = barrier_kit::theme::resolved();
-        let text = theme::color(vow_appearance::palette(resolved.scheme).text.focused);
-        let mut highlight = resolved.accent;
+        let palette = Palette::current();
+        let text = theme::color(palette.label);
+        let mut highlight = palette.accent;
         highlight.a = 0.18;
 
         let force_quit = {
@@ -605,37 +603,18 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        let controls = WindowControls::get();
-        let focused = controls.status.read().activated;
-        about_view(&self.info, focused, about_titlebar(focused, controls.fixed))
-    }
-}
-
-fn about_titlebar(focused: bool, fixed: bool) -> Element {
-    let (x, ..) = vow_appearance::traffic::group_rect();
-    rect()
-        .width(Size::fill())
-        .height(Size::px(TITLEBAR.thickness as f32))
-        .padding(Gaps::new(0.0, 0.0, 0.0, x as f32))
-        .direction(Direction::Horizontal)
-        .cross_align(Alignment::Center)
-        .on_mouse_down(window_drag_handler(fixed))
-        .child(
-            TrafficLights::new()
-                .focused(focused)
-                .close_only(true)
-                .on_action(|kind| {
-                    if kind == ButtonKind::Close {
-                        close();
-                    }
-                }),
+        let focused = WindowControls::get().status.read().activated;
+        about_view(
+            &self.info,
+            focused,
+            Titlebar::new().close_only(true).into_element(),
         )
-        .into_element()
+    }
 }
 
 fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
-    let palette = vow_appearance::palette(resolved.scheme);
+    let palette = Palette::current();
     let mut rows = vec![
         ("Procesador", info.cpu.clone()),
         ("Memoria", info.memory.clone()),
@@ -656,14 +635,14 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                     .text_align(TextAlign::Right)
                     .font_size(TEXT.size as f32)
                     .font_weight(FontWeight::SEMI_BOLD)
-                    .color(theme::color(palette.text.focused)),
+                    .color(theme::color(palette.label)),
             )
             .child(
                 label()
                     .text(value)
                     .width(Size::px(ABOUT_VALUE_WIDTH))
                     .font_size(TEXT.size as f32)
-                    .color(theme::color(palette.text.unfocused)),
+                    .color(theme::color(palette.secondary_label)),
             )
             .into_element()
     });
@@ -672,7 +651,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
     } else {
         GENERIC_SVG
     };
-    let muted = theme::color(palette.text.unfocused);
+    let muted = theme::color(palette.secondary_label);
     let footer = |text: &str| {
         label()
             .text(text.to_string())
@@ -701,7 +680,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                 .width(Size::px(ABOUT_DRAWING.0))
                 .height(Size::px(ABOUT_DRAWING_BOX_HEIGHT))
                 .margin(Gaps::new(
-                    ABOUT_DRAWING_TOP - TITLEBAR.thickness as f32,
+                    ABOUT_DRAWING_TOP - TITLEBAR_CLIENT_HEIGHT as f32,
                     0.0,
                     ABOUT_GAP,
                     0.0,
@@ -720,7 +699,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                 .width(Size::fill())
                 .font_size(DISPLAY.size as f32)
                 .font_weight(FontWeight::BOLD)
-                .color(theme::color(palette.text.focused)),
+                .color(theme::color(palette.label)),
         )
         .child(
             label()
@@ -877,7 +856,7 @@ mod render_tests {
         fn render(&self) -> impl IntoElement {
             let titlebar = rect()
                 .width(Size::fill())
-                .height(Size::px(TITLEBAR.thickness as f32))
+                .height(Size::px(TITLEBAR_CLIENT_HEIGHT as f32))
                 .into_element();
             about_view(&self.0, self.1, titlebar)
         }

@@ -31,6 +31,7 @@ use vow_design::{
 };
 
 use crate::desktop::{self, DesktopEntry};
+use barrier_kit::style::Palette;
 use barrier_kit::theme;
 
 #[derive(Clone, PartialEq)]
@@ -202,13 +203,12 @@ impl App for LauncherApp {
         });
 
         let resolved = barrier_kit::theme::resolved();
-        let palette = vow_appearance::palette(resolved.scheme);
+        let palette = Palette::current();
         let background = theme::color(barrier_kit::theme::surface_background(
             &resolved,
             barrier_kit::theme::SurfaceKind::LayerShell,
         ));
-        let _text = theme::color(palette.text.focused);
-        let muted = theme::color(palette.text.unfocused);
+        let muted = theme::color(palette.secondary_label);
 
         let list = if results.is_empty() {
             rect()
@@ -289,9 +289,9 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
             .height(Size::px(size))
             .into_element(),
         None => {
-            let resolved = barrier_kit::theme::resolved();
-            let text = theme::color(vow_appearance::palette(resolved.scheme).text.focused);
-            let mut fill = resolved.accent;
+            let palette = Palette::current();
+            let text = theme::color(palette.label);
+            let mut fill = palette.accent;
             fill.a = 0.22;
             rect()
                 .width(Size::px(size))
@@ -311,10 +311,10 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
 }
 
 fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> Element {
-    let palette = vow_appearance::palette(barrier_kit::theme::resolved().scheme);
-    let text = theme::color(palette.text.focused);
-    let muted = theme::color(palette.text.unfocused);
-    let mut selected_bg = barrier_kit::theme::resolved().accent;
+    let palette = Palette::current();
+    let text = theme::color(palette.label);
+    let muted = theme::color(palette.secondary_label);
+    let mut selected_bg = palette.accent;
     selected_bg.a = 0.18;
     let selected_bg = theme::color(selected_bg);
     let icon = app_icon(
