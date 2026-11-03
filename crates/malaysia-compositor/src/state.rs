@@ -37,6 +37,7 @@ use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::{DataDeviceState, set_data_device_selection};
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState};
+use smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1;
 use smithay::wayland::viewporter::ViewporterState;
 use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode as KdeDefaultMode;
@@ -109,6 +110,7 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub lock_state: SessionLockManagerState,
     pub locked: bool,
+    pub(crate) lock_owner: Option<ExtSessionLockV1>,
     pub lock_surfaces: Vec<LockSurface>,
     pub idle: crate::idle::IdleState,
     pub idle_inhibitors: Vec<WlSurface>,
@@ -337,6 +339,7 @@ impl State {
             primary_selection_state,
             lock_state,
             locked: false,
+            lock_owner: None,
             lock_surfaces: Vec::new(),
             idle,
             idle_inhibitors: Vec::new(),

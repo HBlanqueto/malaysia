@@ -429,7 +429,7 @@ fn compositor_shortcut(
             CompositorShortcut::Launcher
         };
     }
-    if ctrl && logo && !alt {
+    if ctrl && logo && !alt && !locked {
         for sym in syms {
             let sym = u32::from(*sym);
             match sym {
@@ -1865,14 +1865,14 @@ impl State {
         });
     }
 
-    fn end_grab(&mut self) {
+    pub(crate) fn end_grab(&mut self) {
         if let Some(Grab::Resize { window, .. }) = self.grab {
             self.windows.set_resizing(window, false, None);
         }
         self.grab = None;
     }
 
-    fn pointer_motion(&mut self, mut location: Point<f64, Logical>, time: InputTime) {
+    pub(crate) fn pointer_motion(&mut self, mut location: Point<f64, Logical>, time: InputTime) {
         let now = Instant::now();
         if self.shake.observe(location.x, now) {
             self.trigger_cursor_boost();
@@ -2359,6 +2359,19 @@ mod tests {
         );
         assert_eq!(
             compositor_shortcut(true, true, false, true, &escape, false),
+            CompositorShortcut::None
+        );
+    }
+
+    #[test]
+    fn ctrl_super_arrange_shortcuts_are_ignored_while_locked() {
+        let left = [keysyms::KEY_Left.into()];
+        assert_eq!(
+            compositor_shortcut(true, false, false, true, &left, false),
+            CompositorShortcut::ArrangeLeft
+        );
+        assert_eq!(
+            compositor_shortcut(true, false, true, true, &left, true),
             CompositorShortcut::None
         );
     }

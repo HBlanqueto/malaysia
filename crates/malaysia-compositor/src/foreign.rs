@@ -159,6 +159,9 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
+        if state.locked {
+            return;
+        }
         let id = *data;
         match request {
             zwlr_foreign_toplevel_handle_v1::Request::Activate { seat: _ } => {

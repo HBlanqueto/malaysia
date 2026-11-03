@@ -151,6 +151,9 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
         _data_init: &mut DataInit<'_, State>,
     ) {
         use protocol::infinity_window_manager_v1::Request;
+        if state.locked {
+            return;
+        }
         match request {
             Request::Arrange { handle, layout } => {
                 if let Some(id) = window_id_from_handle(&handle) {

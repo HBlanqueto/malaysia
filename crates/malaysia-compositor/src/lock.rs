@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use smithay::backend::input::InputTime;
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_output::WlOutput;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -27,6 +28,12 @@ impl SessionLockHandler for State {
     }
 
     fn lock(&mut self, confirmation: SessionLocker) {
+        // ext-session-lock-v1: a second lock must not take over a live one, or its unlock_and_destroy unlocks the session.
+        if self.lock_owner.as_ref().is_some_and(Resource::is_alive) {
+            tracing::warn!("lock refused: a live client already holds the session lock");
+            return;
+        }
+        self.lock_owner = Some(confirmation.ext_session_lock().clone());
         let already_locked = self.locked;
         tracing::info!("session locked");
         self.locked = true;
@@ -39,6 +46,14 @@ impl SessionLockHandler for State {
         self.arm_lock_recovery(LOCK_START_GRACE);
         self.clear_keyboard_focus();
         self.clear_chrome_pointer();
+        self.end_grab();
+        if let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        {
+            self.pointer_motion(location, InputTime::from_millis(0));
+        }
         for pending in std::mem::take(&mut self.pending_captures) {
             pending.frame.fail(CaptureFailureReason::Unknown);
         }
@@ -50,6 +65,7 @@ impl SessionLockHandler for State {
 
     fn unlock(&mut self) {
         tracing::info!("session unlocked");
+        self.lock_owner = None;
         self.locked = false;
         self.idle.set_locked(false);
         self.lock_surfaces.clear();
