@@ -27,11 +27,14 @@ Commands:
     demo [--dark|--light]
                         Nested session with the shell and demo windows; the flag
                         forces that appearance in a temporary config (Ctrl-C ends it)
+    video [--dark|--light]
+                        Like demo, with only Marea (the barrierkit media app) on the
+                        desktop; builds that app alone
     lab [--dark|--light]
                         Nested session with shell + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
-    app <name>          Run tengen-app-show, tengen-motion-show, ondina or rotulo (pinned rev, or ../barrierkit with kit-local) in the demo
+    app <name>          Run tengen-app-show, tengen-motion-show, marea, ondina or rotulo (pinned rev, or ../barrierkit with kit-local) in the demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
@@ -705,6 +708,7 @@ demo() {
     if [ "$#" -ne 0 ]; then
         fail "$EXIT_USAGE" "unexpected argument for demo: $1"
     fi
+    _apps=${_demo_apps-tengen-app-show tengen-motion-show ondina rotulo}
     if is_running; then
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
@@ -748,11 +752,9 @@ demo() {
             fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        build_kit_apps tengen-app-show tengen-motion-show ondina rotulo
-        _show="$_kit_bin/tengen-app-show"
-        _motion="$_kit_bin/tengen-motion-show"
-        _ondina="$_kit_bin/ondina"
-        _rotulo="$_kit_bin/rotulo"
+        # shellcheck disable=SC2086
+        build_kit_apps $_apps
+        _apps_bin=$_kit_bin
     else
         _shell_bin="$script_dir/result/bin/malaysia-shell"
         _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
@@ -761,10 +763,7 @@ demo() {
             [ ! -x "$_wallpaper_bin" ]; then
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
-        _show="$script_dir/result/bin/tengen-app-show"
-        _motion="$script_dir/result/bin/tengen-motion-show"
-        _ondina="$script_dir/result/bin/ondina"
-        _rotulo="$script_dir/result/bin/rotulo"
+        _apps_bin="$script_dir/result/bin"
     fi
 
     start
@@ -802,22 +801,23 @@ demo() {
     check_wallpaper_ready demo
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
-    if command -v foot >/dev/null 2>&1; then
-        demo_client foot-1 foot -T "MalaysiaDreams"
-        demo_client foot-2 foot -T "Segunda ventana"
-    elif command -v wezterm >/dev/null 2>&1; then
-        demo_client wezterm wezterm start
-    else
-        printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
+    if [ -z "${_demo_apps+set}" ]; then
+        if command -v foot >/dev/null 2>&1; then
+            demo_client foot-1 foot -T "MalaysiaDreams"
+            demo_client foot-2 foot -T "Segunda ventana"
+        elif command -v wezterm >/dev/null 2>&1; then
+            demo_client wezterm wezterm start
+        else
+            printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
+        fi
     fi
-    if [ -x "$_show" ] && [ -x "$_motion" ] && [ -x "$_ondina" ] && [ -x "$_rotulo" ]; then
-        demo_client tengen-app-show "$_show"
-        demo_client tengen-motion-show "$_motion"
-        demo_client ondina "$_ondina"
-        demo_client rotulo "$_rotulo"
-    else
-        printf 'demo: barrierkit apps not found; skipping them\n' >&2
-    fi
+    for _app in $_apps; do
+        if [ -x "$_apps_bin/$_app" ]; then
+            demo_client "$_app" "$_apps_bin/$_app"
+        else
+            printf 'demo: %s not found in %s; skipping it\n' "$_app" "$_apps_bin" >&2
+        fi
+    done
 
     printf 'demo: wallpaper, menubar and dock on %s\n' "$_sock"
     printf 'demo: more clients: WAYLAND_DISPLAY=%s <program>\n' "$_sock"
@@ -835,6 +835,11 @@ demo() {
         fi
         sleep 1
     done
+}
+
+video() {
+    _demo_apps=marea
+    demo "$@"
 }
 
 lab() {
@@ -1118,18 +1123,18 @@ app() {
             --sin-menubar) _sin_menubar=1 ;;
             -*) fail "$EXIT_USAGE" "unknown option for app: $1" ;;
             *)
-                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|ondina|rotulo"
+                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|marea|ondina|rotulo"
                 _name=$1
                 ;;
         esac
         shift
     done
     if [ -z "$_name" ]; then
-        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|ondina|rotulo"
+        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|marea|ondina|rotulo"
     fi
     case "$_name" in
-        tengen-app-show | tengen-motion-show | ondina | rotulo) ;;
-        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show, tengen-motion-show, ondina or rotulo)" ;;
+        tengen-app-show | tengen-motion-show | marea | ondina | rotulo) ;;
+        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show, tengen-motion-show, marea, ondina or rotulo)" ;;
     esac
     if ! is_running; then
         fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
@@ -1507,6 +1512,7 @@ case "$command_name" in
     titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
+    video) video "$@" ;;
     lab) lab "$@" ;;
     app) app "$@" ;;
     drm-vkms) drm_vkms "$@" ;;

@@ -72,6 +72,7 @@ nix develop            # obligatorio (marca MALAYSIA_DEV_SHELL)
 ./dev.sh check         # fmt + clippy + tests
 ./dev.sh run           # compositor anidado
 ./dev.sh demo          # shell + ventanas de prueba
+./dev.sh video         # shell + solo Marea (vídeo, cristal y carátulas)
 ./dev.sh titlebar      # cerrar/minimizar/maximizar
 ./dev.sh smoke         # mapeo de toplevels
 # probes: move, pointers, screencopy, presentation, activation
