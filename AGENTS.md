@@ -107,6 +107,24 @@ No modifiques nada fuera del repo y `$XDG_RUNTIME_DIR/malaysia`: sockets, ficher
 Si copias código de un tercero, actualiza `NOTICE` en el mismo commit. Otto es
 MIT; `laye-rs` no tiene licencia y no se usa.
 
+## Documentación (español e inglés)
+
+Aplica a `README.md`, `docs/` y los ADR.
+
+1. **Bilingüe.** Cada documento existe en español (`nombre.md`) y en inglés
+   (`nombre.en.md`), en el mismo directorio. Ambos cambian en el mismo commit,
+   con la misma estructura y el mismo contenido; ninguno resume al otro. Los
+   comentarios y el rustdoc del código van solo en inglés.
+2. **Un proceso por documento:** objetivo y alcance (dónde empieza y acaba),
+   lector, entradas y salidas, y pasos numerados en orden de ejecución.
+3. **Fuente real.** Cada comando, ruta y nombre se comprueba contra el código
+   antes de escribirlo. El documento se actualiza en el commit que cambia lo
+   que describe; si deja de valer, se borra.
+4. **Estilo:** frases cortas, voz activa y presente; una idea por párrafo.
+   Nada se repite: se enlaza a su única fuente (`roadmap.md`, el ADR,
+   `opciones.md`). Ejemplos mínimos y ejecutables, mejor en pareja ✗/✓.
+5. **Comentarios en el código:** reglas 5 y 6 de «Código mínimo».
+
 ## Código mínimo (reglas duras, estilo ponytail)
 
 Se cumplen al pie de la letra. Ganan el diff más corto y la respuesta más corta.
