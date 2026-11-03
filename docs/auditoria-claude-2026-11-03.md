@@ -825,4 +825,9 @@ Commits que aplican esta auditoría, en orden:
    - el cursor y los commits encolan el redibujado con un frame en vuelo (`Udev::queue_redraw`);
    - `RoundedTextureElement` daña todo el elemento cuando su commit cambia, así que no pierde daño;
    - `schedule_repaint` guarda su token y no cancela un repintado: solo lo aplaza al vblank estimado.
-5. **Sin verificar aquí:** el contenedor no tiene `/dev/dri` ni display anfitrión, así que no se pudo bisecar con `./dev.sh demo`. Hay que confirmarlo en sesión.
+5. **Confirmado en la máquina de desarrollo** (2026-11-03):
+   - La sesión DRM del boot anterior (1920x1080@60, vía GDM) corría un binario construido exactamente desde `cfcf7c0`. Se comprobó por el hash de `udev.rs`, `session.rs` y `handlers.rs` frente al rev fijado en el flake de los dotfiles.
+   - El journal no muestra errores de frame: el lag venía de los frames que no se pedían, no de frames fallidos.
+   - Esa sesión tampoco tenía `18d90a5`, así que además repintaba la salida entera con una ventana visible.
+   - El anidado no lo mostraba porque `./dev.sh run` compilaba un checkout local anterior a `cfcf7c0`, que aún renderizaba en cada vblank.
+   - Falta validar `41b0661` o posterior en una sesión DRM.
