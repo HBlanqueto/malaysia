@@ -130,11 +130,11 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
         return None;
     }
     let show_in = values.get("OnlyShowIn").map(String::as_str).unwrap_or("");
-    if !show_in.is_empty() && !list_contains(show_in, "MalaysiaDreams") {
+    if !show_in.is_empty() && !list_contains(show_in, "Malaysia") {
         return None;
     }
     let not_show_in = values.get("NotShowIn").map(String::as_str).unwrap_or("");
-    if list_contains(not_show_in, "MalaysiaDreams") {
+    if list_contains(not_show_in, "Malaysia") {
         return None;
     }
     let try_exec = values.get("TryExec").map(String::as_str).unwrap_or("");
@@ -466,7 +466,7 @@ mod tests {
         );
         assert!(
             parse_desktop(
-                &format!("[Desktop Entry]\n{base}NotShowIn=MalaysiaDreams;\n"),
+                &format!("[Desktop Entry]\n{base}NotShowIn=Malaysia;\n"),
                 "a",
                 &[]
             )
@@ -474,7 +474,7 @@ mod tests {
         );
         assert!(
             parse_desktop(
-                &format!("[Desktop Entry]\n{base}OnlyShowIn=MalaysiaDreams;\n"),
+                &format!("[Desktop Entry]\n{base}OnlyShowIn=Malaysia;\n"),
                 "a",
                 &[]
             )

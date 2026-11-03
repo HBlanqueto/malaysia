@@ -1,6 +1,6 @@
 # Hardware y línea base gráfica
 
-Punto de referencia de la máquina donde se probó MalaysiaDreams, no un
+Punto de referencia de la máquina donde se probó Malaysia, no un
 requisito. Sirve para comparar cuando algo se comporte distinto bajo DRM/KMS.
 
 ## Máquina

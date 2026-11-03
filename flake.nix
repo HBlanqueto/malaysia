@@ -1,5 +1,5 @@
 {
-  description = "MalaysiaDreams, a fixed Wayland compositor built on Smithay.";
+  description = "Malaysia, a Wayland desktop for NixOS; its compositor is built on Smithay.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

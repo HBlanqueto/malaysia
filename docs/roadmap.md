@@ -224,7 +224,7 @@ casado por pid del Registrar (XWayland).
 
 Prueba: `./dev.sh demo` con apps reales.
 
-### 15 — Rebranding a MalaysiaDreams
+### 15 — Rebranding a Malaysia
 
 Crates, binarios, D-Bus, variables `MALAYSIA_*`, rutas `~/.config/malaysia` y
 `~/.local/share/malaysia`, Nix, PAM, portal y sesión. **Hecho (2026-10-26).**

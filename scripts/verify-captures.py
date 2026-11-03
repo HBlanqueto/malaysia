@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verifies MalaysiaDreams debug captures against expected values/regions (Bloque 7.3, 3c).
+"""Verifies Malaysia debug captures against expected values/regions (Bloque 7.3, 3c).
 
 Every check compares pixels to an expected colour in an expected region — never
 "there are some non-black pixels". A capture that does not decode, or whose

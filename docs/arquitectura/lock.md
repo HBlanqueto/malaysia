@@ -22,7 +22,7 @@ lock() ──► locked ──► una ext_session_lock_surface_v1 por output
 
 ## Recuperación
 
-Smithay deja el lock en `Defunct` (no en `Unlocked`) y un segundo `lock()` puede tomar la propiedad; MalaysiaDreams mantiene `locked == true`.
+Smithay deja el lock en `Defunct` (no en `Unlocked`) y un segundo `lock()` puede tomar la propiedad; Malaysia mantiene `locked == true`.
 
 `lock.rs`:
 

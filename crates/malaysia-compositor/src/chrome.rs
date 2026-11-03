@@ -1204,11 +1204,11 @@ mod tests {
                 ..TrafficInput::default()
             };
             let mut text = TextEngine::new();
-            let _ = text.rasterize("MalaysiaDreams", true, 1200, 1.5, theme, input);
+            let _ = text.rasterize("Malaysia", true, 1200, 1.5, theme, input);
             let iterations = 20;
             let start = Instant::now();
             for _ in 0..iterations {
-                let _ = text.rasterize("MalaysiaDreams", true, 1200, 1.5, theme, input);
+                let _ = text.rasterize("Malaysia", true, 1200, 1.5, theme, input);
             }
             eprintln!(
                 "rasterize 1200x32 @1.5 hovered={hovered}: {:?}",

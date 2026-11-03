@@ -1,4 +1,4 @@
-# NixOS module for MalaysiaDreams, exposed as `nixosModules.default`.
+# NixOS module for Malaysia, exposed as `nixosModules.default`.
 { self }:
 {
   config,
@@ -11,7 +11,7 @@ let
 in
 {
   options.programs.malaysia = {
-    enable = lib.mkEnableOption "the MalaysiaDreams Wayland compositor";
+    enable = lib.mkEnableOption "the Malaysia desktop";
 
     globalMenu.libadwaita.enable = lib.mkEnableOption "global menu support for libadwaita applications" // {
       default = true;
@@ -31,7 +31,7 @@ in
     };
 
     wallpaper = {
-      enable = lib.mkEnableOption "the MalaysiaDreams Vulkan wallpaper client" // {
+      enable = lib.mkEnableOption "the Malaysia Vulkan wallpaper client" // {
         default = true;
       };
     };
@@ -77,7 +77,7 @@ in
     systemd.packages = [ cfg.package ];
 
     systemd.user.targets.malaysia-session = {
-      description = "MalaysiaDreams shell session";
+      description = "Malaysia shell session";
       wants =
         map (component: "malaysia-shell@${component}.service") cfg.shellComponents
         ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service"

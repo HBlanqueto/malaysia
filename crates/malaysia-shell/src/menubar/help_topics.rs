@@ -10,7 +10,7 @@ pub const DOCS_INDEX: &str = "https://github.com/HBlanqueto/malaysia/tree/main/d
 pub fn topics() -> &'static [HelpTopic] {
     &[
         HelpTopic {
-            title: "Documentación de MalaysiaDreams",
+            title: "Documentación de Malaysia",
             url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/README.md",
         },
         HelpTopic {
@@ -57,6 +57,6 @@ mod tests {
         let titles: Vec<&str> = topics().iter().map(|t| t.title).collect();
         assert!(titles.contains(&"Atajos de teclado"));
         assert!(titles.contains(&"Reducir transparencia"));
-        assert!(titles.contains(&"Documentación de MalaysiaDreams"));
+        assert!(titles.contains(&"Documentación de Malaysia"));
     }
 }

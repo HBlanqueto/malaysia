@@ -1,4 +1,4 @@
-# Catálogo de opciones de MalaysiaDreams
+# Catálogo de opciones de Malaysia
 
 Catálogo canónico de las opciones del compositor (ADR 0021) y de su módulo de
 NixOS. **Los nombres y valores de dominio son idénticos a los de macOS**
@@ -13,7 +13,7 @@ Las opciones de NixOS (`programs.malaysia.*`) se documentan en su propia
 sección al final; no forman parte de los dominios `.domain`.
 
 **Como macOS, la configuración se guarda en un archivo por dominio** (extensión
-**`.domain`**, el formato propio de MalaysiaDreams, como `.plist` lo es de macOS) en dos
+**`.domain`**, el formato propio de Malaysia, como `.plist` lo es de macOS) en dos
 directorios — preferencias y estado:
 
 ```
@@ -123,7 +123,7 @@ derivados del acento/wallpaper en los otros).
 | `display.scale` | float `1.0..=4.0` | `1.0` | **activa** | `State::scale`, `wl_output`, `wp_fractional_scale_v1` |
 
 No tiene equivalente exacto en macOS: macOS elige un **modo de pantalla** por
-monitor, no una escala fraccional. MalaysiaDreams sigue el modelo Wayland y publica la
+monitor, no una escala fraccional. Malaysia sigue el modelo Wayland y publica la
 parte entera por `wl_output` y la fraccionaria por `wp_fractional_scale_v1`.
 `MALAYSIA_SCALE` sigue existiendo como **override de desarrollo** y gana cuando está
 definido; sirve para `dev.sh` sin escribir configuración. Con 8b esta opción
@@ -147,7 +147,7 @@ pasará a ser por salida.
 ofrece en ventanas SSD normales (no maximizadas ni fullscreen).
 
 `"default"` respeta la negociación (GTK/Libadwaita conservan su headerbar; Qt y el
-resto reciben el chrome de MalaysiaDreams). `"force_server"` dibuja el chrome de MalaysiaDreams en todas
+resto reciben el chrome de Malaysia). `"force_server"` dibuja el chrome de Malaysia en todas
 las ventanas; `"force_client"` no dibuja ninguno.
 
 `double_click_titlebar` usa las palabras de macOS: "**Fill / Minimize / Zoom / No
@@ -165,7 +165,7 @@ siempre en modo foco. El doble clic de la barra sigue gobernado por `double_clic
 
 `qt_server_decorations` exporta `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` para los
 clientes que lanza `malaysia_compositor::spawn` y en el entorno de la sesión, de modo que Qt
-use el protocolo `xdg-decoration` y reciba el marco de MalaysiaDreams. Ponerlo a `false`
+use el protocolo `xdg-decoration` y reciba el marco de Malaysia. Ponerlo a `false`
 permite que Qt dibuje su propia barra (como hace Telegram; véase
 [`../arquitectura/ventanas.md`](../arquitectura/ventanas.md)).
 
@@ -206,7 +206,7 @@ incluyen el puntero. El portapapeles es `image/png` y lo sirve el compositor; co
 | `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | datos | `malaysia-wallpaper` |
 | `wallpaper.shuffle` | bool | `false` | datos | `malaysia-wallpaper` |
 
-**Los wallpapers de MalaysiaDreams viven en el propio proyecto** (`share/wallpapers/solid-colors/`,
+**Los wallpapers de Malaysia viven en el propio proyecto** (`share/wallpapers/solid-colors/`,
 el set macOS "Solid Colors", vendored en el repo) y el flake los instala como datos
 del sistema en `/run/current-system/sw/share/wallpapers/`, igual que GNOME instala
 los suyos en `/usr/share/backgrounds`. `wallpaper.dir` por defecto apunta ahí; un
@@ -456,9 +456,9 @@ Estas opciones configuran la integración con el sistema; van en
 
 | Opción | Tipo | Default | Descripción |
 |---|---|---|---|
-| `programs.malaysia.enable` | bool | `false` | Activa MalaysiaDreams: instala el paquete, registra la sesión Wayland, PAM, units y el portal. |
+| `programs.malaysia.enable` | bool | `false` | Activa Malaysia: instala el paquete, registra la sesión Wayland, PAM, units y el portal. |
 | `programs.malaysia.globalMenu.libadwaita.enable` | bool | `true` | Reemplaza la libadwaita del sistema por una versión parcheada que exporta el menú principal como menubar global (`org.gtk.Menus`). Usa `system.replaceDependencies`, así que las apps no se recompilan (ADR 0052). |
 
 `programs.malaysia.globalMenu.libadwaita.enable` se puede desactivar para no
 usar el fork parcheado; las apps libadwaita seguirán funcionando, pero no
-publicarán su menú ☰ en la barra de menús de MalaysiaDreams.
+publicarán su menú ☰ en la barra de menús de Malaysia.

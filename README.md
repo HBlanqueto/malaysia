@@ -1,6 +1,7 @@
-# MalaysiaDreams
+# Malaysia
 
-Compositor Wayland construido sobre Smithay, desarrollado bloque a bloque. La
+Escritorio Wayland para NixOS. Su compositor, *Malaysia Compositor*
+(`malaysia-compositor`), está construido sobre Smithay y se desarrolla bloque a bloque. La
 documentación completa vive en [`docs/`](docs/README.md); el estado, en
 [`docs/roadmap.md`](docs/roadmap.md).
 

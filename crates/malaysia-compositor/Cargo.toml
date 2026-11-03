@@ -1,6 +1,6 @@
 [package]
 name = "malaysia-compositor"
-description = "Malaysia, a Wayland compositor built on Smithay."
+description = "Malaysia Compositor, the Wayland compositor of the Malaysia desktop, built on Smithay."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=MalaysiaDreams
-Comment=MalaysiaDreams Wayland compositor
+Name=Malaysia
+Comment=Malaysia Wayland desktop
 Exec=@out@/bin/malaysia-compositor --drm
 Type=Application
 DesktopNames=Malaysia

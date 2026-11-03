@@ -16,7 +16,7 @@ Hallazgos abiertos contra `22070c6` (2026-10-31); los corregidos y los del toolk
 | PX-09 | `crates/malaysia-compositor/src/handlers.rs:597` | Un hilo por `receive`; `write_all` bloquea sin timeout y `spawn` puede panicar. | L1l |
 | PX-13 | `crates/malaysia-compositor/src/input.rs:490` | Ctrl+Super no comprueba `locked`: el tiling mueve ventanas ocultas. | L1l |
 | PX-14 | `crates/malaysia-compositor/src/idle.rs:84,191` | `note_activity` reinserta timers en cada evento (ratón a 1000 Hz). | L4d |
-| P5-07 | `crates/malaysia-shell/src/desktop.rs:153,157` | Compara con `MalaysiaDreams` pero el escritorio es `Malaysia`; `OnlyShowIn`/`NotShowIn` se invierten. | L1i |
+| P5-07 | `crates/malaysia-shell/src/desktop.rs:153,157` | Compara con `Malaysia` pero el escritorio es `Malaysia`; `OnlyShowIn`/`NotShowIn` se invierten. | L1i |
 | P5-09 | `crates/malaysia-shell/src/menubar/mod.rs:279,304` | `prepare_kit_env` borra `MALAYSIA_ORIG_*` del hijo; el launcher no puede restaurarlos. | L1i |
 | P5-10 | `crates/malaysia-shell/src/menubar/focused.rs:230,411` | Ids con índice de lista; abrir/cerrar ventanas con el menú abierto puede operar en otra. | L1h |
 | P5-11 | `share/systemd/user/malaysia-shell@.service:18` y `malaysia-wallpaper.service:18` | `StartLimitIntervalSec` en `[Service]`; systemd lo ignora (real: 10 s). | L1j |

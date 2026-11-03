@@ -52,7 +52,7 @@ cmd_run() {
     if ! tty | grep -qE '^/dev/tty[0-9]+$'; then
         die "ejecútalo desde un TTY de texto (Ctrl+Alt+F4), no desde una terminal gráfica"
     fi
-    [[ -z "$(malaysia_compositor_pid)" ]] || die "ya hay un MalaysiaDreams corriendo (pid $(malaysia_compositor_pid)); usa: $0 stop"
+    [[ -z "$(malaysia_compositor_pid)" ]] || die "ya hay un Malaysia corriendo (pid $(malaysia_compositor_pid)); usa: $0 stop"
 
     mkdir -p "$RUNDIR"
     local log
@@ -68,13 +68,13 @@ cmd_run() {
     "$RESULT/bin/malaysia" --drm --log-level="${MALAYSIA_LOG_LEVEL:-info}" 2>&1 | tee "$log"
     local status=${PIPESTATUS[0]}
     set -e
-    info "MalaysiaDreams salió con código $status (log: $log)"
+    info "Malaysia salió con código $status (log: $log)"
     return "$status"
 }
 
 cmd_client() {
     [[ $# -gt 0 ]] || die "uso: $0 client <programa> [args…]"
-    [[ -n "$(malaysia_compositor_pid)" ]] || die "MalaysiaDreams no está corriendo"
+    [[ -n "$(malaysia_compositor_pid)" ]] || die "Malaysia no está corriendo"
     local sock
     sock="$(socket_name)" || die "no encuentro el socket en $LATEST_LOG"
     [[ -S "$XDG_RUNTIME_DIR/$sock" ]] || die "el socket $sock no existe todavía"
@@ -84,7 +84,7 @@ cmd_client() {
     info "lanzando '$*' en $sock (log: $clog)"
     env -u DISPLAY WAYLAND_DISPLAY="$sock" XDG_SESSION_TYPE=wayland \
         setsid -f "$@" >"$clog" 2>&1 </dev/null
-    info "vuelve al TTY de MalaysiaDreams (Ctrl+Alt+F4)"
+    info "vuelve al TTY de Malaysia (Ctrl+Alt+F4)"
 }
 
 cmd_lock() {
@@ -94,7 +94,7 @@ cmd_lock() {
 
 cmd_status() {
     local pid; pid="$(malaysia_compositor_pid)"
-    if [[ -n "$pid" ]]; then info "MalaysiaDreams corriendo, pid $pid"; else info "MalaysiaDreams no está corriendo"; fi
+    if [[ -n "$pid" ]]; then info "Malaysia corriendo, pid $pid"; else info "Malaysia no está corriendo"; fi
     if sock="$(socket_name)"; then info "socket: $sock"; fi
     if [[ -f "$LATEST_LOG" ]]; then
         info "log: $(readlink -f "$LATEST_LOG")"
@@ -104,14 +104,14 @@ cmd_status() {
 
 cmd_stop() {
     local pid; pid="$(malaysia_compositor_pid)"
-    [[ -n "$pid" ]] || { info "MalaysiaDreams no está corriendo"; return 0; }
+    [[ -n "$pid" ]] || { info "Malaysia no está corriendo"; return 0; }
     info "enviando SIGTERM a $pid…"
     pkill -TERM -x "$PROC_NAME"
     for _ in $(seq 1 50); do
-        [[ -z "$(malaysia_compositor_pid)" ]] && { info "MalaysiaDreams terminó. Vuelve a GDM con Ctrl+Alt+F1."; return 0; }
+        [[ -z "$(malaysia_compositor_pid)" ]] && { info "Malaysia terminó. Vuelve a GDM con Ctrl+Alt+F1."; return 0; }
         sleep 0.1
     done
-    die "MalaysiaDreams no terminó en 5 s; revisa con: $0 status (y si hace falta, sudo systemctl restart display-manager)"
+    die "Malaysia no terminó en 5 s; revisa con: $0 status (y si hace falta, sudo systemctl restart display-manager)"
 }
 
 case "${1:-}" in

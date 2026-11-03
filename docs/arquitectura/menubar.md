@@ -21,7 +21,7 @@ frame RGBA (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
 
 1. `.desktop` cuyo id o `StartupWMClass` coincide → su `Name` localizado (`foot` → «Foot», `org.wezfurlong.wezterm` → «WezTerm»).
 2. Sin `.desktop`, el último segmento con mayúscula inicial (`org.example.notes` → «Notes»).
-3. Sin app ni ventana, «MalaysiaDreams».
+3. Sin app ni ventana, «Malaysia».
 
 Va en negrita (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, con la sans de `vow-design` (Geist); el reloj en peso normal.
 
@@ -31,4 +31,4 @@ El compositor calcula el workspace como el output menos las zonas exclusivas de 
 
 ## Menú global
 
-La barra integra `MenuView`: sin ventana muestra ❄ · MalaysiaDreams · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; con ventana, ❄ · {App} · menús reales · Ventana · Ayuda. El menú real usa `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); si no hay, respaldo de `.desktop` (14c). GTK usa `gtk_shell1`/`org.gtk.Menus` (14f-1 registra; 14f-2 dibuja). Pendiente: 14b-2, 14f-2, teclado F10/Alt y desbordamiento.
+La barra integra `MenuView`: sin ventana muestra ❄ · Malaysia · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; con ventana, ❄ · {App} · menús reales · Ventana · Ayuda. El menú real usa `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); si no hay, respaldo de `.desktop` (14c). GTK usa `gtk_shell1`/`org.gtk.Menus` (14f-1 registra; 14f-2 dibuja). Pendiente: 14b-2, 14f-2, teclado F10/Alt y desbordamiento.

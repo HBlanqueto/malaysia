@@ -28,7 +28,7 @@ Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investig
 
 ## Otto y sus forks
 
-- No se usa `smithay-otto`: sus parches son Vulkan/Intel y MalaysiaDreams es GLES/AMD.
+- No se usa `smithay-otto`: sus parches son Vulkan/Intel y Malaysia es GLES/AMD.
 - De `layers` solo se toma el resorte; `laye-rs` no tiene licencia.
 - De `otto-kit` se portan estados y protocolos, no dibujo: bucle, key repeat, escala, menús, DBusMenu, portal, desktop entries, iconos y accesibilidad. Otto se lee para udev/input, fractional scale, PAM/lock, xdg-activation y appmenu; render, planos, backdrop y screencopy no se portan.
 - Si se copia una línea MIT, el aviso entra en `NOTICE` en el mismo commit; el ADR 0034 dejó BarrierKit sobre Freya.
@@ -54,7 +54,7 @@ Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investig
 ## Portapapeles de capturas
 
 - Wayland usa *pull*: el dueño publica MIME types y el compositor entrega un fd por pega; la selección sigue el foco.
-- MalaysiaDreams es dueño de la captura: PNG en `image/png`, sin fichero si `target = "clipboard"`; default Escritorio.
+- Malaysia es dueño de la captura: PNG en `image/png`, sin fichero si `target = "clipboard"`; default Escritorio.
 - De GNOME se toma que el compositor sea el dueño; de macOS, el destino configurable y `Control` (pendiente). La escritura al fd va en un hilo; no hay gestor de portapapeles. `freya-clipboard` sigue arrastrando SCTK/calloop duplicados; el reemplazo vive en barrierkit.
 
 Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investigacion/portapapeles-capturas.md`
@@ -69,7 +69,7 @@ Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investig
 ## ChromaLeon y los acentos
 
 - Se toma el ajuste de luminosidad HSL `L` para contraste WCAG y subir saturación si el acento queda plano.
-- No se toma el primer píxel como representante ni su detección de grises; MalaysiaDreams usa histograma ponderado por croma y vecindario 3×3×3.
+- No se toma el primer píxel como representante ni su detección de grises; Malaysia usa histograma ponderado por croma y vecindario 3×3×3.
 
 Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investigacion/chromaleon.md`
 

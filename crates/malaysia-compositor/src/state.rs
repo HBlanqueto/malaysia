@@ -878,7 +878,7 @@ fn winit_output(size: Size<i32, Physical>) -> Output {
         PhysicalProperties {
             size: (0, 0).into(),
             subpixel: Subpixel::Unknown,
-            make: "MalaysiaDreams".to_string(),
+            make: "Malaysia".to_string(),
             model: "Winit".to_string(),
             serial_number: String::new(),
         },

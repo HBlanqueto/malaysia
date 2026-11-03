@@ -1,6 +1,6 @@
 [package]
 name = "malaysia-wallpaper"
-description = "MalaysiaDreams desktop wallpaper drawn with wgpu on Vulkan."
+description = "Malaysia desktop wallpaper drawn with wgpu on Vulkan."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

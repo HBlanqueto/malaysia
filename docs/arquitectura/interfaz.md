@@ -1,4 +1,4 @@
-# La interfaz de MalaysiaDreams
+# La interfaz de Malaysia
 
 Mapa de lo visual y de interacción; el detalle vive en cada documento.
 

@@ -3,7 +3,7 @@
 use crate::logging::LogLevel;
 
 pub const USAGE: &str = "\
-MalaysiaDreams - a Wayland compositor
+Malaysia Compositor - the Wayland compositor of the Malaysia desktop
 
 Usage:
     malaysia-compositor [OPTIONS]

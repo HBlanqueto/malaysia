@@ -49,7 +49,7 @@ index 0000000..ff29688
 + */
 +
 +/*
-+ * Live appearance from the settings portal (MalaysiaDreams).
++ * Live appearance from the settings portal (Malaysia).
 + *
 + * The standard `org.freedesktop.appearance` namespace only carries the
 + * colour scheme and an accent that libadwaita rounds to one of its presets.

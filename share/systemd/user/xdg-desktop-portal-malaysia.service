@@ -8,7 +8,7 @@
 # Installed by the flake with the `@out@` placeholder replaced by the store
 # path of the package.
 [Unit]
-Description=MalaysiaDreams portal backend and GTK bridge
+Description=Malaysia portal backend and GTK bridge
 PartOf=malaysia-session.target
 After=malaysia-session.target
 

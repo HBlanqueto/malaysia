@@ -727,7 +727,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                 .cross_align(Alignment::Center)
                 .spacing(ABOUT_FOOTER_GAP)
                 .margin(Gaps::new(0.0, 0.0, ABOUT_GAP, 0.0))
-                .child(footer("™ y © 2026 MalaysiaDreams"))
+                .child(footer("™ y © 2026 Malaysia"))
                 .child(footer("Todos los derechos reservados.")),
         )
 }

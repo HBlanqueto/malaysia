@@ -803,7 +803,7 @@ demo() {
     sleep 0.5
     if [ -z "${_demo_apps+set}" ]; then
         if command -v foot >/dev/null 2>&1; then
-            demo_client foot-1 foot -T "MalaysiaDreams"
+            demo_client foot-1 foot -T "Malaysia"
             demo_client foot-2 foot -T "Segunda ventana"
         elif command -v wezterm >/dev/null 2>&1; then
             demo_client wezterm wezterm start
@@ -1005,7 +1005,7 @@ lab() {
     sleep 0.5
 
     if command -v foot >/dev/null 2>&1; then
-        lab_client foot-1 foot -T "MalaysiaDreams"
+        lab_client foot-1 foot -T "Malaysia"
         lab_client foot-2 foot -T "Segunda ventana"
     elif command -v wezterm >/dev/null 2>&1; then
         lab_client wezterm wezterm start
@@ -1080,7 +1080,7 @@ lab session running. Manual checklist:
     3) Resize Tengen App Show and Ondina from 4 corners and 4 edges:
        no jumps, buttons keep responding; Ondina changes layout at 900 and 620.
     4) Resize foot with another window behind it: the back window does not focus.
-    5) Nautilus must NOT have the MalaysiaDreams titlebar; kate MUST have it.
+    5) Nautilus must NOT have the Malaysia titlebar; kate MUST have it.
     6) Help > type "oc": no other menu opens; Down reveals Foot.
     7) Many results ("s"): list scrolls inside the screen.
     8) Minimize, move and restore: returns where it was.

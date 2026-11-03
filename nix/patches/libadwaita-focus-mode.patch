@@ -53,7 +53,7 @@ index 0000000..3be3ba2
 +/*
 + * Focus mode for compositors that offer `infinity_focus_manager_v1`.
 + *
-+ * In MalaysiaDreams, maximizing a window gives it a space of its own and the
++ * In Malaysia, maximizing a window gives it a space of its own and the
 + * xdg fullscreen state (focus mode). Moving the pointer to the top edge
 + * brings the bar down and the compositor moves a client-decorated window
 + * down by the bar's height; `infinity_focus_surface_v1.bar` tells the client
@@ -64,7 +64,7 @@ index 0000000..3be3ba2
 + * the bar is down. Leaving fullscreen shows them again.
 + *
 + * With version 2 of the global the window asks for an overlaid titlebar
-+ * (`set_overlay`, MalaysiaDreams ADR 0054): the compositor no longer moves
++ * (`set_overlay`, Malaysia ADR 0054): the compositor no longer moves
 + * the window for the bar. The taken views then extend their content to the
 + * top edge for the whole fullscreen, and their top bars come in over the
 + * content, opaque, right below the bar (`bar_height`). With version 1 the
@@ -724,7 +724,7 @@ index 848fa0a..f735e3d 100644
    int top_bar_height;
    int bottom_bar_height;
 +
-+  /* MalaysiaDreams focus mode (adw-focus-mode.c): the top bars go over the
++  /* Malaysia focus mode (adw-focus-mode.c): the top bars go over the
 +   * content, this far from the top edge; -1 when off */
 +  int focus_overlay;
  };
@@ -936,7 +936,7 @@ index 1a6a63f..7787e5f 100644
    ]
  endif
  
-+# MalaysiaDreams focus mode (adw-focus-mode.c): infinity_focus_v1 client code
++# Malaysia focus mode (adw-focus-mode.c): infinity_focus_v1 client code
 +# for GTK's Wayland backend. Without it the module builds as a no-op.
 +gtk_wayland_dep = dependency('gtk4-wayland', version: gtk_min_version, required: false)
 +wayland_client_dep = dependency('wayland-client', required: false)
@@ -973,14 +973,14 @@ index 0000000..3cb8b7e
 @@ -0,0 +1,106 @@
 +<?xml version="1.0" encoding="UTF-8"?>
 +<!--
-+  Copied verbatim (below this comment) from MalaysiaDreams' barrierkit:
++  Copied verbatim (below this comment) from Malaysia' barrierkit:
 +  https://github.com/HBlanqueto/barrierkit, file
 +  crates/infinity-protocol/protocols/infinity-focus-v1.xml, revision 3841a09.
 +  It is MIT-licensed (notice in <copyright>); keep both copies in step.
 +-->
 +<protocol name="infinity_focus_v1">
 +  <copyright>
-+    Copyright © 2026 MalaysiaDreams contributors
++    Copyright © 2026 Malaysia contributors
 +
 +    Permission is hereby granted, free of charge, to any person obtaining a
 +    copy of this software and associated documentation files (the "Software"),
@@ -1004,7 +1004,7 @@ index 0000000..3cb8b7e
 +
 +  <interface name="infinity_focus_manager_v1" version="2">
 +    <description summary="focus mode notices for applications">
-+      MalaysiaDreams focus mode (ADR 0051): a maximized window gets a space of
++      Malaysia focus mode (ADR 0051): a maximized window gets a space of
 +      its own and the xdg fullscreen state. In that space, the pointer at the
 +      top edge brings the bar down over the window.
 +
@@ -1016,7 +1016,7 @@ index 0000000..3cb8b7e
 +      client-decorated window down by the bar's height while the bar is down,
 +      so its own titlebar stays visible under it. With set_overlay (version
 +      2) the window stays put and the client draws its titlebar over its
-+      content, below the bar (MalaysiaDreams ADR 0054).
++      content, below the bar (Malaysia ADR 0054).
 +    </description>
 +
 +    <request name="destroy" type="destructor">

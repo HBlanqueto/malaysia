@@ -18,13 +18,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
-        items::action(
-            "malaysia-about",
-            "Acerca de MalaysiaDreams",
-            None,
-            false,
-            None,
-        ),
+        items::action("malaysia-about", "Acerca de Malaysia", None, false, None),
         items::separator(),
         items::action(
             "malaysia-settings",
@@ -493,7 +487,7 @@ pub fn help_menu_items() -> Vec<MenuItem> {
         MenuItem::SearchField {
             placeholder: "Buscar".to_string(),
         },
-        help_topic_item("Documentación de MalaysiaDreams", icons::BOOK),
+        help_topic_item("Documentación de Malaysia", icons::BOOK),
         help_topic_item("Atajos de teclado", icons::KEYBOARD),
         items::separator(),
         items::action("help-report", "Informar de un problema…", None, true, None),
@@ -765,7 +759,7 @@ mod tests {
         assert_eq!(
             labels_with_separators(&malaysia_menu_items(&[])),
             vec![
-                "Acerca de MalaysiaDreams",
+                "Acerca de Malaysia",
                 "—",
                 "Ajustes…",
                 "—",
@@ -937,7 +931,7 @@ mod tests {
             labels_with_separators(&help_menu_items()),
             vec![
                 "Buscar",
-                "Documentación de MalaysiaDreams",
+                "Documentación de Malaysia",
                 "Atajos de teclado",
                 "—",
                 "Informar de un problema…",
@@ -983,7 +977,7 @@ mod tests {
         );
         assert_eq!(
             top_level_icon_labels(&help_menu_items()),
-            vec!["Documentación de MalaysiaDreams", "Atajos de teclado"]
+            vec!["Documentación de Malaysia", "Atajos de teclado"]
         );
     }
 
@@ -1183,7 +1177,7 @@ mod tests {
         let items = help_menu_items();
         let docs = items
             .iter()
-            .find(|item| label(item) == Some("Documentación de MalaysiaDreams"))
+            .find(|item| label(item) == Some("Documentación de Malaysia"))
             .expect("missing docs item");
         let shortcuts = items
             .iter()
@@ -1195,7 +1189,7 @@ mod tests {
 
         let docs_url = help_topics::topics()
             .iter()
-            .find(|topic| topic.title == "Documentación de MalaysiaDreams")
+            .find(|topic| topic.title == "Documentación de Malaysia")
             .map(|topic| topic.url)
             .expect("docs topic missing");
         let shortcuts_url = help_topics::topics()
@@ -1272,7 +1266,7 @@ mod tests {
         let topics = focused::help_search_topics();
         let docs = topics
             .iter()
-            .find(|entry| label(&entry.item) == Some("Documentación de MalaysiaDreams"))
+            .find(|entry| label(&entry.item) == Some("Documentación de Malaysia"))
             .expect("docs topic missing");
         assert_eq!(docs.path, "Temas de ayuda");
         assert!(matches!(docs.source, SearchSource::Help));

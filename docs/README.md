@@ -1,4 +1,4 @@
-# Documentación de MalaysiaDreams
+# Documentación de Malaysia
 
 Índice. El estado vive en [`roadmap.md`](roadmap.md); el porqué, en los ADR;
 los hallazgos abiertos, en [`deuda.md`](deuda.md).
