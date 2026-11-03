@@ -13,6 +13,7 @@ docs/
 ├── glossary.md          nombres del proyecto (BarrierKit, Grade, Infinity)
 ├── hardware.md          línea base de GPU/EGL de la máquina
 ├── investigacion.md     conclusiones macOS/GNOME/Otto
+├── auditoria-claude-2026-11-03.md  auditoría completa (código muerto, rendimiento, niri)
 ├── arquitectura/        cómo es la UI y el shell HOY
 │   ├── interfaz.md          mapa visual completo
 │   ├── modelo-de-procesos.md  procesos y reparto
