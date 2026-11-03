@@ -28,7 +28,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::output::{Output, WeakOutput};
-use smithay::utils::{Buffer as BufferCoords, Rectangle, Serial, Size};
+use smithay::utils::{Buffer as BufferCoords, Logical, Rectangle, Serial, Size};
 use malaysia_scene::scene::WindowId;
 use smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle;
 use smithay::wayland::image_capture_source::{
@@ -474,6 +474,30 @@ impl SeatHandler for State {
         self.request_redraw();
     }
 }
+
+impl smithay::wayland::input_method::InputMethodHandler for State {
+    fn new_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+        self.ime_popups.retain(|popup| popup.alive());
+        self.ime_popups.push(surface);
+        self.request_redraw();
+    }
+
+    fn popup_repositioned(&mut self, _surface: smithay::wayland::input_method::PopupSurface) {
+        self.request_redraw();
+    }
+
+    fn dismiss_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+        self.ime_popups
+            .retain(|popup| *popup != surface && popup.alive());
+        self.request_redraw();
+    }
+
+    fn parent_geometry(&self, parent: &WlSurface) -> Rectangle<i32, Logical> {
+        crate::window::window_geometry(parent).unwrap_or_default()
+    }
+}
+
+impl smithay::wayland::text_input::TextInputActivation for State {}
 
 impl SelectionHandler for State {
     type SelectionUserData = std::sync::Arc<[u8]>;

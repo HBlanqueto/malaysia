@@ -50,7 +50,10 @@ no en `ack_configure`; las ventanas se rastrean en `window.rs` sin
 
 Foco de teclado al mapear, keymap/repeat, hit-testing de puntero, `set_cursor` y
 serials centrales. **Hecho.** La escritura, el hover y los píxeles del cursor se
-verifican a mano. Prueba: `./dev.sh smoke`.
+verifican a mano. Prueba: `./dev.sh smoke`. `text-input-v3` e
+`input-method-v2` hechos sin aceptar: los popups del método de entrada salen
+bajo el cursor de texto, o encima si no caben. Prueba: `fcitx5` o `ibus` con
+una app GTK.
 
 ### 4 — Ventanas manipulables
 

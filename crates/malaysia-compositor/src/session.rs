@@ -763,6 +763,7 @@ pub(crate) fn build_output_elements(
             },
         );
         crate::popup_fade::append(state, Instant::now(), &mut elements);
+        append_ime_popups(state, renderer, scale, &mut elements);
         append_popups(state, renderer, scale, &mut elements, |_| true);
         if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
             && frame.server_decorated
@@ -1220,6 +1221,67 @@ struct Frame {
     exponent: f32,
     focused: bool,
     bordered: bool,
+}
+
+fn append_ime_popups(
+    state: &State,
+    renderer: &mut GlesRenderer,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
+    let output = Rectangle::from_size(state.logical_output_size());
+    for popup in state.ime_popups.iter().filter(|popup| popup.alive()) {
+        let Some(origin) = popup
+            .get_parent()
+            .and_then(|parent| state.windows.id_of(&parent.surface))
+            .and_then(|id| state.windows.iter().find(|window| window.id() == id))
+            .filter(|window| window.is_mapped())
+            .map(|window| window.location() + window.surface_location())
+        else {
+            continue;
+        };
+        let size = smithay::desktop::utils::bbox_from_surface_tree(
+            popup.wl_surface(),
+            Point::from((0, 0)),
+        )
+        .size;
+        let location = ime_popup_location(origin, popup.text_input_rectangle(), size, output);
+        popup.set_location(location - origin);
+        elements.extend(
+            render_elements_from_surface_tree::<
+                GlesRenderer,
+                WaylandSurfaceRenderElement<GlesRenderer>,
+            >(
+                renderer,
+                popup.wl_surface(),
+                physical_point(location, scale),
+                scale,
+                1.0,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(OutputRenderElement::from),
+        );
+    }
+}
+
+fn ime_popup_location(
+    surface_origin: Point<i32, Logical>,
+    cursor: Rectangle<i32, Logical>,
+    size: Size<i32, Logical>,
+    output: Rectangle<i32, Logical>,
+) -> Point<i32, Logical> {
+    let cursor_x = surface_origin.x + cursor.loc.x;
+    let cursor_y = surface_origin.y + cursor.loc.y;
+    let right = output.loc.x + output.size.w;
+    let x = (cursor_x.min(right - size.w)).max(output.loc.x);
+    let below = cursor_y + cursor.size.h;
+    let y = if below + size.h <= output.loc.y + output.size.h {
+        below
+    } else {
+        cursor_y - size.h
+    };
+    Point::from((x, y))
 }
 
 pub(crate) fn append_popups(
@@ -1736,6 +1798,9 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 send_frame_callbacks(surface, now);
             }
         }
+        for popup in &session.state.ime_popups {
+            send_frame_callbacks(popup.wl_surface(), now);
+        }
     }
     if let Err(error) = session.display.flush_clients() {
         tracing::warn!(%error, "failed to flush clients after a frame");
@@ -2001,6 +2066,9 @@ pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
             send_frame_callbacks(surface, time);
         }
     }
+    for popup in &state.ime_popups {
+        send_frame_callbacks(popup.wl_surface(), time);
+    }
 }
 
 pub(crate) fn send_presentation_feedbacks_for_state(
@@ -2178,6 +2246,28 @@ mod tests {
         fn source(&self) -> Option<&(dyn Error + 'static)> {
             Some(&self.0)
         }
+    }
+
+    #[test]
+    fn an_ime_popup_sits_below_the_text_cursor() {
+        let output = Rectangle::from_size(Size::from((1000, 800)));
+        let cursor = Rectangle::new(Point::from((40, 30)), Size::from((2, 20)));
+        let location = super::ime_popup_location(
+            Point::from((100, 100)),
+            cursor,
+            Size::from((200, 60)),
+            output,
+        );
+        assert_eq!(location, Point::from((140, 150)));
+    }
+
+    #[test]
+    fn an_ime_popup_flips_above_the_cursor_at_the_bottom_and_stays_inside_the_output() {
+        let output = Rectangle::from_size(Size::from((1000, 800)));
+        let cursor = Rectangle::new(Point::from((880, 700)), Size::from((2, 20)));
+        let location =
+            super::ime_popup_location(Point::from((50, 50)), cursor, Size::from((200, 60)), output);
+        assert_eq!(location, Point::from((800, 690)));
     }
 
     #[test]

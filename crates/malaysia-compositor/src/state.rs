@@ -104,6 +104,7 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub lock_state: SessionLockManagerState,
     pub locked: bool,
+    pub(crate) ime_popups: Vec<smithay::wayland::input_method::PopupSurface>,
     pub(crate) activity_noted: bool,
     pub(crate) clock: Clock<Monotonic>,
     pub(crate) lock_owner: Option<ExtSessionLockV1>,
@@ -273,6 +274,11 @@ impl State {
         CursorShapeManagerState::new::<Self>(display_handle);
         PointerConstraintsState::new::<Self>(display_handle);
         RelativePointerManagerState::new::<Self>(display_handle);
+        smithay::wayland::text_input::TextInputManagerState::new::<Self>(display_handle);
+        smithay::wayland::input_method::InputMethodManagerState::new::<Self, _>(
+            display_handle,
+            |_| true,
+        );
         let output_capture_source_state = OutputCaptureSourceState::new::<Self>(display_handle);
         let toplevel_capture_source_state = ToplevelCaptureSourceState::new::<Self>(display_handle);
         let image_copy_capture_state = ImageCopyCaptureState::new::<Self>(display_handle);
@@ -328,6 +334,7 @@ impl State {
             primary_selection_state,
             lock_state,
             locked: false,
+            ime_popups: Vec::new(),
             activity_noted: false,
             clock: Clock::new(),
             lock_owner: None,

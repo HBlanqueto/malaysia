@@ -540,7 +540,7 @@ Se conservan, porque se usan [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, el
 - Base: wl_compositor, subcompositor, shm, linux-dmabuf v5 y drm-syncobj.
 - Salidas y ventanas: xdg-output, xdg-shell, xdg-decoration, kde-server-decoration y layer-shell.
 - Presentación y escala: viewporter, fractional-scale y presentation-time (con el bug de §2).
-- Entrada: xdg-activation, cursor-shape, pointer-constraints y relative-pointer.
+- Entrada: xdg-activation, cursor-shape, pointer-constraints, relative-pointer, text-input-v3 e input-method-v2.
 - Captura: ext-image-capture-source y ext-image-copy-capture.
 - Selección: data-device (DnD sin icono) y primary-selection.
 - Sesión: ext-session-lock (con el bypass de §1), idle-inhibit e idle-notify.
@@ -553,7 +553,6 @@ Se conservan, porque se usan [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, el
 - Entrada:
   - tablet-v2: el handler existe, pero no hay global y los eventos se descartan en `input.rs:635`;
   - pointer-gestures;
-  - text-input-v3 e input-method-v2: sin IME para CJK;
   - virtual-keyboard y virtual-pointer;
   - keyboard-shortcuts-inhibit;
   - pointer-warp.
@@ -813,7 +812,8 @@ Commits que aplican esta auditoría, en orden:
 | `5b56fb8` | §10 | `deuda.md` al día. |
 | `41b0661` | §2.2 | Causa del lag tras `cfcf7c0`: todo commit encola el redibujado (abajo). |
 | `78c6a2e` | §2.2 (6) | Scanout en el plano primario para pantalla completa, plano de cursor y feedback dmabuf por superficie. `SKIP_CURSOR_ONLY_UPDATES` no se activa: sin VRR congela el cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri solo la usa con VRR). |
-| siguiente | §2.2 (6) | Planos overlay tras `debug.overlay_planes`, apagados por defecto. Smithay `023b78b1` no fija el `pixel blend mode`; en i915 quedan apagados (S-02). |
+| `4b5c35c` | §2.2 (6) | Planos overlay tras `debug.overlay_planes`, apagados por defecto. Smithay `023b78b1` no fija el `pixel blend mode`; en i915 quedan apagados (S-02). |
+| siguiente | §8.1 | `text-input-v3` e `input-method-v2`; popups del IME bajo el cursor de texto o encima si no caben. |
 
 ### Lag tras `cfcf7c0`
 

@@ -539,7 +539,7 @@ Kept, because they are used [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, the
 - Core: wl_compositor, subcompositor, shm, linux-dmabuf v5 and drm-syncobj.
 - Outputs and windows: xdg-output, xdg-shell, xdg-decoration, kde-server-decoration and layer-shell.
 - Presentation and scale: viewporter, fractional-scale and presentation-time (with the §2 bug).
-- Input: xdg-activation, cursor-shape, pointer-constraints and relative-pointer.
+- Input: xdg-activation, cursor-shape, pointer-constraints, relative-pointer, text-input-v3 and input-method-v2.
 - Capture: ext-image-capture-source and ext-image-copy-capture.
 - Selection: data-device (DnD without icon) and primary-selection.
 - Session: ext-session-lock (with the §1 bypass), idle-inhibit and idle-notify.
@@ -552,7 +552,6 @@ Kept, because they are used [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, the
 - Input:
   - tablet-v2: the handler exists, but there is no global and the events are dropped in `input.rs:635`;
   - pointer-gestures;
-  - text-input-v3 and input-method-v2: no IME for CJK;
   - virtual-keyboard and virtual-pointer;
   - keyboard-shortcuts-inhibit;
   - pointer-warp.
@@ -812,7 +811,8 @@ Commits that apply this audit, in order:
 | `5b56fb8` | §10 | `deuda.md` brought up to date. |
 | `41b0661` | §2.2 | Cause of the lag after `cfcf7c0`: every commit queues a redraw (below). |
 | `78c6a2e` | §2.2 (6) | Primary-plane scanout for fullscreen, cursor plane and per-surface dmabuf feedback. `SKIP_CURSOR_ONLY_UPDATES` stays off: without VRR it freezes the cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri only uses it with VRR). |
-| next | §2.2 (6) | Overlay planes behind `debug.overlay_planes`, off by default. Smithay `023b78b1` does not set the `pixel blend mode`; on i915 they stay off (S-02). |
+| `4b5c35c` | §2.2 (6) | Overlay planes behind `debug.overlay_planes`, off by default. Smithay `023b78b1` does not set the `pixel blend mode`; on i915 they stay off (S-02). |
+| next | §8.1 | `text-input-v3` and `input-method-v2`; IME popups below the text cursor, or above it when they do not fit. |
 
 ### Lag after `cfcf7c0`
 
