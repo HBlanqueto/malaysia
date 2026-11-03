@@ -2065,6 +2065,9 @@ impl State {
     fn drag(&mut self, grab: Grab, location: Point<f64, Logical>) {
         match grab {
             Grab::Move { window, offset } => {
+                let Some(offset) = self.unmaximize_on_drag(window, offset, location) else {
+                    return;
+                };
                 let target =
                     Point::from((round(location.x - offset.x), round(location.y - offset.y)));
                 self.windows.move_to(window, target);
@@ -2084,6 +2087,35 @@ impl State {
                 self.windows.resize(window, outer);
             }
         }
+    }
+
+    // A press on a maximized titlebar may be a click or a double click: restore only once it drags.
+    fn unmaximize_on_drag(
+        &mut self,
+        window: WindowId,
+        offset: ScenePoint<f64, malaysia_scene::geometry::Logical>,
+        location: Point<f64, Logical>,
+    ) -> Option<ScenePoint<f64, malaysia_scene::geometry::Logical>> {
+        if !self.maximized.contains_key(&window) {
+            return Some(offset);
+        }
+        let outer = self.windows.outer(window)?;
+        let press: ScenePoint<f64, malaysia_scene::geometry::Logical> =
+            ScenePoint::new(outer.x() + offset.x, outer.y() + offset.y);
+        if (location.x - press.x).hypot(location.y - press.y)
+            <= vow_design::TITLEBAR_DOUBLE_CLICK.slop
+        {
+            return None;
+        }
+        let saved = self.maximized.remove(&window)?;
+        let restored = restored_under_pointer(outer, saved, press.x);
+        self.windows
+            .set_maximized_with_outer(window, false, restored);
+        self.foreign_state_changed(window);
+        tracing::info!(window = window.get(), "window restored by a drag");
+        let offset = ScenePoint::new(press.x - restored.x(), offset.y);
+        self.grab = Some(Grab::Move { window, offset });
+        Some(offset)
     }
 
     fn update_edge_cursor(&mut self, location: Point<f64, Logical>) {
@@ -2170,6 +2202,19 @@ fn maximize_target_rect(
             SceneSize::new(f64::from(size.w), f64::from(size.h)),
         )
     }
+}
+
+// The pointer keeps its share of the titlebar width, as in macOS and GNOME.
+fn restored_under_pointer(
+    maximized: SceneRect<f64, malaysia_scene::geometry::Logical>,
+    saved: SceneRect<f64, malaysia_scene::geometry::Logical>,
+    pointer_x: f64,
+) -> SceneRect<f64, malaysia_scene::geometry::Logical> {
+    let share = (pointer_x - maximized.x()) / maximized.width();
+    SceneRect::new(
+        ScenePoint::new(pointer_x - saved.width() * share, maximized.y()),
+        saved.size(),
+    )
 }
 
 fn pointer_focus_blocked(
@@ -3006,6 +3051,19 @@ mod tests {
         assert_eq!(target.y(), 0.0);
         assert_eq!(target.width(), 760.0);
         assert_eq!(target.height(), 1052.0);
+    }
+
+    #[test]
+    fn a_dragged_maximized_window_regains_its_size_under_the_pointer() {
+        use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
+
+        let maximized = SceneRect::new(ScenePoint::new(0.0, 28.0), SceneSize::new(1920.0, 1052.0));
+        let saved = SceneRect::new(ScenePoint::new(300.0, 100.0), SceneSize::new(800.0, 600.0));
+        let restored = super::restored_under_pointer(maximized, saved, 1440.0);
+        assert_eq!(restored.width(), 800.0);
+        assert_eq!(restored.height(), 600.0);
+        assert_eq!(restored.x(), 1440.0 - 600.0);
+        assert_eq!(restored.y(), 28.0);
     }
 
     #[test]
