@@ -27,6 +27,7 @@ mod spawn;
 mod state;
 mod theme_fade;
 pub mod udev;
+mod virtual_input;
 mod window;
 mod xdg;
 mod xwayland;

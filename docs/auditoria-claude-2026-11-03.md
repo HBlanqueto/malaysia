@@ -540,7 +540,7 @@ Se conservan, porque se usan [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, el
 - Base: wl_compositor, subcompositor, shm, linux-dmabuf v5 y drm-syncobj.
 - Salidas y ventanas: xdg-output, xdg-shell, xdg-decoration, kde-server-decoration y layer-shell.
 - Presentación y escala: viewporter, fractional-scale y presentation-time (con el bug de §2).
-- Entrada: xdg-activation, cursor-shape, pointer-constraints, relative-pointer, text-input-v3 e input-method-v2.
+- Entrada: xdg-activation, cursor-shape, pointer-constraints, relative-pointer, text-input-v3, input-method-v2, virtual-keyboard y virtual-pointer.
 - Captura: ext-image-capture-source y ext-image-copy-capture.
 - Selección: data-device (DnD sin icono) y primary-selection.
 - Sesión: ext-session-lock (con el bypass de §1), idle-inhibit e idle-notify.
@@ -553,7 +553,6 @@ Se conservan, porque se usan [V]: `protocols/gtk-shell.xml`, `nix/patches/*`, el
 - Entrada:
   - tablet-v2: el handler existe, pero no hay global y los eventos se descartan en `input.rs:635`;
   - pointer-gestures;
-  - virtual-keyboard y virtual-pointer;
   - keyboard-shortcuts-inhibit;
   - pointer-warp.
 - Seguridad: security-context.
@@ -813,7 +812,8 @@ Commits que aplican esta auditoría, en orden:
 | `41b0661` | §2.2 | Causa del lag tras `cfcf7c0`: todo commit encola el redibujado (abajo). |
 | `78c6a2e` | §2.2 (6) | Scanout en el plano primario para pantalla completa, plano de cursor y feedback dmabuf por superficie. `SKIP_CURSOR_ONLY_UPDATES` no se activa: sin VRR congela el cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri solo la usa con VRR). |
 | `4b5c35c` | §2.2 (6) | Planos overlay tras `debug.overlay_planes`, apagados por defecto. Smithay `023b78b1` no fija el `pixel blend mode`; en i915 quedan apagados (S-02). |
-| siguiente | §8.1 | `text-input-v3` e `input-method-v2`; popups del IME bajo el cursor de texto o encima si no caben. |
+| `31c4dd0` | §8.1 | `text-input-v3` e `input-method-v2`; popups del IME bajo el cursor de texto o encima si no caben. |
+| siguiente | §8.1, §1.1 | `virtual-keyboard` y `virtual-pointer` (rediseño de Smithay `7454d68a`, `2bf8be86`, `9786228e`), solo para clientes de confianza (S-03). |
 
 ### Lag tras `cfcf7c0`
 

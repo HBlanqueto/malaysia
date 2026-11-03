@@ -542,10 +542,20 @@ fn clamp_pointer(
 }
 
 impl State {
-    pub(crate) fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+    pub(crate) fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>)
+    where
+        I::Device: 'static,
+    {
         self.note_idle_activity();
         match event {
             InputEvent::Keyboard { event, .. } => {
+                let device = event.device();
+                let physical = (&device as &dyn std::any::Any)
+                    .downcast_ref::<smithay::wayland::virtual_keyboard::VirtualKeyboardDevice>()
+                    .is_none();
+                if physical {
+                    self.restore_configured_keymap();
+                }
                 self.keyboard_key(event.key_code(), event.state(), event.time());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {

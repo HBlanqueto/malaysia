@@ -53,7 +53,10 @@ serials centrales. **Hecho.** La escritura, el hover y los píxeles del cursor s
 verifican a mano. Prueba: `./dev.sh smoke`. `text-input-v3` e
 `input-method-v2` hechos sin aceptar: los popups del método de entrada salen
 bajo el cursor de texto, o encima si no caben. Prueba: `fcitx5` o `ibus` con
-una app GTK.
+una app GTK. `virtual-keyboard` y `virtual-pointer` hechos sin aceptar, solo
+para la shell de confianza (como infinity); sus eventos pasan por el mismo
+camino que libinput, con atajos, lock e idle. Prueba: un probe de la shell que
+escriba en un `foot` enfocado.
 
 ### 4 — Ventanas manipulables
 

@@ -104,6 +104,11 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub lock_state: SessionLockManagerState,
     pub locked: bool,
+    pub(crate) keymap: crate::keymap::Keymap,
+    pub(crate) virtual_keymap: Option<(
+        smithay::wayland::virtual_keyboard::VirtualKeyboardDevice,
+        std::sync::Arc<str>,
+    )>,
     pub(crate) ime_popups: Vec<smithay::wayland::input_method::PopupSurface>,
     pub(crate) activity_noted: bool,
     pub(crate) clock: Clock<Monotonic>,
@@ -292,6 +297,14 @@ impl State {
         let mut seat = seat_state.new_wl_seat(display_handle, "malaysia-compositor");
         let keymap = crate::keymap::system();
         seat.add_keyboard(keymap.xkb_config(), 200, 25)?;
+        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(
+            display_handle,
+            crate::virtual_input::trusted,
+        );
+        smithay::wayland::virtual_pointer::VirtualPointerManagerState::new::<Self, _>(
+            display_handle,
+            crate::virtual_input::trusted,
+        );
         let _ = seat.add_pointer();
 
         let _ = output.create_global::<Self>(display_handle);
@@ -334,6 +347,8 @@ impl State {
             primary_selection_state,
             lock_state,
             locked: false,
+            keymap,
+            virtual_keymap: None,
             ime_popups: Vec::new(),
             activity_noted: false,
             clock: Clock::new(),
