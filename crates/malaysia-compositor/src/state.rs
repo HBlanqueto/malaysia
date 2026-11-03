@@ -29,7 +29,7 @@ use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::image_capture_source::{
     OutputCaptureSourceState, ToplevelCaptureSourceState,
 };
-use smithay::wayland::image_copy_capture::{ImageCopyCaptureState, Session};
+use smithay::wayland::image_copy_capture::{ImageCopyCaptureHandler, ImageCopyCaptureState, Session};
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
@@ -88,7 +88,7 @@ pub struct State {
     pub(crate) output_capture_source_state: OutputCaptureSourceState,
     pub(crate) toplevel_capture_source_state: ToplevelCaptureSourceState,
     pub(crate) image_copy_capture_state: ImageCopyCaptureState,
-    capture_sessions: Vec<Session>,
+    pub(crate) capture_sessions: Vec<Session>,
     pub(crate) pending_captures: Vec<crate::capture::PendingCapture>,
     pub(crate) capture_dma: Option<crate::capture::CaptureDma>,
     capture_dma_checked: bool,
@@ -432,8 +432,14 @@ impl State {
         self.capture_dma = crate::capture::dmabuf_constraints(renderer);
     }
 
-    pub(crate) fn push_capture_session(&mut self, session: Session) {
-        self.capture_sessions.push(session);
+    pub(crate) fn refresh_capture_constraints(&mut self) {
+        let sessions = std::mem::take(&mut self.capture_sessions);
+        for session in &sessions {
+            if let Some(constraints) = self.capture_constraints(&session.source()) {
+                session.update_constraints(constraints);
+            }
+        }
+        self.capture_sessions = sessions;
     }
 
     pub(crate) fn request_screenshot(&mut self, request: ScreenshotRequest) {

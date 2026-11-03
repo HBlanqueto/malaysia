@@ -328,7 +328,11 @@ impl ImageCopyCaptureHandler for State {
         if let Some(constraints) = self.capture_constraints(&session.source()) {
             session.update_constraints(constraints);
         }
-        self.push_capture_session(session);
+        self.capture_sessions.push(session);
+    }
+
+    fn session_destroyed(&mut self, session: SessionRef) {
+        self.capture_sessions.retain(|known| *known != session);
     }
 
     fn frame(&mut self, session: &SessionRef, frame: Frame) {

@@ -485,6 +485,7 @@ fn handle_event(event: WinitEvent, session: &mut Session) {
                 size,
                 session.state.scale.fractional_scale(),
             ));
+            session.state.refresh_capture_constraints();
             session.backend.window().request_redraw();
         }
         WinitEvent::CloseRequested => {
