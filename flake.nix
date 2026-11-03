@@ -7,6 +7,7 @@
     barrierkit = {
       url = "github:HBlanqueto/barrierkit/112632b";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.crane.follows = "crane";
     };
   };
 
@@ -65,8 +66,6 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=610f852#610f852606d7dc50fa9a7d24faeb202fc1304fcd" =
-              "sha256-9QJh5GJ3GSjCy7AS7p72EE2sOku/+Wa0vE5MOL6ltvU=";
           };
 
           env = {
