@@ -329,6 +329,16 @@ Concepto y plan en el ADR 0051.
   `./dev.sh demo`, modo foco con una app de barrierkit y con
   gnome-calculator; puntero arriba: la titlebar aparece bajo la barra negra
   y el contenido no se mueve ni pierde la parte de abajo.
+- **17h — Barras de pantalla completa y Rail en foco. Hecho (2026-11-03),
+  sin aceptar en sesión.** barrierkit `f7362c9` (ADR 0054, «Cambios
+  posteriores»): la titlebar superpuesta se dibuja lisa (por defecto) o con
+  vidrio que difumina lo de debajo; `fullscreen_push` baja el contenido en vez
+  de taparlo; las dos opciones cambian en vivo. Con el Rail la titlebar se
+  queda en su sitio, solo entra el rail desde la izquierda y la primera fila
+  de la barra lateral sube a la fila de la titlebar. Prueba: `./dev.sh demo`,
+  Tengen App Show en foco; en Ventana › Pantalla completa, cada barra y el
+  empuje con el puntero arriba; en Ventana › Titlebar, Rail normal y
+  unificado: nada baja con la barra y el rail entra por la izquierda.
 - **14f-3 — Menú global para apps libadwaita.** Implementado: parche
   `nix/patches/libadwaita-global-menu.patch`, paquete
   `packages.<system>.libadwaita-global-menu` y opción de NixOS

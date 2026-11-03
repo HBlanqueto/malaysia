@@ -62,3 +62,22 @@ contenido, como ya hace aquí la titlebar Tengen de una app SSD.
   cosa; el compositor la envía.
 - **`top-bar-style = raised` y `extend-content-to-top-edge` públicos:**
   notifican a la app y pisan valores que la app puede vigilar.
+
+## Cambios posteriores
+
+Cambios en barrierkit desde que se aceptó este ADR. El detalle de cada caso está
+en el [capítulo 7 de su documentación](https://github.com/HBlanqueto/barrierkit/blob/main/docs/barrierkit/07-titlebars.md#maximizada-pantalla-completa-y-modo-foco).
+
+- **Barra de pantalla completa** (`FullscreenBar`, ADR 0057 de barrierkit): la
+  titlebar superpuesta se dibuja lisa (`Solid`, por defecto) o con vidrio que
+  difumina lo de debajo (`Glass`, `ProgressiveGlass`).
+- **Empujar el contenido** (`WindowOptions::fullscreen_push`, `4de4079`): con
+  la barra bajada, el contenido baja lo que miden la barra y la titlebar en vez
+  de quedar tapado. Se combina con cualquier `FullscreenBar`.
+- **En vivo** (`d07d84e`): la barra y el empuje son estados de
+  `WindowControls`; la app los cambia sin reabrir la ventana.
+- **Rail** (`bcc1ecd`): con `TitlebarLayout::Rail` la titlebar superior no
+  sale del layout ni se superpone, y nada baja con la barra. Solo el rail entra
+  desde la izquierda, con sus semáforos bajo la barra.
+- **Vistas previas** (`d07d84e`): una `Titlebar::preview` dentro del contenido
+  no lee el estado de la ventana, así que no se superpone en pantalla completa.
