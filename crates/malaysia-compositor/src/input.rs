@@ -1049,6 +1049,9 @@ impl State {
     }
 
     fn log_focus_stack(&self, focused: Option<WindowId>) {
+        if !tracing::enabled!(tracing::Level::DEBUG) {
+            return;
+        }
         let mut lines = Vec::new();
         for window in self.windows.iter() {
             let id = window.id();
@@ -1063,7 +1066,7 @@ impl State {
                 focused == Some(id),
             ));
         }
-        tracing::info!(focused = ?focused, "focus stack (back-to-front):\n{}", lines.join("\n"));
+        tracing::debug!(focused = ?focused, "focus stack (back-to-front):\n{}", lines.join("\n"));
     }
 
     pub(crate) fn focus_window(&mut self, id: WindowId) {
@@ -1530,6 +1533,8 @@ impl State {
         self.foreign_window_destroyed(id);
         self.space_window_removed(id);
         self.maximized.remove(&id);
+        self.arranged.remove(&id);
+        self.minimized.remove(&id);
         self.chrome.remove(id);
         if self.grab.map(Grab::window) == Some(id) {
             self.grab = None;
