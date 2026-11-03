@@ -423,6 +423,14 @@ impl State {
         std::mem::take(&mut self.needs_redraw)
     }
 
+    pub(crate) fn animating(&self, now: Instant) -> bool {
+        self.space_slide.is_some()
+            || self.focus_transition.is_some()
+            || !self.popup_fades.is_empty()
+            || self.focus_reveal.animating(now)
+            || self.theme_fade.is_some()
+    }
+
     pub(crate) fn init_capture_dma(
         &mut self,
         renderer: &smithay::backend::renderer::gles::GlesRenderer,

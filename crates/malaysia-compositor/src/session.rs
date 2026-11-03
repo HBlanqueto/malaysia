@@ -1616,11 +1616,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         drop(result);
         let mut request_redraw = false;
         let now = Instant::now();
-        if session.state.space_slide.is_some()
-            || session.state.focus_transition.is_some()
-            || !session.state.popup_fades.is_empty()
-            || session.state.focus_reveal.animating(now)
-        {
+        if session.state.animating(now) {
             request_redraw = true;
         }
         if let Some(fade) = session.state.theme_fade.as_mut() {
@@ -1664,7 +1660,9 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 Timer::from_duration(delay),
                 |_, _, session: &mut Session| {
                     session.repaint_timer = None;
-                    session.backend.window().request_redraw();
+                    if session.state.animating(Instant::now()) {
+                        session.backend.window().request_redraw();
+                    }
                     TimeoutAction::Drop
                 },
             ) {

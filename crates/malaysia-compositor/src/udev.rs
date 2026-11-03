@@ -64,6 +64,8 @@ struct Udev {
     output: Output,
     active: bool,
     repaint_timer: Option<RegistrationToken>,
+    waiting_for_vblank: bool,
+    redraw_queued: bool,
     loop_signal: LoopSignal,
     capture_requested: bool,
     vblank_count: u64,
@@ -253,6 +255,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
         output,
         active: true,
         repaint_timer: None,
+        waiting_for_vblank: false,
+        redraw_queued: false,
         loop_signal: loop_signal.clone(),
         capture_requested: false,
         vblank_count: 0,
@@ -291,7 +295,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     }
                     data.state.refresh_theme();
                     if data.state.take_redraw_request() {
-                        data.render();
+                        data.queue_redraw();
                     }
                 }
                 Ok(PostAction::Continue)
@@ -358,6 +362,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     }
                     data.compositor.reset_buffers();
                     data.active = true;
+                    data.waiting_for_vblank = false;
                     data.render();
                 }
             },
@@ -402,7 +407,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                 Signal::SIGUSR1 => {
                     info!("SIGUSR1: debug capture requested");
                     data.capture_requested = true;
-                    data.render();
+                    data.queue_redraw();
                 }
                 Signal::SIGTERM | Signal::SIGINT => {
                     info!("shutdown signal received");
@@ -424,7 +429,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
             |_, _, data: &mut Udev| {
                 data.dispatch_clients();
                 if data.state.take_redraw_request() {
-                    data.render();
+                    data.queue_redraw();
                 }
                 Ok(PostAction::Continue)
             },
@@ -539,6 +544,20 @@ impl Udev {
             warn!(%error, "switching to VT {vt}");
         }
         if self.state.take_redraw_request() {
+            self.queue_redraw();
+        }
+    }
+
+    fn queue_redraw(&mut self) {
+        if self.waiting_for_vblank || self.repaint_timer.is_some() {
+            self.redraw_queued = true;
+        } else {
+            self.render();
+        }
+    }
+
+    fn redraw_if_needed(&mut self) {
+        if std::mem::take(&mut self.redraw_queued) || self.state.animating(Instant::now()) {
             self.render();
         }
     }
@@ -548,9 +567,7 @@ impl Udev {
             return;
         }
         self.vblank_count += 1;
-        if self.vblank_count <= 5 || self.vblank_count.is_multiple_of(120) {
-            info!(count = self.vblank_count, "vblank");
-        }
+        self.waiting_for_vblank = false;
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
@@ -565,13 +582,14 @@ impl Udev {
             true,
         );
         crate::session::send_frame_callbacks_for_state(&self.state, time);
-        self.render();
+        self.redraw_if_needed();
     }
 
     fn render(&mut self) {
         if !self.active {
             return;
         }
+        self.redraw_queued = false;
         let elements = crate::session::build_output_elements(
             &mut self.state,
             &mut self.renderer,
@@ -682,13 +700,16 @@ impl Udev {
                 if !result.is_empty {
                     self.frames_queued += 1;
                     self.frame_was_empty = false;
-                    info!(
+                    tracing::trace!(
                         frames_queued = self.frames_queued,
                         "frame queued with damage"
                     );
-                    if let Err(error) = self.compositor.queue_frame(()) {
-                        warn!(%error, "queueing a frame");
-                        self.schedule_repaint();
+                    match self.compositor.queue_frame(()) {
+                        Ok(()) => self.waiting_for_vblank = true,
+                        Err(error) => {
+                            warn!(%error, "queueing a frame");
+                            self.schedule_repaint();
+                        }
                     }
                 } else {
                     if !self.frame_was_empty {
@@ -713,7 +734,7 @@ impl Udev {
                             Timer::from_duration(delay),
                             |_, _, data: &mut Udev| {
                                 data.repaint_timer = None;
-                                data.render();
+                                data.redraw_if_needed();
                                 TimeoutAction::Drop
                             },
                         ) {
@@ -748,14 +769,15 @@ impl Udev {
             .max(1) as u64;
         let delay = Duration::from_micros(1_000_000 / refresh);
         let timer = Timer::from_duration(delay);
-        if let Err(error) = self
+        match self
             .loop_handle
             .insert_source(timer, |_, _, data: &mut Udev| {
+                data.repaint_timer = None;
                 data.render();
                 TimeoutAction::Drop
-            })
-        {
-            warn!(%error, "scheduling a repaint");
+            }) {
+            Ok(token) => self.repaint_timer = Some(token),
+            Err(error) => warn!(%error, "scheduling a repaint"),
         }
     }
 }
@@ -892,7 +914,7 @@ impl crate::idle::IdleHost for Udev {
     }
 
     fn request_redraw(&mut self) {
-        self.schedule_repaint();
+        self.queue_redraw();
     }
 }
 
