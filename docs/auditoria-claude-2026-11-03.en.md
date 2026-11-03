@@ -812,7 +812,7 @@ Commits that apply this audit, in order:
 | `78c6a2e` | §2.2 (6) | Primary-plane scanout for fullscreen, cursor plane and per-surface dmabuf feedback. `SKIP_CURSOR_ONLY_UPDATES` stays off: without VRR it freezes the cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri only uses it with VRR). |
 | `4b5c35c` | §2.2 (6) | Overlay planes behind `debug.overlay_planes`, off by default. Smithay `023b78b1` does not set the `pixel blend mode`; on i915 they stay off (S-02). |
 | `31c4dd0` | §8.1 | `text-input-v3` and `input-method-v2`; IME popups below the text cursor, or above it when they do not fit. |
-| next | §8.1, §1.1 | `virtual-keyboard` and `virtual-pointer` (Smithay redesign `7454d68a`, `2bf8be86`, `9786228e`), trusted clients only (S-03). |
+| `338da33` | §8.1, §1.1 | `virtual-keyboard` and `virtual-pointer` (Smithay redesign `7454d68a`, `2bf8be86`, `9786228e`), trusted clients only (S-03). |
 
 ### Lag after `cfcf7c0`
 
