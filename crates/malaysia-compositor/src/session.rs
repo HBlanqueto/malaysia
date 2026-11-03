@@ -80,7 +80,6 @@ pub(crate) struct Session {
     backend: WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: OutputDamageTracker,
     cursor: Cursors,
-    start_time: Instant,
     track_objects: bool,
     last_objects: LiveObjects,
     capture_requested: bool,
@@ -243,7 +242,6 @@ pub fn run() -> Result<(), SessionError> {
         backend,
         damage_tracker,
         cursor,
-        start_time: Instant::now(),
         track_objects,
         last_objects: LiveObjects::default(),
         capture_requested: false,
@@ -1645,7 +1643,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         session.backend.window().request_redraw();
     }
 
-    let now = session.start_time.elapsed();
+    let now = Duration::from(session.state.clock.now());
     let presented = damage.is_some();
     if !presented {
         let refresh = session
@@ -1718,19 +1716,14 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         .backend
         .submit(damage.as_deref())
         .map_err(DrawError::Submit)?;
-    let now = session.start_time.elapsed();
+    let now = Duration::from(session.state.clock.now());
     if let Some(previous) = session.last_frame_duration {
         let delta = now - previous;
         tracing::debug!(frame = session.frame_seq, ?delta, "frame presented");
     }
     session.last_frame_duration = Some(now);
     session.frame_seq = session.frame_seq.wrapping_add(1);
-    send_presentation_feedbacks_for_state(
-        &session.state,
-        session.start_time.elapsed(),
-        session.frame_seq,
-        true,
-    );
+    send_presentation_feedbacks_for_state(&session.state, now, session.frame_seq, true);
     if let Err(error) = session.display.flush_clients() {
         tracing::warn!(%error, "failed to flush presentation feedback");
     }
@@ -1987,7 +1980,14 @@ pub(crate) fn send_presentation_feedbacks_for_state(
     seq: u64,
     presented: bool,
 ) {
-    let refresh = Refresh::fixed(Duration::from_micros(16_666));
+    let refresh = state
+        .output
+        .current_mode()
+        .map_or(Refresh::Unknown, |mode| {
+            Refresh::fixed(Duration::from_secs_f64(
+                1_000.0 / f64::from(mode.refresh.max(1)),
+            ))
+        });
     let send = |surface: &WlSurface| {
         with_surface_tree_downward(
             surface,

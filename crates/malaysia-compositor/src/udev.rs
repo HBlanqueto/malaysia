@@ -13,7 +13,9 @@ use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
-use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmNode, NodeType};
+use smithay::backend::drm::{
+    DrmDevice, DrmDeviceFd, DrmEventMetadata, DrmEventTime, DrmNode, NodeType,
+};
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::ImportDma;
@@ -60,7 +62,6 @@ struct Udev {
     renderer: GlesRenderer,
     cursor: Cursors,
     output: Output,
-    start_time: Instant,
     active: bool,
     repaint_timer: Option<RegistrationToken>,
     loop_signal: LoopSignal,
@@ -250,7 +251,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         renderer,
         cursor,
         output,
-        start_time: Instant::now(),
         active: true,
         repaint_timer: None,
         loop_signal: loop_signal.clone(),
@@ -302,8 +302,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
     loop_handle
         .insert_source(
             drm_notifier,
-            move |event, _metadata, data: &mut Udev| match event {
-                smithay::backend::drm::DrmEvent::VBlank(_crtc) => data.on_vblank(),
+            move |event, metadata, data: &mut Udev| match event {
+                smithay::backend::drm::DrmEvent::VBlank(_crtc) => data.on_vblank(metadata.as_ref()),
                 smithay::backend::drm::DrmEvent::Error(error) => {
                     error!(%error, "DRM event error");
                 }
@@ -543,7 +543,7 @@ impl Udev {
         }
     }
 
-    fn on_vblank(&mut self) {
+    fn on_vblank(&mut self, metadata: Option<&DrmEventMetadata>) {
         if !self.active {
             return;
         }
@@ -554,7 +554,10 @@ impl Udev {
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
-        let time = self.start_time.elapsed();
+        let time = match metadata.map(|metadata| metadata.time) {
+            Some(DrmEventTime::Monotonic(time)) => time,
+            _ => Duration::from(self.state.clock.now()),
+        };
         crate::session::send_presentation_feedbacks_for_state(
             &self.state,
             time,
@@ -692,7 +695,7 @@ impl Udev {
                         self.frame_was_empty = true;
                         tracing::debug!("frame skipped: no damage");
                     }
-                    let time = self.start_time.elapsed();
+                    let time = Duration::from(self.state.clock.now());
                     let refresh = self
                         .output
                         .current_mode()

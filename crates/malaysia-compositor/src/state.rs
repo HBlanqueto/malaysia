@@ -20,7 +20,7 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason, GlobalId};
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Physical, Point, Rectangle, Serial, Size, Transform};
+use smithay::utils::{Clock, Logical, Monotonic, Physical, Point, Rectangle, Serial, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufState, ImportNotifier};
@@ -110,6 +110,7 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub lock_state: SessionLockManagerState,
     pub locked: bool,
+    pub(crate) clock: Clock<Monotonic>,
     pub(crate) lock_owner: Option<ExtSessionLockV1>,
     pub lock_surfaces: Vec<LockSurface>,
     pub idle: crate::idle::IdleState,
@@ -339,6 +340,7 @@ impl State {
             primary_selection_state,
             lock_state,
             locked: false,
+            clock: Clock::new(),
             lock_owner: None,
             lock_surfaces: Vec::new(),
             idle,
