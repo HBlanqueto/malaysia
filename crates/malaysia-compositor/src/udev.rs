@@ -438,7 +438,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
 
     udev.render();
     info!("direct session ready");
-    let result = event_loop.run(None, &mut udev, |_| {});
+    let result = event_loop.run(None, &mut udev, |udev| udev.state.activity_noted = false);
     if shell_started {
         stop_shell_session();
     }

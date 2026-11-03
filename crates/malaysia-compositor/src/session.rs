@@ -387,6 +387,7 @@ pub fn run() -> Result<(), SessionError> {
 
     tracing::info!("winit window open; close it or send SIGTERM to exit");
     event_loop.run(None, &mut session, |session| {
+        session.state.activity_noted = false;
         if session.state.take_redraw_request() {
             session.backend.window().request_redraw();
         }

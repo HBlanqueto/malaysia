@@ -161,14 +161,12 @@ impl IdleState {
                 notification.idle = false;
             }
         }
-        let armed: Vec<(u64, Duration, bool)> = self
+        for notification in self
             .notifications
             .iter()
-            .filter(|n| !n.idle && (n.ignore_inhibitor || !self.inhibited))
-            .map(|n| (n.id, n.timeout, n.ignore_inhibitor))
-            .collect();
-        for (id, timeout, _) in armed {
-            self.sink.insert(id, timeout);
+            .filter(|n| n.ignore_inhibitor || !self.inhibited)
+        {
+            self.sink.insert(notification.id, notification.timeout);
         }
         if !self.locked {
             self.arm_auto();

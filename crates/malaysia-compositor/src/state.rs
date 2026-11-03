@@ -104,6 +104,7 @@ pub struct State {
     pub primary_selection_state: PrimarySelectionState,
     pub lock_state: SessionLockManagerState,
     pub locked: bool,
+    pub(crate) activity_noted: bool,
     pub(crate) clock: Clock<Monotonic>,
     pub(crate) lock_owner: Option<ExtSessionLockV1>,
     pub lock_surfaces: Vec<LockSurface>,
@@ -327,6 +328,7 @@ impl State {
             primary_selection_state,
             lock_state,
             locked: false,
+            activity_noted: false,
             clock: Clock::new(),
             lock_owner: None,
             lock_surfaces: Vec::new(),
@@ -583,7 +585,9 @@ impl State {
     }
 
     pub(crate) fn note_idle_activity(&mut self) {
-        self.idle.note_activity();
+        if !std::mem::replace(&mut self.activity_noted, true) {
+            self.idle.note_activity();
+        }
     }
 
     pub(crate) fn idle_timer(&mut self, id: u64) {
