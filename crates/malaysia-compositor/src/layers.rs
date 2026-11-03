@@ -206,10 +206,6 @@ impl Layers {
     pub fn all(&self) -> impl Iterator<Item = &LayerEntry> {
         self.mapped.iter()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.mapped.is_empty()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -326,10 +322,6 @@ impl<S: Clone + Eq> LayerFocus<S> {
     pub fn blocks_window_focus(&self) -> bool {
         !self.exclusive.is_empty()
     }
-
-    pub fn focused(&self) -> Option<&S> {
-        self.focused.as_ref()
-    }
 }
 
 fn input_region_of(surface: &WlSurface) -> Option<smithay::wayland::compositor::RegionAttributes> {
@@ -438,7 +430,7 @@ mod tests {
     fn a_none_layer_click_does_not_take_keyboard_focus() {
         let mut focus: LayerFocus<u32> = LayerFocus::default();
         assert!(!focus.clicked(3, KeyboardInteractivity::None, Some(WindowId::new(1))));
-        assert_eq!(focus.focused(), None);
+        assert_eq!(focus.focused.as_ref(), None);
         assert!(!focus.blocks_window_focus());
     }
 
@@ -446,7 +438,7 @@ mod tests {
     fn exclusive_takes_focus_on_map_and_blocks_window_focus() {
         let mut focus: LayerFocus<u32> = LayerFocus::default();
         assert!(focus.mapped(7, KeyboardInteractivity::Exclusive, Some(WindowId::new(3))));
-        assert_eq!(focus.focused(), Some(&7));
+        assert_eq!(focus.focused.as_ref(), Some(&7));
         assert!(focus.blocks_window_focus());
         assert!(!focus.clicked(7, KeyboardInteractivity::Exclusive, None));
     }
@@ -455,12 +447,12 @@ mod tests {
     fn on_demand_takes_focus_on_click_and_loses_it_outside() {
         let mut focus: LayerFocus<u32> = LayerFocus::default();
         assert!(!focus.mapped(4, KeyboardInteractivity::OnDemand, Some(WindowId::new(2))));
-        assert_eq!(focus.focused(), None);
+        assert_eq!(focus.focused.as_ref(), None);
         assert!(focus.clicked(4, KeyboardInteractivity::OnDemand, Some(WindowId::new(2))));
-        assert_eq!(focus.focused(), Some(&4));
+        assert_eq!(focus.focused.as_ref(), Some(&4));
         assert!(!focus.blocks_window_focus());
         assert!(focus.clicked_outside());
-        assert_eq!(focus.focused(), None);
+        assert_eq!(focus.focused.as_ref(), None);
         assert!(!focus.clicked_outside());
     }
 
@@ -469,7 +461,7 @@ mod tests {
         let mut focus: LayerFocus<u32> = LayerFocus::default();
         focus.mapped(9, KeyboardInteractivity::Exclusive, None);
         assert!(!focus.clicked_outside());
-        assert_eq!(focus.focused(), Some(&9));
+        assert_eq!(focus.focused.as_ref(), Some(&9));
     }
 
     #[test]
@@ -478,7 +470,7 @@ mod tests {
         let mut focus: LayerFocus<u32> = LayerFocus::default();
         focus.mapped(1, KeyboardInteractivity::Exclusive, Some(window));
         assert_eq!(focus.unmapped(&1), LayerUnfocus::Window(Some(window)));
-        assert_eq!(focus.focused(), None);
+        assert_eq!(focus.focused.as_ref(), None);
         assert!(!focus.blocks_window_focus());
     }
 
@@ -496,6 +488,6 @@ mod tests {
         focus.mapped(1, KeyboardInteractivity::Exclusive, None);
         focus.mapped(2, KeyboardInteractivity::Exclusive, None);
         assert_eq!(focus.unmapped(&2), LayerUnfocus::Layer(1));
-        assert_eq!(focus.focused(), Some(&1));
+        assert_eq!(focus.focused.as_ref(), Some(&1));
     }
 }

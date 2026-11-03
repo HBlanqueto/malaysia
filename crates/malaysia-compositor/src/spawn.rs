@@ -40,6 +40,7 @@ pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     command.spawn()
 }
 
+#[cfg(not(test))]
 #[allow(unsafe_code)]
 pub fn export_session_env(config: &Config) {
     if !config.window.qt_server_decorations {

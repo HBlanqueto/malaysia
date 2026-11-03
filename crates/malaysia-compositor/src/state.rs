@@ -17,7 +17,7 @@ use smithay::reexports::calloop::LoopSignal;
 use smithay::reexports::calloop::ping::Ping;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::reexports::wayland_server::Resource;
-use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason, GlobalId};
+use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::backend::renderer::element::solid::SolidColorBuffer;
@@ -83,9 +83,6 @@ pub struct State {
     pub cursor_status: CursorImageStatus,
     pub(crate) client_cursor: CursorImageStatus,
     pub activation_state: XdgActivationState,
-    pub cursor_shape_state: CursorShapeManagerState,
-    pub pointer_constraints_state: PointerConstraintsState,
-    pub relative_pointer_state: RelativePointerManagerState,
     pub(crate) output_capture_source_state: OutputCaptureSourceState,
     pub(crate) toplevel_capture_source_state: ToplevelCaptureSourceState,
     pub(crate) image_copy_capture_state: ImageCopyCaptureState,
@@ -99,12 +96,8 @@ pub struct State {
     pub(crate) cursor_boost_started: Option<Instant>,
     pub(crate) shake: ShakeDetector,
     pub xdg_shell_state: XdgShellState,
-    pub decoration_state: XdgDecorationState,
     pub kde_decoration_state: KdeDecorationState,
     pub layer_shell_state: WlrLayerShellState,
-    pub viewporter_state: ViewporterState,
-    pub fractional_scale_state: FractionalScaleManagerState,
-    pub presentation_state: PresentationState,
     pub layers: Layers,
     pub layer_focus: crate::layers::LayerFocus<WlSurface>,
     pub data_device_state: DataDeviceState,
@@ -119,7 +112,6 @@ pub struct State {
     pub(crate) lock_recovery_attempts: u32,
     pub(crate) lock_recovery_pending: bool,
     pub display_handle: DisplayHandle,
-    pub output_manager_state: OutputManagerState,
     pub output: Output,
     pub output_size: Size<i32, Physical>,
     pub scale: Scale,
@@ -146,9 +138,6 @@ pub struct State {
     pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     pub(crate) focus_desk: HashMap<WindowId, Rectangle<i32, Logical>>,
     pub(crate) infinity_managers: Vec<InfinityWindowManagerV1>,
-    #[allow(dead_code)]
-    pub(crate) infinity_global: GlobalId,
-    pub(crate) _focus_notice_global: GlobalId,
     pub(crate) focus_notices: Vec<
         infinity_protocol::server::focus::infinity_focus_v1::infinity_focus_surface_v1::InfinityFocusSurfaceV1,
     >,
@@ -270,19 +259,19 @@ impl State {
         dmabuf_state.create_global_with_default_feedback::<Self>(display_handle, &dmabuf_feedback);
         let syncobj_state =
             syncobj_device.map(|device| DrmSyncobjState::new::<Self>(display_handle, device));
-        let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(display_handle);
+        OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
-        let decoration_state = XdgDecorationState::new::<Self>(display_handle);
+        XdgDecorationState::new::<Self>(display_handle);
         let kde_decoration_state =
             KdeDecorationState::new::<Self>(display_handle, KdeDefaultMode::Server);
         let layer_shell_state = WlrLayerShellState::new::<Self>(display_handle);
-        let viewporter_state = ViewporterState::new::<Self>(display_handle);
-        let fractional_scale_state = FractionalScaleManagerState::new::<Self>(display_handle);
-        let presentation_state = PresentationState::new::<Self>(display_handle, 1);
+        ViewporterState::new::<Self>(display_handle);
+        FractionalScaleManagerState::new::<Self>(display_handle);
+        PresentationState::new::<Self>(display_handle, 1);
         let activation_state = XdgActivationState::new::<Self>(display_handle);
-        let cursor_shape_state = CursorShapeManagerState::new::<Self>(display_handle);
-        let pointer_constraints_state = PointerConstraintsState::new::<Self>(display_handle);
-        let relative_pointer_state = RelativePointerManagerState::new::<Self>(display_handle);
+        CursorShapeManagerState::new::<Self>(display_handle);
+        PointerConstraintsState::new::<Self>(display_handle);
+        RelativePointerManagerState::new::<Self>(display_handle);
         let output_capture_source_state = OutputCaptureSourceState::new::<Self>(display_handle);
         let toplevel_capture_source_state = ToplevelCaptureSourceState::new::<Self>(display_handle);
         let image_copy_capture_state = ImageCopyCaptureState::new::<Self>(display_handle);
@@ -300,6 +289,8 @@ impl State {
 
         let _ = output.create_global::<Self>(display_handle);
 
+        crate::infinity::InfinityGlobalData::create_global(display_handle);
+        crate::focus_notice::FocusNoticeGlobalData::create_global(display_handle);
         Ok(Self {
             loop_signal,
             needs_redraw: false,
@@ -315,9 +306,6 @@ impl State {
             cursor_status: CursorImageStatus::default_named(),
             client_cursor: CursorImageStatus::default_named(),
             activation_state,
-            cursor_shape_state,
-            pointer_constraints_state,
-            relative_pointer_state,
             output_capture_source_state,
             toplevel_capture_source_state,
             image_copy_capture_state,
@@ -331,12 +319,8 @@ impl State {
             cursor_boost_started: None,
             shake: ShakeDetector::default(),
             xdg_shell_state,
-            decoration_state,
             kde_decoration_state,
             layer_shell_state,
-            viewporter_state,
-            fractional_scale_state,
-            presentation_state,
             layers: Layers::new(),
             layer_focus: crate::layers::LayerFocus::default(),
             data_device_state,
@@ -351,7 +335,6 @@ impl State {
             lock_recovery_attempts: 0,
             lock_recovery_pending: false,
             display_handle: display_handle.clone(),
-            output_manager_state,
             output,
             output_size: size,
             scale,
@@ -362,10 +345,6 @@ impl State {
             appmenu: AppMenuState::new(display_handle),
             gtk: GtkShellState::new(display_handle),
             list_handles: Vec::new(),
-            infinity_global: crate::infinity::InfinityGlobalData::create_global(display_handle),
-            _focus_notice_global: crate::focus_notice::FocusNoticeGlobalData::create_global(
-                display_handle,
-            ),
             focus_notices: Vec::new(),
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),

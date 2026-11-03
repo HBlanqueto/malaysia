@@ -4,10 +4,7 @@ Hallazgos abiertos contra `22070c6` (2026-10-31); los corregidos y los del toolk
 
 | id | dónde | qué | lote |
 |---|---|---|---|
-| P1-04 | `crates/malaysia-compositor/src/window.rs:1091` | `Windows::set_maximized` sin llamadas; solo se usa `set_maximized_with_outer`. | L2a |
 | P1-05 | `crates/malaysia-compositor/src/session.rs:1774` | `try_clone` del fence innecesario; si falla se pierde la retención del release. | L1b |
-| P1-08 | `crates/malaysia-compositor/src/state.rs:311` | `infinity_global` solo se escribe; el global vive en el `Display`. | L2a |
-| P1-09 | `crates/malaysia-compositor/src/window.rs:1297` | `id_of_surface` duplica `id_of`; solo lo usa `dialog_parent`. | L3b |
 | P1-11 | `crates/malaysia-compositor/src/session.rs:1180-1300` | Helpers de chrome en `session.rs` pese a existir `chrome.rs`/`effects.rs`. Aplazado: solo mover. | L3c |
 | P1-12 | `crates/malaysia-compositor/src/session.rs:1301,1376` | Captura y ventana en `session.rs` pese a existir `capture.rs`. Aplazado: solo mover. | L3d |
 | P1-13 | `crates/malaysia-compositor/src/session.rs:1685` | `reset_dead_cursor` en `session.rs` pese a existir `cursor.rs`. Aplazado: solo mover. | L3e |

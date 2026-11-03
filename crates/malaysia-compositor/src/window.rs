@@ -157,17 +157,9 @@ impl Window<'_> {
         })
     }
 
-    pub fn usable_size(&self) -> Size<i32, Logical> {
-        usable(self.size(), self.insets())
-    }
-
     pub fn surface_location(&self) -> Point<i32, Logical> {
         let insets = self.insets();
         Point::from((round(insets.left), round(insets.top)))
-    }
-
-    pub fn contains(&self, point: Point<f64, Logical>) -> bool {
-        self.outer.contains(ScenePoint::new(point.x, point.y))
     }
 }
 
@@ -538,15 +530,6 @@ impl Windows {
         let id = self.windows.remove(index).id;
         self.scene.remove(id);
         Some(id)
-    }
-
-    pub fn remove_by_id(&mut self, id: WindowId) -> bool {
-        let Some(index) = self.index(id) else {
-            return false;
-        };
-        self.windows.remove(index);
-        self.scene.remove(id);
-        true
     }
 
     pub fn set_hidden(&mut self, id: WindowId, hidden: bool) -> bool {
@@ -938,18 +921,6 @@ impl Windows {
         self.send_configure(index);
     }
 
-    pub fn set_maximized(&mut self, id: WindowId, maximized: bool) -> bool {
-        let Some(index) = self.index(id) else {
-            return false;
-        };
-        if self.windows[index].maximized == maximized {
-            return false;
-        }
-        self.windows[index].maximized = maximized;
-        self.send_configure(index);
-        true
-    }
-
     pub fn outer(&self, id: WindowId) -> Option<SceneRect<f64, SceneLogical>> {
         self.scene.outer(id)
     }
@@ -1103,13 +1074,6 @@ impl Windows {
         self.scene.decoration(id).unwrap_or(Decoration::Client)
     }
 
-    fn id_of_surface(&self, surface: &WlSurface) -> Option<WindowId> {
-        self.windows
-            .iter()
-            .find(|data| data.toplevel.wl_surface() == surface)
-            .map(|data| data.id)
-    }
-
     pub(crate) fn parent_of(&self, id: WindowId) -> Option<WindowId> {
         self.dialog_parent(id)
     }
@@ -1117,7 +1081,7 @@ impl Windows {
     fn dialog_parent(&self, id: WindowId) -> Option<WindowId> {
         let index = self.index(id)?;
         let parent = self.windows[index].toplevel.parent()?;
-        self.id_of_surface(&parent)
+        self.id_of(&parent)
     }
 
     fn send_configure(&mut self, index: usize) {

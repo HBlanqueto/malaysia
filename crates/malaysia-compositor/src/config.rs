@@ -3,10 +3,7 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
-pub use vow_appearance::{
-    AppearanceConfig, ColorScheme, TrafficLightStyle, WindowColorMode, WindowTintScope, config_dir,
-    data_dir,
-};
+pub use vow_appearance::{AppearanceConfig, config_dir, data_dir};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -385,6 +382,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vow_appearance::{ColorScheme, TrafficLightStyle, WindowColorMode, WindowTintScope};
 
     #[test]
     fn per_domain_files_are_loaded_separately() {

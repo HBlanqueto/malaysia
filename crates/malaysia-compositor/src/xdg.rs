@@ -1,6 +1,6 @@
 //! XDG user directories lookup.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub fn desktop_dir() -> PathBuf {
     let explicit = std::env::var("XDG_DESKTOP_DIR")
@@ -49,10 +49,6 @@ fn parse_desktop_dir(text: &str) -> Option<PathBuf> {
         return Some(expanded);
     }
     None
-}
-
-pub fn is_directory(path: &Path) -> bool {
-    path.is_dir()
 }
 
 #[cfg(test)]

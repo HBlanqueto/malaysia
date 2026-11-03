@@ -46,7 +46,6 @@ impl Insets {
 pub enum Role {
     Toplevel,
     Dialog,
-    Popup,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -183,13 +182,6 @@ mod tests {
         let bar = titlebar(TitlebarPosition::Top, 32);
         let insets =
             Insets::for_window(Role::Dialog, WindowState::Normal, Decoration::Server, &bar);
-        assert_eq!(insets, Insets::ZERO);
-    }
-
-    #[test]
-    fn a_popup_is_never_decorated() {
-        let bar = titlebar(TitlebarPosition::Top, 32);
-        let insets = Insets::for_window(Role::Popup, WindowState::Normal, Decoration::Server, &bar);
         assert_eq!(insets, Insets::ZERO);
     }
 

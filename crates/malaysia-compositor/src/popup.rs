@@ -48,14 +48,6 @@ impl Popups {
         Self::default()
     }
 
-    pub fn len(&self) -> usize {
-        self.popups.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.popups.is_empty()
-    }
-
     pub fn id_of(&self, surface: &WlSurface) -> Option<PopupId> {
         self.popups
             .iter()
@@ -173,10 +165,6 @@ impl Popups {
 
     fn remove_id(&mut self, id: PopupId) {
         self.popups.retain(|data| data.id != id);
-    }
-
-    pub fn geometry_of(&self, surface: &WlSurface) -> Option<Rectangle<i32, Logical>> {
-        self.index_of(surface).map(|i| self.popups[i].geometry)
     }
 }
 
