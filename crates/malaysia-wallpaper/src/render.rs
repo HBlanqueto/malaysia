@@ -1140,12 +1140,11 @@ mod tests {
         let (w, h) = capture.size;
         let source = decode_default();
 
-        let corner_inset = corner_inset_for_capture(w, h);
         let points: [(u32, u32); 9] = [
-            (corner_inset, corner_inset),
-            (w - 1 - corner_inset, corner_inset),
-            (corner_inset, h - 1 - corner_inset),
-            (w - 1 - corner_inset, h - 1 - corner_inset),
+            (0, 0),
+            (w - 1, 0),
+            (0, h - 1),
+            (w - 1, h - 1),
             (w / 2, 0),
             (w / 2, h - 1),
             (0, h / 2),
@@ -1165,10 +1164,6 @@ mod tests {
                 "mismatch at ({x},{y}) in {w}x{h} capture: got {got:?}, expected {expected:?}"
             );
         }
-    }
-
-    fn corner_inset_for_capture(_w: u32, _h: u32) -> u32 {
-        0
     }
 
     #[test]

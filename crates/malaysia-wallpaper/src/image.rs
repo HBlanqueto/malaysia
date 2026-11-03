@@ -92,9 +92,6 @@ fn load_default_image() -> (Option<(PathBuf, String)>, DecodedImage) {
 
 #[derive(Debug, Default, serde::Deserialize)]
 struct WallpaperStore {
-    #[allow(dead_code)]
-    #[serde(default)]
-    dir: String,
     #[serde(default)]
     scale: String,
     #[serde(default)]
