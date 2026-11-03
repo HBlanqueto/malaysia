@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/8885fbf";
+      url = "github:HBlanqueto/barrierkit/9d8b361";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -253,6 +253,7 @@
             xwayland-satellite
             weston
             amdgpu_top
+            yt-dlp
           ] ++ labApps;
 
           buildInputs = deps ++ videoDeps ++ [
@@ -272,6 +273,8 @@
             ''}
             export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath (deps ++ videoDeps)}$LD_LIBRARY_PATH"
             export GST_PLUGIN_SYSTEM_PATH_1_0="${pkgs.lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" videoDeps}"
+            # souphttpsrc needs a GIO TLS backend to open https:// sources.
+            export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules"
             export LIBVA_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
             # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
