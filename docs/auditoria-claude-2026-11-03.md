@@ -816,7 +816,7 @@ Commits que aplican esta auditoría, en orden:
 | `338da33` | §8.1, §1.1 | `virtual-keyboard` y `virtual-pointer` (rediseño de Smithay `7454d68a`, `2bf8be86`, `9786228e`), solo para clientes de confianza (S-03). |
 | `3deb003` | §8.2 | Render genérico sobre `MalaysiaRenderer` (GLES o `MultiRenderer`); el recorte redondeado envuelve el elemento de superficie y conserva su daño parcial. |
 | `9e46f23` | §8.2 | El DRM renderiza a través de `GpuManager`. |
-| siguiente | §8.2 | Multi-GPU: composición en la GPU de render y copia a la de scanout cuando esta puede renderizar. |
+| `fef7763` | §8.2 | Multi-GPU: composición en la GPU de render y copia a la de scanout cuando esta puede renderizar. |
 
 ### Lag tras `cfcf7c0`
 
