@@ -31,7 +31,7 @@ Commands:
                         Nested session with shell + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
-    app <name>          Run tengen-app-show, ondina or rotulo (pinned rev, or ../barrierkit with kit-local) in the demo
+    app <name>          Run tengen-app-show, tengen-motion-show, ondina or rotulo (pinned rev, or ../barrierkit with kit-local) in the demo
                         (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
@@ -748,8 +748,9 @@ demo() {
             fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
         _shell_bin="$script_dir/target/debug/malaysia-shell"
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        build_kit_apps tengen-app-show ondina rotulo
+        build_kit_apps tengen-app-show tengen-motion-show ondina rotulo
         _show="$_kit_bin/tengen-app-show"
+        _motion="$_kit_bin/tengen-motion-show"
         _ondina="$_kit_bin/ondina"
         _rotulo="$_kit_bin/rotulo"
     else
@@ -761,6 +762,7 @@ demo() {
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
         _show="$script_dir/result/bin/tengen-app-show"
+        _motion="$script_dir/result/bin/tengen-motion-show"
         _ondina="$script_dir/result/bin/ondina"
         _rotulo="$script_dir/result/bin/rotulo"
     fi
@@ -808,8 +810,9 @@ demo() {
     else
         printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
     fi
-    if [ -x "$_show" ] && [ -x "$_ondina" ] && [ -x "$_rotulo" ]; then
+    if [ -x "$_show" ] && [ -x "$_motion" ] && [ -x "$_ondina" ] && [ -x "$_rotulo" ]; then
         demo_client tengen-app-show "$_show"
+        demo_client tengen-motion-show "$_motion"
         demo_client ondina "$_ondina"
         demo_client rotulo "$_rotulo"
     else
@@ -907,8 +910,9 @@ lab() {
         _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
         cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
             fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-        build_kit_apps tengen-app-show ondina rotulo
+        build_kit_apps tengen-app-show tengen-motion-show ondina rotulo
         _show="$_kit_bin/tengen-app-show"
+        _motion="$_kit_bin/tengen-motion-show"
         _ondina="$_kit_bin/ondina"
         _rotulo="$_kit_bin/rotulo"
     else
@@ -920,6 +924,7 @@ lab() {
             fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
         fi
         _show="$script_dir/result/bin/tengen-app-show"
+        _motion="$script_dir/result/bin/tengen-motion-show"
         _ondina="$script_dir/result/bin/ondina"
         _rotulo="$script_dir/result/bin/rotulo"
     fi
@@ -1062,6 +1067,9 @@ EOF
     fi
 
     sleep 0.5
+    if [ -x "$_motion" ]; then
+        lab_client tengen-motion-show "$_motion"
+    fi
     if [ -x "$_ondina" ]; then
         lab_client ondina "$_ondina"
     fi
@@ -1110,18 +1118,18 @@ app() {
             --sin-menubar) _sin_menubar=1 ;;
             -*) fail "$EXIT_USAGE" "unknown option for app: $1" ;;
             *)
-                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|ondina|rotulo"
+                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|ondina|rotulo"
                 _name=$1
                 ;;
         esac
         shift
     done
     if [ -z "$_name" ]; then
-        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|ondina|rotulo"
+        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|tengen-motion-show|ondina|rotulo"
     fi
     case "$_name" in
-        tengen-app-show | ondina | rotulo) ;;
-        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show, ondina or rotulo)" ;;
+        tengen-app-show | tengen-motion-show | ondina | rotulo) ;;
+        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show, tengen-motion-show, ondina or rotulo)" ;;
     esac
     if ! is_running; then
         fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
