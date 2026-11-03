@@ -95,7 +95,12 @@ ventanas a pantalla completa, plano de cursor y feedback dmabuf por
 superficie con tramo de scanout, hechos sin aceptar en el panel real. Los
 planos overlay existen tras `debug.overlay_planes`, apagados por defecto hasta
 aceptarlos con `./dev.sh video`; en i915 quedan apagados (S-02 en
-[`deuda.md`](deuda.md)). Prueba: con `--log-level=trace`,
+[`deuda.md`](deuda.md)). Multi-GPU con `GpuManager` y `MultiRenderer` sobre
+GLES, hecho sin aceptar: con `--drm-device` sobre otra GPU que renderiza, se
+compone en la GPU de render y se copia al buffer de la de scanout; un
+dispositivo solo de pantalla (vkms) sigue recibiendo los buffers de la GPU de
+render. Varias salidas en varias GPU esperan a 8b. Prueba: `./dev.sh drm-vkms`
+y `--drm-device` con la segunda GPU de un portátil híbrido. Prueba: con `--log-level=trace`,
 `mpv --fs` debe salir en el plano primario y mover el cursor solo debe tocar el
 plano de cursor.
 

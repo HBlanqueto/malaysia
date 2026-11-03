@@ -73,6 +73,7 @@ struct Udev {
     compositor: Compositor,
     gpu: GpuManager<GpuApi>,
     render_node: DrmNode,
+    target_node: DrmNode,
     cursor: Cursors,
     output: Output,
     active: bool,
@@ -178,8 +179,24 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let mut api = GpuApi::default();
     api.add_node(render_node, render_gbm.clone())
         .map_err(|error| anyhow!("creating EGL on the render node: {error}"))?;
+    let scanout_render_node = scanout_node
+        .node_with_type(NodeType::Render)
+        .and_then(Result::ok)
+        .filter(|node| render_node != scanout_node && *node != render_node)
+        .filter(|node| api.add_node(*node, scanout_gbm.clone()).is_ok());
+    let target_node = scanout_render_node.unwrap_or(render_node);
+    info!(node = ?target_node, "DRM composition target");
     let mut gpu =
         GpuManager::new(api).map_err(|error| anyhow!("creating the GPU manager: {error}"))?;
+    let render_formats: Vec<_> = gpu
+        .single_renderer(&target_node)
+        .map_err(|error| anyhow!("creating GLES on the composition target: {error}"))?
+        .as_mut()
+        .egl_context()
+        .dmabuf_render_formats()
+        .iter()
+        .copied()
+        .collect();
     let mut multi = gpu
         .single_renderer(&render_node)
         .map_err(|error| anyhow!("creating GLES: {error}"))?;
@@ -204,17 +221,16 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let scanout_feedback =
         scanout_feedback(&surface, &planes, renderer, render_node, scanout_node)?;
 
+    let allocator_gbm = if target_node == render_node {
+        render_gbm.clone()
+    } else {
+        scanout_gbm.clone()
+    };
     let allocator = GbmAllocator::new(
-        render_gbm.clone(),
+        allocator_gbm,
         GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
     );
     let exporter = GbmFramebufferExporter::new(scanout_gbm.clone(), scanout_node.into());
-    let render_formats: Vec<_> = renderer
-        .egl_context()
-        .dmabuf_render_formats()
-        .iter()
-        .copied()
-        .collect();
     let compositor = Compositor::new(
         &output,
         surface,
@@ -280,6 +296,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         compositor,
         gpu,
         render_node,
+        target_node,
         cursor,
         output,
         active: true,
@@ -630,7 +647,16 @@ impl Udev {
             return;
         }
         self.redraw_queued = false;
-        let mut renderer = match self.gpu.single_renderer(&self.render_node) {
+        let renderer = if self.target_node == self.render_node {
+            self.gpu.single_renderer(&self.render_node)
+        } else {
+            self.gpu.renderer(
+                &self.render_node,
+                &self.target_node,
+                self.compositor.format(),
+            )
+        };
+        let mut renderer = match renderer {
             Ok(renderer) => renderer,
             Err(error) => {
                 warn!(%error, "no renderer on the render node");

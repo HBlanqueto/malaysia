@@ -577,7 +577,7 @@ ext-workspace (útil para los espacios del ADR 0051) y tearing-control.
   - una sola salida (`find_panel`, `udev.rs:795-826`);
   - sin hotplug ni cambio de modo;
   - sin VRR ni gamma;
-  - sin multi-GPU.
+  - multi-GPU para una salida; varias salidas en varias GPU esperan a 8b.
 - Sin direct scanout, plano de cursor ni overlays.
 - Sin blur ni vibrancy, aunque la política 3 de `AGENTS.md` lo exige.
 - Screencast por PipeWire: no está en el compositor ni en el portal.
@@ -814,6 +814,9 @@ Commits que aplican esta auditoría, en orden:
 | `4b5c35c` | §2.2 (6) | Planos overlay tras `debug.overlay_planes`, apagados por defecto. Smithay `023b78b1` no fija el `pixel blend mode`; en i915 quedan apagados (S-02). |
 | `31c4dd0` | §8.1 | `text-input-v3` e `input-method-v2`; popups del IME bajo el cursor de texto o encima si no caben. |
 | `338da33` | §8.1, §1.1 | `virtual-keyboard` y `virtual-pointer` (rediseño de Smithay `7454d68a`, `2bf8be86`, `9786228e`), solo para clientes de confianza (S-03). |
+| `3deb003` | §8.2 | Render genérico sobre `MalaysiaRenderer` (GLES o `MultiRenderer`); el recorte redondeado envuelve el elemento de superficie y conserva su daño parcial. |
+| `9e46f23` | §8.2 | El DRM renderiza a través de `GpuManager`. |
+| siguiente | §8.2 | Multi-GPU: composición en la GPU de render y copia a la de scanout cuando esta puede renderizar. |
 
 ### Lag tras `cfcf7c0`
 

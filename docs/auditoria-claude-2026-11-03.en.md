@@ -576,7 +576,7 @@ ext-workspace (useful for the ADR 0051 spaces) and tearing-control.
   - a single output (`find_panel`, `udev.rs:795-826`);
   - no hotplug or mode change;
   - no VRR or gamma;
-  - no multi-GPU.
+  - multi-GPU for one output; several outputs on several GPUs wait for 8b.
 - No direct scanout, cursor plane or overlays.
 - No blur or vibrancy, even though policy 3 in `AGENTS.md` requires it.
 - PipeWire screencast: not in the compositor or the portal.
@@ -813,6 +813,9 @@ Commits that apply this audit, in order:
 | `4b5c35c` | §2.2 (6) | Overlay planes behind `debug.overlay_planes`, off by default. Smithay `023b78b1` does not set the `pixel blend mode`; on i915 they stay off (S-02). |
 | `31c4dd0` | §8.1 | `text-input-v3` and `input-method-v2`; IME popups below the text cursor, or above it when they do not fit. |
 | `338da33` | §8.1, §1.1 | `virtual-keyboard` and `virtual-pointer` (Smithay redesign `7454d68a`, `2bf8be86`, `9786228e`), trusted clients only (S-03). |
+| `3deb003` | §8.2 | Rendering generic over `MalaysiaRenderer` (GLES or `MultiRenderer`); the rounded clip wraps the surface element and keeps its partial damage. |
+| `9e46f23` | §8.2 | DRM renders through `GpuManager`. |
+| next | §8.2 | Multi-GPU: composition on the render GPU and copy to the scanout GPU when the latter can render. |
 
 ### Lag after `cfcf7c0`
 
