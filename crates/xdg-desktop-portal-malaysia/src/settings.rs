@@ -160,7 +160,9 @@ impl Settings {
             .values
             .read()
             .expect("the settings lock is not poisoned");
-        [NAMESPACE, GNOME_NAMESPACE]
+        let mut known: Vec<&str> = KEYS.iter().map(|(namespace, _)| *namespace).collect();
+        known.dedup();
+        known
             .into_iter()
             .filter(|namespace| {
                 namespaces.is_empty()
