@@ -28,6 +28,7 @@ use vow_design::{
 use crate::config::Config;
 use crate::cursor::OutputRenderElement;
 use crate::decoration::Insets;
+use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ChromeTheme {
@@ -204,7 +205,7 @@ impl ChromeCache {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn shadow_element(
+    pub(crate) fn shadow_element<R: MalaysiaRenderer>(
         &mut self,
         owner: Option<WindowId>,
         program: &GlesPixelProgram,
@@ -214,7 +215,7 @@ impl ChromeCache {
         scale: f64,
         theme: &ChromeTheme,
         focused: bool,
-    ) -> Vec<OutputRenderElement> {
+    ) -> Vec<OutputRenderElement<R>> {
         let style = match theme.scheme {
             ColorScheme::Light => vow_design::SHADOW,
             _ => vow_design::SHADOW_DARK,
@@ -227,15 +228,14 @@ impl ChromeCache {
             };
             let owner = owner.map(|id| (id, slot));
             elements.push(
-                self.shader(owner, program, area, layer.opacity, uniforms)
-                    .into(),
+                PrimaryGpu(self.shader(owner, program, area, layer.opacity, uniforms)).into(),
             );
         }
         elements
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn element(
+    pub(crate) fn element<R: MalaysiaRenderer>(
         &mut self,
         renderer: &mut GlesRenderer,
         id: WindowId,
@@ -250,7 +250,7 @@ impl ChromeCache {
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
         exponent: f32,
-    ) -> Option<crate::effects::RoundedTextureElement> {
+    ) -> Option<crate::effects::RoundedTextureElement<R>> {
         use smithay::backend::renderer::ImportMem;
         let key = Key {
             title: title.to_string(),
@@ -297,9 +297,6 @@ impl ChromeCache {
             entry.commit,
             src,
             dst,
-            smithay::utils::Transform::Normal,
-            1.0,
-            Kind::Unspecified,
             frame_rect,
             radius,
             exponent,

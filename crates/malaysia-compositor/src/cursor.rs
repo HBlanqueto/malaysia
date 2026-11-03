@@ -8,7 +8,9 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
-use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::backend::renderer::gles::GlesTexture;
+
+use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use smithay::input::pointer::CursorIcon;
 use smithay::utils::{Logical, Point, Rectangle, Size, Transform};
 use xcursor::CursorTheme;
@@ -300,13 +302,13 @@ fn fallback_image() -> ImageData {
 }
 
 smithay::render_elements! {
-    pub(crate) OutputRenderElement<=GlesRenderer>;
-    Surface = WaylandSurfaceRenderElement<GlesRenderer>,
-    Memory = MemoryRenderBufferRenderElement<GlesRenderer>,
+    pub(crate) OutputRenderElement<R> where R: MalaysiaRenderer;
+    Surface = WaylandSurfaceRenderElement<R>,
+    Memory = MemoryRenderBufferRenderElement<R>,
     Solid = SolidColorRenderElement,
-    PixelShader = smithay::backend::renderer::gles::element::PixelShaderElement,
-    Rounded = crate::effects::RoundedTextureElement,
-    Texture = smithay::backend::renderer::element::texture::TextureRenderElement<GlesTexture>,
+    PixelShader = PrimaryGpu<smithay::backend::renderer::gles::element::PixelShaderElement>,
+    Rounded = crate::effects::RoundedTextureElement<R>,
+    Texture = PrimaryGpu<smithay::backend::renderer::element::texture::TextureRenderElement<GlesTexture>>,
 }
 
 #[cfg(test)]

@@ -63,7 +63,7 @@ pub(crate) fn dmabuf_constraints(renderer: &GlesRenderer) -> Option<CaptureDma> 
 
 pub(crate) fn capture_output(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -86,7 +86,7 @@ pub(crate) fn capture_output(
 
 pub(crate) fn screenshot_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -97,7 +97,7 @@ pub(crate) fn screenshot_png(
 
 pub(crate) fn screenshot_region_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     region: Rectangle<i32, Logical>,
@@ -124,7 +124,7 @@ pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
 
 fn render_png(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -204,7 +204,7 @@ fn write_png(path: &Path, png: &[u8]) -> std::io::Result<()> {
 
 fn render_and_read(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     transform: Transform,
     scale: f64,
@@ -248,7 +248,7 @@ fn render_and_read(
 
 pub(crate) fn capture_into_buffer(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],
@@ -265,7 +265,7 @@ pub(crate) fn capture_into_buffer(
 
 fn capture_into_dmabuf(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],
@@ -368,7 +368,7 @@ fn copy_into_shm_pool(
 #[allow(unsafe_code)]
 fn capture_into_shm(
     renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement],
+    elements: &[OutputRenderElement<GlesRenderer>],
     size: Size<i32, Physical>,
     scale: f64,
     clear: [f32; 4],

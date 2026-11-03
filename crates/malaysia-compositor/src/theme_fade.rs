@@ -16,6 +16,7 @@ use smithay::utils::{Buffer as BufferCoord, Physical, Point, Scale, Size, Transf
 use tracing::warn;
 
 use crate::cursor::{Cursors, OutputRenderElement};
+use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 
 pub(crate) const WAIT_MAX: Duration = Duration::from_millis(vow_design::THEME_FADE_WAIT_MS);
@@ -169,15 +170,15 @@ impl ThemeFade {
         self.state.mark_committed(surface_id);
     }
 
-    pub(crate) fn element(&self, alpha: f32) -> OutputRenderElement {
-        TextureRenderElement::from_texture_buffer(
+    pub(crate) fn element<R: MalaysiaRenderer>(&self, alpha: f32) -> OutputRenderElement<R> {
+        PrimaryGpu(TextureRenderElement::from_texture_buffer(
             Point::from((0.0, 0.0)),
             &self.texture_buffer,
             Some(alpha),
             None,
             None,
             Kind::Unspecified,
-        )
+        ))
         .into()
     }
 }
@@ -420,7 +421,8 @@ mod tests {
             1.0,
             smithay::backend::renderer::element::Kind::Unspecified,
         );
-        let source_elements: Vec<super::OutputRenderElement> = vec![top.into(), bottom.into()];
+        let source_elements: Vec<super::OutputRenderElement<GlesRenderer>> =
+            vec![top.into(), bottom.into()];
 
         let mut direct_texture =
             Offscreen::<GlesTexture>::create_buffer(&mut renderer, Fourcc::Abgr8888, buffer_size)

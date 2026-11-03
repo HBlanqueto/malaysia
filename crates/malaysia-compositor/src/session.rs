@@ -47,6 +47,7 @@ use smithay::wayland::socket::ListeningSocketSource;
 
 use crate::config::ScreenshotTarget;
 use crate::cursor::{Cursors, OutputRenderElement};
+use crate::renderer::MalaysiaRenderer;
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
 use vow_appearance::watch::AppearanceWatch;
@@ -511,7 +512,10 @@ fn redraw(session: &mut Session) {
     }
 }
 
-fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderElement>) {
+fn append_screenshot_overlay<R: MalaysiaRenderer>(
+    state: &State,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
     let Some(mode) = state.screenshot_mode() else {
         return;
     };
@@ -549,11 +553,11 @@ fn append_screenshot_overlay(state: &State, elements: &mut Vec<OutputRenderEleme
     }
 }
 
-fn append_dim_outside(
+fn append_dim_outside<R: MalaysiaRenderer>(
     rect: Rectangle<i32, Logical>,
     output: Size<i32, Logical>,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let dim = vow_design::SCREENSHOT_DIM;
     let left = rect.loc.x.clamp(0, output.w);
@@ -590,10 +594,10 @@ fn append_dim_outside(
     );
 }
 
-fn append_border(
+fn append_border<R: MalaysiaRenderer>(
     rect: Rectangle<i32, Logical>,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     const BORDER: i32 = vow_design::SCREENSHOT_BORDER_WIDTH;
     let color = vow_design::SCREENSHOT_BORDER;
@@ -632,7 +636,10 @@ fn append_border(
     );
 }
 
-fn append_theme_fade(state: &State, elements: &mut Vec<OutputRenderElement>) {
+fn append_theme_fade<R: MalaysiaRenderer>(
+    state: &State,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
     let Some(fade) = state.theme_fade.as_ref() else {
         return;
     };
@@ -640,24 +647,24 @@ fn append_theme_fade(state: &State, elements: &mut Vec<OutputRenderElement>) {
     elements.push(fade.element(alpha));
 }
 
-fn append_solid(
+fn append_solid<R: MalaysiaRenderer>(
     location: Point<i32, Logical>,
     size: Size<i32, Logical>,
     color: [f32; 4],
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let mut buffer = SolidColorBuffer::default();
     append_buffer(&mut buffer, location, size, color, scale, elements);
 }
 
-fn append_buffer(
+fn append_buffer<R: MalaysiaRenderer>(
     buffer: &mut SolidColorBuffer,
     location: Point<i32, Logical>,
     size: Size<i32, Logical>,
     color: [f32; 4],
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     if size.w <= 0 || size.h <= 0 {
         return;
@@ -675,13 +682,13 @@ fn append_buffer(
     );
 }
 
-pub(crate) fn build_output_elements(
+pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
     state: &mut State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     cursor: &Cursors,
     include_cursor: bool,
-) -> Vec<OutputRenderElement> {
-    let mut elements: Vec<OutputRenderElement> = Vec::new();
+) -> Vec<OutputRenderElement<R>> {
+    let mut elements: Vec<OutputRenderElement<R>> = Vec::new();
     let scale = state.scale.fractional_scale();
     if state.locked {
         reset_dead_cursor(state);
@@ -693,10 +700,7 @@ pub(crate) fn build_output_elements(
                 continue;
             }
             elements.extend(
-                render_elements_from_surface_tree::<
-                    GlesRenderer,
-                    WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
+                render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
                     renderer,
                     lock_surface.wl_surface(),
                     physical_point(Point::from((0, 0)), scale),
@@ -709,7 +713,7 @@ pub(crate) fn build_output_elements(
             );
         }
     } else {
-        crate::popup_fade::start_requested(state, renderer, scale);
+        crate::popup_fade::start_requested(state, renderer.gles(), scale);
         reset_dead_cursor(state);
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
@@ -837,13 +841,13 @@ pub(crate) fn window_content_rect(window: &crate::window::Window<'_>) -> Rectang
     Rectangle::new(origin, geometry.size)
 }
 
-fn append_revealed_titlebar(
+fn append_revealed_titlebar<R: MalaysiaRenderer>(
     state: &mut State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     id: malaysia_scene::scene::WindowId,
     y: i32,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let Some(title) = state
         .windows
@@ -875,7 +879,7 @@ fn append_revealed_titlebar(
     };
     let theme = state.chrome_theme;
     if let Some(element) = state.chrome.element(
-        renderer,
+        renderer.gles(),
         id,
         &title,
         focused,
@@ -912,12 +916,12 @@ fn append_revealed_titlebar(
     );
 }
 
-fn append_focus_transition(
+fn append_focus_transition<R: MalaysiaRenderer>(
     state: &State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     frame: crate::spaces::FocusFrame,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let Some(surface) = state
         .windows
@@ -933,10 +937,7 @@ fn append_focus_transition(
     let content_physical = physical_rect(Rectangle::new(frame.rect.loc, geometry.size), scale);
     let radius = (frame.radius * scale).round() as i32;
     let exponent = frame_exponent(crate::decoration::Role::Toplevel);
-    let surface_elements = render_elements_from_surface_tree::<
-        GlesRenderer,
-        WaylandSurfaceRenderElement<GlesRenderer>,
-    >(
+    let surface_elements = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         &surface,
         physical_point(frame.rect.loc - geometry_origin, scale),
@@ -945,20 +946,20 @@ fn append_focus_transition(
         Kind::Unspecified,
     );
     for element in surface_elements {
-        let clipped = state.rounded_clip.clone().and_then(|program| {
-            crate::effects::RoundedTextureElement::from_surface_element(
-                &element,
-                rect_physical,
-                radius,
-                exponent,
-                scale,
-                program,
-            )
-            .map(|rounded| rounded.mapped(content_physical, rect_physical))
-        });
-        match clipped {
-            Some(rounded) => elements.push(rounded.into()),
-            None => elements.push(element.into()),
+        let Some(program) = state.rounded_clip.clone() else {
+            elements.push(element.into());
+            continue;
+        };
+        match crate::effects::RoundedTextureElement::from_surface_element(
+            element,
+            rect_physical,
+            radius,
+            exponent,
+            scale,
+            program,
+        ) {
+            Ok(rounded) => elements.push(rounded.mapped(content_physical, rect_physical).into()),
+            Err(element) => elements.push((*element).into()),
         }
     }
     append_solid(
@@ -970,13 +971,13 @@ fn append_focus_transition(
     );
 }
 
-fn append_sliding_spaces(
+fn append_sliding_spaces<R: MalaysiaRenderer>(
     state: &mut State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     position: f64,
     scale: f64,
     moving: Option<malaysia_scene::scene::WindowId>,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let output = state.logical_output_size();
     let stride = f64::from(output.w + vow_design::SPACE_GAP);
@@ -1093,14 +1094,14 @@ fn frame_has_border(state: crate::decoration::WindowState) -> bool {
     state != crate::decoration::WindowState::Fullscreen
 }
 
-fn append_window_frame(
+fn append_window_frame<R: MalaysiaRenderer>(
     state: &mut State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     id: malaysia_scene::scene::WindowId,
     focused: Option<malaysia_scene::scene::WindowId>,
     scale: f64,
     offset: Point<i32, Logical>,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let data = {
         let Some(window) = state
@@ -1154,7 +1155,7 @@ fn append_window_frame(
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
     let exponent = frame_exponent(data.role);
 
-    let mut content: Vec<OutputRenderElement> = Vec::new();
+    let mut content: Vec<OutputRenderElement<R>> = Vec::new();
     if data.insets.top > 0.0 {
         let pointer = state
             .chrome_pointer
@@ -1169,7 +1170,7 @@ fn append_window_frame(
         };
         if let Some(program) = state.rounded_clip.clone()
             && let Some(element) = state.chrome.element(
-                renderer,
+                renderer.gles(),
                 id,
                 &data.title,
                 is_focused,
@@ -1193,10 +1194,14 @@ fn append_window_frame(
     } else {
         Kind::ScanoutCandidate
     };
-    let surface_elements = render_elements_from_surface_tree::<
-        GlesRenderer,
-        WaylandSurfaceRenderElement<GlesRenderer>,
-    >(renderer, &data.surface, surface_location, scale, 1.0, kind);
+    let surface_elements = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
+        renderer,
+        &data.surface,
+        surface_location,
+        scale,
+        1.0,
+        kind,
+    );
     append_frame(
         state,
         content,
@@ -1223,11 +1228,11 @@ struct Frame {
     bordered: bool,
 }
 
-fn append_ime_popups(
+fn append_ime_popups<R: MalaysiaRenderer>(
     state: &State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let output = Rectangle::from_size(state.logical_output_size());
     for popup in state.ime_popups.iter().filter(|popup| popup.alive()) {
@@ -1248,10 +1253,7 @@ fn append_ime_popups(
         let location = ime_popup_location(origin, popup.text_input_rectangle(), size, output);
         popup.set_location(location - origin);
         elements.extend(
-            render_elements_from_surface_tree::<
-                GlesRenderer,
-                WaylandSurfaceRenderElement<GlesRenderer>,
-            >(
+            render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
                 renderer,
                 popup.wl_surface(),
                 physical_point(location, scale),
@@ -1284,11 +1286,11 @@ fn ime_popup_location(
     Point::from((x, y))
 }
 
-pub(crate) fn append_popups(
+pub(crate) fn append_popups<R: MalaysiaRenderer>(
     state: &mut State,
-    renderer: &mut GlesRenderer,
+    renderer: &mut R,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
     shown: impl Fn(malaysia_scene::scene::PopupId) -> bool,
 ) {
     let popups: Vec<_> = state
@@ -1306,10 +1308,7 @@ pub(crate) fn append_popups(
             Size::from((rect.width().round() as i32, rect.height().round() as i32)),
         );
         let geometry = crate::window::window_geometry(&surface).unwrap_or_default();
-        let surface_elements = render_elements_from_surface_tree::<
-            GlesRenderer,
-            WaylandSurfaceRenderElement<GlesRenderer>,
-        >(
+        let surface_elements = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
             renderer,
             &surface,
             physical_point(frame.loc - geometry.loc, scale),
@@ -1339,13 +1338,13 @@ pub(crate) fn append_popups(
     }
 }
 
-fn append_frame(
+fn append_frame<R: MalaysiaRenderer>(
     state: &mut State,
-    mut content: Vec<OutputRenderElement>,
-    surface_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>>,
+    mut content: Vec<OutputRenderElement<R>>,
+    surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
     frame: Frame,
     scale: f64,
-    elements: &mut Vec<OutputRenderElement>,
+    elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let frame_rect_physical = frame.rect;
     let radius_physical = frame.radius;
@@ -1353,17 +1352,16 @@ fn append_frame(
     let is_focused = frame.focused;
     if let Some(program) = state.rounded_clip.clone().filter(|_| frame.bordered) {
         for element in surface_elements {
-            if let Some(rounded) = crate::effects::RoundedTextureElement::from_surface_element(
-                &element,
+            match crate::effects::RoundedTextureElement::from_surface_element(
+                element,
                 frame_rect_physical,
                 radius_physical,
                 exponent,
                 scale,
                 program.clone(),
             ) {
-                content.push(rounded.into());
-            } else {
-                content.push(element.into());
+                Ok(rounded) => content.push(rounded.into()),
+                Err(element) => content.push((*element).into()),
             }
         }
     } else {
@@ -1387,16 +1385,14 @@ fn append_frame(
                     color,
                 );
                 inner = Some(
-                    state
-                        .chrome
-                        .shader(
-                            slot(crate::chrome::INNER_BORDER_SLOT),
-                            program,
-                            area,
-                            1.0,
-                            uniforms,
-                        )
-                        .into(),
+                    crate::renderer::PrimaryGpu(state.chrome.shader(
+                        slot(crate::chrome::INNER_BORDER_SLOT),
+                        program,
+                        area,
+                        1.0,
+                        uniforms,
+                    ))
+                    .into(),
                 );
             }
             let (area, uniforms) = border_shader(
@@ -1408,16 +1404,14 @@ fn append_frame(
                 palette.outer_border,
             );
             outer = Some(
-                state
-                    .chrome
-                    .shader(
-                        slot(crate::chrome::OUTER_BORDER_SLOT),
-                        program,
-                        area,
-                        1.0,
-                        uniforms,
-                    )
-                    .into(),
+                crate::renderer::PrimaryGpu(state.chrome.shader(
+                    slot(crate::chrome::OUTER_BORDER_SLOT),
+                    program,
+                    area,
+                    1.0,
+                    uniforms,
+                ))
+                .into(),
             );
         }
         if let Some(program) = state.shadow.as_ref() {
@@ -1482,12 +1476,12 @@ fn border_shader(
     (area, uniforms)
 }
 
-pub(crate) fn build_window_elements(
-    renderer: &mut GlesRenderer,
+pub(crate) fn build_window_elements<R: MalaysiaRenderer>(
+    renderer: &mut R,
     surface: &WlSurface,
     scale: f64,
-) -> Vec<OutputRenderElement> {
-    render_elements_from_surface_tree::<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>(
+) -> Vec<OutputRenderElement<R>> {
+    render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         surface,
         Point::from((0, 0)),
@@ -1551,7 +1545,7 @@ fn screenshot_elements(
     state: &mut State,
     renderer: &mut GlesRenderer,
     cursor: &Cursors,
-) -> Vec<OutputRenderElement> {
+) -> Vec<OutputRenderElement<GlesRenderer>> {
     let include_cursor = state.config.screenshot.show_pointer;
     build_output_elements(state, renderer, cursor, include_cursor)
 }
@@ -1663,8 +1657,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                     )
                 }
             };
-            let without_cursor: Vec<OutputRenderElement>;
-            let drawn: &[OutputRenderElement] = match &pending.target {
+            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
+            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
                 crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
                     without_cursor =
                         build_output_elements(&mut session.state, renderer, &session.cursor, false);
@@ -1909,10 +1903,10 @@ enum LayerSide {
     Front,
 }
 
-fn append_layers(
+fn append_layers<R: MalaysiaRenderer>(
     state: &State,
-    renderer: &mut GlesRenderer,
-    elements: &mut Vec<OutputRenderElement>,
+    renderer: &mut R,
+    elements: &mut Vec<OutputRenderElement<R>>,
     side: LayerSide,
     offset: Point<i32, Logical>,
     include: impl Fn(&crate::layers::LayerEntry) -> bool,
@@ -1926,10 +1920,7 @@ fn append_layers(
         for entry in state.layers.on_layer(layer).filter(|entry| include(entry)) {
             let location = physical_point(entry.geometry.loc + offset, scale);
             elements.extend(
-                render_elements_from_surface_tree::<
-                    GlesRenderer,
-                    WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
+                render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
                     renderer,
                     entry.surface.wl_surface(),
                     location,
@@ -1944,9 +1935,9 @@ fn append_layers(
     }
 }
 
-fn append_cursor(
-    renderer: &mut GlesRenderer,
-    elements: &mut Vec<OutputRenderElement>,
+fn append_cursor<R: MalaysiaRenderer>(
+    renderer: &mut R,
+    elements: &mut Vec<OutputRenderElement<R>>,
     state: &State,
     cursor: &Cursors,
 ) {
@@ -1991,10 +1982,7 @@ fn append_cursor(
             let hotspot = Point::from((hotspot.x * boost, hotspot.y * boost));
             let position = cursor_origin(location, hotspot, scale).to_i32_round();
             elements.extend(
-                render_elements_from_surface_tree::<
-                    GlesRenderer,
-                    WaylandSurfaceRenderElement<GlesRenderer>,
-                >(
+                render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
                     renderer,
                     surface,
                     position,
@@ -2350,7 +2338,7 @@ mod tests {
     fn render_and_read(
         renderer: &mut GlesRenderer,
         size: Size<i32, Physical>,
-        elements: &[OutputRenderElement],
+        elements: &[OutputRenderElement<GlesRenderer>],
     ) -> Vec<u8> {
         let buffer_size: Size<i32, BufferCoord> = Size::from((size.w, size.h));
         let mut target =
@@ -2399,7 +2387,11 @@ mod tests {
             .expect("the readback should cover the whole frame")
     }
 
-    fn solid(renderer: &mut GlesRenderer, color: [u8; 4], side: i32) -> OutputRenderElement {
+    fn solid(
+        renderer: &mut GlesRenderer,
+        color: [u8; 4],
+        side: i32,
+    ) -> OutputRenderElement<GlesRenderer> {
         let buffer = MemoryRenderBuffer::from_slice(
             &color.repeat((side * side) as usize),
             Fourcc::Argb8888,

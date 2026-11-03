@@ -103,6 +103,7 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca51
     "renderer_gl",
     "wayland_frontend",
     "desktop",
+    "renderer_multi",
 ] }
 
 [profile.dev]

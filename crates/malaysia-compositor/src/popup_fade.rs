@@ -12,6 +12,7 @@ use smithay::backend::renderer::{Bind, Offscreen};
 use smithay::utils::{Buffer as BufferCoord, Point, Scale, Size, Transform};
 
 use crate::cursor::OutputRenderElement;
+use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 use crate::theme_fade::{ease, progress};
 
@@ -67,21 +68,25 @@ fn snapshot(
     Some(texture)
 }
 
-pub(crate) fn append(state: &mut State, now: Instant, elements: &mut Vec<OutputRenderElement>) {
+pub(crate) fn append<R: MalaysiaRenderer>(
+    state: &mut State,
+    now: Instant,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
     state
         .popup_fades
         .retain(|fade| now.saturating_duration_since(fade.start) < DURATION);
     for fade in &state.popup_fades {
         let alpha = 1.0 - ease(progress(fade.start, now, DURATION));
         elements.push(
-            TextureRenderElement::from_texture_buffer(
+            PrimaryGpu(TextureRenderElement::from_texture_buffer(
                 Point::from((0.0, 0.0)),
                 &fade.texture,
                 Some(alpha),
                 None,
                 None,
                 Kind::Unspecified,
-            )
+            ))
             .into(),
         );
     }

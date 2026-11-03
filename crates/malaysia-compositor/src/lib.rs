@@ -21,6 +21,7 @@ mod layers;
 mod lock;
 mod popup;
 mod popup_fade;
+mod renderer;
 pub mod session;
 mod spaces;
 mod spawn;

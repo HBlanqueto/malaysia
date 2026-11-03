@@ -1,12 +1,16 @@
 //! Compositor-side window effects: rounded frame, border and shadow.
 
-use smithay::backend::renderer::Texture;
-use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::element::surface::{
+    WaylandSurfaceRenderElement, WaylandSurfaceTexture,
+};
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
 use smithay::backend::renderer::gles::{
     GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
-use smithay::backend::renderer::utils::CommitCounter;
+use smithay::backend::renderer::utils::{CommitCounter, DamageSet};
+use smithay::backend::renderer::{Renderer, Texture};
+
+use crate::renderer::MalaysiaRenderer;
 use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
@@ -49,46 +53,46 @@ pub(crate) fn shader_area(
     )
 }
 
-pub(crate) struct RoundedTextureElement {
-    id: Id,
-    commit_counter: CommitCounter,
-    texture: GlesTexture,
+#[allow(clippy::large_enum_variant)]
+enum Source<R: Renderer> {
+    Surface(WaylandSurfaceRenderElement<R>),
+    Texture {
+        texture: GlesTexture,
+        id: Id,
+        commit: CommitCounter,
+        src: Rectangle<f64, BufferCoords>,
+    },
+}
+
+pub(crate) struct RoundedTextureElement<R: Renderer> {
+    source: Source<R>,
     texture_size: Size<i32, BufferCoords>,
-    src: Rectangle<f64, BufferCoords>,
     dst: Rectangle<i32, Physical>,
-    transform: Transform,
-    alpha: f32,
-    kind: Kind,
+    remapped: bool,
     frame_rect: Rectangle<i32, Physical>,
     radius: i32,
     exponent: f32,
     program: GlesTexProgram,
 }
 
-impl RoundedTextureElement {
+impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
     pub(crate) fn from_surface_element(
-        element: &WaylandSurfaceRenderElement<GlesRenderer>,
+        element: WaylandSurfaceRenderElement<R>,
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
         exponent: f32,
         scale: f64,
         program: GlesTexProgram,
-    ) -> Option<Self> {
-        let texture = match element.texture() {
-            WaylandSurfaceRenderElementTexture::Texture(tex) => tex.clone(),
-            WaylandSurfaceRenderElementTexture::SolidColor(_) => return None,
+    ) -> Result<Self, Box<WaylandSurfaceRenderElement<R>>> {
+        let texture_size = match element.texture() {
+            WaylandSurfaceTexture::Texture(texture) => texture.size(),
+            WaylandSurfaceTexture::SolidColor(_) => return Err(Box::new(element)),
         };
-        let texture_size = texture.size();
-        Some(Self {
-            id: element.id().clone(),
-            commit_counter: element.current_commit(),
-            texture,
+        Ok(Self {
             texture_size,
-            src: element.src(),
             dst: element.geometry(Scale::from(scale)),
-            transform: element.transform(),
-            alpha: element.alpha(),
-            kind: element.kind(),
+            source: Source::Surface(element),
+            remapped: false,
             frame_rect,
             radius,
             exponent,
@@ -102,6 +106,7 @@ impl RoundedTextureElement {
         to: Rectangle<i32, Physical>,
     ) -> Self {
         self.dst = map_rect(self.dst, from, to);
+        self.remapped = true;
         self
     }
 
@@ -109,28 +114,24 @@ impl RoundedTextureElement {
     pub(crate) fn from_texture(
         texture: GlesTexture,
         id: Id,
-        commit_counter: CommitCounter,
+        commit: CommitCounter,
         src: Rectangle<f64, BufferCoords>,
         dst: Rectangle<i32, Physical>,
-        transform: Transform,
-        alpha: f32,
-        kind: Kind,
         frame_rect: Rectangle<i32, Physical>,
         radius: i32,
         exponent: f32,
         program: GlesTexProgram,
     ) -> Self {
-        let texture_size = texture.size();
         Self {
-            id,
-            commit_counter,
-            texture,
-            texture_size,
-            src,
+            texture_size: texture.size(),
+            source: Source::Texture {
+                texture,
+                id,
+                commit,
+                src,
+            },
             dst,
-            transform,
-            alpha,
-            kind,
+            remapped: false,
             frame_rect,
             radius,
             exponent,
@@ -138,79 +139,117 @@ impl RoundedTextureElement {
         }
     }
 
-    fn texture_geometry(&self) -> [f32; 4] {
-        frame_to_texture_geometry(self.src, self.dst, self.frame_rect)
-    }
-
-    fn rounded_radius(&self) -> f32 {
-        texture_radius(self.src, self.dst, self.radius)
+    fn uniforms(&self) -> Vec<Uniform<'static>> {
+        let src = self.src();
+        vec![
+            Uniform::new(
+                "texture_size",
+                [self.texture_size.w as f32, self.texture_size.h as f32],
+            ),
+            Uniform::new(
+                "geometry",
+                frame_to_texture_geometry(src, self.dst, self.frame_rect),
+            ),
+            Uniform::new("radius", texture_radius(src, self.dst, self.radius)),
+            Uniform::new("exponent", self.exponent),
+        ]
     }
 }
 
-impl Element for RoundedTextureElement {
+impl<R: MalaysiaRenderer> Element for RoundedTextureElement<R> {
     fn id(&self) -> &Id {
-        &self.id
+        match &self.source {
+            Source::Surface(element) => element.id(),
+            Source::Texture { id, .. } => id,
+        }
     }
 
     fn current_commit(&self) -> CommitCounter {
-        self.commit_counter
+        match &self.source {
+            Source::Surface(element) => element.current_commit(),
+            Source::Texture { commit, .. } => *commit,
+        }
     }
 
     fn src(&self) -> Rectangle<f64, BufferCoords> {
-        self.src
+        match &self.source {
+            Source::Surface(element) => element.src(),
+            Source::Texture { src, .. } => *src,
+        }
     }
 
     fn transform(&self) -> Transform {
-        self.transform
+        match &self.source {
+            Source::Surface(element) => element.transform(),
+            Source::Texture { .. } => Transform::Normal,
+        }
     }
 
     fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
         self.dst
     }
 
+    fn damage_since(
+        &self,
+        scale: Scale<f64>,
+        commit: Option<CommitCounter>,
+    ) -> DamageSet<i32, Physical> {
+        match &self.source {
+            Source::Surface(element) if !self.remapped => element.damage_since(scale, commit),
+            _ if commit == Some(self.current_commit()) => DamageSet::default(),
+            _ => DamageSet::from_slice(&[Rectangle::from_size(self.dst.size)]),
+        }
+    }
+
     fn alpha(&self) -> f32 {
-        self.alpha
+        match &self.source {
+            Source::Surface(element) => element.alpha(),
+            Source::Texture { .. } => 1.0,
+        }
     }
 
     fn kind(&self) -> Kind {
-        self.kind
+        match &self.source {
+            Source::Surface(element) => element.kind(),
+            Source::Texture { .. } => Kind::Unspecified,
+        }
     }
 }
 
-impl RenderElement<GlesRenderer> for RoundedTextureElement {
+impl<R: MalaysiaRenderer> RenderElement<R> for RoundedTextureElement<R> {
     fn draw(
         &self,
-        frame: &mut smithay::backend::renderer::gles::GlesFrame<'_, '_>,
+        frame: &mut R::Frame<'_, '_>,
         src: Rectangle<f64, BufferCoords>,
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
-        _cache: Option<&smithay::utils::user_data::UserDataMap>,
-    ) -> Result<(), smithay::backend::renderer::gles::GlesError> {
-        let uniforms = vec![
-            Uniform::new(
-                "texture_size",
-                [self.texture_size.w as f32, self.texture_size.h as f32],
-            ),
-            Uniform::new("geometry", self.texture_geometry()),
-            Uniform::new("radius", self.rounded_radius()),
-            Uniform::new("exponent", self.exponent),
-        ];
-        frame.render_texture_from_to(
-            &self.texture,
-            src,
-            dst,
-            damage,
-            opaque_regions,
-            self.transform,
-            self.alpha,
-            Some(&self.program),
-            &uniforms,
-        )
+        cache: Option<&smithay::utils::user_data::UserDataMap>,
+    ) -> Result<(), R::Error> {
+        match &self.source {
+            Source::Surface(element) => {
+                R::gles_frame(frame)
+                    .override_default_tex_program(self.program.clone(), self.uniforms());
+                let drawn = element.draw(frame, src, dst, damage, opaque_regions, cache);
+                R::gles_frame(frame).clear_tex_program_override();
+                drawn
+            }
+            Source::Texture { texture, .. } => R::gles_frame(frame)
+                .render_texture_from_to(
+                    texture,
+                    src,
+                    dst,
+                    damage,
+                    opaque_regions,
+                    Transform::Normal,
+                    1.0,
+                    Some(&self.program),
+                    &self.uniforms(),
+                )
+                .map_err(R::from_gles_error),
+        }
     }
 }
-
-use smithay::backend::renderer::element::surface::WaylandSurfaceTexture as WaylandSurfaceRenderElementTexture;
 
 #[cfg(test)]
 mod tests {
