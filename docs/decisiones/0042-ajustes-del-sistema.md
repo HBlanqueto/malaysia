@@ -13,7 +13,7 @@ El escritorio necesita una app de preferencias.
 3. Ventana CSD: `Decorations::Client` y titlebar propia con semáforos; tamaño y límites de `yuki-design::SETTINGS`.
 4. Se abre desde el menú ❄ con `spawn_app("yuki-settings", &[])`, que preserva `WAYLAND_DISPLAY` y elimina el entorno Mesa privado.
 5. Persistencia en `appearance.domain` vía `vow_appearance`; solo edita campos de apariencia.
-6. Nix instala el binario, lo envuelve con el wrapper Mesa y copia el `.desktop`.
+6. Nix instala el binario, lo envuelve con el wrapper Mesa y copia el `.desktop` y su icono `hicolor/scalable`.
 
 ## Consecuencias
 
