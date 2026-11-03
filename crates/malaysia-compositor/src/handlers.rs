@@ -1,6 +1,6 @@
 //! Protocol handler implementations and their delegation glue.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use smithay::backend::input::TabletToolDescriptor;
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
@@ -502,14 +502,51 @@ impl SelectionHandler for State {
             return;
         }
         let bytes = user_data.clone();
-        std::thread::spawn(move || {
-            use std::io::Write;
-            let mut file = std::fs::File::from(fd);
-            if let Err(error) = file.write_all(&bytes) {
-                tracing::warn!(%error, "could not write the clipboard image");
-            }
-        });
+        let spawned = std::thread::Builder::new()
+            .name("clipboard-send".into())
+            .spawn(move || {
+                if let Err(error) = write_before_deadline(fd, &bytes, CLIPBOARD_SEND_TIMEOUT) {
+                    tracing::warn!(%error, "could not write the clipboard image");
+                }
+            });
+        if let Err(error) = spawned {
+            tracing::warn!(%error, "could not start the clipboard writer");
+        }
     }
+}
+
+const CLIPBOARD_SEND_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn write_before_deadline(
+    fd: std::os::fd::OwnedFd,
+    mut bytes: &[u8],
+    timeout: Duration,
+) -> std::io::Result<()> {
+    use nix::fcntl::{FcntlArg, OFlag, fcntl};
+    use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+    use std::io::Write;
+    use std::os::fd::AsFd;
+    let flags = OFlag::from_bits_retain(fcntl(&fd, FcntlArg::F_GETFL)?);
+    fcntl(&fd, FcntlArg::F_SETFL(flags | OFlag::O_NONBLOCK))?;
+    let deadline = Instant::now() + timeout;
+    let mut file = std::fs::File::from(fd);
+    while !bytes.is_empty() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let mut fds = [PollFd::new(file.as_fd(), PollFlags::POLLOUT)];
+        let ready = poll(
+            &mut fds,
+            PollTimeout::try_from(remaining).unwrap_or(PollTimeout::MAX),
+        )?;
+        if ready == 0 {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        match file.write(bytes) {
+            Ok(written) => bytes = &bytes[written..],
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
 }
 
 impl DataDeviceHandler for State {
@@ -990,9 +1027,37 @@ mod tests {
 
     use super::{
         BlockerKind, child_grab_serial_ok, decoration_for_kde_mode, decoration_for_xdg_mode,
-        pending_blocker,
+        pending_blocker, write_before_deadline,
     };
     use crate::config::DecorationPolicy;
+
+    #[test]
+    fn a_clipboard_reader_that_never_reads_times_out() {
+        let (_reader, writer) = std::io::pipe().expect("pipe");
+        let bytes = vec![0u8; 4 << 20];
+        let result =
+            write_before_deadline(writer.into(), &bytes, std::time::Duration::from_millis(50));
+        assert_eq!(
+            result.map_err(|error| error.kind()),
+            Err(std::io::ErrorKind::TimedOut)
+        );
+    }
+
+    #[test]
+    fn a_clipboard_reader_gets_every_byte() {
+        use std::io::Read;
+        let (mut reader, writer) = std::io::pipe().expect("pipe");
+        let bytes: Vec<u8> = (0..300_000u32).map(|i| i as u8).collect();
+        let expected = bytes.clone();
+        let read = std::thread::spawn(move || {
+            let mut got = Vec::new();
+            reader.read_to_end(&mut got).expect("read");
+            got
+        });
+        write_before_deadline(writer.into(), &bytes, std::time::Duration::from_secs(5))
+            .expect("write");
+        assert_eq!(read.join().expect("reader"), expected);
+    }
     use malaysia_scene::scene::Decoration;
     use smithay::utils::Serial;
 

@@ -9,7 +9,6 @@ Hallazgos abiertos contra `22070c6` (2026-10-31); los corregidos y los del toolk
 | P1-12 | `crates/malaysia-compositor/src/session.rs:1301,1376` | Captura y ventana en `session.rs` pese a existir `capture.rs`. Aplazado: solo mover. | L3d |
 | P1-13 | `crates/malaysia-compositor/src/session.rs:1685` | `reset_dead_cursor` en `session.rs` pese a existir `cursor.rs`. Aplazado: solo mover. | L3e |
 | P1-14 | `crates/malaysia-compositor/src/handlers.rs:345,658,666` | Handlers vacíos sin comentario de que es intencional. | L5a |
-| PX-09 | `crates/malaysia-compositor/src/handlers.rs:597` | Un hilo por `receive`; `write_all` bloquea sin timeout y `spawn` puede panicar. | L1l |
 | P5-07 | `crates/malaysia-shell/src/desktop.rs:153,157` | Compara con `Malaysia` pero el escritorio es `Malaysia`; `OnlyShowIn`/`NotShowIn` se invierten. | L1i |
 | P5-09 | `crates/malaysia-shell/src/menubar/mod.rs:279,304` | `prepare_kit_env` borra `MALAYSIA_ORIG_*` del hijo; el launcher no puede restaurarlos. | L1i |
 | P5-10 | `crates/malaysia-shell/src/menubar/focused.rs:230,411` | Ids con índice de lista; abrir/cerrar ventanas con el menú abierto puede operar en otra. | L1h |
