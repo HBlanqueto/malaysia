@@ -811,7 +811,8 @@ Commits that apply this audit, in order:
 | `cb630a2`, `b2a90e0`, `03b2ca3`, `d0bba82` | §2.3, §3, §1.1 | PX-14, PX-09, `forget_window` and relative-pointer deltas. |
 | `5b56fb8` | §10 | `deuda.md` brought up to date. |
 | `41b0661` | §2.2 | Cause of the lag after `cfcf7c0`: every commit queues a redraw (below). |
-| next | §2.2 (6) | Primary-plane scanout for fullscreen, cursor plane and per-surface dmabuf feedback. `SKIP_CURSOR_ONLY_UPDATES` stays off: without VRR it freezes the cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri only uses it with VRR). |
+| `78c6a2e` | §2.2 (6) | Primary-plane scanout for fullscreen, cursor plane and per-surface dmabuf feedback. `SKIP_CURSOR_ONLY_UPDATES` stays off: without VRR it freezes the cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri only uses it with VRR). |
+| next | §2.2 (6) | Overlay planes behind `debug.overlay_planes`, off by default. Smithay `023b78b1` does not set the `pixel blend mode`; on i915 they stay off (S-02). |
 
 ### Lag after `cfcf7c0`
 

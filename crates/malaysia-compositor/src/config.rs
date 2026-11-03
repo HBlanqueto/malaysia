@@ -342,6 +342,7 @@ impl Default for BlurConfig {
 #[serde(default)]
 pub struct DebugConfig {
     pub damage_highlight: bool,
+    pub overlay_planes: bool,
 }
 
 impl Config {

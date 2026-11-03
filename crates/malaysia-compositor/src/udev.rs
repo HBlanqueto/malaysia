@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
-use smithay::backend::allocator::{Fourcc, Modifier};
+use smithay::backend::allocator::{Format, Fourcc, Modifier};
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
-    DrmDevice, DrmDeviceFd, DrmEventMetadata, DrmEventTime, DrmNode, NodeType,
+    DrmDevice, DrmDeviceFd, DrmEventMetadata, DrmEventTime, DrmNode, DrmSurface, NodeType, Planes,
 };
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
@@ -82,6 +82,7 @@ struct Udev {
     appearance_watch: Option<AppearanceWatch>,
     render_feedback: DmabufFeedback,
     scanout_feedback: DmabufFeedback,
+    frame_flags: FrameFlags,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -188,8 +189,13 @@ pub fn run(options: DrmOptions) -> Result<()> {
         .create_surface(crtc, mode, &[connector.handle()])
         .map_err(|error| anyhow!("creating the DRM surface: {error}"))?;
 
+    let overlay_planes = crate::config::Config::load().debug.overlay_planes;
     let mut planes = surface.planes().clone();
-    planes.overlay.clear();
+    if !overlay_planes {
+        planes.overlay.clear();
+    }
+    let scanout_feedback =
+        scanout_feedback(&surface, &planes, &renderer, render_node, scanout_node)?;
 
     let allocator = GbmAllocator::new(
         render_gbm.clone(),
@@ -218,7 +224,11 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), renderer.dmabuf_formats())
         .build()
         .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
-    let scanout_feedback = scanout_feedback(&compositor, &renderer, render_node, scanout_node)?;
+    let mut frame_flags =
+        FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT;
+    if overlay_planes {
+        frame_flags.insert(FrameFlags::ALLOW_OVERLAY_PLANE_SCANOUT);
+    }
     let syncobj = supports_syncobj_eventfd(&render_fd).then_some(render_fd);
     let loop_handle = event_loop.handle();
     let mut state = State::new_with_output(
@@ -275,6 +285,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         appearance_watch: None,
         render_feedback: feedback,
         scanout_feedback,
+        frame_flags,
     };
 
     let appearance_watch = AppearanceWatch::new()
@@ -697,7 +708,7 @@ impl Udev {
             &mut self.renderer,
             &elements,
             [0.06, 0.06, 0.09, 1.0],
-            FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT,
+            self.frame_flags,
         ) {
             Ok(mut result) => {
                 send_dmabuf_feedbacks(
@@ -928,30 +939,30 @@ fn make_output(
 }
 
 fn scanout_feedback(
-    compositor: &Compositor,
+    surface: &DrmSurface,
+    planes: &Planes,
     renderer: &GlesRenderer,
     render_node: DrmNode,
     scanout_node: DrmNode,
 ) -> anyhow::Result<DmabufFeedback> {
     let render_formats = renderer.dmabuf_formats();
-    let mut scanout_formats: Vec<_> = compositor
-        .surface()
-        .plane_info()
-        .formats
-        .intersection(&render_formats)
-        .copied()
-        .collect();
-    // Cross-device buffers scan out glitched unless Linear: https://github.com/YaLTeR/niri/blob/main/src/backend/tty.rs (surface_dmabuf_feedback).
-    if render_node != scanout_node {
-        scanout_formats.retain(|format| format.modifier == Modifier::Linear);
-    }
-    DmabufFeedbackBuilder::new(render_node.dev_id(), render_formats)
-        .add_preference_tranche(
-            scanout_node.dev_id(),
-            TrancheFlags::Scanout,
-            scanout_formats,
-            4..=5,
-        )
+    let scanout_formats = |formats: &mut dyn Iterator<Item = &Format>| {
+        let mut formats: Vec<Format> = formats
+            .filter(|format| render_formats.contains(format))
+            .copied()
+            .collect();
+        // Cross-device buffers scan out glitched unless Linear: https://github.com/YaLTeR/niri/blob/main/src/backend/tty.rs (surface_dmabuf_feedback).
+        if render_node != scanout_node {
+            formats.retain(|format| format.modifier == Modifier::Linear);
+        }
+        formats
+    };
+    let primary = scanout_formats(&mut surface.plane_info().formats.iter());
+    let overlay =
+        scanout_formats(&mut planes.overlay.iter().flat_map(|plane| plane.formats.iter()));
+    DmabufFeedbackBuilder::new(render_node.dev_id(), render_formats.clone())
+        .add_preference_tranche(scanout_node.dev_id(), TrancheFlags::Scanout, primary, 4..=5)
+        .add_preference_tranche(scanout_node.dev_id(), TrancheFlags::Scanout, overlay, 4..=5)
         .build()
         .map_err(|error| anyhow!("building the scanout dmabuf feedback: {error}"))
 }

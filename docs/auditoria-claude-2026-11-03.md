@@ -812,7 +812,8 @@ Commits que aplican esta auditoría, en orden:
 | `cb630a2`, `b2a90e0`, `03b2ca3`, `d0bba82` | §2.3, §3, §1.1 | PX-14, PX-09, `forget_window` y deltas de relative-pointer. |
 | `5b56fb8` | §10 | `deuda.md` al día. |
 | `41b0661` | §2.2 | Causa del lag tras `cfcf7c0`: todo commit encola el redibujado (abajo). |
-| siguiente | §2.2 (6) | Scanout en el plano primario para pantalla completa, plano de cursor y feedback dmabuf por superficie. `SKIP_CURSOR_ONLY_UPDATES` no se activa: sin VRR congela el cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri solo la usa con VRR). |
+| `78c6a2e` | §2.2 (6) | Scanout en el plano primario para pantalla completa, plano de cursor y feedback dmabuf por superficie. `SKIP_CURSOR_ONLY_UPDATES` no se activa: sin VRR congela el cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri solo la usa con VRR). |
+| siguiente | §2.2 (6) | Planos overlay tras `debug.overlay_planes`, apagados por defecto. Smithay `023b78b1` no fija el `pixel blend mode`; en i915 quedan apagados (S-02). |
 
 ### Lag tras `cfcf7c0`
 

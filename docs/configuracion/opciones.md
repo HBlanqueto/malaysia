@@ -298,6 +298,12 @@ hace que el compositor difumine lo que hay detrás (vibrancy tipo macOS).
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
 | `debug.damage_highlight` | bool | `false` | datos | render (resaltar daño por frame) |
+| `debug.overlay_planes` | bool | `false` | activa | DRM: planos overlay y su tramo de feedback dmabuf |
+
+`debug.overlay_planes` se lee al iniciar la sesión DRM; cambiarlo exige
+reiniciar. Va apagado, como `debug.enable-overlay-planes` de niri, hasta
+aceptarlo con `./dev.sh video` en el panel real. En Intel i915 debe quedar
+apagado: ver S-02 en [`deuda.md`](../deuda.md).
 
 `MALAYSIA_POWER_DRY_RUN=1` (variable de entorno, no de dominio): Suspender,
 Reiniciar, Apagar y Cerrar sesión solo escriben en el log la llamada a logind
@@ -438,6 +444,7 @@ radius = 20.0
 ```toml
 # ~/.config/malaysia/debug.domain
 damage_highlight = false
+overlay_planes = false
 ```
 
 > Nota: dentro de cada archivo de dominio las secciones se escriben **sin el
