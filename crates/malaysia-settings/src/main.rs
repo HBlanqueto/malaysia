@@ -4,6 +4,7 @@ mod app;
 mod previews;
 mod state;
 
+use barrier_kit::app::{Instance, Launch, launch};
 use barrier_kit::platform::{Decorations, WindowOptions, run_window};
 use barrier_kit::theme;
 use freya_components::theming::hooks::use_init_theme;
@@ -15,8 +16,13 @@ use vow_design::SETTINGS;
 use crate::app::settings_window;
 
 fn main() {
+    let instance = match launch(&barrier_kit::titlebar::app_id("settings")) {
+        Ok(Launch::Forwarded) => return,
+        Ok(Launch::Primary(instance)) => Some(instance),
+        Err(_) => None,
+    };
     run_window(
-        AppComponent::new(SettingsApp),
+        AppComponent::new(SettingsApp { instance }),
         WindowOptions::new("Ajustes del sistema", "settings")
             .decorations(Decorations::Client)
             .size((SETTINGS.window_width, SETTINGS.window_height))
@@ -26,10 +32,18 @@ fn main() {
     .expect("malaysia-settings");
 }
 
-struct SettingsApp;
+struct SettingsApp {
+    instance: Option<Instance>,
+}
 
 impl App for SettingsApp {
     fn render(&self) -> impl IntoElement {
+        let instance = self.instance.clone();
+        use_hook(move || {
+            if let Some(instance) = &instance {
+                instance.listen();
+            }
+        });
         use_init_theme(theme::shell);
         settings_window(&load_appearance(), load_dominant(), &theme::resolved())
     }
