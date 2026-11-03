@@ -51,7 +51,7 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0044 | Fundido de apariencia | aceptado |
 | 0045 | GTK menus | aceptado |
 | 0046 | Tengen ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
-| 0047 | BarrierKit en capas ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | propuesto |
+| 0047 | BarrierKit en capas ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0048 | BarrierKit en su repo | aceptado |
 | 0049 | Fondo en Vulkan | aceptado |
 | 0050 | Puente GTK/libadwaita | aceptado |
@@ -60,5 +60,7 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0053 | Modo foco en libadwaita | aceptado |
 | 0054 | Titlebar superpuesta en foco | aceptado |
 | 0055 | Acento y tinte en vivo en libadwaita | aceptado |
+| 0056 | BarrierKit dibuja con Vulkan ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
+| 0057 | Cristal de pantalla completa a todo el ancho y barra lateral sobre un fondo tintado ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.
