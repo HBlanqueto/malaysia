@@ -31,6 +31,8 @@
         fontconfig
         vulkan-loader
       ];
+      hasFreyaSkia = builtins.any (package: package.name == "freya-skia-bindings")
+        (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
     in
     {
       packages = forAllSystems (system: let
@@ -53,7 +55,6 @@
           ];
         };
         skia = barrierkit.packages.${system}.skia-binaries;
-        hasFreyaSkia = lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         commonArgs = {
           pname = "malaysia";
           version = "0.1.0";
@@ -199,7 +200,6 @@
         pkgs = import nixpkgs { inherit system; };
         deps = nativeDeps pkgs;
         skia = barrierkit.packages.${system}.skia-binaries;
-        hasFreyaSkia = pkgs.lib.hasInfix "freya-skia-bindings" (builtins.readFile ./Cargo.lock);
         weston = pkgs.weston.overrideAttrs (final: prev: {
           mesonFlags =
             builtins.filter
