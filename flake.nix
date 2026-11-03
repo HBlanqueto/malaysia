@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/922866a";
+      url = "github:HBlanqueto/barrierkit/849b2b3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -228,6 +228,15 @@
         ];
 
         libadwaitaPatched = self.packages.${system}.libadwaita-global-menu;
+        videoDeps = with pkgs.gst_all_1; [
+          gstreamer
+          gst-plugins-base
+          gst-plugins-good
+          gst-plugins-bad
+          gst-libav
+          pkgs.libva
+          pkgs.glib
+        ];
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
@@ -246,7 +255,7 @@
             amdgpu_top
           ] ++ labApps;
 
-          buildInputs = deps ++ [
+          buildInputs = deps ++ videoDeps ++ [
             pkgs.geist-font
             pkgs.inter
           ];
@@ -261,7 +270,9 @@
             ${pkgs.lib.optionalString hasFreyaSkia ''
               export SKIA_BINARIES_URL="file://${skia}/skia-binaries.tar.gz"
             ''}
-            export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath deps}$LD_LIBRARY_PATH"
+            export LD_LIBRARY_PATH="${libadwaitaPatched}/lib:${pkgs.lib.makeLibraryPath (deps ++ videoDeps)}$LD_LIBRARY_PATH"
+            export GST_PLUGIN_SYSTEM_PATH_1_0="${pkgs.lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" videoDeps}"
+            export LIBVA_DRIVERS_PATH="${pkgs.mesa}/lib/dri"
             # libglvnd reads __EGL_VENDOR_LIBRARY_DIRS (two underscores), not EGL_VENDOR_LIBRARY_DIRS.
             export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d''${__EGL_VENDOR_LIBRARY_DIRS:+:$__EGL_VENDOR_LIBRARY_DIRS}"
             export VK_DRIVER_FILES="${pkgs.mesa}/share/vulkan/icd.d/radeon_icd.x86_64.json''${VK_DRIVER_FILES:+:$VK_DRIVER_FILES}"
