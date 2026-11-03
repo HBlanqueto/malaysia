@@ -29,3 +29,4 @@ mod theme_fade;
 pub mod udev;
 pub mod window;
 pub mod xdg;
+mod xwayland;

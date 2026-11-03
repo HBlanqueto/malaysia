@@ -368,6 +368,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let socket_name = socket.socket_name().to_string_lossy().into_owned();
     info!(socket = %socket_name, "listening on the Wayland socket");
     udev.state.set_wayland_display(socket_name.clone());
+    let _xwayland = crate::xwayland::start(&socket_name);
     loop_handle
         .insert_source(socket, {
             let queue = disconnect_queue.clone();
@@ -446,6 +447,7 @@ fn start_shell_session(socket: &str) -> bool {
             "--user",
             "import-environment",
             "WAYLAND_DISPLAY",
+            "DISPLAY",
             "XDG_CURRENT_DESKTOP",
             "XDG_SESSION_ID",
         ],

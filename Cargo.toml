@@ -40,7 +40,7 @@ libc = "0.2"
 zeroize = "1"
 
 calloop = { version = "0.14", features = ["signals"] }
-nix = { version = "0.31", features = ["signal", "socket", "inotify", "poll"] }
+nix = { version = "0.31", features = ["signal", "socket", "inotify", "poll", "fs", "user"] }
 
 xcursor = "0.3"
 

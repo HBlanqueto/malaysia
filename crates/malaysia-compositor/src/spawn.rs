@@ -19,11 +19,14 @@ pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     let mut command = Command::new(program);
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
+    apply_x11_display(&mut command);
     command
 }
 
 pub fn shell_command(program: impl AsRef<OsStr>) -> Command {
-    Command::new(program)
+    let mut command = Command::new(program);
+    apply_x11_display(&mut command);
+    command
 }
 
 pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
@@ -33,6 +36,7 @@ pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
 pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
+    apply_x11_display(&mut command);
     command.spawn()
 }
 
@@ -63,6 +67,15 @@ fn apply_qt_decoration(command: &mut Command, config: &Config) {
     }
     if std::env::var_os("QT_WAYLAND_DISABLE_WINDOWDECORATION").is_none() {
         command.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
+    }
+}
+
+fn apply_x11_display(command: &mut Command) {
+    let chosen = command.get_envs().any(|(name, _)| name == "DISPLAY");
+    if let Some(display) = crate::xwayland::display()
+        && !chosen
+    {
+        command.env("DISPLAY", display);
     }
 }
 

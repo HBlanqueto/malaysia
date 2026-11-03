@@ -109,6 +109,9 @@ Pendiente: presentation en vkms/DRM, captura rotada y la app de
 `Shift+Super+5` (temporizador, miniatura, `Control` al portapapeles, `Option`
 sin sombra). Pruebas: `./dev.sh presentation`, `activation`, `pointers`,
 `screencopy` y `screencopy-window`.
+**Apps X11 (2026-11-03, ADR 0056):** xwayland-satellite con `-listenfd`; el
+compositor exporta `DISPLAY` a sus hijos y al user manager. Probado contra
+weston headless con `xdpyinfo` y `xeyes`; falta en sesión con OnlyOffice.
 
 ### 12 — Portales y servicios
 

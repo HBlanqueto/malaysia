@@ -145,6 +145,9 @@
                 > "$out/lib/systemd/user/$unit"
             done
 
+            wrapProgram "$out/bin/malaysia-compositor" \
+              --prefix PATH : "${pkgs.xwayland-satellite}/bin"
+
             wrapProgram "$out/bin/malaysia-wallpaper" \
               --run 'export MALAYSIA_ORIG_VK_DRIVER_FILES="''${MALAYSIA_ORIG_VK_DRIVER_FILES-''${VK_DRIVER_FILES-}}"' \
               --run 'export MALAYSIA_ORIG_LD_LIBRARY_PATH="''${MALAYSIA_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
@@ -238,6 +241,7 @@
             cargo-watch
             foot
             wayland-utils
+            xwayland-satellite
             weston
             amdgpu_top
           ] ++ labApps;

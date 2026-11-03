@@ -354,6 +354,7 @@ pub fn run() -> Result<(), SessionError> {
         .to_string_lossy()
         .into_owned();
     tracing::info!(socket = %socket_name, "listening on the Wayland socket");
+    let _xwayland = crate::xwayland::start(&socket_name);
     session.state.set_wayland_display(socket_name);
     loop_handle
         .insert_source(listening_socket, {

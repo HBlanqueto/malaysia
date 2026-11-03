@@ -60,6 +60,7 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0053 | Modo foco en libadwaita | aceptado |
 | 0054 | Titlebar superpuesta en foco | aceptado |
 | 0055 | Acento y tinte en vivo en libadwaita | aceptado |
+| 0056 | Apps X11 con xwayland-satellite | aceptado |
 | 0056 | BarrierKit dibuja con Vulkan ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0057 | Cristal de pantalla completa a todo el ancho y barra lateral sobre un fondo tintado ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 
