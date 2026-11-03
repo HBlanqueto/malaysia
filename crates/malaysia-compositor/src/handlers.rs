@@ -170,9 +170,7 @@ impl CompositorHandler for State {
             self.clear_keyboard_focus();
         }
         self.popup_commit(surface);
-        if commit_requests_redraw(surface) {
-            self.request_redraw();
-        }
+        self.request_redraw();
         self.theme_fade_mark_committed(surface.id());
     }
 
@@ -180,16 +178,6 @@ impl CompositorHandler for State {
         self.clear_surface_appmenu(surface);
         self.clear_surface_gtk_menus(surface);
     }
-}
-
-fn commit_requests_redraw(surface: &WlSurface) -> bool {
-    with_states(surface, |states| {
-        let mut cached = states.cached_state.get::<SurfaceAttributes>();
-        let attrs = cached.current();
-        let has_damage = attrs.buffer.is_some() || !attrs.damage.is_empty();
-        let requests_frame = !attrs.frame_callbacks.is_empty();
-        has_damage || requests_frame
-    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

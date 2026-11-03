@@ -794,3 +794,32 @@ se acepte se registra en `deuda.md` o en `roadmap.md`.
   - `src/wayland/image_copy_capture/mod.rs`.
 - Protocolos: https://wayland.app/protocols/ext-session-lock-v1 y https://wayland.app/protocols/presentation-time.
 - Portal Settings: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Settings.html
+
+## 12. Seguimiento
+
+Commits que aplican esta auditoría, en orden:
+
+| commit | sección | qué |
+|---|---|---|
+| `718605f` | §1.1 | Un segundo lock no sustituye al vivo; el bloqueo corta grab y puntero; atajos, foreign e infinity respetan `locked`. |
+| `61bb3ea` | §3 | `session_destroyed` libera las sesiones de captura. |
+| `74e9df2` | §1.3, §2.3 | Orden de destrucción del wallpaper; el portal ignora los eventos `Defaults`. |
+| `b4e2796` | §2.2 (4) | presentation-time con CLOCK_MONOTONIC y el refresco del modo. |
+| `cfcf7c0` | §2.2 (1) | Un render por vblank y sin bucle en reposo. |
+| `18d90a5` | §2.2 (2, 3) | Ids y commits estables para sombra, borde, titlebar y sólidos; `buffer_age` en winit. |
+| `5a9f87c`, `4e27331`, `b181161` | §4 | Código muerto del compositor, de `malaysia-scene` y del wallpaper. |
+| `b84eaff` | §7 | Scripts, probes y entradas del flake huérfanos. |
+| `cb630a2`, `b2a90e0`, `03b2ca3`, `d0bba82` | §2.3, §3, §1.1 | PX-14, PX-09, `forget_window` y deltas de relative-pointer. |
+| `5b56fb8` | §10 | `deuda.md` al día. |
+
+### Lag tras `cfcf7c0`
+
+1. **Síntoma:** desde `cfcf7c0`, la sesión va con lag en DRM y en anidado.
+2. **Causa:** `CompositorHandler::commit` pedía redibujo solo si `commit_requests_redraw` veía buffer, daño o frame callbacks. Se evaluaba después de `on_commit_buffer_handler`, que en Smithay `023b78b1` ya hizo `attrs.buffer.take()` y `attrs.damage.drain(..)` (`src/backend/renderer/utils/wayland.rs:155,200`). Un commit con buffer nuevo y sin frame callback no pedía frame. El render incondicional en cada vblank lo ocultaba; `cfcf7c0` lo destapó.
+3. **Arreglo:** todo commit encola el redibujado, como niri (`src/handlers/compositor.rs`, `queue_redraw` en cada commit de una ventana mapeada). El damage tracker decide si hay algo que pintar; un frame sin daño envía frame callbacks y arma el vblank estimado.
+4. **Comprobado frente a niri** (`src/niri.rs`: `RedrawState`, `queue_redraw`, `send_frame_callbacks`; `src/backend/tty.rs`: `on_estimated_vblank_timer`):
+   - un frame sin daño envía frame callbacks (`finish_empty_frame`);
+   - el cursor y los commits encolan el redibujado con un frame en vuelo (`Udev::queue_redraw`);
+   - `RoundedTextureElement` daña todo el elemento cuando su commit cambia, así que no pierde daño;
+   - `schedule_repaint` guarda su token y no cancela un repintado: solo lo aplaza al vblank estimado.
+5. **Sin verificar aquí:** el contenedor no tiene `/dev/dri` ni display anfitrión, así que no se pudo bisecar con `./dev.sh demo`. Hay que confirmarlo en sesión.
