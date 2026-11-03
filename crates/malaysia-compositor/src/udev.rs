@@ -9,19 +9,23 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
-use smithay::backend::allocator::{Format, Fourcc, Modifier};
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
+use smithay::backend::allocator::{Format, Fourcc, Modifier};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     DrmDevice, DrmDeviceFd, DrmEventMetadata, DrmEventTime, DrmNode, DrmSurface, NodeType, Planes,
 };
-use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::ImportDma;
-use smithay::backend::renderer::element::{RenderElementStates, default_primary_scanout_output_compare};
 use smithay::backend::renderer::element::utils::select_dmabuf_feedback;
+use smithay::backend::renderer::element::{
+    RenderElementStates, default_primary_scanout_output_compare,
+};
 use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::multigpu::GpuManager;
+
+use crate::renderer::GpuApi;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session as SessionTrait};
 use smithay::backend::udev::{all_gpus, primary_gpu};
@@ -67,7 +71,8 @@ struct Udev {
     session: LibSeatSession,
     drm: DrmDevice,
     compositor: Compositor,
-    renderer: GlesRenderer,
+    gpu: GpuManager<GpuApi>,
+    render_node: DrmNode,
     cursor: Cursors,
     output: Output,
     active: bool,
@@ -170,13 +175,15 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let scanout_gbm =
         GbmDevice::new(scanout_fd.clone()).context("creating the scanout GBM device")?;
 
-    // SAFETY: the EGL display and context never leave this thread (ADR 0030).
-    let egl_display = unsafe { EGLDisplay::new(render_gbm.clone()) }
-        .map_err(|error| anyhow!("creating the EGL display: {error}"))?;
-    let egl_context =
-        EGLContext::new(&egl_display).map_err(|error| anyhow!("creating EGL: {error}"))?;
-    let mut renderer = unsafe { GlesRenderer::new(egl_context) }
+    let mut api = GpuApi::default();
+    api.add_node(render_node, render_gbm.clone())
+        .map_err(|error| anyhow!("creating EGL on the render node: {error}"))?;
+    let mut gpu =
+        GpuManager::new(api).map_err(|error| anyhow!("creating the GPU manager: {error}"))?;
+    let mut multi = gpu
+        .single_renderer(&render_node)
         .map_err(|error| anyhow!("creating GLES: {error}"))?;
+    let renderer = multi.as_mut();
     let (connector, crtc, mode) = find_panel(&drm)?;
     info!(
         connector = %format!("{}-{}", connector.interface().as_str(), connector.interface_id()),
@@ -195,7 +202,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         planes.overlay.clear();
     }
     let scanout_feedback =
-        scanout_feedback(&surface, &planes, &renderer, render_node, scanout_node)?;
+        scanout_feedback(&surface, &planes, renderer, render_node, scanout_node)?;
 
     let allocator = GbmAllocator::new(
         render_gbm.clone(),
@@ -243,9 +250,10 @@ pub fn run(options: DrmOptions) -> Result<()> {
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
 
-    state.rounded_clip = crate::effects::compile_rounded_clip(&mut renderer);
-    state.shadow = crate::effects::compile_shadow(&mut renderer);
-    state.border = crate::effects::compile_border(&mut renderer);
+    state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
+    state.shadow = crate::effects::compile_shadow(renderer);
+    state.border = crate::effects::compile_border(renderer);
+    drop(multi);
 
     let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
 
@@ -270,7 +278,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
         session: session.clone(),
         drm,
         compositor,
-        renderer,
+        gpu,
+        render_node,
         cursor,
         output,
         active: true,
@@ -307,9 +316,12 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     let output_size = data.state.output_size;
                     let scale = data.state.scale.fractional_scale();
                     if events.iter().any(|event| event.restyles()) {
+                        let Ok(mut renderer) = data.gpu.single_renderer(&data.render_node) else {
+                            return Ok(PostAction::Continue);
+                        };
                         data.state.theme_fade = crate::theme_fade::start_if_allowed(
                             &mut data.state,
-                            &mut data.renderer,
+                            renderer.as_mut(),
                             &data.cursor,
                             output_size,
                             scale,
@@ -551,7 +563,12 @@ impl Udev {
             error!(%error, "dispatching clients");
             return;
         }
-        crate::session::import_pending_dmabufs(&mut self.state, &mut self.renderer);
+        match self.gpu.single_renderer(&self.render_node) {
+            Ok(mut renderer) => {
+                crate::session::import_pending_dmabufs(&mut self.state, renderer.as_mut())
+            }
+            Err(error) => warn!(%error, "no renderer to import dmabufs"),
+        }
         if let Err(error) = self.display.flush_clients() {
             warn!(%error, "flushing clients");
         }
@@ -613,20 +630,35 @@ impl Udev {
             return;
         }
         self.redraw_queued = false;
+        let mut renderer = match self.gpu.single_renderer(&self.render_node) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                warn!(%error, "no renderer on the render node");
+                self.schedule_repaint();
+                return;
+            }
+        };
         let elements = crate::session::build_output_elements(
             &mut self.state,
-            &mut self.renderer,
+            &mut renderer,
             &self.cursor,
             true,
         );
-        self.state.init_capture_dma(&self.renderer);
+        let gles = renderer.as_mut();
+        self.state.init_capture_dma(gles);
+        let capture_elements = if self.capture_requested || !self.state.pending_captures.is_empty()
+        {
+            crate::session::build_output_elements(&mut self.state, gles, &self.cursor, true)
+        } else {
+            Vec::new()
+        };
         if self.capture_requested {
             self.capture_requested = false;
             if let Some(mode) = self.output.current_mode() {
                 let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
                 if let Err(error) = crate::capture::capture_output(
-                    &mut self.renderer,
-                    &elements,
+                    gles,
+                    &capture_elements,
                     size,
                     render_transform(),
                     self.state.scale.fractional_scale(),
@@ -642,7 +674,7 @@ impl Udev {
             let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
             crate::session::log_screenshot(crate::session::save_screenshot(
                 &mut self.state,
-                &mut self.renderer,
+                gles,
                 &self.cursor,
                 size,
                 render_transform(),
@@ -661,7 +693,7 @@ impl Udev {
                     (
                         *size,
                         Some(crate::session::build_window_elements(
-                            &mut self.renderer,
+                            gles,
                             &surface,
                             capture_scale,
                         )),
@@ -673,17 +705,17 @@ impl Udev {
                 crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
                     without_cursor = crate::session::build_output_elements(
                         &mut self.state,
-                        &mut self.renderer,
+                        gles,
                         &self.cursor,
                         false,
                     );
                     &without_cursor
                 }
-                _ => window_elements.as_deref().unwrap_or(&elements),
+                _ => window_elements.as_deref().unwrap_or(&capture_elements),
             };
             let damage = Rectangle::from_size(Size::from((size.w, size.h)));
             match crate::capture::capture_into_buffer(
-                &mut self.renderer,
+                gles,
                 drawn,
                 size,
                 capture_scale,
@@ -705,7 +737,7 @@ impl Udev {
             self.compositor.reset_buffer_ages();
         }
         match self.compositor.render_frame(
-            &mut self.renderer,
+            &mut renderer,
             &elements,
             [0.06, 0.06, 0.09, 1.0],
             self.frame_flags,
