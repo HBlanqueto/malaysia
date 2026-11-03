@@ -747,24 +747,13 @@ demo() {
         fi
     }
     trap _demo_cleanup EXIT INT TERM
-    if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
-        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
-            fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
-        _shell_bin="$script_dir/target/debug/malaysia-shell"
-        _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        # shellcheck disable=SC2086
-        build_kit_apps $_apps
-        _apps_bin=$_kit_bin
-    else
-        _shell_bin="$script_dir/result/bin/malaysia-shell"
-        _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
-        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] ||
-            [ ! -x "$_shell_bin" ] ||
-            [ ! -x "$_wallpaper_bin" ]; then
-            fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
-        fi
-        _apps_bin="$script_dir/result/bin"
-    fi
+    cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
+        fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
+    _shell_bin="$script_dir/target/debug/malaysia-shell"
+    _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
+    # shellcheck disable=SC2086
+    build_kit_apps $_apps
+    _apps_bin=$_kit_bin
 
     start
     _sock=
@@ -910,25 +899,13 @@ lab() {
     }
     trap _lab_cleanup EXIT INT TERM
 
-    if [ -n "${MALAYSIA_DEV_SHELL:-}" ]; then
-        _shell_bin="$script_dir/target/debug/malaysia-shell"
-        _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-        cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
-            fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-        build_kit_apps tengen-app-show ondina
-        _show="$_kit_bin/tengen-app-show"
-        _ondina="$_kit_bin/ondina"
-    else
-        _shell_bin="$script_dir/result/bin/malaysia-shell"
-        _wallpaper_bin="$script_dir/result/bin/malaysia-wallpaper"
-        if [ ! -x "$script_dir/result/bin/malaysia-compositor" ] ||
-            [ ! -x "$_shell_bin" ] ||
-            [ ! -x "$_wallpaper_bin" ]; then
-            fail "$EXIT_RUN_FAILED" "no existe result/bin/malaysia-shell; ejecuta: nix build .#default"
-        fi
-        _show="$script_dir/result/bin/tengen-app-show"
-        _ondina="$script_dir/result/bin/ondina"
-    fi
+    _shell_bin="$script_dir/target/debug/malaysia-shell"
+    _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
+    cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
+        fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
+    build_kit_apps tengen-app-show ondina
+    _show="$_kit_bin/tengen-app-show"
+    _ondina="$_kit_bin/ondina"
 
     if ! command -v dbus-daemon >/dev/null 2>&1; then
         fail "$EXIT_RUN_FAILED" \

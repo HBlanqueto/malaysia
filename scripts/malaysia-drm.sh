@@ -19,7 +19,7 @@ socket_name() {
 }
 
 need_result() {
-    [[ -x "$RESULT/bin/malaysia" ]] || die "no existe $RESULT/bin/malaysia; ejecuta primero: $0 setup"
+    [[ -x "$RESULT/bin/malaysia-compositor" ]] || die "no existe $RESULT/bin/malaysia-compositor; ejecuta primero: $0 setup"
 }
 
 cmd_setup() {
@@ -65,7 +65,7 @@ cmd_run() {
 
     cd "$REPO"
     set +e
-    "$RESULT/bin/malaysia" --drm --log-level="${MALAYSIA_LOG_LEVEL:-info}" 2>&1 | tee "$log"
+    "$RESULT/bin/malaysia-compositor" --drm --log-level="${MALAYSIA_LOG_LEVEL:-info}" 2>&1 | tee "$log"
     local status=${PIPESTATUS[0]}
     set -e
     info "Malaysia salió con código $status (log: $log)"
