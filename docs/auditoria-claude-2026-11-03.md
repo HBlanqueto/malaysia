@@ -808,9 +808,11 @@ Commits que aplican esta auditoría, en orden:
 | `cfcf7c0` | §2.2 (1) | Un render por vblank y sin bucle en reposo. |
 | `18d90a5` | §2.2 (2, 3) | Ids y commits estables para sombra, borde, titlebar y sólidos; `buffer_age` en winit. |
 | `5a9f87c`, `4e27331`, `b181161` | §4 | Código muerto del compositor, de `malaysia-scene` y del wallpaper. |
-| `b84eaff` | §7 | Scripts, probes y entradas del flake huérfanos. |
+| `1ef49da`, `b84eaff` | §7 | Scripts, probes y entradas del flake huérfanos. |
 | `cb630a2`, `b2a90e0`, `03b2ca3`, `d0bba82` | §2.3, §3, §1.1 | PX-14, PX-09, `forget_window` y deltas de relative-pointer. |
 | `5b56fb8` | §10 | `deuda.md` al día. |
+| `41b0661` | §2.2 | Causa del lag tras `cfcf7c0`: todo commit encola el redibujado (abajo). |
+| siguiente | §2.2 (6) | Scanout en el plano primario para pantalla completa, plano de cursor y feedback dmabuf por superficie. `SKIP_CURSOR_ONLY_UPDATES` no se activa: sin VRR congela el cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri solo la usa con VRR). |
 
 ### Lag tras `cfcf7c0`
 

@@ -84,7 +84,12 @@ Sin fallback a v3: sin render node el arranque falla. Prueba: `vkcube`, `mpv`
 **8a hecha y aceptada** en el panel real el 2026-10-21 (DRM/KMS atómico,
 libseat, libinput, GBM/EGL/GLES, un plano primario; cambio de VT y lock).
 Prueba: `./dev.sh drm-vkms`. **8b** (hotplug, varios outputs, escala por
-monitor) y **8c** (overlay/cursor planes, direct scanout) pendientes.
+monitor) pendiente. **8c**: scanout directo en el plano primario de las
+ventanas a pantalla completa, plano de cursor y feedback dmabuf por
+superficie con tramo de scanout, hechos sin aceptar en el panel real; los
+planos overlay siguen pendientes. Prueba: con `--log-level=trace`,
+`mpv --fs` debe salir en el plano primario y mover el cursor solo debe tocar el
+plano de cursor.
 
 ### 9 — Escala fraccional
 

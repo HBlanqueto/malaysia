@@ -1187,17 +1187,15 @@ fn append_window_frame(
         }
     }
     let surface_location = physical_point(data.location + data.surface_location, scale);
+    let kind = if frame_has_border(data.state) {
+        Kind::Unspecified
+    } else {
+        Kind::ScanoutCandidate
+    };
     let surface_elements = render_elements_from_surface_tree::<
         GlesRenderer,
         WaylandSurfaceRenderElement<GlesRenderer>,
-    >(
-        renderer,
-        &data.surface,
-        surface_location,
-        scale,
-        1.0,
-        Kind::Unspecified,
-    );
+    >(renderer, &data.surface, surface_location, scale, 1.0, kind);
     append_frame(
         state,
         content,

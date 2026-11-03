@@ -807,9 +807,11 @@ Commits that apply this audit, in order:
 | `cfcf7c0` | §2.2 (1) | One render per vblank and no idle loop. |
 | `18d90a5` | §2.2 (2, 3) | Stable ids and commits for shadow, border, titlebar and solids; `buffer_age` in winit. |
 | `5a9f87c`, `4e27331`, `b181161` | §4 | Dead code in the compositor, `malaysia-scene` and the wallpaper. |
-| `b84eaff` | §7 | Orphan scripts, probes and flake entries. |
+| `1ef49da`, `b84eaff` | §7 | Orphan scripts, probes and flake entries. |
 | `cb630a2`, `b2a90e0`, `03b2ca3`, `d0bba82` | §2.3, §3, §1.1 | PX-14, PX-09, `forget_window` and relative-pointer deltas. |
 | `5b56fb8` | §10 | `deuda.md` brought up to date. |
+| `41b0661` | §2.2 | Cause of the lag after `cfcf7c0`: every commit queues a redraw (below). |
+| next | §2.2 (6) | Primary-plane scanout for fullscreen, cursor plane and per-surface dmabuf feedback. `SKIP_CURSOR_ONLY_UPDATES` stays off: without VRR it freezes the cursor (Smithay `023b78b1`, `drm/compositor/mod.rs:2379`; niri only uses it with VRR). |
 
 ### Lag after `cfcf7c0`
 

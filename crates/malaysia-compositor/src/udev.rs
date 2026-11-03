@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
-use smithay::backend::allocator::Fourcc;
+use smithay::backend::allocator::{Fourcc, Modifier};
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
@@ -19,6 +19,8 @@ use smithay::backend::drm::{
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::ImportDma;
+use smithay::backend::renderer::element::{RenderElementStates, default_primary_scanout_output_compare};
+use smithay::backend::renderer::element::utils::select_dmabuf_feedback;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session as SessionTrait};
@@ -33,9 +35,15 @@ use smithay::reexports::drm::control::connector::{self, Interface};
 use smithay::reexports::drm::control::{Device as ControlDevice, ModeTypeFlags, crtc};
 use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
+use smithay::desktop::utils::{
+    send_dmabuf_feedback_surface_tree, surface_primary_scanout_output,
+    update_surface_primary_scanout_output, with_surfaces_surface_tree,
+};
+use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1::TrancheFlags;
 use smithay::reexports::wayland_server::Display;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{DeviceFd, Rectangle, Size, Transform};
-use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::socket::ListeningSocketSource;
@@ -72,6 +80,8 @@ struct Udev {
     frames_queued: u64,
     frame_was_empty: bool,
     appearance_watch: Option<AppearanceWatch>,
+    render_feedback: DmabufFeedback,
+    scanout_feedback: DmabufFeedback,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -180,7 +190,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
 
     let mut planes = surface.planes().clone();
     planes.overlay.clear();
-    planes.cursor.clear();
 
     let allocator = GbmAllocator::new(
         render_gbm.clone(),
@@ -209,6 +218,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
     let feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), renderer.dmabuf_formats())
         .build()
         .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
+    let scanout_feedback = scanout_feedback(&compositor, &renderer, render_node, scanout_node)?;
     let syncobj = supports_syncobj_eventfd(&render_fd).then_some(render_fd);
     let loop_handle = event_loop.handle();
     let mut state = State::new_with_output(
@@ -216,7 +226,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         &display.handle(),
         smithay::utils::Size::from((i32::from(mode.size().0), i32::from(mode.size().1))),
         output.clone(),
-        feedback,
+        feedback.clone(),
         syncobj,
         Box::new(loop_handle.clone()),
         Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
@@ -263,6 +273,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
         frames_queued: 0,
         frame_was_empty: false,
         appearance_watch: None,
+        render_feedback: feedback,
+        scanout_feedback,
     };
 
     let appearance_watch = AppearanceWatch::new()
@@ -685,9 +697,16 @@ impl Udev {
             &mut self.renderer,
             &elements,
             [0.06, 0.06, 0.09, 1.0],
-            FrameFlags::empty(),
+            FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT,
         ) {
             Ok(mut result) => {
+                send_dmabuf_feedbacks(
+                    &self.state,
+                    &self.output,
+                    &result.states,
+                    &self.render_feedback,
+                    &self.scanout_feedback,
+                );
                 let now = Instant::now();
                 if let Some(fade) = self.state.theme_fade.as_mut() {
                     match fade.tick(now) {
@@ -906,6 +925,70 @@ fn make_output(
         Some((0, 0).into()),
     );
     Ok(output)
+}
+
+fn scanout_feedback(
+    compositor: &Compositor,
+    renderer: &GlesRenderer,
+    render_node: DrmNode,
+    scanout_node: DrmNode,
+) -> anyhow::Result<DmabufFeedback> {
+    let render_formats = renderer.dmabuf_formats();
+    let mut scanout_formats: Vec<_> = compositor
+        .surface()
+        .plane_info()
+        .formats
+        .intersection(&render_formats)
+        .copied()
+        .collect();
+    // Cross-device buffers scan out glitched unless Linear: https://github.com/YaLTeR/niri/blob/main/src/backend/tty.rs (surface_dmabuf_feedback).
+    if render_node != scanout_node {
+        scanout_formats.retain(|format| format.modifier == Modifier::Linear);
+    }
+    DmabufFeedbackBuilder::new(render_node.dev_id(), render_formats)
+        .add_preference_tranche(
+            scanout_node.dev_id(),
+            TrancheFlags::Scanout,
+            scanout_formats,
+            4..=5,
+        )
+        .build()
+        .map_err(|error| anyhow!("building the scanout dmabuf feedback: {error}"))
+}
+
+fn send_dmabuf_feedbacks(
+    state: &State,
+    output: &Output,
+    render_states: &RenderElementStates,
+    render_feedback: &DmabufFeedback,
+    scanout_feedback: &DmabufFeedback,
+) {
+    let send = |surface: &WlSurface| {
+        with_surfaces_surface_tree(surface, |surface, states| {
+            update_surface_primary_scanout_output(
+                surface,
+                output,
+                states,
+                None,
+                render_states,
+                default_primary_scanout_output_compare,
+            );
+        });
+        send_dmabuf_feedback_surface_tree(
+            surface,
+            output,
+            surface_primary_scanout_output,
+            |surface, _| {
+                select_dmabuf_feedback(surface, render_states, render_feedback, scanout_feedback)
+            },
+        );
+    };
+    for surface in state.windows.surfaces() {
+        send(surface);
+    }
+    for entry in state.layers.all() {
+        send(entry.surface.wl_surface());
+    }
 }
 
 impl crate::idle::IdleHost for Udev {
