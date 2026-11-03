@@ -66,6 +66,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=112632b#112632bde54dc29f46d2c59bbbd52fb07de97af5" =
+              "sha256-bQ+dHcpkZW7/ypDfrLKEIT5ZLc+q4/hV9PrioLu6lqc=";
           };
 
           env = {
