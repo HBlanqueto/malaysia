@@ -8,7 +8,7 @@ Mezclar espacio lógico, físico y de buffer es una fuente clásica de bugs; Smi
 
 ## Decisión
 
-El compositor usa `smithay::utils` sin wrapper. Los tipos propios viven en `yuki-scene/src/geometry.rs`: lógicos `f64`, físicos y de buffer `i32`. La conversión entre ambos mundos ocurre solo donde el compositor alimenta la escena.
+El compositor usa `smithay::utils` sin wrapper. Los tipos propios viven en `malaysia-scene/src/geometry.rs` y son solo lógicos. El paso a físico y a buffer usa los tipos de Smithay, donde el compositor alimenta el render.
 
 ## Consecuencias
 

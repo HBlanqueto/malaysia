@@ -1,6 +1,6 @@
 [package]
 name = "malaysia-scene"
-description = "Scene graph and renderable tree for Malaysia."
+description = "Window and space layout of Malaysia in logical coordinates."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

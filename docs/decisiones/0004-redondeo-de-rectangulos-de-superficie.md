@@ -12,7 +12,7 @@ La posición se redondea con `floor` y el tamaño con `ceil`. Dos rectángulos a
 
 ## Consecuencias
 
-Los tests cubren dos rectángulos que comparten una arista fraccionaria; cada llamada usa `to_physical`/`to_buffer` sin elegir el redondeo.
+El compositor convierte con los tipos de Smithay (ADR 0001): `to_i32_floor` para la posición y `to_physical_precise_up` para el tamaño. `malaysia-scene` ya no tiene conversiones propias.
 
 ## Alternativas descartadas
 
