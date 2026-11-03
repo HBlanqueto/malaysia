@@ -576,7 +576,11 @@ impl State {
                     self.screenshot_pointer_motion(location);
                     return;
                 }
-                self.pointer_motion(location, event.time());
+                self.pointer_motion_raw(
+                    location,
+                    event.time(),
+                    Some((event.delta(), event.delta_unaccel())),
+                );
             }
             InputEvent::PointerButton { event, .. } => {
                 if self.screenshot_mode().is_some() {
@@ -1877,7 +1881,16 @@ impl State {
         self.grab = None;
     }
 
-    pub(crate) fn pointer_motion(&mut self, mut location: Point<f64, Logical>, time: InputTime) {
+    pub(crate) fn pointer_motion(&mut self, location: Point<f64, Logical>, time: InputTime) {
+        self.pointer_motion_raw(location, time, None);
+    }
+
+    fn pointer_motion_raw(
+        &mut self,
+        mut location: Point<f64, Logical>,
+        time: InputTime,
+        raw_delta: Option<(Point<f64, Logical>, Point<f64, Logical>)>,
+    ) {
         let now = Instant::now();
         if self.shake.observe(location.x, now) {
             self.trigger_cursor_boost();
@@ -1888,13 +1901,14 @@ impl State {
         if let Some(grab) = self.grab {
             if let Some(pointer) = self.seat.get_pointer() {
                 let delta = location - pointer.current_location();
+                let (delta, delta_unaccel) = raw_delta.unwrap_or((delta, delta));
                 let serial = SERIAL_COUNTER.next_serial();
                 pointer.relative_motion(
                     self,
                     None,
                     &RelativeMotionEvent {
                         delta,
-                        delta_unaccel: delta,
+                        delta_unaccel,
                         time,
                     },
                 );
@@ -1977,6 +1991,7 @@ impl State {
             return;
         };
         let delta = location - pointer.current_location();
+        let (relative, relative_unaccel) = raw_delta.unwrap_or((delta, delta));
 
         let mut locked = false;
         let mut confined = None;
@@ -2008,8 +2023,8 @@ impl State {
                 self,
                 focus,
                 &RelativeMotionEvent {
-                    delta,
-                    delta_unaccel: delta,
+                    delta: relative,
+                    delta_unaccel: relative_unaccel,
                     time,
                 },
             );
@@ -2035,8 +2050,8 @@ impl State {
             self,
             focus.clone(),
             &RelativeMotionEvent {
-                delta,
-                delta_unaccel: delta,
+                delta: relative,
+                delta_unaccel: relative_unaccel,
                 time,
             },
         );
