@@ -7,11 +7,12 @@ use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCach
 use malaysia_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use malaysia_scene::scene::WindowId;
 use smithay::backend::allocator::Fourcc;
-use smithay::backend::renderer::element::Kind;
+use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::Uniform;
 use smithay::backend::renderer::gles::{
     GlesPixelProgram, GlesRenderer, GlesTexture, element::PixelShaderElement,
 };
+use smithay::backend::renderer::utils::CommitCounter;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use unicode_segmentation::UnicodeSegmentation;
 use vow_appearance::traffic::{self, TrafficInput};
@@ -109,15 +110,28 @@ fn signature(
     hash
 }
 
+pub(crate) const OUTER_BORDER_SLOT: u8 = 0;
+pub(crate) const INNER_BORDER_SLOT: u8 = 1;
+const SHADOW_SLOT: u8 = 2;
+
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
+    shaders: HashMap<(WindowId, u8), CachedShader>,
     text: TextEngine,
 }
 
 struct Cached {
     key: Key,
+    id: Id,
+    commit: CommitCounter,
     texture: GlesTexture,
     size: (i32, i32),
+}
+
+struct CachedShader {
+    alpha: f32,
+    uniforms: Vec<Uniform<'static>>,
+    element: PixelShaderElement,
 }
 
 #[derive(PartialEq, Eq)]
@@ -136,17 +150,63 @@ impl ChromeCache {
     pub(crate) fn new() -> Self {
         Self {
             entries: HashMap::new(),
+            shaders: HashMap::new(),
             text: TextEngine::new(),
         }
     }
 
     pub(crate) fn remove(&mut self, id: WindowId) {
         self.entries.remove(&id);
+        self.shaders.retain(|(owner, _), _| *owner != id);
+    }
+
+    pub(crate) fn shader(
+        &mut self,
+        owner: Option<(WindowId, u8)>,
+        program: &GlesPixelProgram,
+        area: Rectangle<i32, Logical>,
+        alpha: f32,
+        uniforms: Vec<Uniform<'static>>,
+    ) -> PixelShaderElement {
+        let fresh = |uniforms| {
+            PixelShaderElement::new(
+                program.clone(),
+                area,
+                None,
+                alpha,
+                uniforms,
+                Kind::Unspecified,
+            )
+        };
+        let Some(key) = owner else {
+            return fresh(uniforms);
+        };
+        if let Some(cached) = self.shaders.get_mut(&key)
+            && cached.alpha == alpha
+        {
+            cached.element.resize(area, None);
+            if cached.uniforms != uniforms {
+                cached.element.update_uniforms(uniforms.clone());
+                cached.uniforms = uniforms;
+            }
+            return cached.element.clone();
+        }
+        let element = fresh(uniforms.clone());
+        self.shaders.insert(
+            key,
+            CachedShader {
+                alpha,
+                uniforms,
+                element: element.clone(),
+            },
+        );
+        element
     }
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn shadow_element(
-        &self,
+        &mut self,
+        owner: Option<WindowId>,
         program: &GlesPixelProgram,
         window_rect: Rectangle<i32, Physical>,
         radius: i32,
@@ -160,13 +220,16 @@ impl ChromeCache {
             _ => vow_design::SHADOW_DARK,
         };
         let mut elements = Vec::with_capacity(2);
-        for layer in style.layers(focused) {
-            let Some(element) =
-                shadow_layer_element(program, window_rect, radius, exponent, scale, layer)
+        for (slot, layer) in (SHADOW_SLOT..).zip(style.layers(focused)) {
+            let Some((area, uniforms)) = shadow_layer(window_rect, radius, exponent, scale, layer)
             else {
                 continue;
             };
-            elements.push(element.into());
+            let owner = owner.map(|id| (id, slot));
+            elements.push(
+                self.shader(owner, program, area, layer.opacity, uniforms)
+                    .into(),
+            );
         }
         elements
     }
@@ -199,8 +262,14 @@ impl ChromeCache {
             scale: scale.to_bits(),
             theme: theme.signature,
         };
-        let stale = self.entries.get(&id).is_none_or(|entry| entry.key != key);
+        let previous = self.entries.get(&id);
+        let stale = previous.is_none_or(|entry| entry.key != key);
         if stale {
+            let (element_id, mut commit) = previous.map_or_else(
+                || (Id::new(), CommitCounter::default()),
+                |entry| (entry.id.clone(), entry.commit),
+            );
+            commit.increment();
             let (pixels, w, h) = self
                 .text
                 .rasterize(title, focused, width, scale, *theme, input);
@@ -211,6 +280,8 @@ impl ChromeCache {
                 id,
                 Cached {
                     key,
+                    id: element_id,
+                    commit,
                     texture,
                     size: (w, h),
                 },
@@ -222,7 +293,8 @@ impl ChromeCache {
         let dst = Rectangle::new(physical_point(location, scale), Size::from((w, h)));
         Some(crate::effects::RoundedTextureElement::from_texture(
             entry.texture.clone(),
-            smithay::backend::renderer::element::Id::new(),
+            entry.id.clone(),
+            entry.commit,
             src,
             dst,
             smithay::utils::Transform::Normal,
@@ -236,14 +308,13 @@ impl ChromeCache {
     }
 }
 
-fn shadow_layer_element(
-    program: &GlesPixelProgram,
+fn shadow_layer(
     window_rect: Rectangle<i32, Physical>,
     radius: i32,
     exponent: f32,
     scale: f64,
     layer: vow_design::ShadowLayer,
-) -> Option<PixelShaderElement> {
+) -> Option<(Rectangle<i32, Logical>, Vec<Uniform<'static>>)> {
     let margin = (f64::from(shadow_margin(layer)) * scale).ceil() as i32 + 1;
     if margin <= 0 {
         return None;
@@ -267,14 +338,7 @@ fn shadow_layer_element(
         Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
     ];
-    Some(PixelShaderElement::new(
-        program.clone(),
-        area,
-        None,
-        layer.opacity,
-        uniforms,
-        Kind::Unspecified,
-    ))
+    Some((area, uniforms))
 }
 
 fn shadow_margin(layer: vow_design::ShadowLayer) -> i32 {

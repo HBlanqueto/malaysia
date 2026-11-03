@@ -646,13 +646,25 @@ fn append_solid(
     scale: f64,
     elements: &mut Vec<OutputRenderElement>,
 ) {
+    let mut buffer = SolidColorBuffer::default();
+    append_buffer(&mut buffer, location, size, color, scale, elements);
+}
+
+fn append_buffer(
+    buffer: &mut SolidColorBuffer,
+    location: Point<i32, Logical>,
+    size: Size<i32, Logical>,
+    color: [f32; 4],
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement>,
+) {
     if size.w <= 0 || size.h <= 0 {
         return;
     }
-    let buffer = SolidColorBuffer::new(size, color);
+    buffer.update(size, color);
     elements.push(
         SolidColorRenderElement::from_buffer(
-            &buffer,
+            buffer,
             physical_point(location, scale),
             scale,
             1.0,
@@ -793,9 +805,11 @@ pub(crate) fn build_output_elements(
                 malaysia_scene::spaces::SpaceKind::Focus { .. }
             );
             if focus_space {
-                append_solid(
+                let size = state.logical_output_size();
+                append_buffer(
+                    &mut state.focus_backdrop,
                     Point::from((0, 0)),
-                    state.logical_output_size(),
+                    size,
                     vow_design::SPACE_GAP_COLOR,
                     scale,
                     &mut elements,
@@ -881,7 +895,8 @@ fn append_revealed_titlebar(
         theme.palette.titlebar_bg.unfocused
     };
     let [r, g, b, _] = background.to_rgba8();
-    append_solid(
+    append_buffer(
+        &mut state.revealed_titlebar_backdrop,
         rect.loc,
         rect.size,
         [
@@ -1187,6 +1202,7 @@ fn append_window_frame(
         content,
         surface_elements,
         Frame {
+            owner: Some(id),
             rect: frame_rect_physical,
             radius: radius_physical,
             exponent,
@@ -1199,6 +1215,7 @@ fn append_window_frame(
 }
 
 struct Frame {
+    owner: Option<malaysia_scene::scene::WindowId>,
     rect: Rectangle<i32, Physical>,
     radius: i32,
     exponent: f32,
@@ -1207,7 +1224,7 @@ struct Frame {
 }
 
 pub(crate) fn append_popups(
-    state: &State,
+    state: &mut State,
     renderer: &mut GlesRenderer,
     scale: f64,
     elements: &mut Vec<OutputRenderElement>,
@@ -1248,6 +1265,7 @@ pub(crate) fn append_popups(
             Vec::new(),
             surface_elements,
             Frame {
+                owner: None,
                 rect: physical_rect(frame, scale),
                 radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
                 exponent: vow_design::POPUP.superellipse_exponent,
@@ -1261,7 +1279,7 @@ pub(crate) fn append_popups(
 }
 
 fn append_frame(
-    state: &State,
+    state: &mut State,
     mut content: Vec<OutputRenderElement>,
     surface_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>>,
     frame: Frame,
@@ -1296,34 +1314,54 @@ fn append_frame(
     let mut shadow = Vec::new();
     if frame.bordered {
         let palette = &state.chrome_theme.palette;
+        let slot = |slot| frame.owner.map(|id| (id, slot));
         if let Some(program) = state.border.as_ref() {
-            if let Some(color) = palette.inner_line
-                && let Some(element) = border_element(
-                    program,
+            if let Some(color) = palette.inner_line {
+                let (area, uniforms) = border_shader(
                     frame_rect_physical,
                     radius_physical,
                     scale,
                     exponent,
                     false,
                     color,
-                )
-            {
-                inner = Some(element.into());
+                );
+                inner = Some(
+                    state
+                        .chrome
+                        .shader(
+                            slot(crate::chrome::INNER_BORDER_SLOT),
+                            program,
+                            area,
+                            1.0,
+                            uniforms,
+                        )
+                        .into(),
+                );
             }
-            if let Some(element) = border_element(
-                program,
+            let (area, uniforms) = border_shader(
                 frame_rect_physical,
                 radius_physical,
                 scale,
                 exponent,
                 true,
                 palette.outer_border,
-            ) {
-                outer = Some(element.into());
-            }
+            );
+            outer = Some(
+                state
+                    .chrome
+                    .shader(
+                        slot(crate::chrome::OUTER_BORDER_SLOT),
+                        program,
+                        area,
+                        1.0,
+                        uniforms,
+                    )
+                    .into(),
+            );
         }
         if let Some(program) = state.shadow.as_ref() {
             shadow = state.chrome.shadow_element(
+                frame.owner,
                 program,
                 frame_rect_physical,
                 radius_physical,
@@ -1351,18 +1389,18 @@ fn physical_rect(rect: Rectangle<i32, Logical>, scale: f64) -> Rectangle<i32, Ph
     rect.to_f64().to_physical_precise_up(scale)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn border_element(
-    program: &smithay::backend::renderer::gles::GlesPixelProgram,
+fn border_shader(
     frame_rect: Rectangle<i32, Physical>,
     radius: i32,
     scale: f64,
     exponent: f32,
     outer: bool,
     color: vow_design::Rgba,
-) -> Option<smithay::backend::renderer::gles::element::PixelShaderElement> {
+) -> (
+    Rectangle<i32, Logical>,
+    Vec<smithay::backend::renderer::gles::Uniform<'static>>,
+) {
     use smithay::backend::renderer::gles::Uniform;
-    use smithay::backend::renderer::gles::element::PixelShaderElement;
     let area = crate::effects::shader_area(frame_rect, 1, scale);
     let area_physical: Rectangle<i32, Physical> = area.to_physical_precise_round(scale);
     let rect_local = [
@@ -1380,14 +1418,7 @@ fn border_element(
         Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
     ];
-    Some(PixelShaderElement::new(
-        program.clone(),
-        area,
-        None,
-        1.0,
-        uniforms,
-        Kind::Unspecified,
-    ))
+    (area, uniforms)
 }
 
 pub(crate) fn build_window_elements(
@@ -1521,6 +1552,7 @@ pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
 
 fn draw(session: &mut Session) -> Result<(), DrawError> {
     let capture_size = session.backend.window_size();
+    let age = session.backend.buffer_age().unwrap_or(0);
     let (damage, sync, request_redraw) = {
         let (renderer, mut framebuffer) = session.backend.bind().map_err(DrawError::Bind)?;
 
@@ -1605,7 +1637,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             .render_output(
                 renderer,
                 &mut framebuffer,
-                0,
+                age,
                 &elements,
                 [0.06, 0.06, 0.09, 1.0],
             )

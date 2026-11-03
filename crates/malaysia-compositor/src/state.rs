@@ -20,6 +20,7 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason, GlobalId};
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::backend::renderer::element::solid::SolidColorBuffer;
 use smithay::utils::{Clock, Logical, Monotonic, Physical, Point, Rectangle, Serial, Size, Transform};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
@@ -158,6 +159,8 @@ pub struct State {
     pub(crate) test_pointer: Option<crate::input::TestPointer>,
     pub(crate) leaked_window: Option<WindowId>,
     pub(crate) chrome: crate::chrome::ChromeCache,
+    pub(crate) focus_backdrop: SolidColorBuffer,
+    pub(crate) revealed_titlebar_backdrop: SolidColorBuffer,
     pub(crate) chrome_theme: crate::chrome::ChromeTheme,
     pub(crate) theme_fade: Option<crate::theme_fade::ThemeFade>,
     pub(crate) popup_fade_request: Option<WindowId>,
@@ -382,6 +385,8 @@ impl State {
             test_pointer: crate::input::TestPointer::from_env(),
             leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
+            focus_backdrop: SolidColorBuffer::default(),
+            revealed_titlebar_backdrop: SolidColorBuffer::default(),
             chrome_theme,
             theme_fade: None,
             popup_fade_request: None,

@@ -46,7 +46,7 @@ pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, sc
 }
 
 fn snapshot(
-    state: &State,
+    state: &mut State,
     renderer: &mut GlesRenderer,
     scale: f64,
     shown: &HashSet<malaysia_scene::scene::PopupId>,

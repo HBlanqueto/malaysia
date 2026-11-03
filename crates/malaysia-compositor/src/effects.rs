@@ -6,7 +6,7 @@ use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
 use smithay::backend::renderer::gles::{
     GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
-use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
+use smithay::backend::renderer::utils::CommitCounter;
 use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
@@ -109,6 +109,7 @@ impl RoundedTextureElement {
     pub(crate) fn from_texture(
         texture: GlesTexture,
         id: Id,
+        commit_counter: CommitCounter,
         src: Rectangle<f64, BufferCoords>,
         dst: Rectangle<i32, Physical>,
         transform: Transform,
@@ -122,7 +123,7 @@ impl RoundedTextureElement {
         let texture_size = texture.size();
         Self {
             id,
-            commit_counter: CommitCounter::default(),
+            commit_counter,
             texture,
             texture_size,
             src,
@@ -165,18 +166,6 @@ impl Element for RoundedTextureElement {
 
     fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
         self.dst
-    }
-
-    fn damage_since(
-        &self,
-        _scale: Scale<f64>,
-        _commit: Option<CommitCounter>,
-    ) -> DamageSet<i32, Physical> {
-        DamageSet::from_slice(&[Rectangle::from_size(self.dst.size)])
-    }
-
-    fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
-        OpaqueRegions::default()
     }
 
     fn alpha(&self) -> f32 {
