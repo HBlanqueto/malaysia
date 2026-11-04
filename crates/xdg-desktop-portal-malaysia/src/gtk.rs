@@ -278,6 +278,12 @@ fn traffic_states(traffic: &Traffic, focused: bool, group_hovered: bool) -> [But
     )
 }
 
+// libadwaita pads the headerbar box 7 px inside a -1 px margin (_header-bar.scss, 1.9.3).
+const ADWAITA_HEADERBAR_START: u32 = 6;
+
+// libadwaita dims the whole headerbar in backdrop; the traffic lights carry their own unfocused colour.
+const ADWAITA_BACKDROP_DIM: &str = "filter: opacity(0.5);";
+
 fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, indent: &str) {
     let buttons = &TITLEBAR.buttons;
     let radius = match traffic.shape {
@@ -287,66 +293,108 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
     let focused = traffic_states(traffic, true, false);
     let backdrop = traffic_states(traffic, false, false);
     let hovered = traffic_states(traffic, true, true);
-    let mut rule = |selector: String, body: String| {
+    let mut rule = |selector: &str, body: &str| {
         out.push_str(&format!("{indent}{selector} {{ {body} }}\n"));
     };
     if toolkit == Toolkit::Gtk4 {
         rule(
-            "windowcontrols".into(),
-            format!("border-spacing: {}px;", buttons.spacing),
+            "windowcontrols",
+            &format!("border-spacing: {}px;", buttons.spacing),
         );
+        rule(
+            "windowcontrols.start:dir(ltr)",
+            &format!(
+                "margin-left: {}px;",
+                buttons.margin_start.saturating_sub(ADWAITA_HEADERBAR_START)
+            ),
+        );
+        rule("headerbar:backdrop > windowhandle", "filter: none;");
+        for parent in ["windowhandle > box", "windowhandle > box > widget"] {
+            rule(
+                &format!("headerbar:backdrop > {parent} > :not(box)"),
+                ADWAITA_BACKDROP_DIM,
+            );
+            rule(
+                &format!("headerbar:backdrop > {parent} > box > :not(windowcontrols)"),
+                ADWAITA_BACKDROP_DIM,
+            );
+        }
     }
     for (index, button) in buttons.order.iter().enumerate() {
         let name = gtk_button_name(button.kind);
-        let (selector, hover) = match toolkit {
+        let pressed = hovered[index]
+            .fill
+            .darken(vow_design::TRAFFIC_PRESSED_DARKEN);
+        let glyph = hovered[index]
+            .glyph
+            .map_or("transparent".to_string(), css_color);
+        let (button, light, hover) = match toolkit {
             Toolkit::Gtk4 => (
                 format!("windowcontrols > button.{name}"),
-                format!("windowcontrols:hover > button.{name}"),
+                format!("windowcontrols > button.{name} > image"),
+                format!("windowcontrols:hover > button.{name} > image"),
             ),
             Toolkit::Gtk3 => (
+                format!("button.titlebutton.{name}"),
                 format!("button.titlebutton.{name}"),
                 format!("button.titlebutton.{name}:hover"),
             ),
         };
-        let pressed = hovered[index]
-            .fill
-            .darken(vow_design::TRAFFIC_PRESSED_DARKEN);
-        let glyph = hovered[index].glyph.map_or(String::new(), |color| {
-            format!(" color: {};", css_color(color))
-        });
-        let icon_size = match toolkit {
-            Toolkit::Gtk4 => format!(" -gtk-icon-size: {}px;", TRAFFIC_GLYPHS.box_size),
-            Toolkit::Gtk3 => String::new(),
+        let shape = format!(
+            "border: none; border-radius: {radius}px; box-shadow: none; background: {};",
+            css_color(focused[index].fill)
+        );
+        match toolkit {
+            Toolkit::Gtk4 => {
+                let padding = (buttons.diameter as f32 - TRAFFIC_GLYPHS.box_size) / 2.0;
+                rule(
+                    &button,
+                    "min-width: 0; min-height: 0; padding: 0; margin: 0; border: none; \
+                     box-shadow: none; background: none;",
+                );
+                rule(
+                    &light,
+                    &format!(
+                        "min-width: 0; min-height: 0; padding: {padding}px; \
+                         -gtk-icon-size: {}px; color: transparent; {shape}",
+                        TRAFFIC_GLYPHS.box_size
+                    ),
+                );
+            }
+            Toolkit::Gtk3 => {
+                let margin = if index > 0 { buttons.spacing } else { 0 };
+                rule(
+                    &button,
+                    &format!(
+                        "min-width: {d}px; min-height: {d}px; padding: 0; \
+                         margin: 0 0 0 {margin}px; {shape}",
+                        d = buttons.diameter
+                    ),
+                );
+                rule(&format!("{button} image"), "opacity: 0;");
+                rule(&format!("{hover} image"), "opacity: 1;");
+            }
+        }
+        let active = match toolkit {
+            Toolkit::Gtk4 => format!("windowcontrols > button.{name}:active > image"),
+            Toolkit::Gtk3 => format!("{button}:active"),
+        };
+        let backdrop_light = match toolkit {
+            Toolkit::Gtk4 => format!("windowcontrols > button.{name}:backdrop > image"),
+            Toolkit::Gtk3 => format!("{button}:backdrop"),
         };
         rule(
-            selector.clone(),
-            format!(
-                "min-width: {d}px; min-height: {d}px; padding: 0; margin: 0; border: none; \
-                 border-radius: {radius}px; box-shadow: none; background: {};",
-                css_color(focused[index].fill),
-                d = buttons.diameter,
+            &backdrop_light,
+            &format!("background: {};", css_color(backdrop[index].fill)),
+        );
+        rule(
+            &hover,
+            &format!(
+                "background: {}; color: {glyph};",
+                css_color(hovered[index].fill)
             ),
         );
-        rule(
-            format!("{selector} image"),
-            format!("opacity: 0; padding: 0; background: none;{glyph}{icon_size}"),
-        );
-        rule(
-            format!("{selector}:backdrop"),
-            format!("background: {};", css_color(backdrop[index].fill)),
-        );
-        rule(
-            hover.clone(),
-            format!("background: {};", css_color(hovered[index].fill)),
-        );
-        rule(format!("{hover} image"), "opacity: 1;".into());
-        rule(
-            format!("{selector}:active"),
-            format!("background: {};", css_color(pressed)),
-        );
-        if toolkit == Toolkit::Gtk3 && index > 0 {
-            rule(selector, format!("margin-left: {}px;", buttons.spacing));
-        }
+        rule(&active, &format!("background: {};", css_color(pressed)));
     }
 }
 
@@ -642,7 +690,7 @@ mod tests {
     fn every_toolkit_gets_the_traffic_light_rules_for_each_scheme() {
         let gtk4 = gtk4_css(&AppearanceConfig::default(), None);
         assert_eq!(gtk4.matches("windowcontrols > button.close {").count(), 2);
-        assert!(gtk4.contains("windowcontrols:hover > button.close image { opacity: 1; }"));
+        assert!(gtk4.contains("windowcontrols:hover > button.close > image { background:"));
         let gtk3 = gtk3_css(&AppearanceConfig::default(), None);
         assert!(gtk3.contains("button.titlebutton.close:backdrop"));
         assert!(live_css(&AppearanceConfig::default(), None).contains("windowcontrols"));
