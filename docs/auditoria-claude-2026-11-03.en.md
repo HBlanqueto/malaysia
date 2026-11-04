@@ -816,6 +816,7 @@ Commits that apply this audit, in order:
 | `3deb003` | §8.2 | Rendering generic over `MalaysiaRenderer` (GLES or `MultiRenderer`); the rounded clip wraps the surface element and keeps its partial damage. |
 | `9e46f23` | §8.2 | DRM renders through `GpuManager`. |
 | `fef7763` | §8.2 | Multi-GPU: composition on the render GPU and copy to the scanout GPU when the latter can render. |
+| `fb45726` | §2.2 | Pointer motion requests a redraw on every move (below). |
 
 ### Lag after `cfcf7c0`
 

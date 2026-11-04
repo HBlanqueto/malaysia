@@ -817,6 +817,7 @@ Commits que aplican esta auditoría, en orden:
 | `3deb003` | §8.2 | Render genérico sobre `MalaysiaRenderer` (GLES o `MultiRenderer`); el recorte redondeado envuelve el elemento de superficie y conserva su daño parcial. |
 | `9e46f23` | §8.2 | El DRM renderiza a través de `GpuManager`. |
 | `fef7763` | §8.2 | Multi-GPU: composición en la GPU de render y copia a la de scanout cuando esta puede renderizar. |
+| `fb45726` | §2.2 | El puntero pide redibujado en cada movimiento (abajo). |
 
 ### Lag tras `cfcf7c0`
 
