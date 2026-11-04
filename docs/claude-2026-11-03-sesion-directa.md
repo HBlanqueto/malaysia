@@ -73,6 +73,14 @@ En la sesión DRM real (no en `./dev.sh lab`):
 
 ### 1. Redibujado con input (prioridad)
 
+**Actualización 2026-11-04:** ya hay un primer arreglo en `f020597`.
+`CompositorHandler::commit` detecta un buffer nuevo sin damage y marca
+`force_full_damage`; `udev::render` resetea las edades del swapchain para que
+el damage tracker repinte la salida. Verifica en la sesión DRM que el
+escritorio avance sin input, mide el coste de repintar toda la salida y, si
+niri permite limitarlo a la superficie, estrecha el daño. No vuelvas a meter
+el render incondicional por vblank.
+
 Compara con niri (el rev fijado en la auditoría) cómo maneja `queue_redraw`,
 `RedrawState`, damage tracking, cursor plane y frame callbacks. Revisa
 `crates/malaysia-compositor/src/{udev.rs,session.rs,input.rs,handlers.rs}`.
