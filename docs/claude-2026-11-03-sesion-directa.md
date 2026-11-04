@@ -111,11 +111,8 @@ Medido en `./dev.sh frames` (winit sobre weston headless, llvmpipe):
 | `32fd711`, con el puente | 0 (congelado) | 0 ticks/5 s |
 | Con el modelo nuevo | 59,9 | 0 ticks/5 s |
 
-Falta validar el camino DRM, que no se pudo probar sin GPU:
-
-1. `./dev.sh drm-vkms`.
-2. La sesión real: con el ratón quieto, el reloj avanza y
-   `WAYLAND_DISPLAY=wayland-N target/debug/frame_callbacks` da PASS.
+DRM validado el 2026-11-04 en la sesión real (ThinkPad L14 Gen2, amdgpu) con
+`3e6e899`, tras iniciar una sesión nueva: la pantalla avanza sin input.
 
 Compara con niri (el rev fijado en la auditoría) cómo maneja `queue_redraw`,
 `RedrawState`, damage tracking, cursor plane y frame callbacks. Revisa

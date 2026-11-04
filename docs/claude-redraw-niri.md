@@ -224,12 +224,9 @@ se cuelga y `screencopy-window` falla. Las dos cosas pasan igual en
 
 Pasan los probes `presentation`, `smoke`, `activation`, `pointers` y `move`.
 
-**Falta** validar DRM: no hay `/dev/dri` ni vkms aquí.
-
-1. `./dev.sh drm-vkms`.
-2. La sesión real, sin tocar el ratón. El reloj y las animaciones deben
-   avanzar, y `WAYLAND_DISPLAY=wayland-N target/debug/frame_callbacks` debe
-   dar PASS.
+**DRM validado** el 2026-11-04 en la sesión real (ThinkPad L14 Gen2, Ryzen 5
+PRO, amdgpu) con `3e6e899`: la pantalla avanza sin input. El compositor nuevo
+solo se carga al iniciar una sesión nueva después del rebuild.
 
 ## 2. Menú global de Firefox
 
