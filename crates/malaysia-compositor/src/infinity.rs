@@ -12,6 +12,8 @@ use tracing::info;
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use malaysia_scene::scene::WindowId;
 
+use crate::appmenu::AppMenuAddress;
+use crate::gtk::GtkMenusAddress;
 use crate::state::{ClientState, State};
 
 pub(crate) mod protocol {
@@ -89,39 +91,15 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
             .unwrap_or(0);
         info!(pid, "infinity bound by trusted shell");
         let manager = data_init.init(resource, self.clone());
-        if manager.version() >= 2 {
-            let client_id = client.id();
-            let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
-            for id in ids {
-                let Some(handle) = state
-                    .foreign
-                    .management
-                    .handle_for_client(id, client_id.clone())
-                else {
-                    continue;
-                };
-                let address = state.appmenu_address(id).unwrap_or_default();
-                manager.app_menu(handle, address.service, address.path);
-
-                if manager.version() >= 3 {
-                    let gtk = state.gtk_menus_address(id).unwrap_or_default();
-                    manager.gtk_menus(
-                        handle,
-                        gtk.unique_bus_name,
-                        gtk.application_id,
-                        gtk.menubar_path,
-                        gtk.app_menu_path,
-                        gtk.application_object_path,
-                        gtk.window_object_path,
-                    );
-                }
-            }
-        }
         if manager.version() >= 5 {
             let (index, count, desktop, focus_bar) = state.space_state();
             manager.space(index, count, desktop, focus_bar);
         }
         state.infinity_managers.push(manager);
+        let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
+        for id in ids {
+            state.send_menus_to_client(id, client.id());
+        }
     }
 
     fn can_view(&self, client: &Client) -> bool {
@@ -415,122 +393,79 @@ impl State {
     pub(crate) fn send_app_menu(&mut self, id: WindowId) {
         let address = self.appmenu_address(id).unwrap_or_default();
         self.infinity_managers.retain(|manager| manager.is_alive());
-        for manager in &self.infinity_managers {
-            let Some(client) = manager.client() else {
-                continue;
-            };
-            let handle = self.foreign.management.handle_for_client(id, client.id());
-            if !delivers_event(manager.version(), 2, handle.is_some()) {
-                continue;
-            }
-            let Some(handle) = handle else {
-                continue;
-            };
-            manager.app_menu(handle, address.service.clone(), address.path.clone());
-        }
+        self.send_window_event(id, None, 2, |manager, handle| {
+            app_menu_event(manager, handle, &address)
+        });
     }
 
     pub(crate) fn send_gtk_menus(&mut self, id: WindowId) {
         let address = self.gtk_menus_address(id).unwrap_or_default();
         self.infinity_managers.retain(|manager| manager.is_alive());
-        for manager in &self.infinity_managers {
-            let Some(client) = manager.client() else {
-                continue;
-            };
-            let handle = self.foreign.management.handle_for_client(id, client.id());
-            if !delivers_event(manager.version(), 3, handle.is_some()) {
-                continue;
-            }
-            let Some(handle) = handle else {
-                continue;
-            };
-            manager.gtk_menus(
-                handle,
-                address.unique_bus_name.clone(),
-                address.application_id.clone(),
-                address.menubar_path.clone(),
-                address.app_menu_path.clone(),
-                address.application_object_path.clone(),
-                address.window_object_path.clone(),
-            );
+        self.send_window_event(id, None, 3, |manager, handle| {
+            gtk_menus_event(manager, handle, &address)
+        });
+    }
+
+    pub(crate) fn send_menus_to_client(&self, id: WindowId, client: ClientId) {
+        if let Some(address) = self.appmenu_address(id) {
+            self.send_window_event(id, Some(&client), 2, |manager, handle| {
+                app_menu_event(manager, handle, &address)
+            });
+        }
+        if let Some(address) = self.gtk_menus_address(id) {
+            self.send_window_event(id, Some(&client), 3, |manager, handle| {
+                gtk_menus_event(manager, handle, &address)
+            });
         }
     }
 
-    pub(crate) fn send_app_menu_to_client(
-        &mut self,
+    fn send_window_event(
+        &self,
         id: WindowId,
-        client: smithay::reexports::wayland_server::backend::ClientId,
+        client: Option<&ClientId>,
+        since: u32,
+        send: impl Fn(&InfinityWindowManagerV1, &ZwlrForeignToplevelHandleV1),
     ) {
-        let Some(address) = self.appmenu_address(id) else {
-            return;
-        };
-        let client_id = client;
         for manager in &self.infinity_managers {
-            let Some(owner) = manager.client() else {
+            let Some(owner) = manager.client().map(|owner| owner.id()) else {
                 continue;
             };
-            if owner.id() != client_id {
+            if manager.version() < since || client.is_some_and(|client| *client != owner) {
                 continue;
             }
-            let handle = self
-                .foreign
-                .management
-                .handle_for_client(id, client_id.clone());
-            if !delivers_event(manager.version(), 2, handle.is_some()) {
-                continue;
+            if let Some(handle) = self.foreign.management.handle_for_client(id, owner) {
+                send(manager, handle);
             }
-            let Some(handle) = handle else {
-                continue;
-            };
-            manager.app_menu(handle, address.service.clone(), address.path.clone());
         }
     }
+}
 
-    pub(crate) fn send_gtk_menus_to_client(
-        &mut self,
-        id: WindowId,
-        client: smithay::reexports::wayland_server::backend::ClientId,
-    ) {
-        let Some(address) = self.gtk_menus_address(id) else {
-            return;
-        };
-        let client_id = client;
-        for manager in &self.infinity_managers {
-            let Some(owner) = manager.client() else {
-                continue;
-            };
-            if owner.id() != client_id {
-                continue;
-            }
-            let handle = self
-                .foreign
-                .management
-                .handle_for_client(id, client_id.clone());
-            if !delivers_event(manager.version(), 3, handle.is_some()) {
-                continue;
-            }
-            let Some(handle) = handle else {
-                continue;
-            };
-            manager.gtk_menus(
-                handle,
-                address.unique_bus_name.clone(),
-                address.application_id.clone(),
-                address.menubar_path.clone(),
-                address.app_menu_path.clone(),
-                address.application_object_path.clone(),
-                address.window_object_path.clone(),
-            );
-        }
-    }
+fn app_menu_event(
+    manager: &InfinityWindowManagerV1,
+    handle: &ZwlrForeignToplevelHandleV1,
+    address: &AppMenuAddress,
+) {
+    manager.app_menu(handle, address.service.clone(), address.path.clone());
+}
+
+fn gtk_menus_event(
+    manager: &InfinityWindowManagerV1,
+    handle: &ZwlrForeignToplevelHandleV1,
+    address: &GtkMenusAddress,
+) {
+    manager.gtk_menus(
+        handle,
+        address.unique_bus_name.clone(),
+        address.application_id.clone(),
+        address.menubar_path.clone(),
+        address.app_menu_path.clone(),
+        address.application_object_path.clone(),
+        address.window_object_path.clone(),
+    );
 }
 
 fn may_force_quit(pid: i32, own_pid: u32) -> bool {
     pid > 1 && u32::try_from(pid).ok() != Some(own_pid)
-}
-
-fn delivers_event(manager_version: u32, since: u32, has_handle: bool) -> bool {
-    manager_version >= since && has_handle
 }
 
 fn round(value: f64) -> i32 {
@@ -673,8 +608,8 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        Layout, PairLayout, arranged_rect, available, delivers_event, is_trusted_shell_exe,
-        may_force_quit, pair_rects, quarter_rects, trusted_shell_exes,
+        Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, may_force_quit,
+        pair_rects, quarter_rects, trusted_shell_exes,
     };
     use malaysia_scene::scene::WindowId;
 
@@ -928,35 +863,5 @@ mod tests {
         let trusted = PathBuf::from("/run/current-system/sw/bin/malaysia-shell");
         let attacker = PathBuf::from("/tmp/evil-shell");
         assert!(!is_trusted_shell_exe(&attacker, &[trusted]));
-    }
-
-    #[test]
-    fn a_v1_manager_never_gets_app_menu() {
-        assert!(!delivers_event(1, 2, true));
-        assert!(!delivers_event(1, 2, false));
-    }
-
-    #[test]
-    fn a_v2_manager_needs_a_handle() {
-        assert!(delivers_event(2, 2, true));
-        assert!(!delivers_event(2, 2, false));
-    }
-
-    #[test]
-    fn a_v3_manager_needs_a_handle_for_gtk_menus() {
-        assert!(delivers_event(3, 3, true));
-        assert!(!delivers_event(3, 3, false));
-        assert!(!delivers_event(2, 3, true));
-    }
-
-    #[test]
-    fn the_pair_reaches_the_bar_in_either_bind_order() {
-        let manager = 2;
-        let mut handle = true;
-        assert!(delivers_event(manager, 2, handle));
-        handle = false;
-        assert!(!delivers_event(manager, 2, handle));
-        handle = true;
-        assert!(delivers_event(manager, 2, handle));
     }
 }
