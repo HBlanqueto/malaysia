@@ -5,7 +5,7 @@ use vow_design::Rgba;
 
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../share/wallpapers/bandura.jpg"
+    "/../../share/wallpapers/malaysia-dream.heic"
 ));
 
 #[derive(Clone, PartialEq)]
@@ -160,8 +160,10 @@ pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
         decode_png(bytes)
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
         decode_jpeg(bytes)
+    } else if bytes.get(4..8) == Some(b"ftyp") {
+        decode_heif(bytes)
     } else {
-        anyhow::bail!("unsupported image format (expected PNG or JPEG)")
+        anyhow::bail!("unsupported image format (expected PNG, JPEG or HEIF)")
     };
     tracing::info!(elapsed_ms = start.elapsed().as_millis(), "image decoded");
     result
@@ -262,6 +264,29 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
         .ok_or_else(|| anyhow::anyhow!("the JPEG headers were not decoded"))?;
     Ok(DecodedImage {
         size: (u32::from(info.width), u32::from(info.height)),
+        pixels: Pixels::Srgb8(rgba),
+    })
+}
+
+pub fn decode_heif(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
+    use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
+
+    let context = HeifContext::read_from_bytes(bytes)?;
+    let handle = context.primary_image_handle()?;
+    let image = LibHeif::new().decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None)?;
+    let plane = image
+        .planes()
+        .interleaved
+        .ok_or_else(|| anyhow::anyhow!("the HEIF image has no interleaved RGBA plane"))?;
+    let row = plane.width as usize * 4;
+    let rgba = plane
+        .data
+        .chunks(plane.stride)
+        .flat_map(|line| &line[..row])
+        .copied()
+        .collect();
+    Ok(DecodedImage {
+        size: (plane.width, plane.height),
         pixels: Pixels::Srgb8(rgba),
     })
 }
@@ -810,18 +835,19 @@ mod tests {
     }
 
     #[test]
-    fn the_embedded_default_wallpaper_decodes_to_1280x959() {
+    fn the_embedded_default_is_a_6016x6016_salmon_heic() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
-        assert_eq!(image.size, (1280, 959));
+        assert_eq!(image.size, (6016, 6016));
+        assert_eq!(image.rgba8_at(0), [0xe1, 0x6e, 0x79, 0xff]);
     }
 
     #[test]
     fn the_embedded_default_has_a_dominant_colour() {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
-        let color = dominant(&image).expect("bandura should have a dominant colour");
-        assert!((color.r - 0.721986).abs() < 0.001);
-        assert!((color.g - 0.684085).abs() < 0.001);
-        assert!((color.b - 0.178014).abs() < 0.001);
+        let color = dominant(&image).expect("the default should have a dominant colour");
+        assert!((color.r - 0.879878).abs() < 0.001);
+        assert!((color.g - 0.420122).abs() < 0.001);
+        assert!((color.b - 0.464189).abs() < 0.001);
     }
 
     #[test]

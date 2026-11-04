@@ -253,8 +253,9 @@ as a historical record (ADR 0043).
 
 **16a in progress:** `malaysia-wallpaper` is an own client with wgpu/Vulkan
 over layer-shell, fractional scale, mipmaps, zero-copy dmabuf and inotify reload
-of `wallpaper.domain` (ADR 0049). **16b** (HEIC by default) and **16c**
-(dynamic wallpapers and frame callback throttling) pending. Test:
+of `wallpaper.domain` (ADR 0049). **16b in progress:** the default wallpaper is
+`malaysia-dream.heic` (decoded with libheif). **16c** (dynamic wallpapers and
+frame callback throttling) pending. Test:
 `./dev.sh wallpaper-check`.
 
 ### 17 — Spaces and focus mode

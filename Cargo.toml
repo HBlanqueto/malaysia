@@ -83,6 +83,7 @@ cosmic-text = "0.19"
 unicode-segmentation = "1"
 
 png = "0.17"
+libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 zune-jpeg = "0.5"
 half = { version = "2", features = ["bytemuck"] }
 

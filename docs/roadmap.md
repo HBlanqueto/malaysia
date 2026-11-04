@@ -253,8 +253,9 @@ como registro histórico (ADR 0043).
 
 **16a en curso:** `malaysia-wallpaper` es un cliente propio con wgpu/Vulkan
 sobre layer-shell, escala fraccional, mipmaps, dmabuf sin copias y recarga por
-inotify de `wallpaper.domain` (ADR 0049). **16b** (HEIC por defecto) y **16c**
-(fondos dinámicos y throttling de frame callbacks) pendientes. Prueba:
+inotify de `wallpaper.domain` (ADR 0049). **16b en curso:** el fondo por
+defecto es `malaysia-dream.heic` (decodificado con libheif). **16c** (fondos
+dinámicos y throttling de frame callbacks) pendiente. Prueba:
 `./dev.sh wallpaper-check`.
 
 ### 17 — Espacios y modo foco

@@ -216,11 +216,13 @@ development setup can point it at the repo or another folder. The
 **`malaysia-wallpaper`** component draws the wallpaper on the `Background` layer with the
 images from that folder (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
 
-**The default wallpaper is `bandura.jpg`**: a 1280×959 sRGB JPEG
-embedded in the `malaysia-wallpaper` binary.
+**The default wallpaper is `malaysia-dream.heic`**: a square 6016×6016
+lossless HEIC of a single salmon colour (`#e16e79`), embedded in the
+`malaysia-wallpaper` binary. A HEIC can hold several images; future colours go
+in that same file. `malaysia-wallpaper` decodes PNG, JPEG and HEIF (libheif).
 It is the one shown when the store picks none, does not exist yet, or the
 selection points to a file that does not exist or does not decode. If `wallpaper.dir`
-points to another folder and there is no selection, `bandura.jpg` still shows.
+points to another folder and there is no selection, `malaysia-dream.heic` still shows.
 
 **Like macOS, the current selection lives in a separate store**:
 `~/.local/share/malaysia/wallpaper.domain` (the equivalent of `~/Library/Application
@@ -230,7 +232,7 @@ to the image:
 ```toml
 # ~/.local/share/malaysia/wallpaper.domain  (current selection, per desktop)
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, bandura.jpg
+default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, malaysia-dream.heic
 ```
 
 Editing that file changes the wallpaper **live** (`malaysia-wallpaper` watches the

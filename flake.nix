@@ -31,6 +31,7 @@
         freetype
         fontconfig
         vulkan-loader
+        libheif
       ];
       hasFreyaSkia = builtins.any (package: package.name == "freya-skia-bindings")
         (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
@@ -134,6 +135,8 @@
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
             install -Dm644 share/wallpapers/bandura.jpg \
               $out/share/wallpapers/bandura.jpg
+            install -Dm644 share/wallpapers/malaysia-dream.heic \
+              $out/share/wallpapers/malaysia-dream.heic
             install -Dm644 NOTICE \
               $out/share/doc/malaysia/NOTICE
             install -Dm644 share/applications/io.github.hblanqueto.malaysia.settings.desktop \
