@@ -81,13 +81,6 @@ escritorio avance sin input, mide el coste de repintar toda la salida y, si
 niri permite limitarlo a la superficie, estrecha el daño. No vuelvas a meter
 el render incondicional por vblank.
 
-**Actualización 2026-11-04 (Claude, `17bf50a`):** el daño ya se limita a la
-superficie. Un buffer nuevo sin damage recibe el daño de todo su buffer antes
-de `on_commit_buffer_handler`; Smithay lo recorta al tamaño del buffer
-(`src/backend/renderer/utils/wayland.rs:197-209`). Se quitan
-`force_full_damage` y el `reset_buffer_ages` de udev, y vale también para
-winit. Falta medirlo en la sesión DRM.
-
 Compara con niri (el rev fijado en la auditoría) cómo maneja `queue_redraw`,
 `RedrawState`, damage tracking, cursor plane y frame callbacks. Revisa
 `crates/malaysia-compositor/src/{udev.rs,session.rs,input.rs,handlers.rs}`.
