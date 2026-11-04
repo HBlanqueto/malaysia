@@ -18,6 +18,10 @@ Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clie
 
 A BarrierKit app uses an `app_id` with the `io.github.hblanqueto.malaysia.` prefix and requests its mode through `xdg-decoration` before the first commit: `Client` draws its own 44 px bar (apps with a toolbar/sidebar); `Server` leaves the 32 px bar to the compositor (simple utilities). `force_server`/`force_client` only affect third-party apps.
 
+## Moving
+
+While dragged, a window does not go behind the menubar: its top edge stops at the work area (`State::workspace`, which subtracts the top exclusive zones), as on macOS. The sides and the bottom edge may leave the screen.
+
 ## Edge resize
 
 Normal SSD windows (not maximized or fullscreen) are resized from an outer band: `window.resize_border` (10 px) on the sides and an «L» of `window.resize_corner` (20 px) at the corners, with 2 px of tolerance inward. The hit test walks the stack: the top window wins and its content blocks the band of a lower one. The traffic lights are checked before the resize. CSD windows handle their own edges.

@@ -2141,8 +2141,11 @@ impl State {
                 let Some(offset) = self.unmaximize_on_drag(window, offset, location) else {
                     return;
                 };
-                let target =
-                    Point::from((round(location.x - offset.x), round(location.y - offset.y)));
+                let top = self.workspace().0.y;
+                let target = Point::from((
+                    round(location.x - offset.x),
+                    round(location.y - offset.y).max(top),
+                ));
                 self.windows.move_to(window, target);
             }
             Grab::Resize {

@@ -17,6 +17,10 @@ Solo las ventanas SSD reciben titlebar (ADR 0014/0019). GTK/Libadwaita y los cli
 ## Apps propias
 
 Una app de BarrierKit usa `app_id` con prefijo `io.github.hblanqueto.malaysia.` y pide su modo por `xdg-decoration` antes del primer commit: `Client` dibuja su barra de 44 px (apps con toolbar/sidebar); `Server` deja la barra de 32 px al compositor (utilidades simples). `force_server`/`force_client` solo afectan a apps ajenas.
+## Mover
+
+Al arrastrar, la ventana no pasa por detrás de la barra de menús: su borde superior se detiene en el área de trabajo (`State::workspace`, que descuenta las zonas exclusivas de arriba), como en macOS. Los lados y el borde inferior pueden salir de la pantalla.
+
 ## Resize por bordes
 
 Las ventanas SSD normales (no maximizadas ni fullscreen) se redimensionan desde una banda exterior: `window.resize_border` (10 px) en los lados y una «L» de `window.resize_corner` (20 px) en las esquinas, con 2 px de tolerancia hacia dentro. El hit-test recorre la pila: la ventana superior gana y su contenido bloquea la banda de una inferior. Los semáforos se comprueban antes que el resize. Las CSD gestionan sus propios bordes.
