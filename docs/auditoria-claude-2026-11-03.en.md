@@ -842,5 +842,7 @@ Commits that apply this audit, in order:
    - Nested did not show it because `./dev.sh run` built a local checkout older than `cfcf7c0`, which still rendered on every vblank.
    - Validated on `23c1121` (2026-11-03): commits already queued frames, but the lag remained with no client commits.
 6. **Second cause, confirmed while validating `23c1121`:** `pointer_motion_raw` requested a redraw only for grabs and cursor-image changes. Other motion relied on the unconditional vblank render that `cfcf7c0` removed; without client commits, the cursor advanced only when another surface requested a frame. That is why it was smooth over the dock and slow over the wallpaper. Fix: `request_redraw` on every pointer motion.
+| barrierkit `abd1cec`, `ba5c1fb` | §2.3 | With `VK_EXT_swapchain_maintenance1`, a resize retires the old swapchain with present fences, without `vkDeviceWaitIdle`. |
+| `14e4a58` | §8.1, S-03 | `security-context-v1`: sandboxed clients do not see the privileged globals; virtual-keyboard and virtual-pointer open to the rest. |
 
 Pending: the `bandura.jpg` licence (§1 (9)) is the author's call; barrierkit's `sidebar_section_chevron_changes_shape_when_toggled` test is flaky on `73590c5` too.

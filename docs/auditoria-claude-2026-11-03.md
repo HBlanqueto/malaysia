@@ -843,5 +843,7 @@ Commits que aplican esta auditoría, en orden:
    - El anidado no lo mostraba porque `./dev.sh run` compilaba un checkout local anterior a `cfcf7c0`, que aún renderizaba en cada vblank.
    - Validado en `23c1121` (2026-11-03): los commits ya encolaban frames, pero el lag seguía sin commits de clientes.
 6. **Segunda causa, confirmada al validar `23c1121`:** `pointer_motion_raw` solo pedía redibujado al arrastrar o al cambiar la imagen del cursor. El resto de movimientos dependía del render incondicional por vblank que quitó `cfcf7c0`; sin commits de clientes, el cursor solo avanzaba cuando otra superficie pedía frame. Por eso iba fluido sobre el dock y lento sobre el fondo. Arreglo: `request_redraw` en cada movimiento del puntero.
+| barrierkit `abd1cec`, `ba5c1fb` | §2.3 | Con `VK_EXT_swapchain_maintenance1`, redimensionar retira el swapchain viejo con fences de present, sin `vkDeviceWaitIdle`. |
+| `14e4a58` | §8.1, S-03 | `security-context-v1`: los clientes en sandbox no ven los globals privilegiados; virtual-keyboard y virtual-pointer se abren al resto. |
 
 Pendiente: la licencia de `bandura.jpg` (§1 (9)) la decide el autor; `test sidebar_section_chevron_changes_shape_when_toggled` de barrierkit falla de forma intermitente también en `73590c5`.
