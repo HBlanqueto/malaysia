@@ -34,7 +34,7 @@ Smithay deja el lock en `Defunct` (no en `Unlocked`) y un segundo `lock()` puede
 
 ## PAM y auto-lock
 
-La autenticación vive en el proceso del lock (FFI a `libpam`, hilo `malaysia-pam`); servicio `malaysia-lock` o `login`, contraseña en `Zeroizing<String>`, y solo un acierto llama a `unlock_and_destroy`. `ext-idle-notify-v1` reinicia el reloj en cada input y `lock.idle_timeout_seconds` (default 0, desactivado) lanza el lock; `zwp_idle_inhibit_manager_v1` lo frena.
+La autenticación vive en el proceso del lock (FFI a `libpam`, hilo `malaysia-pam`); servicio `malaysia-lock` o `login`, contraseña en `Zeroizing<String>`, y solo un acierto llama a `unlock_and_destroy`. `ext-idle-notify-v1` reinicia el reloj en cada input y `lock.idle_timeout_seconds` (default 0, desactivado) lanza el lock; `zwp_idle_inhibit_manager_v1` lo frena. Con el auto-lock activo, el backend DRM toma un inhibidor `delay` de logind y, al recibir `PrepareForSleep(true)`, lanza el lock y suelta el inhibidor cuando la sesión queda bloqueada (máximo 4 s). Vive en `sleep.rs`.
 ## Lado del compositor
 
 - `SessionLockHandler::lock()` marca `State::locked`, limpia el foco de teclado, confirma y redibuja. Mientras `locked`, el draw solo renderiza lock surfaces y los frame callbacks solo van a ellas y a la superficie del cursor.

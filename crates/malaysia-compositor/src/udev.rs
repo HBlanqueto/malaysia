@@ -266,6 +266,9 @@ pub fn run(options: DrmOptions) -> Result<()> {
         Box::new(crate::idle::IdleTimers::new(loop_handle.clone())),
     )
     .map_err(|error| anyhow!("building the compositor state: {error}"))?;
+    if state.idle.locks_automatically() {
+        crate::sleep::watch(&loop_handle);
+    }
 
     state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
     state.shadow = crate::effects::compile_shadow(renderer);

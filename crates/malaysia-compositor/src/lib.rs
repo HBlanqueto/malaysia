@@ -23,6 +23,7 @@ mod popup;
 mod popup_fade;
 mod renderer;
 pub mod session;
+mod sleep;
 mod spaces;
 mod spawn;
 mod state;

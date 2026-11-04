@@ -104,6 +104,7 @@ pub struct IdleState {
     sink: Box<dyn TimerSink>,
     auto_lock_child: Option<Child>,
     wayland_display: Option<String>,
+    sleep_lock: Option<std::sync::mpsc::Sender<()>>,
 }
 
 impl IdleState {
@@ -124,6 +125,7 @@ impl IdleState {
             sink,
             auto_lock_child: None,
             wayland_display: None,
+            sleep_lock: None,
         };
         idle.arm_auto();
         idle
@@ -145,9 +147,24 @@ impl IdleState {
         self.sink.remove(LOCK_RECOVERY_ID);
     }
 
+    pub fn locks_automatically(&self) -> bool {
+        self.auto_timeout.is_some()
+    }
+
+    pub fn lock_before_sleep(&mut self, locked: std::sync::mpsc::Sender<()>) {
+        if self.locked || !self.spawn_lock_screen() {
+            let _ = locked.send(());
+        } else {
+            self.sleep_lock = Some(locked);
+        }
+    }
+
     pub fn set_locked(&mut self, locked: bool) {
         self.locked = locked;
         if locked {
+            if let Some(sleep_lock) = self.sleep_lock.take() {
+                let _ = sleep_lock.send(());
+            }
             self.sink.remove(AUTO_ID);
         } else {
             self.arm_auto();
