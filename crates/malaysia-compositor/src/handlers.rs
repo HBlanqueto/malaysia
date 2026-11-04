@@ -148,16 +148,17 @@ impl CompositorHandler for State {
     fn commit(&mut self, surface: &WlSurface) {
         log_committed_buffer_type(surface);
         // Smithay 023b78b1 drops empty damage (renderer/utils/mod.rs:221-226), so a new buffer
-        // without damage would never be drawn; it damages its whole surface instead.
+        // without damage would never be drawn; it damages the whole buffer instead.
         with_states(surface, |states| {
             let mut cached = states.cached_state.get::<SurfaceAttributes>();
             let attrs = cached.current();
-            if matches!(attrs.buffer, Some(BufferAssignment::NewBuffer(_)))
+            if let Some(BufferAssignment::NewBuffer(buffer)) = &attrs.buffer
                 && attrs.damage.is_empty()
+                && let Some(size) = smithay::backend::renderer::buffer_dimensions(buffer)
             {
-                attrs.damage.push(Damage::Buffer(Rectangle::from_size(
-                    (i32::MAX, i32::MAX).into(),
-                )));
+                attrs
+                    .damage
+                    .push(Damage::Buffer(Rectangle::from_size(size)));
             }
         });
         on_commit_buffer_handler::<Self>(surface);

@@ -56,14 +56,7 @@ impl ChromeTheme {
         };
         palette.hairline = resolved.surfaces.line;
 
-        let traffic_style = match appearance.traffic_lights {
-            TrafficLightStyle::Auto => match appearance.window_color {
-                WindowColorMode::Neutral => TrafficLightStyle::Standard,
-                WindowColorMode::Accent => TrafficLightStyle::Accent,
-                WindowColorMode::Wallpaper => TrafficLightStyle::Wallpaper,
-            },
-            style => style,
-        };
+        let traffic_style = appearance.traffic_light_style();
         let signature = signature(
             resolved.scheme,
             appearance.window_color,
@@ -128,6 +121,7 @@ pub(crate) struct ChromeCache {
 }
 
 struct Cached {
+    title: String,
     key: Key,
     id: Id,
     commit: CommitCounter,
@@ -143,7 +137,6 @@ struct CachedShader {
 
 #[derive(PartialEq, Eq)]
 struct Key {
-    title: String,
     focused: bool,
     group_hovered: bool,
     pressed: Option<ButtonKind>,
@@ -229,7 +222,8 @@ impl ChromeCache {
                 continue;
             };
             elements.push(
-                PrimaryGpu(self.shader((owner, slot), program, area, layer.opacity, uniforms)).into(),
+                PrimaryGpu(self.shader((owner, slot), program, area, layer.opacity, uniforms))
+                    .into(),
             );
         }
         elements
@@ -254,7 +248,6 @@ impl ChromeCache {
     ) -> Option<crate::effects::RoundedTextureElement<R>> {
         use smithay::backend::renderer::ImportMem;
         let key = Key {
-            title: title.to_string(),
             focused,
             group_hovered: input.group_hovered,
             pressed: input.pressed,
@@ -264,22 +257,34 @@ impl ChromeCache {
             theme: theme.signature,
         };
         let previous = self.entries.get(&id);
-        let stale = previous.is_none_or(|entry| entry.key != key);
+        let stale = previous.is_none_or(|entry| entry.key != key || entry.title != title);
         if stale {
+            let (pixels, w, h) = self
+                .text
+                .rasterize(title, focused, width, scale, *theme, input);
+            let reusable = previous
+                .filter(|entry| entry.size == (w, h))
+                .map(|entry| entry.texture.clone())
+                .filter(|texture| {
+                    renderer
+                        .update_memory(texture, &pixels, Rectangle::from_size((w, h).into()))
+                        .is_ok()
+                });
+            let texture = match reusable {
+                Some(texture) => texture,
+                None => renderer
+                    .import_memory(&pixels, Fourcc::Abgr8888, (w, h).into(), false)
+                    .ok()?,
+            };
             let (element_id, mut commit) = previous.map_or_else(
                 || (Id::new(), CommitCounter::default()),
                 |entry| (entry.id.clone(), entry.commit),
             );
             commit.increment();
-            let (pixels, w, h) = self
-                .text
-                .rasterize(title, focused, width, scale, *theme, input);
-            let texture = renderer
-                .import_memory(&pixels, Fourcc::Abgr8888, (w, h).into(), false)
-                .ok()?;
             self.entries.insert(
                 id,
                 Cached {
+                    title: title.to_owned(),
                     key,
                     id: element_id,
                     commit,

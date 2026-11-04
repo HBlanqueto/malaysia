@@ -603,12 +603,6 @@ impl Windows {
             .unwrap_or(false)
     }
 
-    pub fn is_mapped(&self, surface: &WlSurface) -> bool {
-        self.index_of(surface)
-            .map(|index| self.windows[index].mapped)
-            .unwrap_or(false)
-    }
-
     pub fn active_info(&self, id: WindowId) -> Option<(String, String)> {
         let index = self.index(id)?;
         let surface = self.windows[index].toplevel.wl_surface();

@@ -1,6 +1,7 @@
 //! Screenshots: the debug PNG dump and the screencopy protocol.
 
 use std::{
+    cell::RefCell,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -11,7 +12,9 @@ use smithay::backend::drm::DrmNode;
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
-use smithay::backend::renderer::{Bind, BufferType, ExportMem, ImportDma, Offscreen, buffer_type};
+use smithay::backend::renderer::{
+    Bind, BufferType, ContextId, ExportMem, ImportDma, Offscreen, Renderer, buffer_type,
+};
 use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::utils::{Buffer as BufferCoord, Logical, Physical, Rectangle, Scale, Size, Transform};
@@ -391,9 +394,7 @@ fn capture_into_shm(
         )
         .map_err(|error| format!("invalid shm capture buffer: {error}"))?;
         let size_buf: Size<i32, BufferCoord> = Size::from((size.w, size.h));
-        let mut offscreen: GlesTexture = renderer
-            .create_buffer(fourcc, size_buf)
-            .map_err(|error| format!("create_buffer failed: {error}"))?;
+        let mut offscreen = shm_offscreen(renderer, fourcc, size_buf)?;
         let mut tracker = OutputDamageTracker::new(size, Scale::from(scale), Transform::Flipped);
         {
             let mut target = renderer
@@ -429,6 +430,44 @@ fn capture_into_shm(
         }
     })
     .map_err(|error| format!("shm buffer access failed: {error}"))?
+}
+
+struct ShmOffscreen {
+    context: ContextId<GlesTexture>,
+    fourcc: Fourcc,
+    size: Size<i32, BufferCoord>,
+    texture: GlesTexture,
+}
+
+thread_local! {
+    static SHM_OFFSCREEN: RefCell<Option<ShmOffscreen>> = const { RefCell::new(None) };
+}
+
+// niri a8562a1 src/render_helpers/offscreen.rs: a screencast reuses one texture per size,
+// format and GL context instead of allocating one per frame.
+fn shm_offscreen(
+    renderer: &mut GlesRenderer,
+    fourcc: Fourcc,
+    size: Size<i32, BufferCoord>,
+) -> Result<GlesTexture, String> {
+    let context = renderer.context_id();
+    SHM_OFFSCREEN.with_borrow_mut(|cached| {
+        if let Some(cached) = cached.as_ref().filter(|cached| {
+            cached.context == context && cached.fourcc == fourcc && cached.size == size
+        }) {
+            return Ok(cached.texture.clone());
+        }
+        let texture: GlesTexture = renderer
+            .create_buffer(fourcc, size)
+            .map_err(|error| format!("create_buffer failed: {error}"))?;
+        *cached = Some(ShmOffscreen {
+            context,
+            fourcc,
+            size,
+            texture: texture.clone(),
+        });
+        Ok(texture)
+    })
 }
 
 fn capture_dir() -> PathBuf {

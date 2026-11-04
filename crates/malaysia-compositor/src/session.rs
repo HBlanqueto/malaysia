@@ -10,16 +10,24 @@ use smithay::backend::drm::{DrmDeviceFd, DrmNode};
 use smithay::backend::egl::EGLDevice;
 use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::damage::{Error as DamageError, OutputDamageTracker};
-use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
 use smithay::backend::renderer::element::solid::{SolidColorBuffer, SolidColorRenderElement};
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, render_elements_from_surface_tree,
 };
+use smithay::backend::renderer::element::{
+    Kind, RenderElementStates, default_primary_scanout_output_compare,
+};
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer};
 use smithay::backend::renderer::sync::SyncPoint;
 use smithay::backend::renderer::utils::{Buffer, RendererSurfaceStateUserData};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
+use smithay::desktop::utils::{
+    OutputPresentationFeedback, send_frames_surface_tree,
+    surface_presentation_feedback_flags_from_states, surface_primary_scanout_output,
+    take_presentation_feedback_surface_tree, update_surface_primary_scanout_output,
+    with_surfaces_surface_tree,
+};
 use smithay::input::pointer::{CursorImageStatus, CursorImageSurfaceData};
 use smithay::output::{Mode as OutputMode, OutputModeSource};
 use smithay::reexports::calloop::generic::Generic;
@@ -36,15 +44,11 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{
     DeviceFd, IsAlive, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
-use smithay::wayland::compositor::{
-    SurfaceAttributes, TraversalAction, with_states, with_surface_tree_downward,
-};
+use smithay::wayland::compositor::{TraversalAction, with_states, with_surface_tree_downward};
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
-use smithay::wayland::presentation::{
-    PresentationFeedbackCachedState, PresentationFeedbackCallback, Refresh,
-};
+use smithay::wayland::presentation::Refresh;
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -281,6 +285,7 @@ pub fn run() -> Result<(), SessionError> {
             }
         })
         .map_err(|error| SessionError::EventLoop(error.into()))?;
+    watch_overdue_frame_callbacks(&loop_handle);
 
     if session.state.test_pointer.is_some() {
         loop_handle
@@ -1614,7 +1619,7 @@ pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
 fn draw(session: &mut Session) -> Result<(), DrawError> {
     let capture_size = session.backend.window_size();
     let age = session.backend.buffer_age().unwrap_or(0);
-    let (damage, sync, request_redraw) = {
+    let (damage, sync, request_redraw, mut feedback) = {
         let (renderer, mut framebuffer) = session.backend.bind().map_err(DrawError::Bind)?;
 
         let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
@@ -1681,11 +1686,11 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {
-                Ok(()) => {
-                    pending
-                        .frame
-                        .success(Transform::Normal, Some(vec![damage]), Duration::ZERO)
-                }
+                Ok(()) => pending.frame.success(
+                    Transform::Normal,
+                    Some(vec![damage]),
+                    Duration::from(session.state.clock.now()),
+                ),
                 Err(error) => {
                     tracing::warn!(%error, "screencopy frame failed");
                     pending.frame.fail(CaptureFailureReason::Unknown);
@@ -1704,6 +1709,8 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             )
             .map_err(DrawError::Output)?;
 
+        update_primary_scanout_outputs(&session.state, &result.states);
+        let feedback = take_presentation_feedback(&session.state, &result.states);
         let mut damage = result.damage.cloned();
         let sync = result.sync.clone();
         drop(result);
@@ -1725,7 +1732,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             }
         }
 
-        (damage, sync, request_redraw)
+        (damage, sync, request_redraw, feedback)
     };
 
     if request_redraw {
@@ -1733,7 +1740,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     }
 
     if damage.is_none() {
-        discard_feedbacks(&session.state);
+        feedback.discarded();
         send_frame_callbacks_for_state(&session.state, Duration::from(session.state.clock.now()));
         queue_estimated_vblank(session);
         return Ok(());
@@ -1755,8 +1762,12 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     }
     session.last_frame_duration = Some(now);
     session.frame_seq = session.frame_seq.wrapping_add(1);
-    let feedbacks = take_presentation_feedbacks(&session.state);
-    present_feedbacks(&session.state, feedbacks, now, session.frame_seq);
+    feedback.presented(
+        session.state.clock.now(),
+        Refresh::fixed(refresh_interval(&session.state)),
+        session.frame_seq,
+        wp_presentation_feedback::Kind::Vsync,
+    );
     if let Some(token) = session.estimated_vblank.take() {
         session.loop_handle.remove(token);
     }
@@ -1946,7 +1957,7 @@ fn append_cursor<R: MalaysiaRenderer>(
                 Kind::Cursor,
             ) {
                 Ok(element) => {
-                    tracing::debug!(boost, "drawing a pointer cursor");
+                    tracing::trace!(boost, "drawing a pointer cursor");
                     elements.push(element.into());
                 }
                 Err(error) => tracing::warn!(?error, "could not draw a pointer cursor"),
@@ -1994,126 +2005,115 @@ fn cursor_surface_hotspot(surface: &WlSurface) -> Point<f64, Logical> {
 #[derive(Default)]
 struct LastFrameCallbackCycle(Cell<Option<u32>>);
 
-// niri a8562a1 src/niri.rs:5342: one callback per surface and refresh cycle, or a client that
-// commits only wl_surface.frame busy-loops on empty frames.
-fn send_frame_callbacks(surface: &WlSurface, time: Duration, cycle: u32) {
-    let time_ms = time.as_millis() as u32;
-    with_surface_tree_downward(
-        surface,
-        (),
-        |_, _, &()| TraversalAction::DoChildren(()),
-        |_, states, &()| {
-            let last = states
-                .data_map
-                .get_or_insert(LastFrameCallbackCycle::default);
-            if last.0.replace(Some(cycle)) == Some(cycle) {
-                return;
-            }
-            let mut cached = states.cached_state.get::<SurfaceAttributes>();
-            for callback in cached.current().frame_callbacks.drain(..) {
-                callback.done(time_ms);
-            }
-        },
-        |_, _, &()| true,
-    );
-}
+// niri a8562a1 src/niri.rs:205: hidden surfaces still get a callback about once a second.
+const FRAME_CALLBACK_THROTTLE: Duration = Duration::from_millis(995);
 
-pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
-    let cycle = state.frame_callback_cycle;
+fn for_each_frame_surface(state: &State, mut visit: impl FnMut(&WlSurface, bool)) {
     if let CursorImageStatus::Surface(surface) = &state.cursor_status {
-        send_frame_callbacks(surface, time, cycle);
+        visit(surface, true);
     }
     if state.locked {
-        for surface in &state.lock_surfaces {
-            if surface.alive() {
-                send_frame_callbacks(surface.wl_surface(), time, cycle);
-            }
+        for surface in state.lock_surfaces.iter().filter(|surface| surface.alive()) {
+            visit(surface.wl_surface(), true);
         }
         return;
     }
     for surface in state.windows.surfaces() {
-        if state.windows.is_mapped(surface) || !state.windows.is_placed(surface) {
-            send_frame_callbacks(surface, time, cycle);
-        }
+        visit(surface, !state.windows.is_placed(surface));
     }
     for entry in state.layers.all() {
-        send_frame_callbacks(entry.surface.wl_surface(), time, cycle);
+        visit(entry.surface.wl_surface(), false);
     }
     for (id, _parent, _rect) in state.windows.iter_popups() {
         if let Some(surface) = state.popups.surface_of(id) {
-            send_frame_callbacks(surface, time, cycle);
+            visit(surface, false);
         }
     }
     for popup in &state.ime_popups {
-        send_frame_callbacks(popup.wl_surface(), time, cycle);
+        visit(popup.wl_surface(), false);
     }
 }
 
-pub(crate) fn take_presentation_feedbacks(state: &State) -> Vec<PresentationFeedbackCallback> {
-    let mut callbacks = Vec::new();
-    let mut take = |surface: &WlSurface| {
-        with_surface_tree_downward(
+pub(crate) fn update_primary_scanout_outputs(state: &State, render_states: &RenderElementStates) {
+    for_each_frame_surface(state, |surface, _| {
+        with_surfaces_surface_tree(surface, |surface, states| {
+            update_surface_primary_scanout_output(
+                surface,
+                &state.output,
+                states,
+                None,
+                render_states,
+                default_primary_scanout_output_compare,
+            );
+        });
+    });
+}
+
+// niri a8562a1 src/niri.rs:5342: one callback per surface and refresh cycle, or a client that
+// commits only wl_surface.frame busy-loops on empty frames; surfaces off screen wait for the
+// throttle.
+pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
+    let cycle = state.frame_callback_cycle;
+    let output = &state.output;
+    for_each_frame_surface(state, |surface, always| {
+        send_frames_surface_tree(
             surface,
-            (),
-            |_, _, &()| TraversalAction::DoChildren(()),
-            |_, states, &()| {
-                callbacks.append(
-                    &mut states
-                        .cached_state
-                        .get::<PresentationFeedbackCachedState>()
-                        .current()
-                        .callbacks,
-                );
+            output,
+            time,
+            Some(FRAME_CALLBACK_THROTTLE),
+            |surface, states| {
+                let shown = always
+                    || surface_primary_scanout_output(surface, states).as_ref() == Some(output);
+                let last = states
+                    .data_map
+                    .get_or_insert(LastFrameCallbackCycle::default);
+                (shown && last.0.replace(Some(cycle)) != Some(cycle)).then(|| output.clone())
             },
-            |_, _, &()| true,
         );
-    };
-    if state.locked {
-        for surface in &state.lock_surfaces {
-            if surface.alive() {
-                take(surface.wl_surface());
-            }
-        }
-        return callbacks;
-    }
-    for window in state.windows.iter() {
-        if window.is_mapped() {
-            take(window.surface());
-        }
-    }
-    for entry in state.layers.all() {
-        take(entry.surface.wl_surface());
-    }
-    for (id, _parent, _rect) in state.windows.iter_popups() {
-        if let Some(surface) = state.popups.surface_of(id) {
-            take(surface);
-        }
-    }
-    callbacks
+    });
 }
 
-pub(crate) fn present_feedbacks(
-    state: &State,
-    callbacks: Vec<PresentationFeedbackCallback>,
-    time: Duration,
-    seq: u64,
-) {
-    let refresh = Refresh::fixed(refresh_interval(state));
-    for callback in callbacks {
-        callback.presented(
+fn send_overdue_frame_callbacks(state: &State) {
+    let time = Duration::from(state.clock.now());
+    for_each_frame_surface(state, |surface, _| {
+        send_frames_surface_tree(
+            surface,
             &state.output,
             time,
-            refresh,
-            seq,
-            wp_presentation_feedback::Kind::Vsync,
+            Some(FRAME_CALLBACK_THROTTLE),
+            |_, _| None,
         );
+    });
+}
+
+pub(crate) fn watch_overdue_frame_callbacks<D: crate::idle::IdleHost + 'static>(
+    handle: &LoopHandle<'static, D>,
+) {
+    let timer = Timer::from_duration(FRAME_CALLBACK_THROTTLE);
+    if let Err(error) = handle.insert_source(timer, |_, _, data: &mut D| {
+        send_overdue_frame_callbacks(data.idle_state());
+        TimeoutAction::ToDuration(FRAME_CALLBACK_THROTTLE)
+    }) {
+        tracing::warn!(%error, "arming the frame callback fallback timer");
     }
 }
 
-pub(crate) fn discard_feedbacks(state: &State) {
-    for callback in take_presentation_feedbacks(state) {
-        callback.discarded();
-    }
+pub(crate) fn take_presentation_feedback(
+    state: &State,
+    render_states: &RenderElementStates,
+) -> OutputPresentationFeedback {
+    let mut feedback = OutputPresentationFeedback::new(&state.output);
+    for_each_frame_surface(state, |surface, _| {
+        take_presentation_feedback_surface_tree(
+            surface,
+            &mut feedback,
+            surface_primary_scanout_output,
+            |surface, _| {
+                surface_presentation_feedback_flags_from_states(surface, None, render_states)
+            },
+        );
+    });
+    feedback
 }
 
 pub(crate) fn refresh_interval(state: &State) -> Duration {

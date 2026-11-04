@@ -48,7 +48,12 @@ fn run(to_loop: &channel::Sender<mpsc::Sender<()>>) -> zbus::Result<()> {
     let inhibit = || {
         manager.call::<_, _, OwnedFd>(
             "Inhibit",
-            &("sleep", "malaysia", "Lock the session before sleeping", "delay"),
+            &(
+                "sleep",
+                "malaysia",
+                "Lock the session before sleeping",
+                "delay",
+            ),
         )
     };
     let mut inhibitor = Some(inhibit()?);

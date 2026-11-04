@@ -162,9 +162,9 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
         }
     }
 
-    fn uniforms(&self) -> Vec<Uniform<'static>> {
+    fn uniforms(&self) -> [Uniform<'static>; 4] {
         let src = self.src();
-        vec![
+        [
             Uniform::new(
                 "texture_size",
                 [self.texture_size.w as f32, self.texture_size.h as f32],
@@ -267,7 +267,7 @@ impl<R: MalaysiaRenderer> RenderElement<R> for RoundedTextureElement<R> {
         match &self.source {
             Source::Surface(element) => {
                 R::gles_frame(frame)
-                    .override_default_tex_program(self.program.clone(), self.uniforms());
+                    .override_default_tex_program(self.program.clone(), self.uniforms().to_vec());
                 let drawn = element.draw(frame, src, dst, damage, opaque_regions, cache);
                 R::gles_frame(frame).clear_tex_program_override();
                 drawn

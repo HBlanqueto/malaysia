@@ -18,10 +18,8 @@ use smithay::backend::drm::{
 };
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::ImportDma;
+use smithay::backend::renderer::element::RenderElementStates;
 use smithay::backend::renderer::element::utils::select_dmabuf_feedback;
-use smithay::backend::renderer::element::{
-    RenderElementStates, default_primary_scanout_output_compare,
-};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::multigpu::GpuManager;
 
@@ -40,8 +38,7 @@ use smithay::reexports::drm::control::{Device as ControlDevice, ModeTypeFlags, c
 use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::desktop::utils::{
-    send_dmabuf_feedback_surface_tree, surface_primary_scanout_output,
-    update_surface_primary_scanout_output, with_surfaces_surface_tree,
+    OutputPresentationFeedback, send_dmabuf_feedback_surface_tree, surface_primary_scanout_output,
 };
 use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1::TrancheFlags;
 use smithay::reexports::wayland_server::Display;
@@ -50,7 +47,8 @@ use smithay::utils::{DeviceFd, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
-use smithay::wayland::presentation::PresentationFeedbackCallback;
+use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
+use smithay::wayland::presentation::Refresh;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{error, info, warn};
 
@@ -79,7 +77,7 @@ struct Udev {
     output: Output,
     active: bool,
     redraw_state: RedrawState,
-    presented_feedbacks: Vec<PresentationFeedbackCallback>,
+    presented_feedback: Option<OutputPresentationFeedback>,
     last_vblank: Option<Duration>,
     loop_signal: LoopSignal,
     capture_requested: bool,
@@ -245,9 +243,12 @@ pub fn run(options: DrmOptions) -> Result<()> {
     )
     .map_err(|error| anyhow!("creating the DRM compositor: {error}"))?;
 
-    let feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), renderer.dmabuf_formats())
-        .build()
-        .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
+    let feedback = DmabufFeedbackBuilder::new(
+        feedback_node(render_node).dev_id(),
+        renderer.dmabuf_formats(),
+    )
+    .build()
+    .map_err(|error| anyhow!("building the dmabuf feedback: {error}"))?;
     let mut frame_flags =
         FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT;
     if overlay_planes {
@@ -290,6 +291,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
             }
         })
         .map_err(|error| anyhow!("inserting the disconnect source: {error}"))?;
+    crate::session::watch_overdue_frame_callbacks(&loop_handle);
 
     let mut udev = Udev {
         loop_handle: loop_handle.clone(),
@@ -305,7 +307,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         output,
         active: true,
         redraw_state: RedrawState::Idle,
-        presented_feedbacks: Vec::new(),
+        presented_feedback: None,
         last_vblank: None,
         loop_signal: loop_signal.clone(),
         capture_requested: false,
@@ -363,6 +365,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                 smithay::backend::drm::DrmEvent::VBlank(_crtc) => data.on_vblank(metadata.as_ref()),
                 smithay::backend::drm::DrmEvent::Error(error) => {
                     error!(%error, "DRM event error");
+                    data.on_drm_error();
                 }
             },
         )
@@ -647,7 +650,6 @@ impl Udev {
                 self.state.frame_callback_cycle = self.state.frame_callback_cycle.wrapping_add(1);
             }
             RenderResult::NoDamage => {
-                crate::session::discard_feedbacks(&self.state);
                 self.queue_estimated_vblank_timer();
             }
             RenderResult::Skipped => {
@@ -713,6 +715,15 @@ impl Udev {
         }
     }
 
+    fn on_drm_error(&mut self) {
+        // A lost page-flip event leaves the redraw loop waiting forever; a late one lands in
+        // on_vblank's unexpected branch.
+        if matches!(self.redraw_state, RedrawState::WaitingForVBlank { .. }) {
+            self.redraw_state = RedrawState::Idle;
+            self.queue_redraw();
+        }
+    }
+
     fn on_vblank(&mut self, metadata: Option<&DrmEventMetadata>) {
         if !self.active {
             return;
@@ -734,13 +745,24 @@ impl Udev {
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
-        let time = match metadata.map(|metadata| metadata.time) {
-            Some(DrmEventTime::Monotonic(time)) => time,
-            _ => Duration::from(self.state.clock.now()),
+        let (time, clock) = match metadata.map(|metadata| metadata.time) {
+            Some(DrmEventTime::Monotonic(time)) => (time, wp_presentation_feedback::Kind::HwClock),
+            _ => (
+                Duration::from(self.state.clock.now()),
+                wp_presentation_feedback::Kind::empty(),
+            ),
         };
         self.last_vblank = Some(time);
-        let feedbacks = std::mem::take(&mut self.presented_feedbacks);
-        crate::session::present_feedbacks(&self.state, feedbacks, time, self.vblank_count);
+        if let Some(mut feedback) = self.presented_feedback.take() {
+            feedback.presented::<_, smithay::utils::Monotonic>(
+                time,
+                Refresh::fixed(crate::session::refresh_interval(&self.state)),
+                self.vblank_count,
+                wp_presentation_feedback::Kind::Vsync
+                    | wp_presentation_feedback::Kind::HwCompletion
+                    | clock,
+            );
+        }
         if redraw_needed || self.state.animating(Instant::now()) {
             self.queue_redraw();
         } else {
@@ -849,11 +871,11 @@ impl Udev {
                 [0.06, 0.06, 0.09, 1.0],
                 &pending.frame.buffer(),
             ) {
-                Ok(()) => {
-                    pending
-                        .frame
-                        .success(Transform::Normal, Some(vec![damage]), Duration::ZERO)
-                }
+                Ok(()) => pending.frame.success(
+                    Transform::Normal,
+                    Some(vec![damage]),
+                    Duration::from(self.state.clock.now()),
+                ),
                 Err(error) => {
                     warn!(%error, "screencopy frame failed");
                     pending.frame.fail(CaptureFailureReason::Unknown);
@@ -870,6 +892,9 @@ impl Udev {
             self.frame_flags,
         ) {
             Ok(mut result) => {
+                crate::session::update_primary_scanout_outputs(&self.state, &result.states);
+                let mut feedback =
+                    crate::session::take_presentation_feedback(&self.state, &result.states);
                 send_dmabuf_feedbacks(
                     &self.state,
                     &self.output,
@@ -887,6 +912,7 @@ impl Udev {
                     }
                 }
                 if result.is_empty {
+                    feedback.discarded();
                     if !self.frame_was_empty {
                         self.frame_was_empty = true;
                         tracing::debug!("frame skipped: no damage");
@@ -901,11 +927,11 @@ impl Udev {
                 );
                 match self.compositor.queue_frame(()) {
                     Ok(()) => {
-                        self.presented_feedbacks =
-                            crate::session::take_presentation_feedbacks(&self.state);
+                        self.presented_feedback = Some(feedback);
                         RenderResult::Submitted
                     }
                     Err(error) => {
+                        feedback.discarded();
                         warn!(%error, "queueing a frame");
                         RenderResult::NoDamage
                     }
@@ -960,6 +986,13 @@ fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDevic
         )
         .map_err(|error| anyhow!("opening {}: {error}", path.display()))?;
     Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
+}
+
+// linux-dmabuf: main_device names the node clients allocate on, the render node when there is one.
+fn feedback_node(node: DrmNode) -> DrmNode {
+    node.node_with_type(NodeType::Render)
+        .and_then(Result::ok)
+        .unwrap_or(node)
 }
 
 fn find_render_node(seat: &str, scanout: &DrmNode) -> Result<DrmNode> {
@@ -1100,7 +1133,7 @@ fn scanout_feedback(
     let primary = scanout_formats(&mut surface.plane_info().formats.iter());
     let overlay =
         scanout_formats(&mut planes.overlay.iter().flat_map(|plane| plane.formats.iter()));
-    DmabufFeedbackBuilder::new(render_node.dev_id(), render_formats.clone())
+    DmabufFeedbackBuilder::new(feedback_node(render_node).dev_id(), render_formats.clone())
         .add_preference_tranche(scanout_node.dev_id(), TrancheFlags::Scanout, primary, 4..=5)
         .add_preference_tranche(scanout_node.dev_id(), TrancheFlags::Scanout, overlay, 4..=5)
         .build()
@@ -1115,16 +1148,6 @@ fn send_dmabuf_feedbacks(
     scanout_feedback: &DmabufFeedback,
 ) {
     let send = |surface: &WlSurface| {
-        with_surfaces_surface_tree(surface, |surface, states| {
-            update_surface_primary_scanout_output(
-                surface,
-                output,
-                states,
-                None,
-                render_states,
-                default_primary_scanout_output_compare,
-            );
-        });
         send_dmabuf_feedback_surface_tree(
             surface,
             output,
