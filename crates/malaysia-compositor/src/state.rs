@@ -71,7 +71,6 @@ pub enum StateError {
 pub struct State {
     loop_signal: LoopSignal,
     needs_redraw: bool,
-    pub(crate) force_full_damage: bool,
     pending_vt_switch: Option<u8>,
     pub compositor_state: CompositorState,
     pub shm_state: ShmState,
@@ -315,7 +314,6 @@ impl State {
         Ok(Self {
             loop_signal,
             needs_redraw: false,
-            force_full_damage: false,
             pending_vt_switch: None,
             compositor_state,
             shm_state,

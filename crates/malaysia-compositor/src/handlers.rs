@@ -41,7 +41,7 @@ use smithay::wayland::image_copy_capture::{
 };
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
-    Blocker, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
+    Blocker, BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, Damage,
     SurfaceAttributes, add_blocker, add_pre_commit_hook, with_states,
 };
 use smithay::wayland::output::OutputHandler;
@@ -147,15 +147,18 @@ impl CompositorHandler for State {
 
     fn commit(&mut self, surface: &WlSurface) {
         log_committed_buffer_type(surface);
-        let undamaged_buffer = with_states(surface, |states| {
+        // Smithay takes a new buffer without damage as unchanged; the Freya shell commits like that.
+        with_states(surface, |states| {
             let mut cached = states.cached_state.get::<SurfaceAttributes>();
             let attrs = cached.current();
-            matches!(attrs.buffer, Some(BufferAssignment::NewBuffer(_))) && attrs.damage.is_empty()
+            if matches!(attrs.buffer, Some(BufferAssignment::NewBuffer(_)))
+                && attrs.damage.is_empty()
+            {
+                attrs.damage.push(Damage::Buffer(Rectangle::from_size(
+                    (i32::MAX, i32::MAX).into(),
+                )));
+            }
         });
-        if undamaged_buffer {
-            // Sin damage, un buffer nuevo cambia toda la superficie.
-            self.force_full_damage = true;
-        }
         on_commit_buffer_handler::<Self>(surface);
         if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
             self.layer_surface_mapped(&layer);
