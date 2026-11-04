@@ -12,11 +12,12 @@ use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
 use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, ScrollBars, TintParts, TintStrength,
-    TrafficLightStyle, WindowColorMode, WindowTintScope, derived_lights, load_appearance,
+    TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope, derived_lights,
+    load_appearance,
 };
 use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS, TITLEBAR};
 
-use crate::previews::{theme_preview, window_color_preview};
+use crate::previews::{theme_preview, traffic_radius, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
 
 const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
@@ -33,6 +34,10 @@ const STRENGTHS: [TintStrength; 4] = [
 ];
 const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
 const SCROLL_BARS: [ScrollBars; 2] = [ScrollBars::WhenScrolling, ScrollBars::Always];
+const SHAPES: [(TrafficLightShape, &str); 2] = [
+    (TrafficLightShape::Square, "Cuadrados"),
+    (TrafficLightShape::Round, "Redondos"),
+];
 const TRAFFIC: [(TrafficLightStyle, &str); 4] = [
     (TrafficLightStyle::Auto, "Automático"),
     (TrafficLightStyle::Standard, "Clásico"),
@@ -64,7 +69,7 @@ pub fn settings_window(
         "appearance",
         "Apariencia",
         Symbol::CircleHalf,
-        ACCENT_SWATCHES[ACCENT_SWATCHES.len() - 1].1,
+        SETTINGS.section_icon_bg,
         appearance(config, dominant, resolved, error),
     )));
     let message = error.read().clone();
@@ -184,6 +189,11 @@ fn appearance(
                         .control(traffic_popup(config, dominant, resolved, error)),
                 )
                 .row(
+                    Row::new("Forma de los semáforos")
+                        .keywords(&["cuadrados", "redondos", "botones", "forma"])
+                        .control(traffic_shape_cards(config, resolved, error)),
+                )
+                .row(
                     Row::new("Mostrar barras de desplazamiento")
                         .keywords(&["scroll", "desplazamiento", "barras"])
                         .control(
@@ -259,6 +269,33 @@ fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) ->
         }))
 }
 
+fn traffic_shape_cards(
+    config: &AppearanceConfig,
+    resolved: &Resolved,
+    error: State<Option<String>>,
+) -> ChoiceCards {
+    SHAPES
+        .iter()
+        .fold(
+            ChoiceCards::new("Forma de los semáforos"),
+            |cards, &(shape, caption)| {
+                cards.option(
+                    caption,
+                    traffic_shape_preview(resolved, shape == TrafficLightShape::Round),
+                )
+            },
+        )
+        .selected(
+            SHAPES
+                .iter()
+                .position(|(shape, _)| *shape == config.traffic_light_shape)
+                .unwrap_or(0),
+        )
+        .on_change(edit(error, |config, index: usize| {
+            config.traffic_light_shape = SHAPES[index].0;
+        }))
+}
+
 fn traffic_popup(
     config: &AppearanceConfig,
     dominant: Option<Rgba>,
@@ -269,7 +306,8 @@ fn traffic_popup(
         .into_iter()
         .fold(PopUpButton::new("Semáforos"), |popup, (style, label)| {
             let lights = traffic_lights(style, resolved, dominant);
-            popup.icon_item(label, MenuIcon::Svg(swatch_grid_svg(lights).into()))
+            let round = config.traffic_light_shape == TrafficLightShape::Round;
+            popup.icon_item(label, MenuIcon::Svg(traffic_row_svg(lights, round).into()))
         })
         .selected(
             TRAFFIC
@@ -295,17 +333,21 @@ fn traffic_lights(
     }
 }
 
-fn swatch_grid_svg(lights: [Rgba; 3]) -> String {
+fn traffic_row_svg(lights: [Rgba; 3], round: bool) -> String {
     let size = MENU_POPOVER.swatch_grid_size;
     let dot = MENU_POPOVER.swatch_grid_dot;
     let gap = MENU_POPOVER.swatch_grid_gap;
-    let radius = dot / 2.0;
-    let circles: String = (0..9)
-        .map(|index| {
-            let cx = gap + (index % 3) as f32 * (dot + gap) + radius;
-            let cy = gap + (index / 3) as f32 * (dot + gap) + radius;
-            let [r, g, b, _] = lights[index % 3].to_rgba8();
-            format!(r#"<circle cx="{cx}" cy="{cy}" r="{radius}" fill="rgb({r},{g},{b})"/>"#)
+    let corner = traffic_radius(dot, round);
+    let y = (size - dot) / 2.0;
+    let circles: String = lights
+        .iter()
+        .enumerate()
+        .map(|(index, light)| {
+            let x = index as f32 * (dot + gap);
+            let [r, g, b, _] = light.to_rgba8();
+            format!(
+                r#"<rect x="{x}" y="{y}" width="{dot}" height="{dot}" rx="{corner}" fill="rgb({r},{g},{b})"/>"#
+            )
         })
         .collect();
     format!(
@@ -344,4 +386,18 @@ fn position<T: PartialEq>(options: &[T], value: T) -> usize {
         .iter()
         .position(|option| *option == value)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_traffic_row_icon_fits_the_menu_leading_column() {
+        let row = 3.0 * MENU_POPOVER.swatch_grid_dot + 2.0 * MENU_POPOVER.swatch_grid_gap;
+        assert!(row <= MENU_POPOVER.swatch_grid_size);
+        const { assert!(MENU_POPOVER.swatch_grid_size <= MENU_POPOVER.leading_column) };
+        let svg = traffic_row_svg([Rgba::TRANSPARENT; 3], false);
+        assert_eq!(svg.matches("<rect").count(), 3);
+    }
 }

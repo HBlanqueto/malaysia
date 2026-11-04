@@ -83,6 +83,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings** |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints menubar/dock (20 % / 26 %), **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **active** | titlebar traffic lights, **System Settings** |
+| `appearance.traffic_light_shape` | `"square"` \| `"round"` | `"square"` | **active** | traffic light shape (radius 4 or circle), **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
@@ -360,6 +361,7 @@ scroll_bars = "when_scrolling"  # when_scrolling | always
 window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tints menubar/dock)
 traffic_lights = "auto"         # auto | standard | accent | wallpaper
+traffic_light_shape = "square"  # square | round
 ```
 
 ```toml

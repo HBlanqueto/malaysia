@@ -2,7 +2,7 @@
 
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
-use vow_design::SETTINGS;
+use vow_design::{SETTINGS, TITLEBAR};
 
 use barrier_kit::theme::color as rgba;
 use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, WindowColorMode, resolve};
@@ -187,6 +187,36 @@ pub fn window_color_preview(
                     .background(rgba(sunken)),
             ),
     )
+}
+
+pub fn traffic_shape_preview(resolved: &Resolved, round: bool) -> Rect {
+    let diameter = TITLEBAR.buttons.diameter as f32;
+    let radius = traffic_radius(diameter, round);
+    rect()
+        .width(Size::fill())
+        .height(Size::fill())
+        .corner_radius(SETTINGS.card_radius as f32)
+        .background(rgba(resolved.surfaces.sunken))
+        .direction(Direction::Horizontal)
+        .main_align(Alignment::Center)
+        .cross_align(Alignment::Center)
+        .spacing(TITLEBAR.buttons.spacing as f32)
+        .children(resolved.lights.map(|light| {
+            rect()
+                .width(Size::px(diameter))
+                .height(Size::px(diameter))
+                .corner_radius(radius)
+                .background(rgba(light))
+                .into_element()
+        }))
+}
+
+pub fn traffic_radius(size: f32, round: bool) -> f32 {
+    if round {
+        size / 2.0
+    } else {
+        size * TITLEBAR.buttons.corner_radius as f32 / TITLEBAR.buttons.diameter as f32
+    }
 }
 
 #[cfg(test)]

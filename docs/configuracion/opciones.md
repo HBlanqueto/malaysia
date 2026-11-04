@@ -83,6 +83,7 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **activa** | titlebar/chrome del compositor, **Ajustes del sistema** |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **activa** | `desktop` tiñe también menubar/dock (20 % / 26 %), **Ajustes del sistema** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **activa** | semáforos de la titlebar, **Ajustes del sistema** |
+| `appearance.traffic_light_shape` | `"square"` \| `"round"` | `"square"` | **activa** | forma de los semáforos (radio 4 o círculo), **Ajustes del sistema** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **activa** | estilo de la barra lateral del kit |
 | `appearance.gtk_bridge` | bool | `true` | **activa** | portal: acento exacto y tinte en GTK 3/4 y libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) y en vivo por `org.malaysia.appearance` (ADR 0055). La lee solo el portal |
 
@@ -361,6 +362,7 @@ scroll_bars = "when_scrolling"  # when_scrolling | always
 window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tiñe menubar/dock)
 traffic_lights = "auto"         # auto | standard | accent | wallpaper
+traffic_light_shape = "square"  # square | round
 ```
 
 ```toml
