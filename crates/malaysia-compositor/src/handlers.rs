@@ -147,6 +147,15 @@ impl CompositorHandler for State {
 
     fn commit(&mut self, surface: &WlSurface) {
         log_committed_buffer_type(surface);
+        let undamaged_buffer = with_states(surface, |states| {
+            let mut cached = states.cached_state.get::<SurfaceAttributes>();
+            let attrs = cached.current();
+            matches!(attrs.buffer, Some(BufferAssignment::NewBuffer(_))) && attrs.damage.is_empty()
+        });
+        if undamaged_buffer {
+            // Sin damage, un buffer nuevo cambia toda la superficie.
+            self.force_full_damage = true;
+        }
         on_commit_buffer_handler::<Self>(surface);
         if let Some(layer) = self.layers.commit(surface, self.logical_output_size()) {
             self.layer_surface_mapped(&layer);

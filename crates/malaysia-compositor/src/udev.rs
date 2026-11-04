@@ -647,6 +647,9 @@ impl Udev {
             return;
         }
         self.redraw_queued = false;
+        if std::mem::take(&mut self.state.force_full_damage) {
+            self.compositor.reset_buffer_ages();
+        }
         let renderer = if self.target_node == self.render_node {
             self.gpu.single_renderer(&self.render_node)
         } else {
