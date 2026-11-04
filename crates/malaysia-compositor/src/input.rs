@@ -377,6 +377,11 @@ enum CompositorShortcut {
     ScreenshotRegion,
     Launcher,
     ForceQuit,
+    HideApp,
+    HideOtherApps,
+    QuitApp,
+    MinimizeWindow,
+    CloseWindow,
     ArrangeLeft,
     ArrangeRight,
     ArrangeUp,
@@ -428,6 +433,20 @@ fn compositor_shortcut(
         } else {
             CompositorShortcut::Launcher
         };
+    }
+    if logo && !ctrl && !shift && !locked {
+        for sym in syms {
+            match u32::from(*sym) {
+                keysyms::KEY_h | keysyms::KEY_H if alt => return CompositorShortcut::HideOtherApps,
+                keysyms::KEY_h | keysyms::KEY_H => return CompositorShortcut::HideApp,
+                keysyms::KEY_q | keysyms::KEY_Q if !alt => return CompositorShortcut::QuitApp,
+                keysyms::KEY_m | keysyms::KEY_M if !alt => {
+                    return CompositorShortcut::MinimizeWindow;
+                }
+                keysyms::KEY_w | keysyms::KEY_W if !alt => return CompositorShortcut::CloseWindow,
+                _ => {}
+            }
+        }
     }
     if ctrl && logo && !alt && !locked {
         for sym in syms {
@@ -730,6 +749,19 @@ impl State {
                                 }
                                 CompositorShortcut::ForceQuit => {
                                     state.open_force_quit();
+                                }
+                                CompositorShortcut::HideApp => state.hide_focused_app(),
+                                CompositorShortcut::HideOtherApps => state.hide_other_apps(),
+                                CompositorShortcut::QuitApp => state.quit_focused_app(),
+                                CompositorShortcut::MinimizeWindow => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.set_minimized(id, true);
+                                    }
+                                }
+                                CompositorShortcut::CloseWindow => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.windows.send_close(id);
+                                    }
                                 }
                                 CompositorShortcut::ArrangeLeft => {
                                     if let Some(id) = state.focused_window() {
@@ -2373,6 +2405,46 @@ mod tests {
     fn escape_is_recognised_by_its_raw_sym() {
         assert!(is_escape(&[keysyms::KEY_Escape.into()]));
         assert!(!is_escape(&[keysyms::KEY_Down.into()]));
+    }
+
+    #[test]
+    fn super_letters_are_the_app_menu_shortcuts_only_when_unlocked() {
+        let key = |sym: u32| [xkb::Keysym::from(sym)];
+        let shortcut = |alt: bool, sym: u32, locked: bool| {
+            compositor_shortcut(false, alt, false, true, &key(sym), locked)
+        };
+        assert_eq!(
+            shortcut(false, keysyms::KEY_h, false),
+            CompositorShortcut::HideApp
+        );
+        assert_eq!(
+            shortcut(true, keysyms::KEY_h, false),
+            CompositorShortcut::HideOtherApps
+        );
+        assert_eq!(
+            shortcut(false, keysyms::KEY_q, false),
+            CompositorShortcut::QuitApp
+        );
+        assert_eq!(
+            shortcut(false, keysyms::KEY_m, false),
+            CompositorShortcut::MinimizeWindow
+        );
+        assert_eq!(
+            shortcut(false, keysyms::KEY_w, false),
+            CompositorShortcut::CloseWindow
+        );
+        assert_eq!(
+            shortcut(true, keysyms::KEY_q, false),
+            CompositorShortcut::None
+        );
+        assert_eq!(
+            shortcut(false, keysyms::KEY_q, true),
+            CompositorShortcut::None
+        );
+        assert_eq!(
+            compositor_shortcut(true, false, false, true, &key(keysyms::KEY_q), false),
+            CompositorShortcut::None
+        );
     }
 
     #[test]

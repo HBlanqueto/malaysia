@@ -483,7 +483,7 @@ mod tests {
             app_items: Rc::new(move || {
                 vec![
                     disabled("Acerca de Calculadora", None),
-                    disabled("Ajustes…", Some("Super+,")),
+                    disabled("Ajustes…", None),
                     action("Salir de Calculadora"),
                 ]
             }),

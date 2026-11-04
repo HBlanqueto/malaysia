@@ -26,7 +26,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
         items::action(
             "app-settings",
             "Ajustes…",
-            Some("Super+,"),
+            None,
             false,
             Some(MenuIcon::svg(icons::GEAR)),
         ),

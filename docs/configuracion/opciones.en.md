@@ -61,6 +61,9 @@ They are not domain options; they are fixed and documented here:
 | `Shift+Super+3` / `Shift+Super+4` | screen / region screenshot |
 | `PrintScreen` | captures the focused window |
 | `Alt+Super+Escape` | opens `malaysia-shell force-quit` («Force Quit…»); not while the session is locked |
+| `Super+H` / `Alt+Super+H` | minimizes every window of the focused app / of the other apps; not while the session is locked |
+| `Super+Q` | asks every window of the focused app to close (`xdg_toplevel.close`); not while the session is locked |
+| `Super+M` / `Super+W` | minimizes / asks the focused window to close; not while the session is locked |
 | `Ctrl+Alt+←` / `Ctrl+Alt+→` | shows the space to the left / right, without wrapping around (ADR 0051); not while the session is locked |
 | `Ctrl+Alt+N` | adds a desktop at the end of the row and shows it; at most 99 (ADR 0051) |
 | `Ctrl+Super+F` | enters or leaves focus mode with the focused window (ADR 0051) |

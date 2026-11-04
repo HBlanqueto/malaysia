@@ -61,6 +61,9 @@ No son opciones de dominio; están fijos y documentados aquí:
 | `Shift+Super+3` / `Shift+Super+4` | captura de pantalla / región |
 | `PrintScreen` | captura la ventana enfocada |
 | `Alt+Super+Escape` | abre `malaysia-shell force-quit` («Forzar salida…»); no con la sesión bloqueada |
+| `Super+H` / `Alt+Super+H` | minimiza todas las ventanas de la app enfocada / de las demás apps; no con la sesión bloqueada |
+| `Super+Q` | pide cerrar (`xdg_toplevel.close`) todas las ventanas de la app enfocada; no con la sesión bloqueada |
+| `Super+M` / `Super+W` | minimiza / pide cerrar la ventana enfocada; no con la sesión bloqueada |
 | `Ctrl+Alt+←` / `Ctrl+Alt+→` | muestra el espacio de la izquierda / derecha, sin dar la vuelta (ADR 0051); no con la sesión bloqueada |
 | `Ctrl+Alt+N` | añade un escritorio al final de la fila y lo muestra; máximo 99 (ADR 0051) |
 | `Ctrl+Super+F` | entra o sale del modo foco con la ventana enfocada (ADR 0051) |
