@@ -260,7 +260,7 @@ Las claves con guion son **exactamente** las de `defaults write com.apple.dock .
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `lock.idle_timeout_seconds` | entero (segundos) | `300` | **activa** | `ext-idle-notify-v1` / auto-lock |
+| `lock.idle_timeout_seconds` | entero (segundos) | `0` | **activa** | `ext-idle-notify-v1` / auto-lock |
 
 `0` desactiva el bloqueo automático. Al vencer el timeout sin input, el
 compositor lanza `malaysia-shell lock`. Un inhibidor `zwp_idle_inhibit_manager_v1`

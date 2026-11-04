@@ -260,7 +260,7 @@ The hyphenated keys are **exactly** those of `defaults write com.apple.dock ...`
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `lock.idle_timeout_seconds` | integer (seconds) | `300` | **active** | `ext-idle-notify-v1` / auto-lock |
+| `lock.idle_timeout_seconds` | integer (seconds) | `0` | **active** | `ext-idle-notify-v1` / auto-lock |
 
 `0` disables automatic locking. When the timeout expires without input, the
 compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhibitor

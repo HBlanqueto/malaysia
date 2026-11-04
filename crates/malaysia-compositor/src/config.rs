@@ -152,18 +152,10 @@ pub enum ScreenshotFormat {
     Pdf,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 pub struct LockConfig {
     pub idle_timeout_seconds: u64,
-}
-
-impl Default for LockConfig {
-    fn default() -> Self {
-        Self {
-            idle_timeout_seconds: 300,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -481,7 +473,7 @@ mod tests {
         assert!(!config.screenshot.disable_shadow);
         assert_eq!(config.screenshot.timer, 0);
         assert!(!config.screenshot.remember_selection);
-        assert_eq!(config.lock.idle_timeout_seconds, 300);
+        assert_eq!(config.lock.idle_timeout_seconds, 0);
     }
 
     #[test]
