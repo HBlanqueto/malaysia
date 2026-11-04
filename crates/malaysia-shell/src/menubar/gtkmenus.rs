@@ -482,12 +482,19 @@ pub fn action_object<'a>(
     action: &'a str,
 ) -> Option<(&'a str, &'a str)> {
     let (prefix, name) = action.split_once('.')?;
-    let path = match prefix {
-        "app" => &menus.application_object_path,
-        "win" => &menus.window_object_path,
-        _ => return None,
-    };
-    (!path.is_empty()).then_some((path.as_str(), name))
+    let (_, path) = action_groups(menus)
+        .into_iter()
+        .find(|(group, _)| group.strip_suffix('.') == Some(prefix))?;
+    (!path.is_empty()).then_some((path, name))
+}
+
+// appmenu-gtk-module exports its `unity.*` actions next to the menubar model (platform.c).
+fn action_groups(menus: &GtkMenusAddress) -> [(&'static str, &str); 3] {
+    [
+        ("app.", &menus.application_object_path),
+        ("win.", &menus.window_object_path),
+        ("unity.", &menus.menubar_path),
+    ]
 }
 
 pub struct Session {
@@ -510,10 +517,7 @@ impl Session {
     ) -> Self {
         let started = Instant::now();
         let mut actions = Actions::default();
-        for (prefix, path) in [
-            ("app.", &menus.application_object_path),
-            ("win.", &menus.window_object_path),
-        ] {
+        for (prefix, path) in action_groups(&menus) {
             if path.is_empty() {
                 continue;
             }
@@ -532,6 +536,9 @@ impl Session {
                     .deserialize::<HashMap<String, ActionDescription>>()
             }) {
                 Ok(all) => actions.describe_all(prefix, all),
+                Err(error) if prefix == "unity." => {
+                    tracing::debug!(%error, path = %path, "menubar: no appmenu-gtk-module actions")
+                }
                 Err(error) => {
                     tracing::warn!(%error, path = %path, "menubar: org.gtk.Actions DescribeAll failed")
                 }
@@ -617,11 +624,10 @@ impl Session {
                 changed
             }
             Some(ACTIONS_INTERFACE) => {
-                let prefix = if path == self.menus.application_object_path {
-                    "app."
-                } else if path == self.menus.window_object_path {
-                    "win."
-                } else {
+                let Some((prefix, _)) = action_groups(&self.menus)
+                    .into_iter()
+                    .find(|(_, group_path)| *group_path == path)
+                else {
                     return false;
                 };
                 let Ok((removals, enabled, states, additions)) = message.body().deserialize::<(
@@ -1071,6 +1077,10 @@ mod tests {
         assert_eq!(
             action_object(&menus, "win.copy"),
             Some(("/org/gtk/Demo2/window/1", "copy"))
+        );
+        assert_eq!(
+            action_object(&menus, "unity.file-quit"),
+            Some(("/org/gtk/Demo2/menus/menubar", "file-quit"))
         );
         assert_eq!(action_object(&menus, "doc.save"), None);
         assert_eq!(address(&menus).path, "/org/gtk/Demo2/menus/menubar");

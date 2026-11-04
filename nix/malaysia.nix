@@ -8,12 +8,17 @@
 }:
 let
   cfg = config.programs.malaysia;
+  appmenuGtkModule = self.packages.${pkgs.stdenv.hostPlatform.system}.appmenu-gtk-module;
 in
 {
   options.programs.malaysia = {
     enable = lib.mkEnableOption "the Malaysia desktop";
 
     globalMenu.libadwaita.enable = lib.mkEnableOption "global menu support for libadwaita applications" // {
+      default = true;
+    };
+
+    globalMenu.gtk3.enable = lib.mkEnableOption "global menu support for GTK 3 applications with a GtkMenuBar" // {
       default = true;
     };
 
@@ -38,7 +43,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ];
+    environment.systemPackages = [ cfg.package ] ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
     system.replaceDependencies.replacements = lib.mkIf cfg.globalMenu.libadwaita.enable [
       {
@@ -46,6 +51,11 @@ in
         newDependency = self.packages.${pkgs.stdenv.hostPlatform.system}.libadwaita-global-menu;
       }
     ];
+
+    environment.sessionVariables = lib.mkIf cfg.globalMenu.gtk3.enable {
+      GTK_MODULES = [ "appmenu-gtk-module" ];
+      XDG_DATA_DIRS = [ (pkgs.glib.getSchemaDataDirPath appmenuGtkModule) ];
+    };
 
     fonts.packages = [
       pkgs.geist-font

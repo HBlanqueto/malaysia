@@ -236,6 +236,10 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
   menú ☰ como menubar con `x-adw-app-menu` y la barra lo pliega en el título
   de la app. Falta el overlay de Nix con el fork y aceptarlo con una app
   libadwaita real.
+- 14f-4 (GTK 3 con `GtkMenuBar`): implementado 2026-11-04, falta aceptarlo con
+  virt-manager. El módulo NixOS instala `appmenu-gtk-module`
+  (`nix/appmenu-gtk-module.nix`) y lo carga con `GTK_MODULES`; la barra
+  resuelve sus acciones `unity.*` en `menubar_path` (`menubar/gtkmenus.rs`).
 
 **Fuera del bloque (anotado):** HUD en el launcher, menú de atajos por app y
 casado por pid del Registrar (XWayland).
