@@ -45,6 +45,19 @@ copy code or templates (ChromaLeon is GPL-3.0, Malaysia is MIT).
    inherit them. `settings.ini` keeps its last value.
 7. `appearance.gtk_bridge = false` disables the bridge and cleans it up. A
    `gtk.css` or `settings.ini` that is a symbolic link (home-manager) is not touched.
+8. **Traffic lights.** The portal publishes `org.gnome.desktop.wm.preferences`
+   `button-layout` in the order of `vow_design::TITLEBAR.buttons`
+   (`close,minimize,maximize:`, on the left), also with the bridge off.
+   GTK 4 and libadwaita read it from the portal as `gtk-decoration-layout`
+   (`gdksettings-wayland.c`, `gdk_display_should_use_portal`). GTK 3 outside
+   Flatpak reads it from GSettings, not the portal, and keeps its order.
+9. The buttons are drawn like the kit's traffic lights: size, spacing,
+   radius and shape (`traffic_light_shape`) from `TITLEBAR.buttons`; fills and
+   glyph from `vow_appearance::traffic::visual` for focused, unfocused
+   (`:backdrop`), pointer over the group (GTK 4) or the button (GTK 3) and
+   pressed. The GTK icon shows only under the pointer. They go in
+   `malaysia.css` and, in GTK 4, also in `gtk4-css` (ADR 0055), inside each
+   `@media` block.
 
 ## Consequences
 

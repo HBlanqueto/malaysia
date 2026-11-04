@@ -45,6 +45,19 @@ copia código ni plantillas (ChromaLeon es GPL-3.0, Malaysia es MIT).
    herede. `settings.ini` conserva su último valor.
 7. `appearance.gtk_bridge = false` desactiva el puente y lo limpia. Un
    `gtk.css` o `settings.ini` que sea enlace simbólico (home-manager) no se toca.
+8. **Semáforos.** El portal publica `org.gnome.desktop.wm.preferences`
+   `button-layout` con el orden de `vow_design::TITLEBAR.buttons`
+   (`close,minimize,maximize:`, a la izquierda), también con el puente
+   apagado. GTK 4 y libadwaita lo leen del portal como `gtk-decoration-layout`
+   (`gdksettings-wayland.c`, `gdk_display_should_use_portal`). GTK 3 fuera de
+   Flatpak lo lee de GSettings, no del portal, y conserva su orden.
+9. Los botones se dibujan como los semáforos del kit: tamaño, separación,
+   radio y forma (`traffic_light_shape`) de `TITLEBAR.buttons`; rellenos y
+   glifo de `vow_appearance::traffic::visual` para enfocada, sin foco
+   (`:backdrop`), puntero sobre el grupo (GTK 4) o el botón (GTK 3) y pulsado.
+   El icono de GTK solo se ve con el puntero encima. Van en `malaysia.css` y,
+   en GTK 4, también en `gtk4-css` (ADR 0055), dentro de cada bloque
+   `@media`.
 
 ## Consecuencias
 

@@ -17,8 +17,9 @@ use crate::gtk::{self, Bridge};
 pub const NAMESPACE: &str = "org.freedesktop.appearance";
 pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
 pub const LIVE_NAMESPACE: &str = "org.malaysia.appearance";
+pub const WM_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
-const KEYS: [(&str, &str); 7] = [
+const KEYS: [(&str, &str); 8] = [
     (NAMESPACE, "color-scheme"),
     (NAMESPACE, "accent-color"),
     (NAMESPACE, "contrast"),
@@ -26,6 +27,7 @@ const KEYS: [(&str, &str); 7] = [
     (GNOME_NAMESPACE, "color-scheme"),
     (LIVE_NAMESPACE, "gtk4-css"),
     (LIVE_NAMESPACE, "accent-color"),
+    (WM_NAMESPACE, "button-layout"),
 ];
 
 const UNSET_ACCENT: (f64, f64, f64) = (-1.0, -1.0, -1.0);
@@ -100,6 +102,7 @@ impl Values {
             (GNOME_NAMESPACE, "color-scheme") => Value::new(self.gnome_color_scheme()),
             (LIVE_NAMESPACE, "gtk4-css") => Value::new(self.live_css.clone()),
             (LIVE_NAMESPACE, "accent-color") => Value::new(self.live_accent),
+            (WM_NAMESPACE, "button-layout") => Value::new(gtk::button_layout()),
             _ => return None,
         };
         Some(owned(value))

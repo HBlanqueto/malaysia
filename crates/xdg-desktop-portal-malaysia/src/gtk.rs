@@ -5,8 +5,14 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use vow_appearance::backdrop::Oklab;
-use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, palette, resolve};
-use vow_design::{LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba};
+use vow_appearance::traffic::{ButtonVisual, TrafficInput, visual};
+use vow_appearance::{
+    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, palette, resolve,
+};
+use vow_design::{
+    ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
+    TRAFFIC_GLYPHS,
+};
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
 const END: &str = "/* malaysia:gtk-bridge end */";
@@ -60,6 +66,21 @@ const ADWAITA_DARK: AdwaitaBase = AdwaitaBase {
 struct SchemeColors {
     dark: bool,
     colors: Vec<(&'static str, Rgba)>,
+    traffic: Traffic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Traffic {
+    lights: [Rgba; 3],
+    style: TrafficLightStyle,
+    shape: TrafficLightShape,
+    inactive: Rgba,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Toolkit {
+    Gtk3,
+    Gtk4,
 }
 
 impl SchemeColors {
@@ -71,6 +92,12 @@ impl SchemeColors {
         let resolved = resolve(&concrete, dominant);
         let dark = matches!(resolved.scheme, ColorScheme::Dark | ColorScheme::DarkTint);
         let on_accent = palette(resolved.scheme).on_accent;
+        let traffic = Traffic {
+            lights: resolved.lights,
+            style: resolved.traffic_style,
+            shape: resolved.traffic_shape,
+            inactive: palette(resolved.scheme).traffic_lights_inactive,
+        };
         let mut colors = vec![
             ("accent_bg_color", resolved.accent),
             ("accent_fg_color", on_accent),
@@ -79,7 +106,11 @@ impl SchemeColors {
         if !appearance.contrast {
             colors.extend(tinted_backgrounds(&resolved, appearance, dark));
         }
-        Self { dark, colors }
+        Self {
+            dark,
+            colors,
+            traffic,
+        }
     }
 
     fn get(&self, name: &str) -> Option<Rgba> {
@@ -210,7 +241,112 @@ fn push_media_blocks(out: &mut String, light: &SchemeColors, dark: &SchemeColors
         out.push_str(&format!("\n@media (prefers-color-scheme: {query}) {{\n"));
         push_variables(out, colors, "  ");
         push_define_colors(out, colors, "  ");
+        push_window_controls(out, &colors.traffic, Toolkit::Gtk4, "  ");
         out.push_str("}\n");
+    }
+}
+
+pub fn button_layout() -> String {
+    let names: Vec<&str> = TITLEBAR
+        .buttons
+        .order
+        .iter()
+        .map(|button| gtk_button_name(button.kind))
+        .collect();
+    format!("{}:", names.join(","))
+}
+
+fn gtk_button_name(kind: ButtonKind) -> &'static str {
+    match kind {
+        ButtonKind::Close => "close",
+        ButtonKind::Minimize => "minimize",
+        ButtonKind::Maximize => "maximize",
+    }
+}
+
+fn traffic_states(traffic: &Traffic, focused: bool, group_hovered: bool) -> [ButtonVisual; 3] {
+    visual(
+        traffic.lights,
+        traffic.style,
+        traffic.inactive,
+        TrafficInput {
+            focused,
+            group_hovered,
+            pressed: None,
+            zoom_supported: true,
+        },
+    )
+}
+
+fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, indent: &str) {
+    let buttons = &TITLEBAR.buttons;
+    let radius = match traffic.shape {
+        TrafficLightShape::Square => buttons.corner_radius,
+        TrafficLightShape::Round => buttons.diameter / 2,
+    };
+    let focused = traffic_states(traffic, true, false);
+    let backdrop = traffic_states(traffic, false, false);
+    let hovered = traffic_states(traffic, true, true);
+    let mut rule = |selector: String, body: String| {
+        out.push_str(&format!("{indent}{selector} {{ {body} }}\n"));
+    };
+    if toolkit == Toolkit::Gtk4 {
+        rule(
+            "windowcontrols".into(),
+            format!("border-spacing: {}px;", buttons.spacing),
+        );
+    }
+    for (index, button) in buttons.order.iter().enumerate() {
+        let name = gtk_button_name(button.kind);
+        let (selector, hover) = match toolkit {
+            Toolkit::Gtk4 => (
+                format!("windowcontrols > button.{name}"),
+                format!("windowcontrols:hover > button.{name}"),
+            ),
+            Toolkit::Gtk3 => (
+                format!("button.titlebutton.{name}"),
+                format!("button.titlebutton.{name}:hover"),
+            ),
+        };
+        let pressed = hovered[index]
+            .fill
+            .darken(vow_design::TRAFFIC_PRESSED_DARKEN);
+        let glyph = hovered[index].glyph.map_or(String::new(), |color| {
+            format!(" color: {};", css_color(color))
+        });
+        let icon_size = match toolkit {
+            Toolkit::Gtk4 => format!(" -gtk-icon-size: {}px;", TRAFFIC_GLYPHS.box_size),
+            Toolkit::Gtk3 => String::new(),
+        };
+        rule(
+            selector.clone(),
+            format!(
+                "min-width: {d}px; min-height: {d}px; padding: 0; margin: 0; border: none; \
+                 border-radius: {radius}px; box-shadow: none; background: {};",
+                css_color(focused[index].fill),
+                d = buttons.diameter,
+            ),
+        );
+        rule(
+            format!("{selector} image"),
+            format!("opacity: 0; padding: 0; background: none;{glyph}{icon_size}"),
+        );
+        rule(
+            format!("{selector}:backdrop"),
+            format!("background: {};", css_color(backdrop[index].fill)),
+        );
+        rule(
+            hover.clone(),
+            format!("background: {};", css_color(hovered[index].fill)),
+        );
+        rule(format!("{hover} image"), "opacity: 1;".into());
+        rule(
+            format!("{selector}:active"),
+            format!("background: {};", css_color(pressed)),
+        );
+        if toolkit == Toolkit::Gtk3 && index > 0 {
+            rule(selector, format!("margin-left: {}px;", buttons.spacing));
+        }
     }
 }
 
@@ -261,6 +397,7 @@ fn gtk3_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     alias("theme_selected_fg_color", "accent_fg_color");
     alias("theme_bg_color", "window_bg_color");
     alias("theme_base_color", "view_bg_color");
+    push_window_controls(&mut out, &colors.traffic, Toolkit::Gtk3, "");
     out
 }
 
@@ -494,6 +631,21 @@ mod tests {
         let css = gtk4_css(&AppearanceConfig::default(), None);
         assert!(css.contains("@media (prefers-color-scheme: light)"));
         assert!(css.contains("@media (prefers-color-scheme: dark)"));
+    }
+
+    #[test]
+    fn the_window_controls_sit_on_the_left_in_the_titlebar_order() {
+        assert_eq!(button_layout(), "close,minimize,maximize:");
+    }
+
+    #[test]
+    fn every_toolkit_gets_the_traffic_light_rules_for_each_scheme() {
+        let gtk4 = gtk4_css(&AppearanceConfig::default(), None);
+        assert_eq!(gtk4.matches("windowcontrols > button.close {").count(), 2);
+        assert!(gtk4.contains("windowcontrols:hover > button.close image { opacity: 1; }"));
+        let gtk3 = gtk3_css(&AppearanceConfig::default(), None);
+        assert!(gtk3.contains("button.titlebutton.close:backdrop"));
+        assert!(live_css(&AppearanceConfig::default(), None).contains("windowcontrols"));
     }
 
     #[test]
