@@ -44,7 +44,9 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{
     DeviceFd, IsAlive, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
-use smithay::wayland::compositor::{TraversalAction, with_states, with_surface_tree_downward};
+use smithay::wayland::compositor::{
+    SurfaceAttributes, SurfaceData, TraversalAction, with_states, with_surface_tree_downward,
+};
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
@@ -2056,21 +2058,50 @@ pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
     let cycle = state.frame_callback_cycle;
     let output = &state.output;
     for_each_frame_surface(state, |surface, always| {
+        if always {
+            send_frame_callbacks(surface, time, cycle);
+            return;
+        }
         send_frames_surface_tree(
             surface,
             output,
             time,
             Some(FRAME_CALLBACK_THROTTLE),
             |surface, states| {
-                let shown = always
-                    || surface_primary_scanout_output(surface, states).as_ref() == Some(output);
-                let last = states
-                    .data_map
-                    .get_or_insert(LastFrameCallbackCycle::default);
-                (shown && last.0.replace(Some(cycle)) != Some(cycle)).then(|| output.clone())
+                let shown =
+                    surface_primary_scanout_output(surface, states).as_ref() == Some(output);
+                (shown && first_in_cycle(states, cycle)).then(|| output.clone())
             },
         );
     });
+}
+
+fn first_in_cycle(states: &SurfaceData, cycle: u32) -> bool {
+    let last = states
+        .data_map
+        .get_or_insert(LastFrameCallbackCycle::default);
+    last.0.replace(Some(cycle)) != Some(cycle)
+}
+
+// Smithay's send_frames_surface_tree skips surfaces without a buffer; a toplevel waiting
+// for its first configure still needs its callback.
+fn send_frame_callbacks(surface: &WlSurface, time: Duration, cycle: u32) {
+    let time_ms = time.as_millis() as u32;
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, &()| TraversalAction::DoChildren(()),
+        |_, states, &()| {
+            if !first_in_cycle(states, cycle) {
+                return;
+            }
+            let mut cached = states.cached_state.get::<SurfaceAttributes>();
+            for callback in cached.current().frame_callbacks.drain(..) {
+                callback.done(time_ms);
+            }
+        },
+        |_, _, &()| true,
+    );
 }
 
 fn send_overdue_frame_callbacks(state: &State) {
