@@ -15,7 +15,7 @@ RGBA frame (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
 1. `Top` layer, anchored top/left/right, `exclusive_zone = 28`; windows do not go underneath.
 2. The text is composed on the CPU with `barrier-kit::text` on `ShellPalette` and presented via EGL; the texture upload is partial (the clock or title strip), not the whole frame (ADR 0027).
 3. The clock shows `%H:%M` and commits at the minute boundary.
-4. The active app is read from `window.domain` (`[active] title`/`app_id`), which the compositor publishes on focus; `use_watched` reads it again when inotify reports a change, without polling. The menubar uses the **app_id**, never the window title.
+4. The active app is read from `window.domain` (`[active] title`/`app_id`), which the compositor publishes on focus and clears when the session starts; `use_watched` reads it again when inotify reports a change, without polling. The menubar uses the **app_id**, never the window title.
 
 ## The app name
 

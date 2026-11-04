@@ -457,6 +457,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
         info!("shell target skipped for the development DRM options");
         false
     } else {
+        // window.domain outlives the session: the menubar must not start on the last session's app.
+        udev.state.publish_active(None);
         start_shell_session(&socket_name)
     };
 

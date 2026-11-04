@@ -15,7 +15,7 @@ frame RGBA (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
 1. Capa `Top`, anclada arriba/izquierda/derecha, `exclusive_zone = 28`; las ventanas no se meten debajo.
 2. El texto se compone por CPU con `barrier-kit::text` sobre `ShellPalette` y se presenta por EGL; la subida a textura es parcial (franja del reloj o del título), no el frame entero (ADR 0027).
 3. El reloj muestra `%H:%M` y commitea al borde de minuto.
-4. La app activa se lee de `window.domain` (`[active] title`/`app_id`), que publica el compositor al enfocar; `use_watched` la relee cuando inotify avisa de un cambio, sin sondeo. La menubar usa el **app_id**, nunca el título de la ventana.
+4. La app activa se lee de `window.domain` (`[active] title`/`app_id`), que publica el compositor al enfocar y vacía al arrancar la sesión; `use_watched` la relee cuando inotify avisa de un cambio, sin sondeo. La menubar usa el **app_id**, nunca el título de la ventana.
 
 ## El nombre de la app
 
