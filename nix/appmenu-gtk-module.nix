@@ -14,6 +14,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   sourceRoot = "source/subprojects/appmenu-gtk-module";
 
+  patches = [ ./patches/appmenu-gtk-module-wayland-realize.patch ];
+
   postPatch = ''
     substituteInPlace src/gtk-3.0/meson.build \
       --replace-fail "gtk3.get_variable(pkgconfig:'libdir')" "get_option('prefix'), get_option('libdir')"
