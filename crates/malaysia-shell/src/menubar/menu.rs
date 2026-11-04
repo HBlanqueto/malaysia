@@ -268,7 +268,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     } else {
         let mut text = label()
             .text(label_text.clone())
-            .font_size(13.0)
+            .font_size(vow_design::MENUBAR_FONT_SIZE)
             .max_lines(1)
             .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
             .color(fg);

@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use barrier_kit::app::use_watched;
 use barrier_kit::menu::MenuItem;
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
@@ -203,17 +204,31 @@ impl App for BarApp {
         let clock_state = self.clock;
         use_hook(move || schedule_next_minute(timers, clock_state));
 
-        let timers = Timers::get();
-        let active_app = self.active_app;
+        let mut active_app = self.active_app;
         let window_store = self.window_store.clone();
         let poll_store = window_store.clone();
-        use_hook(move || schedule_active_poll(timers, poll_store, active_app));
+        let published_app = use_watched(move || load_active_app(&poll_store));
+        use_side_effect(move || {
+            let id = published_app.read().clone();
+            if *active_app.peek() != id {
+                if let Some(id) = &id {
+                    super::recents::record_app(id);
+                }
+                active_app.set(id);
+            }
+        });
 
-        let timers = Timers::get();
-        let app_menus = self.app_menus;
+        let mut app_menus = self.app_menus;
         let dbus = self.dbus.clone();
         let menubar_store = self.menubar_store.clone();
-        use_hook(move || schedule_menubar_poll(timers, app_menus, dbus, menubar_store));
+        let menus_enabled = use_watched(move || load_app_menus(&menubar_store));
+        use_side_effect(move || {
+            let enabled = *menus_enabled.read();
+            if *app_menus.peek() != enabled {
+                app_menus.set(enabled);
+                dbus.set_app_menus(enabled);
+            }
+        });
 
         let generation = use_hook(|| Rc::new(Cell::new(0u64)));
         let open_started = use_hook(|| Rc::new(Cell::new(None::<std::time::Instant>)));
@@ -821,21 +836,6 @@ impl App for BarApp {
     }
 }
 
-fn schedule_active_poll(timers: Timers, window_store: PathBuf, active_app: State<Option<String>>) {
-    let retry = timers.clone();
-    timers.after(std::time::Duration::from_millis(250), move || {
-        let id = load_active_app(&window_store);
-        let mut active_app = active_app;
-        if *active_app.peek() != id {
-            if let Some(id) = &id {
-                super::recents::record_app(id);
-            }
-            active_app.set(id);
-        }
-        schedule_active_poll(retry.clone(), window_store.clone(), active_app);
-    });
-}
-
 fn schedule_snapshot_drain(
     timers: Timers,
     dbus: MenuClient,
@@ -925,29 +925,6 @@ fn load_app_menus(path: &Path) -> bool {
         .and_then(|text| toml::from_str::<MenubarConfig>(&text).ok())
         .map(|config| config.app_menus)
         .unwrap_or(true)
-}
-
-fn schedule_menubar_poll(
-    timers: Timers,
-    app_menus: State<bool>,
-    dbus: MenuClient,
-    menubar_store: PathBuf,
-) {
-    let retry = timers.clone();
-    timers.after(std::time::Duration::from_millis(500), move || {
-        let enabled = load_app_menus(&menubar_store);
-        let mut app_menus = app_menus;
-        if *app_menus.peek() != enabled {
-            app_menus.set(enabled);
-            dbus.set_app_menus(enabled);
-        }
-        schedule_menubar_poll(
-            retry.clone(),
-            app_menus,
-            dbus.clone(),
-            menubar_store.clone(),
-        );
-    });
 }
 
 fn schedule_next_minute(timers: Timers, clock: State<String>) {

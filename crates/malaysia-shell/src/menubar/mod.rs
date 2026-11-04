@@ -18,10 +18,8 @@ pub use bar::run;
 
 use std::env;
 use std::fs::OpenOptions;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 
 use crate::desktop::DesktopEntry;
 
@@ -118,14 +116,6 @@ pub fn spawn_component_with(component: &str, args: &[&str]) {
         command.stdout(Stdio::null()).stderr(Stdio::null());
     }
     prepare_kit_env(&mut command);
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
     spawn_logged(&log_name, &program, command);
 }
 
@@ -154,7 +144,11 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
         PathBuf::from(binary)
     };
 
-    let mut command = Command::new(&program);
+    let mut command = if is_kit_binary(binary) {
+        Command::new(&program)
+    } else {
+        crate::spawn::app_command(&program)
+    };
     command
         .args(args)
         .env("WAYLAND_DISPLAY", display)
@@ -168,14 +162,6 @@ pub fn spawn_app(binary: &str, args: &[&str]) {
         prepare_kit_env(&mut command);
     } else {
         sanitize_client_env(&mut command);
-    }
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
     }
     spawn_logged(binary, &program, command);
 }
@@ -194,23 +180,15 @@ fn resolve_settings_binary() -> Option<PathBuf> {
 
 pub fn xdg_open(path: impl AsRef<std::path::Path>) {
     let path = path.as_ref();
-    let mut command = Command::new("xdg-open");
+    let mut command = crate::spawn::app_command("xdg-open");
     command.arg(path);
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     sanitize_client_env(&mut command);
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-    match command.spawn() {
-        Ok(_) => eprintln!("menubar: xdg-open {}", path.display()),
+    match crate::spawn::detached(command) {
+        Ok(()) => eprintln!("menubar: xdg-open {}", path.display()),
         Err(error) => eprintln!("menubar: could not open '{}': {error}", path.display()),
     }
 }
@@ -242,7 +220,7 @@ pub fn create_desktop_folder() {
     }
 }
 
-fn sanitize_client_env(command: &mut Command) {
+pub(crate) fn sanitize_client_env(command: &mut Command) {
     for name in [
         "LD_LIBRARY_PATH",
         "__EGL_VENDOR_LIBRARY_DIRS",
@@ -297,39 +275,11 @@ fn open_log(path: &Path) -> Stdio {
     }
 }
 
-fn spawn_logged(name: &str, program: &Path, mut command: Command) {
+fn spawn_logged(name: &str, program: &Path, command: Command) {
     tracing::info!(name, program = %program.display(), "spawning kit binary");
-    match command.spawn() {
-        Ok(mut child) => {
-            let name = name.to_string();
-            std::thread::spawn(move || {
-                let start = Instant::now();
-                loop {
-                    match child.try_wait() {
-                        Ok(Some(status)) => {
-                            if start.elapsed() < Duration::from_secs(2) {
-                                tracing::warn!(name, ?status, "kit child exited quickly");
-                            }
-                            break;
-                        }
-                        Ok(None) => {
-                            if start.elapsed() >= Duration::from_secs(2) {
-                                break;
-                            }
-                            std::thread::sleep(Duration::from_millis(50));
-                        }
-                        Err(error) => {
-                            tracing::warn!(name, %error, "could not wait on kit child");
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-        Err(error) => {
-            tracing::warn!(name, %error, "could not spawn kit binary");
-            eprintln!("menubar: could not spawn {name}: {error}");
-        }
+    if let Err(error) = crate::spawn::detached(command) {
+        tracing::warn!(name, %error, "could not spawn kit binary");
+        eprintln!("menubar: could not spawn {name}: {error}");
     }
 }
 

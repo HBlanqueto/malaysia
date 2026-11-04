@@ -11,8 +11,6 @@ Hallazgos abiertos contra `d0bba82` (2026-11-03); los corregidos y los del toolk
 | P5-09 | `crates/malaysia-shell/src/menubar/mod.rs:265-278` | `prepare_kit_env` borra `MALAYSIA_ORIG_*` del hijo; el launcher no puede restaurarlos. | L1i |
 | P5-10 | `crates/malaysia-shell/src/menubar/focused.rs:230,639`, `dock.rs:49` y `dialogs.rs:290` | Ids con índice de lista; abrir/cerrar ventanas con el menú abierto puede operar en otra. | L1h |
 | P5-12 | `crates/malaysia-shell/src/lock.rs:32,264,318-331` | `theme_revision` se guarda pero no se lee. | L2b |
-| P5-13 | `crates/malaysia-shell/src/launcher.rs:584` y `menubar/mod.rs:245` | Dos copias de `sanitize_client_env`. | L3f |
-| P5-15 | `menubar/menu.rs:249-275` y `clock.rs:8-11` | Literales 13/10/16 donde hay tokens. | L5c |
 | P5-17 | `crates/malaysia-shell/src/launcher.rs:93-110,146,156,369` | Clona entries e iconos en cada render. | L4e |
 | P5-19 | `crates/malaysia-shell/src/menubar/dbusmenu.rs:317-327` | `ItemsPropertiesUpdated` no invalida `full`; la Ayuda ve datos viejos. | L1i |
 | P5-20 | `crates/malaysia-shell/src/menubar/mod.rs:76-78` y `dock.rs:95-109` | `ActiveWindow.title` muerto y dock con parser propio. | L2b |

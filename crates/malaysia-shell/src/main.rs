@@ -7,6 +7,7 @@ mod lock;
 mod menubar;
 mod pam;
 mod power;
+mod spawn;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;

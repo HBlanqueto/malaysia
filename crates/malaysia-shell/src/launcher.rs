@@ -1,20 +1,13 @@
 //! The launcher: overlay with a search field and app results.
 
-use std::{
-    cell::Cell,
-    env,
-    os::unix::process::CommandExt,
-    path::PathBuf,
-    process::{Command, Stdio},
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{cell::Cell, env, path::PathBuf, process::Stdio, rc::Rc, time::Duration};
 
 use barrier_kit::animation::Spring;
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
+use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::input::Input;
 use freya_components::svg_viewer::SvgViewer;
@@ -50,7 +43,6 @@ struct LauncherApp {
     entries: Vec<AppEntry>,
     query: State<String>,
     selected: State<usize>,
-    progress: State<f32>,
     closing: State<bool>,
     close_started: State<bool>,
     close: Rc<dyn Fn()>,
@@ -60,17 +52,23 @@ impl App for LauncherApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
 
-        let timers = Timers::get();
-        let progress_state = self.progress;
-        use_hook(move || animate_open(progress_state, timers));
-
-        let timers = Timers::get();
-        let progress = self.progress;
+        let open = use_animation(|conf| {
+            conf.on_creation(OnCreation::Run);
+            Spring::new(0.0, 1.0, Duration::from_millis(LAUNCHER_OPEN_MS), 0.15)
+        });
+        let mut close = use_animation(|_| {
+            Spring::new(1.0, 0.0, Duration::from_millis(LAUNCHER_CLOSE_MS), 0.15)
+        });
         let mut started = self.close_started;
         use_side_effect_with_deps(&*self.closing.read(), move |closing| {
             if *closing && !started() {
                 started.set(true);
-                animate_close(progress, timers.clone());
+                close.start();
+            }
+        });
+        use_side_effect(move || {
+            if started() && !*close.is_running().read() {
+                std::process::exit(0);
             }
         });
 
@@ -109,7 +107,11 @@ impl App for LauncherApp {
         .take(LAUNCHER_MAX_RESULTS as usize)
         .collect();
         let selected = (*self.selected.read()).min(results.len().saturating_sub(1));
-        let progress = *self.progress.read();
+        let progress = if *self.close_started.read() {
+            close.get().current()
+        } else {
+            open.get().current()
+        };
 
         let activation = Activation::get();
         let timers = Timers::get();
@@ -327,7 +329,7 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
     rect()
         .width(Size::fill())
         .height(Size::px(LAUNCHER_RESULT_HEIGHT as f32))
-        .corner_radius(10.0)
+        .corner_radius(vow_design::LAUNCHER_RESULT_RADIUS)
         .background(if selected {
             selected_bg
         } else {
@@ -375,55 +377,6 @@ fn next_selection(
     (current + step).rem_euclid(len as isize) as usize
 }
 
-fn animate_open(progress: State<f32>, timers: Timers) {
-    Rc::new(Animation {
-        progress,
-        timers,
-        spring: Spring::new(0.0, 1.0, Duration::from_millis(LAUNCHER_OPEN_MS), 0.15),
-        started: Instant::now(),
-        done: None,
-    })
-    .start();
-}
-
-fn animate_close(progress: State<f32>, timers: Timers) {
-    Rc::new(Animation {
-        progress,
-        timers,
-        spring: Spring::new(1.0, 0.0, Duration::from_millis(LAUNCHER_CLOSE_MS), 0.15),
-        started: Instant::now(),
-        done: Some(Rc::new(|| std::process::exit(0))),
-    })
-    .start();
-}
-
-struct Animation {
-    progress: State<f32>,
-    timers: Timers,
-    spring: Spring,
-    started: Instant,
-    done: Option<Rc<dyn Fn()>>,
-}
-
-impl Animation {
-    fn start(self: Rc<Self>) {
-        self.tick();
-    }
-
-    fn tick(self: &Rc<Self>) {
-        let elapsed = self.started.elapsed();
-        let mut progress = self.progress;
-        progress.set(self.spring.value(elapsed));
-        if elapsed < self.spring.duration() {
-            let this = Rc::clone(self);
-            self.timers
-                .after(Duration::from_millis(16), move || this.tick());
-        } else if let Some(done) = &self.done {
-            done();
-        }
-    }
-}
-
 pub fn run() -> anyhow::Result<()> {
     let desktops = desktop::read_entries();
     let entries: Vec<AppEntry> = desktops
@@ -436,7 +389,6 @@ pub fn run() -> anyhow::Result<()> {
 
     let query = State::create_global(String::new());
     let selected = State::create_global(0usize);
-    let progress = State::create_global(0.0f32);
     let closing = State::create_global(false);
     let close_started = State::create_global(false);
     let close = Rc::new(move || {
@@ -447,7 +399,6 @@ pub fn run() -> anyhow::Result<()> {
         entries,
         query,
         selected,
-        progress,
         closing,
         close_started,
         close,
@@ -553,7 +504,7 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         return;
     }
     let program = argv.remove(0);
-    let mut command = Command::new(program);
+    let mut command = crate::spawn::app_command(program);
     command.args(argv);
     if let Some(path) = &entry.path {
         command.current_dir(path);
@@ -562,38 +513,13 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         command.env("XDG_ACTIVATION_TOKEN", token);
         command.env("DESKTOP_STARTUP_ID", token);
     }
-    sanitize_client_env(&mut command);
+    crate::menubar::sanitize_client_env(&mut command);
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    unsafe {
-        command.pre_exec(|| {
-            if libc::setsid() < 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            Ok(())
-        });
-    }
-    match command.spawn() {
-        Ok(_) => {}
-        Err(error) => eprintln!("launcher: could not launch {}: {error}", entry.name),
-    }
-}
-
-fn sanitize_client_env(command: &mut Command) {
-    for name in [
-        "LD_LIBRARY_PATH",
-        "__EGL_VENDOR_LIBRARY_DIRS",
-        "LIBGL_DRIVERS_PATH",
-        "GBM_BACKENDS_PATH",
-    ] {
-        command.env_remove(name);
-        let saved = format!("MALAYSIA_ORIG_{name}");
-        if let Some(value) = env::var_os(&saved).filter(|value| !value.is_empty()) {
-            command.env(name, value);
-        }
-        command.env_remove(saved);
+    if let Err(error) = crate::spawn::detached(command) {
+        eprintln!("launcher: could not launch {}: {error}", entry.name);
     }
 }
 
@@ -676,7 +602,7 @@ mod golden_tests {
                 rect()
                     .width(Size::fill())
                     .height(Size::px(LAUNCHER_RESULT_HEIGHT as f32))
-                    .corner_radius(10.0)
+                    .corner_radius(vow_design::LAUNCHER_RESULT_RADIUS)
                     .background(if index == 0 {
                         selected
                     } else {
@@ -751,7 +677,7 @@ mod golden_tests {
                                 .width(Size::fill())
                                 .height(Size::px(LAUNCHER_SEARCH_HEIGHT as f32))
                                 .background(search)
-                                .corner_radius(10.0)
+                                .corner_radius(vow_design::LAUNCHER_RESULT_RADIUS)
                                 .center()
                                 .child(
                                     label()

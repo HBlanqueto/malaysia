@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use barrier_kit::app::use_watched;
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -19,7 +20,9 @@ impl App for DockApp {
     fn render(&self) -> impl IntoElement {
         let toplevels = Toplevels::get();
         let entries = toplevels.list.read().clone();
-        let active = load_active_title(&self.window_store).unwrap_or_default();
+        let store = self.window_store.clone();
+        let active = use_watched(move || load_active_title(&store).unwrap_or_default());
+        let active = active.read().clone();
         let resolved = barrier_kit::theme::resolved();
         let palette = barrier_kit::theme::shell_palette(&resolved);
         let background = theme::color(barrier_kit::theme::surface_background(
