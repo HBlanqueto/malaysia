@@ -4,6 +4,12 @@ Lee antes de tocar código: `AGENTS.md`, `CLAUDE.md`,
 `docs/auditoria-claude-2026-11-03.md` y
 `docs/claude-2026-11-03-sesion-directa.md`.
 
+**Requisito duro:** estudia el código de niri a fondo, en la fuente y en el rev
+exacto, antes de escribir una sola línea. No te quedes con el resumen de la
+auditoría, no adivines, no saltes partes y no implementes solo el caso del
+shell. Si no puedes explicar el flujo completo de niri (commit → petición →
+vblank → frame callbacks → damage → present), sigue leyendo.
+
 ## Estado actual
 
 - `cfcf7c0` eliminó el render incondicional por vblank siguiendo el
@@ -56,22 +62,39 @@ Implementa el modelo de niri completo y correcto:
 - Elimina `force_full_damage` y el puente de `22a1d49` si el modelo nuevo los
   hace innecesarios; no dejes código muerto.
 
-### Referencia: niri
+### Estudio obligatorio de niri
 
-Estudia niri en el rev fijado de la auditoría (`a8562a1`, 2026-10-31):
+Antes de implementar, clona niri en `a8562a1` (2026-10-31) y lee el código real,
+no solo la auditoría. Como mínimo, entiende y anota:
 
-- `RedrawState` y `queue_redraw` en `src/niri.rs` y su uso en el backend TTY.
-- Cómo distingue petición de frame, frame en vuelo, vblank pendiente y
-  animación.
-- Cómo sirve frame callbacks a clientes que no adjuntan damage.
-- Cómo calcula y aplica el damage sin repintar la salida entera.
-- Cómo evita `queue_frame` pisando un frame pendiente.
+- `src/niri.rs`: `RedrawState`, `queue_redraw`, `redraw`, `take_redraw`, los
+  flags de petición, frame en vuelo, vblank pendiente y animación, y **cada**
+  sitio que llama a `queue_redraw`.
+- Backend TTY (`src/backend/tty.rs` y módulos relacionados): cuándo programa el
+  frame, cuándo hace `queue_frame`, cómo espera el vblank, cómo evita pisar un
+  frame pendiente y cómo manda los frame callbacks.
+- `src/handlers/compositor.rs` y el resto de handlers: qué commits piden
+  redraw y qué pasa con buffers sin damage.
+- Frame callbacks: dónde se guardan, cuándo se envían, qué pasa si no hay daño
+  y cómo se programa un frame vacío.
+- Damage: `OutputDamageTracker`, `damage_since`, IDs/commits estables, scanout
+  directo, cursor plane, overlays y cómo se evita repintar toda la salida.
+- Entrada: movimiento del puntero y botones, por qué piden redraw y cómo se
+  coalescen.
+- Winit/nested y cualquier otro backend, para no dejar caminos sin cubrir.
 
-Adapta las ideas, no copies ciegamente: el shell de Malaysia y Smithay tienen
-sus propias particularidades.
+Escribe un resumen del flujo en el chat/commit antes de tocar Malaysia. Si algo
+del código de niri no se entiende, consulta también Smithay en el rev fijado y
+la documentación de Wayland; no supongas. Adapta las ideas a Malaysia, pero
+implementa **todo** lo necesario: no dejes casos, clientes ni backends sin
+cubrir. Si algo queda fuera, justifícalo con la fuente exacta y dilo en la
+entrega.
 
 ### Plan
 
+0. Clona niri en `a8562a1`, lee el flujo completo y escribe el resumen. No
+   pases al paso 1 hasta poder explicar commit → petición → vblank → frame
+   callbacks → damage → present de principio a fin.
 1. Audita el flujo actual completo:
    - `udev.rs`: `after_input`, `queue_redraw`, `render_if_idle`, `on_vblank`,
      `render`, `schedule_repaint`, `dispatch_clients`, fuente del display fd.
@@ -117,6 +140,8 @@ sus propias particularidades.
 - DRM y winit correctos.
 - Sin workarounds, sin código muerto, sin `force_full_damage` si el modelo lo
   sustituye.
+- La entrega demuestra el estudio de niri: archivos/funciones exactas,
+  explicación del flujo y ninguna parte omitida sin justificar.
 
 ## 2. Menú global de Firefox
 
