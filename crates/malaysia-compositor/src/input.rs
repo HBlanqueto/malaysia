@@ -2141,7 +2141,7 @@ impl State {
                 let Some(offset) = self.unmaximize_on_drag(window, offset, location) else {
                     return;
                 };
-                let top = self.workspace().0.y;
+                let top = self.workspace().0.y - self.client_shadow_top(window);
                 let target = Point::from((
                     round(location.x - offset.x),
                     round(location.y - offset.y).max(top),
@@ -2163,6 +2163,17 @@ impl State {
                 self.windows.resize(window, outer);
             }
         }
+    }
+
+    // A CSD client draws its shadow inside the surface; the visible frame starts at the window geometry.
+    fn client_shadow_top(&self, window: WindowId) -> i32 {
+        if !self.windows.is_client_decorated(window) {
+            return 0;
+        }
+        self.windows
+            .surface_of(window)
+            .and_then(crate::window::window_geometry)
+            .map_or(0, |geometry| geometry.loc.y)
     }
 
     // A press on a maximized titlebar may be a click or a double click: restore only once it drags.

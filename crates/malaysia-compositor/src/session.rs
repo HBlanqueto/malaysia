@@ -1222,9 +1222,6 @@ fn append_window_frame<R: MalaysiaRenderer>(
         1.0,
         kind,
     );
-    // A dialog or a fixed-size window (About, panels) gets the Tahoe rim; resizable windows keep the flat line.
-    let panel =
-        matches!(data.role, crate::decoration::Role::Dialog) || !state.windows.zoom_supported(id);
     append_frame(
         state,
         content,
@@ -1236,7 +1233,6 @@ fn append_window_frame<R: MalaysiaRenderer>(
             exponent,
             focused: is_focused,
             bordered: frame_has_border(data.state),
-            panel,
         },
         scale,
         elements,
@@ -1250,7 +1246,6 @@ struct Frame {
     exponent: f32,
     focused: bool,
     bordered: bool,
-    panel: bool,
 }
 
 fn append_ime_popups<R: MalaysiaRenderer>(
@@ -1356,7 +1351,6 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
                 exponent: vow_design::POPUP.superellipse_exponent,
                 focused: true,
                 bordered: true,
-                panel: true,
             },
             scale,
             elements,
@@ -1401,10 +1395,10 @@ fn append_frame<R: MalaysiaRenderer>(
         let palette = &state.chrome_theme.palette;
         let slot = |slot| (frame.owner, slot);
         if let Some(program) = state.border.as_ref() {
-            let inner_line = match (frame.panel, palette.panel_inner_line) {
-                (true, Some(line)) => Some((line.sides, line.edges)),
-                _ => palette.inner_line.map(|color| (color, color)),
-            };
+            let inner_line = palette
+                .panel_inner_line
+                .map(|line| (line.sides, line.edges))
+                .or(palette.inner_line.map(|color| (color, color)));
             if let Some((color, edge_color)) = inner_line {
                 let (area, uniforms) = border_shader(
                     frame_rect_physical,

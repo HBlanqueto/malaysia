@@ -11,7 +11,7 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - Centered title, rasterized with `cosmic-text` and colored with `title.focused`/`title.unfocused`.
 - Frame for all windows: 16 px corners, shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Fullscreen removes the frame; maximized keeps it (ADR 0037).
 - Dialogs use the same frame and are centered over the parent window.
-- Popups, dialogs and fixed-size windows («Acerca de») get the Tahoe inner border: `panel-inner-edge` (22 %) at the top and bottom, blending into `panel-inner` (9 %) on the sides over the corner radius.
+- In dark mode, every window, dialog and popup gets the Tahoe inner border: `panel-inner-edge` (22 %) at the top and bottom, blending into `panel-inner` (9 %) on the sides over the corner radius.
 - The traffic lights are square (radius 4) or round following `appearance.traffic_light_shape`.
 
 Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clients that request CSD keep their chrome; `window.decorations = "force_server"` can force the bar on third-party apps (at the risk of duplicating it). Telegram (Qt) may need its frame disabled in Settings › Advanced; with `window.qt_server_decorations = true` (default) the compositor requests server-side.
@@ -22,7 +22,7 @@ A BarrierKit app uses an `app_id` with the `io.github.hblanqueto.malaysia.` pref
 
 ## Moving
 
-While dragged, a window does not go behind the menubar: its top edge stops at the work area (`State::workspace`, which subtracts the top exclusive zones), as on macOS. The sides and the bottom edge may leave the screen.
+While dragged, a window does not go behind the menubar: its top edge stops at the work area (`State::workspace`, which subtracts the top exclusive zones), as on macOS. For a CSD window the visible edge counts: the shadow the app draws inside its surface (`window_geometry`) is subtracted. The sides and the bottom edge may leave the screen.
 
 ## Edge resize
 

@@ -11,7 +11,7 @@ La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px
 - Título centrado, rasterizado con `cosmic-text` y coloreado con `title.focused`/`title.unfocused`.
 - Marco para todas las ventanas: esquinas de 16, sombra (`shadow.frag`), borde exterior (`border.frag`) e inner hairline. Fullscreen elimina el marco; maximizado lo conserva (ADR 0037).
 - Los diálogos usan el mismo marco y se centran sobre la ventana padre.
-- Popups, diálogos y ventanas de tamaño fijo («Acerca de») llevan el borde interior de Tahoe: `panel-inner-edge` (22 %) arriba y abajo, que se funde con `panel-inner` (9 %) en los lados a lo largo del radio de la esquina.
+- En oscuro, todas las ventanas, diálogos y popups llevan el borde interior de Tahoe: `panel-inner-edge` (22 %) arriba y abajo, que se funde con `panel-inner` (9 %) en los lados a lo largo del radio de la esquina.
 - Los semáforos son cuadrados (radio 4) o redondos según `appearance.traffic_light_shape`.
 
 Solo las ventanas SSD reciben titlebar (ADR 0014/0019). GTK/Libadwaita y los clientes que piden CSD conservan su chrome; `window.decorations = "force_server"` puede forzar la barra en apps ajenas (con riesgo de duplicarla). Telegram (Qt) puede necesitar desactivar su marco en Ajustes › Avanzado; con `window.qt_server_decorations = true` (default) el compositor pide server-side.
@@ -21,7 +21,7 @@ Solo las ventanas SSD reciben titlebar (ADR 0014/0019). GTK/Libadwaita y los cli
 Una app de BarrierKit usa `app_id` con prefijo `io.github.hblanqueto.malaysia.` y pide su modo por `xdg-decoration` antes del primer commit: `Client` dibuja su barra de 44 px (apps con toolbar/sidebar); `Server` deja la barra de 32 px al compositor (utilidades simples). `force_server`/`force_client` solo afectan a apps ajenas.
 ## Mover
 
-Al arrastrar, la ventana no pasa por detrás de la barra de menús: su borde superior se detiene en el área de trabajo (`State::workspace`, que descuenta las zonas exclusivas de arriba), como en macOS. Los lados y el borde inferior pueden salir de la pantalla.
+Al arrastrar, la ventana no pasa por detrás de la barra de menús: su borde superior se detiene en el área de trabajo (`State::workspace`, que descuenta las zonas exclusivas de arriba), como en macOS. En una CSD cuenta el borde visible: se descuenta la sombra que la app dibuja dentro de su superficie (`window_geometry`). Los lados y el borde inferior pueden salir de la pantalla.
 
 ## Resize por bordes
 
