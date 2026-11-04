@@ -389,22 +389,6 @@ pub fn on_action(id: String) {
                 toplevels.close(index);
             }
         }
-        "app-window-minimize" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.minimize(index);
-            }
-        }
-        "app-window-maximize" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                let maximized = list.get(index).is_some_and(|window| window.maximized);
-                toplevels.set_maximized(index, !maximized);
-            }
-        }
-        "app-window-close" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.close(index);
-            }
-        }
         "app-window-front" => {
             let mut windows = app_indices(&list, argument);
             if let Some(position) = windows
@@ -418,64 +402,9 @@ pub fn on_action(id: String) {
                 toplevels.activate(index);
             }
         }
-        "app-window-activate" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.activate(index);
-            }
-        }
         "app-help-report" => xdg_open(ISSUES_URL),
         "app-help-topics-index" => xdg_open(help_topics::DOCS_INDEX),
         "app-help-topic" => xdg_open(argument),
-        "app-window-fill" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Fill);
-            }
-        }
-        "app-window-center" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Center);
-            }
-        }
-        "app-move-left" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Left);
-            }
-        }
-        "app-move-right" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Right);
-            }
-        }
-        "app-move-up" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Top);
-            }
-        }
-        "app-move-down" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::Bottom);
-            }
-        }
-        "app-quarter-top-left" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::TopLeft);
-            }
-        }
-        "app-quarter-top-right" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::TopRight);
-            }
-        }
-        "app-quarter-bottom-left" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::BottomLeft);
-            }
-        }
-        "app-quarter-bottom-right" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.arrange(index, InfinityLayout::BottomRight);
-            }
-        }
         "app-layout-side-by-side" => {
             toplevels.arrange_pair(InfinityPairLayout::SideBySide);
         }
@@ -491,18 +420,47 @@ pub fn on_action(id: String) {
         "app-layout-quarters" => {
             toplevels.arrange_quarters();
         }
-        "app-move-restore" => {
+        _ => {
             if let Ok(index) = argument.parse::<usize>() {
-                toplevels.restore(index);
+                on_window_action(&toplevels, &list, verb, index);
             }
         }
-        "app-window-fullscreen" => {
-            if let Ok(index) = argument.parse::<usize>() {
-                toplevels.set_fullscreen(index, true);
-            }
-        }
-        _ => {}
     }
+}
+
+fn on_window_action(toplevels: &Toplevels, list: &[ToplevelInfo], verb: &str, index: usize) {
+    match verb {
+        "app-window-minimize" => toplevels.minimize(index),
+        "app-window-maximize" => {
+            let maximized = list.get(index).is_some_and(|window| window.maximized);
+            toplevels.set_maximized(index, !maximized);
+        }
+        "app-window-close" => toplevels.close(index),
+        "app-window-activate" => toplevels.activate(index),
+        "app-move-restore" => toplevels.restore(index),
+        "app-window-fullscreen" => toplevels.set_fullscreen(index, true),
+        verb => {
+            if let Some(layout) = window_layout(verb) {
+                toplevels.arrange(index, layout);
+            }
+        }
+    }
+}
+
+fn window_layout(verb: &str) -> Option<InfinityLayout> {
+    Some(match verb {
+        "app-window-fill" => InfinityLayout::Fill,
+        "app-window-center" => InfinityLayout::Center,
+        "app-move-left" => InfinityLayout::Left,
+        "app-move-right" => InfinityLayout::Right,
+        "app-move-up" => InfinityLayout::Top,
+        "app-move-down" => InfinityLayout::Bottom,
+        "app-quarter-top-left" => InfinityLayout::TopLeft,
+        "app-quarter-top-right" => InfinityLayout::TopRight,
+        "app-quarter-bottom-left" => InfinityLayout::BottomLeft,
+        "app-quarter-bottom-right" => InfinityLayout::BottomRight,
+        _ => return None,
+    })
 }
 
 pub(crate) fn move_resize_items(
