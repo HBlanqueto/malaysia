@@ -198,6 +198,65 @@ aparece.
 - No se rompe el menú de otras apps GTK/libadwaita.
 - La solución no depende de `dev.sh`.
 
+### Resultado (Claude, 2026-11-04)
+
+Firefox 158 (nixpkgs `31ecbaca`) se probó dentro de Malaysia anidado con el
+entorno de la sesión directa:
+
+- Con `WAYLAND_DISPLAY` y `DISPLAY`.
+- Sin `MOZ_ENABLE_WAYLAND` ni `GDK_BACKEND`.
+- Con un bus de sesión propio.
+
+Resultados:
+
+| Caso | Resultado |
+|---|---|
+| Prefs activos y el nombre `com.canonical.AppMenu.Registrar` con dueño | Firefox va por Wayland y el compositor registra `appmenu set window=0 service=:1.1 path=/com/canonical/menu/0`. |
+| Mismo caso, sin dueño del Registrar | No llega ningún `appmenu`. |
+
+Firefox exige estas condiciones, comprobadas en su código:
+
+1. **Wayland.** `IsWaylandEnabled` (`toolkit/xre/nsAppRunner.cpp`) elige
+   Wayland con GTK ≥ 3.24.30 aunque exista `DISPLAY`. Solo
+   `MOZ_ENABLE_WAYLAND=0` o `GDK_BACKEND=x11` lo llevan a XWayland. Por
+   XWayland no hay menú: el Registrar por XID no está implementado.
+2. **Prefs.** `widget.gtk.global-menu.enabled` y
+   `widget.gtk.global-menu.wayland.enabled` deben estar activos al abrir la
+   ventana (`widget/gtk/NativeMenuSupport.cpp`).
+3. **Política.** Firefox lee `/etc/firefox/policies/policies.json`
+   (`xpcom/io/SpecialSystemDirectory.cpp`) antes que la de `distribution/`
+   del paquete. La forma corta de `Preferences` vale para `widget.*` y deja
+   el pref bloqueado (`Policies.sys.mjs`).
+4. **Registrar.** `DBusMenuBar::OnNameOwnerChanged` (`widget/gtk/NativeMenuGtk.cpp`)
+   no manda `org_kde_kwin_appmenu` hasta que el Registrar tiene dueño en
+   su bus. En Malaysia lo toma la menubar (`menubar: Registrar acquired`).
+5. **dbusmenu.** Hacen falta `libdbusmenu-glib.so.4` y
+   `libdbusmenu-gtk3.so.4`. El wrapper de nixpkgs ya las añade
+   (`libdbusmenu-gtk3`).
+
+No hacen falta `GTK_MODULES` ni el puente GTK del portal.
+
+El lab ya no escribe `user.js` ni fuerza `MOZ_ENABLE_WAYLAND` ni
+`GDK_BACKEND`. Su Firefox recibe los prefs por la misma política del sistema
+que la sesión, así que si falla en la sesión también falla en el lab.
+
+No se pudo reproducir el fallo de la sesión fuera de la máquina. Para
+encontrar cuál de las condiciones falla:
+
+1. Comprueba el Registrar con
+   `journalctl --user -b -u malaysia-shell@menubar | grep Registrar`. Debe
+   decir `acquired`, no `already owned`.
+2. En Firefox:
+   - `about:support`, Window Protocol: `wayland`.
+   - `about:policies`: sin errores.
+   - `about:config`: los dos prefs en `true` y bloqueados.
+   
+   Si Firefox ya estaba abierto antes del `nixos-rebuild` que añadió la
+   política, ciérralo del todo y ábrelo otra vez.
+3. Mira el log del compositor al abrir Firefox. Si no aparece `appmenu set`,
+   falla Firefox o el Registrar. Si aparece y la barra no lo pinta, falla
+   la shell.
+
 ## Reglas
 
 - `CLAUDE.md`: commits directos a `main`, `git pull --ff-only` antes de push,

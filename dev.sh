@@ -974,8 +974,6 @@ lab() {
         _name=$1
         shift
         lab_client "$_name" env \
-            GDK_BACKEND=wayland \
-            MOZ_ENABLE_WAYLAND=1 \
             QT_QPA_PLATFORM=wayland \
             QT_QPA_PLATFORMTHEME=kde \
             XDG_CURRENT_DESKTOP=Malaysia \
@@ -1041,10 +1039,6 @@ lab() {
             _lab_firefox_profile="$_lab_config/firefox"
             mkdir -p "$_lab_firefox_profile" ||
                 fail "$EXIT_RUN_FAILED" "could not create the lab Firefox profile"
-            cat >"$_lab_firefox_profile/user.js" <<'EOF'
-user_pref("widget.gtk.global-menu.enabled", true);
-user_pref("widget.gtk.global-menu.wayland.enabled", true);
-EOF
             lab_app_client firefox firefox \
                 --no-remote --profile "$_lab_firefox_profile"
         else
