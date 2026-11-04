@@ -18,6 +18,8 @@ in
       default = true;
     };
 
+    globalMenu.electron.enable = lib.mkEnableOption "global menu support for Electron 43 applications on Wayland (builds Electron from source)";
+
     globalMenu.gtk3.enable = lib.mkEnableOption "global menu support for GTK 3 applications with a GtkMenuBar" // {
       default = true;
     };
@@ -45,12 +47,15 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ] ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
-    system.replaceDependencies.replacements = lib.mkIf cfg.globalMenu.libadwaita.enable [
-      {
+    system.replaceDependencies.replacements =
+      lib.optional cfg.globalMenu.libadwaita.enable {
         oldDependency = pkgs.libadwaita;
         newDependency = self.packages.${pkgs.stdenv.hostPlatform.system}.libadwaita-global-menu;
       }
-    ];
+      ++ lib.optional cfg.globalMenu.electron.enable {
+        oldDependency = pkgs.electron_43;
+        newDependency = self.packages.${pkgs.stdenv.hostPlatform.system}.electron-global-menu;
+      };
 
     environment.sessionVariables = lib.mkIf cfg.globalMenu.gtk3.enable {
       GTK_MODULES = [ "appmenu-gtk-module" ];

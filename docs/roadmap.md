@@ -240,6 +240,12 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
   virt-manager. El módulo NixOS instala `appmenu-gtk-module`
   (`nix/appmenu-gtk-module.nix`) y lo carga con `GTK_MODULES`; la barra
   resuelve sus acciones `unity.*` en `menubar_path` (`menubar/gtkmenus.rs`).
+  Aceptado 2026-11-04 con virt-manager (parche
+  `nix/patches/appmenu-gtk-module-wayland-realize.patch`).
+- 14f-5 (Electron 43): implementado 2026-11-04, falta aceptarlo con Bitwarden.
+  `programs.malaysia.globalMenu.electron.enable` aplica electron/electron#54629
+  (`nix/patches/electron-wayland-appmenu.patch`) y añade `libdbusmenu` al rpath.
+  Chromium 150 ya trae `org_kde_kwin_appmenu` (`ozone_platform_wayland.cc`); falta probarlo.
 
 **Fuera del bloque (anotado):** HUD en el launcher, menú de atajos por app y
 casado por pid del Registrar (XWayland).

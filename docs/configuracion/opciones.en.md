@@ -471,6 +471,7 @@ These options configure the system integration; they go in
 |---|---|---|---|
 | `programs.malaysia.enable` | bool | `false` | Enables Malaysia: installs the package, registers the Wayland session, PAM, units and the portal. |
 | `programs.malaysia.globalMenu.libadwaita.enable` | bool | `true` | Replaces the system libadwaita with a patched version that exports the primary menu as a global menubar (`org.gtk.Menus`). It uses `system.replaceDependencies`, so apps are not rebuilt (ADR 0052). |
+| `programs.malaysia.globalMenu.electron.enable` | bool | `false` | Replaces `electron_43` with a build carrying electron/electron#54629, which publishes Electron apps' menus on Wayland through `org_kde_kwin_appmenu`. It uses `system.replaceDependencies`; Electron builds from source (hours, no cache). |
 | `programs.malaysia.globalMenu.gtk3.enable` | bool | `true` | Installs `appmenu-gtk-module` and loads it with `GTK_MODULES`, so GTK 3 apps with an in-window `GtkMenuBar` publish their menu through `gtk_shell1`/`org.gtk.Menus`. |
 
 `programs.malaysia.globalMenu.libadwaita.enable` can be disabled to avoid

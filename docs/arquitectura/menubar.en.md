@@ -32,6 +32,6 @@ The compositor computes the workspace as the output minus the exclusive zones of
 
 ## Global menu
 
-The bar embeds `MenuView`: without a window it shows ❄ · Escritorio · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; with a window, ❄ · {App} · real menus · Ventana · Ayuda. The real menu uses `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); if there is none, the `.desktop` fallback (14c). GTK uses `gtk_shell1`/`org.gtk.Menus` (14f-1 registers; 14f-2 draws); a GTK 3 `GtkMenuBar` arrives the same way with `appmenu-gtk-module` and `unity.*` actions (14f-4). Pending: 14b-2, 14f-2, F10/Alt keyboard and overflow.
+The bar embeds `MenuView`: without a window it shows ❄ · Escritorio · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; with a window, ❄ · {App} · real menus · Ventana · Ayuda. The real menu uses `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); if there is none, the `.desktop` fallback (14c). GTK uses `gtk_shell1`/`org.gtk.Menus` (14f-1 registers; 14f-2 draws); a GTK 3 `GtkMenuBar` arrives the same way with `appmenu-gtk-module` and `unity.*` actions (14f-4). Chromium and patched Electron (14f-5) use `org_kde_kwin_appmenu`. Pending: 14b-2, 14f-2, F10/Alt keyboard and overflow.
 
 «Acerca de {App}» takes the app's «Acerca de…»/«About…» entry from whichever menu holds it (almost always Help) and removes it there (`remote::take_about`). If the app has none, it opens `malaysia-shell about-app <app_id>`: icon, name and `GenericName` from the `.desktop`.

@@ -169,6 +169,15 @@
         "malaysia-shell" = malaysia;
         skia-binaries = skia;
         appmenu-gtk-module = pkgs.callPackage ./nix/appmenu-gtk-module.nix { };
+        electron-global-menu = pkgs.electron_43.override {
+          electron-unwrapped = pkgs.electron_43.unwrapped.overrideAttrs (old: {
+            patches = old.patches ++ [ ./nix/patches/electron-wayland-appmenu.patch ];
+            # GlobalMenuBarX11 dlopens libdbusmenu-glib; without it Electron never exports the menu.
+            postFixup = old.postFixup + ''
+              patchelf --add-rpath "${pkgs.libdbusmenu}/lib" $out/libexec/electron/electron
+            '';
+          });
+        };
         libadwaita-global-menu = pkgs.libadwaita.overrideAttrs (old: {
           patches = (old.patches or []) ++ [
             ./nix/patches/libadwaita-global-menu.patch

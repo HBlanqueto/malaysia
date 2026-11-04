@@ -472,6 +472,7 @@ Estas opciones configuran la integración con el sistema; van en
 |---|---|---|---|
 | `programs.malaysia.enable` | bool | `false` | Activa Malaysia: instala el paquete, registra la sesión Wayland, PAM, units y el portal. |
 | `programs.malaysia.globalMenu.libadwaita.enable` | bool | `true` | Reemplaza la libadwaita del sistema por una versión parcheada que exporta el menú principal como menubar global (`org.gtk.Menus`). Usa `system.replaceDependencies`, así que las apps no se recompilan (ADR 0052). |
+| `programs.malaysia.globalMenu.electron.enable` | bool | `false` | Sustituye `electron_43` por una versión con el PR electron/electron#54629, que publica el menú de las apps Electron en Wayland por `org_kde_kwin_appmenu`. Usa `system.replaceDependencies`; Electron se compila desde el código fuente (horas, sin caché). |
 | `programs.malaysia.globalMenu.gtk3.enable` | bool | `true` | Instala `appmenu-gtk-module` y lo carga con `GTK_MODULES`, para que las apps GTK 3 con un `GtkMenuBar` dentro de la ventana publiquen su menú por `gtk_shell1`/`org.gtk.Menus`. |
 
 `programs.malaysia.globalMenu.libadwaita.enable` se puede desactivar para no
