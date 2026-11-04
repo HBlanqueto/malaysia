@@ -17,7 +17,10 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
-    CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE, TEXT, TITLEBAR_CLIENT_HEIGHT,
+    ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP, ABOUT_DRAWING_WIDTH,
+    ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_LABEL_WIDTH, ABOUT_SPEC_ROW_GAP, ABOUT_TITLE_GAP,
+    ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE,
+    TEXT, TITLEBAR_CLIENT_HEIGHT,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -31,17 +34,9 @@ const CONFIRM_BUTTON_GAP: f32 = 10.0;
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 pub const ABOUT_APP_ID: &str = "about";
 pub const ABOUT_APP_INFO_ID: &str = "about-app";
-const ABOUT_SIZE: (u32, u32) = (329, 505);
-const ABOUT_DRAWING_TOP: f32 = 89.0;
-const ABOUT_DRAWING: (f32, f32) = (148.0, 78.0);
-const ABOUT_TITLE_GAP: f32 = 61.0;
+const ABOUT_SIZE: (u32, u32) = (ABOUT_WIDTH, ABOUT_HEIGHT);
 const ABOUT_GAP: f32 = 20.0;
-const ABOUT_LABEL_WIDTH: f32 = 138.0;
-const ABOUT_COLUMN_GAP: f32 = 12.0;
-const ABOUT_VALUE_WIDTH: f32 = 160.0;
 const ABOUT_ROW_GAP: f32 = 5.0;
-const ABOUT_SPEC_ROW_GAP: f32 = 2.0;
-const ABOUT_FOOTER_BOTTOM: f32 = 34.0;
 const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
 const ABOUT_APP_ICON_SIZE: f32 = 64.0;
 const ROW_HEIGHT: f32 = 32.0;
@@ -677,8 +672,8 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
         .child(titlebar)
         .child(
             rect()
-                .width(Size::px(ABOUT_DRAWING.0))
-                .height(Size::px(ABOUT_DRAWING.1))
+                .width(Size::px(ABOUT_DRAWING_WIDTH))
+                .height(Size::px(ABOUT_DRAWING_HEIGHT))
                 .margin(Gaps::new(
                     ABOUT_DRAWING_TOP - TITLEBAR_CLIENT_HEIGHT as f32,
                     0.0,
@@ -688,8 +683,8 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
                 .center()
                 .child(
                     SvgViewer::new(drawing)
-                        .width(Size::px(ABOUT_DRAWING.0))
-                        .height(Size::px(ABOUT_DRAWING.1)),
+                        .width(Size::px(ABOUT_DRAWING_WIDTH))
+                        .height(Size::px(ABOUT_DRAWING_HEIGHT)),
                 ),
         )
         .child(
