@@ -660,155 +660,166 @@ impl State {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
-        let forwarded = keyboard
-            .input::<(), _>(
+        let Some((filtered, mods_changed)) = keyboard.input_intercept::<FilterResult<()>, _>(
+            smithay::input::keyboard::KeyboardSource::MAIN,
+            self,
+            key_code,
+            key_state,
+            |state, mods, keysym| {
+                if state.screenshot_mode().is_some() {
+                    if pressed {
+                        for sym in keysym.raw_syms() {
+                            match u32::from(sym) {
+                                keysyms::KEY_Escape => state.cancel_screenshot(),
+                                keysyms::KEY_space => state.start_window_screenshot(),
+                                _ => {}
+                            }
+                        }
+                    }
+                    return FilterResult::Intercept(());
+                }
+                match compositor_shortcut(
+                    mods.ctrl,
+                    mods.alt,
+                    mods.shift,
+                    mods.logo,
+                    &keysym.raw_syms(),
+                    state.locked,
+                ) {
+                    CompositorShortcut::None => {}
+                    shortcut => {
+                        if pressed {
+                            match shortcut {
+                                CompositorShortcut::Vt(vt) => {
+                                    state.request_vt_switch(vt);
+                                }
+                                CompositorShortcut::Quit => {
+                                    tracing::info!("emergency exit: Ctrl+Alt+Backspace");
+                                    state.stop();
+                                }
+                                CompositorShortcut::Blocked => {
+                                    tracing::info!(
+                                        "Ctrl+Alt+Backspace ignored: the session is locked"
+                                    );
+                                }
+                                CompositorShortcut::Relock => {
+                                    if state.locked && !state.lock_surfaces.is_empty() {
+                                        tracing::info!(
+                                            "Ctrl+Alt+L ignored: a lock surface is already live"
+                                        );
+                                    } else if state.relaunch_lock_screen() {
+                                        tracing::info!("Ctrl+Alt+L: started the lock screen");
+                                    }
+                                }
+                                CompositorShortcut::Screenshot => {
+                                    tracing::info!(
+                                        "PrintScreen: screenshotting the focused window"
+                                    );
+                                    state.request_screenshot(ScreenshotRequest::Focused);
+                                }
+                                CompositorShortcut::ScreenshotFull => {
+                                    tracing::info!("Shift+Super+3: screenshotting the output");
+                                    state.request_screenshot(ScreenshotRequest::Output);
+                                }
+                                CompositorShortcut::ScreenshotRegion => {
+                                    tracing::info!("Shift+Super+4: selecting a screenshot region");
+                                    state.start_region_screenshot();
+                                }
+                                CompositorShortcut::Launcher => {
+                                    state.toggle_launcher();
+                                }
+                                CompositorShortcut::ForceQuit => {
+                                    state.open_force_quit();
+                                }
+                                CompositorShortcut::ArrangeLeft => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Left);
+                                    }
+                                }
+                                CompositorShortcut::ArrangeRight => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Right);
+                                    }
+                                }
+                                CompositorShortcut::ArrangeUp => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Top);
+                                    }
+                                }
+                                CompositorShortcut::ArrangeDown => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Bottom);
+                                    }
+                                }
+                                CompositorShortcut::ArrangePairLeft => {
+                                    state.infinity_arrange_pair(PairLayout::SideBySide);
+                                }
+                                CompositorShortcut::ArrangePairRight => {
+                                    state.infinity_arrange_pair(PairLayout::SideBySideReversed);
+                                }
+                                CompositorShortcut::ArrangePairUp => {
+                                    state.infinity_arrange_pair(PairLayout::Stacked);
+                                }
+                                CompositorShortcut::ArrangePairDown => {
+                                    state.infinity_arrange_pair(PairLayout::StackedReversed);
+                                }
+                                CompositorShortcut::ArrangeFill => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Fill);
+                                    }
+                                }
+                                CompositorShortcut::ArrangeCenter => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_arrange(id, Layout::Center);
+                                    }
+                                }
+                                CompositorShortcut::ArrangeRestore => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.infinity_restore(id);
+                                    }
+                                }
+                                CompositorShortcut::ToggleFullscreen => {
+                                    if let Some(id) = state.focused_window() {
+                                        state.toggle_focus_mode(id);
+                                    }
+                                }
+                                CompositorShortcut::PreviousSpace => {
+                                    state.previous_space();
+                                }
+                                CompositorShortcut::NextSpace => {
+                                    state.next_space();
+                                }
+                                CompositorShortcut::AddDesktop => {
+                                    state.add_desktop();
+                                }
+                                CompositorShortcut::None => {}
+                            }
+                        }
+                        return FilterResult::Intercept(());
+                    }
+                }
+                if pressed && is_escape(&keysym.raw_syms()) {
+                    state.dismiss_topmost_popup();
+                }
+                FilterResult::Forward
+            },
+        ) else {
+            return;
+        };
+        let forwarded = matches!(filtered, FilterResult::Forward);
+        if forwarded && self.locked {
+            // ext-session-lock-v1: an input-method keyboard grab must not read the password.
+            keyboard.input_forward_bypassing_grab(
                 self,
                 key_code,
                 key_state,
                 serial,
                 time,
-                |state, mods, keysym| {
-                    if state.screenshot_mode().is_some() {
-                        if pressed {
-                            for sym in keysym.raw_syms() {
-                                match u32::from(sym) {
-                                    keysyms::KEY_Escape => state.cancel_screenshot(),
-                                    keysyms::KEY_space => state.start_window_screenshot(),
-                                    _ => {}
-                                }
-                            }
-                        }
-                        return FilterResult::Intercept(());
-                    }
-                    match compositor_shortcut(
-                        mods.ctrl,
-                        mods.alt,
-                        mods.shift,
-                        mods.logo,
-                        &keysym.raw_syms(),
-                        state.locked,
-                    ) {
-                        CompositorShortcut::None => {}
-                        shortcut => {
-                            if pressed {
-                                match shortcut {
-                                    CompositorShortcut::Vt(vt) => {
-                                        state.request_vt_switch(vt);
-                                    }
-                                    CompositorShortcut::Quit => {
-                                        tracing::info!("emergency exit: Ctrl+Alt+Backspace");
-                                        state.stop();
-                                    }
-                                    CompositorShortcut::Blocked => {
-                                        tracing::info!(
-                                            "Ctrl+Alt+Backspace ignored: the session is locked"
-                                        );
-                                    }
-                                    CompositorShortcut::Relock => {
-                                        if state.locked && !state.lock_surfaces.is_empty() {
-                                            tracing::info!(
-                                                "Ctrl+Alt+L ignored: a lock surface is already live"
-                                            );
-                                        } else if state.relaunch_lock_screen() {
-                                            tracing::info!("Ctrl+Alt+L: started the lock screen");
-                                        }
-                                    }
-                                    CompositorShortcut::Screenshot => {
-                                        tracing::info!(
-                                            "PrintScreen: screenshotting the focused window"
-                                        );
-                                        state.request_screenshot(ScreenshotRequest::Focused);
-                                    }
-                                    CompositorShortcut::ScreenshotFull => {
-                                        tracing::info!("Shift+Super+3: screenshotting the output");
-                                        state.request_screenshot(ScreenshotRequest::Output);
-                                    }
-                                    CompositorShortcut::ScreenshotRegion => {
-                                        tracing::info!(
-                                            "Shift+Super+4: selecting a screenshot region"
-                                        );
-                                        state.start_region_screenshot();
-                                    }
-                                    CompositorShortcut::Launcher => {
-                                        state.toggle_launcher();
-                                    }
-                                    CompositorShortcut::ForceQuit => {
-                                        state.open_force_quit();
-                                    }
-                                    CompositorShortcut::ArrangeLeft => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Left);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangeRight => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Right);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangeUp => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Top);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangeDown => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Bottom);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangePairLeft => {
-                                        state.infinity_arrange_pair(PairLayout::SideBySide);
-                                    }
-                                    CompositorShortcut::ArrangePairRight => {
-                                        state.infinity_arrange_pair(PairLayout::SideBySideReversed);
-                                    }
-                                    CompositorShortcut::ArrangePairUp => {
-                                        state.infinity_arrange_pair(PairLayout::Stacked);
-                                    }
-                                    CompositorShortcut::ArrangePairDown => {
-                                        state.infinity_arrange_pair(PairLayout::StackedReversed);
-                                    }
-                                    CompositorShortcut::ArrangeFill => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Fill);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangeCenter => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_arrange(id, Layout::Center);
-                                        }
-                                    }
-                                    CompositorShortcut::ArrangeRestore => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.infinity_restore(id);
-                                        }
-                                    }
-                                    CompositorShortcut::ToggleFullscreen => {
-                                        if let Some(id) = state.focused_window() {
-                                            state.toggle_focus_mode(id);
-                                        }
-                                    }
-                                    CompositorShortcut::PreviousSpace => {
-                                        state.previous_space();
-                                    }
-                                    CompositorShortcut::NextSpace => {
-                                        state.next_space();
-                                    }
-                                    CompositorShortcut::AddDesktop => {
-                                        state.add_desktop();
-                                    }
-                                    CompositorShortcut::None => {}
-                                }
-                            }
-                            return FilterResult::Intercept(());
-                        }
-                    }
-                    if pressed && is_escape(&keysym.raw_syms()) {
-                        state.dismiss_topmost_popup();
-                    }
-                    FilterResult::Forward
-                },
-            )
-            .is_none();
+                mods_changed,
+            );
+        } else if forwarded {
+            keyboard.input_forward(self, key_code, key_state, serial, time, mods_changed);
+        }
         if pressed
             && forwarded
             && let Some(focus) = keyboard.current_focus()

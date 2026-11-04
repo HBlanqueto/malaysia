@@ -37,7 +37,7 @@ Smithay deja el lock en `Defunct` (no en `Unlocked`) y un segundo `lock()` puede
 La autenticación vive en el proceso del lock (FFI a `libpam`, hilo `malaysia-pam`); servicio `malaysia-lock` o `login`, contraseña en `Zeroizing<String>`, y solo un acierto llama a `unlock_and_destroy`. `ext-idle-notify-v1` reinicia el reloj en cada input y `lock.idle_timeout_seconds` (default 0, desactivado) lanza el lock; `zwp_idle_inhibit_manager_v1` lo frena. Con el auto-lock activo, el backend DRM toma un inhibidor `delay` de logind y, al recibir `PrepareForSleep(true)`, lanza el lock y suelta el inhibidor cuando la sesión queda bloqueada (máximo 4 s). Vive en `sleep.rs`.
 ## Lado del compositor
 
-- `SessionLockHandler::lock()` marca `State::locked`, limpia el foco de teclado, confirma y redibuja. Mientras `locked`, el draw solo renderiza lock surfaces y los frame callbacks solo van a ellas y a la superficie del cursor.
+- `SessionLockHandler::lock()` marca `State::locked`, limpia el foco de teclado, confirma y redibuja. Mientras `locked`, el draw solo renderiza lock surfaces y los frame callbacks solo van a ellas y a la superficie del cursor. Las teclas van directas a la superficie de lock, saltándose el grab de un método de entrada, para que no lea la contraseña.
 - `new_surface()` configura al tamaño del output, añade a `lock_surfaces` y da el foco de teclado a la primera.
 - `unlock()` solo llega por `unlock_and_destroy`; nunca por la muerte del cliente.
 - Con la sesión bloqueada, `pointer_press` ignora ventanas/popups, `focus_window` no cede foco y `activate_window` del dock se ignora. La autenticación es del cliente; el compositor no conoce PAM.

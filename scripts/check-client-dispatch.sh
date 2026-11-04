@@ -26,7 +26,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-unset MALAYSIA_DEV MALAYSIA_SHELL_EXE
+unset MALAYSIA_SHELL_EXE
 MALAYSIA_CONFIG_DIR="$tmp/config" MALAYSIA_DATA_DIR="$tmp/data" \
     "$bin" >"$log" 2>&1 &
 pid=$!

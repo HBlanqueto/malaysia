@@ -28,9 +28,7 @@ const TILE_GAP: i32 = 8;
 pub struct InfinityGlobalData;
 
 pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
-    if std::env::var("MALAYSIA_DEV").is_ok_and(|v| v == "1") {
-        return true;
-    }
+    static TRUSTED: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
     let Ok(credentials) = getsockopt(stream, sockopt::PeerCredentials) else {
         return false;
     };
@@ -38,10 +36,19 @@ pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
     let Ok(exe) = std::fs::canonicalize(format!("/proc/{pid}/exe")) else {
         return false;
     };
-    let trusted = trusted_shell_exes();
-    let trusted_shell = is_trusted_shell_exe(&exe, &trusted);
+    let trusted = TRUSTED.get_or_init(trusted_shell_exes);
+    let trusted_shell = is_trusted_shell_exe(&exe, trusted) && !preloads_code(pid);
     tracing::debug!(pid, exe = ?exe, trusted = ?trusted, trusted_shell, "infinity trust check");
     trusted_shell
+}
+
+// The shell binary is only trustworthy if the dynamic loader did not inject code into it.
+fn preloads_code(pid: i32) -> bool {
+    std::fs::read(format!("/proc/{pid}/environ")).map_or(true, |environ| {
+        environ
+            .split(|byte| *byte == 0)
+            .any(|var| var.starts_with(b"LD_PRELOAD=") || var.starts_with(b"LD_AUDIT="))
+    })
 }
 
 fn trusted_shell_exes() -> Vec<PathBuf> {
@@ -51,22 +58,10 @@ fn trusted_shell_exes() -> Vec<PathBuf> {
     {
         exes.push(path);
     }
-
-    let mut candidate_dirs: Vec<PathBuf> = Vec::new();
     if let Some(dir) = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(PathBuf::from))
     {
-        candidate_dirs.push(dir);
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        for profile in ["debug", "release"] {
-            candidate_dirs.push(cwd.join("target").join(profile));
-        }
-        candidate_dirs.push(cwd.join("result").join("bin"));
-    }
-
-    for dir in candidate_dirs {
         for name in ["malaysia-shell", ".malaysia-shell-wrapped"] {
             if let Ok(path) = std::fs::canonicalize(dir.join(name))
                 && !exes.contains(&path)
