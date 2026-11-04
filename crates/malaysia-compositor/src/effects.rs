@@ -454,6 +454,7 @@ pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
             UniformName::new("scale", UniformType::_1f),
             UniformName::new("exponent", UniformType::_1f),
             UniformName::new("color", UniformType::_4f),
+            UniformName::new("edge_color", UniformType::_4f),
         ],
     );
     match program {

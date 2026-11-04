@@ -8,6 +8,7 @@ uniform float side;
 uniform float scale;
 uniform float exponent;
 uniform vec4 color;
+uniform vec4 edge_color;
 uniform float alpha;
 
 void main() {
@@ -21,5 +22,8 @@ void main() {
         coverage = window_coverage(dist) - window_coverage(dist + width);
     }
 
-    gl_FragColor = color * (coverage * alpha);
+    // Tahoe panels: the rim brightens along the top and bottom edges and fades towards the sides.
+    float from_edge = min(px.y - rect.y, rect.y + rect.w - px.y);
+    vec4 tint = mix(edge_color, color, smoothstep(0.0, max(radius, 1.0), from_edge));
+    gl_FragColor = tint * (coverage * alpha);
 }

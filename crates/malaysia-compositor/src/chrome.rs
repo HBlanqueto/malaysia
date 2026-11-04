@@ -17,8 +17,8 @@ use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use unicode_segmentation::UnicodeSegmentation;
 use vow_appearance::traffic::{self, TrafficInput};
 use vow_appearance::{
-    AppearanceConfig, ColorScheme, TrafficLightStyle, WindowColorMode, load_dominant,
-    palette as base_palette, resolve,
+    AppearanceConfig, ColorScheme, TrafficLightShape, TrafficLightStyle, WindowColorMode,
+    load_dominant, palette as base_palette, resolve,
 };
 use vow_design::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
@@ -36,6 +36,7 @@ pub(crate) struct ChromeTheme {
     scheme: ColorScheme,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
+    round_lights: bool,
     signature: u64,
 }
 
@@ -57,10 +58,12 @@ impl ChromeTheme {
         palette.hairline = resolved.surfaces.line;
 
         let traffic_style = appearance.traffic_light_style();
+        let round_lights = appearance.traffic_light_shape == TrafficLightShape::Round;
         let signature = signature(
             resolved.scheme,
             appearance.window_color,
             appearance.traffic_lights,
+            round_lights,
             palette,
             resolved.lights,
         );
@@ -69,6 +72,7 @@ impl ChromeTheme {
             scheme: resolved.scheme,
             lights: resolved.lights,
             traffic_style,
+            round_lights,
             signature,
         }
     }
@@ -78,6 +82,7 @@ fn signature(
     scheme: ColorScheme,
     mode: WindowColorMode,
     style: TrafficLightStyle,
+    round_lights: bool,
     palette: Palette,
     lights: [Rgba; 3],
 ) -> u64 {
@@ -89,6 +94,7 @@ fn signature(
     add(scheme as u64);
     add(mode as u64);
     add(style as u64);
+    add(u64::from(round_lights));
     for color in [
         palette.titlebar_bg.focused,
         palette.titlebar_bg.unfocused,
@@ -458,7 +464,11 @@ impl TextEngine {
             let (x, y, size) = traffic::button_rect(index);
             let center_x = ((x + size / 2.0) * scale).round() as i32;
             let center_y = ((y + size / 2.0) * scale).round() as i32;
-            let radius = (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32;
+            let radius = if theme.round_lights {
+                diameter / 2
+            } else {
+                (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32
+            };
             fill_rounded_square(
                 &mut pixels,
                 w,

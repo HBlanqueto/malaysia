@@ -145,6 +145,7 @@ mod tests {
         assert!(src.contains("uniform float scale"));
         assert!(src.contains("uniform float exponent"));
         assert!(src.contains("uniform vec4 color"));
+        assert!(src.contains("uniform vec4 edge_color"));
     }
 
     fn rounded_rect_sdf(px: (f32, f32), center: (f32, f32), size: (f32, f32), radius: f32) -> f32 {

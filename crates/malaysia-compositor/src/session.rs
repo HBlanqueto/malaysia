@@ -1222,6 +1222,9 @@ fn append_window_frame<R: MalaysiaRenderer>(
         1.0,
         kind,
     );
+    // A dialog or a fixed-size window (About, panels) gets the Tahoe rim; resizable windows keep the flat line.
+    let panel =
+        matches!(data.role, crate::decoration::Role::Dialog) || !state.windows.zoom_supported(id);
     append_frame(
         state,
         content,
@@ -1233,6 +1236,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
             exponent,
             focused: is_focused,
             bordered: frame_has_border(data.state),
+            panel,
         },
         scale,
         elements,
@@ -1246,6 +1250,7 @@ struct Frame {
     exponent: f32,
     focused: bool,
     bordered: bool,
+    panel: bool,
 }
 
 fn append_ime_popups<R: MalaysiaRenderer>(
@@ -1351,6 +1356,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
                 exponent: vow_design::POPUP.superellipse_exponent,
                 focused: true,
                 bordered: true,
+                panel: true,
             },
             scale,
             elements,
@@ -1395,7 +1401,11 @@ fn append_frame<R: MalaysiaRenderer>(
         let palette = &state.chrome_theme.palette;
         let slot = |slot| (frame.owner, slot);
         if let Some(program) = state.border.as_ref() {
-            if let Some(color) = palette.inner_line {
+            let inner_line = match (frame.panel, palette.panel_inner_line) {
+                (true, Some(line)) => Some((line.sides, line.edges)),
+                _ => palette.inner_line.map(|color| (color, color)),
+            };
+            if let Some((color, edge_color)) = inner_line {
                 let (area, uniforms) = border_shader(
                     frame_rect_physical,
                     radius_physical,
@@ -1403,6 +1413,7 @@ fn append_frame<R: MalaysiaRenderer>(
                     exponent,
                     false,
                     color,
+                    edge_color,
                 );
                 inner = Some(
                     crate::renderer::PrimaryGpu(state.chrome.shader(
@@ -1421,6 +1432,7 @@ fn append_frame<R: MalaysiaRenderer>(
                 scale,
                 exponent,
                 true,
+                palette.outer_border,
                 palette.outer_border,
             );
             outer = Some(
@@ -1471,6 +1483,7 @@ fn border_shader(
     exponent: f32,
     outer: bool,
     color: vow_design::Rgba,
+    edge_color: vow_design::Rgba,
 ) -> (
     Rectangle<i32, Logical>,
     Vec<smithay::backend::renderer::gles::Uniform<'static>>,
@@ -1492,6 +1505,7 @@ fn border_shader(
         Uniform::new("scale", scale as f32),
         Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
+        Uniform::new("edge_color", edge_color.premultiplied()),
     ];
     (area, uniforms)
 }
