@@ -30,7 +30,7 @@ Temas `light`/`dark`/`dark-tint`; radio 16, semáforos 12 (radio 4), titlebar SS
 
 ## Shell
 
-`malaysia-wallpaper` (Background), `malaysia-shell menubar` (Top, 28 px), `dock` (Top, abajo), `lock` (lock surfaces) y `launcher` (Overlay). Leen `~/.config/malaysia/` y `~/.local/share/malaysia/`; no escriben configuración.
+`malaysia-wallpaper` (Background), `malaysia-shell menubar` (Top, 30 px), `dock` (Top, abajo), `lock` (lock surfaces) y `launcher` (Overlay). Leen `~/.config/malaysia/` y `~/.local/share/malaysia/`; no escriben configuración.
 ## Ventanas
 
 - **Apps propias (ADR 0035):** `app_id` con prefijo `io.github.hblanqueto.malaysia.`; su modo de decoración se respeta antes del primer commit y `force_server`/`force_client` no las toca.

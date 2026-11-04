@@ -17,7 +17,10 @@ use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_appearance::{config_dir, data_dir};
-use vow_design::{MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, SANS_FAMILIES};
+use vow_design::{
+    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
+    SANS_FAMILIES,
+};
 
 use crate::desktop::DesktopEntry;
 use crate::menubar::dbusmenu::{self, MenuClient};
@@ -461,8 +464,8 @@ impl App for BarApp {
             .main_align(Alignment::SpaceBetween)
             .padding(Gaps::new(
                 0.0,
-                MENUBAR_MARGIN as f32,
-                0.0,
+                MENUBAR_MARGIN_RIGHT as f32,
+                2.0 * MENUBAR_TEXT_LIFT,
                 MENUBAR_MARGIN as f32,
             ))
             .font_size(MENUBAR_FONT_SIZE);

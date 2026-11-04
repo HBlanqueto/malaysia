@@ -14,7 +14,9 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Gaps, Size};
-use vow_design::{MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH};
+use vow_design::{
+    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X,
+};
 
 use crate::menubar::icons;
 use barrier_kit::theme;
@@ -236,13 +238,18 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     let fg = theme::color(fg_rgba);
 
     let mut container = rect()
-        .height(Size::px(MENUBAR_HEIGHT as f32))
+        .height(Size::fill())
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center);
 
     let mut title = rect()
         .height(Size::px(palette.bar_title_open_height))
-        .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
+        .padding(Gaps::new(
+            0.0,
+            MENUBAR_TITLE_PADDING_X,
+            0.0,
+            MENUBAR_TITLE_PADDING_X,
+        ))
         .corner_radius(palette.bar_title_open_radius)
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)

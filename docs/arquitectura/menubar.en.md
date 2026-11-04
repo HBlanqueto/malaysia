@@ -2,14 +2,14 @@
 
 > Overview map: [`interfaz.en.md`](interfaz.en.md).
 
-Native component (ADR 0023/0034): a 28 px top bar with the active app, the clock and the menus.
+Native component (ADR 0023/0034): a 30 px top bar with the active app, the clock and the menus.
 
 ## How it works
 
 ```
 window.domain ──► active app (title/app_id)
         ▼
-RGBA frame (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
+RGBA frame (barrier-kit) → layer-shell Top (30 px) → EGL/dmabuf
 ```
 
 1. `Top` layer, anchored top/left/right, `exclusive_zone = 28`; windows do not go underneath.

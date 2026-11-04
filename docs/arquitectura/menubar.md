@@ -2,14 +2,14 @@
 
 > Mapa general: [`interfaz.md`](interfaz.md).
 
-Componente nativo (ADR 0023/0034): barra superior de 28 px con la app activa, el reloj y los menús.
+Componente nativo (ADR 0023/0034): barra superior de 30 px con la app activa, el reloj y los menús.
 
 ## Cómo funciona
 
 ```
 window.domain ──► app activa (título/app_id)
         ▼
-frame RGBA (barrier-kit) → layer-shell Top (28 px) → EGL/dmabuf
+frame RGBA (barrier-kit) → layer-shell Top (30 px) → EGL/dmabuf
 ```
 
 1. Capa `Top`, anclada arriba/izquierda/derecha, `exclusive_zone = 28`; las ventanas no se meten debajo.
