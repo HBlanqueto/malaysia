@@ -1,9 +1,11 @@
 //! System menu title (snowflake) at the far left of the menubar.
-use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
+use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::{icons, recents, spawn_app, spawn_component, spawn_component_with, xdg_open};
+use crate::menubar::{
+    icons, items, recents, spawn_app, spawn_component, spawn_component_with, xdg_open,
+};
 use crate::power::{self, PowerAction};
 
 const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
@@ -23,17 +25,19 @@ pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
 
 fn base_items(logout: &str) -> Vec<MenuItem> {
     vec![
-        action(
+        items::action(
             "about-this-computer",
             "Acerca de este PC",
             None,
-            Some(icons::LAPTOP),
+            true,
+            Some(MenuIcon::svg(icons::LAPTOP)),
         ),
-        action(
+        items::action(
             "system-settings",
             "Ajustes del sistema…",
             None,
-            Some(icons::GEAR),
+            true,
+            Some(MenuIcon::svg(icons::GEAR)),
         ),
         MenuItem::Separator,
         MenuItem::Submenu {
@@ -44,12 +48,18 @@ fn base_items(logout: &str) -> Vec<MenuItem> {
             icon: None,
         },
         MenuItem::Separator,
-        action("sleep", "Suspender", None, None),
-        action("restart", "Reiniciar…", None, None),
-        action("shutdown", "Apagar…", None, None),
+        items::action("sleep", "Suspender", None, true, None),
+        items::action("restart", "Reiniciar…", None, true, None),
+        items::action("shutdown", "Apagar…", None, true, None),
         MenuItem::Separator,
-        action("lock-screen", "Bloquear pantalla", Some("Ctrl+Alt+L"), None),
-        action("logout", logout, None, None),
+        items::action(
+            "lock-screen",
+            "Bloquear pantalla",
+            Some("Ctrl+Alt+L"),
+            true,
+            None,
+        ),
+        items::action("logout", logout, None, true, None),
     ]
 }
 
@@ -76,17 +86,6 @@ fn user_display_name() -> Option<String> {
         .and_then(|gecos| gecos.split(',').next().map(str::trim).map(str::to_string))
         .filter(|name| !name.is_empty());
     gecos.or_else(|| read(unsafe { (*pw).pw_name }))
-}
-
-fn action(id: &str, label: &str, shortcut: Option<&str>, icon: Option<&'static str>) -> MenuItem {
-    MenuItem::Action {
-        id: id.to_string(),
-        label: label.to_string(),
-        shortcut: shortcut.map(ToOwned::to_owned),
-        enabled: true,
-        check: CheckState::None,
-        icon: icon.map(MenuIcon::svg),
-    }
 }
 
 pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[DesktopEntry]) {

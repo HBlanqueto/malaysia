@@ -633,7 +633,7 @@ pub fn on_action_with(
                 minimize(index);
             }
         }
-        "help-report" => open(Path::new("https://github.com/HBlanqueto/malaysia/issues")),
+        "help-report" => open(Path::new(focused::ISSUES_URL)),
         id if id.starts_with("window-activate-") => {
             if let Ok(index) = id["window-activate-".len()..].parse::<usize>() {
                 activate(index);

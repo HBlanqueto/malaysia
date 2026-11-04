@@ -6,7 +6,7 @@ use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Tople
 
 use crate::menubar::{help_topics, icons, items, spawn_component_with, xdg_open};
 
-const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
+pub(crate) const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
 
 pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
