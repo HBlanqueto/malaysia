@@ -29,15 +29,19 @@ use barrier_kit::theme;
 const CONFIRM_SIZE: (u32, u32) = (280, 250);
 const CONFIRM_BUTTON_GAP: f32 = 10.0;
 const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
-const ABOUT_SIZE: (u32, u32) = (335, 550);
-const ABOUT_DRAWING_TOP: f32 = 75.0;
-const ABOUT_DRAWING: (f32, f32) = (175.0, 118.0);
-const ABOUT_DRAWING_BOX_HEIGHT: f32 = 125.0;
+pub const ABOUT_APP_ID: &str = "about";
+pub const ABOUT_APP_INFO_ID: &str = "about-app";
+const ABOUT_SIZE: (u32, u32) = (329, 505);
+const ABOUT_DRAWING_TOP: f32 = 89.0;
+const ABOUT_DRAWING: (f32, f32) = (148.0, 78.0);
+const ABOUT_TITLE_GAP: f32 = 61.0;
 const ABOUT_GAP: f32 = 20.0;
-const ABOUT_LABEL_WIDTH: f32 = 120.0;
+const ABOUT_LABEL_WIDTH: f32 = 138.0;
+const ABOUT_COLUMN_GAP: f32 = 12.0;
 const ABOUT_VALUE_WIDTH: f32 = 160.0;
 const ABOUT_ROW_GAP: f32 = 5.0;
-const ABOUT_FOOTER_GAP: f32 = 8.0;
+const ABOUT_SPEC_ROW_GAP: f32 = 2.0;
+const ABOUT_FOOTER_BOTTOM: f32 = 34.0;
 const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
 const ABOUT_APP_ICON_SIZE: f32 = 64.0;
 const ROW_HEIGHT: f32 = 32.0;
@@ -605,16 +609,14 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        let focused = WindowControls::get().status.read().activated;
         about_view(
             &self.info,
-            focused,
-            Titlebar::new().close_only(true).into_element(),
+            Titlebar::new().close_only(true).title("").into_element(),
         )
     }
 }
 
-fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoElement + use<> {
+fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
     let palette = Palette::current();
     let mut rows = vec![
@@ -629,13 +631,13 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
     let rows = rows.into_iter().map(|(name, value)| {
         rect()
             .direction(Direction::Horizontal)
-            .spacing(ABOUT_ROW_GAP)
+            .spacing(ABOUT_COLUMN_GAP)
             .child(
                 label()
                     .text(name)
                     .width(Size::px(ABOUT_LABEL_WIDTH))
                     .text_align(TextAlign::Right)
-                    .font_size(TEXT.size as f32)
+                    .font_size(CAPTION.size as f32)
                     .font_weight(FontWeight::SEMI_BOLD)
                     .color(theme::color(palette.label)),
             )
@@ -643,7 +645,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
                 label()
                     .text(value)
                     .width(Size::px(ABOUT_VALUE_WIDTH))
-                    .font_size(TEXT.size as f32)
+                    .font_size(CAPTION.size as f32)
                     .color(theme::color(palette.secondary_label)),
             )
             .into_element()
@@ -663,11 +665,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
     rect()
         .width(Size::fill())
         .height(Size::fill())
-        .background(theme::color(if focused {
-            resolved.surfaces.window
-        } else {
-            resolved.surfaces.titlebar_inactive
-        }))
+        .background(theme::color(resolved.surfaces.raised))
         .direction(Direction::Vertical)
         .content(Content::flex())
         .cross_align(Alignment::Center)
@@ -680,11 +678,11 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
         .child(
             rect()
                 .width(Size::px(ABOUT_DRAWING.0))
-                .height(Size::px(ABOUT_DRAWING_BOX_HEIGHT))
+                .height(Size::px(ABOUT_DRAWING.1))
                 .margin(Gaps::new(
                     ABOUT_DRAWING_TOP - TITLEBAR_CLIENT_HEIGHT as f32,
                     0.0,
-                    ABOUT_GAP,
+                    ABOUT_TITLE_GAP,
                     0.0,
                 ))
                 .center()
@@ -713,7 +711,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
         .child(
             rect()
                 .direction(Direction::Vertical)
-                .spacing(ABOUT_ROW_GAP)
+                .spacing(ABOUT_SPEC_ROW_GAP)
                 .children(rows),
         )
         .child(
@@ -727,8 +725,7 @@ fn about_view(info: &AboutInfo, focused: bool, titlebar: Element) -> impl IntoEl
             rect()
                 .direction(Direction::Vertical)
                 .cross_align(Alignment::Center)
-                .spacing(ABOUT_FOOTER_GAP)
-                .margin(Gaps::new(0.0, 0.0, ABOUT_GAP, 0.0))
+                .margin(Gaps::new(0.0, 0.0, ABOUT_FOOTER_BOTTOM, 0.0))
                 .child(footer("™ y © 2026 Malaysia"))
                 .child(footer("Todos los derechos reservados.")),
         )
@@ -739,7 +736,7 @@ pub fn run_about() -> anyhow::Result<()> {
     tracing::info!(?info, "about this computer");
     run_window(
         AppComponent::new(AboutApp { info }),
-        WindowOptions::new("Acerca de este PC", "about")
+        WindowOptions::new("Acerca de este PC", ABOUT_APP_ID)
             .decorations(Decorations::Client)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
@@ -818,7 +815,7 @@ pub fn run_about_app(app_id: Option<&str>) -> anyhow::Result<()> {
     let window_title = format!("Acerca de {}", info.name);
     run_window(
         AppComponent::new(info),
-        WindowOptions::new(window_title, "about-app")
+        WindowOptions::new(window_title, ABOUT_APP_INFO_ID)
             .decorations(Decorations::Client)
             .size(ABOUT_APP_SIZE)
             .min_size(Some(ABOUT_APP_SIZE))
@@ -931,7 +928,7 @@ mod render_tests {
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
 
-    struct Preview(AboutInfo, bool);
+    struct Preview(AboutInfo);
 
     impl App for Preview {
         fn render(&self) -> impl IntoElement {
@@ -939,7 +936,7 @@ mod render_tests {
                 .width(Size::fill())
                 .height(Size::px(TITLEBAR_CLIENT_HEIGHT as f32))
                 .into_element();
-            about_view(&self.0, self.1, titlebar)
+            about_view(&self.0, titlebar)
         }
     }
 
@@ -953,12 +950,8 @@ mod render_tests {
                 ..AboutInfo::default()
             };
             let size = Size2D::new(ABOUT_SIZE.0 as f32, ABOUT_SIZE.1 as f32);
-            let (mut test, _) = TestingRunner::new(
-                AppComponent::new(Preview(info, thinkpad)),
-                size,
-                |_| {},
-                1.0,
-            );
+            let (mut test, _) =
+                TestingRunner::new(AppComponent::new(Preview(info)), size, |_| {}, 1.0);
             test.sync_and_update();
             assert!(!test.render().as_ref().is_empty());
         }

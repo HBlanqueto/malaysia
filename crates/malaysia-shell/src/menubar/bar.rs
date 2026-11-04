@@ -260,14 +260,27 @@ impl App for BarApp {
         let menu_tick = use_state(|| 0u64);
         let _ = *menu_tick.read();
         let toplevels = Toplevels::get().list.read().clone();
-        let active_info = toplevels.iter().find(|window| window.active).or_else(|| {
-            active_app
-                .as_deref()
-                .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
-        });
+        let last_app = use_hook(|| Rc::new(RefCell::new(None::<String>)));
+        let dialog_active = toplevels
+            .iter()
+            .any(|window| window.active && is_shell_dialog(&window.app_id));
+        let active_app = if dialog_active {
+            last_app.borrow().clone()
+        } else {
+            active_app.filter(|id| !is_shell_dialog(id))
+        };
+        let active_info = toplevels
+            .iter()
+            .find(|window| window.active && !is_shell_dialog(&window.app_id))
+            .or_else(|| {
+                active_app
+                    .as_deref()
+                    .and_then(|id| toplevels.iter().find(|window| window.app_id == id))
+            });
         let app_id = active_info
             .map(|info| info.app_id.clone())
             .or_else(|| active_app.clone());
+        last_app.borrow_mut().clone_from(&app_id);
         let focused = app_id.is_some();
         let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let key = active_info.map(|info| MenuKey {
@@ -944,6 +957,14 @@ fn seconds_to_next_minute() -> std::time::Duration {
     } else {
         (60 - seconds) as u64
     })
+}
+
+fn is_shell_dialog(app_id: &str) -> bool {
+    [
+        crate::dialogs::ABOUT_APP_ID,
+        crate::dialogs::ABOUT_APP_INFO_ID,
+    ]
+    .contains(&app_id)
 }
 
 fn load_active_app(store_path: &PathBuf) -> Option<String> {
