@@ -79,7 +79,6 @@ struct Udev {
     active: bool,
     repaint_timer: Option<RegistrationToken>,
     waiting_for_vblank: bool,
-    redraw_queued: bool,
     loop_signal: LoopSignal,
     capture_requested: bool,
     vblank_count: u64,
@@ -302,7 +301,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
         active: true,
         repaint_timer: None,
         waiting_for_vblank: false,
-        redraw_queued: false,
         loop_signal: loop_signal.clone(),
         capture_requested: false,
         vblank_count: 0,
@@ -606,15 +604,14 @@ impl Udev {
     }
 
     fn queue_redraw(&mut self) {
-        if self.waiting_for_vblank || self.repaint_timer.is_some() {
-            self.redraw_queued = true;
-        } else {
+        if !self.waiting_for_vblank && self.repaint_timer.is_none() {
             self.render();
         }
     }
 
-    fn redraw_if_needed(&mut self) {
-        if std::mem::take(&mut self.redraw_queued) || self.state.animating(Instant::now()) {
+    fn render_if_idle(&mut self) {
+        // Sin vblank no hay frame callbacks; el timer mantiene el bucle.
+        if !self.waiting_for_vblank {
             self.render();
         }
     }
@@ -639,14 +636,13 @@ impl Udev {
             true,
         );
         crate::session::send_frame_callbacks_for_state(&self.state, time);
-        self.redraw_if_needed();
+        self.render_if_idle();
     }
 
     fn render(&mut self) {
         if !self.active {
             return;
         }
-        self.redraw_queued = false;
         if std::mem::take(&mut self.state.force_full_damage) {
             self.compositor.reset_buffer_ages();
         }
@@ -825,7 +821,7 @@ impl Udev {
                             Timer::from_duration(delay),
                             |_, _, data: &mut Udev| {
                                 data.repaint_timer = None;
-                                data.redraw_if_needed();
+                                data.render_if_idle();
                                 TimeoutAction::Drop
                             },
                         ) {
