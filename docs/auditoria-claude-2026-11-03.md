@@ -833,4 +833,5 @@ Commits que aplican esta auditoría, en orden:
    - El journal no muestra errores de frame: el lag venía de los frames que no se pedían, no de frames fallidos.
    - Esa sesión tampoco tenía `18d90a5`, así que además repintaba la salida entera con una ventana visible.
    - El anidado no lo mostraba porque `./dev.sh run` compilaba un checkout local anterior a `cfcf7c0`, que aún renderizaba en cada vblank.
-   - Falta validar `41b0661` o posterior en una sesión DRM.
+   - Validado en `23c1121` (2026-11-03): los commits ya encolaban frames, pero el lag seguía sin commits de clientes.
+6. **Segunda causa, confirmada al validar `23c1121`:** `pointer_motion_raw` solo pedía redibujado al arrastrar o al cambiar la imagen del cursor. El resto de movimientos dependía del render incondicional por vblank que quitó `cfcf7c0`; sin commits de clientes, el cursor solo avanzaba cuando otra superficie pedía frame. Por eso iba fluido sobre el dock y lento sobre el fondo. Arreglo: `request_redraw` en cada movimiento del puntero.

@@ -1901,6 +1901,7 @@ impl State {
         time: InputTime,
         raw_delta: Option<(Point<f64, Logical>, Point<f64, Logical>)>,
     ) {
+        self.request_redraw();
         let now = Instant::now();
         if self.shake.observe(location.x, now) {
             self.trigger_cursor_boost();

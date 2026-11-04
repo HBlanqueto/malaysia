@@ -832,4 +832,5 @@ Commits that apply this audit, in order:
    - The journal shows no frame errors: the lag came from frames that were never requested, not from failed frames.
    - That session also lacked `18d90a5`, so it repainted the whole output with one window visible.
    - Nested did not show it because `./dev.sh run` built a local checkout older than `cfcf7c0`, which still rendered on every vblank.
-   - Validating `41b0661` or later in a DRM session is still pending.
+   - Validated on `23c1121` (2026-11-03): commits already queued frames, but the lag remained with no client commits.
+6. **Second cause, confirmed while validating `23c1121`:** `pointer_motion_raw` requested a redraw only for grabs and cursor-image changes. Other motion relied on the unconditional vblank render that `cfcf7c0` removed; without client commits, the cursor advanced only when another surface requested a frame. That is why it was smooth over the dock and slow over the wallpaper. Fix: `request_redraw` on every pointer motion.
