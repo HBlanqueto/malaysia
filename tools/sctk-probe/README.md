@@ -1,45 +1,47 @@
 # sctk-probe
 
-Dev-only Wayland clients for driving Malaysia while developing. This package is
-**not** part of the compositor: it is a workspace member excluded from the
-default build (`default-members` in the root `Cargo.toml`). A plain
-`cargo build`/`cargo test` at the repository root will not build it; name the
-package to build it on purpose.
+Clientes Wayland solo para desarrollo, que manejan Malaysia mientras se
+desarrolla. Este paquete **no** forma parte del compositor: es un miembro del
+workspace excluido de la compilación por defecto (`default-members` en el
+`Cargo.toml` raíz). Un `cargo build`/`cargo test` sin más en la raíz del
+repositorio no lo compila; nombra el paquete para compilarlo a propósito.
 
-The clients here connect to whatever `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` point
-at, so they can be run against Malaysia or the host session without any change.
-`smoke` and `block4` are different: they launch Malaysia itself and drive clients
-against it.
+Estos clientes se conectan a lo que indiquen `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR`,
+así que corren contra Malaysia o contra la sesión del host sin ningún cambio.
+`smoke` y `block4` son distintos: lanzan el propio Malaysia y manejan clientes
+contra él.
 
-Everything here runs inside the dev shell (`nix develop`). The simplest way to
-run the smoke test is the project script, which builds both the compositor and
-this harness and propagates the result:
+Todo esto corre dentro del dev shell (`nix develop`). La forma más sencilla de
+correr el smoke test es el script del proyecto, que compila el compositor y este
+arnés y propaga el resultado:
 
 ```sh
 ./dev.sh smoke
 ```
 
-The sections below are the underlying `cargo` commands, for when you want to run
-one binary directly.
+Las secciones siguientes muestran los comandos `cargo` subyacentes, para cuando
+quieras correr un binario directamente.
 
 ## `parent_probe`
 
-Demonstrates that decoration insets are a function of a window's *current*
-state, not of the state it had at map time. It maps two toplevels and toggles a
-parent on the child while both are tracked:
+Demuestra que los márgenes de decoración dependen del estado *actual* de una
+ventana, no del estado que tenía al mapearse. Mapea dos toplevels y alterna un
+padre en la hija mientras ambas están registradas:
 
-- initial (no parent) — decorated, configured one left-titlebar narrower;
-- `set_parent` — the child becomes a dialog, so it is reconfigured wider;
-- unset — the child returns to exactly its initial size.
+- inicial (sin padre): decorada, configurada un titlebar izquierdo más estrecha;
+- `set_parent`: la hija pasa a ser un diálogo, así que se reconfigura más ancha;
+- sin padre: la hija vuelve exactamente a su tamaño inicial.
 
-The probe checks the three configure sizes and exits non-zero if the cycle is
-not reproduced, so it is a pass/fail check rather than output to read by eye.
+La sonda comprueba los tres tamaños de configure y sale con código distinto de
+cero si no reproduce el ciclo. Es una comprobación de pasa/falla, no una salida
+para leer a ojo.
 
-Run it against a running compositor. While Malaysia runs under `./dev.sh run`,
-the compositor inherits the caller's `XDG_RUNTIME_DIR` and auto-names its socket
-there (Smithay picks the first free `wayland-N`, `wayland-1` when the host
-already holds `wayland-0`); `malaysia-dev` holds the pid and the log, not the
-socket. Read the name the compositor logged rather than assuming one:
+Córrela contra un compositor en marcha. Mientras Malaysia corre con
+`./dev.sh run`, el compositor hereda el `XDG_RUNTIME_DIR` de quien lo llama y
+nombra allí su socket automáticamente (Smithay elige el primer `wayland-N`
+libre, `wayland-1` cuando el host ya ocupa `wayland-0`); `malaysia-dev` guarda
+el pid y el log, no el socket. Lee el nombre que registró el compositor en vez
+de suponer uno:
 
 ```sh
 runtime="${XDG_RUNTIME_DIR:?the compositor inherits this for its socket}"
@@ -52,40 +54,42 @@ XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$sock" \
 
 ## `smoke`
 
-An assertion-based smoke test for the toplevel mapping sequence. It launches the
-compositor, starts a real client (`foot` by default) with `WAYLAND_DEBUG=1`,
-captures the client's trace, and checks, in order: `xdg_toplevel.configure`
-before the first non-null attach; a matching `ack_configure` serial before that
-attach; a non-null buffered commit that the compositor reports as mapped;
-`wl_keyboard.enter` on the mapped surface; and completion of the *specific*
-callback id requested by `wl_surface.frame`. A bare `wl_callback.done` is not
-accepted, so a `wl_display.sync` round-trip cannot be mistaken for a frame.
+Un smoke test basado en aserciones para la secuencia de mapeo de un toplevel.
+Lanza el compositor, arranca un cliente real (`foot` por defecto) con
+`WAYLAND_DEBUG=1`, captura la traza del cliente y comprueba, en orden:
+`xdg_toplevel.configure` antes del primer attach no nulo; un serial de
+`ack_configure` coincidente antes de ese attach; un commit no nulo con buffer
+que el compositor da por mapeado; `wl_keyboard.enter` en la superficie mapeada;
+y la finalización del id de callback *concreto* que pidió `wl_surface.frame`. No
+acepta un `wl_callback.done` suelto, así que un ida y vuelta de
+`wl_display.sync` no se confunde con un frame.
 
-It exits non-zero if any step is missing or out of order.
+Sale con código distinto de cero si falta algún paso o llega fuera de orden.
 
 ```sh
 ./dev.sh smoke          # builds malaysia-compositor and the harness, then runs it
 cargo run -p sctk-probe --bin smoke   # run it directly, if already built
 ```
 
-Environment overrides: `MALAYSIA_BIN` (path to the compositor binary) and
-`MALAYSIA_SMOKE_CLIENT` (the client to drive).
+Variables de entorno: `MALAYSIA_BIN` (ruta al binario del compositor) y
+`MALAYSIA_SMOKE_CLIENT` (el cliente que se maneja).
 
 ## `block4`
 
-The Block 4 acceptance harness. It launches the compositor and three batches of
-`window_stress`, each opening and destroying fifty decorated toplevels. It
-asserts the compositor's live-object counts (clients, `wl_surface`s, tracked
-toplevels) return to the startup baseline after every batch, and that resident
-memory does not grow from batch 2 to batch 3 by more than 1 MiB (the first batch
-is warm-up). Both are asserted; the three measurements are printed.
+El arnés de aceptación del Bloque 4. Lanza el compositor y tres tandas de
+`window_stress`; cada una abre y destruye cincuenta toplevels decorados.
+Comprueba que los recuentos de objetos vivos del compositor (clientes,
+`wl_surface`s, toplevels registrados) vuelven a la base del arranque tras cada
+tanda, y que la memoria residente no crece más de 1 MiB de la tanda 2 a la 3 (la
+primera tanda es de calentamiento). Comprueba ambas cosas e imprime las tres
+mediciones.
 
-It then runs three resize scenarios, each with a fresh compositor, a fresh
-`resize_client` and `MALAYSIA_TEST_INPUT=1`: the compositor presses a corner or
-an edge of the mapped window and its scripted motions drive the grab. The
-harness asserts the final configured size — corner growth with no client
-maximum, the same growth clamped to a client maximum, and a shrunk width held
-by a client minimum:
+Después corre tres escenarios de redimensionado, cada uno con un compositor
+nuevo, un `resize_client` nuevo y `MALAYSIA_TEST_INPUT=1`: el compositor pulsa
+una esquina o un borde de la ventana mapeada y sus movimientos guionizados
+manejan el grab. El arnés comprueba el tamaño configurado final: crecimiento por
+la esquina sin máximo del cliente, el mismo crecimiento limitado por un máximo
+del cliente, y un ancho reducido que frena un mínimo del cliente:
 
 ```
 block4: resize grow PASS (initial 1280x800, final 1328x832, expected 1328x832)
@@ -98,14 +102,14 @@ block4: resize minimum PASS (initial 1280x800, final 1270x800, expected 1270x800
 cargo run -p sctk-probe --bin block4   # run it directly, if already built
 ```
 
-Environment overrides: `MALAYSIA_BIN`, `MALAYSIA_STRESS_BIN` and
+Variables de entorno: `MALAYSIA_BIN`, `MALAYSIA_STRESS_BIN` y
 `MALAYSIA_RESIZE_BIN`.
 
 ## `window_stress`
 
-The client `block4` drives. It opens fifty decorated toplevels with
-shared-memory buffers, waits for a configure on each, then closes every one and
-exits. On its own it is only useful to watch a compositor's teardown:
+El cliente que maneja `block4`. Abre cincuenta toplevels decorados con buffers
+de memoria compartida, espera un configure en cada uno, luego los cierra todos y
+sale. Por sí solo solo sirve para observar el desmontaje de un compositor:
 
 ```sh
 cargo run -p sctk-probe --bin window_stress
@@ -113,11 +117,11 @@ cargo run -p sctk-probe --bin window_stress
 
 ## `resize_client`
 
-The client `block4` drives for the resize assertions. It maps a
-client-decorated toplevel, applies a bound from `MALAYSIA_RESIZE_MIN` or
-`MALAYSIA_RESIZE_MAX` (an `x,y` offset from the initial configure, in surface
-coordinates, before it maps), and prints every configure it receives, then the
-size once the stream settles:
+El cliente que maneja `block4` para las aserciones de redimensionado. Mapea un
+toplevel decorado por el cliente, aplica un límite de `MALAYSIA_RESIZE_MIN` o
+`MALAYSIA_RESIZE_MAX` (un desplazamiento `x,y` desde el configure inicial, en
+coordenadas de superficie, antes de mapearse) e imprime cada configure que
+recibe, y luego el tamaño cuando el flujo se estabiliza:
 
 ```
 resize_client: configure width=1280 height=800 resizing=false
@@ -125,43 +129,46 @@ resize_client: configure width=1328 height=832 resizing=true
 resize_client: final width=1328 height=832
 ```
 
-It is client-decorated so its configured size is its window size, with no
-decoration reconfigure racing the first configure. It exits non-zero if it is
-never configured or if no resize settles.
+Está decorado por el cliente, así que su tamaño configurado es su tamaño de
+ventana, sin un reconfigure de decoración que compita con el primer configure.
+Sale con código distinto de cero si nunca recibe configure o si ningún
+redimensionado se estabiliza.
 
 ## `decoration_probe`
 
-The Phase 6 acceptance harness for the decoration policy (ADR 0019). It launches
-one Malaysia and, for each real application, runs it inside that compositor with
-`WAYLAND_DEBUG=1`, captures the client's trace and asserts what it negotiated:
-the decoration protocol it bound (xdg-decoration, the KDE one, or none), the
-mode Malaysia configured, and whether the surface was inset by the titlebar. The
-inset is read from the configure width against the output width, so it holds
-even when the first configure already carries it (GTK4 asks before its toplevel
-exists). Configures after a client-initiated resize or state change are ignored,
-because a host pointer can click into a window and resize it.
+El arnés de aceptación de la Fase 6 para la política de decoración (ADR 0019).
+Lanza un Malaysia y, para cada aplicación real, la corre dentro de ese
+compositor con `WAYLAND_DEBUG=1`, captura la traza del cliente y comprueba lo
+que negoció: el protocolo de decoración que enlazó (xdg-decoration, el de KDE o
+ninguno), el modo que configuró Malaysia y si la superficie quedó reducida por
+el titlebar. La reducción se lee del ancho del configure frente al ancho de la
+salida, así que vale aunque el primer configure ya la lleve (GTK4 pregunta antes
+de que exista su toplevel). Ignora los configures posteriores a un
+redimensionado o cambio de estado que inicia el cliente, porque un puntero del
+host puede hacer clic en una ventana y redimensionarla.
 
-Applications are located through `MALAYSIA_APP_<NAME>` variables; one with no
-binary is reported `UNVERIFIED` rather than skipped silently, and an application
-that exits before mapping a window is reported the same way. Whether two
-titlebars are *visible* needs a pixel comparison, so it stays manual.
+Las aplicaciones se localizan con variables `MALAYSIA_APP_<NAME>`; una sin
+binario se informa como `UNVERIFIED` en vez de saltarse en silencio, y una
+aplicación que sale antes de mapear una ventana se informa igual. Saber si se
+*ven* dos titlebars exige comparar píxeles, así que sigue siendo manual.
 
 ```sh
 ./dev.sh decoration                        # builds malaysia-compositor and the probes, then runs it
 cargo run -p sctk-probe --bin decoration_probe   # run it directly, if already built
 ```
 
-Environment overrides: `MALAYSIA_BIN`, `MALAYSIA_DECORATION_CLIENT` (the
-mode-change client, found next to the probe by default), `MALAYSIA_APP_NAUTILUS`,
-`MALAYSIA_APP_GTK3_DEMO`, `MALAYSIA_APP_GTK3_WIDGET_FACTORY`,
-`MALAYSIA_APP_GTK3_PLAIN`, `MALAYSIA_APP_GTK4_DEMO`,
-`MALAYSIA_APP_GTK4_WIDGET_FACTORY`, `MALAYSIA_APP_GTK4_PLAIN`, `MALAYSIA_APP_QT6`
-(with `MALAYSIA_APP_QT6_QML_IMPORT_PATH`), `MALAYSIA_APP_QT5` and
+Variables de entorno: `MALAYSIA_BIN`, `MALAYSIA_DECORATION_CLIENT` (el cliente
+de cambio de modo, que por defecto se busca junto a la sonda),
+`MALAYSIA_APP_NAUTILUS`, `MALAYSIA_APP_GTK3_DEMO`,
+`MALAYSIA_APP_GTK3_WIDGET_FACTORY`, `MALAYSIA_APP_GTK3_PLAIN`,
+`MALAYSIA_APP_GTK4_DEMO`, `MALAYSIA_APP_GTK4_WIDGET_FACTORY`,
+`MALAYSIA_APP_GTK4_PLAIN`, `MALAYSIA_APP_QT6` (con
+`MALAYSIA_APP_QT6_QML_IMPORT_PATH`), `MALAYSIA_APP_QT5` y
 `MALAYSIA_APP_ONLYOFFICE`.
 
-`gtk3_plain.c` and `gtk4_plain.c` under `gtk/` are minimal plain-window clients
-for the server-side branch, because the GTK demos all use a headerbar. Build
-them against the same GTK the probe runs against:
+`gtk3_plain.c` y `gtk4_plain.c`, en `gtk/`, son clientes mínimos de ventana
+simple para la rama server-side, porque todas las demos de GTK usan headerbar.
+Compílalos contra el mismo GTK con el que corre la sonda:
 
 ```sh
 cc gtk/gtk3_plain.c -o /tmp/gtk3_plain $(pkg-config --cflags --libs gtk+-3.0)
@@ -172,64 +179,67 @@ MALAYSIA_APP_GTK3_PLAIN=/tmp/gtk3_plain MALAYSIA_APP_GTK4_PLAIN=/tmp/gtk4_plain 
 
 ## `decoration_client`
 
-The client `decoration_probe` runs for the one policy rule real applications
-cannot be made to exercise: a mode change after mapping (ADR 0019, rule 4). It
-maps a window asking for server-side decorations, waits for the compositor's
-server-side configure (one titlebar narrower), asks for client-side on the first
-frame, and asserts the compositor then configures it one titlebar wider. It
-exits non-zero if the second configure never arrives or the sizes are wrong.
+El cliente que corre `decoration_probe` para la única regla de la política que
+las aplicaciones reales no permiten ejercitar: un cambio de modo después del
+mapeo (ADR 0019, regla 4). Mapea una ventana que pide decoraciones server-side,
+espera el configure server-side del compositor (un titlebar más estrecho), pide
+client-side en el primer frame y comprueba que el compositor la configura
+entonces un titlebar más ancha. Sale con código distinto de cero si el segundo
+configure nunca llega o si los tamaños no cuadran.
 
 ## `move_probe`
 
-Exercises the client-initiated `xdg_toplevel.move`/`resize` path and the
-surface-local coordinates a client sees for pointer motion. It runs three cases,
-each with a fresh compositor and `MALAYSIA_TEST_INPUT=1` (the compositor presses
-once, holds the button, follows the press with motions and releases it, which a
-probe cannot make itself):
+Ejercita la ruta de `xdg_toplevel.move`/`resize` que inicia el cliente y las
+coordenadas locales de superficie que ve un cliente en el movimiento del
+puntero. Corre tres casos, cada uno con un compositor nuevo y
+`MALAYSIA_TEST_INPUT=1` (el compositor pulsa una vez, mantiene el botón, sigue la
+pulsación con movimientos y lo suelta, algo que una sonda no puede hacer por sí
+misma):
 
-- `move_client` repeats a GTK-shaped gesture: press, three motions past a drag
-  threshold, a second window that takes focus, then `move` and `resize` with the
-  original press serial while the button is held. The harness asserts both were
-  accepted, that the window moved by the injected pointer delta, and that the
-  released and fabricated serials were rejected for both requests.
-- `hover_client` asserts the surface-local coordinates of a buttonless hover:
-  the scripted drag moves the window to a non-zero origin and the release ends
-  the grab, then the compositor hovers the pointer over the global points in
-  `MALAYSIA_TEST_HOVER` and the client must read each at the position it holds
-  over the surface. A compositor that hands Smithay the surface-local point
-  where it expects the surface origin makes every client read the window origin,
-  which fails here.
-- Nautilus, a real GTK4 + libadwaita client, gets a scripted headerbar drag; the
-  harness asserts its window moved by the same delta. If Nautilus is not
-  installed, or never maps a window, the case is reported UNVERIFIED rather than
-  failed.
+- `move_client` repite un gesto con forma de GTK: pulsación, tres movimientos
+  más allá de un umbral de arrastre, una segunda ventana que toma el foco, y
+  luego `move` y `resize` con el serial de la pulsación original mientras el
+  botón sigue pulsado. El arnés comprueba que ambos se aceptaron, que la ventana
+  se movió el delta del puntero inyectado y que los seriales soltados e
+  inventados se rechazaron en ambas peticiones.
+- `hover_client` comprueba las coordenadas locales de superficie de un hover sin
+  botón: el arrastre guionizado mueve la ventana a un origen distinto de cero y
+  la liberación termina el grab; después el compositor pasa el puntero por los
+  puntos globales de `MALAYSIA_TEST_HOVER` y el cliente debe leer cada uno en la
+  posición que ocupa sobre la superficie. Un compositor que pasa a Smithay el
+  punto local de superficie donde espera el origen de la superficie hace que
+  todos los clientes lean el origen de la ventana, y eso falla aquí.
+- Nautilus, un cliente real GTK4 + libadwaita, recibe un arrastre guionizado de
+  la headerbar; el arnés comprueba que su ventana se movió el mismo delta. Si
+  Nautilus no está instalado, o nunca mapea una ventana, el caso se informa como
+  UNVERIFIED en vez de fallido.
 
 ```sh
 ./dev.sh move                          # builds malaysia-compositor and the probes, then runs it
 cargo run -p sctk-probe --bin move_probe   # run it directly, if already built
 ```
 
-Environment overrides: `MALAYSIA_BIN`, `MALAYSIA_MOVE_BIN`, `MALAYSIA_HOVER_BIN`
-and `MALAYSIA_APP_NAUTILUS`.
+Variables de entorno: `MALAYSIA_BIN`, `MALAYSIA_MOVE_BIN`, `MALAYSIA_HOVER_BIN`
+y `MALAYSIA_APP_NAUTILUS`.
 
 ## `pointer_lock`
 
-Maps a client-decorated toplevel and, on the first `wl_pointer.enter` (the
-compositor's scripted input hovers the pointer over the window), asks
-`zwp_pointer_constraints_v1` for a persistent lock with no region. It passes
-when the compositor sends `locked`, which it only does after activating the
-constraint for the surface the pointer is over. Times out if the global is
-advertised but never activated.
+Mapea un toplevel decorado por el cliente y, en el primer `wl_pointer.enter` (la
+entrada guionizada del compositor pasa el puntero sobre la ventana), pide a
+`zwp_pointer_constraints_v1` un bloqueo persistente sin región. Pasa cuando el
+compositor envía `locked`, algo que solo hace tras activar la restricción para
+la superficie que hay bajo el puntero. Agota el tiempo si el global se anuncia
+pero nunca se activa.
 
 ## `relative_pointer`
 
-Maps a toplevel, binds `zwp_relative_pointer_manager_v1`, creates a relative
-pointer for the seat's pointer and waits for a `relative_motion` with a non-zero
-delta from the scripted motions. Times out if the compositor never forwards
-motion to relative-pointer clients.
+Mapea un toplevel, enlaza `zwp_relative_pointer_manager_v1`, crea un puntero
+relativo para el puntero del seat y espera un `relative_motion` con delta
+distinto de cero de los movimientos guionizados. Agota el tiempo si el
+compositor nunca reenvía el movimiento a los clientes de puntero relativo.
 
-Both are driven by one command, each against its own compositor because the
-scripted press is injected once and stays held:
+Un solo comando maneja ambos, cada uno contra su propio compositor, porque la
+pulsación guionizada se inyecta una vez y queda mantenida:
 
 ```sh
 ./dev.sh pointers
@@ -237,12 +247,13 @@ scripted press is injected once and stays held:
 
 ## `screencopy`
 
-Captures the output through `ext-image-copy-capture-v1`. It creates a source
-for the first `wl_output`, opens a session, and on the compositor's constraints
-allocates a matching SHM buffer, attaches it to a frame and captures. It passes
-on the frame's `Ready` event and additionally checks the centre pixel is the
-compositor's clear colour (not blank), which catches a wrong channel order or an
-empty copy. It also reports whether the session offered DMA-BUF constraints.
+Captura la salida mediante `ext-image-copy-capture-v1`. Crea una fuente para el
+primer `wl_output`, abre una sesión y, con las restricciones del compositor,
+reserva un buffer SHM que encaje, lo adjunta a un frame y captura. Pasa con el
+evento `Ready` del frame y además comprueba que el píxel central es el color de
+borrado del compositor (no está en blanco), lo que detecta un orden de canales
+erróneo o una copia vacía. También informa de si la sesión ofreció
+restricciones DMA-BUF.
 
 ```sh
 ./dev.sh screencopy
@@ -250,10 +261,10 @@ empty copy. It also reports whether the session offered DMA-BUF constraints.
 
 ## `screencopy_window`
 
-Captures a window through `ext-image-copy-capture-v1`. It maps a window, waits
-for its `ext-foreign-toplevel-list` handle, creates a capture source from it and
-captures it into an SHM buffer, checking the centre pixel is the window's own
-(grey) content rather than the background.
+Captura una ventana mediante `ext-image-copy-capture-v1`. Mapea una ventana,
+espera su handle de `ext-foreign-toplevel-list`, crea con él una fuente de
+captura y la captura en un buffer SHM; comprueba que el píxel central es el
+contenido propio (gris) de la ventana y no el fondo.
 
 ```sh
 ./dev.sh screencopy-window
@@ -261,9 +272,9 @@ captures it into an SHM buffer, checking the centre pixel is the window's own
 
 ## `presentation`
 
-Maps a window, asks `wp_presentation` for feedback on the next commit and
-asserts the `presented` event arrives with a monotonic timestamp and a refresh.
-A `discarded` event, or a timeout, fails.
+Mapea una ventana, pide a `wp_presentation` feedback del siguiente commit y
+comprueba que llega el evento `presented` con una marca de tiempo monótona y un
+refresco. Un evento `discarded`, o agotar el tiempo, falla.
 
 ```sh
 ./dev.sh presentation
@@ -271,11 +282,11 @@ A `discarded` event, or a timeout, fails.
 
 ## `activation`
 
-Maps two toplevels of one client (A then B, so B is focused) and uses the
-scripted input's press serial to request an activation token for A, then
-activates A through it. It passes when the keyboard enters A again, which means
-the compositor accepted the token and moved focus. Run with `MALAYSIA_TEST_INPUT=1`
-(the `./dev.sh activation` target does).
+Mapea dos toplevels de un mismo cliente (A y luego B, así que B tiene el foco) y
+usa el serial de la pulsación de la entrada guionizada para pedir un token de
+activación para A; después activa A con él. Pasa cuando el teclado vuelve a
+entrar en A, lo que significa que el compositor aceptó el token y movió el foco.
+Córrelo con `MALAYSIA_TEST_INPUT=1` (el objetivo `./dev.sh activation` lo hace).
 
 ```sh
 ./dev.sh activation
@@ -283,19 +294,22 @@ the compositor accepted the token and moved focus. Run with `MALAYSIA_TEST_INPUT
 
 ## `move_client`
 
-The client `move_probe` drives: it maps a toplevel, waits for the scripted press
-and three motions, maps a second window so the compositor raises and focuses it
-in between, then sends `move` and `resize` with the original press serial. After
-the compositor's release it sends both again with that serial and both with a
-fabricated one. It exits non-zero if no resizing configure arrives.
+El cliente que maneja `move_probe`: mapea un toplevel, espera la pulsación
+guionizada y tres movimientos, mapea entre medias una segunda ventana para que
+el compositor la eleve y le dé el foco, y luego envía `move` y `resize` con el
+serial de la pulsación original. Tras la liberación del compositor, envía ambos
+otra vez con ese serial y ambos con uno inventado. Sale con código distinto de
+cero si no llega ningún configure de redimensionado.
 
 ## `hover_client`
 
-The client `move_probe` drives for the coordinate assertion. It maps a
-client-decorated window, so its surface origin is exactly its window origin, and
-sends the `move` and `resize` the scripted gesture answers: the move makes the
-compositor's scripted drag move the window to a non-zero origin, the resize
-makes it release the button. It then asserts that the `wl_pointer.enter` and
-`wl_pointer.motion` it receives for the buttonless hover carry the surface-local
-positions in `MALAYSIA_EXPECT_HOVER` (an `x,y` list separated by `;`), and exits
-non-zero on a mismatch or if the hover never arrives.
+El cliente que maneja `move_probe` para la aserción de coordenadas. Mapea una
+ventana decorada por el cliente, así que el origen de su superficie es
+exactamente el origen de su ventana, y envía el `move` y el `resize` que
+responde el gesto guionizado: el move hace que el arrastre guionizado del
+compositor mueva la ventana a un origen distinto de cero; el resize hace que
+suelte el botón. Después comprueba que el `wl_pointer.enter` y el
+`wl_pointer.motion` que recibe en el hover sin botón llevan las posiciones
+locales de superficie de `MALAYSIA_EXPECT_HOVER` (una lista de `x,y` separada
+por `;`), y sale con código distinto de cero si no coinciden o si el hover nunca
+llega.

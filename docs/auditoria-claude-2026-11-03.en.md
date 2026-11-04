@@ -817,6 +817,13 @@ Commits that apply this audit, in order:
 | `9e46f23` | §8.2 | DRM renders through `GpuManager`. |
 | `fef7763` | §8.2 | Multi-GPU: composition on the render GPU and copy to the scanout GPU when the latter can render. |
 | `fb45726` | §2.2 | Pointer motion requests a redraw on every move (below). |
+| `06b144e` | §1 (2) | With auto-lock on, a logind `delay` inhibitor locks the session before suspend (`sleep.rs`). |
+| `8206879` | §2.2 (3) | Opaque regions for the rounded frame; kit popup borders and shadows keep a stable id. |
+| `4018070` | §4.1 (8) | Options without a reader are gone; the catalog keeps them as "pending". barrierkit pinned by full sha (`abeb5e6`). |
+| `db8c86a` | §1.1 | While locked, keys skip the IME grab. Infinity no longer trusts `MALAYSIA_DEV`, cwd paths, `LD_PRELOAD` or `LD_AUDIT`. |
+| `425d1bc` | §2.2, §2.3 | Primary scanout output per surface: hidden surfaces get a frame callback every 995 ms, presentation with ZeroCopy/HwClock, recovery after a DRM error, `renderD` feedback, fewer per-frame allocations, reused capture offscreen texture. |
+| `48cdb3d` | §1 (7) | Shell apps with a double fork and `systemd-run --scope`; menubar and dock without polling (`use_watched`); launcher with `use_animation`. |
+| barrierkit `50d2843`…`abeb5e6` | §2.3 | Skia cache released when idle, one SkSurface per image, bounded icon cache, one thread for artwork, dmabuf import drop order, `use_watched`, single traffic-light rule and new tokens. |
 
 ### Lag after `cfcf7c0`
 
@@ -835,3 +842,5 @@ Commits that apply this audit, in order:
    - Nested did not show it because `./dev.sh run` built a local checkout older than `cfcf7c0`, which still rendered on every vblank.
    - Validated on `23c1121` (2026-11-03): commits already queued frames, but the lag remained with no client commits.
 6. **Second cause, confirmed while validating `23c1121`:** `pointer_motion_raw` requested a redraw only for grabs and cursor-image changes. Other motion relied on the unconditional vblank render that `cfcf7c0` removed; without client commits, the cursor advanced only when another surface requested a frame. That is why it was smooth over the dock and slow over the wallpaper. Fix: `request_redraw` on every pointer motion.
+
+Pending: the `bandura.jpg` licence (§1 (9)) is the author's call; barrierkit's `sidebar_section_chevron_changes_shape_when_toggled` test is flaky on `73590c5` too.

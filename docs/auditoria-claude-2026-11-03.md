@@ -818,6 +818,13 @@ Commits que aplican esta auditoría, en orden:
 | `9e46f23` | §8.2 | El DRM renderiza a través de `GpuManager`. |
 | `fef7763` | §8.2 | Multi-GPU: composición en la GPU de render y copia a la de scanout cuando esta puede renderizar. |
 | `fb45726` | §2.2 | El puntero pide redibujado en cada movimiento (abajo). |
+| `06b144e` | §1 (2) | Con el auto-lock activo, un inhibidor `delay` de logind bloquea la sesión antes de suspender (`sleep.rs`). |
+| `8206879` | §2.2 (3) | Regiones opacas del marco redondeado; bordes y sombras de los popups del kit con id estable. |
+| `4018070` | §4.1 (8) | Fuera las opciones sin lector; el catálogo las deja como «pendiente». barrierkit por sha completo (`abeb5e6`). |
+| `db8c86a` | §1.1 | Con la sesión bloqueada, las teclas no pasan por el grab del IME. Infinity sin `MALAYSIA_DEV` ni rutas del cwd, y sin `LD_PRELOAD`/`LD_AUDIT`. |
+| `425d1bc` | §2.2, §2.3 | Salida primaria de scanout por superficie: frame callbacks a las ocultas cada 995 ms, presentation con ZeroCopy/HwClock, recuperación tras error DRM, feedback con `renderD`, menos asignaciones por frame, textura offscreen de captura reutilizada. |
+| `48cdb3d` | §1 (7) | Apps de la shell con doble fork y `systemd-run --scope`; menubar y dock sin sondeo (`use_watched`); launcher con `use_animation`. |
+| barrierkit `50d2843`…`abeb5e6` | §2.3 | Caché de Skia liberada en reposo, una SkSurface por imagen, caché de iconos acotada, un hilo para carátulas, orden de drop de los imports dmabuf, `use_watched`, regla de semáforos única y tokens nuevos. |
 
 ### Lag tras `cfcf7c0`
 
@@ -836,3 +843,5 @@ Commits que aplican esta auditoría, en orden:
    - El anidado no lo mostraba porque `./dev.sh run` compilaba un checkout local anterior a `cfcf7c0`, que aún renderizaba en cada vblank.
    - Validado en `23c1121` (2026-11-03): los commits ya encolaban frames, pero el lag seguía sin commits de clientes.
 6. **Segunda causa, confirmada al validar `23c1121`:** `pointer_motion_raw` solo pedía redibujado al arrastrar o al cambiar la imagen del cursor. El resto de movimientos dependía del render incondicional por vblank que quitó `cfcf7c0`; sin commits de clientes, el cursor solo avanzaba cuando otra superficie pedía frame. Por eso iba fluido sobre el dock y lento sobre el fondo. Arreglo: `request_redraw` en cada movimiento del puntero.
+
+Pendiente: la licencia de `bandura.jpg` (§1 (9)) la decide el autor; `test sidebar_section_chevron_changes_shape_when_toggled` de barrierkit falla de forma intermitente también en `73590c5`.
