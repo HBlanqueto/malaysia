@@ -751,7 +751,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
         let reveal = state.reveal_frame(now);
         let reveal_drop = reveal.map(|frame| {
             let travel = frame.bar
-                + if frame.server_decorated {
+                + if frame.titlebar {
                     vow_design::TITLEBAR.thickness as i32
                 } else {
                     0
@@ -790,7 +790,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
         append_ime_popups(state, renderer, scale, &mut elements);
         append_popups(state, renderer, scale, &mut elements, |_| true);
         if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
-            && frame.server_decorated
+            && frame.titlebar
         {
             append_revealed_titlebar(
                 state,

@@ -348,7 +348,7 @@ impl State {
     pub(crate) fn infinity_set_fullscreen(&mut self, id: WindowId, fullscreen: bool) {
         info!(window = id.get(), fullscreen, "infinity set fullscreen");
         if fullscreen {
-            self.enter_focus_mode(id);
+            self.enter_focus_mode(id, false);
         } else {
             self.exit_focus_mode(id);
         }

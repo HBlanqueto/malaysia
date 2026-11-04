@@ -144,6 +144,7 @@ pasará a ser por salida.
 | `window.resize_border` | entero (px lógicos) | `10` | **activa** | ancho de la banda exterior de resize en lados |
 | `window.resize_corner` | entero (px lógicos) | `20` | **activa** | longitud de la «L» exterior de resize en esquinas |
 | `window.qt_server_decorations` | bool | `true` | **activa** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` en clientes y sesión |
+| `window.focus_titlebar_apps` | lista de `app_id` | `["firefox", "brave-browser", "chromium-browser"]` | **activa** | modo foco de apps CSD con pestañas |
 
 `window.resize_border` es una banda **exterior** al lado; la «L» de
 `window.resize_corner` es exterior y puede entrar 2 px. El hit-test solo se
@@ -165,6 +166,13 @@ propio de una app CSD (`set_maximized`) hace lo mismo. `zoom` maximiza
 conservando el marco; `fullscreen` todavía solo registra la petición; `none`
 no hace nada. Una app que pide fullscreen (F11) y `Ctrl+Super+F` entran
 siempre en modo foco. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
+
+`focus_titlebar_apps` lista las apps CSD que en modo foco se tratan como una
+ventana SSD: reciben `maximized` en vez de `fullscreen`, así que conservan
+pestañas y barra de direcciones, y al bajar la barra de menús el compositor
+dibuja encima su titlebar de 32 px. Un navegador que recibe `fullscreen` entra
+en su modo F11 y esconde las pestañas. Si la app pide pantalla completa por su
+cuenta (F11, un vídeo), recibe `fullscreen` como siempre.
 
 `qt_server_decorations` exporta `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` para los
 clientes que lanza `malaysia_compositor::spawn` y en el entorno de la sesión, de modo que Qt
@@ -380,6 +388,7 @@ focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20
 qt_server_decorations = true    # false para la barra nativa de Qt
+focus_titlebar_apps = ["firefox", "brave-browser", "chromium-browser"]
 ```
 
 ```toml

@@ -181,6 +181,7 @@ struct WindowData {
     resize_configure_sent: Option<Instant>,
     maximized: bool,
     fullscreen: bool,
+    focus_titlebar: bool,
     activated: bool,
     requested: Option<Decoration>,
     native_warned: bool,
@@ -358,6 +359,7 @@ impl Windows {
             resize_configure_sent: None,
             maximized: false,
             fullscreen: false,
+            focus_titlebar: false,
             activated: false,
             requested,
             native_warned: false,
@@ -887,6 +889,23 @@ impl Windows {
         state_changed
     }
 
+    // A browser told `fullscreen` enters its F11 mode and hides its tabs; in focus mode it is told `maximized`.
+    pub fn set_focus_titlebar(&mut self, id: WindowId, focus_titlebar: bool) {
+        let Some(index) = self.index(id) else {
+            return;
+        };
+        let changed = self.windows[index].focus_titlebar != focus_titlebar;
+        self.windows[index].focus_titlebar = focus_titlebar;
+        if changed && self.windows[index].fullscreen {
+            self.send_configure(index);
+        }
+    }
+
+    pub fn has_focus_titlebar(&self, id: WindowId) -> bool {
+        self.index(id)
+            .is_some_and(|index| self.windows[index].focus_titlebar)
+    }
+
     pub fn set_scene_y(&mut self, id: WindowId, y: f64) -> bool {
         let Some(index) = self.index(id) else {
             return false;
@@ -1093,8 +1112,8 @@ impl Windows {
             apply_configure_states(
                 &mut state.states,
                 data.placed,
-                data.maximized,
-                data.fullscreen,
+                data.maximized || data.fullscreen && data.focus_titlebar,
+                data.fullscreen && !data.focus_titlebar,
                 resizing,
                 data.activated,
             );

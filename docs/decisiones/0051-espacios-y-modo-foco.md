@@ -39,6 +39,10 @@ app.
    del tipo de app:
    - **App ajena con SSD** (Qt/KDE como Kate, Firefox): el compositor baja su
      titlebar Tengen encima del contenido, debajo del panel.
+   - **Navegadores** (`window.focus_titlebar_apps`, CSD sin `infinity_focus_v1`):
+     como una app SSD. Reciben `maximized` en vez de `fullscreen` para no
+     entrar en su modo F11 y conservar las pestañas; la titlebar Tengen baja
+     encima de ellas. F11 de la app sigue siendo `fullscreen`.
    - **App de barrierkit con CSD**: la app vuelve a mostrar su titlebar y
      sus semáforos, como Finder. La app se entera por
      `infinity_focus_v1`. Desde el ADR 0054 la ventana no se mueve: la

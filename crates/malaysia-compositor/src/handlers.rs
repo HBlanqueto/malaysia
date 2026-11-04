@@ -814,7 +814,7 @@ impl XdgShellHandler for State {
         } else if self.config.window.green_button == crate::config::GreenButtonAction::Focus
             && !self.has_fixed_width(id)
         {
-            self.enter_focus_mode(id);
+            self.enter_focus_mode(id, false);
         } else {
             self.set_maximized(id, true);
         }
@@ -829,7 +829,11 @@ impl XdgShellHandler for State {
             return;
         };
         tracing::info!(window = id.get(), "fullscreen_request");
-        self.enter_focus_mode(id);
+        if self.in_focus_mode(id) {
+            self.windows.set_focus_titlebar(id, false);
+        } else {
+            self.enter_focus_mode(id, true);
+        }
     }
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {

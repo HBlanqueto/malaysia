@@ -115,7 +115,7 @@ pub(crate) struct RevealFrame {
     pub(crate) owner: WindowId,
     pub(crate) progress: f64,
     pub(crate) bar: i32,
-    pub(crate) server_decorated: bool,
+    pub(crate) titlebar: bool,
     pub(crate) slides: bool,
 }
 
@@ -150,7 +150,7 @@ impl State {
         let from = self.focus_reveal.progress(now);
         let mut notified = self.focus_reveal.notified.take();
         let mut shifted = self.focus_reveal.shifted;
-        if shown && self.windows.is_client_decorated(owner) {
+        if shown && !self.focus_titlebar(owner) {
             shifted = !self.focus_overlay(owner);
             if shifted {
                 self.windows
@@ -204,8 +204,8 @@ impl State {
             owner,
             progress,
             bar: self.desktop_bar_height(),
-            server_decorated: !self.windows.is_client_decorated(owner),
-            slides: self.focus_reveal.shifted && self.windows.is_client_decorated(owner),
+            titlebar: self.focus_titlebar(owner),
+            slides: self.focus_reveal.shifted && !self.focus_titlebar(owner),
         })
     }
 
@@ -213,10 +213,7 @@ impl State {
         &self,
         id: WindowId,
     ) -> Option<(SceneRect<f64, SceneLogical>, crate::decoration::Insets)> {
-        if self.focus_owner() != Some(id)
-            || !self.focus_reveal.shown
-            || self.windows.is_client_decorated(id)
-        {
+        if self.focus_owner() != Some(id) || !self.focus_reveal.shown || !self.focus_titlebar(id) {
             return None;
         }
         let size = self.logical_output_size();
@@ -246,6 +243,18 @@ impl State {
         self.send_space_state();
     }
 
+    fn focus_titlebar(&self, id: WindowId) -> bool {
+        !self.windows.is_client_decorated(id) || self.windows.has_focus_titlebar(id)
+    }
+
+    fn keeps_tabs_in_focus(&self, id: WindowId) -> bool {
+        let Some(surface) = self.windows.surface_of(id) else {
+            return false;
+        };
+        let app_id = self.windows.app_id(surface);
+        self.config.window.focus_titlebar_apps.contains(&app_id)
+    }
+
     pub(crate) fn in_focus_mode(&self, id: WindowId) -> bool {
         self.spaces.focus_space_of(id).is_some()
     }
@@ -254,11 +263,11 @@ impl State {
         if self.in_focus_mode(id) {
             self.exit_focus_mode(id);
         } else {
-            self.enter_focus_mode(id);
+            self.enter_focus_mode(id, false);
         }
     }
 
-    pub(crate) fn enter_focus_mode(&mut self, id: WindowId) {
+    pub(crate) fn enter_focus_mode(&mut self, id: WindowId, requested_fullscreen: bool) {
         if self.focus_transition.is_some() || self.in_focus_mode(id) || self.locked {
             return;
         }
@@ -292,6 +301,8 @@ impl State {
         self.fullscreen.insert(id, outer);
         self.focus_desk.insert(id, desk);
         let full = self.output_scene_rect();
+        let keeps_tabs = !requested_fullscreen && self.keeps_tabs_in_focus(id);
+        self.windows.set_focus_titlebar(id, keeps_tabs);
         self.windows.set_fullscreen_with_outer(id, true, full);
         self.foreign_state_changed(id);
         tracing::info!(window = id.get(), index, "focus mode entered");
@@ -351,6 +362,7 @@ impl State {
             .or_else(|| self.windows.outer(id))
             .unwrap_or_else(|| self.output_scene_rect());
         self.windows.set_fullscreen_with_outer(id, false, saved);
+        self.windows.set_focus_titlebar(id, false);
         self.foreign_state_changed(id);
     }
 

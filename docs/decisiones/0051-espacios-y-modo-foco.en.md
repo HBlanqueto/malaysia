@@ -39,6 +39,10 @@ app.
    on the kind of app:
    - **Third-party app with SSD** (Qt/KDE such as Kate, Firefox): the compositor lowers its
      Tengen titlebar over the content, below the panel.
+   - **Browsers** (`window.focus_titlebar_apps`, CSD without `infinity_focus_v1`):
+     like an SSD app. They get `maximized` instead of `fullscreen` so they do
+     not enter their F11 mode and keep their tabs; the Tengen titlebar comes
+     down over them. The app's own F11 is still `fullscreen`.
    - **barrierkit app with CSD**: the app shows its titlebar and
      its traffic lights again, like Finder. The app learns about it through
      `infinity_focus_v1`. Since ADR 0054 the window does not move: the

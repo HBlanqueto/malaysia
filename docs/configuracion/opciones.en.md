@@ -144,6 +144,7 @@ becomes per output.
 | `window.resize_border` | integer (logical px) | `10` | **active** | width of the outer resize band on the sides |
 | `window.resize_corner` | integer (logical px) | `20` | **active** | length of the outer resize «L» at the corners |
 | `window.qt_server_decorations` | bool | `true` | **active** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in clients and session |
+| `window.focus_titlebar_apps` | list of `app_id` | `["firefox", "brave-browser", "chromium-browser"]` | **active** | focus mode of CSD apps with tabs |
 
 `window.resize_border` is a band **outside** the side; the «L» of
 `window.resize_corner` is outside and may reach 2 px in. The hit-test is only
@@ -165,6 +166,13 @@ traffic light (`set_maximized`) does the same. `zoom` maximizes
 keeping the frame; `fullscreen` still only records the request; `none`
 does nothing. An app that requests fullscreen (F11) and `Ctrl+Super+F` always enter
 focus mode. Double-clicking the bar is still governed by `double_click_titlebar`.
+
+`focus_titlebar_apps` lists the CSD apps that focus mode treats like an SSD
+window: they get `maximized` instead of `fullscreen`, so they keep their tabs
+and address bar, and when the menu bar comes down the compositor draws its
+32 px titlebar over them. A browser that gets `fullscreen` enters its F11 mode
+and hides its tabs. If the app asks for fullscreen itself (F11, a video), it
+gets `fullscreen` as always.
 
 `qt_server_decorations` exports `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` for the
 clients that `malaysia_compositor::spawn` launches and in the session environment, so that Qt
@@ -379,6 +387,7 @@ focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20
 qt_server_decorations = true    # false for Qt's native bar
+focus_titlebar_apps = ["firefox", "brave-browser", "chromium-browser"]
 ```
 
 ```toml

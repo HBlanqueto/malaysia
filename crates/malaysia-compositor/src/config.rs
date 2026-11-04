@@ -91,6 +91,7 @@ pub struct WindowConfig {
     pub resize_border: i32,
     pub resize_corner: i32,
     pub qt_server_decorations: bool,
+    pub focus_titlebar_apps: Vec<String>,
 }
 
 impl Default for WindowConfig {
@@ -102,6 +103,9 @@ impl Default for WindowConfig {
             resize_border: 10,
             resize_corner: 20,
             qt_server_decorations: true,
+            focus_titlebar_apps: ["firefox", "brave-browser", "chromium-browser"]
+                .map(String::from)
+                .to_vec(),
         }
     }
 }
