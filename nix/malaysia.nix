@@ -81,7 +81,10 @@ in
       wants =
         map (component: "malaysia-shell@${component}.service") cfg.shellComponents
         ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service"
-        ++ [ "xdg-desktop-portal-malaysia.service" ];
+        ++ [
+          "xdg-desktop-portal-malaysia.service"
+          "graphical-session.target"
+        ];
     };
   };
 }
