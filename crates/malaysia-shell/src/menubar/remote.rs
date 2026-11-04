@@ -68,9 +68,13 @@ impl MenuSources {
         let app_name = normalize(&self.app_name);
         let mut seen = HashSet::from(["sistema".to_string()]);
         let mut middle = Vec::new();
+        let has_about_slot = app_items
+            .iter()
+            .any(|item| matches!(item, MenuItem::Action { label, .. } if is_about(label)));
+        let mut about = None;
 
         for item in remote {
-            let (label, id, children, enabled) = match item {
+            let (label, id, mut children, enabled) = match item {
                 MenuItem::Submenu {
                     id,
                     label,
@@ -86,6 +90,9 @@ impl MenuSources {
                 MenuItem::Action { label, .. } => (label.clone(), None, vec![item.clone()], true),
                 _ => continue,
             };
+            if has_about_slot && about.is_none() && matches!(item, MenuItem::Submenu { .. }) {
+                about = take_about(&mut children);
+            }
             let normalized = normalize(&label);
             if normalized == app_name {
                 if seen.insert(normalized) {
@@ -112,6 +119,10 @@ impl MenuSources {
                     enabled,
                 });
             }
+        }
+
+        if let Some(about) = about {
+            fill_slots(&mut app_items, vec![about]);
         }
 
         let mut titles = Vec::with_capacity(middle.len() + 3);
@@ -156,9 +167,8 @@ fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
             rest.push(extra);
             continue;
         };
-        let wanted = normalize(label);
         let slot = items.iter_mut().find(
-            |item| matches!(item, MenuItem::Action { label, .. } if normalize(label) == wanted),
+            |item| matches!(item, MenuItem::Action { label: slot, .. } if same_slot(slot, label)),
         );
         match slot {
             Some(MenuItem::Action {
@@ -179,6 +189,34 @@ fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
         }
     }
     rest
+}
+
+fn same_slot(slot: &str, label: &str) -> bool {
+    normalize(slot) == normalize(label) || (is_about(slot) && is_about(label))
+}
+
+fn is_about(label: &str) -> bool {
+    let label = normalize(label);
+    let label = label.trim_end_matches(['…', '.']).trim_end();
+    ["acerca de", "about", "sobre"].iter().any(|prefix| {
+        label.strip_prefix(prefix).is_some_and(|rest| {
+            rest.is_empty() || (rest.starts_with(' ') && !matches!(rest.trim(), "kde" | "qt"))
+        })
+    })
+}
+
+fn take_about(items: &mut Vec<MenuItem>) -> Option<MenuItem> {
+    let index = items
+        .iter()
+        .position(|item| matches!(item, MenuItem::Action { label, .. } if is_about(label)))?;
+    let about = items.remove(index);
+    let is_separator = |item: Option<&MenuItem>| matches!(item, Some(MenuItem::Separator));
+    if is_separator(items.get(index)) && (index == 0 || is_separator(items.get(index - 1))) {
+        items.remove(index);
+    } else if index == items.len() && index > 0 && is_separator(items.get(index - 1)) {
+        items.remove(index - 1);
+    }
+    Some(about)
 }
 
 fn append(items: &mut Vec<MenuItem>, extras: Vec<MenuItem>) {
@@ -487,6 +525,52 @@ mod tests {
                 if id == "dbusmenu:3" && shortcut == "Ctrl+comma"
         ));
         assert_eq!(app[2].label(), Some("Salir de Calculadora"));
+    }
+
+    #[test]
+    fn the_apps_about_entry_moves_from_its_help_menu_into_the_app_menu() {
+        let sources = MenuSources {
+            app_name: "Firefox".to_string(),
+            app_items: Rc::new(|| {
+                vec![MenuItem::Action {
+                    id: "app-about:firefox".to_string(),
+                    label: "Acerca de Firefox".to_string(),
+                    shortcut: None,
+                    enabled: true,
+                    check: CheckState::None,
+                    icon: None,
+                }]
+            }),
+            window_items: Rc::new(Vec::new),
+            help_items: Rc::new(Vec::new),
+        };
+        let mut about = action("About Firefox");
+        if let MenuItem::Action { id, .. } = &mut about {
+            *id = "dbusmenu:9".to_string();
+        }
+        let remote = vec![submenu(
+            "Help",
+            "5",
+            vec![
+                action("Firefox Help"),
+                MenuItem::Separator,
+                action("About Qt"),
+                about,
+            ],
+        )];
+        let titles = sources.compose(&remote);
+        assert!(matches!(
+            &titles[0].items[0],
+            MenuItem::Action { id, label, .. } if id == "dbusmenu:9" && label == "Acerca de Firefox"
+        ));
+        let help: Vec<_> = titles
+            .last()
+            .unwrap()
+            .items
+            .iter()
+            .map(MenuItem::label)
+            .collect();
+        assert_eq!(help, vec![Some("Firefox Help"), None, Some("About Qt")]);
     }
 
     #[test]

@@ -4,7 +4,7 @@ use barrier_kit::menu::{
 };
 use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
-use crate::menubar::{help_topics, icons, items, xdg_open};
+use crate::menubar::{help_topics, icons, items, spawn_component_with, xdg_open};
 
 const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
 
@@ -16,10 +16,10 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     vec![
         items::action(
-            "app-about",
+            format!("app-about:{app_id}"),
             format!("Acerca de {app_name}"),
             None,
-            false,
+            !app_id.is_empty(),
             Some(MenuIcon::svg(icons::INFO)),
         ),
         items::separator(),
@@ -365,6 +365,7 @@ pub fn on_action(id: String) {
     let list = toplevels.list.read().clone();
     let (verb, argument) = id.split_once(':').unwrap_or((id.as_str(), ""));
     match verb {
+        "app-about" => spawn_component_with("about-app", &[argument]),
         "app-hide" => {
             for index in app_indices(&list, argument) {
                 toplevels.minimize(index);
@@ -695,7 +696,7 @@ mod tests {
                 "Salir de Foot",
             ]
         );
-        assert!(!enabled(&items, "Acerca de Foot"));
+        assert!(enabled(&items, "Acerca de Foot"));
         assert!(!enabled(&items, "Ajustes…"));
         assert!(enabled(&items, "Servicios"));
         assert!(enabled(&items, "Ocultar Foot"));

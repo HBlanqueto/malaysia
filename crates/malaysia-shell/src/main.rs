@@ -24,6 +24,8 @@ components:
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
   force-quit  the «Forzar salida» list of running apps
   about       «Acerca de este PC»
+  about-app <app_id>
+              «Acerca de» for an app that has none of its own
 ";
 
 fn main() -> ExitCode {
@@ -37,6 +39,7 @@ fn main() -> ExitCode {
         Some("power") => dialogs::run_confirm(std::env::args().nth(2).as_deref()),
         Some("force-quit") => dialogs::run_force_quit(),
         Some("about") => dialogs::run_about(),
+        Some("about-app") => dialogs::run_about_app(std::env::args().nth(2).as_deref()),
         Some(other) => {
             eprintln!("malaysia-shell: unknown component '{other}'");
             eprintln!("{USAGE}");

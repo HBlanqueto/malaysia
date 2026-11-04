@@ -1,4 +1,4 @@
-//! System menu dialogs: power confirmation, force quit and «Acerca de este PC».
+//! System menu dialogs: power confirmation, force quit, «Acerca de este PC» and an app's «Acerca de».
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -38,6 +38,8 @@ const ABOUT_LABEL_WIDTH: f32 = 120.0;
 const ABOUT_VALUE_WIDTH: f32 = 160.0;
 const ABOUT_ROW_GAP: f32 = 5.0;
 const ABOUT_FOOTER_GAP: f32 = 8.0;
+const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
+const ABOUT_APP_ICON_SIZE: f32 = 64.0;
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
@@ -742,6 +744,85 @@ pub fn run_about() -> anyhow::Result<()> {
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
             .max_size(Some(ABOUT_SIZE)),
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+struct AboutAppInfo {
+    name: String,
+    kind: Option<String>,
+    app_id: String,
+    icon: Option<IconData>,
+}
+
+impl App for AboutAppInfo {
+    fn render(&self) -> impl IntoElement {
+        use_init_theme(barrier_kit::theme::shell);
+        let resolved = barrier_kit::theme::resolved();
+        let palette = Palette::current();
+        let focused = WindowControls::get().status.read().activated;
+        let muted = theme::color(palette.secondary_label);
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .background(theme::color(if focused {
+                resolved.surfaces.window
+            } else {
+                resolved.surfaces.titlebar_inactive
+            }))
+            .direction(Direction::Vertical)
+            .cross_align(Alignment::Center)
+            .spacing(ABOUT_ROW_GAP)
+            .on_global_key_down(|event: Event<KeyboardEventData>| {
+                if matches!(event.key, Key::Named(NamedKey::Escape)) {
+                    close();
+                }
+            })
+            .child(Titlebar::new().close_only(true).into_element())
+            .child(
+                rect()
+                    .margin(Gaps::new(ABOUT_GAP, 0.0, ABOUT_GAP, 0.0))
+                    .child(app_icon(
+                        self.icon.as_ref(),
+                        &self.name,
+                        ABOUT_APP_ICON_SIZE,
+                    )),
+            )
+            .child(title(&self.name))
+            .children(self.kind.iter().map(|kind| {
+                label()
+                    .text(kind.clone())
+                    .font_size(CALLOUT.size as f32)
+                    .color(muted)
+                    .into_element()
+            }))
+            .child(
+                label()
+                    .text(self.app_id.clone())
+                    .font_size(CAPTION.size as f32)
+                    .color(muted),
+            )
+    }
+}
+
+pub fn run_about_app(app_id: Option<&str>) -> anyhow::Result<()> {
+    let app_id = app_id.ok_or_else(|| anyhow::anyhow!("about-app needs an app_id"))?;
+    let entries = desktop::read_entries();
+    let entry = find_entry(app_id, &entries);
+    let info = AboutAppInfo {
+        name: resolve_app_name(Some(app_id), &entries),
+        kind: entry.and_then(|entry| entry.generic_name.clone()),
+        app_id: app_id.to_string(),
+        icon: entry.and_then(|entry| load_icon(entry.icon.as_deref())),
+    };
+    let window_title = format!("Acerca de {}", info.name);
+    run_window(
+        AppComponent::new(info),
+        WindowOptions::new(window_title, "about-app")
+            .decorations(Decorations::Client)
+            .size(ABOUT_APP_SIZE)
+            .min_size(Some(ABOUT_APP_SIZE))
+            .max_size(Some(ABOUT_APP_SIZE)),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
 }

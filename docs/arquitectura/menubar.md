@@ -31,4 +31,6 @@ El compositor calcula el workspace como el output menos las zonas exclusivas de 
 
 ## Menú global
 
-La barra integra `MenuView`: sin ventana muestra ❄ · Malaysia · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; con ventana, ❄ · {App} · menús reales · Ventana · Ayuda. El menú real usa `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); si no hay, respaldo de `.desktop` (14c). GTK usa `gtk_shell1`/`org.gtk.Menus` (14f-1 registra; 14f-2 dibuja). Pendiente: 14b-2, 14f-2, teclado F10/Alt y desbordamiento.
+La barra integra `MenuView`: sin ventana muestra ❄ · Escritorio · Archivo · Edición · Visualización · Ir · Ventana · Ayuda; con ventana, ❄ · {App} · menús reales · Ventana · Ayuda. El menú real usa `org_kde_kwin_appmenu` + dbusmenu (ADR 0036/0040); si no hay, respaldo de `.desktop` (14c). GTK usa `gtk_shell1`/`org.gtk.Menus` (14f-1 registra; 14f-2 dibuja). Pendiente: 14b-2, 14f-2, teclado F10/Alt y desbordamiento.
+
+«Acerca de {App}» toma la entrada «Acerca de…»/«About…» de la app, esté en el menú que esté (casi siempre Ayuda), y la quita de allí (`remote::take_about`). Si la app no tiene, abre `malaysia-shell about-app <app_id>`: icono, nombre y `GenericName` del `.desktop`.

@@ -600,7 +600,7 @@ impl App for BarApp {
                         })
                     };
                     let is_help = index + 1 == titles.len();
-                    let request_open: Option<Rc<dyn Fn()>> = if is_help {
+                    let request_open: Option<Rc<dyn Fn()>> = if is_help || index == 0 {
                         let dbus = self.dbus.clone();
                         let address = address.clone();
                         let callback: Rc<dyn Fn()> = Rc::new(move || {
