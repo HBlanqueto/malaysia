@@ -2,6 +2,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
+use std::path::PathBuf;
 use std::process::{Child, Command};
 
 use crate::config::Config;
@@ -14,6 +15,10 @@ pub const WRAPPER_ENV: &[&str] = &[
 ];
 
 pub const ORIGINAL_PREFIX: &str = "MALAYSIA_ORIG_";
+
+pub fn bin_dir() -> Option<PathBuf> {
+    std::env::current_exe().ok()?.parent().map(PathBuf::from)
+}
 
 pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     let mut command = Command::new(program);

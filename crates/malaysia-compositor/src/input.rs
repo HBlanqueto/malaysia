@@ -1205,9 +1205,8 @@ impl State {
     }
 
     fn spawn_shell_component(&self, component: &str) -> Option<std::process::Child> {
-        let shell = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("malaysia-shell")))
+        let shell = crate::spawn::bin_dir()
+            .map(|dir| dir.join("malaysia-shell"))
             .unwrap_or_else(|| "malaysia-shell".into());
         let mut command = crate::spawn::shell_command(shell);
         command.arg(component);

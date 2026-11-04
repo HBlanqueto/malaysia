@@ -27,22 +27,7 @@ cmd_setup() {
     info "compilando el paquete (nix build .#default)…"
     nix build .#default
 
-    local units="$RESULT/lib/systemd/user"
-    [[ -f "$units/malaysia-session.target" ]] || die "no encuentro las units en $units"
-
-    info "enlazando las units de la shell…"
-    local user_units="$HOME/.config/systemd/user"
-    for unit in malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service; do
-        rm -f "$user_units/$unit" "$user_units/malaysia-session.target.wants/$unit"
-    done
-    systemctl --user daemon-reload
-    systemctl --user link --force "$units/malaysia-session.target"
-    systemctl --user link --force "$units/malaysia-shell@.service"
-    systemctl --user link --force "$units/malaysia-wallpaper.service"
-    systemctl --user daemon-reload
-    systemctl --user enable \
-        malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service
-
+    # The units come from the NixOS module; links in ~/.config/systemd/user would pin an old build.
     info "listo. Ahora: Ctrl+Alt+F3 (emergencia) y Ctrl+Alt+F4 → $0 run"
 }
 

@@ -15,7 +15,9 @@ After=malaysia-session.target
 [Service]
 Type=dbus
 BusName=org.freedesktop.impl.portal.desktop.malaysia
-ExecStart=@out@/bin/xdg-desktop-portal-malaysia
+# The binary comes from MALAYSIA_BIN_DIR, which the compositor imports, so it always
+# matches the running compositor; without it, from this package.
+ExecStart=/bin/sh -c 'exec "$${MALAYSIA_BIN_DIR:-@out@/bin}/xdg-desktop-portal-malaysia"'
 Restart=on-failure
 RestartSec=2
 

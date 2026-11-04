@@ -60,10 +60,7 @@ fn trusted_shell_exes() -> Vec<PathBuf> {
     {
         exes.push(path);
     }
-    if let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(PathBuf::from))
-    {
+    if let Some(dir) = crate::spawn::bin_dir() {
         for name in ["malaysia-shell", ".malaysia-shell-wrapped"] {
             if let Ok(path) = std::fs::canonicalize(dir.join(name))
                 && !exes.contains(&path)

@@ -524,6 +524,7 @@ fn start_shell_session(socket: &str) -> bool {
             "DISPLAY",
             "XDG_CURRENT_DESKTOP",
             "XDG_SESSION_ID",
+            "MALAYSIA_BIN_DIR",
         ],
         Some(socket),
     );
@@ -573,22 +574,17 @@ fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::proces
     if let Some(socket) = socket {
         command.env("WAYLAND_DISPLAY", socket);
         command.env("XDG_CURRENT_DESKTOP", "Malaysia");
+        // The shell units start from MALAYSIA_BIN_DIR: Infinity trusts only the shell next to this binary.
+        if let Some(dir) = crate::spawn::bin_dir() {
+            command.env("MALAYSIA_BIN_DIR", dir);
+        }
     }
     crate::spawn::spawn(command, &crate::config::Config::default())?.wait_with_output()
 }
 
-fn missing_target_help() -> String {
-    let units = unit_dir()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "result/share/systemd/user".to_string());
-    format!(
-        "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell.          Para probar: systemctl --user link {units}/malaysia-session.target;          systemctl --user link {units}/malaysia-shell@.service;          systemctl --user link {units}/malaysia-wallpaper.service; systemctl --user daemon-reload;          systemctl --user enable --now malaysia-wallpaper.service malaysia-shell@menubar.service malaysia-shell@dock.service"
-    )
-}
-
-fn unit_dir() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    Some(exe.parent()?.parent()?.join("share/systemd/user"))
+fn missing_target_help() -> &'static str {
+    "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell. \
+     Instálalo con el módulo de NixOS (programs.malaysia.enable)."
 }
 
 impl Udev {

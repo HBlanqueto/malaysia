@@ -13,7 +13,9 @@ StartLimitIntervalSec=30
 
 [Service]
 Type=simple
-ExecStart=@out@/bin/malaysia-wallpaper
+# The binary comes from MALAYSIA_BIN_DIR, which the compositor imports, so it always
+# matches the running compositor; without it, from this package.
+ExecStart=/bin/sh -c 'exec "$${MALAYSIA_BIN_DIR:-@out@/bin}/malaysia-wallpaper"'
 Restart=on-failure
 RestartSec=2
 
