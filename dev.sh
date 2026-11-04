@@ -54,6 +54,7 @@ Commands:
     screencopy [--release] Build and run the output capture probe
     screencopy-window   Build and run the window capture probe
     presentation        Build and run the wp_presentation feedback probe
+    frames              Build and run the frame-callback pacing probe (no damage, no input)
     activation          Build and run the xdg-activation probe
     titlebar            Press close, minimize and maximize on a real window
     decoration          Build and run the decoration-policy probe over real apps
@@ -685,6 +686,13 @@ presentation() {
     require cargo
     build_probes "$@"
     run_one_probe presentation
+}
+
+frames() {
+    require_devshell
+    require cargo
+    build_probes "$@"
+    run_one_probe frame_callbacks
 }
 
 activation() {
@@ -1475,6 +1483,7 @@ case "$command_name" in
     screencopy) screencopy "$@" ;;
     screencopy-window) screencopy_window "$@" ;;
     presentation) presentation "$@" ;;
+    frames) frames "$@" ;;
     activation) activation "$@" ;;
     titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;

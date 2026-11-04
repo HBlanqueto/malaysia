@@ -50,6 +50,7 @@ use smithay::utils::{DeviceFd, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
+use smithay::wayland::presentation::PresentationFeedbackCallback;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{error, info, warn};
 
@@ -77,8 +78,9 @@ struct Udev {
     cursor: Cursors,
     output: Output,
     active: bool,
-    repaint_timer: Option<RegistrationToken>,
-    waiting_for_vblank: bool,
+    redraw_state: RedrawState,
+    presented_feedbacks: Vec<PresentationFeedbackCallback>,
+    last_vblank: Option<Duration>,
     loop_signal: LoopSignal,
     capture_requested: bool,
     vblank_count: u64,
@@ -299,8 +301,9 @@ pub fn run(options: DrmOptions) -> Result<()> {
         cursor,
         output,
         active: true,
-        repaint_timer: None,
-        waiting_for_vblank: false,
+        redraw_state: RedrawState::Idle,
+        presented_feedbacks: Vec::new(),
+        last_vblank: None,
         loop_signal: loop_signal.clone(),
         capture_requested: false,
         vblank_count: 0,
@@ -344,9 +347,6 @@ pub fn run(options: DrmOptions) -> Result<()> {
                         );
                     }
                     data.state.refresh_theme();
-                    if data.state.take_redraw_request() {
-                        data.queue_redraw();
-                    }
                 }
                 Ok(PostAction::Continue)
             },
@@ -412,8 +412,13 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     }
                     data.compositor.reset_buffers();
                     data.active = true;
-                    data.waiting_for_vblank = false;
-                    data.render();
+                    if let RedrawState::WaitingForEstimatedVBlank(token)
+                    | RedrawState::WaitingForEstimatedVBlankAndQueued(token) =
+                        std::mem::take(&mut data.redraw_state)
+                    {
+                        data.loop_handle.remove(token);
+                    }
+                    data.queue_redraw();
                 }
             },
         )
@@ -478,17 +483,18 @@ pub fn run(options: DrmOptions) -> Result<()> {
             Generic::new(display_fd, Interest::READ, Mode::Level),
             |_, _, data: &mut Udev| {
                 data.dispatch_clients();
-                if data.state.take_redraw_request() {
-                    data.queue_redraw();
-                }
                 Ok(PostAction::Continue)
             },
         )
         .map_err(|error| anyhow!("inserting the display source: {error}"))?;
 
-    udev.render();
+    udev.queue_redraw();
+    udev.redraw();
     info!("direct session ready");
-    let result = event_loop.run(None, &mut udev, |udev| udev.state.activity_noted = false);
+    let result = event_loop.run(None, &mut udev, |udev| {
+        udev.state.activity_noted = false;
+        udev.redraw_queued_and_flush();
+    });
     if shell_started {
         stop_shell_session();
     }
@@ -590,29 +596,117 @@ impl Udev {
     }
 
     fn after_input(&mut self) {
-        if let Err(error) = self.display.flush_clients() {
-            warn!(%error, "flushing clients after input");
-        }
         if let Some(vt) = self.state.take_vt_switch()
             && let Err(error) = self.session.change_vt(i32::from(vt))
         {
             warn!(%error, "switching to VT {vt}");
         }
+    }
+
+    // niri a8562a1 src/niri.rs:819: every event source ends here, so no redraw request or
+    // frame callback waits for the next input or client request.
+    fn redraw_queued_and_flush(&mut self) {
         if self.state.take_redraw_request() {
             self.queue_redraw();
+        }
+        if matches!(
+            self.redraw_state,
+            RedrawState::Queued | RedrawState::WaitingForEstimatedVBlankAndQueued(_)
+        ) {
+            self.redraw();
+        }
+        if let Err(error) = self.display.flush_clients() {
+            warn!(%error, "flushing clients");
         }
     }
 
     fn queue_redraw(&mut self) {
-        if !self.waiting_for_vblank && self.repaint_timer.is_none() {
-            self.render();
+        self.redraw_state = std::mem::take(&mut self.redraw_state).queued();
+    }
+
+    fn redraw(&mut self) {
+        let result = if self.active {
+            self.render()
+        } else {
+            RenderResult::Skipped
+        };
+        match result {
+            RenderResult::Submitted => {
+                if let RedrawState::WaitingForEstimatedVBlankAndQueued(token) = std::mem::replace(
+                    &mut self.redraw_state,
+                    RedrawState::WaitingForVBlank {
+                        redraw_needed: false,
+                    },
+                ) {
+                    self.loop_handle.remove(token);
+                }
+                // niri a8562a1 src/backend/tty.rs:2014: client buffers are latched once queued.
+                self.state.frame_callback_cycle = self.state.frame_callback_cycle.wrapping_add(1);
+            }
+            RenderResult::NoDamage => {
+                crate::session::discard_feedbacks(&self.state);
+                self.queue_estimated_vblank_timer();
+            }
+            RenderResult::Skipped => {
+                self.redraw_state = match std::mem::take(&mut self.redraw_state) {
+                    RedrawState::WaitingForEstimatedVBlank(token)
+                    | RedrawState::WaitingForEstimatedVBlankAndQueued(token) => {
+                        RedrawState::WaitingForEstimatedVBlank(token)
+                    }
+                    _ => RedrawState::Idle,
+                };
+            }
+        }
+        let now = Duration::from(self.state.clock.now());
+        crate::session::send_frame_callbacks_for_state(&self.state, now);
+    }
+
+    fn queue_estimated_vblank_timer(&mut self) {
+        match std::mem::take(&mut self.redraw_state) {
+            RedrawState::Queued => {}
+            RedrawState::WaitingForEstimatedVBlank(token)
+            | RedrawState::WaitingForEstimatedVBlankAndQueued(token) => {
+                self.redraw_state = RedrawState::WaitingForEstimatedVBlank(token);
+                return;
+            }
+            RedrawState::Idle | RedrawState::WaitingForVBlank { .. } => {
+                unreachable!("an estimated vblank is only queued from a queued redraw")
+            }
+        }
+        let delay = crate::session::next_vblank_delay(
+            self.last_vblank,
+            Duration::from(self.state.clock.now()),
+            crate::session::refresh_interval(&self.state),
+        );
+        match self.loop_handle.insert_source(
+            Timer::from_duration(delay),
+            |_, _, data: &mut Udev| {
+                data.on_estimated_vblank();
+                TimeoutAction::Drop
+            },
+        ) {
+            Ok(token) => self.redraw_state = RedrawState::WaitingForEstimatedVBlank(token),
+            Err(error) => warn!(%error, "scheduling the estimated vblank"),
         }
     }
 
-    fn render_if_idle(&mut self) {
-        // Sin vblank no hay frame callbacks; el timer mantiene el bucle.
-        if !self.waiting_for_vblank {
-            self.render();
+    fn on_estimated_vblank(&mut self) {
+        self.state.frame_callback_cycle = self.state.frame_callback_cycle.wrapping_add(1);
+        match std::mem::take(&mut self.redraw_state) {
+            RedrawState::WaitingForEstimatedVBlank(_) => {}
+            RedrawState::WaitingForEstimatedVBlankAndQueued(_) => {
+                self.redraw_state = RedrawState::Queued;
+                return;
+            }
+            RedrawState::Idle | RedrawState::Queued | RedrawState::WaitingForVBlank { .. } => {
+                unreachable!("the estimated vblank timer outlived its redraw state")
+            }
+        }
+        if self.state.animating(Instant::now()) {
+            self.queue_redraw();
+        } else {
+            let now = Duration::from(self.state.clock.now());
+            crate::session::send_frame_callbacks_for_state(&self.state, now);
         }
     }
 
@@ -621,7 +715,19 @@ impl Udev {
             return;
         }
         self.vblank_count += 1;
-        self.waiting_for_vblank = false;
+        let redraw_needed = match std::mem::take(&mut self.redraw_state) {
+            RedrawState::WaitingForVBlank { redraw_needed } => redraw_needed,
+            // Rogue vblanks happen after resume or DPMS: https://github.com/niri-wm/niri/issues/556
+            unexpected => {
+                warn!(?unexpected, "vblank without a queued frame");
+                if let RedrawState::WaitingForEstimatedVBlank(token)
+                | RedrawState::WaitingForEstimatedVBlankAndQueued(token) = unexpected
+                {
+                    self.loop_handle.remove(token);
+                }
+                true
+            }
+        };
         if let Err(error) = self.compositor.frame_submitted() {
             warn!(%error, "frame submitted");
         }
@@ -629,23 +735,17 @@ impl Udev {
             Some(DrmEventTime::Monotonic(time)) => time,
             _ => Duration::from(self.state.clock.now()),
         };
-        crate::session::send_presentation_feedbacks_for_state(
-            &self.state,
-            time,
-            self.vblank_count,
-            true,
-        );
-        crate::session::send_frame_callbacks_for_state(&self.state, time);
-        self.render_if_idle();
+        self.last_vblank = Some(time);
+        let feedbacks = std::mem::take(&mut self.presented_feedbacks);
+        crate::session::present_feedbacks(&self.state, feedbacks, time, self.vblank_count);
+        if redraw_needed || self.state.animating(Instant::now()) {
+            self.queue_redraw();
+        } else {
+            crate::session::send_frame_callbacks_for_state(&self.state, time);
+        }
     }
 
-    fn render(&mut self) {
-        if !self.active {
-            return;
-        }
-        if std::mem::take(&mut self.state.force_full_damage) {
-            self.compositor.reset_buffer_ages();
-        }
+    fn render(&mut self) -> RenderResult {
         let renderer = if self.target_node == self.render_node {
             self.gpu.single_renderer(&self.render_node)
         } else {
@@ -659,8 +759,7 @@ impl Udev {
             Ok(renderer) => renderer,
             Err(error) => {
                 warn!(%error, "no renderer on the render node");
-                self.schedule_repaint();
-                return;
+                return RenderResult::Skipped;
             }
         };
         let elements = crate::session::build_output_elements(
@@ -784,89 +883,70 @@ impl Udev {
                         }
                     }
                 }
-                if !result.is_empty {
-                    self.frames_queued += 1;
-                    self.frame_was_empty = false;
-                    tracing::trace!(
-                        frames_queued = self.frames_queued,
-                        "frame queued with damage"
-                    );
-                    match self.compositor.queue_frame(()) {
-                        Ok(()) => self.waiting_for_vblank = true,
-                        Err(error) => {
-                            warn!(%error, "queueing a frame");
-                            self.schedule_repaint();
-                        }
-                    }
-                } else {
+                if result.is_empty {
                     if !self.frame_was_empty {
                         self.frame_was_empty = true;
                         tracing::debug!("frame skipped: no damage");
                     }
-                    let time = Duration::from(self.state.clock.now());
-                    let refresh = self
-                        .output
-                        .current_mode()
-                        .map(|mode| mode.refresh)
-                        .unwrap_or(60_000)
-                        .max(1) as u64;
-                    let delay = Duration::from_micros(1_000_000 / refresh);
-                    let loop_handle = &self.loop_handle;
-                    let repaint_timer = &mut self.repaint_timer;
-                    let mut schedule_repaint = move || {
-                        if repaint_timer.is_some() {
-                            return;
-                        }
-                        match loop_handle.insert_source(
-                            Timer::from_duration(delay),
-                            |_, _, data: &mut Udev| {
-                                data.repaint_timer = None;
-                                data.render_if_idle();
-                                TimeoutAction::Drop
-                            },
-                        ) {
-                            Ok(token) => *repaint_timer = Some(token),
-                            Err(error) => warn!(%error, "scheduling a repaint"),
-                        }
-                    };
-                    crate::session::finish_empty_frame(
-                        &mut self.state,
-                        time,
-                        self.vblank_count,
-                        &mut schedule_repaint,
-                    );
+                    return RenderResult::NoDamage;
+                }
+                self.frames_queued += 1;
+                self.frame_was_empty = false;
+                tracing::trace!(
+                    frames_queued = self.frames_queued,
+                    "frame queued with damage"
+                );
+                match self.compositor.queue_frame(()) {
+                    Ok(()) => {
+                        self.presented_feedbacks =
+                            crate::session::take_presentation_feedbacks(&self.state);
+                        RenderResult::Submitted
+                    }
+                    Err(error) => {
+                        warn!(%error, "queueing a frame");
+                        RenderResult::NoDamage
+                    }
                 }
             }
             Err(error) => {
                 warn!(%error, "rendering a frame");
-                self.schedule_repaint();
+                RenderResult::NoDamage
             }
         }
     }
+}
 
-    fn schedule_repaint(&mut self) {
-        if self.repaint_timer.is_some() {
-            return;
-        }
-        let refresh = self
-            .output
-            .current_mode()
-            .map(|mode| mode.refresh)
-            .unwrap_or(60_000)
-            .max(1) as u64;
-        let delay = Duration::from_micros(1_000_000 / refresh);
-        let timer = Timer::from_duration(delay);
-        match self
-            .loop_handle
-            .insert_source(timer, |_, _, data: &mut Udev| {
-                data.repaint_timer = None;
-                data.render();
-                TimeoutAction::Drop
-            }) {
-            Ok(token) => self.repaint_timer = Some(token),
-            Err(error) => warn!(%error, "scheduling a repaint"),
+#[derive(Debug, Default)]
+enum RedrawState {
+    #[default]
+    Idle,
+    Queued,
+    WaitingForVBlank {
+        redraw_needed: bool,
+    },
+    WaitingForEstimatedVBlank(RegistrationToken),
+    WaitingForEstimatedVBlankAndQueued(RegistrationToken),
+}
+
+impl RedrawState {
+    fn queued(self) -> Self {
+        match self {
+            Self::Idle => Self::Queued,
+            Self::WaitingForEstimatedVBlank(token) => {
+                Self::WaitingForEstimatedVBlankAndQueued(token)
+            }
+            Self::WaitingForVBlank { .. } => Self::WaitingForVBlank {
+                redraw_needed: true,
+            },
+            queued @ (Self::Queued | Self::WaitingForEstimatedVBlankAndQueued(_)) => queued,
         }
     }
+}
+
+enum RenderResult {
+    Submitted,
+    NoDamage,
+    Skipped,
 }
 
 fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDeviceFd> {

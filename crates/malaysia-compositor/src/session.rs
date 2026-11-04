@@ -1,5 +1,6 @@
 //! The nested compositor session: event loop, winit window and GLES output.
 
+use std::cell::Cell;
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -41,7 +42,9 @@ use smithay::wayland::compositor::{
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
 use smithay::wayland::image_copy_capture::CaptureFailureReason;
-use smithay::wayland::presentation::{PresentationFeedbackCachedState, Refresh};
+use smithay::wayland::presentation::{
+    PresentationFeedbackCachedState, PresentationFeedbackCallback, Refresh,
+};
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
 
@@ -86,7 +89,7 @@ pub(crate) struct Session {
     capture_requested: bool,
     frame_seq: u64,
     last_frame_duration: Option<Duration>,
-    repaint_timer: Option<RegistrationToken>,
+    estimated_vblank: Option<RegistrationToken>,
     appearance_watch: Option<AppearanceWatch>,
 }
 
@@ -248,7 +251,7 @@ pub fn run() -> Result<(), SessionError> {
         capture_requested: false,
         frame_seq: 0,
         last_frame_duration: None,
-        repaint_timer: None,
+        estimated_vblank: None,
         appearance_watch: None,
     };
     if session.track_objects {
@@ -391,6 +394,9 @@ pub fn run() -> Result<(), SessionError> {
         session.state.activity_noted = false;
         if session.state.take_redraw_request() {
             session.backend.window().request_redraw();
+        }
+        if let Err(error) = session.display.flush_clients() {
+            tracing::warn!(%error, "failed to flush clients");
         }
         if session.track_objects {
             let now = live_objects(&session.display, &session.state);
@@ -1726,78 +1732,16 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
         session.backend.window().request_redraw();
     }
 
-    let now = Duration::from(session.state.clock.now());
-    let presented = damage.is_some();
-    if !presented {
-        let refresh = session
-            .state
-            .output
-            .current_mode()
-            .map(|mode| mode.refresh)
-            .unwrap_or(60_000)
-            .max(1) as u64;
-        let delay = Duration::from_micros(1_000_000 / refresh);
-        let loop_handle = &session.loop_handle;
-        let repaint_timer = &mut session.repaint_timer;
-        let mut schedule_repaint = move || {
-            if repaint_timer.is_some() {
-                return;
-            }
-            match loop_handle.insert_source(
-                Timer::from_duration(delay),
-                |_, _, session: &mut Session| {
-                    session.repaint_timer = None;
-                    if session.state.animating(Instant::now()) {
-                        session.backend.window().request_redraw();
-                    }
-                    TimeoutAction::Drop
-                },
-            ) {
-                Ok(token) => *repaint_timer = Some(token),
-                Err(error) => tracing::warn!(%error, "scheduling an empty-frame repaint"),
-            }
-        };
-        finish_empty_frame(
-            &mut session.state,
-            now,
-            session.frame_seq,
-            &mut schedule_repaint,
-        );
+    if damage.is_none() {
+        discard_feedbacks(&session.state);
+        send_frame_callbacks_for_state(&session.state, Duration::from(session.state.clock.now()));
+        queue_estimated_vblank(session);
         return Ok(());
     }
 
     let buffers = collect_drawn_buffers(&session.state);
     if !buffers.is_empty() {
         schedule_frame_release(&session.loop_handle, PendingFrameRelease { sync, buffers });
-    }
-
-    if session.state.locked {
-        for surface in &session.state.lock_surfaces {
-            if surface.alive() {
-                send_frame_callbacks(surface.wl_surface(), now);
-            }
-        }
-    } else {
-        for surface in session.state.windows.surfaces() {
-            if session.state.windows.is_mapped(surface) || !session.state.windows.is_placed(surface)
-            {
-                send_frame_callbacks(surface, now);
-            }
-        }
-        for entry in session.state.layers.all() {
-            send_frame_callbacks(entry.surface.wl_surface(), now);
-        }
-        for (id, _parent, _rect) in session.state.windows.iter_popups() {
-            if let Some(surface) = session.state.popups.surface_of(id) {
-                send_frame_callbacks(surface, now);
-            }
-        }
-        for popup in &session.state.ime_popups {
-            send_frame_callbacks(popup.wl_surface(), now);
-        }
-    }
-    if let Err(error) = session.display.flush_clients() {
-        tracing::warn!(%error, "failed to flush clients after a frame");
     }
 
     session
@@ -1811,11 +1755,42 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     }
     session.last_frame_duration = Some(now);
     session.frame_seq = session.frame_seq.wrapping_add(1);
-    send_presentation_feedbacks_for_state(&session.state, now, session.frame_seq, true);
-    if let Err(error) = session.display.flush_clients() {
-        tracing::warn!(%error, "failed to flush presentation feedback");
+    let feedbacks = take_presentation_feedbacks(&session.state);
+    present_feedbacks(&session.state, feedbacks, now, session.frame_seq);
+    if let Some(token) = session.estimated_vblank.take() {
+        session.loop_handle.remove(token);
     }
+    session.state.frame_callback_cycle = session.state.frame_callback_cycle.wrapping_add(1);
+    send_frame_callbacks_for_state(&session.state, now);
     Ok(())
+}
+
+fn queue_estimated_vblank(session: &mut Session) {
+    if session.estimated_vblank.is_some() {
+        return;
+    }
+    let delay = next_vblank_delay(
+        session.last_frame_duration,
+        Duration::from(session.state.clock.now()),
+        refresh_interval(&session.state),
+    );
+    match session.loop_handle.insert_source(
+        Timer::from_duration(delay),
+        |_, _, session: &mut Session| {
+            session.estimated_vblank = None;
+            session.state.frame_callback_cycle = session.state.frame_callback_cycle.wrapping_add(1);
+            if session.state.animating(Instant::now()) {
+                session.backend.window().request_redraw();
+            } else {
+                let now = Duration::from(session.state.clock.now());
+                send_frame_callbacks_for_state(&session.state, now);
+            }
+            TimeoutAction::Drop
+        },
+    ) {
+        Ok(token) => session.estimated_vblank = Some(token),
+        Err(error) => tracing::warn!(%error, "scheduling the estimated vblank"),
+    }
 }
 
 fn reset_dead_cursor(state: &mut State) {
@@ -2016,13 +1991,24 @@ fn cursor_surface_hotspot(surface: &WlSurface) -> Point<f64, Logical> {
     .unwrap_or_else(|| Point::from((0.0, 0.0)))
 }
 
-pub(crate) fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
+#[derive(Default)]
+struct LastFrameCallbackCycle(Cell<Option<u32>>);
+
+// niri a8562a1 src/niri.rs:5342: one callback per surface and refresh cycle, or a client that
+// commits only wl_surface.frame busy-loops on empty frames.
+fn send_frame_callbacks(surface: &WlSurface, time: Duration, cycle: u32) {
     let time_ms = time.as_millis() as u32;
     with_surface_tree_downward(
         surface,
         (),
         |_, _, &()| TraversalAction::DoChildren(()),
         |_, states, &()| {
+            let last = states
+                .data_map
+                .get_or_insert(LastFrameCallbackCycle::default);
+            if last.0.replace(Some(cycle)) == Some(cycle) {
+                return;
+            }
             let mut cached = states.cached_state.get::<SurfaceAttributes>();
             for callback in cached.current().frame_callbacks.drain(..) {
                 callback.done(time_ms);
@@ -2033,72 +2019,51 @@ pub(crate) fn send_frame_callbacks(surface: &WlSurface, time: Duration) {
 }
 
 pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
+    let cycle = state.frame_callback_cycle;
+    if let CursorImageStatus::Surface(surface) = &state.cursor_status {
+        send_frame_callbacks(surface, time, cycle);
+    }
     if state.locked {
         for surface in &state.lock_surfaces {
             if surface.alive() {
-                send_frame_callbacks(surface.wl_surface(), time);
+                send_frame_callbacks(surface.wl_surface(), time, cycle);
             }
         }
         return;
     }
     for surface in state.windows.surfaces() {
         if state.windows.is_mapped(surface) || !state.windows.is_placed(surface) {
-            send_frame_callbacks(surface, time);
+            send_frame_callbacks(surface, time, cycle);
         }
     }
     for entry in state.layers.all() {
-        send_frame_callbacks(entry.surface.wl_surface(), time);
+        send_frame_callbacks(entry.surface.wl_surface(), time, cycle);
     }
     for (id, _parent, _rect) in state.windows.iter_popups() {
         if let Some(surface) = state.popups.surface_of(id) {
-            send_frame_callbacks(surface, time);
+            send_frame_callbacks(surface, time, cycle);
         }
     }
     for popup in &state.ime_popups {
-        send_frame_callbacks(popup.wl_surface(), time);
+        send_frame_callbacks(popup.wl_surface(), time, cycle);
     }
 }
 
-pub(crate) fn send_presentation_feedbacks_for_state(
-    state: &State,
-    time: Duration,
-    seq: u64,
-    presented: bool,
-) {
-    let refresh = state
-        .output
-        .current_mode()
-        .map_or(Refresh::Unknown, |mode| {
-            Refresh::fixed(Duration::from_secs_f64(
-                1_000.0 / f64::from(mode.refresh.max(1)),
-            ))
-        });
-    let send = |surface: &WlSurface| {
+pub(crate) fn take_presentation_feedbacks(state: &State) -> Vec<PresentationFeedbackCallback> {
+    let mut callbacks = Vec::new();
+    let mut take = |surface: &WlSurface| {
         with_surface_tree_downward(
             surface,
             (),
             |_, _, &()| TraversalAction::DoChildren(()),
             |_, states, &()| {
-                let callbacks = std::mem::take(
+                callbacks.append(
                     &mut states
                         .cached_state
                         .get::<PresentationFeedbackCachedState>()
                         .current()
                         .callbacks,
                 );
-                for callback in callbacks {
-                    if presented {
-                        callback.presented(
-                            &state.output,
-                            time,
-                            refresh,
-                            seq,
-                            wp_presentation_feedback::Kind::Vsync,
-                        );
-                    } else {
-                        callback.discarded();
-                    }
-                }
             },
             |_, _, &()| true,
         );
@@ -2106,35 +2071,70 @@ pub(crate) fn send_presentation_feedbacks_for_state(
     if state.locked {
         for surface in &state.lock_surfaces {
             if surface.alive() {
-                send(surface.wl_surface());
+                take(surface.wl_surface());
             }
         }
-        return;
+        return callbacks;
     }
     for window in state.windows.iter() {
         if window.is_mapped() {
-            send(window.surface());
+            take(window.surface());
         }
     }
     for entry in state.layers.all() {
-        send(entry.surface.wl_surface());
+        take(entry.surface.wl_surface());
     }
     for (id, _parent, _rect) in state.windows.iter_popups() {
         if let Some(surface) = state.popups.surface_of(id) {
-            send(surface);
+            take(surface);
         }
+    }
+    callbacks
+}
+
+pub(crate) fn present_feedbacks(
+    state: &State,
+    callbacks: Vec<PresentationFeedbackCallback>,
+    time: Duration,
+    seq: u64,
+) {
+    let refresh = Refresh::fixed(refresh_interval(state));
+    for callback in callbacks {
+        callback.presented(
+            &state.output,
+            time,
+            refresh,
+            seq,
+            wp_presentation_feedback::Kind::Vsync,
+        );
     }
 }
 
-pub(crate) fn finish_empty_frame(
-    state: &mut State,
-    time: Duration,
-    seq: u64,
-    schedule_repaint: &mut dyn FnMut(),
-) {
-    send_frame_callbacks_for_state(state, time);
-    send_presentation_feedbacks_for_state(state, time, seq, false);
-    schedule_repaint();
+pub(crate) fn discard_feedbacks(state: &State) {
+    for callback in take_presentation_feedbacks(state) {
+        callback.discarded();
+    }
+}
+
+pub(crate) fn refresh_interval(state: &State) -> Duration {
+    let millihertz = state
+        .output
+        .current_mode()
+        .map_or(60_000, |mode| mode.refresh)
+        .max(1);
+    Duration::from_micros(1_000_000_000 / millihertz as u64)
+}
+
+pub(crate) fn next_vblank_delay(
+    last_vblank: Option<Duration>,
+    now: Duration,
+    refresh: Duration,
+) -> Duration {
+    let Some(last) = last_vblank.filter(|last| *last <= now) else {
+        return refresh;
+    };
+    let since = (now - last).as_nanos() % refresh.as_nanos();
+    refresh - Duration::from_nanos(since as u64)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -3456,5 +3456,27 @@ mod tests {
         if let Err(error) = client_handle.join() {
             std::panic::resume_unwind(error);
         }
+    }
+
+    #[test]
+    fn the_estimated_vblank_lands_on_the_refresh_grid() {
+        let refresh = std::time::Duration::from_millis(16);
+        let delay = super::next_vblank_delay(
+            Some(std::time::Duration::from_millis(10)),
+            std::time::Duration::from_millis(35),
+            refresh,
+        );
+        assert_eq!(delay, std::time::Duration::from_millis(7));
+    }
+
+    #[test]
+    fn without_a_past_vblank_the_estimate_waits_one_refresh() {
+        let refresh = std::time::Duration::from_millis(16);
+        let now = std::time::Duration::from_millis(35);
+        assert_eq!(super::next_vblank_delay(None, now, refresh), refresh);
+        assert_eq!(
+            super::next_vblank_delay(Some(std::time::Duration::from_millis(50)), now, refresh),
+            refresh
+        );
     }
 }

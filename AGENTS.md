@@ -75,7 +75,7 @@ nix develop            # obligatorio (marca MALAYSIA_DEV_SHELL)
 ./dev.sh video         # shell + solo Marea (vídeo, cristal y carátulas)
 ./dev.sh titlebar      # cerrar/minimizar/maximizar
 ./dev.sh smoke         # mapeo de toplevels
-# probes: move, pointers, screencopy, presentation, activation
+# probes: move, pointers, screencopy, presentation, frames, activation
 ```
 
 No compiles fuera del dev shell: `build.rs` y `dev.sh` lo rechazan (ADR 0007).

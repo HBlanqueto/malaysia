@@ -81,6 +81,42 @@ escritorio avance sin input, mide el coste de repintar toda la salida y, si
 niri permite limitarlo a la superficie, estrecha el daño. No vuelvas a meter
 el render incondicional por vblank.
 
+**Resultado 2026-11-04 (Claude):** el modelo de niri `a8562a1` está aplicado
+y `force_full_damage` y el puente de `22a1d49` ya no existen. La congelación
+tenía dos causas que no eran el damage:
+
+1. En udev, un commit aplicado al soltarse un blocker de dmabuf (todo cliente
+   GPU, incluido el shell Vulkan) dejaba `needs_redraw` sin atender hasta el
+   siguiente input.
+2. Los frame callbacks del vblank y del frame vacío no se enviaban al socket
+   (`flush_clients`) hasta que un cliente escribía o llegaba input.
+
+Ahora, como niri (`src/main.rs:279`, `refresh_and_flush_clients`), cada vuelta
+del bucle atiende las peticiones, redibuja si toca y hace flush. Detalles:
+
+- `RedrawState` en `udev.rs`, con las transiciones de `src/niri.rs:699`.
+- Sin damage, un timer de vblank estimado sustituye al render continuo.
+- Cada superficie recibe como mucho un frame callback por ciclo de refresco.
+- La superficie del cursor recibe callbacks.
+- El feedback de presentación se toma al encolar el frame, no en el vblank.
+- Un buffer nuevo sin damage daña solo su superficie.
+
+Mesa adjunta damage completo en cada present Vulkan; lo que el shell manda sin
+damage es el commit que solo pide `wl_surface.frame`.
+
+Medido en `./dev.sh frames` (winit sobre weston headless, llvmpipe):
+
+| Código | Callbacks/s sin damage | CPU en reposo |
+|---|---|---|
+| `32fd711`, con el puente | 0 (congelado) | 0 ticks/5 s |
+| Con el modelo nuevo | 59,9 | 0 ticks/5 s |
+
+Falta validar el camino DRM, que no se pudo probar sin GPU:
+
+1. `./dev.sh drm-vkms`.
+2. La sesión real: con el ratón quieto, el reloj avanza y
+   `WAYLAND_DISPLAY=wayland-N target/debug/frame_callbacks` da PASS.
+
 Compara con niri (el rev fijado en la auditoría) cómo maneja `queue_redraw`,
 `RedrawState`, damage tracking, cursor plane y frame callbacks. Revisa
 `crates/malaysia-compositor/src/{udev.rs,session.rs,input.rs,handlers.rs}`.
