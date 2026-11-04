@@ -9,10 +9,7 @@ pub fn desktop_dir() -> PathBuf {
     if let Some(path) = explicit {
         return PathBuf::from(path);
     }
-    let config_home = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
-    if let Some(dir) = config_home
+    if let Some(dir) = config_home()
         .map(|dir| dir.join("user-dirs.dirs"))
         .and_then(|file| std::fs::read_to_string(file).ok())
         .and_then(|text| parse_desktop_dir(&text))
@@ -22,6 +19,12 @@ pub fn desktop_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join("Desktop"))
         .unwrap_or_else(|| PathBuf::from("Desktop"))
+}
+
+pub fn config_home() -> Option<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
 }
 
 fn parse_desktop_dir(text: &str) -> Option<PathBuf> {
