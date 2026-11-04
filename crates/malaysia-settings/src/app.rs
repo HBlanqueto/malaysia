@@ -56,7 +56,10 @@ pub fn settings_window(
 ) -> Rect {
     let mut error = use_state(|| None::<String>);
     let name = account_name();
-    let window = PreferencesWindow::new().account(initials(&name), name, "Cuenta local");
+    let window = PreferencesWindow::new()
+        .account(initials(&name), name, "Cuenta local")
+        .sidebar_toggle(false)
+        .sidebar_resizable(false);
     let window = window.group(PaneGroup::new(None).pane(Pane::new(
         "appearance",
         "Apariencia",

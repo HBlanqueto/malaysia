@@ -770,7 +770,7 @@ impl App for AboutAppInfo {
                     close();
                 }
             })
-            .child(Titlebar::new().close_only(true).into_element())
+            .child(Titlebar::new().close_only(true).title("").into_element())
             .child(
                 rect()
                     .margin(Gaps::new(ABOUT_GAP, 0.0, ABOUT_GAP, 0.0))

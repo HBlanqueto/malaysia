@@ -963,11 +963,15 @@ fn seconds_to_next_minute() -> std::time::Duration {
 }
 
 fn is_shell_dialog(app_id: &str) -> bool {
-    [
-        crate::dialogs::ABOUT_APP_ID,
-        crate::dialogs::ABOUT_APP_INFO_ID,
-    ]
-    .contains(&app_id)
+    app_id
+        .strip_prefix(vow_design::NATIVE_APP_ID_PREFIX)
+        .is_some_and(|name| {
+            [
+                crate::dialogs::ABOUT_APP_ID,
+                crate::dialogs::ABOUT_APP_INFO_ID,
+            ]
+            .contains(&name)
+        })
 }
 
 fn load_active_app(store_path: &PathBuf) -> Option<String> {
@@ -1017,6 +1021,18 @@ pub fn run() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_dialogs_are_recognised_by_their_prefixed_app_id() {
+        let about = format!(
+            "{}{}",
+            vow_design::NATIVE_APP_ID_PREFIX,
+            crate::dialogs::ABOUT_APP_ID
+        );
+        assert!(is_shell_dialog(&about));
+        assert!(!is_shell_dialog(crate::dialogs::ABOUT_APP_ID));
+        assert!(!is_shell_dialog("org.mozilla.firefox"));
+    }
 
     #[test]
     fn menubar_domain_defaults_app_menus_to_true() {
