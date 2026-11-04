@@ -44,8 +44,7 @@ Each file is optional; missing files use their default (like macOS's
 
 Status of each option:
 - **active** — read at runtime and changes the behavior.
-- **data** — lives in `Config`, is documented and validated, but nothing consumes it yet.
-- **pending** — defined in the catalog; it is implemented together with its effect.
+- **pending** — defined in the catalog; not parsed or consumed yet, and it arrives with its effect.
 
 ---
 
@@ -134,10 +133,10 @@ becomes per output.
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
 | `window.decorations` | `"default"` \| `"force_server"` \| `"force_client"` | `"default"` | **active** | decoration handlers (ADR 0019/0020) |
-| `window.titlebar` | bool | `true` | data | decoration renderer |
+| `window.titlebar` | bool | `true` | pending | decoration renderer |
 | `window.double_click_titlebar` | `"fill"` \| `"minimize"` \| `"zoom"` \| `"none"` | `"zoom"` | **active** | input |
 | `window.green_button` | `"focus"` \| `"zoom"` \| `"fullscreen"` \| `"none"` | `"focus"` | **active** | SSD and CSD titlebar |
-| `window.focus` | `"click"` \| `"sloppy"` | `"click"` | data | input |
+| `window.focus` | `"click"` \| `"sloppy"` | `"click"` | pending | input |
 | `window.resize_border` | integer (logical px) | `10` | **active** | width of the outer resize band on the sides |
 | `window.resize_corner` | integer (logical px) | `20` | **active** | length of the outer resize «L» at the corners |
 | `window.qt_server_decorations` | bool | `true` | **active** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` in clients and session |
@@ -178,12 +177,12 @@ Flow, shortcuts and overlay: [`../arquitectura/capturas.md`](../arquitectura/cap
 | `screenshot.show_pointer` | bool | `false` | **active** | screen/region capture (window captures never include it) |
 | `screenshot.show_thumbnail` | bool | `true` | pending | floating thumbnail |
 | `screenshot.target` | `"desktop"` \| `"clipboard"` \| `"preview"` \| `"mail"` \| `"messages"` \| `"other"` | `"desktop"` | **active** (`desktop`/`clipboard`); the rest fall back to the Desktop | target: file or `image/png` on the clipboard |
-| `screenshot.location` | string (path) or absent | — | data | custom folder for `target = "other"` |
-| `screenshot.type` | `"png"` \| `"jpg"` \| `"heif"` \| `"tiff"` \| `"pdf"` | `"png"` | data | format (always PNG today) |
-| `screenshot.include_date` | bool | `true` | data | date and time in the name |
-| `screenshot.disable_shadow` | bool | `false` | data | window shadow in the capture |
-| `screenshot.timer` | integer (seconds) | `0` | data | timer (0 = none, 5, 10) |
-| `screenshot.remember_selection` | bool | `false` | data | remember the last region/window |
+| `screenshot.location` | string (path) or absent | — | pending | custom folder for `target = "other"` |
+| `screenshot.type` | `"png"` \| `"jpg"` \| `"heif"` \| `"tiff"` \| `"pdf"` | `"png"` | pending | format (always PNG today) |
+| `screenshot.include_date` | bool | `true` | pending | date and time in the name |
+| `screenshot.disable_shadow` | bool | `false` | pending | window shadow in the capture |
+| `screenshot.timer` | integer (seconds) | `0` | pending | timer (0 = none, 5, 10) |
+| `screenshot.remember_selection` | bool | `false` | pending | remember the last region/window |
 
 The defaults are macOS's: pointer **hidden**, save to the **Desktop** as
 **PNG** with date, floating thumbnail **yes** and window shadow **yes**. The names
@@ -202,9 +201,9 @@ include the pointer. The clipboard is `image/png` and the compositor serves it; 
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `wallpaper.dir` | string (path) | `/run/current-system/sw/share/wallpapers/solid-colors` | data | `malaysia-wallpaper`, settings app |
-| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | data | `malaysia-wallpaper` |
-| `wallpaper.shuffle` | bool | `false` | data | `malaysia-wallpaper` |
+| `wallpaper.dir` | string (path) | `/run/current-system/sw/share/wallpapers/solid-colors` | pending | `malaysia-wallpaper`, settings app |
+| `wallpaper.scale` | `"fill"` \| `"stretch"` \| `"fit"` \| `"center"` | `"fill"` | pending | `malaysia-wallpaper` |
+| `wallpaper.shuffle` | bool | `false` | pending | `malaysia-wallpaper` |
 
 **Malaysia's wallpapers live in the project itself** (`share/wallpapers/solid-colors/`,
 the macOS "Solid Colors" set, vendored in the repo) and the flake installs them as system
@@ -279,16 +278,16 @@ They apply to **every** window, client- or server-decorated.
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `effects.corner_radius` | float (px) | `0.0` | data | surface render |
-| `effects.inner_border.enabled` | bool | `false` | data | decoration render |
-| `effects.inner_border.width` | float (px) | `1.0` | data | same |
-| `effects.inner_border.color` | `[r,g,b]` | `[0.5,0.5,0.5]` | data | same |
-| `effects.shadow.enabled` | bool | `false` | data | shadow render |
-| `effects.shadow.radius` | float (px) | `24.0` | data | same |
-| `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | data | same |
-| `effects.shadow.opacity` | float `[0,1]` | `0.35` | data | same |
-| `effects.blur.enabled` | bool | `false` | data | blur render |
-| `effects.blur.radius` | float (px) | `20.0` | data | same |
+| `effects.corner_radius` | float (px) | `0.0` | pending | surface render |
+| `effects.inner_border.enabled` | bool | `false` | pending | decoration render |
+| `effects.inner_border.width` | float (px) | `1.0` | pending | same |
+| `effects.inner_border.color` | `[r,g,b]` | `[0.5,0.5,0.5]` | pending | same |
+| `effects.shadow.enabled` | bool | `false` | pending | shadow render |
+| `effects.shadow.radius` | float (px) | `24.0` | pending | same |
+| `effects.shadow.offset` | `[x,y]` (px) | `[0,6]` | pending | same |
+| `effects.shadow.opacity` | float `[0,1]` | `0.35` | pending | same |
+| `effects.blur.enabled` | bool | `false` | pending | blur render |
+| `effects.blur.radius` | float (px) | `20.0` | pending | same |
 
 Once a **transparent theme** exists, the app paints with alpha and `effects.blur.*`
 makes the compositor blur what is behind (macOS-style vibrancy).
@@ -297,7 +296,7 @@ makes the compositor blur what is behind (macOS-style vibrancy).
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `debug.damage_highlight` | bool | `false` | data | render (highlight damage per frame) |
+| `debug.damage_highlight` | bool | `false` | pending | render (highlight damage per frame) |
 | `debug.overlay_planes` | bool | `false` | active | DRM: overlay planes and their dmabuf feedback tranche |
 
 `debug.overlay_planes` is read when the DRM session starts; changing it requires
