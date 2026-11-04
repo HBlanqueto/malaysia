@@ -20,7 +20,7 @@ use vow_design::{
     ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP, ABOUT_DRAWING_WIDTH,
     ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_LABEL_WIDTH, ABOUT_SPEC_ROW_GAP, ABOUT_TITLE_GAP,
     ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE,
-    TEXT, TITLEBAR_CLIENT_HEIGHT,
+    TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -675,7 +675,7 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
                 .width(Size::px(ABOUT_DRAWING_WIDTH))
                 .height(Size::px(ABOUT_DRAWING_HEIGHT))
                 .margin(Gaps::new(
-                    ABOUT_DRAWING_TOP - TITLEBAR_CLIENT_HEIGHT as f32,
+                    ABOUT_DRAWING_TOP - TITLEBAR.thickness as f32,
                     0.0,
                     ABOUT_TITLE_GAP,
                     0.0,
@@ -929,7 +929,7 @@ mod render_tests {
         fn render(&self) -> impl IntoElement {
             let titlebar = rect()
                 .width(Size::fill())
-                .height(Size::px(TITLEBAR_CLIENT_HEIGHT as f32))
+                .height(Size::px(TITLEBAR.thickness as f32))
                 .into_element();
             about_view(&self.0, titlebar)
         }
