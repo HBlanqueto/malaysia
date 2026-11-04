@@ -143,6 +143,94 @@ entrega.
 - La entrega demuestra el estudio de niri: archivos/funciones exactas,
   explicación del flujo y ninguna parte omitida sin justificar.
 
+### Resultado (Claude, 2026-11-04, `aa98503`)
+
+**Flujo de niri `a8562a1`** (Smithay `8a27023`):
+
+1. **Commit.** `CompositorHandler::commit` (`src/handlers/compositor.rs:56`)
+   aplica el buffer y pide `queue_redraw(output)` según la raíz: toplevel,
+   popup, layer o lock. Para el cursor y el DnD pide `queue_redraw_all`.
+   No mira el damage.
+2. **Petición.** `RedrawState::queue_redraw` (`src/niri.rs:699`) solo cambia
+   el estado: `Idle`, `Queued`, `WaitingForVBlank{redraw_needed}` o
+   `WaitingForEstimatedVBlank[AndQueued]`.
+3. **Fin de vuelta del bucle.** `src/main.rs:279` llama a
+   `refresh_and_flush_clients` (`src/niri.rs:819`). Esa función llama a
+   `redraw_queued_outputs` (`:3981`) y hace `flush_clients`.
+4. **Redraw.** `Niri::redraw` (`:4888`) renderiza y siempre termina con
+   `send_frame_callbacks` (`:5342`). Ese envío manda como mucho un callback
+   por superficie y valor de `frame_callback_sequence`.
+5. **Render en TTY** (`src/backend/tty.rs:1882`):
+   - Con damage: `queue_frame`, `WaitingForVBlank` y la secuencia sube en 1
+     (`:2014`).
+   - Sin damage: `queue_estimated_vblank_timer` (`:3064`).
+6. **VBlank** (`:1638`): presenta el feedback. Si hay petición o animación,
+   pide otro redraw; si no, manda los callbacks.
+7. **Timer estimado** (`:1826`): la secuencia sube en 1 y después pide
+   redraw o manda los callbacks.
+8. **Winit** (`src/backend/winit.rs:321`): presenta al momento y la
+   secuencia sube en cada render.
+9. **Input:** `on_pointer_motion` termina en `queue_redraw_all`
+   (`src/input/mod.rs:2899`).
+
+**Qué cambió en Malaysia:**
+
+| Pieza | Antes | Ahora |
+|---|---|---|
+| Peticiones en udev | Solo las atendían display, input y apariencia; un commit tras soltarse un blocker de dmabuf quedaba sin render. | `redraw_queued_and_flush` al final de cada vuelta del bucle. |
+| Flush | Solo tras despachar clientes o input; los callbacks del vblank esperaban. | Al final de cada vuelta, en udev y en winit. |
+| Frame vacío | Callbacks al momento, más render continuo (`22a1d49`). | Timer al vblank estimado; un callback por ciclo. |
+| Cursor | Sin frame callbacks. | Los recibe, también con la sesión bloqueada. |
+| Presentación | Se recogía en el vblank. | Se toma al encolar el frame (udev) o al enviarlo (winit). |
+| Buffer sin damage | `force_full_damage` repintaba la salida. | Daña su superficie entera (Smithay ignora el damage vacío, `renderer/utils/mod.rs:221-226`). |
+
+**Por qué se congelaba:** Mesa adjunta damage completo en cada present
+Vulkan (`wsi_common_wayland.c:3352-3375`, mesa-26.2.4). Lo que barrierkit
+commitea sin damage es su petición de frame (`platform/surface.rs:98-104`).
+`force_full_damage` no tocaba la causa.
+
+**Casos fuera de este cambio, y por qué:**
+
+- **Timer de 1 s para superficies invisibles** (`src/niri.rs:2708`,
+  `:5432`). Malaysia no filtra por visibilidad: manda callbacks a todas las
+  superficies mapeadas de su única salida. Con la sesión bloqueada solo los
+  reciben el lock y el cursor; así era antes y la especificación lo permite.
+- **Icono de DnD.** Malaysia no lo dibuja (`handlers.rs`, `dnd_requested`
+  ignora `_icon`).
+- **VRR, `VBlankThrottle` y varias salidas.** udev maneja un solo panel
+  (`find_panel`) y no tiene VRR.
+- **Feedback en un frame vacío.** Se descarta, como antes. niri lo deja
+  pendiente, pero en reposo no llega otro frame y el cliente esperaría sin
+  fin.
+- **Cursor plane, scanout directo, overlays e IDs estables (`18d90a5`).** No
+  cambian.
+
+**Medido** con `./dev.sh frames` (winit sobre weston headless, llvmpipe,
+60 Hz):
+
+| Código | Callbacks/s sin damage | CPU en reposo | CPU con el probe (2 s) |
+|---|---|---|---|
+| `32fd711` | 0 (congelado) | 0 ticks/5 s | 1 tick |
+| `aa98503` | 59,9 | 0 ticks/5 s | 9 ticks |
+
+`./dev.sh check` no se pudo ejecutar entero porque el dev shell necesita un
+tarball de Skia que el proxy bloquea. Se pasaron `cargo fmt --check`,
+`cargo clippy -D warnings` (compositor y probes) y `cargo test -p
+malaysia-compositor`: 265 + 15 tests.
+
+En este entorno sin GPU, `a_failed_create_immed_is_drained_and_posts_the_protocol_error`
+se cuelga y `screencopy-window` falla. Las dos cosas pasan igual en
+`32fd711`.
+
+Pasan los probes `presentation`, `smoke`, `activation`, `pointers` y `move`.
+
+**Falta** validar DRM: no hay `/dev/dri` ni vkms aquí.
+
+1. `./dev.sh drm-vkms`.
+2. La sesión real, sin tocar el ratón. El reloj y las animaciones deben
+   avanzar, y `WAYLAND_DISPLAY=wayland-N target/debug/frame_callbacks` debe
+   dar PASS.
+
 ## 2. Menú global de Firefox
 
 ### Síntoma real
