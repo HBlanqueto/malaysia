@@ -5,7 +5,7 @@ use std::sync::Once;
 
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use malaysia_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
-use malaysia_scene::scene::WindowId;
+use malaysia_scene::scene::{PopupId, WindowId};
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::Uniform;
@@ -115,9 +115,15 @@ pub(crate) const OUTER_BORDER_SLOT: u8 = 0;
 pub(crate) const INNER_BORDER_SLOT: u8 = 1;
 const SHADOW_SLOT: u8 = 2;
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum FrameOwner {
+    Window(WindowId),
+    Popup(PopupId),
+}
+
 pub(crate) struct ChromeCache {
     entries: HashMap<WindowId, Cached>,
-    shaders: HashMap<(WindowId, u8), CachedShader>,
+    shaders: HashMap<(FrameOwner, u8), CachedShader>,
     text: TextEngine,
 }
 
@@ -156,32 +162,21 @@ impl ChromeCache {
         }
     }
 
-    pub(crate) fn remove(&mut self, id: WindowId) {
-        self.entries.remove(&id);
-        self.shaders.retain(|(owner, _), _| *owner != id);
+    pub(crate) fn remove(&mut self, owner: FrameOwner) {
+        if let FrameOwner::Window(id) = owner {
+            self.entries.remove(&id);
+        }
+        self.shaders.retain(|(cached, _), _| *cached != owner);
     }
 
     pub(crate) fn shader(
         &mut self,
-        owner: Option<(WindowId, u8)>,
+        key: (FrameOwner, u8),
         program: &GlesPixelProgram,
         area: Rectangle<i32, Logical>,
         alpha: f32,
         uniforms: Vec<Uniform<'static>>,
     ) -> PixelShaderElement {
-        let fresh = |uniforms| {
-            PixelShaderElement::new(
-                program.clone(),
-                area,
-                None,
-                alpha,
-                uniforms,
-                Kind::Unspecified,
-            )
-        };
-        let Some(key) = owner else {
-            return fresh(uniforms);
-        };
         if let Some(cached) = self.shaders.get_mut(&key)
             && cached.alpha == alpha
         {
@@ -192,7 +187,14 @@ impl ChromeCache {
             }
             return cached.element.clone();
         }
-        let element = fresh(uniforms.clone());
+        let element = PixelShaderElement::new(
+            program.clone(),
+            area,
+            None,
+            alpha,
+            uniforms.clone(),
+            Kind::Unspecified,
+        );
         self.shaders.insert(
             key,
             CachedShader {
@@ -207,7 +209,7 @@ impl ChromeCache {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn shadow_element<R: MalaysiaRenderer>(
         &mut self,
-        owner: Option<WindowId>,
+        owner: FrameOwner,
         program: &GlesPixelProgram,
         window_rect: Rectangle<i32, Physical>,
         radius: i32,
@@ -226,9 +228,8 @@ impl ChromeCache {
             else {
                 continue;
             };
-            let owner = owner.map(|id| (id, slot));
             elements.push(
-                PrimaryGpu(self.shader(owner, program, area, layer.opacity, uniforms)).into(),
+                PrimaryGpu(self.shader((owner, slot), program, area, layer.opacity, uniforms)).into(),
             );
         }
         elements

@@ -1549,7 +1549,7 @@ impl State {
         self.maximized.remove(&id);
         self.arranged.remove(&id);
         self.minimized.remove(&id);
-        self.chrome.remove(id);
+        self.chrome.remove(crate::chrome::FrameOwner::Window(id));
         if self.grab.map(Grab::window) == Some(id) {
             self.grab = None;
         }

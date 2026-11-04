@@ -1213,7 +1213,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
         content,
         surface_elements,
         Frame {
-            owner: Some(id),
+            owner: crate::chrome::FrameOwner::Window(id),
             rect: frame_rect_physical,
             radius: radius_physical,
             exponent,
@@ -1226,7 +1226,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
 }
 
 struct Frame {
-    owner: Option<malaysia_scene::scene::WindowId>,
+    owner: crate::chrome::FrameOwner,
     rect: Rectangle<i32, Physical>,
     radius: i32,
     exponent: f32,
@@ -1331,7 +1331,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             Vec::new(),
             surface_elements,
             Frame {
-                owner: None,
+                owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
                 radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
                 exponent: vow_design::POPUP.superellipse_exponent,
@@ -1379,7 +1379,7 @@ fn append_frame<R: MalaysiaRenderer>(
     let mut shadow = Vec::new();
     if frame.bordered {
         let palette = &state.chrome_theme.palette;
-        let slot = |slot| frame.owner.map(|id| (id, slot));
+        let slot = |slot| (frame.owner, slot);
         if let Some(program) = state.border.as_ref() {
             if let Some(color) = palette.inner_line {
                 let (area, uniforms) = border_shader(

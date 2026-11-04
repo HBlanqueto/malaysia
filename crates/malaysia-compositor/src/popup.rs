@@ -292,11 +292,16 @@ impl State {
             }
         }
         for id in subtree {
-            self.windows.remove_popup(id);
-            self.popups.remove_id(id);
+            self.forget_popup(id);
         }
         self.restore_popup_focus(&surfaces);
         self.request_redraw();
+    }
+
+    fn forget_popup(&mut self, id: PopupId) {
+        self.windows.remove_popup(id);
+        self.popups.remove_id(id);
+        self.chrome.remove(crate::chrome::FrameOwner::Popup(id));
     }
 
     pub(crate) fn root_popups_of(&self, window: WindowId) -> Vec<PopupId> {
@@ -344,8 +349,7 @@ impl State {
             .filter_map(|id| self.popups.surface_of(*id).cloned())
             .collect();
         for id in subtree {
-            self.windows.remove_popup(id);
-            self.popups.remove_id(id);
+            self.forget_popup(id);
         }
         self.restore_popup_focus(&surfaces);
         self.request_redraw();

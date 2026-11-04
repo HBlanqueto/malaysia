@@ -7,7 +7,7 @@ use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement};
 use smithay::backend::renderer::gles::{
     GlesPixelProgram, GlesRenderer, GlesTexProgram, GlesTexture, Uniform, UniformName, UniformType,
 };
-use smithay::backend::renderer::utils::{CommitCounter, DamageSet};
+use smithay::backend::renderer::utils::{CommitCounter, DamageSet, OpaqueRegions};
 use smithay::backend::renderer::{Renderer, Texture};
 
 use crate::renderer::MalaysiaRenderer;
@@ -36,6 +36,29 @@ fn texture_radius(
 ) -> f32 {
     let scale = src.size.w / f64::from(dst.size.w);
     (f64::from(radius) * scale) as f32
+}
+
+fn opaque_inside_frame(
+    regions: impl IntoIterator<Item = Rectangle<i32, Physical>>,
+    frame: Rectangle<i32, Physical>,
+    radius: i32,
+) -> Vec<Rectangle<i32, Physical>> {
+    let inside = regions
+        .into_iter()
+        .filter_map(|rect| rect.intersection(frame));
+    Rectangle::subtract_rects_many(inside, rounded_corners(frame, radius))
+}
+
+fn rounded_corners(frame: Rectangle<i32, Physical>, radius: i32) -> [Rectangle<i32, Physical>; 4] {
+    let size = Size::from((radius, radius));
+    let right = frame.loc.x + frame.size.w - radius;
+    let bottom = frame.loc.y + frame.size.h - radius;
+    [
+        Rectangle::new(frame.loc, size),
+        Rectangle::new(Point::from((right, frame.loc.y)), size),
+        Rectangle::new(Point::from((frame.loc.x, bottom)), size),
+        Rectangle::new(Point::from((right, bottom)), size),
+    ]
 }
 
 pub(crate) fn shader_area(
@@ -201,6 +224,21 @@ impl<R: MalaysiaRenderer> Element for RoundedTextureElement<R> {
         }
     }
 
+    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        let Source::Surface(element) = &self.source else {
+            return OpaqueRegions::default();
+        };
+        if self.remapped {
+            return OpaqueRegions::default();
+        }
+        let frame = Rectangle::new(self.frame_rect.loc - self.dst.loc, self.frame_rect.size);
+        OpaqueRegions::from_slice(&opaque_inside_frame(
+            element.opaque_regions(scale),
+            frame,
+            self.radius,
+        ))
+    }
+
     fn alpha(&self) -> f32 {
         match &self.source {
             Source::Surface(element) => element.alpha(),
@@ -255,7 +293,17 @@ impl<R: MalaysiaRenderer> RenderElement<R> for RoundedTextureElement<R> {
 mod tests {
     use smithay::utils::{Logical, Physical, Point, Rectangle, Scale, Size};
 
-    use super::{frame_to_texture_geometry, shader_area, texture_radius};
+    use super::{frame_to_texture_geometry, opaque_inside_frame, shader_area, texture_radius};
+
+    #[test]
+    fn opaque_regions_stop_at_the_frame_and_skip_the_rounded_corners() {
+        let frame = Rectangle::<i32, Physical>::new(Point::from((10, 10)), Size::from((100, 50)));
+        let opaque = opaque_inside_frame([Rectangle::from_size(Size::from((200, 200)))], frame, 8);
+        let area: i32 = opaque.iter().map(|rect| rect.size.w * rect.size.h).sum();
+        assert_eq!(area, 100 * 50 - 4 * 8 * 8);
+        assert!(opaque.iter().all(|rect| frame.contains_rect(*rect)));
+        assert!(!opaque.iter().any(|rect| rect.contains(frame.loc)));
+    }
 
     #[test]
     fn surface_geometry_scales_the_logical_view_to_physical() {
