@@ -77,6 +77,7 @@ pub struct State {
     pub shm_state: ShmState,
     pub dmabuf_state: DmabufState,
     pub pending_dmabuf_imports: Vec<PendingDmabufImport>,
+    pub(crate) security_listeners: Vec<smithay::wayland::security_context::SecurityContextListenerSource>,
     pub syncobj_state: Option<DrmSyncobjState>,
     pub(crate) blocker_sink: Box<dyn crate::blockers::BlockerSink>,
     pub seat_state: SeatState<State>,
@@ -272,7 +273,10 @@ impl State {
         XdgDecorationState::new::<Self>(display_handle);
         let kde_decoration_state =
             KdeDecorationState::new::<Self>(display_handle, KdeDefaultMode::Server);
-        let layer_shell_state = WlrLayerShellState::new::<Self>(display_handle);
+        let layer_shell_state = WlrLayerShellState::new_with_filter::<Self, _>(
+            display_handle,
+            crate::security::unrestricted,
+        );
         ViewporterState::new::<Self>(display_handle);
         FractionalScaleManagerState::new::<Self>(display_handle);
         PresentationState::new::<Self>(display_handle, 1);
@@ -283,14 +287,28 @@ impl State {
         smithay::wayland::text_input::TextInputManagerState::new::<Self>(display_handle);
         smithay::wayland::input_method::InputMethodManagerState::new::<Self, _>(
             display_handle,
-            |_| true,
+            crate::security::unrestricted,
         );
-        let output_capture_source_state = OutputCaptureSourceState::new::<Self>(display_handle);
-        let toplevel_capture_source_state = ToplevelCaptureSourceState::new::<Self>(display_handle);
-        let image_copy_capture_state = ImageCopyCaptureState::new::<Self>(display_handle);
+        smithay::wayland::security_context::SecurityContextState::new::<Self, _>(
+            display_handle,
+            crate::security::unrestricted,
+        );
+        let output_capture_source_state = OutputCaptureSourceState::new_with_filter::<Self, _>(
+            display_handle,
+            crate::security::unrestricted,
+        );
+        let toplevel_capture_source_state = ToplevelCaptureSourceState::new_with_filter::<Self, _>(
+            display_handle,
+            crate::security::unrestricted,
+        );
+        let image_copy_capture_state = ImageCopyCaptureState::new_with_filter::<Self, _>(
+            display_handle,
+            crate::security::unrestricted,
+        );
         let data_device_state = DataDeviceState::new::<Self>(display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display_handle);
-        let lock_state = SessionLockManagerState::new::<Self, _>(display_handle, |_| true);
+        let lock_state =
+            SessionLockManagerState::new::<Self, _>(display_handle, crate::security::unrestricted);
         let _idle_inhibit_state =
             smithay::wayland::idle_inhibit::IdleInhibitManagerState::new::<Self>(display_handle);
 
@@ -300,11 +318,11 @@ impl State {
         seat.add_keyboard(keymap.xkb_config(), 200, 25)?;
         smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(
             display_handle,
-            crate::virtual_input::trusted,
+            crate::security::unrestricted,
         );
         smithay::wayland::virtual_pointer::VirtualPointerManagerState::new::<Self, _>(
             display_handle,
-            crate::virtual_input::trusted,
+            crate::security::unrestricted,
         );
         let _ = seat.add_pointer();
 
@@ -321,6 +339,7 @@ impl State {
             shm_state,
             dmabuf_state,
             pending_dmabuf_imports: Vec::new(),
+            security_listeners: Vec::new(),
             syncobj_state,
             blocker_sink,
             seat_state,
@@ -863,6 +882,7 @@ pub struct ClientState {
     disconnect_queue: ClientDisconnectQueue,
     disconnect_ping: Ping,
     pub trusted_shell: bool,
+    pub restricted: bool,
 }
 
 impl ClientState {
@@ -877,6 +897,17 @@ impl ClientState {
             disconnect_queue,
             disconnect_ping,
             trusted_shell,
+            restricted: false,
+        }
+    }
+
+    pub(crate) fn restricted(
+        disconnect_queue: ClientDisconnectQueue,
+        disconnect_ping: Ping,
+    ) -> Self {
+        Self {
+            restricted: true,
+            ..Self::new(disconnect_queue, disconnect_ping, false)
         }
     }
 

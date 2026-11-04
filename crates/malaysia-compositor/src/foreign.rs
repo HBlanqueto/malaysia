@@ -127,6 +127,10 @@ impl smithay::reexports::wayland_server::GlobalDispatch<ZwlrForeignToplevelManag
         }
         state.foreign.management.instances.push(manager);
     }
+
+    fn can_view(client: Client, _data: &()) -> bool {
+        crate::security::unrestricted(&client)
+    }
 }
 
 impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelManagerV1, (), State>

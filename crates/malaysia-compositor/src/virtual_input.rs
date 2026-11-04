@@ -1,9 +1,8 @@
-//! `zwp_virtual_keyboard_v1` and `zwlr_virtual_pointer_v1`: synthetic input from trusted clients.
+//! `zwp_virtual_keyboard_v1` and `zwlr_virtual_pointer_v1`: synthetic input from unsandboxed clients.
 
 use std::sync::Arc;
 
 use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
-use smithay::reexports::wayland_server::Client;
 use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::input_method::InputMethodSeat;
 use smithay::wayland::virtual_keyboard::{
@@ -12,13 +11,7 @@ use smithay::wayland::virtual_keyboard::{
 };
 use smithay::wayland::virtual_pointer::{VirtualPointerBackend, VirtualPointerHandler};
 
-use crate::state::{ClientState, State};
-
-pub(crate) fn trusted(client: &Client) -> bool {
-    client
-        .get_data::<ClientState>()
-        .is_some_and(|state| state.trusted_shell)
-}
+use crate::state::State;
 
 impl VirtualKeyboardHandler for State {
     fn process_virtual_keyboard_event(&mut self, event: InputEvent<VirtualKeyboardBackend>) {

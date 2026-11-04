@@ -499,6 +499,13 @@ pub fn run(options: DrmOptions) -> Result<()> {
     info!("direct session ready");
     let result = event_loop.run(None, &mut udev, |udev| {
         udev.state.activity_noted = false;
+        let listeners = std::mem::take(&mut udev.state.security_listeners);
+        crate::security::listen(
+            &udev.loop_handle,
+            listeners,
+            &disconnect_queue,
+            &disconnect_ping,
+        );
         udev.redraw_queued_and_flush();
     });
     if shell_started {

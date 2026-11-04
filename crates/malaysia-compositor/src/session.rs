@@ -399,6 +399,13 @@ pub fn run() -> Result<(), SessionError> {
     tracing::info!("winit window open; close it or send SIGTERM to exit");
     event_loop.run(None, &mut session, |session| {
         session.state.activity_noted = false;
+        let listeners = std::mem::take(&mut session.state.security_listeners);
+        crate::security::listen(
+            &session.loop_handle,
+            listeners,
+            &disconnect_queue,
+            &disconnect_ping,
+        );
         if session.state.take_redraw_request() {
             session.backend.window().request_redraw();
         }

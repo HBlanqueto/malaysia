@@ -22,6 +22,7 @@ mod lock;
 mod popup;
 mod popup_fade;
 mod renderer;
+mod security;
 pub mod session;
 mod sleep;
 mod spaces;
