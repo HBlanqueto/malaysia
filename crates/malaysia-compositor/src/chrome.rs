@@ -337,7 +337,6 @@ fn shadow_layer(
     let color = layer.color;
     let uniforms = vec![
         Uniform::new("rect", rect),
-        Uniform::new("window_rect", rect),
         Uniform::new("radius", radius as f32),
         Uniform::new("blur", layer.blur as f32 * scale as f32),
         Uniform::new("offset", [0.0f32, layer.y_offset as f32 * scale as f32]),

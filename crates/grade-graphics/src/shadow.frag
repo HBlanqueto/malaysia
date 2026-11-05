@@ -2,7 +2,6 @@ varying vec2 v_coords;
 
 uniform vec2 size;
 uniform vec4 rect;
-uniform vec4 window_rect;
 uniform float radius;
 uniform float blur;
 uniform vec2 offset;
@@ -26,7 +25,7 @@ void main() {
     float sigma = max(blur / 2.0, 0.001);
     float shadow = 0.5 - 0.5 * erf(d / (sqrt(2.0) * sigma));
 
-    float cover = window_coverage(window_sdf(px, window_rect, radius, exponent));
+    float cover = window_coverage(window_sdf(px, rect, radius, exponent));
 
     gl_FragColor = color * (shadow * (1.0 - cover) * alpha);
 }

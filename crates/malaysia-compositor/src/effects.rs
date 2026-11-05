@@ -398,70 +398,55 @@ pub(crate) fn map_rect(
 }
 
 pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
-    let program = renderer.compile_custom_texture_shader(
-        grade_graphics::shaders::ROUNDED_CLIP,
-        &[
-            UniformName::new("texture_size", UniformType::_2f),
-            UniformName::new("geometry", UniformType::_4f),
-            UniformName::new("radius", UniformType::_1f),
-            UniformName::new("exponent", UniformType::_1f),
-        ],
-    );
-    match program {
-        Ok(program) => Some(program),
-        Err(error) => {
-            tracing::warn!(?error, "failed to compile rounded-clip shader");
-            None
-        }
-    }
+    renderer
+        .compile_custom_texture_shader(
+            grade_graphics::shaders::ROUNDED_CLIP,
+            &[
+                UniformName::new("texture_size", UniformType::_2f),
+                UniformName::new("geometry", UniformType::_4f),
+                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("exponent", UniformType::_1f),
+            ],
+        )
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile rounded-clip shader"))
+        .ok()
 }
 
 pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
-    let program = renderer.compile_custom_pixel_shader(
-        grade_graphics::shaders::SHADOW,
-        &[
-            UniformName::new("size", UniformType::_2f),
-            UniformName::new("rect", UniformType::_4f),
-            UniformName::new("window_rect", UniformType::_4f),
-            UniformName::new("radius", UniformType::_1f),
-            UniformName::new("blur", UniformType::_1f),
-            UniformName::new("offset", UniformType::_2f),
-            UniformName::new("scale", UniformType::_1f),
-            UniformName::new("exponent", UniformType::_1f),
-            UniformName::new("color", UniformType::_4f),
-        ],
-    );
-    match program {
-        Ok(program) => Some(program),
-        Err(error) => {
-            tracing::warn!(?error, "failed to compile shadow shader");
-            None
-        }
-    }
+    renderer
+        .compile_custom_pixel_shader(
+            grade_graphics::shaders::SHADOW,
+            &[
+                UniformName::new("rect", UniformType::_4f),
+                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("blur", UniformType::_1f),
+                UniformName::new("offset", UniformType::_2f),
+                UniformName::new("scale", UniformType::_1f),
+                UniformName::new("exponent", UniformType::_1f),
+                UniformName::new("color", UniformType::_4f),
+            ],
+        )
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile shadow shader"))
+        .ok()
 }
 
 pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelProgram> {
-    let program = renderer.compile_custom_pixel_shader(
-        grade_graphics::shaders::BORDER,
-        &[
-            UniformName::new("size", UniformType::_2f),
-            UniformName::new("rect", UniformType::_4f),
-            UniformName::new("radius", UniformType::_1f),
-            UniformName::new("width", UniformType::_1f),
-            UniformName::new("side", UniformType::_1f),
-            UniformName::new("scale", UniformType::_1f),
-            UniformName::new("exponent", UniformType::_1f),
-            UniformName::new("color", UniformType::_4f),
-            UniformName::new("edge_color", UniformType::_4f),
-        ],
-    );
-    match program {
-        Ok(program) => Some(program),
-        Err(error) => {
-            tracing::warn!(?error, "failed to compile border shader");
-            None
-        }
-    }
+    renderer
+        .compile_custom_pixel_shader(
+            grade_graphics::shaders::BORDER,
+            &[
+                UniformName::new("rect", UniformType::_4f),
+                UniformName::new("radius", UniformType::_1f),
+                UniformName::new("width", UniformType::_1f),
+                UniformName::new("side", UniformType::_1f),
+                UniformName::new("scale", UniformType::_1f),
+                UniformName::new("exponent", UniformType::_1f),
+                UniformName::new("color", UniformType::_4f),
+                UniformName::new("edge_color", UniformType::_4f),
+            ],
+        )
+        .inspect_err(|error| tracing::warn!(?error, "failed to compile border shader"))
+        .ok()
 }
 
 #[cfg(test)]
