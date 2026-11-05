@@ -10,10 +10,10 @@ use barrier_kit::platform::{
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use torin::prelude::{Gaps, Size};
+use torin::prelude::{Gaps, Position, Size, SizeFnContext};
 use vow_design::{
-    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X,
-    SYMBOL,
+    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED,
+    MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
 };
 
 use crate::menubar::icons;
@@ -76,6 +76,7 @@ impl MenuTitleSpec {
 pub struct MenuState {
     pub root_id: Rc<Cell<Option<PopupId>>>,
     pub open_label: State<Option<String>>,
+    pub hovered_label: State<Option<String>>,
 }
 
 impl MenuState {
@@ -83,6 +84,7 @@ impl MenuState {
         Self {
             root_id: use_hook(|| Rc::new(Cell::new(None))),
             open_label: use_state(|| None::<String>),
+            hovered_label: use_state(|| None::<String>),
         }
     }
 }
@@ -161,7 +163,10 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         ),
         anchor: PopupAnchor::BottomLeft,
         gravity: PopupGravity::BottomRight,
-        offset: (0, 0),
+        offset: (
+            (MENUBAR_TITLE_PADDING_X - palette.padding - palette.item_padding_x).round() as i32,
+            0,
+        ),
         size: (size.0 as u32, size.1 as u32),
         constraint_adjustment: PopupConstraintAdjustment {
             flip_x: true,
@@ -237,6 +242,7 @@ pub fn menu_title(
     let enabled = spec.enabled;
     let anchor = spec.anchor.clone();
     let is_open = state.open_label.read().as_deref() == Some(&label_text);
+    let hovered = state.hovered_label.read().as_deref() == Some(&label_text);
 
     let resolved = barrier_kit::theme::resolved();
     let palette =
@@ -252,7 +258,6 @@ pub fn menu_title(
             0.0,
             MENUBAR_TITLE_PADDING_X,
         ))
-        .corner_radius(palette.bar_title_open_radius)
         .center()
         .on_sized(move |event: Event<SizedEventData>| {
             let area = event.data().area;
@@ -260,7 +265,9 @@ pub fn menu_title(
         });
 
     if is_open {
-        title = title.background(theme::color(palette.bar_title_open_bg));
+        title = title.child(title_pill(palette.bar_title_open_bg, palette));
+    } else if hovered {
+        title = title.child(title_pill(palette.bar_hover_bg, palette));
     }
 
     let content = if let Some(glyph) = spec.glyph {
@@ -293,6 +300,15 @@ pub fn menu_title(
         toggle_menu(&titles_for_click, title_index, &state_for_click);
     });
 
+    let mut hovered_label = state.hovered_label;
+    let label_for_leave = label_text.clone();
+    container = container.on_pointer_leave(move |_: Event<PointerEventData>| {
+        if hovered_label.read().as_deref() == Some(&label_for_leave) {
+            hovered_label.set(None);
+        }
+    });
+
+    let mut hovered_label = state.hovered_label;
     let open_label_for_hover = state.open_label;
     let titles_for_hover = titles.clone();
     let state_for_hover = state.clone();
@@ -302,6 +318,7 @@ pub fn menu_title(
         if let Some(callback) = &on_hover_title {
             callback();
         }
+        hovered_label.set(Some(label_for_hover.clone()));
         let current = open_label_for_hover.read().clone();
         if current.is_some_and(|current| current != label_for_hover) {
             open_root_menu(&titles_for_hover, title_index, &state_for_hover);
@@ -309,4 +326,18 @@ pub fn menu_title(
     });
 
     container.into_element()
+}
+
+fn title_pill(color: Rgba, palette: MenuPalette) -> Rect {
+    let bled = |context: SizeFnContext| Some(context.parent + 2.0 * MENUBAR_TITLE_BLEED);
+    rect()
+        .position(
+            Position::new_absolute()
+                .left(-MENUBAR_TITLE_BLEED)
+                .top(MENUBAR_TEXT_LIFT),
+        )
+        .width(Size::func(bled))
+        .height(Size::px(palette.bar_title_open_height))
+        .corner_radius(palette.bar_title_open_radius)
+        .background(theme::color(color))
 }

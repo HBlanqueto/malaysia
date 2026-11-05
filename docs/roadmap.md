@@ -155,6 +155,9 @@ compositor-side, borde interior y titlebar SSD integrados; las CSD reciben
 esquinas/sombra/borde sin titlebar. Glifos de hover y doble clic también hechos.
 Pendiente: modo foco real y captura de ventana con marco. Prueba:
 `./dev.sh titlebar` y `./dev.sh demo`.
+Pendiente también la barra de menús transparente de Tahoe, con opción para
+mostrar su fondo; hasta entonces el escritorio se construye como con
+«Reducir transparencia» y la barra es opaca (`shell-bar`).
 
 ### 14 — Menú global
 
