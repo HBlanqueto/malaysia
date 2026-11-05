@@ -50,6 +50,9 @@ fn detached(mut command: Command) -> io::Result<()> {
 
 pub(crate) fn spawn_client(mut command: Command) -> io::Result<()> {
     sanitize_client_env(&mut command);
+    if let Some(language) = vow_appearance::language::system_language() {
+        command.env("LANGUAGE", language);
+    }
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
