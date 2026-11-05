@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId, ObjectId};
@@ -21,58 +20,27 @@ pub struct AppMenuAddress {
     pub path: String,
 }
 
-#[derive(Debug)]
-pub(crate) struct AddressStore<K, V> {
-    addresses: HashMap<K, V>,
-}
-
-impl<K, V> Default for AddressStore<K, V> {
-    fn default() -> Self {
-        Self {
-            addresses: HashMap::new(),
-        }
-    }
-}
-
-impl<K: Eq + Hash, V> AddressStore<K, V> {
-    pub(crate) fn set(&mut self, key: K, value: V) {
-        self.addresses.insert(key, value);
-    }
-
-    pub(crate) fn get(&self, key: &K) -> Option<&V> {
-        self.addresses.get(key)
-    }
-
-    pub(crate) fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        self.addresses.get_mut(key)
-    }
-
-    pub(crate) fn clear(&mut self, key: &K) -> bool {
-        self.addresses.remove(key).is_some()
-    }
-}
-
 pub struct AppMenuState {
     _global: GlobalId,
-    addresses: AddressStore<ObjectId, AppMenuAddress>,
+    addresses: HashMap<ObjectId, AppMenuAddress>,
 }
 
 impl AppMenuState {
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
             _global: display.create_global::<State, OrgKdeKwinAppmenuManager, ()>(2, ()),
-            addresses: AddressStore::default(),
+            addresses: HashMap::new(),
         }
     }
 
     fn set(&mut self, surface: &WlSurface, address: AppMenuAddress) {
         if surface.is_alive() {
-            self.addresses.set(surface.id(), address);
+            self.addresses.insert(surface.id(), address);
         }
     }
 
     fn clear(&mut self, surface: &WlSurface) -> bool {
-        self.addresses.clear(&surface.id())
+        self.addresses.remove(&surface.id()).is_some()
     }
 
     fn get(&self, surface: &WlSurface) -> Option<&AppMenuAddress> {
@@ -210,48 +178,4 @@ macro_rules! delegate_appmenu {
                 smithay::reexports::wayland_server::protocol::wl_surface::WlSurface
         ] => $crate::appmenu::AppMenuState);
     };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{AddressStore, AppMenuAddress};
-
-    fn address(service: &str, path: &str) -> AppMenuAddress {
-        AppMenuAddress {
-            service: service.to_string(),
-            path: path.to_string(),
-        }
-    }
-
-    #[test]
-    fn set_before_map_is_kept_for_the_map() {
-        let mut store = AddressStore::<u32, AppMenuAddress>::default();
-        store.set(7, address(":1.2", "/MenuBar/1"));
-        assert_eq!(store.get(&7), Some(&address(":1.2", "/MenuBar/1")));
-    }
-
-    #[test]
-    fn set_after_map_replaces_the_address() {
-        let mut store = AddressStore::<u32, AppMenuAddress>::default();
-        store.set(7, address(":1.2", "/MenuBar/1"));
-        store.set(7, address(":1.3", "/MenuBar/2"));
-        assert_eq!(store.get(&7), Some(&address(":1.3", "/MenuBar/2")));
-    }
-
-    #[test]
-    fn release_clears_the_address() {
-        let mut store = AddressStore::<u32, AppMenuAddress>::default();
-        store.set(7, address(":1.2", "/MenuBar/1"));
-        assert!(store.clear(&7));
-        assert_eq!(store.get(&7), None);
-        assert!(!store.clear(&7));
-    }
-
-    #[test]
-    fn surface_destruction_clears_the_address() {
-        let mut store = AddressStore::<u32, AppMenuAddress>::default();
-        store.set(9, address(":1.4", "/MenuBar/9"));
-        assert!(store.clear(&9));
-        assert_eq!(store.get(&9), None);
-    }
 }

@@ -7,8 +7,8 @@ use smithay::reexports::wayland_server::{
 use smithay::wayland::xdg_activation::XdgActivationToken;
 use tracing::{debug, info, warn};
 
-use crate::appmenu::AddressStore;
 use crate::state::State;
+use std::collections::HashMap;
 
 pub(crate) mod protocol {
     #![allow(dead_code, non_camel_case_types, unused_unsafe, unused_variables)]
@@ -67,23 +67,22 @@ impl GtkDbusProperties {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 struct GtkSurfaceState {
-    owner: Option<ObjectId>,
-    modal: bool,
+    owner: ObjectId,
     props: GtkDbusProperties,
 }
 
 pub struct GtkShellState {
     _global: GlobalId,
-    surfaces: AddressStore<ObjectId, GtkSurfaceState>,
+    surfaces: HashMap<ObjectId, GtkSurfaceState>,
 }
 
 impl GtkShellState {
     pub fn new(display: &DisplayHandle) -> Self {
         Self {
             _global: display.create_global::<State, GtkShell1, ()>(5, ()),
-            surfaces: AddressStore::default(),
+            surfaces: HashMap::new(),
         }
     }
 
@@ -92,40 +91,25 @@ impl GtkShellState {
             return;
         }
         if let Some(existing) = self.surfaces.get(&surface.id())
-            && existing.owner != Some(owner.clone())
+            && existing.owner != owner
         {
             warn!(surface = ?surface.id(), "gtk_surface1: second object for surface, newest wins");
         }
-        self.surfaces.set(
-            surface.id(),
-            GtkSurfaceState {
-                owner: Some(owner),
-                modal: false,
-                props,
-            },
-        );
-    }
-
-    fn set_modal(&mut self, surface: &WlSurface, owner: ObjectId, modal: bool) {
-        let key = surface.id();
-        if let Some(state) = self.surfaces.get_mut(&key)
-            && state.owner == Some(owner)
-        {
-            state.modal = modal;
-        }
+        self.surfaces
+            .insert(surface.id(), GtkSurfaceState { owner, props });
     }
 
     fn clear(&mut self, surface: &WlSurface, owner: &ObjectId) -> bool {
         if let Some(state) = self.surfaces.get(&surface.id())
-            && state.owner != Some(owner.clone())
+            && state.owner != *owner
         {
             return false;
         }
-        self.surfaces.clear(&surface.id())
+        self.surfaces.remove(&surface.id()).is_some()
     }
 
     fn clear_surface(&mut self, surface: &WlSurface) -> bool {
-        self.surfaces.clear(&surface.id())
+        self.surfaces.remove(&surface.id()).is_some()
     }
 
     fn props(&self, surface: &WlSurface) -> Option<&GtkDbusProperties> {
@@ -232,13 +216,11 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
                 }
             }
             protocol::gtk_surface1::Request::SetModal => {
-                state.gtk.set_modal(surface, owner, true);
                 if let Some(id) = state.windows.id_of(surface) {
                     info!(window = id.get(), "gtk_surface set_modal");
                 }
             }
             protocol::gtk_surface1::Request::UnsetModal => {
-                state.gtk.set_modal(surface, owner, false);
                 if let Some(id) = state.windows.id_of(surface) {
                     info!(window = id.get(), "gtk_surface unset_modal");
                 }

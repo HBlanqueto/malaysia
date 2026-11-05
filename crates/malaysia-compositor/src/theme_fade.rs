@@ -21,14 +21,6 @@ pub(crate) const WAIT_MAX: Duration = Duration::from_millis(vow_design::THEME_FA
 
 pub(crate) const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
 
-fn hold_duration() -> Duration {
-    std::env::var("MALAYSIA_THEME_FADE_HOLD_MS")
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-        .map(Duration::from_millis)
-        .unwrap_or(Duration::ZERO)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FadeTick {
     Active,
@@ -49,7 +41,7 @@ enum Phase {
         initial_pending: usize,
     },
     Fading {
-        hold_until: Instant,
+        since: Instant,
     },
 }
 
@@ -67,13 +59,7 @@ impl FadeState {
     pub(crate) fn alpha(&self, now: Instant) -> f32 {
         match &self.phase {
             Phase::Waiting { .. } => 1.0,
-            Phase::Fading { hold_until, .. } => {
-                if now < *hold_until {
-                    return 1.0;
-                }
-                let t = progress(*hold_until, now, DURATION);
-                1.0 - ease(t)
-            }
+            Phase::Fading { since } => 1.0 - ease(progress(*since, now, DURATION)),
         }
     }
 
@@ -97,25 +83,15 @@ impl FadeState {
                         initial_pending = *initial_pending,
                         "theme fade started"
                     );
-                    let hold = hold_duration();
-                    if hold > Duration::ZERO {
-                        tracing::info!(?hold, "theme fade hold");
-                    }
-                    self.phase = Phase::Fading {
-                        hold_until: now + hold,
-                    };
+                    self.phase = Phase::Fading { since: now };
                     FadeTick::Started
                 } else {
                     FadeTick::Active
                 }
             }
-            Phase::Fading { hold_until, .. } => {
-                if now < *hold_until {
-                    return FadeTick::Active;
-                }
-                let t = progress(*hold_until, now, DURATION);
-                if t >= 1.0 {
-                    let elapsed = now.duration_since(*hold_until);
+            Phase::Fading { since } => {
+                if progress(*since, now, DURATION) >= 1.0 {
+                    let elapsed = now.duration_since(*since);
                     tracing::info!(?elapsed, "theme fade finished");
                     FadeTick::Done
                 } else {

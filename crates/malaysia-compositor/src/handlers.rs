@@ -214,12 +214,10 @@ fn insert_blocker_source(
     client: Client,
     source: crate::blockers::BlockerSource,
     blocker: impl Blocker + Send + 'static,
-) -> bool {
-    let inserted = state.blocker_sink.insert(source, client);
-    if inserted {
+) {
+    if state.blocker_sink.insert(source, client) {
         add_blocker(surface, blocker);
     }
-    inserted
 }
 
 fn log_committed_buffer_type(surface: &WlSurface) {
@@ -1010,8 +1008,6 @@ impl XdgDecorationHandler for State {
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
-        self.windows
-            .clear_requested_decoration(toplevel.wl_surface());
         self.apply_requested_decoration(toplevel.wl_surface(), Some(Decoration::Server));
     }
 }

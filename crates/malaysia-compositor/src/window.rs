@@ -25,21 +25,13 @@ use crate::decoration::{Insets, Role, WindowState};
 const RESIZE_CONFIGURE_TIMEOUT_DEFAULT: Duration = Duration::from_millis(100);
 const RESIZE_CONFIGURE_TIMEOUT_MS_VAR: &str = "MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS";
 static RESIZE_CONFIGURE_TIMEOUT: LazyLock<Duration> = LazyLock::new(|| {
-    parse_resize_timeout(
+    crate::input::parse_ms(
         std::env::var(RESIZE_CONFIGURE_TIMEOUT_MS_VAR)
             .ok()
             .as_deref(),
         RESIZE_CONFIGURE_TIMEOUT_DEFAULT,
     )
 });
-
-fn parse_resize_timeout(value: Option<&str>, default: Duration) -> Duration {
-    match value.and_then(|v| v.parse::<u64>().ok()) {
-        Some(0) => Duration::from_millis(1),
-        Some(ms) => Duration::from_millis(ms),
-        None => default,
-    }
-}
 
 pub struct Window<'a> {
     data: &'a WindowData,
@@ -1012,12 +1004,6 @@ impl Windows {
         }
     }
 
-    pub fn clear_requested_decoration(&mut self, surface: &WlSurface) {
-        if let Some(index) = self.index_of(surface) {
-            self.windows[index].requested = None;
-        }
-    }
-
     pub fn requested_decoration(&self, surface: &WlSurface) -> Option<Decoration> {
         if let Some(index) = self.index_of(surface) {
             return self.windows[index].requested;
@@ -1326,7 +1312,7 @@ fn configure_size(placed: bool, outer: Size<i32, Logical>, insets: Insets) -> Si
     }
 }
 
-fn round(value: f64) -> i32 {
+pub(crate) fn round(value: f64) -> i32 {
     value.round() as i32
 }
 
@@ -1421,15 +1407,12 @@ fn client_point(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
     use super::{
-        EdgeTarget, RESIZE_CONFIGURE_TIMEOUT_DEFAULT, anchor_resize_origin, apply_configure_states,
-        at_least_one_pixel, client_point, committed_outer, configure_size, edge_hit, geometry_fits,
-        initial_placement, needs_configure_after_commit, outer_size, parse_resize_timeout, usable,
-        usable_rect_location,
+        EdgeTarget, anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
+        committed_outer, configure_size, edge_hit, geometry_fits, initial_placement,
+        needs_configure_after_commit, outer_size, usable, usable_rect_location,
     };
     use crate::decoration::Insets;
     use malaysia_scene::geometry::{
@@ -1774,42 +1757,6 @@ mod tests {
         assert!(
             location.y + usable_height <= workspace_height as i32,
             "usable rect must not extend below the workspace"
-        );
-    }
-
-    #[test]
-    fn parse_resize_timeout_returns_parsed_value() {
-        assert_eq!(
-            parse_resize_timeout(Some("8"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
-            Duration::from_millis(8)
-        );
-    }
-
-    #[test]
-    fn parse_resize_timeout_empty_uses_default() {
-        assert_eq!(
-            parse_resize_timeout(Some(""), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
-            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
-        );
-        assert_eq!(
-            parse_resize_timeout(None, RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
-            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
-        );
-    }
-
-    #[test]
-    fn parse_resize_timeout_garbage_uses_default() {
-        assert_eq!(
-            parse_resize_timeout(Some("fast"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
-            RESIZE_CONFIGURE_TIMEOUT_DEFAULT
-        );
-    }
-
-    #[test]
-    fn parse_resize_timeout_zero_uses_minimum() {
-        assert_eq!(
-            parse_resize_timeout(Some("0"), RESIZE_CONFIGURE_TIMEOUT_DEFAULT),
-            Duration::from_millis(1)
         );
     }
 

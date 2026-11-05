@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect};
@@ -153,7 +153,6 @@ pub struct State {
     pub(crate) grab: Option<Grab>,
     pub(crate) test_press: Option<TestPress>,
     pub(crate) test_pointer: Option<crate::input::TestPointer>,
-    pub(crate) leaked_window: Option<WindowId>,
     pub(crate) chrome: crate::chrome::ChromeCache,
     pub(crate) focus_backdrop: SolidColorBuffer,
     pub(crate) revealed_titlebar_backdrop: SolidColorBuffer,
@@ -408,7 +407,6 @@ impl State {
             grab: None,
             test_press: None,
             test_pointer: crate::input::TestPointer::from_env(),
-            leaked_window: None,
             chrome: crate::chrome::ChromeCache::new(),
             focus_backdrop: SolidColorBuffer::default(),
             revealed_titlebar_backdrop: SolidColorBuffer::default(),
@@ -641,9 +639,6 @@ impl State {
     }
 
     pub(crate) fn cursor_boost_scale(&self) -> f32 {
-        if let Some(boost) = test_cursor_boost() {
-            return boost;
-        }
         self.cursor_boost_started
             .map_or(1.0, |started| boost_scale_at(started.elapsed()))
     }
@@ -774,16 +769,6 @@ pub(crate) fn region_rect(
     let x1 = x1.clamp(x0, output.w);
     let y1 = y1.clamp(y0, output.h);
     Rectangle::new(Point::from((x0, y0)), Size::from((x1 - x0, y1 - y0)))
-}
-
-fn test_cursor_boost() -> Option<f32> {
-    static BOOST: OnceLock<Option<f32>> = OnceLock::new();
-    *BOOST.get_or_init(|| {
-        std::env::var("MALAYSIA_TEST_CURSOR_BOOST")
-            .ok()
-            .and_then(|value| value.parse::<f32>().ok())
-            .filter(|value| (1.0..=4.0).contains(value))
-    })
 }
 
 fn boost_scale_at(elapsed: Duration) -> f32 {

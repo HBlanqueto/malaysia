@@ -27,6 +27,7 @@ use xkbcommon::xkb::{self, Keycode, keysyms};
 
 use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
 use crate::state::{Grab, ScreenshotRequest, State, TestPress};
+use crate::window::round;
 
 const BUTTON_LEFT: u32 = 0x110;
 const TEST_POINTER_STEP_DEFAULT: Duration = Duration::from_millis(100);
@@ -206,11 +207,6 @@ impl TestPointer {
         Self::parse(std::env::var("MALAYSIA_TEST_INPUT").ok()?.as_str())
     }
 
-    #[cfg(test)]
-    pub(crate) fn from_env_with(value: &str) -> Option<Self> {
-        Self::parse(value)
-    }
-
     fn parse(value: &str) -> Option<Self> {
         let mut actions = VecDeque::new();
         for part in value
@@ -264,7 +260,7 @@ impl TestPointer {
     }
 }
 
-fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
+pub(crate) fn parse_ms(value: Option<&str>, default: Duration) -> Duration {
     match value.and_then(|v| v.parse::<u64>().ok()) {
         Some(0) => Duration::from_millis(1),
         Some(ms) => Duration::from_millis(ms),
@@ -1573,9 +1569,6 @@ impl State {
     }
 
     pub(crate) fn forget_window(&mut self, surface: &WlSurface) {
-        if self.leak_window(surface) {
-            return;
-        }
         let active = self.focused_window();
         let Some(id) = self.windows.remove(surface) else {
             return;
@@ -1626,27 +1619,6 @@ impl State {
             return None;
         }
         pointer.grab_start_data()
-    }
-
-    fn leak_window(&mut self, surface: &WlSurface) -> bool {
-        if std::env::var_os("MALAYSIA_TEST_LEAK_WINDOW").is_none() {
-            return false;
-        }
-        let Some(id) = self.windows.id_of(surface) else {
-            return false;
-        };
-        match self.leaked_window {
-            None => self.leaked_window = Some(id),
-            Some(leaked) if leaked == id => {}
-            Some(_) => return false,
-        }
-        tracing::warn!("MALAYSIA_TEST_LEAK_WINDOW: deliberately leaving a window behind");
-        tracing::info!(
-            windows = self.windows.len(),
-            topmost = ?self.windows.topmost(),
-            "window removed"
-        );
-        true
     }
 
     pub(crate) fn test_pointer_step(&mut self) -> Option<Duration> {
@@ -2348,10 +2320,6 @@ fn double_click(
     } else {
         (Some((id, now, local)), None)
     }
-}
-
-fn round(value: f64) -> i32 {
-    value.round() as i32
 }
 
 fn test_press_fraction() -> (f64, f64) {
@@ -3224,7 +3192,7 @@ mod tests {
 
     #[test]
     fn scripted_modifiers_press_in_order_and_release_in_reverse() {
-        let pointer = TestPointer::from_env_with("key:ctrl+shift+s").unwrap();
+        let pointer = TestPointer::parse("key:ctrl+shift+s").unwrap();
         let actions: Vec<_> = pointer.actions.into_iter().collect();
         assert_eq!(
             actions,

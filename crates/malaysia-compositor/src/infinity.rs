@@ -14,6 +14,7 @@ use malaysia_scene::scene::WindowId;
 use crate::appmenu::AppMenuAddress;
 use crate::gtk::GtkMenusAddress;
 use crate::state::{ClientState, State};
+use crate::window::round;
 
 pub(crate) mod protocol {
     pub use infinity_protocol::server::infinity_window_manager_v1::infinity_window_manager_v1;
@@ -421,10 +422,6 @@ fn gtk_menus_event(
 
 fn may_force_quit(pid: i32, own_pid: u32) -> bool {
     pid > 1 && u32::try_from(pid).ok() != Some(own_pid)
-}
-
-fn round(value: f64) -> i32 {
-    value.round() as i32
 }
 
 fn available(workspace: Rectangle<i32, Logical>) -> Rectangle<i32, Logical> {
