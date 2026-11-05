@@ -175,6 +175,7 @@ impl RenderContext {
             raw_display_handle: display,
             raw_window_handle: window,
         };
+        // SAFETY: the caller keeps both raw handles alive for as long as the surface.
         Ok(unsafe { self.instance.create_surface_unsafe(target) }?)
     }
 

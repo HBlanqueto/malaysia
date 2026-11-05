@@ -320,6 +320,7 @@ impl App {
         ));
         let window_handle =
             RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(surface_ptr).unwrap()));
+        // SAFETY: `OutputSurface` drops `wgpu_surface` before `surface`, and the connection outlives both.
         let wgpu_surface = unsafe { self.render.create_surface(display_handle, window_handle)? };
 
         let output_surface = OutputSurface {

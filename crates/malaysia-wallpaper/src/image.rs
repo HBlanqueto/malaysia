@@ -61,7 +61,7 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
                 Ok(decoded) => (Some((path, scale)), decoded),
                 Err(error) => {
                     tracing::error!(?path, %error, "failed to decode wallpaper");
-                    if current.image.is_some() {
+                    if current.selection.is_some() {
                         return current.clone();
                     }
                     load_default_image()
@@ -701,8 +701,8 @@ mod tests {
             format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
         )
         .unwrap();
-        let first = load_snapshot(&store, &state);
-        assert!(first.image.is_some());
+        let mut first = load_snapshot(&store, &state);
+        assert!(first.image.take().is_some());
 
         let missing = dir.join("missing.png");
         std::fs::write(
