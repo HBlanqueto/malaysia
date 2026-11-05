@@ -1,9 +1,8 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 
 use barrier_kit::menu::{
-    MenuItem, MenuNavigation, MenuView, RevealRoots, SearchableEntry, SubmenuSource,
+    ItemsSource, MenuNavigation, MenuView, RevealRoots, SearchableEntry, SubmenuSource,
 };
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
@@ -12,9 +11,10 @@ use bytes::Bytes;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use torin::prelude::{Alignment, Gaps, Size};
+use torin::prelude::{Gaps, Size};
 use vow_design::{
     MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X,
+    SYMBOL,
 };
 
 use crate::menubar::icons;
@@ -25,8 +25,6 @@ pub struct SearchableLists {
     pub help: Vec<SearchableEntry>,
 }
 
-pub type MenuItems = Rc<dyn Fn() -> Vec<MenuItem>>;
-
 pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
 
 #[derive(Clone)]
@@ -34,10 +32,10 @@ pub struct MenuTitleSpec {
     pub label: String,
     pub glyph: Option<&'static [u8]>,
     pub bold: bool,
-    pub items: Rc<dyn Fn() -> Vec<MenuItem>>,
+    pub items: ItemsSource,
     pub searchable: Option<SearchableItems>,
     pub on_activate: Rc<dyn Fn(String)>,
-    pub live_items: Option<MenuItems>,
+    pub live_items: Option<ItemsSource>,
     pub on_open: Option<Rc<dyn Fn()>>,
     pub on_hover_title: Option<Rc<dyn Fn()>>,
     pub on_open_submenu: Option<Rc<dyn Fn(String)>>,
@@ -51,7 +49,7 @@ pub struct MenuTitleSpec {
 impl MenuTitleSpec {
     pub fn new(
         label: String,
-        items: MenuItems,
+        items: ItemsSource,
         on_activate: Rc<dyn Fn(String)>,
         anchor: Rc<Cell<(f32, f32)>>,
     ) -> Self {
@@ -77,24 +75,25 @@ impl MenuTitleSpec {
 
 #[derive(Clone)]
 pub struct MenuState {
-    pub root_id: Arc<Mutex<Option<PopupId>>>,
-    pub open_label: Rc<RefCell<State<Option<String>>>>,
+    pub root_id: Rc<Cell<Option<PopupId>>>,
+    pub open_label: State<Option<String>>,
 }
 
 impl MenuState {
     pub fn new() -> Self {
         Self {
-            root_id: use_hook(|| Arc::new(Mutex::new(None))),
-            open_label: Rc::new(RefCell::new(use_state(|| None::<String>))),
+            root_id: use_hook(|| Rc::new(Cell::new(None))),
+            open_label: use_state(|| None::<String>),
         }
     }
 }
 
 pub fn close_root_menu(state: &MenuState) {
-    if let Some(id) = state.root_id.lock().unwrap().take() {
+    if let Some(id) = state.root_id.take() {
         Popups::get().close(id);
     }
-    state.open_label.borrow_mut().set(None);
+    let mut open_label = state.open_label;
+    open_label.set(None);
 }
 
 pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
@@ -115,14 +114,8 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let (anchor_x, anchor_width) = spec.anchor.get();
     let label = spec.label.clone();
 
-    let cell = state.root_id.clone();
-    let open_label = state.open_label.clone();
-    let on_dismiss_all = move || {
-        if let Some(id) = cell.lock().unwrap().take() {
-            Popups::get().close(id);
-        }
-        open_label.borrow_mut().set(None);
-    };
+    let state_for_dismiss = state.clone();
+    let on_dismiss_all = move || close_root_menu(&state_for_dismiss);
 
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
@@ -183,12 +176,13 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     };
     view = view.with_popup_spec(popup_spec.clone());
 
-    let open_label = state.open_label.clone();
+    let open_label = state.open_label;
     let dismissed_label = label.clone();
     let on_dismissed: Option<Rc<dyn Fn()>> = Some(Rc::new(move || {
-        let still_open = open_label.borrow().read().as_deref() == Some(&dismissed_label);
+        let still_open = open_label.read().as_deref() == Some(&dismissed_label);
         if still_open {
-            open_label.borrow_mut().set(None);
+            let mut open_label = open_label;
+            open_label.set(None);
         }
     }));
     let id = Popups::get().open(
@@ -198,15 +192,16 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
         },
         AppComponent::new(view),
     );
-    state.root_id.lock().unwrap().replace(id);
-    state.open_label.borrow_mut().set(Some(label));
+    state.root_id.set(Some(id));
+    let mut open_label = state.open_label;
+    open_label.set(Some(label));
 }
 
 pub fn toggle_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state: &MenuState) {
     let Some(spec) = titles.get(title_index) else {
         return;
     };
-    if state.open_label.borrow().read().as_deref() == Some(&spec.label) {
+    if state.open_label.read().as_deref() == Some(&spec.label) {
         close_root_menu(state);
         return;
     }
@@ -241,32 +236,23 @@ fn navigate_title(
     }
 }
 
-pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: MenuState) -> Element {
+pub fn menu_title(
+    title_index: usize,
+    titles: Rc<Vec<MenuTitleSpec>>,
+    state: MenuState,
+    fg: Color,
+) -> Element {
     let spec = &titles[title_index];
     let label_text = spec.label.clone();
     let enabled = spec.enabled;
     let anchor = spec.anchor.clone();
-    let is_open = state.open_label.borrow().read().as_deref() == Some(&label_text);
+    let is_open = state.open_label.read().as_deref() == Some(&label_text);
 
     let resolved = barrier_kit::theme::resolved();
     let palette =
         barrier_kit::theme::menu_palette(&resolved, barrier_kit::theme::SurfaceKind::LayerShell);
-    let over_focus = barrier_kit::shell::Toplevels::get()
-        .space
-        .read()
-        .focus_bar
-        .over_focus();
-    let fg_rgba = if over_focus {
-        vow_design::FOCUS_BAR_TEXT
-    } else {
-        barrier_kit::theme::shell_palette(&resolved).text
-    };
-    let fg = theme::color(fg_rgba);
 
-    let mut container = rect()
-        .height(Size::fill())
-        .main_align(Alignment::Center)
-        .cross_align(Alignment::Center);
+    let mut container = rect().height(Size::fill()).center();
 
     let mut title = rect()
         .height(Size::px(palette.bar_title_open_height))
@@ -277,8 +263,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
             MENUBAR_TITLE_PADDING_X,
         ))
         .corner_radius(palette.bar_title_open_radius)
-        .main_align(Alignment::Center)
-        .cross_align(Alignment::Center)
+        .center()
         .on_sized(move |event: Event<SizedEventData>| {
             let area = event.data().area;
             anchor.set((area.origin.x, area.size.width));
@@ -289,19 +274,15 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
     }
 
     let content = if let Some(glyph) = spec.glyph {
-        let [r, g, b, _] = fg_rgba.to_rgba8();
-        let hex = format!("#{:02x}{:02x}{:02x}", r, g, b);
-        let svg = String::from_utf8_lossy(glyph).replace("currentColor", &hex);
-        SvgViewer::new(("menubar-snowflake", Bytes::from(svg)))
-            .width(Size::px(16.0))
-            .height(Size::px(16.0))
+        SvgViewer::new(("menubar-snowflake", Bytes::from_static(glyph)))
+            .width(Size::px(SYMBOL.grid))
+            .height(Size::px(SYMBOL.grid))
             .color(fg)
             .show_loader(false)
             .into_element()
     } else {
         let mut text = label()
             .text(label_text.clone())
-            .font_size(vow_design::MENUBAR_FONT_SIZE)
             .max_lines(1)
             .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
             .color(fg);
@@ -322,7 +303,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         toggle_menu(&titles_for_click, title_index, &state_for_click);
     });
 
-    let open_label_for_hover = state.open_label.clone();
+    let open_label_for_hover = state.open_label;
     let titles_for_hover = titles.clone();
     let state_for_hover = state.clone();
     let label_for_hover = label_text.clone();
@@ -331,7 +312,7 @@ pub fn menu_title(title_index: usize, titles: Rc<Vec<MenuTitleSpec>>, state: Men
         if let Some(callback) = &on_hover_title {
             callback();
         }
-        let current = open_label_for_hover.borrow().read().clone();
+        let current = open_label_for_hover.read().clone();
         if current.is_some_and(|current| current != label_for_hover) {
             open_root_menu(&titles_for_hover, title_index, &state_for_hover);
         }

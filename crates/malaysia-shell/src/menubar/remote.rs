@@ -1,16 +1,16 @@
 use std::collections::HashSet;
-use std::rc::Rc;
 
 use barrier_kit::menu::{
-    CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry, normalize_separators,
+    CheckState, ItemsSource, MenuItem, SearchLocation, SearchSource, SearchableEntry,
+    normalize_separators,
 };
 
 #[derive(Clone)]
 pub struct MenuSources {
     pub app_name: String,
-    pub app_items: Rc<dyn Fn() -> Vec<MenuItem>>,
-    pub window_items: Rc<dyn Fn() -> Vec<MenuItem>>,
-    pub help_items: Rc<dyn Fn() -> Vec<MenuItem>>,
+    pub app_items: ItemsSource,
+    pub window_items: ItemsSource,
+    pub help_items: ItemsSource,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -321,6 +321,7 @@ mod tests {
     use super::*;
     use crate::menubar::dbusmenu::RawItem;
     use std::collections::HashMap;
+    use std::rc::Rc;
 
     fn action(label: &str) -> MenuItem {
         MenuItem::Action {

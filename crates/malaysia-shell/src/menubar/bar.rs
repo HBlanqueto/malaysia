@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use barrier_kit::app::use_watched;
-use barrier_kit::menu::MenuItem;
+use barrier_kit::menu::{ItemsSource, MenuItem};
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec, Toplevels,
@@ -25,7 +25,7 @@ use crate::desktop::DesktopEntry;
 use crate::menubar::dbusmenu::{self, MenuClient};
 use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
-use crate::menubar::menu::{self, MenuItems, MenuState, MenuTitleSpec, SearchableItems};
+use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
 use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, system};
 use barrier_kit::menu::{RevealRoots, SearchQuery};
@@ -507,7 +507,7 @@ impl App for BarApp {
         if focused {
             let app_id = app_id.clone().unwrap_or_default();
             let app_name = app.clone();
-            let app_items: MenuItems = {
+            let app_items: ItemsSource = {
                 let app_id = app_id.clone();
                 let app_name = app_name.clone();
                 Rc::new(move || {
@@ -518,7 +518,7 @@ impl App for BarApp {
                     )
                 })
             };
-            let window_items: MenuItems = {
+            let window_items: ItemsSource = {
                 let app_id = app_id.clone();
                 let app_name = app_name.clone();
                 Rc::new(move || {
@@ -529,7 +529,7 @@ impl App for BarApp {
                     )
                 })
             };
-            let help_items: MenuItems = {
+            let help_items: ItemsSource = {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
@@ -596,7 +596,7 @@ impl App for BarApp {
                     })
                 };
                 for (index, title) in titles.iter().enumerate() {
-                    let items: MenuItems = {
+                    let items: ItemsSource = {
                         let composition = composition.clone();
                         Rc::new(move || {
                             composition()
@@ -707,7 +707,12 @@ impl App for BarApp {
             .direction(Direction::Horizontal)
             .main_align(Alignment::Start);
         for index in 0..titles.len() {
-            left = left.child(menu::menu_title(index, titles.clone(), menu_state.clone()));
+            left = left.child(menu::menu_title(
+                index,
+                titles.clone(),
+                menu_state.clone(),
+                text,
+            ));
         }
 
         root.child(left).child(clock::clock_label(now, text))
