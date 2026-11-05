@@ -55,11 +55,15 @@ copia código ni plantillas (ChromaLeon es GPL-3.0, Malaysia es MIT).
    radio y forma (`traffic_light_shape`) de `TITLEBAR.buttons`; rellenos y
    glifo de `vow_appearance::traffic::visual` para enfocada, sin foco
    (`:backdrop`), puntero sobre el grupo (GTK 4) o el botón (GTK 3) y pulsado.
-   El icono de GTK solo se ve con el puntero encima. En GTK 4 el semáforo se
+   El icono de GTK nunca se ve: con el puntero encima, el glifo de Tengen
+   (`vow_appearance::traffic::glyph_svg`) se pinta como `background-image` en
+   un SVG `data:`. En GTK 4 el semáforo se
    dibuja en la imagen del botón, que GTK centra (el botón ocupa todo el alto
    de la headerbar); los controles empiezan a `margin_start` del borde,
-   descontado el relleno de la headerbar de libadwaita, y la atenuación de
-   libadwaita sin foco (`filter: opacity(0.5)`) no les afecta. Van en `malaysia.css` y,
+   descontado el relleno de la headerbar de libadwaita. La atenuación de
+   libadwaita sin foco (`filter: opacity(0.5)`), en la headerbar o en la barra
+   superior de `AdwToolbarView`, pasa a los demás hijos y no afecta a los
+   semáforos. Van en `malaysia.css` y,
    en GTK 4, también en `gtk4-css` (ADR 0055), dentro de cada bloque
    `@media`.
 

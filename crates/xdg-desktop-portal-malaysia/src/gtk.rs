@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use vow_appearance::backdrop::Oklab;
-use vow_appearance::traffic::{ButtonVisual, TrafficInput, visual};
+use vow_appearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, visual};
 use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, palette, resolve,
 };
@@ -281,8 +281,44 @@ fn traffic_states(traffic: &Traffic, focused: bool, group_hovered: bool) -> [But
 // libadwaita pads the headerbar box 7 px inside a -1 px margin (_header-bar.scss, 1.9.3).
 const ADWAITA_HEADERBAR_START: u32 = 6;
 
-// libadwaita dims the whole headerbar in backdrop; the traffic lights carry their own unfocused colour.
+// libadwaita dims the whole bar in backdrop; the traffic lights carry their own unfocused colour.
 const ADWAITA_BACKDROP_DIM: &str = "filter: opacity(0.5);";
+
+// AdwToolbarView dims its top bar instead of the headerbar (_toolbars.scss, 1.9.3).
+const ADWAITA_BACKDROP_BARS: &str =
+    "headerbar:backdrop > windowhandle, toolbarview > .top-bar:backdrop > windowhandle";
+
+// GtkHeaderBar holds its start/end boxes in the centre box; AdwHeaderBar wraps them in a gizmo `widget`.
+const BACKDROP_DIMMED: [&str; 5] = [
+    "toolbarview > .top-bar:backdrop > windowhandle > box > :not(headerbar)",
+    "headerbar:backdrop > windowhandle > box > :not(box):not(widget)",
+    "headerbar:backdrop > windowhandle > box > box > :not(windowcontrols)",
+    "headerbar:backdrop > windowhandle > box > widget > :not(box)",
+    "headerbar:backdrop > windowhandle > box > widget > box > :not(windowcontrols)",
+];
+
+// GTK rasterises a data: SVG at its intrinsic size through gdk-pixbuf (gdktexture.c, 4.22.4).
+const GLYPH_OVERSAMPLE: f32 = 4.0;
+
+fn glyph_image(index: usize, glyph: Rgba) -> String {
+    let svg = glyph_svg(
+        index,
+        glyph,
+        false,
+        TRAFFIC_GLYPHS.box_size * GLYPH_OVERSAMPLE,
+    );
+    let encoded: String = svg
+        .bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() {
+                char::from(byte).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect();
+    format!("url(\"data:image/svg+xml,{encoded}\")")
+}
 
 fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, indent: &str) {
     let buttons = &TITLEBAR.buttons;
@@ -308,17 +344,8 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
                 buttons.margin_start.saturating_sub(ADWAITA_HEADERBAR_START)
             ),
         );
-        rule("headerbar:backdrop > windowhandle", "filter: none;");
-        for parent in ["windowhandle > box", "windowhandle > box > widget"] {
-            rule(
-                &format!("headerbar:backdrop > {parent} > :not(box)"),
-                ADWAITA_BACKDROP_DIM,
-            );
-            rule(
-                &format!("headerbar:backdrop > {parent} > box > :not(windowcontrols)"),
-                ADWAITA_BACKDROP_DIM,
-            );
-        }
+        rule(ADWAITA_BACKDROP_BARS, "filter: none;");
+        rule(&BACKDROP_DIMMED.join(", "), ADWAITA_BACKDROP_DIM);
     }
     for (index, button) in buttons.order.iter().enumerate() {
         let name = gtk_button_name(button.kind);
@@ -327,7 +354,7 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
             .darken(vow_design::TRAFFIC_PRESSED_DARKEN);
         let glyph = hovered[index]
             .glyph
-            .map_or("transparent".to_string(), css_color);
+            .map_or("none".to_string(), |glyph| glyph_image(index, glyph));
         let (button, light, hover) = match toolkit {
             Toolkit::Gtk4 => (
                 format!("windowcontrols > button.{name}"),
@@ -372,7 +399,6 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
                     ),
                 );
                 rule(&format!("{button} image"), "opacity: 0;");
-                rule(&format!("{hover} image"), "opacity: 1;");
             }
         }
         let active = match toolkit {
@@ -390,11 +416,16 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
         rule(
             &hover,
             &format!(
-                "background: {}; color: {glyph};",
-                css_color(hovered[index].fill)
+                "background-color: {}; background-image: {glyph}; background-position: center; \
+                 background-repeat: no-repeat; background-size: {box_size}px {box_size}px;",
+                css_color(hovered[index].fill),
+                box_size = TRAFFIC_GLYPHS.box_size
             ),
         );
-        rule(&active, &format!("background: {};", css_color(pressed)));
+        rule(
+            &active,
+            &format!("background-color: {};", css_color(pressed)),
+        );
     }
 }
 
@@ -690,7 +721,7 @@ mod tests {
     fn every_toolkit_gets_the_traffic_light_rules_for_each_scheme() {
         let gtk4 = gtk4_css(&AppearanceConfig::default(), None);
         assert_eq!(gtk4.matches("windowcontrols > button.close {").count(), 2);
-        assert!(gtk4.contains("windowcontrols:hover > button.close > image { background:"));
+        assert!(gtk4.contains("windowcontrols:hover > button.close > image { background-color:"));
         let gtk3 = gtk3_css(&AppearanceConfig::default(), None);
         assert!(gtk3.contains("button.titlebutton.close:backdrop"));
         assert!(live_css(&AppearanceConfig::default(), None).contains("windowcontrols"));

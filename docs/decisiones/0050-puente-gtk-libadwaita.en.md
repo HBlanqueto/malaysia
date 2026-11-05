@@ -55,11 +55,15 @@ copy code or templates (ChromaLeon is GPL-3.0, Malaysia is MIT).
    radius and shape (`traffic_light_shape`) from `TITLEBAR.buttons`; fills and
    glyph from `vow_appearance::traffic::visual` for focused, unfocused
    (`:backdrop`), pointer over the group (GTK 4) or the button (GTK 3) and
-   pressed. The GTK icon shows only under the pointer. In GTK 4 the light is
+   pressed. The GTK icon never shows: under the pointer, the Tengen glyph
+   (`vow_appearance::traffic::glyph_svg`) is painted as a `data:` SVG
+   `background-image`. In GTK 4 the light is
    drawn on the button's image, which GTK centres (the button fills the
    headerbar's height); the controls start `margin_start` from the edge, less
-   the libadwaita headerbar padding, and libadwaita's unfocused dimming
-   (`filter: opacity(0.5)`) does not reach them. They go in
+   the libadwaita headerbar padding. libadwaita's unfocused dimming
+   (`filter: opacity(0.5)`), on the headerbar or on the `AdwToolbarView` top
+   bar, moves to the other children and does not reach the traffic lights.
+   They go in
    `malaysia.css` and, in GTK 4, also in `gtk4-css` (ADR 0055), inside each
    `@media` block.
 
