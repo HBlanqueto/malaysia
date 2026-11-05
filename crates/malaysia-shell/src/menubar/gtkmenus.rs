@@ -58,9 +58,11 @@ impl Export {
     pub fn changed(&mut self, changes: Vec<MenuChange>) -> bool {
         let mut changed = false;
         for (group, menu, position, removed, added) in changes {
-            let Some(items) = self.menus.get_mut(&(group, menu)) else {
+            // GLib announces a menu added to a subscribed group as a change at 0 (gmenuexporter.c).
+            if !self.subscribed.contains(&group) {
                 continue;
-            };
+            }
+            let items = self.menus.entry((group, menu)).or_default();
             let start = (position as usize).min(items.len());
             let end = (start + removed as usize).min(items.len());
             items.splice(start..end, added);
@@ -1041,6 +1043,13 @@ mod tests {
         assert!(changed);
         assert_eq!(export.missing_groups(), vec![2]);
         assert!(!export.changed(vec![(9, 9, 0, 0, Vec::new())]));
+    }
+
+    #[test]
+    fn a_new_menu_in_a_subscribed_group_is_added() {
+        let mut export = demo();
+        assert!(export.changed(vec![(0, 7, 0, 0, vec![attrs(&[("label", text("Nueva"))])])]));
+        assert_eq!(export.menu(0, 7).len(), 1);
     }
 
     #[test]

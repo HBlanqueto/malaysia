@@ -287,17 +287,34 @@ impl MenuCache {
         self.full = Some(CachedSubtree { revision, items });
     }
 
-    fn invalidate(&mut self, id: i32, revision: u32) -> bool {
-        if self
-            .subtrees
-            .get(&id)
-            .is_some_and(|subtree| revision > subtree.revision)
-        {
-            self.subtrees.remove(&id);
-            true
-        } else {
-            false
+    fn invalidate(&mut self, parent: i32, revision: u32) -> Vec<i32> {
+        // dbusmenu: `parent` "may not be the direct parent of the changed nodes".
+        let candidates = match self.subtrees.get(&parent) {
+            Some(subtree) if revision <= subtree.revision => return Vec::new(),
+            Some(_) => self.descendants(parent),
+            None => self.subtrees.keys().copied().collect(),
+        };
+        let mut dropped = Vec::new();
+        self.subtrees.retain(|id, subtree| {
+            let stale = candidates.contains(id) && revision > subtree.revision;
+            if stale {
+                dropped.push(*id);
+            }
+            !stale
+        });
+        dropped
+    }
+
+    fn descendants(&self, parent: i32) -> Vec<i32> {
+        let mut ids = vec![parent];
+        let mut next = 0;
+        while let Some(&id) = ids.get(next) {
+            next += 1;
+            if let Some(subtree) = self.subtrees.get(&id) {
+                collect_ids(&subtree.items, &mut ids);
+            }
         }
+        ids
     }
 
     fn invalidate_full(&mut self, revision: u32) -> bool {
@@ -319,10 +336,19 @@ impl MenuCache {
         removed: &[(i32, Vec<String>)],
     ) -> bool {
         let mut changed = false;
-        for subtree in self.subtrees.values_mut() {
+        for subtree in self.subtrees.values_mut().chain(self.full.as_mut()) {
             changed |= apply_properties(&mut subtree.items, updated, removed);
         }
         changed
+    }
+}
+
+fn collect_ids(items: &[RawItem], ids: &mut Vec<i32>) {
+    for item in items {
+        if !ids.contains(&item.id) {
+            ids.push(item.id);
+        }
+        collect_ids(&item.children, ids);
     }
 }
 
@@ -919,7 +945,7 @@ fn handle_signal(
             let Ok((revision, parent)) = message.body().deserialize::<(u32, i32)>() else {
                 return;
             };
-            let (invalidated, full_invalidated) = caches
+            let (dropped, full_invalidated) = caches
                 .get_mut(&address)
                 .map(|cache| {
                     (
@@ -932,12 +958,16 @@ fn handle_signal(
                 service = %address.service,
                 revision,
                 parent,
-                invalidated,
+                ?dropped,
                 full_invalidated,
                 "menubar: dbusmenu LayoutUpdated"
             );
-            if invalidated && is_focused {
-                pending.subtrees.push(parent);
+            let refetch: Vec<i32> = dropped
+                .into_iter()
+                .filter(|id| *id == parent || *id == 0)
+                .collect();
+            if is_focused && !refetch.is_empty() {
+                pending.subtrees.extend(refetch);
                 arm(deadline);
             }
         }
@@ -1430,22 +1460,37 @@ mod tests {
     }
 
     #[test]
-    fn invalidation_drops_only_the_signalled_subtree() {
+    fn a_layout_update_drops_the_subtree_and_its_cached_descendants() {
+        let mut cache = MenuCache::default();
+        cache.put(
+            0,
+            1,
+            vec![item(7, &[], Vec::new()), item(9, &[], Vec::new())],
+        );
+        cache.put(7, 1, vec![item(8, &[], Vec::new())]);
+        cache.put(8, 1, Vec::new());
+        cache.put(9, 1, Vec::new());
+        let mut dropped = cache.invalidate(7, 2);
+        dropped.sort_unstable();
+        assert_eq!(dropped, [7, 8]);
+        assert!(cache.get(0).is_some());
+        assert!(cache.get(9).is_some());
+    }
+
+    #[test]
+    fn an_update_for_an_uncached_parent_drops_every_older_subtree() {
         let mut cache = MenuCache::default();
         cache.put(0, 1, vec![item(7, &[], Vec::new())]);
-        cache.put(7, 1, vec![item(8, &[], Vec::new())]);
-        assert!(cache.invalidate(7, 2));
-        assert!(cache.get(7).is_none());
-        assert!(cache.get(0).is_some());
-        assert!(cache.invalidate(0, 2));
-        assert!(cache.get(0).is_none());
+        cache.put(8, 3, Vec::new());
+        assert_eq!(cache.invalidate(7, 2), [0]);
+        assert!(cache.get(8).is_some());
     }
 
     #[test]
     fn an_older_revision_is_ignored() {
         let mut cache = MenuCache::default();
         cache.put(0, 9, vec![item(1, &[], Vec::new())]);
-        assert!(!cache.invalidate(0, 8));
+        assert!(cache.invalidate(0, 8).is_empty());
         assert!(cache.get(0).is_some());
     }
 
@@ -1480,6 +1525,23 @@ mod tests {
             i32::try_from(cache.get(0).unwrap().items[0].properties["toggle-state"].clone())
                 .unwrap(),
             1
+        );
+    }
+
+    #[test]
+    fn items_properties_updated_also_refresh_the_full_tree() {
+        let mut cache = MenuCache::default();
+        cache.put_full(
+            1,
+            vec![item(4, &[("enabled", OwnedValue::from(true))], Vec::new())],
+        );
+        let updated = vec![(
+            4,
+            HashMap::from([("enabled".to_string(), OwnedValue::from(false))]),
+        )];
+        assert!(cache.apply_properties(&updated, &[]));
+        assert!(
+            !bool::try_from(cache.full().unwrap().items[0].properties["enabled"].clone()).unwrap()
         );
     }
 
