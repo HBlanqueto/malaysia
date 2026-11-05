@@ -43,6 +43,9 @@ pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
     sanitize(&mut command);
     apply_qt_decoration(&mut command, config);
     apply_x11_display(&mut command);
+    if let Some(language) = vow_appearance::language::system_language() {
+        command.env("LANGUAGE", language);
+    }
     command.spawn()
 }
 
