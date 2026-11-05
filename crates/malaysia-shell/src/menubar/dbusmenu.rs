@@ -1237,7 +1237,7 @@ async fn proxy(
 
 type RawNode = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
 
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn raw_items_from_layout(layout: &barrier_kit::app_menu::layout::LayoutItem) -> Vec<RawItem> {
     layout
         .2

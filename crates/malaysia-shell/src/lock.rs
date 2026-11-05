@@ -6,7 +6,6 @@ use std::{
     os::unix::net::UnixStream,
     rc::Rc,
     sync::{Arc, Mutex},
-    time::SystemTime,
 };
 
 use barrier_kit::password::{PasswordField, State as FieldState};
@@ -29,7 +28,6 @@ struct Model {
     label: String,
     masked: String,
     status: Option<String>,
-    theme_revision: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,7 +259,6 @@ pub fn run() -> anyhow::Result<()> {
         label: "Contraseña".to_string(),
         masked: String::new(),
         status: None,
-        theme_revision: theme_revision(),
     });
     let field = State::create_global(PasswordField::default());
     let app = AppComponent::new(LockApp {
@@ -315,21 +312,6 @@ fn submit(
     }
 }
 
-fn theme_revision() -> u64 {
-    let mut hash = 0u64;
-    for path in [
-        vow_appearance::appearance_path(),
-        vow_appearance::wallpaper_state_path(),
-    ] {
-        if let Ok(modified) = std::fs::metadata(path).and_then(|m| m.modified())
-            && let Ok(value) = modified.duration_since(SystemTime::UNIX_EPOCH)
-        {
-            hash = hash.wrapping_mul(31).wrapping_add(value.as_nanos() as u64);
-        }
-    }
-    hash
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,7 +321,6 @@ mod tests {
             label: "Contraseña".to_string(),
             masked: String::new(),
             status: None,
-            theme_revision: 0,
         }
     }
 
