@@ -292,12 +292,10 @@ fn traffic_shape_cards(
                 cards.option(caption(), traffic_shape_preview(resolved, shape))
             },
         )
-        .selected(
-            SHAPES
-                .iter()
-                .position(|(shape, _)| *shape == config.traffic_light_shape)
-                .unwrap_or(0),
-        )
+        .selected(position(
+            &SHAPES.map(|(shape, _)| shape),
+            config.traffic_light_shape,
+        ))
         .on_change(edit(error, |config, index: usize| {
             config.traffic_light_shape = SHAPES[index].0;
         }))
@@ -319,12 +317,10 @@ fn traffic_popup(
                 popup.icon_item(label(), MenuIcon::Svg(svg.into()))
             },
         )
-        .selected(
-            TRAFFIC
-                .iter()
-                .position(|(style, _)| *style == config.traffic_lights)
-                .unwrap_or(0),
-        )
+        .selected(position(
+            &TRAFFIC.map(|(style, _)| style),
+            config.traffic_lights,
+        ))
         .on_change(edit(error, |config, index: usize| {
             config.traffic_lights = TRAFFIC[index].0;
         }))
