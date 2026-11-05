@@ -224,3 +224,6 @@ fn a_fractional_logical_size_is_ceiled() { … }
   pasa de unas 1500 líneas, la siguiente función nueva va a un módulo propio.
 - Una opción nueva se añade en `config.rs` y en `docs/configuracion/opciones.md`,
   sin ningún otro sitio.
+- El texto visible de la shell y de Ajustes va en `i18n/{en,es}/<crate>.ftl` y se
+  lee con `tr!`; nunca un literal en el código. Guía: `docs/barrierkit/18-idiomas.md`
+  de barrierkit.
