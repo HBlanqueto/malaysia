@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
+use barrier_kit::app_menu::layout::{DbusMenuLayout, LayoutItem};
 use barrier_kit::platform::{AppMenuAddress, WakeHandle};
 use barrier_kit::shell::GtkMenusAddress;
 use futures_lite::{StreamExt, future};
@@ -1245,20 +1246,9 @@ async fn proxy(
     Ok(proxy)
 }
 
-type RawNode = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
-
-#[cfg(test)]
-pub fn raw_items_from_layout(layout: &barrier_kit::app_menu::layout::LayoutItem) -> Vec<RawItem> {
-    layout
-        .2
-        .iter()
-        .filter_map(|v| raw_item(v.clone()))
-        .collect()
-}
-
 fn raw_item(value: OwnedValue) -> Option<RawItem> {
     let value: zbus::zvariant::Value<'_> = value.into();
-    let (id, properties, children) = value.downcast::<RawNode>().ok()?;
+    let (id, properties, children) = value.downcast::<LayoutItem>().ok()?;
     Some(RawItem {
         id,
         properties,
@@ -1277,7 +1267,7 @@ async fn layout(
 ) -> zbus::Result<(u32, Vec<RawItem>)> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
     let args = (parent, depth, &[] as &[&str]);
-    let call = proxy.call::<_, _, (u32, RawNode)>("GetLayout", &args);
+    let call = proxy.call::<_, _, DbusMenuLayout>("GetLayout", &args);
     let Some(result) = timed(limit, call).await else {
         return Err(zbus::Error::Failure("GetLayout timed out".to_string()));
     };

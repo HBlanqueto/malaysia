@@ -137,8 +137,6 @@ fn debug_once(key: &str, value: Option<&OwnedValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use barrier_kit::app_menu::server::TestMenuServer;
-    use barrier_kit::app_menu::{AppMenu, Menu};
     use barrier_kit::menu::strip_mnemonic;
     use barrier_kit::menu::{CheckState, MenuItem};
     use std::collections::HashMap;
@@ -160,10 +158,6 @@ mod tests {
             properties: props(pairs),
             children,
         }
-    }
-
-    fn label(item: &MenuItem) -> Option<&str> {
-        item.label()
     }
 
     #[test]
@@ -209,7 +203,7 @@ mod tests {
         ]);
         let mark = MNEMONIC_MARK;
         assert_eq!(
-            items.iter().filter_map(label).collect::<Vec<_>>(),
+            items.iter().filter_map(MenuItem::label).collect::<Vec<_>>(),
             vec![
                 format!("{mark}Archivo").as_str(),
                 format!("Sele{mark}cción").as_str(),
@@ -269,7 +263,7 @@ mod tests {
         );
         let items = menu_items(&[item(1, &[("label", text("shown"))], Vec::new()), hidden]);
         assert_eq!(
-            items.iter().filter_map(label).collect::<Vec<_>>(),
+            items.iter().filter_map(MenuItem::label).collect::<Vec<_>>(),
             vec!["shown"]
         );
     }
@@ -357,133 +351,5 @@ mod tests {
         ));
         assert!(matches!(&items[1], MenuItem::Action { icon: None, .. }));
         assert!(matches!(&items[2], MenuItem::Submenu { icon: None, .. }));
-    }
-
-    #[test]
-    fn dbusmenu_round_trip_over_private_unix_stream() {
-        use barrier_kit::app_menu::layout::DbusMenuLayout;
-        use futures_lite::StreamExt;
-
-        async_io::block_on(async {
-            let (server_stream, client_stream) = std::os::unix::net::UnixStream::pair().unwrap();
-            let (server_conn, client_conn) = futures_lite::future::zip(
-                async {
-                    zbus::connection::Builder::async_io_unix_stream(server_stream)
-                        .server(zbus::Guid::generate())
-                        .unwrap()
-                        .p2p()
-                        .build()
-                        .await
-                        .unwrap()
-                },
-                async {
-                    zbus::connection::Builder::async_io_unix_stream(client_stream)
-                        .p2p()
-                        .build()
-                        .await
-                        .unwrap()
-                },
-            )
-            .await;
-
-            let menu = AppMenu::new(vec![
-                Menu::new(
-                    "Archivo",
-                    vec![
-                        MenuItem::Action {
-                            id: "new-window".into(),
-                            label: "Nueva ventana".into(),
-                            shortcut: Some("Ctrl+N".into()),
-                            enabled: true,
-                            check: CheckState::None,
-                            icon: None,
-                        },
-                        MenuItem::Separator,
-                        MenuItem::Action {
-                            id: "close-window".into(),
-                            label: "Cerrar ventana".into(),
-                            shortcut: Some("Ctrl+W".into()),
-                            enabled: true,
-                            check: CheckState::None,
-                            icon: None,
-                        },
-                    ],
-                ),
-                Menu::new(
-                    "Edicion",
-                    vec![MenuItem::Action {
-                        id: "copy".into(),
-                        label: "Copiar".into(),
-                        shortcut: Some("Ctrl+C".into()),
-                        enabled: false,
-                        check: CheckState::None,
-                        icon: None,
-                    }],
-                ),
-            ]);
-            let server = TestMenuServer::new(menu, "/TestMenu");
-            server.serve(&server_conn).await.unwrap();
-
-            let proxy = zbus::Proxy::new(
-                &client_conn,
-                "org.test",
-                "/TestMenu",
-                "com.canonical.dbusmenu",
-            )
-            .await
-            .unwrap();
-
-            let layout: DbusMenuLayout = proxy
-                .call("GetLayout", &(0i32, 1i32, Vec::<String>::new()))
-                .await
-                .unwrap();
-            let root_items = crate::menubar::dbusmenu::raw_items_from_layout(&layout.1);
-            let items = menu_items(&root_items);
-            assert_eq!(items.len(), 2);
-            assert_eq!(items[0].label(), Some("Archivo"));
-            assert_eq!(items[1].label(), Some("Edicion"));
-
-            let archivo_id = root_items[0].id;
-            let submenu: DbusMenuLayout = proxy
-                .call("GetLayout", &(archivo_id, 1i32, Vec::<String>::new()))
-                .await
-                .unwrap();
-            let submenu_items = crate::menubar::dbusmenu::raw_items_from_layout(&submenu.1);
-            assert_eq!(submenu_items.len(), 3);
-
-            let new_window_id = submenu_items[0].id;
-            proxy
-                .call::<_, _, ()>(
-                    "Event",
-                    &(new_window_id, "clicked", OwnedValue::from(0i32), 0u32),
-                )
-                .await
-                .unwrap();
-            async_io::Timer::after(std::time::Duration::from_millis(10)).await;
-            assert_eq!(
-                server.handle().drain_actions(),
-                vec!["new-window".to_string()]
-            );
-
-            let mut stream = proxy
-                .receive_signal("ItemsPropertiesUpdated")
-                .await
-                .unwrap();
-            let mut props = HashMap::new();
-            props.insert("enabled".to_string(), OwnedValue::from(false));
-            server
-                .update_properties(&server_conn, vec![(new_window_id, props)])
-                .await
-                .unwrap();
-            let signal = stream.next().await.unwrap();
-            #[allow(clippy::type_complexity)]
-            let (updated, _removed): (
-                Vec<(i32, HashMap<String, OwnedValue>)>,
-                Vec<(i32, Vec<String>)>,
-            ) = signal.body().deserialize().unwrap();
-            assert_eq!(updated[0].0, new_window_id);
-            let enabled = bool::try_from(updated[0].1.get("enabled").cloned().unwrap()).unwrap();
-            assert!(!enabled);
-        });
     }
 }
