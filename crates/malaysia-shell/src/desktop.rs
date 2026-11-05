@@ -151,12 +151,8 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
     if exec.is_empty() {
         return None;
     }
-    let name = localized(&values, "Name", locales)
-        .or_else(|| values.get("Name").cloned())
-        .filter(|name| !name.is_empty())?;
-    let generic_name = localized(&values, "GenericName", locales)
-        .or_else(|| values.get("GenericName").cloned())
-        .filter(|value| !value.is_empty());
+    let name = localized(&values, "Name", locales).filter(|name| !name.is_empty())?;
+    let generic_name = localized(&values, "GenericName", locales).filter(|value| !value.is_empty());
     let keywords = localized(&values, "Keywords", locales)
         .map(|value| split_list(&value))
         .unwrap_or_default();
@@ -218,7 +214,7 @@ fn localized(values: &HashMap<String, String>, key: &str, locales: &[String]) ->
             return Some(value.clone());
         }
     }
-    None
+    values.get(key).cloned()
 }
 
 fn boolean(values: &HashMap<String, String>, key: &str) -> bool {
@@ -445,6 +441,14 @@ mod tests {
             "[Desktop Entry]\nType=Application\nName=Firefox\nName[es]=Fuego\nExec=firefox %U\n";
         let entry = parse_desktop(text, "firefox", &locales()).unwrap();
         assert_eq!(entry.name, "Fuego");
+    }
+
+    #[test]
+    fn unlocalised_keywords_are_read() {
+        let text =
+            "[Desktop Entry]\nType=Application\nName=Files\nKeywords=folder;browse;\nExec=files\n";
+        let entry = parse_desktop(text, "files", &locales()).unwrap();
+        assert_eq!(entry.keywords, ["folder", "browse"]);
     }
 
     #[test]
