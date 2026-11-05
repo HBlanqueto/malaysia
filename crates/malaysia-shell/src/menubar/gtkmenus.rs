@@ -7,6 +7,7 @@ use barrier_kit::shell::GtkMenusAddress;
 use zbus::zvariant::{OwnedValue, Signature, Value};
 
 use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, timed};
+use crate::menubar::dbusmenu_map::prop;
 
 pub const MENUS_INTERFACE: &str = "org.gtk.Menus";
 pub const ACTIONS_INTERFACE: &str = "org.gtk.Actions";
@@ -233,13 +234,9 @@ impl Builder<'_> {
                 out.push(separator(self.id()));
                 continue;
             }
-            let label = string(attributes, "label").unwrap_or_default();
+            let label = prop::<String>(attributes, "label").unwrap_or_default();
             if let Some((group, menu)) = attributes.get(":submenu").and_then(link) {
-                if attributes
-                    .get(ADW_APP_MENU)
-                    .and_then(|value| bool::try_from(value.clone()).ok())
-                    .unwrap_or(false)
-                {
+                if prop(attributes, ADW_APP_MENU).unwrap_or(false) {
                     let children = self.menu(export, group, menu);
                     out.extend(self.split_primary_menu(children));
                     continue;
@@ -296,9 +293,12 @@ impl Builder<'_> {
             ),
             ("Ayuda".to_string(), help),
         ] {
-            let has_entries = items
-                .iter()
-                .any(|item| !matches!(string_prop(item, "type").as_deref(), Some("separator")));
+            let has_entries = items.iter().any(|item| {
+                !matches!(
+                    prop::<String>(&item.properties, "type").as_deref(),
+                    Some("separator")
+                )
+            });
             if has_entries {
                 let id = self.id();
                 out.push(RawItem {
@@ -312,10 +312,10 @@ impl Builder<'_> {
     }
 
     fn action(&mut self, attributes: &Attributes, label: String) -> Option<RawItem> {
-        let name = string(attributes, "action");
+        let name = prop::<String>(attributes, "action");
         let action = name.as_deref().and_then(|name| self.actions.get(name));
         let enabled = action.is_some_and(|action| action.enabled);
-        match string(attributes, "hidden-when").as_deref() {
+        match prop::<String>(attributes, "hidden-when").as_deref() {
             Some("action-missing") if action.is_none() => return None,
             Some("action-disabled") if !enabled => return None,
             _ => {}
@@ -340,7 +340,8 @@ impl Builder<'_> {
                 );
             }
         }
-        if let Some(keys) = string(attributes, "accel").and_then(|accel| accel_keys(&accel)) {
+        if let Some(keys) = prop::<String>(attributes, "accel").and_then(|accel| accel_keys(&accel))
+        {
             let value = Value::from(vec![keys]);
             if let Ok(value) = OwnedValue::try_from(value) {
                 properties.insert("shortcut".to_string(), value);
@@ -392,12 +393,6 @@ fn relabel(mut item: RawItem, label: &str) -> RawItem {
     item
 }
 
-fn string_prop(item: &RawItem, key: &str) -> Option<String> {
-    item.properties
-        .get(key)
-        .and_then(|value| String::try_from(value.clone()).ok())
-}
-
 fn submenu_properties(label: &str) -> HashMap<String, OwnedValue> {
     HashMap::from([
         ("label".to_string(), text(label)),
@@ -415,12 +410,6 @@ fn separator(id: i32) -> RawItem {
 
 fn text(value: &str) -> OwnedValue {
     OwnedValue::try_from(Value::from(value)).expect("a string value is always ownable")
-}
-
-fn string(attributes: &Attributes, key: &str) -> Option<String> {
-    attributes
-        .get(key)
-        .and_then(|value| String::try_from(value.clone()).ok())
 }
 
 fn link(value: &OwnedValue) -> Option<(u32, u32)> {

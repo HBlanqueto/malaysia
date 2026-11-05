@@ -15,8 +15,6 @@ const KNOWN_PROPERTIES: &[&str] = &[
     "toggle-type",
     "toggle-state",
     "shortcut",
-    "icon-name",
-    "icon-data",
 ];
 
 pub fn menu_items(items: &[RawItem]) -> Vec<MenuItem> {
@@ -32,23 +30,18 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
             debug_once(key, props.get(key));
         }
     }
-    if !bool_prop(props, "visible", true) {
+    if !prop(props, "visible").unwrap_or(true) {
         return None;
     }
-    if string(props, "type").as_deref() == Some("separator") {
+    if prop::<String>(props, "type").as_deref() == Some("separator") {
         return Some(MenuItem::Separator);
     }
 
-    let label = mnemonic(&string(props, "label").unwrap_or_default());
-    let enabled = bool_prop(props, "enabled", true);
-    for key in ["icon-name", "icon-data"] {
-        if props.contains_key(key) {
-            debug_once(key, props.get(key));
-        }
-    }
+    let label = mnemonic(&prop::<String>(props, "label").unwrap_or_default());
+    let enabled = prop(props, "enabled").unwrap_or(true);
     let children = menu_items(&item.children);
 
-    if string(props, "children-display").as_deref() == Some("submenu") {
+    if prop::<String>(props, "children-display").as_deref() == Some("submenu") {
         return Some(MenuItem::Submenu {
             id: Some(item.id.to_string()),
             label,
@@ -68,17 +61,13 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
     })
 }
 
-fn string(props: &HashMap<String, OwnedValue>, key: &str) -> Option<String> {
+pub(crate) fn prop<T: TryFrom<OwnedValue>>(
+    props: &HashMap<String, OwnedValue>,
+    key: &str,
+) -> Option<T> {
     props
         .get(key)
-        .and_then(|value| String::try_from(value.clone()).ok())
-}
-
-fn bool_prop(props: &HashMap<String, OwnedValue>, key: &str, default: bool) -> bool {
-    props
-        .get(key)
-        .and_then(|value| bool::try_from(value.clone()).ok())
-        .unwrap_or(default)
+        .and_then(|value| T::try_from(value.clone()).ok())
 }
 
 fn mnemonic(text: &str) -> String {
@@ -100,11 +89,8 @@ fn mnemonic(text: &str) -> String {
 }
 
 fn toggle(props: &HashMap<String, OwnedValue>) -> CheckState {
-    let active = props
-        .get("toggle-state")
-        .and_then(|value| i32::try_from(value.clone()).ok())
-        == Some(1);
-    match string(props, "toggle-type").as_deref() {
+    let active = prop::<i32>(props, "toggle-state") == Some(1);
+    match prop::<String>(props, "toggle-type").as_deref() {
         Some("checkmark") => CheckState::Checkbox(active),
         Some("radio") => CheckState::Radio(active),
         _ => CheckState::None,
@@ -112,9 +98,7 @@ fn toggle(props: &HashMap<String, OwnedValue>) -> CheckState {
 }
 
 fn shortcut(props: &HashMap<String, OwnedValue>) -> Option<String> {
-    let combinations = props
-        .get("shortcut")
-        .and_then(|value| Vec::<Vec<String>>::try_from(value.clone()).ok())?;
+    let combinations: Vec<Vec<String>> = prop(props, "shortcut")?;
     let keys = combinations.first()?;
     if keys.is_empty() {
         return None;
