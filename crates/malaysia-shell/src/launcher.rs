@@ -1,13 +1,15 @@
 use std::{cell::Cell, env, path::PathBuf, rc::Rc, time::Duration};
 
 use barrier_kit::animation::Spring;
+use barrier_kit::controls::SearchField;
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
+use barrier_kit::symbol::Symbol;
+use barrier_kit::views::feedback::empty_state;
 use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
-use freya_components::input::Input;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -132,44 +134,17 @@ impl App for LauncherApp {
         let launch_for_enter = launch.clone();
         let launch_for_click = launch.clone();
         let close_for_escape = self.close.clone();
-        let mut selected_for_keys = self.selected;
-        let results_for_keys = results.clone();
-        let on_pre_key = move |event: Event<KeyboardEventData>| -> bool {
-            match event.key {
-                Key::Named(NamedKey::Escape) => {
-                    close_for_escape();
-                    false
-                }
-                Key::Named(NamedKey::Enter) => {
-                    let index =
-                        (*selected_for_keys.read()).min(results_for_keys.len().saturating_sub(1));
-                    if let Some(entry) = results_for_keys.get(index) {
-                        launch_for_enter(entry.clone());
-                    }
-                    false
-                }
-                Key::Named(NamedKey::ArrowDown) => {
-                    selected_for_keys.set(next_selection(
-                        *selected_for_keys.read(),
-                        results_for_keys.len(),
-                        1,
-                    ));
-                    false
-                }
-                Key::Named(NamedKey::ArrowUp) => {
-                    selected_for_keys.set(next_selection(
-                        *selected_for_keys.read(),
-                        results_for_keys.len(),
-                        -1,
-                    ));
-                    false
-                }
-                _ => {
-                    event.stop_propagation();
-                    event.prevent_default();
-                    true
+        let mut selection = self.selected;
+        let visible = results.clone();
+        let on_navigate = move |key: NamedKey| match key {
+            NamedKey::Enter => {
+                if let Some(entry) = visible.get(selected) {
+                    launch_for_enter(entry.clone());
                 }
             }
+            NamedKey::ArrowDown => selection.set(next_selection(selected, visible.len(), 1)),
+            NamedKey::ArrowUp => selection.set(next_selection(selected, visible.len(), -1)),
+            _ => {}
         };
 
         let rows = results.iter().enumerate().map(|(index, entry)| {
@@ -179,25 +154,13 @@ impl App for LauncherApp {
         });
 
         let resolved = barrier_kit::theme::resolved();
-        let palette = Palette::current();
         let background = theme::color(barrier_kit::theme::surface_background(
             &resolved,
             barrier_kit::theme::SurfaceKind::LayerShell,
         ));
-        let muted = theme::color(palette.secondary_label);
 
         let list = if results.is_empty() {
-            rect()
-                .width(Size::fill())
-                .height(Size::fill())
-                .center()
-                .child(
-                    label()
-                        .text("Sin resultados")
-                        .font_size(LAUNCHER_FONT_SIZE)
-                        .color(muted),
-                )
-                .into_element()
+            empty_state(Symbol::MagnifyingGlass, "Sin resultados").into_element()
         } else {
             rect()
                 .width(Size::fill())
@@ -213,6 +176,11 @@ impl App for LauncherApp {
             .width(Size::fill())
             .height(Size::fill())
             .center()
+            .on_global_key_down(move |event: Event<KeyboardEventData>| {
+                if event.key == Key::Named(NamedKey::Escape) {
+                    close_for_escape();
+                }
+            })
             .child(
                 rect()
                     .width(Size::px(LAUNCHER_WIDTH as f32))
@@ -229,11 +197,9 @@ impl App for LauncherApp {
                             .width(Size::fill())
                             .height(Size::px(LAUNCHER_SEARCH_HEIGHT as f32))
                             .child(
-                                Input::new(self.query)
-                                    .placeholder("Buscar aplicaciones")
+                                SearchField::new(self.query, "Buscar aplicaciones")
                                     .auto_focus(true)
-                                    .width(Size::fill())
-                                    .on_pre_key_down(on_pre_key),
+                                    .on_navigate(on_navigate),
                             ),
                     )
                     .child(
