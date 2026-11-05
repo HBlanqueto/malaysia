@@ -34,7 +34,7 @@ pub(crate) struct ChromeTheme {
     scheme: ColorScheme,
     lights: [Rgba; 3],
     traffic_style: TrafficLightStyle,
-    round_lights: bool,
+    traffic_shape: TrafficLightShape,
     signature: u64,
 }
 
@@ -56,12 +56,11 @@ impl ChromeTheme {
         palette.hairline = resolved.surfaces.line;
 
         let traffic_style = appearance.traffic_light_style();
-        let round_lights = appearance.traffic_light_shape == TrafficLightShape::Round;
         let signature = signature(
             resolved.scheme,
             appearance.window_color,
             appearance.traffic_lights,
-            round_lights,
+            appearance.traffic_light_shape,
             palette,
             resolved.lights,
         );
@@ -70,7 +69,7 @@ impl ChromeTheme {
             scheme: resolved.scheme,
             lights: resolved.lights,
             traffic_style,
-            round_lights,
+            traffic_shape: appearance.traffic_light_shape,
             signature,
         }
     }
@@ -80,7 +79,7 @@ fn signature(
     scheme: ColorScheme,
     mode: WindowColorMode,
     style: TrafficLightStyle,
-    round_lights: bool,
+    shape: TrafficLightShape,
     palette: Palette,
     lights: [Rgba; 3],
 ) -> u64 {
@@ -92,7 +91,7 @@ fn signature(
     add(scheme as u64);
     add(mode as u64);
     add(style as u64);
-    add(u64::from(round_lights));
+    add(shape as u64);
     for color in [
         palette.titlebar_bg.focused,
         palette.titlebar_bg.unfocused,
@@ -215,9 +214,10 @@ impl ChromeCache {
         theme: &ChromeTheme,
         focused: bool,
     ) -> Vec<OutputRenderElement<R>> {
-        let style = match theme.scheme {
-            ColorScheme::Light => vow_design::SHADOW,
-            _ => vow_design::SHADOW_DARK,
+        let style = if theme.scheme.is_dark() {
+            vow_design::SHADOW_DARK
+        } else {
+            vow_design::SHADOW
         };
         let mut elements = Vec::with_capacity(2);
         for (slot, layer) in (SHADOW_SLOT..).zip(style.layers(focused)) {
@@ -463,11 +463,7 @@ impl TextEngine {
             let (x, y, size) = traffic::button_rect(index);
             let center_x = ((x + size / 2.0) * scale).round() as i32;
             let center_y = ((y + size / 2.0) * scale).round() as i32;
-            let radius = if theme.round_lights {
-                diameter / 2
-            } else {
-                (f64::from(TITLEBAR.buttons.corner_radius) * scale).round() as i32
-            };
+            let radius = theme.traffic_shape.corner_radius(diameter as f32);
             fill_rounded_square(
                 &mut pixels,
                 w,
@@ -796,11 +792,11 @@ fn fill_rounded_square(
     cx: i32,
     cy: i32,
     size: i32,
-    radius: i32,
+    radius: f32,
     color: vow_design::Rgba,
 ) {
     let half = size as f32 / 2.0;
-    let radius = (radius as f32).min(half);
+    let radius = radius.min(half);
     let inner = half - radius;
     for row in (cy - size).max(0)..(cy + size).min(height) {
         for col in (cx - size).max(0)..(cx + size).min(width) {
@@ -825,12 +821,12 @@ fn stroke_rounded_square(
     cx: i32,
     cy: i32,
     size: i32,
-    radius: i32,
+    radius: f32,
     stroke: f32,
     color: vow_design::Rgba,
 ) {
     let half = size as f32 / 2.0;
-    let radius = (radius as f32).min(half);
+    let radius = radius.min(half);
     let inner = half - radius;
     let half_stroke = stroke / 2.0;
     for row in (cy - size).max(0)..(cy + size).min(height) {
