@@ -6,6 +6,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use barrier_kit::controls::{Button, ButtonStyle};
+use barrier_kit::menu::measure_text_weight;
 use barrier_kit::platform::{Decorations, Timers, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use barrier_kit::style::Palette;
@@ -18,9 +19,9 @@ use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
     ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
-    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_LABEL_WIDTH, ABOUT_SPEC_ROW_GAP,
-    ABOUT_SPECS_GAP, ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT,
-    CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, TEXT, TITLEBAR,
+    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
+    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG,
+    DIALOG_PADDING, HEADLINE, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -738,6 +739,11 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
         rows.push(("Número de serie".to_string(), serial.clone()));
     }
     rows.push(info.system.clone());
+    let label_width = rows
+        .iter()
+        .map(|(name, _)| measure_text_weight(name, CAPTION.size as f32, FontWeight::SEMI_BOLD))
+        .fold(0.0, f32::max)
+        .ceil();
     let rows = rows.into_iter().map(|(name, value)| {
         rect()
             .direction(Direction::Horizontal)
@@ -745,7 +751,7 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
             .child(
                 label()
                     .text(name)
-                    .width(Size::px(ABOUT_LABEL_WIDTH))
+                    .width(Size::px(label_width))
                     .text_align(TextAlign::Right)
                     .font_size(CAPTION.size as f32)
                     .font_weight(FontWeight::SEMI_BOLD)
