@@ -33,20 +33,18 @@ pub(crate) fn app_command(program: impl AsRef<OsStr>) -> Command {
 }
 
 pub(crate) fn detached(mut command: Command) -> io::Result<()> {
-    // SAFETY: setsid, fork and _exit are async-signal-safe, as pre_exec requires.
+    // SAFETY: setsid is async-signal-safe, as pre_exec requires; fork is not
+    // (POSIX.1-2024 lists only _Fork), so the child is reaped from a thread instead.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() < 0 {
                 return Err(io::Error::last_os_error());
             }
-            match libc::fork() {
-                -1 => Err(io::Error::last_os_error()),
-                0 => Ok(()),
-                _ => libc::_exit(0),
-            }
+            Ok(())
         });
     }
-    command.spawn()?.wait()?;
+    let mut child = command.spawn()?;
+    std::thread::spawn(move || child.wait());
     Ok(())
 }
 
