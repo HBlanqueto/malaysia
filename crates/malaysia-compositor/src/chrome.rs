@@ -652,7 +652,7 @@ fn draw_glyph(
     index: usize,
     color: Rgba,
 ) {
-    let canvas = diameter * TRAFFIC_GLYPHS.box_size / 12.0;
+    let canvas = diameter * TRAFFIC_GLYPHS.box_size / TITLEBAR.buttons.diameter as f32;
     let unit = canvas / TRAFFIC_GLYPHS.box_size;
     let origin_x = center_x - canvas / 2.0;
     let origin_y = center_y - canvas / 2.0;
@@ -1056,9 +1056,9 @@ mod tests {
     fn the_titlebar_uses_tengen_metrics() {
         assert_eq!(TITLEBAR.position, TitlebarPosition::Top);
         assert_eq!(TITLEBAR.thickness, 32);
-        assert_eq!(TITLEBAR.buttons.diameter, 12);
-        assert_eq!(TITLEBAR.buttons.spacing, 8);
-        assert_eq!(TITLEBAR.buttons.margin_start, 16);
+        assert_eq!(TITLEBAR.buttons.diameter, 14);
+        assert_eq!(TITLEBAR.buttons.spacing, 9);
+        assert_eq!(TITLEBAR.buttons.margin_start, 15);
         assert_eq!(vow_design::WINDOW.corner_radius, 16);
     }
 
