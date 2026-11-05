@@ -11,8 +11,9 @@ use barrier_kit::shell::{ToplevelInfo, Toplevels};
 use crate::desktop::DesktopEntry;
 use crate::menubar::{
     create_desktop_folder, focused, help_topics, icons, items, menu::MenuItems, resolve_app_name,
-    spawn_component, system, xdg_open, xdg_user_dir,
+    system, xdg_user_dir,
 };
+use crate::spawn::{spawn_component, xdg_open};
 
 pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);

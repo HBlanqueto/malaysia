@@ -4,7 +4,8 @@ use barrier_kit::menu::{
 };
 use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
-use crate::menubar::{help_topics, icons, items, spawn_component_with, xdg_open};
+use crate::menubar::{help_topics, icons, items};
+use crate::spawn::{spawn_component_with, xdg_open};
 
 pub(crate) const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
 

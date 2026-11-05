@@ -3,10 +3,9 @@ use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
 use crate::desktop::DesktopEntry;
-use crate::menubar::{
-    icons, items, recents, spawn_app, spawn_component, spawn_component_with, xdg_open,
-};
+use crate::menubar::{icons, items, recents};
 use crate::power::{self, PowerAction};
+use crate::spawn::{spawn_app, spawn_component, spawn_component_with, xdg_open};
 
 const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
 
@@ -71,20 +70,24 @@ fn logout_label(name: Option<&str>) -> String {
 }
 
 fn user_display_name() -> Option<String> {
+    // SAFETY: the static entry is copied below before any other `getpw*` call on this thread.
     let pw = unsafe { libc::getpwuid(libc::getuid()) };
     if pw.is_null() {
         return None;
     }
     let read = |ptr: *const libc::c_char| {
         (!ptr.is_null()).then(|| {
+            // SAFETY: `read` only receives `passwd` fields, NUL-terminated and checked non-null.
             unsafe { std::ffi::CStr::from_ptr(ptr) }
                 .to_string_lossy()
                 .into_owned()
         })
     };
+    // SAFETY: `pw` was checked non-null above.
     let gecos = read(unsafe { (*pw).pw_gecos })
         .and_then(|gecos| gecos.split(',').next().map(str::trim).map(str::to_string))
         .filter(|name| !name.is_empty());
+    // SAFETY: `pw` was checked non-null above.
     gecos.or_else(|| read(unsafe { (*pw).pw_name }))
 }
 

@@ -513,7 +513,7 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         command.env("XDG_ACTIVATION_TOKEN", token);
         command.env("DESKTOP_STARTUP_ID", token);
     }
-    crate::menubar::sanitize_client_env(&mut command);
+    crate::spawn::sanitize_client_env(&mut command);
     command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
