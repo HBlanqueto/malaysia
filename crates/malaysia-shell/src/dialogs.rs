@@ -18,7 +18,7 @@ use vow_design::{
     ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
     ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
     ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG,
-    DIALOG_PADDING, HEADLINE, TEXT, TITLEBAR,
+    DIALOG_PADDING, HEADLINE, SPACE_2, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -33,7 +33,6 @@ const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 pub const ABOUT_APP_ID: &str = "about";
 pub const ABOUT_APP_INFO_ID: &str = "about-app";
 const ABOUT_SIZE: (u32, u32) = (ABOUT_WIDTH, ABOUT_HEIGHT);
-const ABOUT_GAP: f32 = 20.0;
 const ABOUT_ROW_GAP: f32 = 5.0;
 const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
 const ABOUT_APP_ICON_SIZE: f32 = 64.0;
@@ -62,12 +61,7 @@ fn panel() -> Rect {
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
         .corner_radius(DIALOG.corner_radius as f32)
-        .padding(Gaps::new(
-            DIALOG_PADDING,
-            DIALOG_PADDING,
-            DIALOG_PADDING,
-            DIALOG_PADDING,
-        ))
+        .padding(DIALOG_PADDING)
         .direction(Direction::Vertical)
         .spacing(DIALOG_PADDING / 2.0)
 }
@@ -178,8 +172,7 @@ fn power_badge(glyph: &'static str) -> Rect {
         .height(Size::px(POWER_ICON_SIZE))
         .corner_radius(POWER_ICON_SIZE / 2.0)
         .background(theme::color(disc))
-        .main_align(Alignment::Center)
-        .cross_align(Alignment::Center)
+        .center()
         .child(
             SvgViewer::new(Bytes::from_static(glyph.as_bytes()))
                 .width(Size::px(POWER_GLYPH_SIZE))
@@ -244,7 +237,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
         .child(
             label()
                 .width(Size::fill())
-                .padding(Gaps::new(14.0, 0.0, 8.0, 0.0))
+                .padding(Gaps::new(14.0, 0.0, SPACE_2, 0.0))
                 .text(text.question)
                 .font_size(TEXT.size as f32)
                 .font_weight(FontWeight::BOLD)
@@ -267,9 +260,9 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
 }
 
 pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
-    let action = arg
-        .and_then(PowerAction::from_arg)
-        .ok_or_else(|| anyhow::anyhow!("usage: malaysia-shell power <restart|shutdown|logout>"))?;
+    let action = arg.and_then(PowerAction::from_arg).ok_or_else(|| {
+        anyhow::anyhow!("usage: malaysia-shell power <restart|shutdown|logout>")
+    })?;
     run_layer(
         AppComponent::new(ConfirmApp {
             action,
@@ -361,10 +354,10 @@ impl App for ForceQuitApp {
                 } else {
                     Color::TRANSPARENT
                 })
-                .padding(Gaps::new(0.0, 8.0, 0.0, 8.0))
+                .padding(Gaps::new(0.0, SPACE_2, 0.0, SPACE_2))
                 .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
-                .spacing(8.0)
+                .spacing(SPACE_2)
                 .on_press(move |_| selected_state.set(row))
                 .child(app_icon(self.icon(&app.app_id).as_ref(), &name, ICON_SIZE))
                 .child(label().text(name).font_size(TEXT.size as f32).color(text))
@@ -892,7 +885,7 @@ impl App for AboutAppInfo {
             .child(Titlebar::new().close_only(true).title("").into_element())
             .child(
                 rect()
-                    .margin(Gaps::new(ABOUT_GAP, 0.0, ABOUT_GAP, 0.0))
+                    .margin(Gaps::new(DIALOG_PADDING, 0.0, DIALOG_PADDING, 0.0))
                     .child(app_icon(
                         self.icon.as_ref(),
                         &self.name,

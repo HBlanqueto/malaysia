@@ -1,7 +1,7 @@
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Gaps, Size};
+use torin::prelude::{Direction, Size};
 use vow_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
 use barrier_kit::theme;
@@ -53,15 +53,9 @@ impl App for DockApp {
             .height(Size::fill())
             .background(background)
             .direction(Direction::Horizontal)
-            .main_align(Alignment::Center)
-            .cross_align(Alignment::Center)
+            .center()
             .spacing(DOCK_GAP as f32)
-            .padding(Gaps::new(
-                DOCK_PADDING as f32,
-                DOCK_PADDING as f32,
-                DOCK_PADDING as f32,
-                DOCK_PADDING as f32,
-            ))
+            .padding(DOCK_PADDING as f32)
             .children(tiles)
     }
 }

@@ -40,7 +40,7 @@ impl PowerAction {
     }
 }
 
-pub fn dry_run() -> bool {
+fn dry_run() -> bool {
     std::env::var("MALAYSIA_POWER_DRY_RUN").is_ok_and(|value| value != "0")
 }
 
