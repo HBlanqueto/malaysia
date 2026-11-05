@@ -17,10 +17,10 @@ use freya_core::prelude::*;
 use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
-    ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP, ABOUT_DRAWING_WIDTH,
-    ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_LABEL_WIDTH, ABOUT_SPEC_ROW_GAP, ABOUT_TITLE_GAP,
-    ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG, DIALOG_PADDING, DISPLAY, HEADLINE,
-    TEXT, TITLEBAR,
+    ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
+    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_LABEL_WIDTH, ABOUT_SPEC_ROW_GAP,
+    ABOUT_SPECS_GAP, ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT,
+    CAPTION, DIALOG, DIALOG_PADDING, HEADLINE, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -692,14 +692,14 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
                 .text(info.model.clone())
                 .text_align(TextAlign::Center)
                 .width(Size::fill())
-                .font_size(DISPLAY.size as f32)
+                .font_size(ABOUT_TITLE_SIZE)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::color(palette.label)),
         )
         .child(
             label()
                 .text(info.subtitle.clone())
-                .margin(Gaps::new(0.0, 0.0, ABOUT_GAP, 0.0))
+                .margin(Gaps::new(0.0, 0.0, ABOUT_SPECS_GAP, 0.0))
                 .font_size(CALLOUT.size as f32)
                 .color(muted),
         )
@@ -710,10 +710,13 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
                 .children(rows),
         )
         .child(
-            rect().margin(Gaps::new(ABOUT_GAP, 0.0, 0.0, 0.0)).child(
-                Button::new("Más información…")
-                    .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[])),
-            ),
+            rect()
+                .margin(Gaps::new(ABOUT_BUTTON_GAP, 0.0, 0.0, 0.0))
+                .child(
+                    Button::new("Más información…")
+                        .small(true)
+                        .on_press(|_| crate::menubar::spawn_app("malaysia-settings", &[])),
+                ),
         )
         .child(rect().width(Size::fill()).height(Size::flex(1.0)))
         .child(
