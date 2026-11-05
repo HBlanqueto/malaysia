@@ -40,9 +40,7 @@ impl MenuSources {
         let app_name = normalize_query(&self.app_name);
         let mut seen = HashSet::from([normalize_query(tr!("menubar-system"))]);
         let mut middle = Vec::new();
-        let has_about_slot = app_items
-            .iter()
-            .any(|item| matches!(item, MenuItem::Action { label, .. } if is_about(label)));
+        let has_about_slot = app_items.iter().any(is_about_slot);
         let mut about = None;
 
         for item in remote {
@@ -156,6 +154,10 @@ fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
 
 fn same_slot(slot: &str, label: &str) -> bool {
     normalize_query(slot) == normalize_query(label) || (is_about(slot) && is_about(label))
+}
+
+fn is_about_slot(item: &MenuItem) -> bool {
+    matches!(item, MenuItem::Action { id, .. } if id.starts_with("app-about:"))
 }
 
 fn is_about(label: &str) -> bool {
@@ -433,7 +435,7 @@ mod tests {
             app_name: "Calculadora".to_string(),
             app_items: Rc::new(move || {
                 vec![
-                    disabled("Acerca de Calculadora"),
+                    MenuItem::action("app-about:calc", "Acerca de Calculadora").with_enabled(false),
                     disabled("Ajustes…"),
                     action("Salir de Calculadora"),
                 ]
