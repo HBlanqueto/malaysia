@@ -8,7 +8,7 @@ use crate::desktop::DesktopEntry;
 use crate::dialogs::ABOUT_APP_ID;
 use crate::menubar::{icons, items, recents};
 use crate::power::{self, PowerAction};
-use crate::spawn::{spawn_app, spawn_component, spawn_component_with, xdg_open};
+use crate::spawn::{spawn_component, spawn_component_with, spawn_settings, xdg_open};
 
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
@@ -98,9 +98,12 @@ pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[Deskt
         recents::clear();
         return;
     }
-    on_system_action_with(id, toplevels, spawn_app, |index| {
-        barrier_kit::shell::Toplevels::get().activate(index)
-    });
+    on_system_action_with(
+        id,
+        toplevels,
+        |_, _| spawn_settings(),
+        |index| barrier_kit::shell::Toplevels::get().activate(index),
+    );
 }
 
 fn on_system_action_with(

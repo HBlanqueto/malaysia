@@ -1,4 +1,4 @@
-use std::{cell::Cell, env, path::PathBuf, process::Stdio, rc::Rc, time::Duration};
+use std::{cell::Cell, env, path::PathBuf, rc::Rc, time::Duration};
 
 use barrier_kit::animation::Spring;
 use barrier_kit::platform::Timers;
@@ -478,12 +478,7 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         command.env("XDG_ACTIVATION_TOKEN", token);
         command.env("DESKTOP_STARTUP_ID", token);
     }
-    crate::spawn::sanitize_client_env(&mut command);
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    if let Err(error) = crate::spawn::detached(command) {
+    if let Err(error) = crate::spawn::spawn_client(command) {
         eprintln!("launcher: could not launch {}: {error}", entry.name);
     }
 }

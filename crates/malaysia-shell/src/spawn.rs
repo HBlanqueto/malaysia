@@ -32,7 +32,7 @@ pub(crate) fn app_command(program: impl AsRef<OsStr>) -> Command {
     command
 }
 
-pub(crate) fn detached(mut command: Command) -> io::Result<()> {
+fn detached(mut command: Command) -> io::Result<()> {
     // SAFETY: setsid is async-signal-safe, as pre_exec requires; fork is not
     // (POSIX.1-2024 lists only _Fork), so the child is reaped from a thread instead.
     unsafe {
@@ -48,113 +48,71 @@ pub(crate) fn detached(mut command: Command) -> io::Result<()> {
     Ok(())
 }
 
+pub(crate) fn spawn_client(mut command: Command) -> io::Result<()> {
+    sanitize_client_env(&mut command);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    detached(command)
+}
+
 pub(crate) fn spawn_component(component: &str) {
     spawn_component_with(component, &[]);
 }
 
 pub(crate) fn spawn_component_with(component: &str, args: &[&str]) {
-    let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
-        eprintln!("menubar: cannot spawn {component}: WAYLAND_DISPLAY not set");
-        return;
-    };
-    let program =
-        sibling_binary("malaysia-shell").unwrap_or_else(|| PathBuf::from("malaysia-shell"));
-    let mut command = Command::new(&program);
-    command
-        .arg(component)
-        .args(args)
-        .env("WAYLAND_DISPLAY", display)
-        .stdin(Stdio::null());
-    let log_name = format!("malaysia-shell-{component}");
-    if let Some(path) = kit_log_path(&log_name) {
-        command.stdout(open_log(&path)).stderr(open_log(&path));
-    } else {
-        command.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-    restore_original_env(&mut command);
-    spawn_logged(&log_name, &program, command);
+    let mut command = Command::new(
+        sibling_binary("malaysia-shell").unwrap_or_else(|| PathBuf::from("malaysia-shell")),
+    );
+    command.arg(component).args(args);
+    spawn_kit(&format!("malaysia-shell-{component}"), command);
 }
 
-pub(crate) fn spawn_app(binary: &str, args: &[&str]) {
-    let Some(display) = env::var_os("WAYLAND_DISPLAY") else {
-        eprintln!("menubar: cannot spawn {binary}: WAYLAND_DISPLAY not set");
+pub(crate) fn spawn_settings() {
+    let program = sibling_binary("malaysia-settings")
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("malaysia-settings"));
+    spawn_kit("malaysia-settings", Command::new(program));
+}
+
+fn spawn_kit(name: &str, mut command: Command) {
+    if env::var_os("WAYLAND_DISPLAY").is_none() {
+        eprintln!("menubar: cannot spawn {name}: WAYLAND_DISPLAY not set");
         return;
-    };
-
-    let program = if binary == "malaysia-settings" {
-        match resolve_settings_binary() {
-            Some(path) => path,
-            None => {
-                tracing::warn!(
-                    "menubar: malaysia-settings not found next to malaysia-shell or in PATH"
-                );
-                return;
-            }
-        }
-    } else {
-        PathBuf::from(binary)
-    };
-
-    let mut command = if is_kit_binary(binary) {
-        Command::new(&program)
-    } else {
-        app_command(&program)
-    };
+    }
+    let log = kit_log_path(name);
+    let output = || log.as_deref().map_or_else(Stdio::null, open_log);
     command
-        .args(args)
-        .env("WAYLAND_DISPLAY", display)
-        .stdin(Stdio::null());
-    if let Some(path) = kit_log_path(binary) {
-        command.stdout(open_log(&path)).stderr(open_log(&path));
-    } else {
-        command.stdout(Stdio::null()).stderr(Stdio::null());
+        .stdin(Stdio::null())
+        .stdout(output())
+        .stderr(output());
+    restore_original_env(&mut command);
+    tracing::info!(name, program = %Path::new(command.get_program()).display(), "spawning kit binary");
+    if let Err(error) = detached(command) {
+        tracing::warn!(name, %error, "could not spawn kit binary");
     }
-    if is_kit_binary(binary) {
-        restore_original_env(&mut command);
-    } else {
-        sanitize_client_env(&mut command);
-    }
-    spawn_logged(binary, &program, command);
 }
 
 fn sibling_binary(name: &str) -> Option<PathBuf> {
     Some(env::current_exe().ok()?.parent()?.join(name))
 }
 
-fn resolve_settings_binary() -> Option<PathBuf> {
-    if let Some(candidate) = sibling_binary("malaysia-settings").filter(|path| path.is_file()) {
-        return Some(candidate);
-    }
-    let path = env::var("PATH").ok()?;
-    path.split(':')
-        .map(|dir| Path::new(dir).join("malaysia-settings"))
-        .find(|candidate| candidate.is_file())
-}
-
 pub(crate) fn xdg_open(path: impl AsRef<Path>) {
     let path = path.as_ref();
     let mut command = app_command("xdg-open");
     command.arg(path);
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    sanitize_client_env(&mut command);
-    match detached(command) {
+    match spawn_client(command) {
         Ok(()) => eprintln!("menubar: xdg-open {}", path.display()),
         Err(error) => eprintln!("menubar: could not open '{}': {error}", path.display()),
     }
 }
 
-pub(crate) fn sanitize_client_env(command: &mut Command) {
+fn sanitize_client_env(command: &mut Command) {
     for name in WRAPPER_ENV {
         command.env_remove(name);
     }
     restore_original_env(command);
-}
-
-fn is_kit_binary(binary: &str) -> bool {
-    matches!(binary, "malaysia-shell" | "malaysia-settings")
 }
 
 fn restore_original_env(command: &mut Command) {
@@ -184,13 +142,6 @@ fn open_log(path: &Path) -> Stdio {
     match OpenOptions::new().create(true).append(true).open(path) {
         Ok(file) => Stdio::from(file),
         Err(_) => Stdio::null(),
-    }
-}
-
-fn spawn_logged(name: &str, program: &Path, command: Command) {
-    tracing::info!(name, program = %program.display(), "spawning kit binary");
-    if let Err(error) = detached(command) {
-        tracing::warn!(name, %error, "could not spawn kit binary");
     }
 }
 

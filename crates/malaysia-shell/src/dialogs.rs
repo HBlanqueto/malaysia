@@ -831,7 +831,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
                 .child(
                     Button::new("Más información…")
                         .small(true)
-                        .on_press(|_| crate::spawn::spawn_app("malaysia-settings", &[])),
+                        .on_press(|_| crate::spawn::spawn_settings()),
                 ),
         )
         .child(rect().width(Size::fill()).height(Size::flex(1.0)))
