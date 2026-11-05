@@ -170,12 +170,16 @@ fn appearance(
                     Row::new(tr!("tint-parts"))
                         .detail(tr!("tint-parts-help"))
                         .keywords(tr_list!("tint-parts-keywords"))
-                        .control(tint_parts(config.tint_parts, tint_disabled, error)),
+                        .control(option_column(tint_parts(
+                            config.tint_parts,
+                            tint_disabled,
+                            error,
+                        ))),
                 )
                 .row(
                     Row::new(tr!("tint-scope"))
                         .keywords(tr_list!("tint-scope-keywords"))
-                        .control(
+                        .control(option_column(
                             RadioGroup::new(tr!("tint-scope"))
                                 .option(tr!("tint-scope-windows"))
                                 .option(tr!("tint-scope-desktop"))
@@ -184,7 +188,7 @@ fn appearance(
                                 .on_change(edit(error, |config, index: usize| {
                                     config.window_tint_scope = SCOPES[index];
                                 })),
-                        ),
+                        )),
                 ),
         )
         .section(
@@ -202,7 +206,7 @@ fn appearance(
                 .row(
                     Row::new(tr!("scroll-bars"))
                         .keywords(tr_list!("scroll-bars-keywords"))
-                        .control(
+                        .control(option_column(
                             RadioGroup::new(tr!("scroll-bars"))
                                 .option(tr!("scroll-bars-when-scrolling"))
                                 .option(tr!("scroll-bars-always"))
@@ -210,7 +214,7 @@ fn appearance(
                                 .on_change(edit(error, |config, index: usize| {
                                     config.scroll_bars = SCROLL_BARS[index];
                                 })),
-                        ),
+                        )),
                 ),
         )
 }
@@ -277,6 +281,12 @@ fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) ->
                 }))
                 .into_element()
         }))
+}
+
+fn option_column(control: impl IntoElement) -> Rect {
+    rect()
+        .width(Size::px(SETTINGS.option_column as f32))
+        .child(control)
 }
 
 fn traffic_shape_cards(
