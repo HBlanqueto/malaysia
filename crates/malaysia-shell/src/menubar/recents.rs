@@ -114,7 +114,8 @@ fn percent_decode(value: &str) -> String {
     while i < bytes.len() {
         if bytes[i] == b'%'
             && i + 2 < bytes.len()
-            && let Ok(byte) = u8::from_str_radix(&value[i + 1..i + 3], 16)
+            && let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3])
+            && let Ok(byte) = u8::from_str_radix(hex, 16)
         {
             out.push(byte);
             i += 3;
@@ -308,6 +309,11 @@ mod tests {
         assert_eq!(docs[0].name, "Acta de defunción.pdf");
         assert_eq!(docs[1].path, PathBuf::from("/home/u/Carta_Poder.pdf"));
         assert!(docs[0].modified > docs[1].modified);
+    }
+
+    #[test]
+    fn a_percent_before_multibyte_text_is_kept_literally() {
+        assert_eq!(percent_decode("%1ñ%C3%B3"), "%1ñó");
     }
 
     #[test]
