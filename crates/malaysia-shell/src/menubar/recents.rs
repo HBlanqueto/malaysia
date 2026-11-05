@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use barrier_kit::app::{read_toml, write_toml};
 use barrier_kit::menu::{MenuIcon, MenuItem};
 use vow_appearance::data_dir;
 
@@ -38,26 +39,6 @@ fn store_path() -> PathBuf {
 }
 
 impl Recents {
-    fn load_from(path: &Path) -> Self {
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|text| toml::from_str(&text).ok())
-            .unwrap_or_default()
-    }
-
-    fn save_to(&self, path: &Path) {
-        let Ok(text) = toml::to_string(self) else {
-            return;
-        };
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        let tmp = path.with_extension("domain.tmp");
-        if std::fs::write(&tmp, text).is_ok() {
-            let _ = std::fs::rename(&tmp, path);
-        }
-    }
-
     fn push_app(&mut self, app_id: &str) -> bool {
         let app_id = app_id.trim();
         if app_id.is_empty() || self.apps.first().is_some_and(|first| first == app_id) {
@@ -72,9 +53,9 @@ impl Recents {
 
 pub fn record_app(app_id: &str) {
     let path = store_path();
-    let mut recents = Recents::load_from(&path);
+    let mut recents: Recents = read_toml(&path);
     if recents.push_app(app_id) {
-        recents.save_to(&path);
+        let _ = write_toml(&path, &recents);
     }
 }
 
@@ -84,7 +65,7 @@ pub fn clear() {
         apps: Vec::new(),
         cleared_at: chrono::Utc::now().timestamp(),
     };
-    recents.save_to(&path);
+    let _ = write_toml(&path, &recents);
 }
 
 fn xbel_path() -> PathBuf {
@@ -197,7 +178,7 @@ pub fn menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     thread_local! {
         static ICONS: RefCell<HashMap<String, Option<MenuIcon>>> = RefCell::default();
     }
-    let recents = Recents::load_from(&store_path());
+    let recents: Recents = read_toml(&store_path());
     build_items(&recents, &documents(recents.cleared_at), entries, |entry| {
         ICONS.with_borrow_mut(|icons| {
             icons

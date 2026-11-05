@@ -71,16 +71,14 @@ pub struct ActiveWindow {
     pub app_id: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct ActiveWindowStore {
     active: ActiveWindow,
 }
 
-pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
-    let text = std::fs::read_to_string(store_path).ok()?;
-    toml::from_str::<ActiveWindowStore>(&text)
-        .ok()
-        .map(|store| store.active)
+pub fn load_active_window(store_path: &Path) -> ActiveWindow {
+    barrier_kit::app::read_toml::<ActiveWindowStore>(store_path).active
 }
 
 pub fn xdg_user_dir(kind: &str) -> Option<PathBuf> {

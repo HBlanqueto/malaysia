@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use barrier_kit::app::use_watched;
+use barrier_kit::app::{load_defaults, use_defaults, use_watched};
 use barrier_kit::menu::{ItemsSource, MenuItem};
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
@@ -15,7 +15,7 @@ use barrier_kit::shell::{
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_appearance::{config_dir, data_dir};
+use vow_appearance::data_dir;
 use vow_design::{
     MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
     SANS_FAMILIES,
@@ -192,7 +192,6 @@ pub struct BarApp {
     pub active_app: State<Option<String>>,
     pub app_menus: State<bool>,
     pub window_store: PathBuf,
-    pub menubar_store: PathBuf,
     pub entries: Rc<Vec<DesktopEntry>>,
     pub dbus: MenuClient,
     pub menu_snapshot: State<Option<Arc<RemoteMenu>>>,
@@ -220,10 +219,9 @@ impl App for BarApp {
 
         let mut app_menus = self.app_menus;
         let dbus = self.dbus.clone();
-        let menubar_store = self.menubar_store.clone();
-        let menus_enabled = use_watched(move || load_app_menus(&menubar_store));
+        let config = use_defaults::<MenubarConfig>("menubar");
         use_side_effect(move || {
-            let enabled = *menus_enabled.read();
+            let enabled = config.read().app_menus;
             if *app_menus.peek() != enabled {
                 app_menus.set(enabled);
                 dbus.set_app_menus(enabled);
@@ -796,23 +794,16 @@ fn now_ms() -> u32 {
         .as_millis() as u32
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Deserialize)]
 #[serde(default)]
 struct MenubarConfig {
-    #[serde(default = "app_menus_default")]
     app_menus: bool,
 }
 
-fn app_menus_default() -> bool {
-    true
-}
-
-fn load_app_menus(path: &Path) -> bool {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| toml::from_str::<MenubarConfig>(&text).ok())
-        .map(|config| config.app_menus)
-        .unwrap_or(true)
+impl Default for MenubarConfig {
+    fn default() -> Self {
+        Self { app_menus: true }
+    }
 }
 
 fn schedule_next_minute(timers: Timers, clock: State<String>) {
@@ -846,8 +837,8 @@ fn is_shell_dialog(app_id: &str) -> bool {
         })
 }
 
-fn load_active_app(store_path: &PathBuf) -> Option<String> {
-    let active = load_active_window(store_path).unwrap_or_default();
+fn load_active_app(store_path: &Path) -> Option<String> {
+    let active = load_active_window(store_path);
     let app_id = active.app_id.trim();
     (!app_id.is_empty()).then(|| app_id.to_string())
 }
@@ -865,11 +856,10 @@ fn surface_spec() -> LayerSpec {
 
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
-    let menubar_store = config_dir().join("menubar.domain");
     let entries = Rc::new(crate::desktop::read_entries());
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
-    let app_menus = State::create_global(load_app_menus(&menubar_store));
+    let app_menus = State::create_global(load_defaults::<MenubarConfig>("menubar").app_menus);
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
     let dbus = dbusmenu::start(*app_menus.peek());
     let app = AppComponent::new(BarApp {
@@ -877,7 +867,6 @@ pub fn run() -> anyhow::Result<()> {
         active_app,
         app_menus,
         window_store,
-        menubar_store,
         entries,
         dbus,
         menu_snapshot,
@@ -909,11 +898,12 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("malaysia-menubar-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("menubar.domain");
-        assert!(load_app_menus(&path));
+        let app_menus = |path: &Path| barrier_kit::app::read_toml::<MenubarConfig>(path).app_menus;
+        assert!(app_menus(&path));
         std::fs::write(&path, "app_menus = false\nautohide = true\n").unwrap();
-        assert!(!load_app_menus(&path));
+        assert!(!app_menus(&path));
         std::fs::write(&path, "autohide = true\n").unwrap();
-        assert!(load_app_menus(&path));
+        assert!(app_menus(&path));
         std::fs::remove_dir_all(&dir).ok();
     }
 
