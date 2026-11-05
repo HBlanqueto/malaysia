@@ -86,12 +86,7 @@ pub fn clear() {
 }
 
 fn xbel_path() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
-        .unwrap_or_default()
-        .join("recently-used.xbel")
+    crate::desktop::data_home().join("recently-used.xbel")
 }
 
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {

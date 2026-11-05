@@ -493,24 +493,16 @@ impl App for BarApp {
             move || system::system_menu_items(&entries)
         };
         let mut specs = vec![MenuTitleSpec {
-            label: "Sistema".to_string(),
             glyph: Some(system::SNOWFLAKE_SVG),
-            bold: false,
-            items: Rc::new(system_items),
-            searchable: None,
-            on_activate: Rc::new(move |id| {
-                let toplevels = Toplevels::get().list.read().clone();
-                system::on_system_action(id, &toplevels, &system_entries);
-            }),
-            live_items: None,
-            on_open: None,
-            on_hover_title: None,
-            on_open_submenu: None,
-            submenu_source: None,
-            anchor: title_anchor(0),
-            enabled: true,
-            query_state: None,
-            reveal_roots: None,
+            ..MenuTitleSpec::new(
+                "Sistema".to_string(),
+                Rc::new(system_items),
+                Rc::new(move |id| {
+                    let toplevels = Toplevels::get().list.read().clone();
+                    system::on_system_action(id, &toplevels, &system_entries);
+                }),
+                title_anchor(0),
+            )
         }];
         if focused {
             let app_id = app_id.clone().unwrap_or_default();
@@ -653,21 +645,22 @@ impl App for BarApp {
                         None
                     };
                     specs.push(MenuTitleSpec {
-                        label: title.label.clone(),
-                        glyph: None,
                         bold: title.bold,
-                        items,
                         searchable,
-                        on_activate: on_activate.clone(),
                         live_items,
                         on_open,
                         on_hover_title,
                         on_open_submenu: Some(on_open_submenu.clone()),
                         submenu_source: Some(submenu_source.clone()),
-                        anchor: title_anchor(index + 1),
                         enabled: title.enabled,
                         query_state: is_help.then(|| help_query.clone()),
                         reveal_roots: is_help.then(|| reveal_roots.clone()),
+                        ..MenuTitleSpec::new(
+                            title.label.clone(),
+                            items,
+                            on_activate.clone(),
+                            title_anchor(index + 1),
+                        )
                     });
                 }
             } else if let Some(MenuChoice::Remembered(labels)) = choice.as_ref() {
@@ -694,40 +687,25 @@ impl App for BarApp {
                         Rc::new(move || items.clone())
                     };
                     specs.push(MenuTitleSpec {
-                        label: title.label.clone(),
-                        glyph: None,
                         bold: title.bold,
-                        items,
-                        searchable: None,
-                        on_activate: Rc::new(focused::on_action),
-                        live_items: None,
-                        on_open: None,
-                        on_hover_title: None,
-                        on_open_submenu: None,
-                        submenu_source: None,
-                        anchor: title_anchor(index + 1),
                         enabled: title.enabled,
-                        query_state: None,
-                        reveal_roots: None,
+                        ..MenuTitleSpec::new(
+                            title.label.clone(),
+                            items,
+                            Rc::new(focused::on_action),
+                            title_anchor(index + 1),
+                        )
                     });
                 }
             } else if matches!(choice, Some(MenuChoice::Waiting)) {
                 specs.push(MenuTitleSpec {
-                    label: app_name.clone(),
-                    glyph: None,
                     bold: true,
-                    items: app_items.clone(),
-                    searchable: None,
-                    on_activate: Rc::new(focused::on_action),
-                    live_items: None,
-                    on_open: None,
-                    on_hover_title: None,
-                    on_open_submenu: None,
-                    submenu_source: None,
-                    anchor: title_anchor(1),
-                    enabled: true,
-                    query_state: None,
-                    reveal_roots: None,
+                    ..MenuTitleSpec::new(
+                        app_name.clone(),
+                        app_items.clone(),
+                        Rc::new(focused::on_action),
+                        title_anchor(1),
+                    )
                 });
             } else {
                 let help_searchable: SearchableItems = {
@@ -769,21 +747,16 @@ impl App for BarApp {
                     focused_titles.into_iter().enumerate()
                 {
                     specs.push(MenuTitleSpec {
-                        label,
-                        glyph: None,
                         bold: offset == 0,
-                        items,
                         searchable,
-                        on_activate: Rc::new(focused::on_action),
-                        live_items: None,
-                        on_open: None,
-                        on_hover_title: None,
-                        on_open_submenu: None,
-                        submenu_source: None,
-                        anchor: title_anchor(anchor),
-                        enabled: true,
                         query_state,
                         reveal_roots,
+                        ..MenuTitleSpec::new(
+                            label,
+                            items,
+                            Rc::new(focused::on_action),
+                            title_anchor(anchor),
+                        )
                     });
                 }
             }
@@ -809,33 +782,16 @@ impl App for BarApp {
             for (offset, (label, items)) in desktop_menus.into_iter().enumerate() {
                 let is_help = offset == help_index;
                 specs.push(MenuTitleSpec {
-                    label: label.to_string(),
-                    glyph: None,
                     bold: offset == 0,
-                    items,
-                    searchable: if is_help {
-                        Some(desktop_searchable.clone())
-                    } else {
-                        None
-                    },
-                    on_activate: Rc::new(appmenu::on_action),
-                    live_items: None,
-                    on_open: None,
-                    on_hover_title: None,
-                    on_open_submenu: None,
-                    submenu_source: None,
-                    anchor: title_anchor(offset + 1),
-                    enabled: true,
-                    query_state: if is_help {
-                        Some(help_query.clone())
-                    } else {
-                        None
-                    },
-                    reveal_roots: if is_help {
-                        Some(desktop_reveal_roots.clone())
-                    } else {
-                        None
-                    },
+                    searchable: is_help.then(|| desktop_searchable.clone()),
+                    query_state: is_help.then(|| help_query.clone()),
+                    reveal_roots: is_help.then(|| desktop_reveal_roots.clone()),
+                    ..MenuTitleSpec::new(
+                        label.to_string(),
+                        items,
+                        Rc::new(appmenu::on_action),
+                        title_anchor(offset + 1),
+                    )
                 });
             }
         }

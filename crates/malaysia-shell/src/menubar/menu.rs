@@ -48,6 +48,33 @@ pub struct MenuTitleSpec {
     pub reveal_roots: Option<RevealRoots>,
 }
 
+impl MenuTitleSpec {
+    pub fn new(
+        label: String,
+        items: MenuItems,
+        on_activate: Rc<dyn Fn(String)>,
+        anchor: Rc<Cell<(f32, f32)>>,
+    ) -> Self {
+        Self {
+            label,
+            glyph: None,
+            bold: false,
+            items,
+            searchable: None,
+            on_activate,
+            live_items: None,
+            on_open: None,
+            on_hover_title: None,
+            on_open_submenu: None,
+            submenu_source: None,
+            anchor,
+            enabled: true,
+            query_state: None,
+            reveal_roots: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct MenuState {
     pub root_id: Arc<Mutex<Option<PopupId>>>,

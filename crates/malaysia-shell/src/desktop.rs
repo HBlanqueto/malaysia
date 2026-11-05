@@ -18,13 +18,17 @@ pub struct DesktopEntry {
     pub startup_wm_class: Option<String>,
 }
 
-pub fn read_entries() -> Vec<DesktopEntry> {
-    let home = env::var_os("HOME").unwrap_or_else(|| "/".into());
-    let data_home = env::var_os("XDG_DATA_HOME")
+pub(crate) fn data_home() -> PathBuf {
+    env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())
-        .unwrap_or_else(|| PathBuf::from(&home).join(".local/share"));
-    let data_dirs = env::var_os("XDG_DATA_DIRS")
+        .unwrap_or_else(|| {
+            PathBuf::from(env::var_os("HOME").unwrap_or_else(|| "/".into())).join(".local/share")
+        })
+}
+
+pub(crate) fn data_dirs() -> Vec<PathBuf> {
+    let system = env::var_os("XDG_DATA_DIRS")
         .map(|value| {
             env::split_paths(&value)
                 .filter(|path| path.is_absolute())
@@ -37,11 +41,14 @@ pub fn read_entries() -> Vec<DesktopEntry> {
                 PathBuf::from("/usr/share"),
             ]
         });
+    std::iter::once(data_home()).chain(system).collect()
+}
 
+pub fn read_entries() -> Vec<DesktopEntry> {
     let locales = locale_candidates();
     let mut seen = HashMap::<String, ()>::new();
     let mut entries = Vec::new();
-    for dir in std::iter::once(data_home).chain(data_dirs) {
+    for dir in data_dirs() {
         let applications = dir.join("applications");
         collect_desktop_files(
             &applications,

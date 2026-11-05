@@ -432,22 +432,11 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
     if direct.is_absolute() && direct.is_file() {
         return icon_data(&direct);
     }
-    let home = env::var_os("HOME").map(PathBuf::from)?;
-    let data_home = env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".local/share"));
-    let data_dirs: Vec<PathBuf> = env::var_os("XDG_DATA_DIRS")
-        .map(|value| env::split_paths(&value).collect())
-        .unwrap_or_else(|| {
-            vec![
-                PathBuf::from("/usr/local/share"),
-                PathBuf::from("/usr/share"),
-            ]
-        });
+    let data_dirs = crate::desktop::data_dirs();
     let theme = env::var("MALAYSIA_ICON_THEME").unwrap_or_else(|_| "Adwaita".to_string());
     let themes = [theme.as_str(), "hicolor"];
     for theme in themes {
-        for dir in std::iter::once(&data_home).chain(&data_dirs) {
+        for dir in &data_dirs {
             for size in sizes {
                 let app_dir = dir.join("icons").join(theme).join(size).join("apps");
                 for extension in ["svg", "png"] {
@@ -461,7 +450,7 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
             }
         }
     }
-    for dir in std::iter::once(&data_home).chain(&data_dirs) {
+    for dir in &data_dirs {
         for extension in ["svg", "png"] {
             let candidate = dir.join("pixmaps").join(format!("{icon}.{extension}"));
             if candidate.is_file() {
