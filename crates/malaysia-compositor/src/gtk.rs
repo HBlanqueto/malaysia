@@ -1,5 +1,3 @@
-//! `gtk_shell1`: stores GTK's D-Bus properties and forwards them to the shell.
-
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId, ObjectId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;

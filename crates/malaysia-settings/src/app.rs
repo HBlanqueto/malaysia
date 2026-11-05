@@ -1,5 +1,3 @@
-//! The Apariencia pane: a form over the appearance domain.
-
 use barrier_kit::choices::{ChoiceCards, ColorWell, RadioGroup};
 use barrier_kit::controls::{Checkbox, Slider};
 use barrier_kit::menu::MenuIcon;

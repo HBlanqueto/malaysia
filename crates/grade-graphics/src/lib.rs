@@ -1,5 +1,3 @@
-//! Shared GLSL shaders and their parameters for the compositor and the shell toolkit.
-
 pub mod shaders {
     pub const ROUNDED_CLIP: &str = concat!(
         "//_DEFINES_\n#if defined(EXTERNAL)\n#extension GL_OES_EGL_image_external : require\n#endif\n",

@@ -1,4 +1,3 @@
-//! Merges a dbusmenu tree with the fallback menus.
 use std::collections::HashSet;
 use std::rc::Rc;
 

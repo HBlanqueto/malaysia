@@ -1,5 +1,3 @@
-//! The single place where the compositor starts other processes.
-
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::PathBuf;

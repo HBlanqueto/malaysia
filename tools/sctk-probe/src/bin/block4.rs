@@ -1,4 +1,3 @@
-//! Harness: opens and closes many windows, checks memory and edge/corner resizes.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

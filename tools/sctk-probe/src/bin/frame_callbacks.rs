@@ -1,5 +1,3 @@
-//! Probe: a client that commits only `wl_surface.frame` gets one callback per refresh cycle,
-//! with no input and no busy loop.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{

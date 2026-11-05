@@ -1,4 +1,3 @@
-//! Client that opens many toplevels, then closes them, for teardown checks.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

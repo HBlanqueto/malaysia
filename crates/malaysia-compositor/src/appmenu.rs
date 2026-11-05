@@ -1,5 +1,3 @@
-//! `org_kde_kwin_appmenu`: stores each surface's global-menu D-Bus address and forwards it to the shell.
-
 use std::collections::HashMap;
 use std::hash::Hash;
 

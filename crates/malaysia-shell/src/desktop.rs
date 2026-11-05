@@ -1,5 +1,3 @@
-//! Desktop entries: parsing, localisation, Exec cleanup and launcher ranking.
-
 use barrier_kit::views::search::fold;
 use std::{
     collections::HashMap,

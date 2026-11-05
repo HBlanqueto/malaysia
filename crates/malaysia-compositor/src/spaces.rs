@@ -1,5 +1,3 @@
-//! Spaces: keeps the window tracker in step with the shown space.
-
 use std::time::{Duration, Instant};
 
 use malaysia_scene::geometry::{

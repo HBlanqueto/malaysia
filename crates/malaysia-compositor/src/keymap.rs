@@ -1,5 +1,3 @@
-//! Reads the system keyboard layout once at startup.
-
 use std::env;
 
 use smithay::input::keyboard::XkbConfig;

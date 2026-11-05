@@ -1,5 +1,3 @@
-//! XDG user directories lookup.
-
 use std::path::PathBuf;
 
 pub fn desktop_dir() -> PathBuf {

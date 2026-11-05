@@ -1,4 +1,3 @@
-//! Shared popup machinery for menubar menus.
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};

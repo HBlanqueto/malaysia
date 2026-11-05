@@ -1,5 +1,3 @@
-//! The lock component: the session-lock screen.
-
 use std::{
     cell::RefCell,
     io::Read,

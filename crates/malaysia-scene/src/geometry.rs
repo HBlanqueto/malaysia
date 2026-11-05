@@ -1,5 +1,3 @@
-//! Logical coordinate types of the scene.
-
 use std::marker::PhantomData;
 use std::ops::{Add, Sub};
 

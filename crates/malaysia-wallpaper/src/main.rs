@@ -1,4 +1,3 @@
-//! `malaysia-wallpaper`: standalone Wayland client that draws the desktop picture with wgpu.
 mod image;
 mod render;
 mod wayland;

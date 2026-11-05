@@ -1,5 +1,3 @@
-//! GPU crossfade between the old and new appearance theme.
-
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 

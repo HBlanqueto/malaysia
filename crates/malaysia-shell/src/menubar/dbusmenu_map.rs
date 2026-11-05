@@ -1,4 +1,3 @@
-//! Maps dbusmenu layouts to `MenuItem`.
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 

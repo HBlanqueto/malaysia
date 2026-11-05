@@ -1,5 +1,3 @@
-//! `ext-idle-notify-v1`, automatic locking and idle inhibition.
-
 use std::{
     collections::HashMap,
     process::Child,

@@ -1,4 +1,3 @@
-//! Local help topics for the Help search field.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HelpTopic {
     pub title: &'static str,

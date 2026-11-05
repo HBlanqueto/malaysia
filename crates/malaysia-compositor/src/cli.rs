@@ -1,5 +1,3 @@
-//! Command-line argument parsing for the `malaysia-compositor` binary.
-
 use crate::logging::LogLevel;
 
 pub const USAGE: &str = "\

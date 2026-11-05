@@ -1,5 +1,3 @@
-//! `ext-session-lock-v1`: locking the session.
-
 use std::time::Duration;
 
 use smithay::backend::input::InputTime;

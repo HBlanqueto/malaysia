@@ -1,4 +1,3 @@
-//! Suspend, restart, shut down and log out through logind.
 const LOGIND: &str = "org.freedesktop.login1";
 const LOGIND_PATH: &str = "/org/freedesktop/login1";
 const MANAGER: &str = "org.freedesktop.login1.Manager";

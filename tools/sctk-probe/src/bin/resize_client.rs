@@ -1,4 +1,3 @@
-//! Client that applies a size bound and reports every configured size.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{

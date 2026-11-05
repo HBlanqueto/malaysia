@@ -1,5 +1,3 @@
-//! `infinity_focus_v1`: tells applications when focus mode hides or shows the bar.
-
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};

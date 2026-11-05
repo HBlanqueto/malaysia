@@ -1,4 +1,3 @@
-//! Probe: relative pointer motion reaches the client.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

@@ -1,5 +1,3 @@
-//! Processes the shell launches: no zombies, and apps outside the component's cgroup.
-
 use std::env;
 use std::ffi::OsStr;
 use std::fs::OpenOptions;

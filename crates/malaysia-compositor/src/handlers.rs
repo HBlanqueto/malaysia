@@ -1,5 +1,3 @@
-//! Protocol handler implementations and their delegation glue.
-
 use std::time::{Duration, Instant};
 
 use smithay::backend::input::TabletToolDescriptor;
@@ -147,8 +145,7 @@ impl CompositorHandler for State {
 
     fn commit(&mut self, surface: &WlSurface) {
         log_committed_buffer_type(surface);
-        // Smithay 023b78b1 drops empty damage (renderer/utils/mod.rs:221-226), so a new buffer
-        // without damage would never be drawn; it damages the whole buffer instead.
+        // Smithay 023b78b1 renderer/utils/mod.rs:221-226 drops empty damage; a new buffer needs full damage.
         with_states(surface, |states| {
             let mut cached = states.cached_state.get::<SurfaceAttributes>();
             let attrs = cached.current();

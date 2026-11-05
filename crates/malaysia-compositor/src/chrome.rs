@@ -1,5 +1,3 @@
-//! Server-side window chrome: the titlebar and its controls.
-
 use std::collections::HashMap;
 use std::sync::Once;
 

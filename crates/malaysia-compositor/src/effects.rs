@@ -1,5 +1,3 @@
-//! Compositor-side window effects: rounded frame, border and shadow.
-
 use smithay::backend::renderer::element::surface::{
     WaylandSurfaceRenderElement, WaylandSurfaceTexture,
 };

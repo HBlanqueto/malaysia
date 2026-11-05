@@ -1,4 +1,3 @@
-//! Fallback menus (app, Window, Help) for the focused application.
 use barrier_kit::menu::{
     CheckState, MenuIcon, MenuItem, SearchLocation, SearchSource, SearchableEntry,
 };

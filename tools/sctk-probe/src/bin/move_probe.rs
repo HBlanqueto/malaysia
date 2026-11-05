@@ -1,4 +1,3 @@
-//! Harness for the client-initiated move and resize path.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

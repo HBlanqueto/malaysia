@@ -1,4 +1,3 @@
-//! Desktop menus of the menubar, shown when no window is focused.
 pub const TITLE: &str = "Escritorio";
 
 use std::env;

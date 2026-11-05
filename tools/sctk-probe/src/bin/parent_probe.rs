@@ -1,4 +1,3 @@
-//! Probe: toggling a parent on a toplevel recomputes decoration insets.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

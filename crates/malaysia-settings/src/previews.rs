@@ -1,5 +1,3 @@
-//! Miniatures of the desktop for the theme and window colour cards.
-
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
 use vow_design::{SETTINGS, TITLEBAR};

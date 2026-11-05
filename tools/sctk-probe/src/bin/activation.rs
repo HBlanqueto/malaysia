@@ -1,4 +1,3 @@
-//! Probe: asserts `xdg-activation-v1` between two clients.
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Write},

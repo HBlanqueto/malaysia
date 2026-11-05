@@ -1,5 +1,3 @@
-//! Logging setup: maps the log level to a `tracing` filter and installs the subscriber.
-
 use std::io::IsTerminal;
 
 use tracing::level_filters::LevelFilter;

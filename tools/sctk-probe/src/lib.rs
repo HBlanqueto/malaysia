@@ -1,4 +1,3 @@
-//! Shared setup for the dev-only probe clients.
 pub mod dmabuf;
 
 use smithay_client_toolkit::reexports::{

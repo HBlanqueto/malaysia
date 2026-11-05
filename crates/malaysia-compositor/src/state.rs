@@ -1,5 +1,3 @@
-//! The compositor's shared state passed to every protocol handler.
-
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};

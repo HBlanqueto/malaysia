@@ -1,5 +1,3 @@
-//! Locks the session before logind suspends the machine.
-
 use std::sync::mpsc;
 use std::time::Duration;
 

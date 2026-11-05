@@ -1,5 +1,3 @@
-//! The pointer cursor: the client's surface or a compositor-drawn one.
-
 use std::io::Read;
 
 use smithay::backend::allocator::Fourcc;

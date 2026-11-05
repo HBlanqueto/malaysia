@@ -1,5 +1,3 @@
-//! `Super+H`, `Alt+Super+H` and `Super+Q`: the focused app's menu actions as compositor shortcuts.
-
 use malaysia_scene::scene::WindowId;
 
 use crate::state::State;

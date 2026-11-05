@@ -1,4 +1,3 @@
-//! Smoke test for the toplevel mapping sequence in a nested session.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

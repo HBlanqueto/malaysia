@@ -1,4 +1,3 @@
-//! Menubar component: the top layer-shell bar.
 pub mod appmenu;
 pub mod bar;
 pub mod clock;

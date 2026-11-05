@@ -1,5 +1,3 @@
-//! Translates backend input events into seat events.
-
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -2157,7 +2155,6 @@ impl State {
         }
     }
 
-    // A CSD client draws its shadow inside the surface; the visible frame starts at the window geometry.
     fn client_shadow_top(&self, window: WindowId) -> i32 {
         if !self.windows.is_client_decorated(window) {
             return 0;
@@ -2168,7 +2165,6 @@ impl State {
             .map_or(0, |geometry| geometry.loc.y)
     }
 
-    // A press on a maximized titlebar may be a click or a double click: restore only once it drags.
     fn unmaximize_on_drag(
         &mut self,
         window: WindowId,
@@ -2283,7 +2279,6 @@ fn maximize_target_rect(
     }
 }
 
-// The pointer keeps its share of the titlebar width, as in macOS and GNOME.
 fn restored_under_pointer(
     maximized: SceneRect<f64, malaysia_scene::geometry::Logical>,
     saved: SceneRect<f64, malaysia_scene::geometry::Logical>,

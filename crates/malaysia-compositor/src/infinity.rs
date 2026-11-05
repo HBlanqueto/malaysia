@@ -1,5 +1,3 @@
-//! Infinity window manager protocol: window geometry requests from the shell.
-
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 

@@ -1,5 +1,3 @@
-//! Foreign-toplevel list and management protocols used by the dock.
-
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::{
     zwlr_foreign_toplevel_handle_v1::{self, State as ToplevelState, ZwlrForeignToplevelHandleV1},

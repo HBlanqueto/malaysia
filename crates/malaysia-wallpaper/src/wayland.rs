@@ -1,4 +1,3 @@
-//! Wayland layer-shell client with one Background surface per output.
 use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::os::raw::c_void;

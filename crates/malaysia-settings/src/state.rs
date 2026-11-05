@@ -1,5 +1,3 @@
-//! Writing the appearance domain and naming the local account.
-
 use vow_appearance::{AppearanceConfig, write_appearance};
 
 pub fn save_config(config: &AppearanceConfig) -> Option<String> {

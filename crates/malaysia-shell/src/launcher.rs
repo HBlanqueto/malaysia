@@ -1,5 +1,3 @@
-//! The launcher: overlay with a search field and app results.
-
 use std::{cell::Cell, env, path::PathBuf, process::Stdio, rc::Rc, time::Duration};
 
 use barrier_kit::animation::Spring;

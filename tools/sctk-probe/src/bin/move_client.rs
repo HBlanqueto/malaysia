@@ -1,4 +1,3 @@
-//! Client that exercises client-initiated move and resize like a real gesture.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

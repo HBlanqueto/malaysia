@@ -1,5 +1,3 @@
-//! `zwp_virtual_keyboard_v1` and `zwlr_virtual_pointer_v1`: synthetic input from unsandboxed clients.
-
 use std::sync::Arc;
 
 use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};

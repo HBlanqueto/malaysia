@@ -1,5 +1,3 @@
-//! System menu dialogs: power confirmation, force quit, «Acerca de este PC» and an app's «Acerca de».
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;

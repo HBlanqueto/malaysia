@@ -1,4 +1,3 @@
-//! Wallpaper image loading and dominant-colour extraction.
 use std::path::{Path, PathBuf};
 
 use vow_design::Rgba;

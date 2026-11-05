@@ -1,4 +1,3 @@
-//! Entry point of the shell binary; each component runs as `malaysia-shell <component>`.
 mod desktop;
 mod dialogs;
 mod dock;

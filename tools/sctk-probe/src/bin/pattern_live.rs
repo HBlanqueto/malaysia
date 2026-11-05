@@ -1,4 +1,3 @@
-//! Maps a toplevel with a four-colour quadrant pattern for capture validation.
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::{

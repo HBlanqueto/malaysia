@@ -1,4 +1,3 @@
-//! `org.freedesktop.impl.portal.Settings` backed by `appearance.domain`.
 use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};

@@ -1,5 +1,3 @@
-//! `wp_security_context_v1`: sandboxed clients lose the privileged globals.
-
 use std::sync::Arc;
 
 use smithay::reexports::calloop::LoopHandle;

@@ -1,4 +1,3 @@
-//! Probe: a window can be captured through `ext-image-copy-capture-v1`.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

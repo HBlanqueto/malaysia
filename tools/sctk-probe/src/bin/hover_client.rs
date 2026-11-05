@@ -1,4 +1,3 @@
-//! Client that asserts the surface-local coordinates of a hover.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

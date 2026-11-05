@@ -1,5 +1,3 @@
-//! Type-erased commit-blocker sources that hold dmabuf commits until their fence is ready.
-
 use std::io;
 
 use calloop::{EventSource, Poll, PostAction, Readiness, Token, TokenFactory};

@@ -1,4 +1,3 @@
-//! System menu title (snowflake) at the far left of the menubar.
 use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 

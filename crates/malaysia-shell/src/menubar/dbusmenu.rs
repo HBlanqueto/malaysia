@@ -1,4 +1,3 @@
-//! App-menu D-Bus client and `AppMenu.Registrar` owner, running on its own thread.
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};

@@ -1,5 +1,3 @@
-//! Spaces: the row of desktops and focus spaces.
-
 use crate::scene::WindowId;
 
 pub const MAX_DESKTOPS: usize = 99;

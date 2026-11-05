@@ -1,5 +1,3 @@
-//! Publishes the active window to the shell through the state store.
-
 use std::path::Path;
 
 #[derive(Debug, Clone)]

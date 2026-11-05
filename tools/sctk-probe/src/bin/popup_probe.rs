@@ -1,4 +1,3 @@
-//! Probe: the compositor constraint-adjusts a popup anchored near the output edge.
 use std::time::Duration;
 
 use smithay_client_toolkit::{

@@ -1,5 +1,3 @@
-//! Startup and shutdown of the `malaysia-compositor` binary.
-
 #![deny(unsafe_code)]
 
 mod cli;

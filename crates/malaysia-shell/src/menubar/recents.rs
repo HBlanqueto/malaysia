@@ -1,4 +1,3 @@
-//! Recent apps and documents for the system menu.
 use std::path::{Path, PathBuf};
 
 use barrier_kit::menu::{MenuIcon, MenuItem};

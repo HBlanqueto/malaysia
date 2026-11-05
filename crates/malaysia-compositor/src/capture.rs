@@ -1,5 +1,3 @@
-//! Screenshots: the debug PNG dump and the screencopy protocol.
-
 use std::{
     cell::RefCell,
     fs,
@@ -443,8 +441,7 @@ thread_local! {
     static SHM_OFFSCREEN: RefCell<Option<ShmOffscreen>> = const { RefCell::new(None) };
 }
 
-// niri a8562a1 src/render_helpers/offscreen.rs: a screencast reuses one texture per size,
-// format and GL context instead of allocating one per frame.
+// niri a8562a1 src/render_helpers/offscreen.rs: one texture per size, format and GL context.
 fn shm_offscreen(
     renderer: &mut GlesRenderer,
     fourcc: Fourcc,

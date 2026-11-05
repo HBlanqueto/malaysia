@@ -1,4 +1,3 @@
-//! Vulkan/wgpu rendering of one wallpaper texture shared across outputs.
 use std::collections::HashMap;
 use std::sync::LazyLock;
 

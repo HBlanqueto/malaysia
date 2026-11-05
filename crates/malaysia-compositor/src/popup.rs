@@ -1,5 +1,3 @@
-//! Tracked `xdg_popup` surfaces.
-
 use malaysia_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };

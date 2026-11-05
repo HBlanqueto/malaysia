@@ -1,4 +1,3 @@
-//! Linear DMA-BUF allocated through `/dev/udmabuf`, for the capture probes.
 use std::{
     fs::OpenOptions,
     io,

@@ -1,5 +1,4 @@
 #![deny(unsafe_code)]
-//! `xdg-desktop-portal-malaysia`: portal backend for the compositor.
 
 mod gtk;
 mod settings;

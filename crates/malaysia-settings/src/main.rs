@@ -1,5 +1,3 @@
-//! Malaysia system settings window.
-
 mod app;
 mod previews;
 mod state;

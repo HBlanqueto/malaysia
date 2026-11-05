@@ -1,5 +1,3 @@
-//! Minimal `wlr_layer_shell_v1` support for the shell and the wallpaper.
-
 use malaysia_scene::scene::WindowId;
 use smithay::reexports::wayland_server::Resource;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;

@@ -1,5 +1,3 @@
-//! The direct session: DRM/KMS, libseat and libinput.
-
 use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -683,8 +681,7 @@ impl Udev {
         }
     }
 
-    // niri a8562a1 src/niri.rs:819: every event source ends here, so no redraw request or
-    // frame callback waits for the next input or client request.
+    // niri a8562a1 src/niri.rs:819: every source ends here, so nothing waits for the next input.
     fn redraw_queued_and_flush(&mut self) {
         if self.state.take_redraw_request() {
             self.queue_redraw();
@@ -790,8 +787,7 @@ impl Udev {
     }
 
     fn on_drm_error(&mut self) {
-        // A lost page-flip event leaves the redraw loop waiting forever; a late one lands in
-        // on_vblank's unexpected branch.
+        // A lost page flip would stall the redraw loop forever; a late one lands in on_vblank.
         if matches!(self.redraw_state, RedrawState::WaitingForVBlank { .. }) {
             self.redraw_state = RedrawState::Idle;
             self.queue_redraw();
@@ -1062,7 +1058,6 @@ fn open_drm_device(session: &mut LibSeatSession, path: &Path) -> Result<DrmDevic
     Ok(DrmDeviceFd::new(DeviceFd::from(fd)))
 }
 
-// linux-dmabuf: main_device names the node clients allocate on, the render node when there is one.
 fn feedback_node(node: DrmNode) -> DrmNode {
     node.node_with_type(NodeType::Render)
         .and_then(Result::ok)

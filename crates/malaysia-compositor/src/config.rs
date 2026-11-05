@@ -1,5 +1,3 @@
-//! Runtime configuration of the compositor, loaded from `.domain` TOML files.
-
 use serde::Deserialize;
 
 pub use vow_appearance::{AppearanceConfig, config_dir};

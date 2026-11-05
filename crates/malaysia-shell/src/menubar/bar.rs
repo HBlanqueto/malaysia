@@ -1,4 +1,3 @@
-//! Menubar container: layer-shell surface, module layout, clock and active-app polling.
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

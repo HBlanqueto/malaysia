@@ -1,5 +1,3 @@
-//! The nested compositor session: event loop, winit window and GLES output.
-
 use std::cell::Cell;
 use std::os::fd::{AsFd, OwnedFd};
 use std::sync::Arc;
@@ -2066,9 +2064,7 @@ pub(crate) fn update_primary_scanout_outputs(state: &State, render_states: &Rend
     });
 }
 
-// niri a8562a1 src/niri.rs:5342: one callback per surface and refresh cycle, or a client that
-// commits only wl_surface.frame busy-loops on empty frames; surfaces off screen wait for the
-// throttle.
+// niri a8562a1 src/niri.rs:5342: one callback per surface and cycle, or a frame-only client busy-loops.
 pub(crate) fn send_frame_callbacks_for_state(state: &State, time: Duration) {
     let cycle = state.frame_callback_cycle;
     let output = &state.output;
@@ -2098,8 +2094,7 @@ fn first_in_cycle(states: &SurfaceData, cycle: u32) -> bool {
     last.0.replace(Some(cycle)) != Some(cycle)
 }
 
-// Smithay's send_frames_surface_tree skips surfaces without a buffer; a toplevel waiting
-// for its first configure still needs its callback.
+// send_frames_surface_tree skips bufferless surfaces; a toplevel awaiting its first configure needs one.
 fn send_frame_callbacks(surface: &WlSurface, time: Duration, cycle: u32) {
     let time_ms = time.as_millis() as u32;
     with_surface_tree_downward(

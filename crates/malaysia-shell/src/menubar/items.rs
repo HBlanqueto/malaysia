@@ -1,4 +1,3 @@
-//! Shared constructors for menu rows: action, header, separator and submenu.
 use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 
 pub fn action(

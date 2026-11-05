@@ -1,4 +1,3 @@
-//! Probe: native app ids must never get compositor decorations.
 use std::time::Duration;
 
 use smithay_client_toolkit::reexports::client::protocol::{

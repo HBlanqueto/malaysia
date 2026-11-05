@@ -1,5 +1,3 @@
-//! Space reserved around a client's surface for titlebar and other chrome.
-
 use malaysia_scene::scene::Decoration;
 use vow_design::{Titlebar, TitlebarPosition};
 

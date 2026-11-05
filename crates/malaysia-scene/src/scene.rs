@@ -1,5 +1,3 @@
-//! The ordered set of windows and geometry queries over it.
-
 use crate::geometry::{Logical, Point, Rect, Size};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -1,5 +1,3 @@
-//! Tracked toplevel windows: protocol surface and configure handling.
-
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};

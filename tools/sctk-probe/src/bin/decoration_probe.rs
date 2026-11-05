@@ -1,4 +1,3 @@
-//! Harness: runs real applications under Malaysia and checks their decoration protocol use.
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};

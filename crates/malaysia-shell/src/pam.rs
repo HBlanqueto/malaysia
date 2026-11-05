@@ -1,5 +1,4 @@
-//! PAM authentication for the lock screen.
-//! Adapted from Otto's `components/otto-auth-ui/src/pam.rs` (MIT, Copyright (c) 2024 Riccardo Canalicchio); see NOTICE.
+// Adapted from Otto's `components/otto-auth-ui/src/pam.rs` (MIT, Copyright (c) 2024 Riccardo Canalicchio); see NOTICE.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::{
     io::Write,

@@ -1,5 +1,3 @@
-//! Fade-out of the popups a window loses when it starts moving.
-
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
@@ -23,8 +21,7 @@ pub(crate) struct PopupFade {
     start: Instant,
 }
 
-// The client destroys the popup as soon as it gets popup_done, so the pixels
-// are captured, frame and shadow included, before dismissing it.
+// The client destroys the popup on popup_done, so its pixels are captured before dismissing it.
 pub(crate) fn start_requested(state: &mut State, renderer: &mut GlesRenderer, scale: f64) {
     let Some(window) = state.popup_fade_request.take() else {
         return;

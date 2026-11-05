@@ -1,4 +1,3 @@
-//! `org.gtk.Menus` and `org.gtk.Actions` client for GTK app menus.
 use std::collections::{BTreeSet, HashMap};
 
 use std::time::Instant;

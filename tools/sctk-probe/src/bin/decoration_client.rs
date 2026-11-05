@@ -1,4 +1,3 @@
-//! Client that changes decoration mode after the window has mapped.
 use std::time::Duration;
 
 use smithay_client_toolkit::reexports::client::protocol::{

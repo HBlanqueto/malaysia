@@ -1,5 +1,3 @@
-//! Fails the build when it runs outside the dev shell.
-
 fn main() {
     println!("cargo:rerun-if-env-changed=MALAYSIA_DEV_SHELL");
     if std::env::var("MALAYSIA_DEV_SHELL").unwrap_or_default() != "1" {

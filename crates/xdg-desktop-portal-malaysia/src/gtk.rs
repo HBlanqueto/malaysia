@@ -1,4 +1,3 @@
-//! Bridge from portal appearance settings to GTK 3/4 and libadwaita.
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

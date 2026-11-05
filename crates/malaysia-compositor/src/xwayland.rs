@@ -1,5 +1,3 @@
-//! Rootless X11 through xwayland-satellite, which turns X11 windows into xdg toplevels.
-
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::os::fd::{AsRawFd, BorrowedFd, RawFd};

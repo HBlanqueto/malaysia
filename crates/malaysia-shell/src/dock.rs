@@ -1,5 +1,3 @@
-//! The dock component: running apps at the screen edge.
-
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;

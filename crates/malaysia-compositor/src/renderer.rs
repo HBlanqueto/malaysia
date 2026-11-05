@@ -1,5 +1,3 @@
-//! The renderers the output is composed with: GLES alone (winit) or behind a `MultiRenderer` (DRM).
-
 use smithay::backend::drm::DrmDeviceFd;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
 use smithay::backend::renderer::gles::{GlesError, GlesFrame, GlesRenderer};
