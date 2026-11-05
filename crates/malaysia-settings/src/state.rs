@@ -1,5 +1,7 @@
 use vow_appearance::{AppearanceConfig, write_appearance};
 
+use crate::localize::tr;
+
 pub fn save_config(config: &AppearanceConfig) -> Option<String> {
     write_appearance(&vow_appearance::appearance_path(), config)
         .err()
@@ -10,7 +12,7 @@ pub fn account_name() -> String {
     full_account_name().unwrap_or_else(|| {
         std::env::var("USER")
             .or_else(|_| std::env::var("LOGNAME"))
-            .unwrap_or_else(|_| "Usuario".into())
+            .unwrap_or_else(|_| tr!("default-user").into())
     })
 }
 

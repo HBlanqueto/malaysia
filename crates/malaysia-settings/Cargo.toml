@@ -20,6 +20,9 @@ libc.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
 torin.workspace = true
+i18n-embed.workspace = true
+i18n-embed-fl.workspace = true
+rust-embed.workspace = true
 
 [dev-dependencies]
 freya-testing.workspace = true

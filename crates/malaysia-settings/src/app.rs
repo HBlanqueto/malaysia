@@ -16,6 +16,7 @@ use vow_appearance::{
 };
 use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
 
+use crate::localize::{tr, tr_list};
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
 
@@ -33,24 +34,26 @@ const STRENGTHS: [TintStrength; 4] = [
 ];
 const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
 const SCROLL_BARS: [ScrollBars; 2] = [ScrollBars::WhenScrolling, ScrollBars::Always];
-const SHAPES: [(TrafficLightShape, &str); 2] = [
-    (TrafficLightShape::Square, "Cuadrados"),
-    (TrafficLightShape::Round, "Redondos"),
+type Text = fn() -> &'static str;
+
+const SHAPES: [(TrafficLightShape, Text); 2] = [
+    (TrafficLightShape::Square, || tr!("traffic-shape-square")),
+    (TrafficLightShape::Round, || tr!("traffic-shape-round")),
 ];
-const TRAFFIC: [(TrafficLightStyle, &str); 4] = [
-    (TrafficLightStyle::Auto, "Automático"),
-    (TrafficLightStyle::Standard, "Clásico"),
-    (TrafficLightStyle::Accent, "Acento"),
-    (TrafficLightStyle::Wallpaper, "Fondo"),
+const TRAFFIC: [(TrafficLightStyle, Text); 4] = [
+    (TrafficLightStyle::Auto, || tr!("lights-auto")),
+    (TrafficLightStyle::Standard, || tr!("lights-standard")),
+    (TrafficLightStyle::Accent, || tr!("lights-accent")),
+    (TrafficLightStyle::Wallpaper, || tr!("lights-wallpaper")),
 ];
 type Part = fn(&mut TintParts) -> &mut bool;
 
-const PARTS: [(&str, Part); 5] = [
-    ("Barras laterales", |p| &mut p.sidebars),
-    ("Grupos y tarjetas", |p| &mut p.groups),
-    ("Menús y diálogos", |p| &mut p.menus),
-    ("Fondo de la ventana", |p| &mut p.window),
-    ("Controles", |p| &mut p.controls),
+const PARTS: [(Text, Part); 5] = [
+    (|| tr!("tint-part-sidebars"), |p| &mut p.sidebars),
+    (|| tr!("tint-part-groups"), |p| &mut p.groups),
+    (|| tr!("tint-part-menus"), |p| &mut p.menus),
+    (|| tr!("tint-part-window"), |p| &mut p.window),
+    (|| tr!("tint-part-controls"), |p| &mut p.controls),
 ];
 
 pub fn settings_window(
@@ -61,12 +64,12 @@ pub fn settings_window(
     let mut error = use_state(|| None::<String>);
     let name = account_name();
     let window = PreferencesWindow::new()
-        .account(initials(&name), name, "Cuenta local")
+        .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
         .sidebar_resizable(false);
     let window = window.group(PaneGroup::new(None).pane(Pane::new(
         "appearance",
-        "Apariencia",
+        tr!("appearance"),
         Symbol::CircleHalf,
         SETTINGS.section_icon_bg,
         appearance(config, dominant, resolved, error),
@@ -77,9 +80,9 @@ pub fn settings_window(
         .height(Size::fill())
         .child(window)
         .maybe_child(message.map(|message| {
-            Alert::new("No se pudo guardar la apariencia", message)
-                .confirm("Aceptar", move |_| error.set(None))
-                .cancel("Cerrar", move |_| error.set(None))
+            Alert::new(tr!("save-error-title"), message)
+                .confirm(tr!("save-error-ok"), move |_| error.set(None))
+                .cancel(tr!("save-error-close"), move |_| error.set(None))
         }))
 }
 
@@ -108,22 +111,19 @@ fn appearance(
         .section(
             Section::new()
                 .row(
-                    Row::new("Apariencia")
-                        .keywords(&["tema", "claro", "oscuro", "automático"])
+                    Row::new(tr!("appearance"))
+                        .keywords(tr_list!("appearance-keywords"))
                         .control(scheme_cards(config, dominant, error)),
                 )
                 .row(system_language_row()),
         )
         .section(
-            Section::titled("Color")
+            Section::titled(tr!("color"))
                 .row(
-                    Row::new("Color de acento")
-                        .keywords(&[
-                            "azul", "morado", "rosa", "rojo", "naranja", "amarillo", "verde",
-                            "gris",
-                        ])
+                    Row::new(tr!("accent-color"))
+                        .keywords(tr_list!("accent-color-keywords"))
                         .control(
-                            ColorWell::new("Color de acento", &ACCENT_SWATCHES)
+                            ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
                                 .selected(accent_index(config))
                                 .disabled(config.window_color == WindowColorMode::Wallpaper)
                                 .on_change(edit(error, |config, index: usize| {
@@ -133,19 +133,24 @@ fn appearance(
                         ),
                 )
                 .row(
-                    Row::new("Color de las ventanas")
+                    Row::new(tr!("window-color"))
                         .detail(window_color_help(config.window_color))
-                        .keywords(&["tinte", "neutro", "fondo de pantalla"])
+                        .keywords(tr_list!("window-color-keywords"))
                         .control(window_color_cards(config, dominant, error)),
                 )
                 .row(
-                    Row::new("Intensidad del tinte")
-                        .detail("Acento y Fondo guardan cada uno la suya.")
-                        .keywords(&["sutil", "normal", "fuerte", "intenso"])
+                    Row::new(tr!("tint-strength"))
+                        .detail(tr!("tint-strength-help"))
+                        .keywords(tr_list!("tint-strength-keywords"))
                         .control(
                             Slider::stepped(STRENGTHS.len())
                                 .value(strength_index(config))
-                                .labels(&["Sutil", "Normal", "Fuerte", "Intenso"])
+                                .labels(tr_list!(
+                                    "tint-strength-subtle",
+                                    "tint-strength-normal",
+                                    "tint-strength-strong",
+                                    "tint-strength-intense"
+                                ))
                                 .disabled(tint_disabled)
                                 .on_change(edit(error, |config, index: usize| {
                                     let strength = STRENGTHS[index];
@@ -162,18 +167,18 @@ fn appearance(
                         ),
                 )
                 .row(
-                    Row::new("Teñir en las ventanas")
-                        .detail("Lo que no marques queda en gris neutro.")
-                        .keywords(&["barras laterales", "tarjetas", "controles", "menús"])
+                    Row::new(tr!("tint-parts"))
+                        .detail(tr!("tint-parts-help"))
+                        .keywords(tr_list!("tint-parts-keywords"))
                         .control(tint_parts(config.tint_parts, tint_disabled, error)),
                 )
                 .row(
-                    Row::new("Aplicar el tinte a")
-                        .keywords(&["escritorio", "barra de menús", "dock"])
+                    Row::new(tr!("tint-scope"))
+                        .keywords(tr_list!("tint-scope-keywords"))
                         .control(
-                            RadioGroup::new("Aplicar el tinte a")
-                                .option("Solo las ventanas")
-                                .option("Todo el escritorio")
+                            RadioGroup::new(tr!("tint-scope"))
+                                .option(tr!("tint-scope-windows"))
+                                .option(tr!("tint-scope-desktop"))
                                 .selected(position(&SCOPES, config.window_tint_scope))
                                 .disabled(tint_disabled)
                                 .on_change(edit(error, |config, index: usize| {
@@ -183,24 +188,24 @@ fn appearance(
                 ),
         )
         .section(
-            Section::titled("Ventanas")
+            Section::titled(tr!("windows"))
                 .row(
-                    Row::new("Semáforos")
-                        .keywords(&["botones", "cerrar", "minimizar", "ampliar"])
+                    Row::new(tr!("traffic-lights"))
+                        .keywords(tr_list!("traffic-lights-keywords"))
                         .control(traffic_popup(config, dominant, resolved, error)),
                 )
                 .row(
-                    Row::new("Forma de los semáforos")
-                        .keywords(&["cuadrados", "redondos", "botones", "forma"])
+                    Row::new(tr!("traffic-shape"))
+                        .keywords(tr_list!("traffic-shape-keywords"))
                         .control(traffic_shape_cards(config, resolved, error)),
                 )
                 .row(
-                    Row::new("Mostrar barras de desplazamiento")
-                        .keywords(&["scroll", "desplazamiento", "barras"])
+                    Row::new(tr!("scroll-bars"))
+                        .keywords(tr_list!("scroll-bars-keywords"))
                         .control(
-                            RadioGroup::new("Mostrar barras de desplazamiento")
-                                .option("Al desplazarse")
-                                .option("Siempre")
+                            RadioGroup::new(tr!("scroll-bars"))
+                                .option(tr!("scroll-bars-when-scrolling"))
+                                .option(tr!("scroll-bars-always"))
                                 .selected(position(&SCROLL_BARS, config.scroll_bars))
                                 .on_change(edit(error, |config, index: usize| {
                                     config.scroll_bars = SCROLL_BARS[index];
@@ -219,11 +224,11 @@ fn scheme_cards(
         ColorScheme::DarkTint => 2,
         scheme => position(&SCHEMES, scheme),
     };
-    ["Automático", "Claro", "Oscuro"]
+    [tr!("scheme-auto"), tr!("scheme-light"), tr!("scheme-dark")]
         .into_iter()
         .zip(SCHEMES)
         .fold(
-            ChoiceCards::new("Apariencia"),
+            ChoiceCards::new(tr!("appearance")),
             |cards, (caption, scheme)| {
                 cards.option(caption, theme_preview(scheme, config, dominant))
             },
@@ -239,19 +244,23 @@ fn window_color_cards(
     dominant: Option<Rgba>,
     error: State<Option<String>>,
 ) -> ChoiceCards {
-    ["Neutro", "Acento", "Fondo"]
-        .into_iter()
-        .zip(WINDOW_COLORS)
-        .fold(
-            ChoiceCards::new("Color de las ventanas"),
-            |cards, (caption, mode)| {
-                cards.option(caption, window_color_preview(config, mode, dominant))
-            },
-        )
-        .selected(position(&WINDOW_COLORS, config.window_color))
-        .on_change(edit(error, |config, index: usize| {
-            config.window_color = WINDOW_COLORS[index];
-        }))
+    [
+        tr!("window-color-neutral"),
+        tr!("window-color-accent"),
+        tr!("window-color-wallpaper"),
+    ]
+    .into_iter()
+    .zip(WINDOW_COLORS)
+    .fold(
+        ChoiceCards::new(tr!("window-color")),
+        |cards, (caption, mode)| {
+            cards.option(caption, window_color_preview(config, mode, dominant))
+        },
+    )
+    .selected(position(&WINDOW_COLORS, config.window_color))
+    .on_change(edit(error, |config, index: usize| {
+        config.window_color = WINDOW_COLORS[index];
+    }))
 }
 
 fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) -> Rect {
@@ -260,7 +269,7 @@ fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) ->
         .spacing(SETTINGS.check.row_gap as f32)
         .children(PARTS.iter().map(|&(label, part)| {
             let mut current = parts;
-            Checkbox::new(label)
+            Checkbox::new(label())
                 .checked(*part(&mut current))
                 .disabled(disabled)
                 .on_toggle(edit(error, move |config, checked: bool| {
@@ -278,9 +287,9 @@ fn traffic_shape_cards(
     SHAPES
         .iter()
         .fold(
-            ChoiceCards::new("Forma de los semáforos"),
+            ChoiceCards::new(tr!("traffic-shape")),
             |cards, &(shape, caption)| {
-                cards.option(caption, traffic_shape_preview(resolved, shape))
+                cards.option(caption(), traffic_shape_preview(resolved, shape))
             },
         )
         .selected(
@@ -302,11 +311,14 @@ fn traffic_popup(
 ) -> PopUpButton {
     TRAFFIC
         .into_iter()
-        .fold(PopUpButton::new("Semáforos"), |popup, (style, label)| {
-            let lights = traffic_lights(style, config, resolved, dominant);
-            let svg = traffic_row_svg(lights, config.traffic_light_shape);
-            popup.icon_item(label, MenuIcon::Svg(svg.into()))
-        })
+        .fold(
+            PopUpButton::new(tr!("traffic-lights")),
+            |popup, (style, label)| {
+                let lights = traffic_lights(style, config, resolved, dominant);
+                let svg = traffic_row_svg(lights, config.traffic_light_shape);
+                popup.icon_item(label(), MenuIcon::Svg(svg.into()))
+            },
+        )
         .selected(
             TRAFFIC
                 .iter()
@@ -358,9 +370,9 @@ fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
 
 fn window_color_help(mode: WindowColorMode) -> &'static str {
     match mode {
-        WindowColorMode::Neutral => "Grises sin tinte.",
-        WindowColorMode::Accent => "Toman un poco del color de acento.",
-        WindowColorMode::Wallpaper => "Toman el color del fondo de pantalla.",
+        WindowColorMode::Neutral => tr!("window-color-neutral-help"),
+        WindowColorMode::Accent => tr!("window-color-accent-help"),
+        WindowColorMode::Wallpaper => tr!("window-color-wallpaper-help"),
     }
 }
 

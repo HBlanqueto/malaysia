@@ -1,4 +1,5 @@
 mod app;
+mod localize;
 mod previews;
 mod state;
 
@@ -11,6 +12,7 @@ use vow_appearance::{load_appearance, load_dominant};
 use vow_design::SETTINGS;
 
 use crate::app::settings_window;
+use crate::localize::tr;
 
 fn main() {
     let instance = match launch(&barrier_kit::titlebar::app_id("settings")) {
@@ -20,7 +22,7 @@ fn main() {
     };
     run_window(
         AppComponent::new(SettingsApp { instance }),
-        WindowOptions::new("Ajustes del sistema", "settings")
+        WindowOptions::new(tr!("window-title"), "settings")
             .size((SETTINGS.window_width, SETTINGS.window_height))
             .min_size(Some((SETTINGS.window_width, SETTINGS.window_min_height)))
             .max_size(Some((SETTINGS.window_width, 0))),
@@ -144,7 +146,7 @@ mod tests {
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
-            let node = find_label(&test, "Oscuro").expect("dark theme card label exists");
+            let node = find_label(&test, tr!("scheme-dark")).expect("dark theme card label exists");
             click_node(&mut test, node);
 
             let text = fs::read_to_string(&path).unwrap();
@@ -199,7 +201,7 @@ mod tests {
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
-            let node = find_label(&test, "Oscuro").expect("dark theme card label exists");
+            let node = find_label(&test, tr!("scheme-dark")).expect("dark theme card label exists");
             click_node(&mut test, node);
 
             let config = vow_appearance::load_appearance();
@@ -223,7 +225,8 @@ mod tests {
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
-            let node = find_label(&test, "Todo el escritorio").expect("desktop radio label exists");
+            let node =
+                find_label(&test, tr!("tint-scope-desktop")).expect("desktop radio label exists");
             click_node(&mut test, node);
 
             let text = fs::read_to_string(&path).unwrap();
@@ -247,8 +250,8 @@ mod tests {
                 write_appearance(&path, &initial).unwrap();
 
                 let mut test = run_app(initial);
-                let node =
-                    find_label(&test, "Todo el escritorio").expect("desktop radio label exists");
+                let node = find_label(&test, tr!("tint-scope-desktop"))
+                    .expect("desktop radio label exists");
                 click_node(&mut test, node);
 
                 let text = fs::read_to_string(&path).unwrap();
@@ -267,11 +270,11 @@ mod tests {
             fs::create_dir(dir.join("appearance.domain")).unwrap();
 
             let mut test = run_app(initial);
-            let node = find_label(&test, "Oscuro").expect("dark theme card label exists");
+            let node = find_label(&test, tr!("scheme-dark")).expect("dark theme card label exists");
             click_node(&mut test, node);
 
             assert!(
-                find_label(&test, "No se pudo guardar").is_some()
+                find_label(&test, tr!("save-error-title")).is_some()
                     || find_label(&test, "Permission denied").is_some()
                     || find_label(&test, "denegado").is_some(),
                 "the write error message must be rendered"
