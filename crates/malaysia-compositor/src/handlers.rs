@@ -810,8 +810,10 @@ impl XdgShellHandler for State {
             self.apply_titlebar_double_click(id);
         } else if self.in_focus_mode(id) {
             self.exit_focus_mode(id);
-        } else if self.config.window.green_button == crate::config::GreenButtonAction::Focus
-            && !self.has_fixed_width(id)
+        } else if vow_appearance::window::green_action(
+            self.config.window.green_button,
+            self.has_fixed_width(id),
+        ) == vow_appearance::window::TitlebarAction::Focus
         {
             self.enter_focus_mode(id, false);
         } else {

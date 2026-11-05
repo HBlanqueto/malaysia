@@ -1003,26 +1003,22 @@ impl State {
     }
 
     fn green_button(&mut self, id: WindowId) {
-        use crate::config::GreenButtonAction;
-        match self.config.window.green_button {
-            GreenButtonAction::Focus if self.has_fixed_width(id) => {
-                self.toggle_maximize(id);
-            }
-            GreenButtonAction::Focus => {
+        use vow_appearance::window::{TitlebarAction, green_action};
+        match green_action(self.config.window.green_button, self.has_fixed_width(id)) {
+            TitlebarAction::Focus => {
                 tracing::info!(window = id.get(), "focus mode requested");
                 self.toggle_focus_mode(id);
             }
-            GreenButtonAction::Zoom => {
-                if self.windows.zoom_supported(id) {
-                    self.toggle_maximize(id);
-                } else {
-                    tracing::info!(
-                        window = id.get(),
-                        "maximize ignored: the window is fixed-size"
-                    );
-                }
+            TitlebarAction::Maximize if self.green_button_admitted(id) => {
+                self.toggle_maximize(id);
             }
-            GreenButtonAction::None => {}
+            TitlebarAction::Maximize => {
+                tracing::info!(
+                    window = id.get(),
+                    "maximize ignored: the window is fixed-size"
+                );
+            }
+            TitlebarAction::Minimize | TitlebarAction::None => {}
         }
     }
 

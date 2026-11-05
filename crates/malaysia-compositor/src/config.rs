@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+pub use vow_appearance::window::{DoubleClickAction, GreenButtonAction};
 pub use vow_appearance::{AppearanceConfig, config_dir};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
@@ -9,26 +10,6 @@ pub enum DecorationPolicy {
     Default,
     ForceServer,
     ForceClient,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DoubleClickAction {
-    Fill,
-    Minimize,
-    #[default]
-    Zoom,
-    None,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum GreenButtonAction {
-    #[default]
-    #[serde(alias = "fullscreen")]
-    Focus,
-    Zoom,
-    None,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -215,24 +196,6 @@ mod tests {
         assert!(!config.screenshot.show_pointer);
         assert_eq!(config.screenshot.target, ScreenshotTarget::Desktop);
         assert_eq!(config.lock.idle_timeout_seconds, 0);
-    }
-
-    #[test]
-    fn the_green_button_defaults_to_focus_and_parses_lowercase() {
-        assert_eq!(
-            WindowConfig::default().green_button,
-            GreenButtonAction::Focus
-        );
-        for (text, expected) in [
-            ("focus", GreenButtonAction::Focus),
-            ("zoom", GreenButtonAction::Zoom),
-            ("fullscreen", GreenButtonAction::Focus),
-            ("none", GreenButtonAction::None),
-        ] {
-            let parsed: Config = toml::from_str(&format!("[window]\ngreen_button = \"{text}\"\n"))
-                .expect("green_button parses");
-            assert_eq!(parsed.window.green_button, expected);
-        }
     }
 
     #[test]

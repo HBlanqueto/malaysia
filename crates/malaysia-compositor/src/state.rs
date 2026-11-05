@@ -502,19 +502,14 @@ impl State {
     }
 
     pub(crate) fn apply_titlebar_double_click(&mut self, id: WindowId) {
-        match self.config.window.double_click_titlebar {
-            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill
-                if self.in_focus_mode(id) =>
-            {
-                self.exit_focus_mode(id);
-            }
-            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill => {
-                if self.windows.zoom_supported(id) {
-                    self.toggle_maximize(id);
-                }
-            }
-            crate::config::DoubleClickAction::Minimize => self.set_minimized(id, true),
-            crate::config::DoubleClickAction::None => {}
+        use vow_appearance::window::{TitlebarAction, double_click_action};
+        let in_focus_mode = self.in_focus_mode(id);
+        let zoomable = in_focus_mode || self.windows.zoom_supported(id);
+        match double_click_action(self.config.window.double_click_titlebar, zoomable) {
+            TitlebarAction::Maximize if in_focus_mode => self.exit_focus_mode(id),
+            TitlebarAction::Maximize => self.toggle_maximize(id),
+            TitlebarAction::Minimize => self.set_minimized(id, true),
+            TitlebarAction::Focus | TitlebarAction::None => {}
         }
     }
 
