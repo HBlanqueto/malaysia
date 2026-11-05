@@ -87,23 +87,14 @@ impl App for LauncherApp {
             .map(|toplevel| toplevel.app_id.clone())
             .filter(|app_id| !app_id.is_empty())
             .collect();
-        let entries = self.entries.clone();
         let results: Vec<AppEntry> = desktop::rank(
-            &entries
-                .iter()
-                .map(|entry| entry.desktop.clone())
-                .collect::<Vec<_>>(),
+            self.entries.iter().map(|entry| &entry.desktop),
             &query,
             &running,
         )
         .into_iter()
-        .filter_map(|desktop| {
-            entries
-                .iter()
-                .find(|entry| entry.desktop.id == desktop.id)
-                .cloned()
-        })
         .take(LAUNCHER_MAX_RESULTS as usize)
+        .map(|index| self.entries[index].clone())
         .collect();
         let selected = (*self.selected.read()).min(results.len().saturating_sub(1));
         let progress = if *self.close_started.read() {
@@ -231,12 +222,7 @@ impl App for LauncherApp {
                     .corner_radius(LAUNCHER_CORNER_RADIUS)
                     .opacity(progress)
                     .scale(scale)
-                    .padding(Gaps::new(
-                        LAUNCHER_PADDING as f32,
-                        LAUNCHER_PADDING as f32,
-                        LAUNCHER_PADDING as f32,
-                        LAUNCHER_PADDING as f32,
-                    ))
+                    .padding(LAUNCHER_PADDING as f32)
                     .direction(Direction::Vertical)
                     .spacing(LAUNCHER_PADDING as f32)
                     .child(

@@ -347,10 +347,10 @@ fn unescape(value: &str) -> String {
 }
 
 pub fn rank<'a>(
-    entries: &'a [DesktopEntry],
+    entries: impl IntoIterator<Item = &'a DesktopEntry>,
     query: &str,
     running_apps: &[String],
-) -> Vec<&'a DesktopEntry> {
+) -> Vec<usize> {
     let query = fold(query.trim());
     let running: Vec<String> = running_apps.iter().map(|app| fold(app)).collect();
     let is_running = |entry: &DesktopEntry| {
@@ -360,19 +360,18 @@ pub fn rank<'a>(
             .iter()
             .any(|app| *app == id || wm_class.as_ref() == Some(app))
     };
-
-    if query.is_empty() {
-        let mut out: Vec<&DesktopEntry> = entries.iter().collect();
-        out.sort_by_key(|entry| (!is_running(entry), fold(&entry.name)));
-        return out;
-    }
-
-    let mut scored: Vec<(u8, &DesktopEntry)> = entries
-        .iter()
-        .filter_map(|entry| score(entry, &query).map(|score| (score, entry)))
-        .collect();
-    scored.sort_by_key(|(score, entry)| (*score, fold(&entry.name)));
-    scored.into_iter().map(|(_, entry)| entry).collect()
+    let entries = entries.into_iter().enumerate();
+    let mut ranked: Vec<(u8, String, usize)> = if query.is_empty() {
+        entries
+            .map(|(index, entry)| (u8::from(!is_running(entry)), fold(&entry.name), index))
+            .collect()
+    } else {
+        entries
+            .filter_map(|(index, entry)| Some((score(entry, &query)?, fold(&entry.name), index)))
+            .collect()
+    };
+    ranked.sort_unstable();
+    ranked.into_iter().map(|(.., index)| index).collect()
 }
 
 fn score(entry: &DesktopEntry, query: &str) -> Option<u8> {
@@ -433,6 +432,17 @@ mod tests {
             terminal: false,
             startup_wm_class: None,
         }
+    }
+
+    fn ranked_ids<'a>(
+        entries: &'a [DesktopEntry],
+        query: &str,
+        running: &[String],
+    ) -> Vec<&'a str> {
+        rank(entries, query, running)
+            .into_iter()
+            .map(|index| entries[index].id.as_str())
+            .collect()
     }
 
     #[test]
@@ -528,44 +538,24 @@ mod tests {
         firefox.generic_name = Some("Navegador web".into());
         let entries = vec![firefox, files, campfire, fuego];
 
-        let ranked = rank(&entries, "fue", &[]);
-        assert_eq!(ranked[0].id, "fuego");
-        assert_eq!(
-            ranked
-                .iter()
-                .map(|entry| entry.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["fuego", "files", "campfire"]
-        );
-        let ranked = rank(&entries, "fire", &[]);
-        assert_eq!(ranked[0].id, "firefox");
+        let ids = |query| ranked_ids(&entries, query, &[]);
+        assert_eq!(ids("fue"), ["fuego", "files", "campfire"]);
+        assert_eq!(ids("fire")[0], "firefox");
     }
 
     #[test]
     fn ranking_is_accent_insensitive_and_ties_are_alphabetical() {
         let entries = vec![entry("Árbol", "arbol"), entry("Avión", "avion")];
-        let ranked = rank(&entries, "arbol", &[]);
-        assert_eq!(ranked[0].id, "arbol");
-        let ranked = rank(&entries, "", &[]);
-        assert_eq!(
-            ranked
-                .iter()
-                .map(|entry| entry.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["arbol", "avion"]
-        );
+        assert_eq!(ranked_ids(&entries, "arbol", &[])[0], "arbol");
+        assert_eq!(ranked_ids(&entries, "", &[]), ["arbol", "avion"]);
     }
 
     #[test]
     fn running_apps_come_first_for_an_empty_query() {
         let entries = vec![entry("Bravo", "bravo"), entry("Alfa", "alfa")];
-        let ranked = rank(&entries, "", &["bravo".into()]);
         assert_eq!(
-            ranked
-                .iter()
-                .map(|entry| entry.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["bravo", "alfa"]
+            ranked_ids(&entries, "", &["bravo".into()]),
+            ["bravo", "alfa"]
         );
     }
 }
