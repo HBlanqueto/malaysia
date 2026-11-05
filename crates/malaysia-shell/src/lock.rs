@@ -2,7 +2,6 @@ use std::{cell::RefCell, rc::Rc};
 
 use async_channel::{Receiver, Sender};
 use barrier_kit::password::{PasswordField, State as FieldState};
-use barrier_kit::platform::inserts_text;
 use barrier_kit::shell::{SessionUnlock, run_lock};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -14,7 +13,6 @@ use vow_design::{
 
 use crate::pam;
 use barrier_kit::theme;
-use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -45,33 +43,6 @@ fn apply_pam_event(label: &mut String, field: &mut PasswordField, event: &pam::E
             field.set_error(message.clone());
             Action::Continue
         }
-    }
-}
-
-fn handle_key(
-    field: &mut PasswordField,
-    key: &Key,
-    text: Option<&str>,
-    modifiers: Modifiers,
-) -> Option<Zeroizing<String>> {
-    if matches!(field.state(), FieldState::Verifying) {
-        return None;
-    }
-    match key {
-        Key::Named(NamedKey::Enter) => field.take(),
-        Key::Named(NamedKey::Backspace) => {
-            field.backspace();
-            None
-        }
-        Key::Character(_) if inserts_text(modifiers) => {
-            if let Some(text) = text {
-                for ch in text.chars() {
-                    field.insert(ch);
-                }
-            }
-            None
-        }
-        _ => None,
     }
 }
 
@@ -136,15 +107,7 @@ impl App for LockApp {
             .cross_align(Alignment::Center)
             .spacing(LOCK_LABEL_OFFSET as f32)
             .on_global_key_down(move |event: Event<KeyboardEventData>| {
-                let secret = handle_key(
-                    &mut field.write(),
-                    &event.key,
-                    match &event.key {
-                        Key::Character(text) => Some(text.as_str()),
-                        _ => None,
-                    },
-                    event.modifiers,
-                );
+                let secret = field.write().handle_key(&event.key, event.modifiers);
                 if let Some(secret) = secret {
                     start_attempt(&attempt, &events, &user);
                     if let Some(attempt) = attempt.borrow().as_ref() {
@@ -225,47 +188,7 @@ mod tests {
     use super::*;
 
     fn typed(field: &mut PasswordField, text: &str) {
-        for ch in text.chars() {
-            assert!(
-                handle_key(
-                    field,
-                    &Key::Character(ch.to_string()),
-                    Some(&ch.to_string()),
-                    Modifiers::empty()
-                )
-                .is_none()
-            );
-        }
-    }
-
-    #[test]
-    fn shift_h_inserts_into_lock_field() {
-        let mut field = PasswordField::default();
-        assert!(
-            handle_key(
-                &mut field,
-                &Key::Character("H".to_string()),
-                Some("H"),
-                Modifiers::SHIFT,
-            )
-            .is_none()
-        );
-        assert_eq!(field.take().as_deref().map(String::as_str), Some("H"));
-    }
-
-    #[test]
-    fn ctrl_a_does_not_insert_into_lock_field() {
-        let mut field = PasswordField::default();
-        assert!(
-            handle_key(
-                &mut field,
-                &Key::Character("a".to_string()),
-                Some("a"),
-                Modifiers::CONTROL,
-            )
-            .is_none()
-        );
-        assert_eq!(field.take().as_deref().map(String::as_str), None);
+        text.chars().for_each(|ch| field.insert(ch));
     }
 
     #[test]
@@ -281,31 +204,6 @@ mod tests {
         assert!(matches!(field.state(), FieldState::Idle));
         typed(&mut field, "a");
         assert_eq!(field.masked(), "•");
-    }
-
-    #[test]
-    fn enter_blocks_input_until_the_attempt_ends() {
-        let mut field = PasswordField::default();
-        typed(&mut field, "a");
-        let secret = handle_key(
-            &mut field,
-            &Key::Named(NamedKey::Enter),
-            None,
-            Modifiers::empty(),
-        )
-        .expect("submit a non-empty field");
-        assert_eq!(secret.as_str(), "a");
-        assert!(matches!(field.state(), FieldState::Verifying));
-        assert!(
-            handle_key(
-                &mut field,
-                &Key::Character("b".to_string()),
-                Some("b"),
-                Modifiers::empty(),
-            )
-            .is_none()
-        );
-        assert_eq!(field.masked(), "");
     }
 
     #[test]
@@ -329,12 +227,7 @@ mod tests {
         let mut label = String::new();
         let mut field = PasswordField::default();
         typed(&mut field, "a");
-        let _ = handle_key(
-            &mut field,
-            &Key::Named(NamedKey::Enter),
-            None,
-            Modifiers::empty(),
-        );
+        let _ = field.take();
         apply_pam_event(
             &mut label,
             &mut field,
@@ -356,12 +249,7 @@ mod tests {
         let mut label = String::new();
         let mut field = PasswordField::default();
         typed(&mut field, "old");
-        let _ = handle_key(
-            &mut field,
-            &Key::Named(NamedKey::Enter),
-            None,
-            Modifiers::empty(),
-        );
+        let _ = field.take();
         apply_pam_event(
             &mut label,
             &mut field,
@@ -369,13 +257,7 @@ mod tests {
         );
 
         typed(&mut field, "new");
-        let secret = handle_key(
-            &mut field,
-            &Key::Named(NamedKey::Enter),
-            None,
-            Modifiers::empty(),
-        )
-        .expect("submit the second secret");
+        let secret = field.take().expect("submit the second secret");
         assert_eq!(secret.as_str(), "new");
     }
 
@@ -384,12 +266,7 @@ mod tests {
         let mut label = String::new();
         let mut field = PasswordField::default();
         typed(&mut field, "a");
-        let _ = handle_key(
-            &mut field,
-            &Key::Named(NamedKey::Enter),
-            None,
-            Modifiers::empty(),
-        );
+        let _ = field.take();
         apply_pam_event(
             &mut label,
             &mut field,
