@@ -132,14 +132,6 @@ impl Spaces {
         true
     }
 
-    pub fn show_next(&mut self) -> bool {
-        self.switch_to(self.current + 1)
-    }
-
-    pub fn show_previous(&mut self) -> bool {
-        self.current > 0 && self.switch_to(self.current - 1)
-    }
-
     pub fn assign(&mut self, window: WindowId, parent: Option<WindowId>) -> Assigned {
         if let Some(space) = self.space_of(window) {
             return Assigned {
@@ -301,27 +293,15 @@ mod tests {
     }
 
     #[test]
-    fn switching_does_not_wrap() {
-        let mut spaces = Spaces::new();
-        spaces.add_desktop().unwrap();
-        assert!(!spaces.show_previous());
-        assert!(spaces.show_next());
-        assert!(!spaces.show_next());
-        assert_eq!(spaces.current_index(), 1);
-        assert!(spaces.show_previous());
-        assert_eq!(spaces.current_index(), 0);
-    }
-
-    #[test]
     fn windows_open_on_the_shown_desktop() {
         let mut spaces = Spaces::new();
         let second = spaces.add_desktop().unwrap();
-        spaces.show_next();
+        spaces.switch_to(1);
         let assigned = spaces.assign(w(1), None);
         assert_eq!(assigned.space, second);
         assert!(!assigned.needs_switch);
         assert!(spaces.is_shown(w(1)));
-        spaces.show_previous();
+        spaces.switch_to(0);
         assert!(!spaces.is_shown(w(1)));
     }
 
@@ -336,7 +316,7 @@ mod tests {
         let mut spaces = Spaces::new();
         spaces.add_desktop().unwrap();
         spaces.assign(w(1), None);
-        spaces.show_next();
+        spaces.switch_to(1);
         let assigned = spaces.assign(w(2), Some(w(1)));
         assert_eq!(assigned.space, spaces.space_of(w(1)).unwrap());
         assert!(assigned.needs_switch);
@@ -370,7 +350,7 @@ mod tests {
         let mut spaces = Spaces::new();
         spaces.assign(w(1), None);
         let second = spaces.add_desktop().unwrap();
-        spaces.show_next();
+        spaces.switch_to(1);
         spaces.enter_focus(w(1)).unwrap();
         assert_eq!(spaces.current().id, second);
     }
