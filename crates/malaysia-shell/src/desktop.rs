@@ -1,6 +1,6 @@
 use barrier_kit::views::search::fold;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     path::{Path, PathBuf},
 };
@@ -46,7 +46,7 @@ pub(crate) fn data_dirs() -> Vec<PathBuf> {
 
 pub fn read_entries() -> Vec<DesktopEntry> {
     let locales = locale_candidates();
-    let mut seen = HashMap::<String, ()>::new();
+    let mut seen = HashSet::new();
     let mut entries = Vec::new();
     for dir in data_dirs() {
         let applications = dir.join("applications");
@@ -58,14 +58,14 @@ pub fn read_entries() -> Vec<DesktopEntry> {
             &locales,
         );
     }
-    entries.sort_by_key(|entry| entry.name.to_lowercase());
+    entries.sort_by_cached_key(|entry| entry.name.to_lowercase());
     entries
 }
 
 fn collect_desktop_files(
     root: &Path,
     dir: &Path,
-    seen: &mut HashMap<String, ()>,
+    seen: &mut HashSet<String>,
     out: &mut Vec<DesktopEntry>,
     locales: &[String],
 ) {
@@ -88,13 +88,13 @@ fn collect_desktop_files(
             .to_string_lossy()
             .trim_end_matches(".desktop")
             .replace('/', "-");
-        if seen.contains_key(&id) {
+        if seen.contains(&id) {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        seen.insert(id.clone(), ());
+        seen.insert(id.clone());
         if let Some(entry) = parse_desktop(&text, &id, locales) {
             out.push(entry);
         }
@@ -122,16 +122,20 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
-        values.insert(key.trim().to_string(), unescape(value.trim()));
+        let key = key.trim();
+        let value = value.trim();
+        let value = if is_list(key) {
+            value.to_string()
+        } else {
+            unescape(value)
+        };
+        values.insert(key.to_string(), value);
     }
 
     if boolean(&values, "Hidden") || boolean(&values, "NoDisplay") {
         return None;
     }
     if values.get("Type").map(String::as_str) != Some("Application") {
-        return None;
-    }
-    if boolean(&values, "Terminal") && !values.contains_key("Exec") {
         return None;
     }
     let show_in = values.get("OnlyShowIn").map(String::as_str).unwrap_or("");
@@ -223,12 +227,37 @@ fn boolean(values: &HashMap<String, String>, key: &str) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case("true"))
 }
 
+fn is_list(key: &str) -> bool {
+    matches!(
+        key.split('[').next(),
+        Some("Keywords" | "OnlyShowIn" | "NotShowIn")
+    )
+}
+
 fn split_list(value: &str) -> Vec<String> {
-    value
-        .split(';')
-        .map(str::trim)
+    let mut items = Vec::new();
+    let mut item = String::new();
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        match (ch, chars.clone().next()) {
+            (';', _) => items.push(std::mem::take(&mut item)),
+            ('\\', Some(';')) => {
+                chars.next();
+                item.push(';');
+            }
+            ('\\', Some(next)) => {
+                chars.next();
+                item.push(ch);
+                item.push(next);
+            }
+            _ => item.push(ch),
+        }
+    }
+    items.push(item);
+    items
+        .iter()
+        .map(|item| unescape(item).trim().to_owned())
         .filter(|item| !item.is_empty())
-        .map(ToOwned::to_owned)
         .collect()
 }
 
@@ -311,7 +340,7 @@ fn strip_field_codes(token: &str) -> String {
         }
         match chars.next() {
             Some('%') => out.push('%'),
-            Some('f' | 'F' | 'u' | 'U' | 'i' | 'c' | 'k') => {}
+            Some('f' | 'F' | 'u' | 'U' | 'i' | 'c' | 'k' | 'd' | 'D' | 'n' | 'N' | 'v' | 'm') => {}
             Some(other) => {
                 out.push('%');
                 out.push(other);
@@ -462,6 +491,11 @@ mod tests {
     }
 
     #[test]
+    fn an_escaped_semicolon_stays_inside_a_list_item() {
+        assert_eq!(split_list(r"a\;b;c\\;d;"), ["a;b", "c\\", "d"]);
+    }
+
+    #[test]
     fn hidden_nodisplay_and_wrong_desktops_are_skipped() {
         let base = "Type=Application\nName=App\nExec=app\n";
         assert!(
@@ -511,7 +545,7 @@ mod tests {
 
     #[test]
     fn exec_drops_field_codes_and_honours_quotes_and_escapes() {
-        let exec = parse_exec(r#"env FOO=1 app --flag %U "quoted arg" %% %c "a\\b" 'c d'"#);
+        let exec = parse_exec(r#"env FOO=1 app --flag %U "quoted arg" %% %c %m "a\\b" 'c d'"#);
         assert_eq!(
             exec,
             vec![
