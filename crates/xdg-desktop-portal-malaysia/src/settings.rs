@@ -3,9 +3,7 @@ use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
 
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
-use vow_appearance::{
-    AppearanceConfig, ColorScheme, WindowColorMode, load_dominant, read_appearance, resolve,
-};
+use vow_appearance::{AppearanceConfig, WindowColorMode, load_dominant, read_appearance, resolve};
 use vow_design::Rgba;
 use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
@@ -67,11 +65,7 @@ impl Values {
 
     fn from_parts(appearance: &AppearanceConfig, dominant: Option<Rgba>, bridge: bool) -> Self {
         let resolved = resolve(appearance, dominant);
-        let color_scheme = match resolved.scheme {
-            ColorScheme::Light => 2,
-            ColorScheme::Dark | ColorScheme::DarkTint => 1,
-            ColorScheme::Auto => 2,
-        };
+        let color_scheme = if resolved.scheme.is_dark() { 1 } else { 2 };
         let accent = (
             f64::from(resolved.accent.r),
             f64::from(resolved.accent.g),
@@ -279,6 +273,7 @@ fn owned(value: Value<'static>) -> OwnedValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vow_appearance::ColorScheme;
     use vow_design::{DARK, LIGHT};
 
     #[test]

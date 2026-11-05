@@ -90,7 +90,7 @@ impl SchemeColors {
             ..appearance.clone()
         };
         let resolved = resolve(&concrete, dominant);
-        let dark = matches!(resolved.scheme, ColorScheme::Dark | ColorScheme::DarkTint);
+        let dark = resolved.scheme.is_dark();
         let on_accent = palette(resolved.scheme).on_accent;
         let traffic = Traffic {
             lights: resolved.lights,
@@ -324,10 +324,7 @@ fn glyph_image(index: usize, glyph: Rgba) -> String {
 
 fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, indent: &str) {
     let buttons = &TITLEBAR.buttons;
-    let radius = match traffic.shape {
-        TrafficLightShape::Square => buttons.corner_radius,
-        TrafficLightShape::Round => buttons.diameter / 2,
-    };
+    let radius = traffic.shape.corner_radius(buttons.diameter as f32);
     let focused = traffic_states(traffic, true, false);
     let backdrop = traffic_states(traffic, false, false);
     let hovered = traffic_states(traffic, true, true);
@@ -446,10 +443,7 @@ fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let (light, dark) = schemes(appearance);
     let light = SchemeColors::new(appearance, dominant, light);
     let dark = SchemeColors::new(appearance, dominant, dark);
-    let current = if matches!(
-        appearance.color_scheme.resolved(),
-        ColorScheme::Dark | ColorScheme::DarkTint
-    ) {
+    let current = if appearance.color_scheme.is_dark() {
         &dark
     } else {
         &light
@@ -472,9 +466,10 @@ pub fn live_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String
 
 fn gtk3_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
     let (light, dark) = schemes(appearance);
-    let scheme = match appearance.color_scheme.resolved() {
-        ColorScheme::Dark | ColorScheme::DarkTint => dark,
-        _ => light,
+    let scheme = if appearance.color_scheme.is_dark() {
+        dark
+    } else {
+        light
     };
     let colors = SchemeColors::new(appearance, dominant, scheme);
     let mut out = String::from(HEADER);
@@ -627,10 +622,7 @@ impl Bridge {
     }
 
     pub fn apply(&self, appearance: &AppearanceConfig, dominant: Option<Rgba>) -> io::Result<()> {
-        let dark = matches!(
-            appearance.color_scheme.resolved(),
-            ColorScheme::Dark | ColorScheme::DarkTint
-        );
+        let dark = appearance.color_scheme.is_dark();
         for (version, css) in [
             ("gtk-4.0", gtk4_css(appearance, dominant)),
             ("gtk-3.0", gtk3_css(appearance, dominant)),
