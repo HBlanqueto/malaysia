@@ -173,7 +173,7 @@ checkout_hash() {
 runtime_dir() {
     _hash=$(checkout_hash)
     if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
-        printf '%s\n' "$XDG_RUNTIME_DIR/malaysia-dev-$_hash"
+        printf '%s\n' "$XDG_RUNTIME_DIR/malaysia/dev-$_hash"
     else
         printf '%s\n' "/tmp/malaysia-$(id -u)-$_hash"
     fi
@@ -702,6 +702,39 @@ activation() {
     run_one_probe activation --test-input
 }
 
+isolate_session_dirs() {
+    _session_dirs=$(mktemp -d) ||
+        fail "$EXIT_RUN_FAILED" "could not create the session directories"
+    MALAYSIA_CONFIG_DIR="$_session_dirs/config"
+    MALAYSIA_DATA_DIR="$_session_dirs/data"
+    mkdir -p "$MALAYSIA_CONFIG_DIR" "$MALAYSIA_DATA_DIR" "$_session_dirs/home" ||
+        fail "$EXIT_RUN_FAILED" "could not create the session directories"
+    _user_config="${XDG_CONFIG_HOME:-$HOME/.config}/malaysia"
+    _user_data="${XDG_DATA_HOME:-$HOME/.local/share}/malaysia"
+    if [ -d "$_user_config" ]; then
+        cp -R "$_user_config/." "$MALAYSIA_CONFIG_DIR/" ||
+            fail "$EXIT_RUN_FAILED" "could not copy $_user_config"
+    fi
+    if [ -d "$_user_data" ]; then
+        cp -R "$_user_data/." "$MALAYSIA_DATA_DIR/" ||
+            fail "$EXIT_RUN_FAILED" "could not copy $_user_data"
+    fi
+    export MALAYSIA_CONFIG_DIR MALAYSIA_DATA_DIR
+    [ -n "${1:-}" ] || return 0
+    _appearance="$MALAYSIA_CONFIG_DIR/appearance.domain"
+    if [ -f "$_appearance" ]; then
+        awk -v scheme="$1" '
+            BEGIN { print "color_scheme = \"" scheme "\"" }
+            /^[[:space:]]*\[/ { table = 1 }
+            !table && /^[[:space:]]*color_scheme[[:space:]]*=/ { next }
+            { print }
+        ' "$_appearance" >"$_appearance.tmp" &&
+            mv "$_appearance.tmp" "$_appearance" ||
+            fail "$EXIT_RUN_FAILED" "could not write $_appearance"
+    else
+        printf 'color_scheme = "%s"\n' "$1" >"$_appearance"
+    fi
+}
 
 demo() {
     require_devshell
@@ -720,29 +753,7 @@ demo() {
     if is_running; then
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
-    if [ -n "$_scheme" ]; then
-        _demo_config=$(mktemp -d) ||
-            fail "$EXIT_RUN_FAILED" "could not create the demo config directory"
-        if [ -d "$HOME/.config/malaysia" ]; then
-            cp -R "$HOME/.config/malaysia/." "$_demo_config/" ||
-                fail "$EXIT_RUN_FAILED" "could not copy ~/.config/malaysia"
-        fi
-        _appearance="$_demo_config/appearance.domain"
-        if [ -f "$_appearance" ]; then
-            awk -v scheme="$_scheme" '
-                BEGIN { print "color_scheme = \"" scheme "\"" }
-                /^[[:space:]]*\[/ { table = 1 }
-                !table && /^[[:space:]]*color_scheme[[:space:]]*=/ { next }
-                { print }
-            ' "$_appearance" >"$_appearance.tmp" &&
-                mv "$_appearance.tmp" "$_appearance" ||
-                fail "$EXIT_RUN_FAILED" "could not write $_appearance"
-        else
-            printf 'color_scheme = "%s"\n' "$_scheme" >"$_appearance"
-        fi
-        MALAYSIA_CONFIG_DIR="$_demo_config"
-        export MALAYSIA_CONFIG_DIR
-    fi
+    isolate_session_dirs "$_scheme"
     _pids=
     _demo_cleanup() {
         trap - EXIT INT TERM
@@ -750,9 +761,7 @@ demo() {
             kill "$_pid" 2>/dev/null || true
         done
         stop
-        if [ -n "${_demo_config:-}" ]; then
-            rm -rf "$_demo_config"
-        fi
+        rm -rf "$_session_dirs"
     }
     trap _demo_cleanup EXIT INT TERM
     cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
@@ -856,29 +865,7 @@ lab() {
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
 
-    _lab_config=$(mktemp -d) ||
-        fail "$EXIT_RUN_FAILED" "could not create the lab config directory"
-    if [ -d "$HOME/.config/malaysia" ]; then
-        cp -R "$HOME/.config/malaysia/." "$_lab_config/" ||
-            fail "$EXIT_RUN_FAILED" "could not copy ~/.config/malaysia"
-    fi
-    if [ -n "$_scheme" ]; then
-        _appearance="$_lab_config/appearance.domain"
-        if [ -f "$_appearance" ]; then
-            awk -v scheme="$_scheme" '
-                BEGIN { print "color_scheme = \"" scheme "\"" }
-                /^[[:space:]]*\[/ { table = 1 }
-                !table && /^[[:space:]]*color_scheme[[:space:]]*=/ { next }
-                { print }
-            ' "$_appearance" >"$_appearance.tmp" &&
-                mv "$_appearance.tmp" "$_appearance" ||
-                fail "$EXIT_RUN_FAILED" "could not write $_appearance"
-        else
-            printf 'color_scheme = "%s"\n' "$_scheme" >"$_appearance"
-        fi
-    fi
-    MALAYSIA_CONFIG_DIR="$_lab_config"
-    export MALAYSIA_CONFIG_DIR
+    isolate_session_dirs "$_scheme"
 
     _pids=
     _lab_bus_pid=
@@ -901,9 +888,7 @@ lab() {
                 sleep 0.1
             done
         fi
-        if [ -n "${_lab_config:-}" ]; then
-            rm -rf "$_lab_config"
-        fi
+        rm -rf "$_session_dirs"
     }
     trap _lab_cleanup EXIT INT TERM
 
@@ -919,8 +904,8 @@ lab() {
         fail "$EXIT_RUN_FAILED" \
             "dbus-daemon is not installed; the lab needs a private session bus"
     fi
-    _lab_bus_address_file="$_lab_config/dbus.address"
-    _lab_bus_pid_file="$_lab_config/dbus.pid"
+    _lab_bus_address_file="$_session_dirs/dbus.address"
+    _lab_bus_pid_file="$_session_dirs/dbus.pid"
     if ! dbus-daemon --session --fork \
         --print-address=3 --print-pid=4 \
         3>"$_lab_bus_address_file" 4>"$_lab_bus_pid_file"; then
@@ -974,6 +959,11 @@ lab() {
         _name=$1
         shift
         lab_client "$_name" env \
+            HOME="$_session_dirs/home" \
+            XDG_CONFIG_HOME="$_session_dirs/home/.config" \
+            XDG_DATA_HOME="$_session_dirs/home/.local/share" \
+            XDG_STATE_HOME="$_session_dirs/home/.local/state" \
+            XDG_CACHE_HOME="$_session_dirs/home/.cache" \
             QT_QPA_PLATFORM=wayland \
             QT_QPA_PLATFORMTHEME=kde \
             XDG_CURRENT_DESKTOP=Malaysia \
@@ -1036,7 +1026,7 @@ lab() {
         fi
 
         if command -v firefox >/dev/null 2>&1; then
-            _lab_firefox_profile="$_lab_config/firefox"
+            _lab_firefox_profile="$_session_dirs/firefox"
             mkdir -p "$_lab_firefox_profile" ||
                 fail "$EXIT_RUN_FAILED" "could not create the lab Firefox profile"
             lab_app_client firefox firefox \
@@ -1169,13 +1159,10 @@ drm_vkms() {
     _run=$(mktemp -d "${TMPDIR:-/tmp}/malaysia-vkms.XXXXXX")
     _log="$_run/malaysia-compositor.log"
     _pattern_log="$_run/pattern.log"
-    _presentation_log="$_run/presentation.log"
     _pidfile="$_run/malaysia-compositor.pid"
     _client_pidfile="$_run/pattern.pid"
     _malaysia_pid=
     _client_pid=
-    _vkms_loaded=
-    chmod 0777 "$_run"
 
     cleanup() {
         _status=$?
@@ -1183,26 +1170,19 @@ drm_vkms() {
         if [ -n "${_client_pid:-}" ]; then
             sudo kill -TERM "$_client_pid" 2>/dev/null || true
         fi
+        [ -n "${_malaysia_pid:-}" ] || _malaysia_pid=$(cat "$_pidfile" 2>/dev/null || true)
         if [ -n "${_malaysia_pid:-}" ]; then
             sudo kill -TERM "$_malaysia_pid" 2>/dev/null || true
             sleep 0.3
             sudo kill -KILL "$_malaysia_pid" 2>/dev/null || true
-        else
-            sudo pkill -TERM -f -- "--drm --drm-device $_vkms" 2>/dev/null || true
-        fi
-        if [ -n "${_vkms_loaded:-}" ]; then
-            sudo modprobe -r vkms 2>/dev/null ||
-                printf 'dev.sh: warning: could not unload vkms\n' >&2
         fi
         sudo rm -rf "$_run" 2>/dev/null || rm -rf "$_run" 2>/dev/null || true
         exit "$_status"
     }
     trap cleanup EXIT HUP INT TERM
 
-    if ! lsmod | grep -q '^vkms '; then
-        sudo modprobe vkms || fail "$EXIT_DRM_VKMS" "could not load vkms"
-        _vkms_loaded=1
-    fi
+    lsmod | grep -q '^vkms ' ||
+        fail "$EXIT_DRM_VKMS" "vkms is not loaded; run 'sudo modprobe vkms' first"
 
     _vkms=
     _tries=0
@@ -1229,11 +1209,10 @@ drm_vkms() {
     done
     [ -n "$_vkms" ] || fail "$EXIT_DRM_VKMS" "no DRM card with driver=vkms"
 
-    cargo build -p malaysia-compositor -p sctk-probe --bin malaysia-compositor --bin pattern_live --bin presentation ||
-        fail "$EXIT_DRM_VKMS" "could not build malaysia-compositor, pattern_live and presentation"
+    cargo build -p malaysia-compositor -p sctk-probe --bin malaysia-compositor --bin pattern_live ||
+        fail "$EXIT_DRM_VKMS" "could not build malaysia-compositor and pattern_live"
     _malaysia="$script_dir/target/debug/malaysia-compositor"
     _pattern="$script_dir/target/debug/pattern_live"
-    _presentation="$script_dir/target/debug/presentation"
 
     # shellcheck disable=SC2024
     sudo env LIBSEAT_BACKEND=noop XDG_RUNTIME_DIR="$_run" \
@@ -1330,7 +1309,6 @@ drm_vkms() {
     printf '  capture: %s\n' "$_capture"
     printf '  mode: %s\n' "$(sed -n 's/.*mode chosen \(.*\)/\1/p' "$_log" | tail -n 1)"
     printf '  vblanks: %s, damaged frames queued: %s\n' "$_vblanks" "$_queued"
-    printf '  presentation: %s\n' "$(grep 'presentation: presented' "$_presentation_log" | tail -n 1)"
 }
 
 wallpaper_check() {
@@ -1391,7 +1369,7 @@ wallpaper_check() {
     _before_capture=$(mktemp) || fail "$EXIT_RUN_FAILED" "could not create capture reference file"
     kill -USR1 "$_compositor_pid" || fail "$EXIT_RUN_FAILED" "could not send SIGUSR1"
 
-    _capture_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/malaysia-compositor"
+    _capture_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/malaysia"
     _capture=
     _waited=0
     while [ -z "$_capture" ] && [ "$_waited" -lt 100 ]; do
