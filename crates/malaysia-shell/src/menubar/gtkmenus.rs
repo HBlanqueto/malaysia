@@ -108,15 +108,7 @@ pub struct Actions(HashMap<String, Action>);
 impl Actions {
     pub fn describe_all(&mut self, prefix: &str, all: HashMap<String, ActionDescription>) {
         self.0.retain(|name, _| !name.starts_with(prefix));
-        for (name, (enabled, _, state)) in all {
-            self.0.insert(
-                format!("{prefix}{name}"),
-                Action {
-                    enabled,
-                    state: state.into_iter().next(),
-                },
-            );
-        }
+        self.changed(prefix, Vec::new(), HashMap::new(), HashMap::new(), all);
     }
 
     pub fn changed(
