@@ -337,6 +337,8 @@ fn title_pill(color: Rgba, palette: MenuPalette) -> Rect {
                 .left(-overhang)
                 .top(MENUBAR_TEXT_LIFT),
         )
+        // Freya paints same-layer siblings in hash order; the pill must stay under the label.
+        .layer(-1)
         .width(Size::func(bled))
         .height(Size::px(palette.bar_title_open_height))
         .corner_radius(palette.bar_title_open_radius)
