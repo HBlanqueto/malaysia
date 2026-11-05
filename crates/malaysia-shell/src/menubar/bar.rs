@@ -9,8 +9,8 @@ use barrier_kit::app::{load_defaults, use_defaults, use_watched};
 use barrier_kit::menu::{ItemsSource, MenuItem};
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
-    Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec, Toplevels,
-    run_layer,
+    Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
+    ToplevelInfo, Toplevels, run_layer,
 };
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -65,24 +65,12 @@ struct Decision {
 impl MenuMemory {
     fn remember(&mut self, app_id: &str, labels: Vec<String>) {
         self.titles.insert(app_id.to_string(), labels);
-        if self
-            .grace
-            .as_ref()
-            .is_some_and(|grace| grace.app_id == app_id)
-        {
-            self.grace = None;
-        }
+        self.grace.take_if(|grace| grace.app_id == app_id);
     }
 
     fn forget(&mut self, app_id: &str) {
         self.titles.remove(app_id);
-        if self
-            .grace
-            .as_ref()
-            .is_some_and(|grace| grace.app_id == app_id)
-        {
-            self.grace = None;
-        }
+        self.grace.take_if(|grace| grace.app_id == app_id);
     }
 
     fn decide(
@@ -92,66 +80,40 @@ impl MenuMemory {
         newly_mapped: bool,
         now: Instant,
     ) -> Decision {
-        if let Some(grace) = &self.grace
-            && grace.app_id == app_id
-        {
+        if let Some(grace) = self.grace.take_if(|grace| grace.app_id == app_id) {
             if now < grace.deadline {
                 let choice = if grace.showing_titles {
                     MenuChoice::Remembered(self.titles.get(app_id).cloned().unwrap_or_default())
                 } else {
                     MenuChoice::Waiting
                 };
+                self.grace = Some(grace);
                 return Decision {
                     choice,
                     started: None,
                 };
             }
-            let showing_titles = grace.showing_titles;
-            self.grace = None;
-            if showing_titles && address.is_none() {
+            if grace.showing_titles && address.is_none() {
                 self.titles.remove(app_id);
             }
         }
-        if let Some(titles) = self.titles.get(app_id) {
-            if address.is_none() {
-                let deadline = now + MENU_GRACE;
-                self.grace = Some(Grace {
-                    app_id: app_id.to_string(),
-                    deadline,
-                    showing_titles: true,
-                });
-                return Decision {
-                    choice: MenuChoice::Remembered(titles.clone()),
-                    started: Some(deadline),
-                };
-            }
-            return Decision {
-                choice: MenuChoice::Remembered(titles.clone()),
-                started: None,
-            };
-        }
-        if address.is_none() {
-            if newly_mapped {
-                let deadline = now + MENU_GRACE;
-                self.grace = Some(Grace {
-                    app_id: app_id.to_string(),
-                    deadline,
-                    showing_titles: false,
-                });
-                return Decision {
-                    choice: MenuChoice::Waiting,
-                    started: Some(deadline),
-                };
-            }
-            return Decision {
-                choice: MenuChoice::Fallback,
-                started: None,
-            };
-        }
-        Decision {
-            choice: MenuChoice::Waiting,
-            started: None,
-        }
+        let (choice, showing_titles) = match (self.titles.get(app_id), address) {
+            (Some(titles), None) => (MenuChoice::Remembered(titles.clone()), Some(true)),
+            (Some(titles), Some(_)) => (MenuChoice::Remembered(titles.clone()), None),
+            (None, None) if newly_mapped => (MenuChoice::Waiting, Some(false)),
+            (None, None) => (MenuChoice::Fallback, None),
+            (None, Some(_)) => (MenuChoice::Waiting, None),
+        };
+        let started = showing_titles.map(|showing_titles| {
+            let deadline = now + MENU_GRACE;
+            self.grace = Some(Grace {
+                app_id: app_id.to_string(),
+                deadline,
+                showing_titles,
+            });
+            deadline
+        });
+        Decision { choice, started }
     }
 }
 
@@ -204,48 +166,10 @@ impl App for BarApp {
         let clock_state = self.clock;
         use_hook(move || schedule_next_minute(timers, clock_state));
 
-        let mut active_app = self.active_app;
-        let window_store = self.window_store.clone();
-        let poll_store = window_store.clone();
-        let published_app = use_watched(move || load_active_app(&poll_store));
-        use_side_effect(move || {
-            let id = published_app.read().clone();
-            if *active_app.peek() != id {
-                if let Some(id) = &id {
-                    super::recents::record_app(id);
-                }
-                active_app.set(id);
-            }
-        });
+        self.use_published_app();
+        self.use_app_menus_setting();
 
-        let mut app_menus = self.app_menus;
-        let dbus = self.dbus.clone();
-        let config = use_defaults::<MenubarConfig>("menubar");
-        use_side_effect(move || {
-            let enabled = config.read().app_menus;
-            if *app_menus.peek() != enabled {
-                app_menus.set(enabled);
-                dbus.set_app_menus(enabled);
-            }
-        });
-
-        let generation = use_hook(|| Rc::new(Cell::new(0u64)));
-        let open_started = use_hook(|| Rc::new(Cell::new(None::<std::time::Instant>)));
-        let timers = Timers::get();
-        let dbus = self.dbus.clone();
-        let menu_snapshot = self.menu_snapshot;
-        let generation_for_drain = generation.clone();
-        let open_started_for_drain = open_started.clone();
-        use_hook(move || {
-            schedule_snapshot_drain(
-                timers,
-                dbus,
-                menu_snapshot,
-                generation_for_drain,
-                open_started_for_drain,
-            )
-        });
-        let resolved = barrier_kit::theme::resolved();
+        let (generation, open_started) = self.use_snapshot_drain();
 
         let now = self.clock.read().clone();
         let active_app = self.active_app.read().clone();
@@ -279,7 +203,6 @@ impl App for BarApp {
             .or_else(|| active_app.clone());
         last_app.borrow_mut().clone_from(&app_id);
         let focused = app_id.is_some();
-        let app = resolve_app_name(app_id.as_deref(), &self.entries);
         let key = active_info.map(|info| MenuKey {
             app_id: info.app_id.clone(),
             app_menu: info.app_menu.clone(),
@@ -288,11 +211,11 @@ impl App for BarApp {
         });
         let address = key.as_ref().and_then(MenuKey::address);
         {
-            let mut snapshot_state = self.menu_snapshot;
             let mut last = last_app_menu.borrow_mut();
             if *last != key {
                 let next_generation = generation.get() + 1;
                 generation.set(next_generation);
+                let mut snapshot_state = self.menu_snapshot;
                 snapshot_state.set(None);
                 if let (Some(old), Some(new)) = (&*last, &key)
                     && old.app_id == new.app_id
@@ -301,57 +224,16 @@ impl App for BarApp {
                 {
                     memory.borrow_mut().forget(&new.app_id);
                 }
-                match &key {
-                    Some(key) if !key.enabled => {
-                        tracing::info!(app_id = %key.app_id, "menubar: app_menus disabled");
-                        self.dbus.unfocus();
-                    }
-                    Some(MenuKey {
-                        app_id,
-                        app_menu: Some(menu),
-                        ..
-                    }) => {
-                        tracing::info!(
-                            app_id = %app_id,
-                            service = %menu.service,
-                            path = %menu.path,
-                            generation = next_generation,
-                            "menubar: app_menu"
-                        );
-                        self.dbus.focus(menu.clone(), next_generation);
-                    }
-                    Some(MenuKey {
-                        app_id,
-                        gtk_menus: Some(menus),
-                        ..
-                    }) => {
-                        tracing::info!(
-                            app_id = %app_id,
-                            generation = next_generation,
-                            "menubar: org.gtk.Menus focus"
-                        );
-                        let menu_app = resolve_app_name(Some(app_id.as_str()), &self.entries);
-                        self.dbus
-                            .gtk_focus(menus.clone(), menu_app, next_generation);
-                    }
-                    Some(key) => {
-                        tracing::info!(app_id = %key.app_id, "menubar: app_menu none");
-                        self.dbus.unfocus();
-                    }
-                    None => {
-                        tracing::info!(
-                            active_app = ?active_app,
-                            toplevels = toplevels.len(),
-                            active = toplevels.iter().filter(|window| window.active).count(),
-                            "menubar: no active window, Escritorio menu"
-                        );
-                        self.dbus.unfocus();
-                    }
-                }
+                self.refocus(key.as_ref(), next_generation, &active_app, &toplevels);
                 *last = key;
             }
         }
-        let remote_menu = self.menu_snapshot.read().as_ref().cloned();
+        let remote_menu = self
+            .menu_snapshot
+            .read()
+            .as_ref()
+            .filter(|menu| !menu.items.is_empty())
+            .cloned();
         let choice = if focused && app_menus_enabled {
             let active_index = toplevels
                 .iter()
@@ -361,77 +243,25 @@ impl App for BarApp {
                         .as_deref()
                         .and_then(|id| toplevels.iter().position(|window| window.app_id == id))
                 });
-            let previous = previous_len.get();
-            let mut pending = pending_new.get();
-            if toplevels.len() > previous {
-                pending = Some(pending.map_or(previous, |from| from.min(previous)));
-            }
-            if pending.is_some_and(|from| toplevels.len() < from) {
-                pending = None;
-            }
             let newly_mapped =
-                active_index.is_some_and(|index| pending.is_some_and(|from| index >= from));
-            if newly_mapped {
-                pending = None;
-            }
-            pending_new.set(pending);
-            previous_len.set(toplevels.len());
-
+                newly_mapped(&previous_len, &pending_new, toplevels.len(), active_index);
             let app_id = app_id.clone().unwrap_or_default();
             let mut stored = memory.borrow_mut();
-            if let Some(menu) = remote_menu.as_ref().filter(|menu| !menu.items.is_empty()) {
+            if let Some(menu) = &remote_menu {
                 stored.remember(&app_id, title_labels(&menu.items));
                 None
             } else {
                 let decision =
                     stored.decide(&app_id, address.as_ref(), newly_mapped, Instant::now());
                 if let Some(deadline) = decision.started {
-                    let tick = menu_tick;
-                    let delay = deadline.saturating_duration_since(Instant::now())
-                        + Duration::from_millis(1);
-                    Timers::get().after(delay, move || {
-                        let mut tick = tick;
-                        let next = *tick.peek() + 1;
-                        tick.set(next);
-                    });
+                    tick_at(menu_tick, deadline);
                 }
                 Some(decision.choice)
             }
         } else {
             None
         };
-        let palette = resolved.shell;
-        let over_focus = Toplevels::get().space.read().focus_bar.over_focus();
-        let text = if over_focus {
-            theme::color(vow_design::FOCUS_BAR_TEXT)
-        } else {
-            theme::color(palette.text)
-        };
-        let bar = if over_focus {
-            theme::color(vow_design::FOCUS_BAR_BACKGROUND)
-        } else {
-            theme::color(barrier_kit::theme::surface_background(
-                &resolved,
-                barrier_kit::theme::SurfaceKind::LayerShell,
-            ))
-        };
-
-        let mut root = rect()
-            .width(Size::fill())
-            .height(Size::fill())
-            .background(bar)
-            .direction(Direction::Horizontal)
-            .main_align(Alignment::SpaceBetween)
-            .padding(Gaps::new(
-                0.0,
-                MENUBAR_MARGIN_RIGHT as f32,
-                2.0 * MENUBAR_TEXT_LIFT,
-                MENUBAR_MARGIN as f32,
-            ))
-            .font_size(MENUBAR_FONT_SIZE);
-        for family in SANS_FAMILIES {
-            root = root.font_family(family);
-        }
+        let (text, bar) = bar_colors();
 
         let menu_state = MenuState::new();
         let help_query = use_hook(|| {
@@ -448,210 +278,25 @@ impl App for BarApp {
             }
             anchors[index].clone()
         };
-        let system_entries = self.entries.clone();
-        let system_items = {
-            let entries = system_entries.clone();
-            move || system::system_menu_items(&entries)
-        };
-        let mut specs = vec![MenuTitleSpec {
-            glyph: Some(system::SNOWFLAKE_SVG),
-            ..MenuTitleSpec::new(
-                tr!("menubar-system").to_string(),
-                Rc::new(system_items),
-                Rc::new(move |id| {
-                    let toplevels = Toplevels::get().list.read().clone();
-                    system::on_system_action(id, &toplevels, &system_entries);
-                }),
-                title_anchor(0),
-            )
-        }];
+        let mut specs = vec![system_title(self.entries.clone(), title_anchor(0))];
         if focused {
-            let app_id = app_id.clone().unwrap_or_default();
-            let app_name = app.clone();
-            let app_items: ItemsSource = {
-                let app_id = app_id.clone();
-                let app_name = app_name.clone();
-                Rc::new(move || {
-                    focused::app_menu_items(
-                        &app_name,
-                        &app_id,
-                        &Toplevels::get().list.read().clone(),
-                    )
-                })
-            };
-            let window_items: ItemsSource = {
-                let app_id = app_id.clone();
-                let app_name = app_name.clone();
-                Rc::new(move || {
-                    focused::window_menu_items(
-                        &app_name,
-                        &app_id,
-                        &Toplevels::get().list.read().clone(),
-                    )
-                })
-            };
-            let help_items: ItemsSource = {
-                let app_name = app_name.clone();
-                Rc::new(move || focused::help_menu_items(&app_name))
-            };
-            let sources = remote::MenuSources {
-                app_name,
-                app_items,
-                window_items,
-                help_items,
-            };
-            if let Some(remote_menu) = remote_menu.filter(|menu| !menu.items.is_empty()) {
-                let snapshot = self.menu_snapshot;
-                let composition: Rc<dyn Fn() -> Vec<remote::Title>> = {
-                    Rc::new(move || {
-                        let items = snapshot
-                            .read()
-                            .as_ref()
-                            .map(|menu| menu.items.clone())
-                            .unwrap_or_default();
-                        sources.compose(&items)
-                    })
-                };
-                let address = remote_menu.address.clone();
-                let generation_now = remote_menu.generation;
-                let on_activate: Rc<dyn Fn(String)> = {
-                    let dbus = self.dbus.clone();
-                    let address = address.clone();
-                    Rc::new(move |id| {
-                        if let Some(remote_id) = id.strip_prefix("dbusmenu:") {
-                            if let Ok(remote_id) = remote_id.parse::<i32>() {
-                                dbus.activate(address.clone(), remote_id, now_ms());
-                            }
-                        } else {
-                            focused::on_action(id);
-                        }
-                    })
-                };
-                let on_open_submenu: Rc<dyn Fn(String)> = {
-                    let dbus = self.dbus.clone();
-                    let address = address.clone();
-                    let open_started = open_started.clone();
-                    Rc::new(move |id| {
-                        if let Ok(id) = id.parse::<i32>() {
-                            open_started.set(Some(std::time::Instant::now()));
-                            dbus.open(address.clone(), id, generation_now);
-                        }
-                    })
-                };
-                let submenu_source: barrier_kit::menu::SubmenuSource = {
-                    let snapshot = self.menu_snapshot;
-                    Rc::new(move |id| {
-                        let id = id.parse::<i32>().ok()?;
-                        let menu = snapshot.read().as_ref().cloned()?;
-                        remote::find_subtree(&menu.items, id)
-                    })
-                };
-                let titles = composition();
-                let reveal_roots: barrier_kit::menu::RevealRoots = {
-                    let composition = composition.clone();
-                    Rc::new(move || {
-                        composition()
-                            .iter()
-                            .map(remote::Title::visible_items)
-                            .collect()
-                    })
-                };
-                for (index, title) in titles.iter().enumerate() {
-                    let items: ItemsSource = {
-                        let composition = composition.clone();
-                        Rc::new(move || {
-                            composition()
-                                .get(index)
-                                .map(remote::Title::visible_items)
-                                .unwrap_or_default()
-                        })
-                    };
-                    let is_help = index + 1 == titles.len();
-                    let request_open: Option<Rc<dyn Fn()>> = if is_help || index == 0 {
-                        let dbus = self.dbus.clone();
-                        let address = address.clone();
-                        let callback: Rc<dyn Fn()> = Rc::new(move || {
-                            dbus.full_tree(address.clone(), generation_now);
-                        });
-                        Some(callback)
-                    } else {
-                        title.remote_id.map(|id| {
-                            let dbus = self.dbus.clone();
-                            let address = address.clone();
-                            let callback: Rc<dyn Fn()> = Rc::new(move || {
-                                dbus.open(address.clone(), id, generation_now);
-                            });
-                            callback
-                        })
-                    };
-                    let on_open: Option<Rc<dyn Fn()>> = request_open.as_ref().map(|request| {
-                        let request = request.clone();
-                        let open_started = open_started.clone();
-                        let callback: Rc<dyn Fn()> = Rc::new(move || {
-                            open_started.set(Some(std::time::Instant::now()));
-                            request();
-                        });
-                        callback
-                    });
-                    let live_items = Some(items.clone());
-                    let on_hover_title = request_open;
-                    let searchable: Option<SearchableItems> = if is_help {
-                        let composition = composition.clone();
-                        Some(Rc::new(move || menu::SearchableLists {
-                            menu: remote::searchable(&composition()),
-                            help: focused::help_search_topics(),
-                        }))
-                    } else {
-                        None
-                    };
-                    specs.push(MenuTitleSpec {
-                        bold: index == 0,
-                        searchable,
-                        live_items,
-                        on_open,
-                        on_hover_title,
-                        on_open_submenu: Some(on_open_submenu.clone()),
-                        submenu_source: Some(submenu_source.clone()),
-                        enabled: title.enabled,
-                        query_state: is_help.then(|| help_query.clone()),
-                        reveal_roots: is_help.then(|| reveal_roots.clone()),
-                        ..MenuTitleSpec::new(
-                            title.label.clone(),
-                            items,
-                            on_activate.clone(),
-                            title_anchor(index + 1),
-                        )
-                    });
-                }
-            } else if matches!(choice, Some(MenuChoice::Waiting)) {
-                specs.push(MenuTitleSpec {
-                    bold: true,
-                    ..MenuTitleSpec::new(
-                        sources.app_name,
-                        sources.app_items,
-                        Rc::new(focused::on_action),
-                        title_anchor(1),
-                    )
-                });
+            let sources = menu_sources(
+                resolve_app_name(app_id.as_deref(), &self.entries),
+                app_id.unwrap_or_default(),
+            );
+            if let Some(remote_menu) = remote_menu {
+                specs.extend(self.remote_title_specs(
+                    &remote_menu,
+                    sources,
+                    &open_started,
+                    &help_query,
+                    title_anchor,
+                ));
             } else {
-                let remembered: Vec<MenuItem> = match &choice {
-                    Some(MenuChoice::Remembered(labels)) => labels
-                        .iter()
-                        .map(|label| MenuItem::Submenu {
-                            id: Some("0".to_string()),
-                            label: label.clone(),
-                            enabled: true,
-                            items: Vec::new(),
-                            icon: None,
-                        })
-                        .collect(),
-                    _ => Vec::new(),
-                };
-                let help_query = remembered.is_empty().then(|| help_query.clone());
-                specs.extend(title_specs(
-                    sources.compose(&remembered),
-                    Rc::new(focused::on_action),
-                    help_query,
+                specs.extend(local_title_specs(
+                    sources,
+                    choice,
+                    &help_query,
                     title_anchor,
                 ));
             }
@@ -676,8 +321,378 @@ impl App for BarApp {
             ));
         }
 
-        root.child(left).child(clock::clock_label(now, text))
+        bar_root(bar)
+            .child(left)
+            .child(clock::clock_label(now, text))
     }
+}
+
+impl BarApp {
+    fn use_published_app(&self) {
+        let mut active_app = self.active_app;
+        let poll_store = self.window_store.clone();
+        let published_app = use_watched(move || load_active_app(&poll_store));
+        use_side_effect(move || {
+            let id = published_app.read().clone();
+            if *active_app.peek() != id {
+                if let Some(id) = &id {
+                    super::recents::record_app(id);
+                }
+                active_app.set(id);
+            }
+        });
+    }
+
+    fn use_snapshot_drain(&self) -> (Rc<Cell<u64>>, Rc<Cell<Option<Instant>>>) {
+        let generation = use_hook(|| Rc::new(Cell::new(0u64)));
+        let open_started = use_hook(|| Rc::new(Cell::new(None::<Instant>)));
+        let timers = Timers::get();
+        let dbus = self.dbus.clone();
+        let menu_snapshot = self.menu_snapshot;
+        let (drain_generation, drain_open_started) = (generation.clone(), open_started.clone());
+        use_hook(move || {
+            schedule_snapshot_drain(
+                timers,
+                dbus,
+                menu_snapshot,
+                drain_generation,
+                drain_open_started,
+            )
+        });
+        (generation, open_started)
+    }
+
+    fn use_app_menus_setting(&self) {
+        let mut app_menus = self.app_menus;
+        let dbus = self.dbus.clone();
+        let config = use_defaults::<MenubarConfig>("menubar");
+        use_side_effect(move || {
+            let enabled = config.read().app_menus;
+            if *app_menus.peek() != enabled {
+                app_menus.set(enabled);
+                dbus.set_app_menus(enabled);
+            }
+        });
+    }
+
+    fn refocus(
+        &self,
+        key: Option<&MenuKey>,
+        generation: u64,
+        active_app: &Option<String>,
+        toplevels: &[ToplevelInfo],
+    ) {
+        match key {
+            Some(key) if !key.enabled => {
+                tracing::info!(app_id = %key.app_id, "menubar: app_menus disabled");
+                self.dbus.unfocus();
+            }
+            Some(MenuKey {
+                app_id,
+                app_menu: Some(menu),
+                ..
+            }) => {
+                tracing::info!(
+                    app_id = %app_id,
+                    service = %menu.service,
+                    path = %menu.path,
+                    generation,
+                    "menubar: app_menu"
+                );
+                self.dbus.focus(menu.clone(), generation);
+            }
+            Some(MenuKey {
+                app_id,
+                gtk_menus: Some(menus),
+                ..
+            }) => {
+                tracing::info!(app_id = %app_id, generation, "menubar: org.gtk.Menus focus");
+                let menu_app = resolve_app_name(Some(app_id.as_str()), &self.entries);
+                self.dbus.gtk_focus(menus.clone(), menu_app, generation);
+            }
+            Some(key) => {
+                tracing::info!(app_id = %key.app_id, "menubar: app_menu none");
+                self.dbus.unfocus();
+            }
+            None => {
+                tracing::info!(
+                    active_app = ?active_app,
+                    toplevels = toplevels.len(),
+                    active = toplevels.iter().filter(|window| window.active).count(),
+                    "menubar: no active window, Escritorio menu"
+                );
+                self.dbus.unfocus();
+            }
+        }
+    }
+
+    fn remote_title_specs(
+        &self,
+        remote_menu: &RemoteMenu,
+        sources: remote::MenuSources,
+        open_started: &Rc<Cell<Option<Instant>>>,
+        help_query: &Rc<RefCell<SearchQuery>>,
+        title_anchor: impl Fn(usize) -> TitleAnchor,
+    ) -> Vec<MenuTitleSpec> {
+        let snapshot = self.menu_snapshot;
+        let composition: Rc<dyn Fn() -> Vec<remote::Title>> = Rc::new(move || {
+            let items = snapshot
+                .read()
+                .as_ref()
+                .map(|menu| menu.items.clone())
+                .unwrap_or_default();
+            sources.compose(&items)
+        });
+        let address = remote_menu.address.clone();
+        let generation = remote_menu.generation;
+        let on_activate: Rc<dyn Fn(String)> = {
+            let dbus = self.dbus.clone();
+            let address = address.clone();
+            Rc::new(move |id| {
+                if let Some(remote_id) = id.strip_prefix("dbusmenu:") {
+                    if let Ok(remote_id) = remote_id.parse::<i32>() {
+                        dbus.activate(address.clone(), remote_id, now_ms());
+                    }
+                } else {
+                    focused::on_action(id);
+                }
+            })
+        };
+        let on_open_submenu: Rc<dyn Fn(String)> = {
+            let dbus = self.dbus.clone();
+            let address = address.clone();
+            let open_started = open_started.clone();
+            Rc::new(move |id| {
+                if let Ok(id) = id.parse::<i32>() {
+                    open_started.set(Some(Instant::now()));
+                    dbus.open(address.clone(), id, generation);
+                }
+            })
+        };
+        let submenu_source: barrier_kit::menu::SubmenuSource = Rc::new(move |id| {
+            let id = id.parse::<i32>().ok()?;
+            let menu = snapshot.read().as_ref().cloned()?;
+            remote::find_subtree(&menu.items, id)
+        });
+        let reveal_roots: RevealRoots = {
+            let composition = composition.clone();
+            Rc::new(move || {
+                composition()
+                    .iter()
+                    .map(remote::Title::visible_items)
+                    .collect()
+            })
+        };
+        let titles = composition();
+        titles
+            .iter()
+            .enumerate()
+            .map(|(index, title)| {
+                let items: ItemsSource = {
+                    let composition = composition.clone();
+                    Rc::new(move || {
+                        composition()
+                            .get(index)
+                            .map(remote::Title::visible_items)
+                            .unwrap_or_default()
+                    })
+                };
+                let is_help = index + 1 == titles.len();
+                let opened_id = if is_help || index == 0 {
+                    Some(None)
+                } else {
+                    title.remote_id.map(Some)
+                };
+                let request_open = opened_id.map(|id| {
+                    let dbus = self.dbus.clone();
+                    let address = address.clone();
+                    Rc::new(move || match id {
+                        Some(id) => dbus.open(address.clone(), id, generation),
+                        None => dbus.full_tree(address.clone(), generation),
+                    }) as Rc<dyn Fn()>
+                });
+                let on_open = request_open.clone().map(|request| {
+                    let open_started = open_started.clone();
+                    Rc::new(move || {
+                        open_started.set(Some(Instant::now()));
+                        request();
+                    }) as Rc<dyn Fn()>
+                });
+                let searchable: Option<SearchableItems> = is_help.then(|| {
+                    let composition = composition.clone();
+                    Rc::new(move || menu::SearchableLists {
+                        menu: remote::searchable(&composition()),
+                        help: focused::help_search_topics(),
+                    }) as SearchableItems
+                });
+                MenuTitleSpec {
+                    bold: index == 0,
+                    searchable,
+                    live_items: Some(items.clone()),
+                    on_open,
+                    on_hover_title: request_open,
+                    on_open_submenu: Some(on_open_submenu.clone()),
+                    submenu_source: Some(submenu_source.clone()),
+                    enabled: title.enabled,
+                    query_state: is_help.then(|| help_query.clone()),
+                    reveal_roots: is_help.then(|| reveal_roots.clone()),
+                    ..MenuTitleSpec::new(
+                        title.label.clone(),
+                        items,
+                        on_activate.clone(),
+                        title_anchor(index + 1),
+                    )
+                }
+            })
+            .collect()
+    }
+}
+
+fn bar_root(background: Color) -> Rect {
+    let mut root = rect()
+        .width(Size::fill())
+        .height(Size::fill())
+        .background(background)
+        .direction(Direction::Horizontal)
+        .main_align(Alignment::SpaceBetween)
+        .padding(Gaps::new(
+            0.0,
+            MENUBAR_MARGIN_RIGHT as f32,
+            2.0 * MENUBAR_TEXT_LIFT,
+            MENUBAR_MARGIN as f32,
+        ))
+        .font_size(MENUBAR_FONT_SIZE);
+    for family in SANS_FAMILIES {
+        root = root.font_family(family);
+    }
+    root
+}
+
+fn system_title(entries: Rc<Vec<DesktopEntry>>, anchor: TitleAnchor) -> MenuTitleSpec {
+    let items = {
+        let entries = entries.clone();
+        move || system::system_menu_items(&entries)
+    };
+    MenuTitleSpec {
+        glyph: Some(system::SNOWFLAKE_SVG),
+        ..MenuTitleSpec::new(
+            tr!("menubar-system").to_string(),
+            Rc::new(items),
+            Rc::new(move |id| {
+                let toplevels = Toplevels::get().list.read().clone();
+                system::on_system_action(id, &toplevels, &entries);
+            }),
+            anchor,
+        )
+    }
+}
+
+fn local_title_specs(
+    sources: remote::MenuSources,
+    choice: Option<MenuChoice>,
+    help_query: &Rc<RefCell<SearchQuery>>,
+    title_anchor: impl Fn(usize) -> TitleAnchor,
+) -> Vec<MenuTitleSpec> {
+    let labels = match choice {
+        Some(MenuChoice::Waiting) => {
+            return vec![MenuTitleSpec {
+                bold: true,
+                ..MenuTitleSpec::new(
+                    sources.app_name,
+                    sources.app_items,
+                    Rc::new(focused::on_action),
+                    title_anchor(1),
+                )
+            }];
+        }
+        Some(MenuChoice::Remembered(labels)) => labels,
+        _ => Vec::new(),
+    };
+    let remembered: Vec<MenuItem> = labels
+        .into_iter()
+        .map(|label| MenuItem::Submenu {
+            id: Some("0".to_string()),
+            label,
+            enabled: true,
+            items: Vec::new(),
+            icon: None,
+        })
+        .collect();
+    let help_query = remembered.is_empty().then(|| help_query.clone());
+    title_specs(
+        sources.compose(&remembered),
+        Rc::new(focused::on_action),
+        help_query,
+        title_anchor,
+    )
+}
+
+fn menu_sources(app_name: String, app_id: String) -> remote::MenuSources {
+    let app_items: ItemsSource = {
+        let (app_name, app_id) = (app_name.clone(), app_id.clone());
+        Rc::new(move || focused::app_menu_items(&app_name, &app_id, &Toplevels::get().list.read()))
+    };
+    let window_items: ItemsSource = {
+        let app_name = app_name.clone();
+        Rc::new(move || {
+            focused::window_menu_items(&app_name, &app_id, &Toplevels::get().list.read())
+        })
+    };
+    let help_items: ItemsSource = {
+        let app_name = app_name.clone();
+        Rc::new(move || focused::help_menu_items(&app_name))
+    };
+    remote::MenuSources {
+        app_name,
+        app_items,
+        window_items,
+        help_items,
+    }
+}
+
+fn newly_mapped(
+    previous_len: &Cell<usize>,
+    pending_new: &Cell<Option<usize>>,
+    len: usize,
+    active_index: Option<usize>,
+) -> bool {
+    let previous = previous_len.replace(len);
+    let mut pending = pending_new.get();
+    if len > previous {
+        pending = Some(pending.map_or(previous, |from| from.min(previous)));
+    }
+    if pending.is_some_and(|from| len < from) {
+        pending = None;
+    }
+    let newly_mapped = active_index.is_some_and(|index| pending.is_some_and(|from| index >= from));
+    pending_new.set(pending.filter(|_| !newly_mapped));
+    newly_mapped
+}
+
+fn tick_at(tick: State<u64>, deadline: Instant) {
+    let delay = deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1);
+    Timers::get().after(delay, move || {
+        let mut tick = tick;
+        let next = *tick.peek() + 1;
+        tick.set(next);
+    });
+}
+
+fn bar_colors() -> (Color, Color) {
+    let resolved = theme::resolved();
+    if Toplevels::get().space.read().focus_bar.over_focus() {
+        return (
+            theme::color(vow_design::FOCUS_BAR_TEXT),
+            theme::color(vow_design::FOCUS_BAR_BACKGROUND),
+        );
+    }
+    (
+        theme::color(resolved.shell.text),
+        theme::color(theme::surface_background(
+            &resolved,
+            theme::SurfaceKind::LayerShell,
+        )),
+    )
 }
 
 fn title_specs(
@@ -727,7 +742,7 @@ fn schedule_snapshot_drain(
     dbus: MenuClient,
     snapshot: State<Option<Arc<RemoteMenu>>>,
     generation: Rc<Cell<u64>>,
-    open_started: Rc<Cell<Option<std::time::Instant>>>,
+    open_started: Rc<Cell<Option<Instant>>>,
 ) {
     let drain = {
         let dbus = dbus.clone();
@@ -810,21 +825,12 @@ impl Default for MenubarConfig {
 
 fn schedule_next_minute(timers: Timers, clock: State<String>) {
     let retry = timers.clone();
-    timers.after(seconds_to_next_minute(), move || {
+    let seconds = u64::from(60 - chrono::Timelike::second(&chrono::Local::now()));
+    timers.after(Duration::from_secs(seconds), move || {
         let mut clock = clock;
         clock.set(chrono::Local::now().format("%H:%M").to_string());
         schedule_next_minute(retry.clone(), clock);
     });
-}
-
-fn seconds_to_next_minute() -> std::time::Duration {
-    use chrono::Timelike;
-    let seconds = chrono::Local::now().second();
-    std::time::Duration::from_secs(if seconds == 0 {
-        60
-    } else {
-        (60 - seconds) as u64
-    })
 }
 
 fn is_shell_dialog(app_id: &str) -> bool {
