@@ -45,7 +45,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [ cfg.package ] ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
+    # hwdata: «Acerca de este PC» names the GPU from /run/current-system/sw/share/hwdata/pci.ids.
+    environment.systemPackages = [
+      cfg.package
+      pkgs.hwdata
+    ]
+    ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
     system.replaceDependencies.replacements =
       lib.optional cfg.globalMenu.libadwaita.enable {

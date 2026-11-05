@@ -213,9 +213,13 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
     como «Acerca de este Mac». Modelo por DMI (Lenovo guarda «ThinkPad …» en
     `product_version`); dibujo `about/thinkpad.svg` para ThinkPad y
     `about/generic.svg` para el resto. Subtítulo con las pulgadas del panel
-    (EDID). Filas cortas: procesador, memoria, disco de arranque («SSD de 512
-    GB», siguiendo LUKS/LVM), número de serie si es legible y versión; «Más información…»
-    abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`). Mide 280×430 como en macOS y muestra solo procesador, memoria, disco, serie y versión.
+    (EDID). Filas como en macOS: procesador; gráficos (la GPU integrada del
+    nombre del procesador o, si no, `pci.ids` de `hwdata` y la VRAM);
+    memoria; disco de arranque («SSD de 512 GB», siguiendo LUKS/LVM); número
+    de serie si es legible; y el sistema con su versión (`NAME` y `VERSION`
+    de `/etc/os-release`, p. ej. «NixOS · 26.05 (Yarara)»). «Más
+    información…» abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`). Mide
+    280×547, como en Tahoe.
 - Mnemónicos, Espacio y scroll: implementados 2026-11-01, falta aceptarlos en
   anidado (barrierkit `bdbd583` y `a2394a6`, `menu.rs`).
   - dbusmenu y GTK convierten `_` en `MNEMONIC_MARK` (U+2063, invisible y sin

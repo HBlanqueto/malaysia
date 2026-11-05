@@ -426,15 +426,18 @@ struct AboutInfo {
     thinkpad: bool,
     subtitle: String,
     cpu: String,
+    graphics: Option<String>,
     memory: String,
     disk: String,
     serial: Option<String>,
+    system: (String, String),
 }
 
 impl AboutInfo {
     fn read() -> Self {
         let read = |path: &str| std::fs::read_to_string(path).unwrap_or_default();
         let dmi = |key: &str| read(&format!("/sys/class/dmi/id/{key}")).trim().to_string();
+        let cpuinfo = read("/proc/cpuinfo");
         let model = model_name(
             &dmi("sys_vendor"),
             &dmi("product_name"),
@@ -447,10 +450,17 @@ impl AboutInfo {
             subtitle: built_in_panel_inches()
                 .map(|inches| format!("{inches} pulgadas"))
                 .unwrap_or_else(|| read("/proc/sys/kernel/hostname").trim().to_string()),
-            cpu: cpu_name(&read("/proc/cpuinfo")),
+            cpu: cpu_name(&cpuinfo),
+            graphics: graphics(&cpuinfo),
             memory: memory(&read("/proc/meminfo")),
             disk: startup_disk(&read("/proc/mounts")),
             serial: Some(dmi("product_serial")).filter(|serial| is_real(serial)),
+            system: system_release(&read("/etc/os-release")).unwrap_or_else(|| {
+                (
+                    "Linux".to_string(),
+                    read("/proc/sys/kernel/osrelease").trim().to_string(),
+                )
+            }),
         }
     }
 }
@@ -585,6 +595,110 @@ fn short_cpu(model: &str) -> String {
         .join(" ")
 }
 
+const PCI_IDS: [&str; 3] = [
+    "/run/current-system/sw/share/hwdata/pci.ids",
+    "/usr/share/hwdata/pci.ids",
+    "/usr/share/misc/pci.ids",
+];
+
+fn graphics(cpuinfo: &str) -> Option<String> {
+    let device = gpu_device();
+    let read = |file: &str| {
+        let device = device.as_ref()?;
+        std::fs::read_to_string(device.join(file))
+            .ok()
+            .map(|value| value.trim().to_string())
+    };
+    let name = integrated_gpu(cpuinfo).or_else(|| {
+        let ids = PCI_IDS
+            .iter()
+            .find_map(|path| std::fs::read_to_string(path).ok())?;
+        let (vendor, device) = (read("vendor")?, read("device")?);
+        pci_name(
+            &ids,
+            vendor.trim_start_matches("0x"),
+            device.trim_start_matches("0x"),
+        )
+    })?;
+    match read("mem_info_vram_total").and_then(|bytes| bytes.parse::<u64>().ok()) {
+        Some(bytes) if bytes > 0 => Some(format!("{name} {} MB", bytes / 1024 / 1024)),
+        _ => Some(name),
+    }
+}
+
+fn gpu_device() -> Option<std::path::PathBuf> {
+    let mut cards: Vec<_> = std::fs::read_dir("/sys/class/drm")
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("card") && !name.contains('-'))
+        })
+        .collect();
+    cards.sort();
+    cards
+        .into_iter()
+        .map(|card| card.join("device"))
+        .find(|device| device.join("vendor").exists())
+}
+
+fn integrated_gpu(cpuinfo: &str) -> Option<String> {
+    let model = cpuinfo
+        .lines()
+        .find_map(|line| line.strip_prefix("model name"))?
+        .split_once(':')?
+        .1;
+    let (cpu, gpu) = model.split_once(" with ")?;
+    let vendor = cpu.split_whitespace().next()?;
+    Some(format!("{vendor} {}", gpu.trim()))
+}
+
+fn pci_name(ids: &str, vendor: &str, device: &str) -> Option<String> {
+    let vendor_prefix = format!("{vendor}  ");
+    let mut lines = ids
+        .lines()
+        .skip_while(|line| !line.starts_with(&vendor_prefix));
+    let vendor_name = lines.next()?.strip_prefix(&vendor_prefix)?;
+    let device_prefix = format!("\t{device}  ");
+    let device_name = lines
+        .take_while(|line| line.starts_with('\t') || line.starts_with('#'))
+        .find_map(|line| line.strip_prefix(&device_prefix))?;
+    Some(format!(
+        "{} {}",
+        short_vendor(vendor_name.trim()),
+        bracketed(device_name.trim())
+    ))
+}
+
+fn bracketed(name: &str) -> &str {
+    name.split_once('[')
+        .and_then(|(_, rest)| rest.strip_suffix(']'))
+        .unwrap_or(name)
+}
+
+fn short_vendor(name: &str) -> &str {
+    match name.split_once('[') {
+        Some((_, rest)) => rest.trim_end_matches(']').split('/').next().unwrap_or(rest),
+        None => name.split_whitespace().next().unwrap_or(name),
+    }
+}
+
+fn system_release(os_release: &str) -> Option<(String, String)> {
+    let field = |key: &str| {
+        os_release
+            .lines()
+            .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
+            .map(|value| value.trim().trim_matches('"').to_string())
+            .filter(|value| !value.is_empty())
+    };
+    Some((
+        field("NAME")?,
+        field("VERSION").or_else(|| field("VERSION_ID"))?,
+    ))
+}
+
 fn memory(meminfo: &str) -> String {
     meminfo
         .lines()
@@ -614,15 +728,16 @@ impl App for AboutApp {
 fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
     let palette = Palette::current();
-    let mut rows = vec![
-        ("Procesador", info.cpu.clone()),
-        ("Memoria", info.memory.clone()),
-        ("Disco de arranque", info.disk.clone()),
-    ];
-    if let Some(serial) = &info.serial {
-        rows.push(("Número de serie", serial.clone()));
+    let mut rows = vec![("Procesador".to_string(), info.cpu.clone())];
+    if let Some(graphics) = &info.graphics {
+        rows.push(("Gráficos".to_string(), graphics.clone()));
     }
-    rows.push(("Malaysia", env!("CARGO_PKG_VERSION").to_string()));
+    rows.push(("Memoria".to_string(), info.memory.clone()));
+    rows.push(("Disco de arranque".to_string(), info.disk.clone()));
+    if let Some(serial) = &info.serial {
+        rows.push(("Número de serie".to_string(), serial.clone()));
+    }
+    rows.push(info.system.clone());
     let rows = rows.into_iter().map(|(name, value)| {
         rect()
             .direction(Direction::Horizontal)
@@ -860,6 +975,42 @@ mod tests {
         assert_eq!(memory("MemTotal:       15728640 kB\n"), "16 GB");
         assert_eq!(memory("MemTotal:       7990000 kB\n"), "8 GB");
         assert_eq!(memory(""), "Desconocida");
+    }
+
+    #[test]
+    fn the_gpu_and_the_system_read_like_macos() {
+        let cpuinfo = "model name\t: AMD Ryzen 5 PRO 5650U with Radeon Graphics\n";
+        assert_eq!(
+            integrated_gpu(cpuinfo).as_deref(),
+            Some("AMD Radeon Graphics")
+        );
+        assert_eq!(
+            integrated_gpu("model name\t: Intel(R) Core(TM) i5-8250U\n"),
+            None
+        );
+        let ids = "8086  Intel Corporation\n\t9a49  TigerLake-LP GT2 [Iris Xe Graphics]\n\t\t17aa 22d8  ThinkPad\n10de  NVIDIA Corporation\n\t2560  GA106M [GeForce RTX 3060 Mobile / Max-Q]\n1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\t73bf  Navi 21\n";
+        assert_eq!(
+            pci_name(ids, "8086", "9a49").as_deref(),
+            Some("Intel Iris Xe Graphics")
+        );
+        assert_eq!(
+            pci_name(ids, "10de", "2560").as_deref(),
+            Some("NVIDIA GeForce RTX 3060 Mobile / Max-Q")
+        );
+        assert_eq!(
+            pci_name(ids, "1002", "73bf").as_deref(),
+            Some("AMD Navi 21")
+        );
+        assert_eq!(pci_name(ids, "8086", "2560"), None);
+        let os_release = "NAME=NixOS\nPRETTY_NAME=\"NixOS 26.05 (Yarara)\"\nVERSION=\"26.05 (Yarara)\"\nVERSION_ID=\"26.05\"\n";
+        assert_eq!(
+            system_release(os_release),
+            Some(("NixOS".to_string(), "26.05 (Yarara)".to_string()))
+        );
+        assert_eq!(
+            system_release("NAME=\"Arch Linux\"\nVERSION_ID=rolling\n"),
+            Some(("Arch Linux".to_string(), "rolling".to_string()))
+        );
     }
 
     #[test]
