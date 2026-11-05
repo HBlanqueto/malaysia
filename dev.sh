@@ -1285,7 +1285,7 @@ drm_vkms() {
     [ -n "$_capture" ] ||
         fail "$EXIT_DRM_VKMS" "no capture written; log follows: $(tail -n 30 "$_log" 2>/dev/null)"
     sudo chmod -R a+rX "$_run"
-    python3 "$script_dir/scripts/verify-captures.py" "$_capture" pattern ||
+    python3 "$script_dir/scripts/verify-captures.py" "$_capture" ||
         fail "$EXIT_DRM_VKMS" "the vkms capture does not contain the pattern"
 
     grep -q 'mode chosen' "$_log" ||

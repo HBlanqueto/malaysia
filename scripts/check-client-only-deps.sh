@@ -5,31 +5,30 @@ cd "$(dirname "$0")/.."
 
 fail=0
 
-absent() {
-  local package=$1
-  shift
-  if cargo tree "$@" -i "$package" 2>/dev/null | grep -v '^warning:' | grep -q .; then
-    echo "check-client-only-deps: $package must not be in the graph ($*)" >&2
-    fail=1
-  fi
+graph() {
+  cargo tree "$@" --prefix none --format '{p}' -e normal,build ||
+    { echo "check-client-only-deps: cargo tree $* failed" >&2; exit 1; }
 }
 
-absent freya-engine -p malaysia-compositor
-absent freya-skia-bindings -p malaysia-compositor
-absent freya-skia-safe -p malaysia-compositor
-absent skia-bindings -p malaysia-compositor
-absent wgpu -p malaysia-compositor
+absent() {
+  local target=$1
+  shift
+  local tree
+  tree=$(graph $target)
+  for package in "$@"; do
+    if grep -q "^$package v" <<<"$tree"; then
+      echo "check-client-only-deps: $package must not be in the graph ($target)" >&2
+      fail=1
+    fi
+  done
+}
 
-absent freya-core -p malaysia-wallpaper
-absent freya-engine -p malaysia-wallpaper
-absent freya-skia-bindings -p malaysia-wallpaper
-absent freya-skia-safe -p malaysia-wallpaper
-absent skia-bindings -p malaysia-wallpaper
-
-absent winit -p malaysia-shell
-absent tokio --workspace
-absent gtk --workspace
-absent glutin --workspace
-absent tray-icon --workspace
+absent "-p malaysia-compositor" freya-core freya-components freya-animation freya-engine \
+  freya-skia-bindings freya-skia-safe skia-bindings torin ragnarok wgpu
+absent "-p malaysia-wallpaper" freya-core freya-engine freya-skia-bindings freya-skia-safe \
+  skia-bindings
+absent "-p malaysia-shell" winit wgpu
+absent "--workspace" freya freya-winit tokio gtk glutin tray-icon otto-kit \
+  otto-foundations otto-dbus otto-surface-style laye-rs
 
 exit "$fail"

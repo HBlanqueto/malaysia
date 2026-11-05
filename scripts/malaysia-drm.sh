@@ -6,12 +6,17 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULT="$REPO/result"
 RUNDIR="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR no está definido}/malaysia"
 LATEST_LOG="$RUNDIR/drm-latest.log"
-PROC_NAME=".malaysia-compositor-wrapped"
+PID_FILE="$RUNDIR/drm.pid"
+PROC_COMM=".malaysia-compo"
 
 die()  { printf 'malaysia-drm: %s\n' "$*" >&2; exit 1; }
 info() { printf 'malaysia-drm: %s\n' "$*"; }
 
-malaysia_compositor_pid() { pgrep -x "$PROC_NAME" | head -n1 || true; }
+malaysia_compositor_pid() {
+    [[ -f "$PID_FILE" ]] || return 0
+    local pid; pid="$(cat "$PID_FILE")"
+    if [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == "$PROC_COMM" ]]; then echo "$pid"; fi
+}
 
 socket_name() {
     [[ -f "$LATEST_LOG" ]] || return 1
@@ -50,7 +55,8 @@ cmd_run() {
 
     cd "$REPO"
     set +e
-    "$RESULT/bin/malaysia-compositor" --drm --log-level="${MALAYSIA_LOG_LEVEL:-info}" 2>&1 | tee "$log"
+    sh -c 'printf "%s\n" "$$" >"$1"; shift; exec "$@"' sh "$PID_FILE" \
+        "$RESULT/bin/malaysia-compositor" --drm --log-level="${MALAYSIA_LOG_LEVEL:-info}" 2>&1 | tee "$log"
     local status=${PIPESTATUS[0]}
     set -e
     info "Malaysia salió con código $status (log: $log)"
@@ -91,7 +97,7 @@ cmd_stop() {
     local pid; pid="$(malaysia_compositor_pid)"
     [[ -n "$pid" ]] || { info "Malaysia no está corriendo"; return 0; }
     info "enviando SIGTERM a $pid…"
-    pkill -TERM -x "$PROC_NAME"
+    kill -TERM "$pid"
     for _ in $(seq 1 50); do
         [[ -z "$(malaysia_compositor_pid)" ]] && { info "Malaysia terminó. Vuelve a GDM con Ctrl+Alt+F1."; return 0; }
         sleep 0.1
@@ -106,5 +112,5 @@ case "${1:-}" in
     lock)   shift; cmd_lock "$@" ;;
     status) shift; cmd_status "$@" ;;
     stop)   shift; cmd_stop "$@" ;;
-    *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+    *) printf 'uso: %s {setup|run|client <programa> [args…]|lock|status|stop}\n' "$0"; exit 1 ;;
 esac
