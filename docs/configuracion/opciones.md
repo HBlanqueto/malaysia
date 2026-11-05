@@ -19,6 +19,7 @@ directorios — preferencias y estado:
 ```
 ~/.config/malaysia/            ← ~/Library/Preferences
 ├── appearance.domain
+├── language.domain
 ├── display.domain
 ├── window.domain
 ├── screenshot.domain
@@ -118,6 +119,25 @@ ventanas": `neutral` no tiñe, `accent` mezcla el acento con el fondo de la
 titlebar (6 % en claro, 8 % en oscuro) y `wallpaper` usa el color dominante del
 wallpaper (7 % / 9 %). Los semáforos en `auto` siguen el modo (estándar en neutral,
 derivados del acento/wallpaper en los otros).
+
+## `language` — idioma (System Settings → General → Idioma y región)
+
+| Opción | Tipo | Default | Estado | Consumida por |
+|---|---|---|---|---|
+| `language.language` | `"es"` \| `"en"` | ausente | **activa** | apps del kit (`vow_appearance::language`), **Ajustes del sistema** |
+
+Ausente o vacío, el idioma sale de `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` y `LANG`,
+en el orden de gettext.
+
+Lo escribe la fila «Idioma» de **Ajustes del sistema** (Apariencia). Cada app
+lo lee al arrancar; el cambio se ve al volver a abrirla.
+
+La clave `language` del dominio propio de una app del kit (por ejemplo
+`marea.domain`) gana sobre este dominio. La escribe la fila «Idioma» de sus
+preferencias. El orden completo está en
+[`18-idiomas.md`](https://github.com/HBlanqueto/barrierkit/blob/main/docs/barrierkit/18-idiomas.md) de barrierkit.
+
+Las apps GTK y Qt lanzadas recibirán el idioma en `LANGUAGE`; está pendiente.
 
 ## `display` — escala de salida (System Settings → Displays)
 
@@ -374,6 +394,11 @@ window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tiñe menubar/dock)
 traffic_lights = "auto"         # auto | standard | accent | wallpaper
 traffic_light_shape = "square"  # square | round
+```
+
+```toml
+# ~/.config/malaysia/language.domain
+language = "es"                 # es | en; sin la clave, sigue LANG
 ```
 
 ```toml
