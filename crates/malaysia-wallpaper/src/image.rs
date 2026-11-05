@@ -320,85 +320,66 @@ impl DecodedImage {
     }
 
     fn downscale_2x2(&self, new_w: u32, new_h: u32) -> Self {
-        match &self.pixels {
+        let pixels = match &self.pixels {
             Pixels::Srgb8(pixels) => {
-                let mut rgba = Vec::with_capacity((new_w * new_h * 4) as usize);
-                let (old_w, old_h) = self.size;
-                for y in 0..new_h {
-                    for x in 0..new_w {
-                        let mut linear = [0.0f32; 4];
-                        for dy in 0..2 {
-                            for dx in 0..2 {
-                                let sx = (x * 2 + dx).min(old_w - 1);
-                                let sy = (y * 2 + dy).min(old_h - 1);
-                                let offset = ((sy * old_w + sx) * 4) as usize;
-                                let [r, g, b, a] = [
-                                    pixels[offset],
-                                    pixels[offset + 1],
-                                    pixels[offset + 2],
-                                    pixels[offset + 3],
-                                ];
-                                linear[0] += srgb8_to_linear(r);
-                                linear[1] += srgb8_to_linear(g);
-                                linear[2] += srgb8_to_linear(b);
-                                linear[3] += a as f32 / 255.0;
-                            }
-                        }
-                        rgba.extend_from_slice(&[
-                            linear8_to_srgb(linear[0] / 4.0),
-                            linear8_to_srgb(linear[1] / 4.0),
-                            linear8_to_srgb(linear[2] / 4.0),
-                            (linear[3] / 4.0 * 255.0).round() as u8,
-                        ]);
-                    }
-                }
-                DecodedImage {
-                    size: (new_w, new_h),
-                    pixels: Pixels::Srgb8(rgba),
-                }
+                Pixels::Srgb8(average_2x2(pixels, self.size, (new_w, new_h), 255.0, |v| {
+                    v as u8
+                }))
             }
-            Pixels::Srgb16(pixels) => {
-                let mut rgba = Vec::with_capacity((new_w * new_h * 4) as usize);
-                let (old_w, old_h) = self.size;
-                for y in 0..new_h {
-                    for x in 0..new_w {
-                        let mut linear = [0.0f32; 4];
-                        for dy in 0..2 {
-                            for dx in 0..2 {
-                                let sx = (x * 2 + dx).min(old_w - 1);
-                                let sy = (y * 2 + dy).min(old_h - 1);
-                                let offset = ((sy * old_w + sx) * 4) as usize;
-                                let [r, g, b, a] = [
-                                    pixels[offset],
-                                    pixels[offset + 1],
-                                    pixels[offset + 2],
-                                    pixels[offset + 3],
-                                ];
-                                linear[0] += srgb16_to_linear(r);
-                                linear[1] += srgb16_to_linear(g);
-                                linear[2] += srgb16_to_linear(b);
-                                linear[3] += a as f32 / 65535.0;
-                            }
-                        }
-                        rgba.extend_from_slice(&[
-                            linear16_to_srgb(linear[0] / 4.0),
-                            linear16_to_srgb(linear[1] / 4.0),
-                            linear16_to_srgb(linear[2] / 4.0),
-                            (linear[3] / 4.0 * 65535.0).round() as u16,
-                        ]);
-                    }
-                }
-                DecodedImage {
-                    size: (new_w, new_h),
-                    pixels: Pixels::Srgb16(rgba),
-                }
-            }
+            Pixels::Srgb16(pixels) => Pixels::Srgb16(average_2x2(
+                pixels,
+                self.size,
+                (new_w, new_h),
+                65535.0,
+                |v| v as u16,
+            )),
+        };
+        DecodedImage {
+            size: (new_w, new_h),
+            pixels,
         }
     }
 }
 
-fn srgb8_to_linear(c: u8) -> f32 {
-    let v = c as f32 / 255.0;
+fn average_2x2<T: Copy + Into<f32>>(
+    pixels: &[T],
+    (old_w, old_h): (u32, u32),
+    (new_w, new_h): (u32, u32),
+    max: f32,
+    from: impl Fn(f32) -> T,
+) -> Vec<T> {
+    let mut out = Vec::with_capacity((new_w * new_h * 4) as usize);
+    for y in 0..new_h {
+        for x in 0..new_w {
+            let mut sum = [0.0f32; 4];
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let sx = (x * 2 + dx).min(old_w - 1);
+                let sy = (y * 2 + dy).min(old_h - 1);
+                let offset = ((sy * old_w + sx) * 4) as usize;
+                for (channel, total) in sum.iter_mut().enumerate() {
+                    let value = pixels[offset + channel].into() / max;
+                    *total += if channel < 3 {
+                        srgb_to_linear(value)
+                    } else {
+                        value
+                    };
+                }
+            }
+            out.extend(sum.iter().enumerate().map(|(channel, total)| {
+                let mean = total / 4.0;
+                let value = if channel < 3 {
+                    linear_to_srgb(mean)
+                } else {
+                    mean
+                };
+                from((value * max).round())
+            }));
+        }
+    }
+    out
+}
+
+pub(crate) fn srgb_to_linear(v: f32) -> f32 {
     if v <= 0.04045 {
         v / 12.92
     } else {
@@ -406,31 +387,12 @@ fn srgb8_to_linear(c: u8) -> f32 {
     }
 }
 
-fn linear8_to_srgb(c: f32) -> u8 {
-    let v = if c <= 0.0031308 {
+pub(crate) fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.0031308 {
         c * 12.92
     } else {
         c.powf(1.0 / 2.4) * 1.055 - 0.055
-    };
-    (v * 255.0).round() as u8
-}
-
-fn srgb16_to_linear(c: u16) -> f32 {
-    let v = c as f32 / 65535.0;
-    if v <= 0.04045 {
-        v / 12.92
-    } else {
-        ((v + 0.055) / 1.055).powf(2.4)
     }
-}
-
-fn linear16_to_srgb(c: f32) -> u16 {
-    let v = if c <= 0.0031308 {
-        c * 12.92
-    } else {
-        c.powf(1.0 / 2.4) * 1.055 - 0.055
-    };
-    (v * 65535.0).round() as u16
 }
 
 pub fn dominant(image: &DecodedImage) -> Option<Rgba> {

@@ -471,13 +471,7 @@ fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
     static TABLE: LazyLock<[f16; 65536]> = LazyLock::new(|| {
         let mut table = [f16::ZERO; 65536];
         for (i, entry) in table.iter_mut().enumerate() {
-            let v = i as f32 / 65535.0;
-            let linear = if v <= 0.04045 {
-                v / 12.92
-            } else {
-                ((v + 0.055) / 1.055).powf(2.4)
-            };
-            *entry = f16::from_f32(linear);
+            *entry = f16::from_f32(crate::image::srgb_to_linear(i as f32 / 65535.0));
         }
         table
     });
@@ -642,6 +636,7 @@ mod tests {
 
     use crate::image::{
         DEFAULT_WALLPAPER_BYTES, DecodedImage, Pixels, decode_image_bytes, decode_png,
+        linear_to_srgb, srgb_to_linear,
     };
 
     use super::{RenderContext, WallpaperTexture, mip_level_count};
@@ -717,22 +712,6 @@ mod tests {
         slice.map_async(wgpu::MapMode::Read, |_| {});
         ctx.device.poll(wgpu::Maintain::Wait);
         slice.get_mapped_range().to_vec()
-    }
-
-    fn srgb_to_linear(c: f32) -> f32 {
-        if c <= 0.04045 {
-            c / 12.92
-        } else {
-            ((c + 0.055) / 1.055).powf(2.4)
-        }
-    }
-
-    fn linear_to_srgb(c: f32) -> f32 {
-        if c <= 0.0031308 {
-            c * 12.92
-        } else {
-            c.powf(1.0 / 2.4) * 1.055 - 0.055
-        }
     }
 
     fn reference_color(image: &DecodedImage, x: u32, y: u32, surf_w: u32, surf_h: u32) -> [u8; 4] {
