@@ -79,6 +79,8 @@ impl App for LauncherApp {
         });
 
         let query = self.query.read().clone();
+        let mut selection = self.selected;
+        use_side_effect_with_deps(&query, move |_| selection.set(0));
         let running: Vec<String> = Toplevels::get()
             .list
             .read()
@@ -141,10 +143,8 @@ impl App for LauncherApp {
         let launch_for_enter = launch.clone();
         let launch_for_click = launch.clone();
         let close_for_escape = self.close.clone();
-        let query_for_keys = self.query;
         let mut selected_for_keys = self.selected;
-        let entries_for_keys = self.entries.clone();
-        let running_for_keys = running.clone();
+        let results_for_keys = results.clone();
         let on_pre_key = move |event: Event<KeyboardEventData>| -> bool {
             match event.key {
                 Key::Named(NamedKey::Escape) => {
@@ -152,18 +152,9 @@ impl App for LauncherApp {
                     false
                 }
                 Key::Named(NamedKey::Enter) => {
-                    let query = query_for_keys.read().clone();
-                    let desktops: Vec<DesktopEntry> = entries_for_keys
-                        .iter()
-                        .map(|entry| entry.desktop.clone())
-                        .collect();
-                    let ranked = desktop::rank(&desktops, &query, &running_for_keys);
-                    let index = (*selected_for_keys.read()).min(ranked.len().saturating_sub(1));
-                    if let Some(desktop) = ranked.get(index)
-                        && let Some(entry) = entries_for_keys
-                            .iter()
-                            .find(|entry| entry.desktop.id == desktop.id)
-                    {
+                    let index =
+                        (*selected_for_keys.read()).min(results_for_keys.len().saturating_sub(1));
+                    if let Some(entry) = results_for_keys.get(index) {
                         launch_for_enter(entry.clone());
                     }
                     false
@@ -171,9 +162,7 @@ impl App for LauncherApp {
                 Key::Named(NamedKey::ArrowDown) => {
                     selected_for_keys.set(next_selection(
                         *selected_for_keys.read(),
-                        &query_for_keys.read(),
-                        &entries_for_keys,
-                        &running_for_keys,
+                        results_for_keys.len(),
                         1,
                     ));
                     false
@@ -181,9 +170,7 @@ impl App for LauncherApp {
                 Key::Named(NamedKey::ArrowUp) => {
                     selected_for_keys.set(next_selection(
                         *selected_for_keys.read(),
-                        &query_for_keys.read(),
-                        &entries_for_keys,
-                        &running_for_keys,
+                        results_for_keys.len(),
                         -1,
                     ));
                     false
@@ -359,15 +346,7 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
         .into_element()
 }
 
-fn next_selection(
-    current: usize,
-    query: &str,
-    entries: &[AppEntry],
-    running: &[String],
-    step: isize,
-) -> usize {
-    let desktops: Vec<DesktopEntry> = entries.iter().map(|entry| entry.desktop.clone()).collect();
-    let len = desktop::rank(&desktops, query, running).len();
+fn next_selection(current: usize, len: usize, step: isize) -> usize {
     if len == 0 {
         return 0;
     }
@@ -515,23 +494,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn selection_wraps_around_the_result_list() {
-        let entries = vec![AppEntry {
-            desktop: DesktopEntry {
-                id: "a".into(),
-                name: "Alfa".into(),
-                generic_name: None,
-                keywords: Vec::new(),
-                icon: None,
-                exec: vec!["alfa".into()],
-                path: None,
-                terminal: false,
-                startup_wm_class: None,
-            },
-            icon: None,
-        }];
-        assert_eq!(next_selection(0, "", &entries, &[], -1), 0);
-        assert_eq!(next_selection(0, "zzz", &entries, &[], 1), 0);
+    fn selection_wraps_within_the_visible_results() {
+        assert_eq!(next_selection(0, 3, -1), 2);
+        assert_eq!(next_selection(2, 3, 1), 0);
+        assert_eq!(next_selection(7, 3, 1), 0);
+        assert_eq!(next_selection(0, 0, 1), 0);
     }
 }
 
