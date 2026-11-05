@@ -17,7 +17,7 @@ wallpaper.domain ──► decode PNG/JPEG ──► wgpu texture
 1. It opens a `wgpu` context on the `wl_display` with the Vulkan backend and draws with «fill» scaling (covers and crops).
 2. It is a `wlr-layer-shell` client: `Background` layer, anchored to the whole output, with `wp_fractional_scale_v1` and `wp_viewporter` for HiDPI.
 3. It presents via dmabuf (`zwp_linux_dmabuf_v1`) with no readback or CPU copies.
-4. It watches `wallpaper.domain` with inotify and repaints on change. It computes the dominant color (3×3×3 neighborhood, chroma-weighted histogram, gray discarding and HSL normalization) and writes it to `wallpaper.state` (`dominant = [r, g, b]`). The compositor no longer decodes images.
+4. It watches `wallpaper.domain` with inotify and repaints on change. It computes the dominant color with `vow_appearance::backdrop::dominant_from_pixels` (k-means in OKLab, the same algorithm as the kit) and writes it with `write_dominant` to `wallpaper.state` (`dominant = [r, g, b]`). The compositor no longer decodes images.
 
 ## Supervision
 

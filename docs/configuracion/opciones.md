@@ -137,7 +137,7 @@ La clave `language` del dominio propio de una app del kit (por ejemplo
 preferencias. El orden completo está en
 [`18-idiomas.md`](https://github.com/HBlanqueto/barrierkit/blob/main/docs/barrierkit/18-idiomas.md) de barrierkit.
 
-Las apps GTK y Qt lanzadas recibirán el idioma en `LANGUAGE`; está pendiente.
+El compositor y la shell pasan el idioma en `LANGUAGE` a las apps que lanzan, así que GTK y Qt también lo siguen (gettext lo ignora con el locale `C`).
 
 ## `display` — escala de salida (System Settings → Displays)
 

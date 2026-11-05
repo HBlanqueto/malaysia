@@ -137,7 +137,7 @@ wins over this domain. The "Language" row of its preferences writes it. The
 full order is in barrierkit's
 [`18-idiomas.en.md`](https://github.com/HBlanqueto/barrierkit/blob/main/docs/barrierkit/18-idiomas.en.md).
 
-Launched GTK and Qt apps will get the language in `LANGUAGE`; this is pending.
+The compositor and the shell pass the language in `LANGUAGE` to the apps they launch, so GTK and Qt follow it too (gettext ignores it with the `C` locale).
 
 ## `display` — output scale (System Settings → Displays)
 
