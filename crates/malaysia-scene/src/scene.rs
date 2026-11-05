@@ -76,14 +76,6 @@ impl Scene {
         Self::default()
     }
 
-    pub fn len(&self) -> usize {
-        self.windows.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.windows.is_empty()
-    }
-
     pub fn insert(&mut self, id: WindowId, outer: Rect<f64, Logical>) {
         self.windows.push(Entry { id, outer });
     }
@@ -460,7 +452,6 @@ mod tests {
         scene.insert(second, rect(0.0, 0.0, 10.0, 10.0));
         assert!(scene.remove(first));
         assert!(!scene.remove(first));
-        assert_eq!(scene.len(), 1);
         assert_eq!(scene.topmost(), Some(second));
         assert_eq!(scene.outer(first), None);
     }
