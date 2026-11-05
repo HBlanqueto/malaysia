@@ -1,20 +1,18 @@
-pub const TITLE: &str = "Escritorio";
-
 use std::env;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::path::PathBuf;
 
-use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchLocation, SearchableEntry};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 use barrier_kit::shell::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
+use crate::menubar::remote::Title;
 use crate::menubar::{
-    create_desktop_folder, focused, help_topics, icons, items, menu::MenuItems, resolve_app_name,
-    system, xdg_user_dir,
+    create_desktop_folder, focused, help_topics, icons, items, resolve_app_name, system,
+    xdg_user_dir,
 };
 use crate::spawn::{spawn_component, xdg_open};
 
-pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
+fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
@@ -36,28 +34,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::TRASH)),
         ),
         MenuItem::Separator,
-        items::submenu(
-            "Servicios",
-            true,
-            None,
-            vec![
-                items::action(
-                    "services-none",
-                    "Ningún servicio disponible",
-                    None,
-                    false,
-                    None,
-                ),
-                MenuItem::Separator,
-                items::action(
-                    "services-settings",
-                    "Ajustes de servicios…",
-                    None,
-                    false,
-                    None,
-                ),
-            ],
-        ),
+        focused::services_submenu(),
         MenuItem::Separator,
         items::action(
             "desktop-hide",
@@ -67,23 +44,17 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             None,
         ),
         items::action(
-            "desktop-hide-others",
+            "app-hide-others",
             "Ocultar otros",
             None,
             other_unminimized,
             None,
         ),
-        items::action(
-            "desktop-show-all",
-            "Mostrar todo",
-            None,
-            any_minimized,
-            None,
-        ),
+        items::action("app-show-all", "Mostrar todo", None, any_minimized, None),
     ]
 }
 
-pub fn file_menu_items() -> Vec<MenuItem> {
+fn file_menu_items() -> Vec<MenuItem> {
     vec![
         items::action("file-new-window", "Nueva ventana", None, true, None),
         items::action(
@@ -175,7 +146,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-pub fn edit_menu_items() -> Vec<MenuItem> {
+fn edit_menu_items() -> Vec<MenuItem> {
     vec![
         items::action("edit-undo", "Deshacer", Some("Super+Z"), false, None),
         items::action("edit-redo", "Rehacer", Some("Shift+Super+Z"), false, None),
@@ -217,7 +188,7 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-pub fn view_menu_items() -> Vec<MenuItem> {
+fn view_menu_items() -> Vec<MenuItem> {
     vec![
         MenuItem::Action {
             id: "view-as-icons".to_string(),
@@ -282,7 +253,7 @@ pub fn view_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-pub fn go_menu_items() -> Vec<MenuItem> {
+fn go_menu_items() -> Vec<MenuItem> {
     vec![
         items::action("go-back", "Atrás", Some("Super+["), false, None),
         items::action("go-forward", "Adelante", Some("Super+]"), false, None),
@@ -377,64 +348,13 @@ pub fn go_menu_items() -> Vec<MenuItem> {
     ]
 }
 
-pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
+fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
-    let mut items = vec![
-        items::action("window-minimize", "Minimizar", Some("Super+M"), false, None),
-        items::action("window-maximize", "Maximizar", None, false, None),
-        items::action(
-            "window-fill",
-            "Rellenar",
-            Some("Ctrl+Super+Return"),
-            false,
-            None,
-        ),
-        items::action(
-            "window-center",
-            "Centrar",
-            Some("Ctrl+Super+C"),
-            false,
-            None,
-        ),
-        MenuItem::Separator,
-        items::submenu(
-            "Trasladar y redimensionar",
-            true,
-            Some(MenuIcon::svg(icons::GRID)),
-            focused::move_resize_items(None, None),
-        ),
-        items::submenu(
-            "Ventana a pantalla completa",
-            false,
-            Some(MenuIcon::svg(icons::SPLIT)),
-            vec![
-                items::action(
-                    "window-fullscreen-left",
-                    "Izquierda de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
-                items::action(
-                    "window-fullscreen-right",
-                    "Derecha de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
-                MenuItem::Separator,
-                items::action(
-                    "window-fullscreen-toggle",
-                    "Activar pantalla completa",
-                    Some("Ctrl+Super+F"),
-                    false,
-                    None,
-                ),
-            ],
-        ),
+    let mut items = focused::window_controls("", None);
+    items.extend([
         MenuItem::Separator,
         items::action(
-            "window-front-all",
+            "app-show-all",
             "Traer todo al frente",
             None,
             any_minimized,
@@ -448,8 +368,7 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             None,
         ),
         MenuItem::Separator,
-    ];
-
+    ]);
     if toplevels.is_empty() {
         items.push(items::action(
             "window-none",
@@ -458,261 +377,102 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             false,
             None,
         ));
-    } else {
-        for (index, window) in toplevels.iter().enumerate() {
-            let name = resolve_app_name(Some(&window.app_id), entries);
-            let label = if window.title.is_empty() || window.title == name {
-                name
-            } else {
-                format!("{name} — {title}", title = window.title)
-            };
-            items.push(items::action(
-                format!("app-window-activate:{index}:{}", window.app_id),
-                label,
-                None,
-                true,
-                None,
-            ));
-        }
     }
-
+    items.extend(toplevels.iter().enumerate().map(|(index, window)| {
+        let name = resolve_app_name(Some(&window.app_id), entries);
+        focused::window_item(index, window, &name, CheckState::None)
+    }));
     items
 }
 
-pub fn help_menu_items() -> Vec<MenuItem> {
+fn help_menu_items() -> Vec<MenuItem> {
+    let topics = help_topics::topics();
     vec![
         MenuItem::SearchField {
             placeholder: "Buscar".to_string(),
         },
-        help_topic_item("Documentación de Malaysia", icons::BOOK),
-        help_topic_item("Atajos de teclado", icons::KEYBOARD),
+        topics[0].item(Some(MenuIcon::svg(icons::BOOK))),
+        topics[1].item(Some(MenuIcon::svg(icons::KEYBOARD))),
         MenuItem::Separator,
-        items::action("help-report", "Informar de un problema…", None, true, None),
+        items::action(
+            "app-help-report",
+            "Informar de un problema…",
+            None,
+            true,
+            None,
+        ),
     ]
 }
 
-fn help_topic_item(title: &str, icon: &'static str) -> MenuItem {
-    help_topics::topics()
-        .iter()
-        .find(|topic| topic.title == title)
-        .map(|topic| MenuItem::Action {
-            id: format!("app-help-topic:{}", topic.url),
-            label: topic.title.to_string(),
-            shortcut: None,
-            enabled: true,
-            check: CheckState::None,
-            icon: Some(MenuIcon::svg(icon)),
-        })
-        .unwrap_or_else(|| MenuItem::Action {
-            id: String::new(),
-            label: title.to_string(),
-            shortcut: None,
-            enabled: false,
-            check: CheckState::None,
-            icon: Some(MenuIcon::svg(icon)),
-        })
-}
-
-pub fn is_help_action(id: &str) -> bool {
-    id.starts_with("app-help-topic:") || id == "app-help-topics-index"
-}
-
-pub fn desktop_menus(
-    entries: Rc<Vec<DesktopEntry>>,
-    toplevels: Rc<Vec<ToplevelInfo>>,
-) -> Vec<(&'static str, MenuItems)> {
-    let toplevels_for_title = toplevels.clone();
-    vec![
-        (
-            TITLE,
-            Rc::new(move || malaysia_menu_items(&toplevels_for_title)) as MenuItems,
-        ),
-        ("Archivo", Rc::new(file_menu_items)),
-        ("Edición", Rc::new(edit_menu_items)),
-        ("Visualización", Rc::new(view_menu_items)),
-        ("Ir", Rc::new(go_menu_items)),
-        (
-            "Ventana",
-            Rc::new(move || window_menu_items(&entries, &toplevels)),
-        ),
-        ("Ayuda", Rc::new(help_menu_items)),
+pub fn desktop_menus(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<Title> {
+    [
+        ("Escritorio", malaysia_menu_items(toplevels)),
+        ("Archivo", file_menu_items()),
+        ("Edición", edit_menu_items()),
+        ("Visualización", view_menu_items()),
+        ("Ir", go_menu_items()),
+        ("Ventana", window_menu_items(entries, toplevels)),
+        ("Ayuda", help_menu_items()),
     ]
-}
-
-pub fn desktop_help_title_index(labels: &[&str]) -> Option<usize> {
-    labels.iter().position(|&label| label == "Ayuda")
-}
-
-pub fn searchable_menu_items(
-    entries: Rc<Vec<DesktopEntry>>,
-    toplevels: Rc<Vec<ToplevelInfo>>,
-) -> Vec<SearchableEntry> {
-    let mut out = Vec::new();
-    let menus = desktop_menus(entries, toplevels);
-    let labels: Vec<&str> = menus.iter().map(|(label, _)| *label).collect();
-    let help_index = desktop_help_title_index(&labels);
-    for (title_index, (title, items)) in menus.into_iter().enumerate() {
-        if Some(title_index) == help_index {
-            continue;
-        }
-        focused::collect_searchable(
-            &items(),
-            title,
-            SearchLocation {
-                title_index,
-                indices: Vec::new(),
-            },
-            &mut out,
-        );
-    }
-    out
+    .into_iter()
+    .map(|(label, items)| Title {
+        label: label.to_string(),
+        items,
+        remote_id: None,
+        enabled: true,
+    })
+    .collect()
 }
 
 pub fn on_action(id: String) {
-    let toplevels = Toplevels::get();
-    let list = toplevels.list.read().clone();
-    if id == "malaysia-settings" {
-        system::on_system_action("system-settings".into(), &list, &[]);
-        return;
-    }
-    on_action_with(
-        id,
-        &list,
-        |index| toplevels.minimize(index),
-        |index| toplevels.unset_minimized(index),
-        |binary, _args| spawn_component(binary),
-        |path| xdg_open(path),
-        focused::on_action,
-    );
-}
-
-pub fn on_action_with(
-    id: String,
-    toplevels: &[ToplevelInfo],
-    mut minimize: impl FnMut(usize),
-    mut unminimize: impl FnMut(usize),
-    mut spawn: impl FnMut(&str, &[&str]),
-    mut open: impl FnMut(&Path),
-    mut delegate: impl FnMut(String),
-) {
     match id.as_str() {
-        "go-home" => open_home(&mut open),
-        "go-desktop" => open_user_dir("DESKTOP", "Desktop", &mut open),
-        "go-documents" => open_user_dir("DOCUMENTS", "Documents", &mut open),
-        "go-downloads" => open_user_dir("DOWNLOAD", "Downloads", &mut open),
-        "go-pictures" => open_user_dir("PICTURES", "Pictures", &mut open),
-        "go-music" => open_user_dir("MUSIC", "Music", &mut open),
-        "go-videos" => open_user_dir("VIDEOS", "Videos", &mut open),
-        "go-applications" => spawn("launcher", &[]),
-        "go-trash" => open(Path::new("trash:///")),
-        "file-new-window" => open_home(&mut open),
-        "file-search" | "edit-search" => spawn("launcher", &[]),
+        "malaysia-settings" => {
+            let list = Toplevels::get().list.read().clone();
+            system::on_system_action("system-settings".into(), &list, &[]);
+        }
+        "go-home" | "file-new-window" => open_home(),
+        "go-desktop" => open_user_dir("DESKTOP", "Desktop"),
+        "go-documents" => open_user_dir("DOCUMENTS", "Documents"),
+        "go-downloads" => open_user_dir("DOWNLOAD", "Downloads"),
+        "go-pictures" => open_user_dir("PICTURES", "Pictures"),
+        "go-music" => open_user_dir("MUSIC", "Music"),
+        "go-videos" => open_user_dir("VIDEOS", "Videos"),
+        "go-applications" | "edit-search" => spawn_component("launcher"),
+        "go-trash" => xdg_open("trash:///"),
         "file-new-folder-desktop" => create_desktop_folder(),
-        "desktop-hide-others" => {
-            for (index, window) in toplevels.iter().enumerate() {
-                if !window.minimized {
-                    minimize(index);
-                }
+        "window-show-desktop" => {
+            let toplevels = Toplevels::get();
+            let count = toplevels.list.read().len();
+            for index in 0..count {
+                toplevels.minimize(index);
             }
         }
-        "desktop-show-all" | "window-front-all" => {
-            for (index, window) in toplevels.iter().enumerate() {
-                if window.minimized {
-                    unminimize(index);
-                }
-            }
-        }
-        "window-minimize-all" | "window-show-desktop" => {
-            for index in 0..toplevels.len() {
-                minimize(index);
-            }
-        }
-        "help-report" => open(Path::new(focused::ISSUES_URL)),
-        id if id.starts_with("app-window-activate:") || is_help_action(id) => {
-            delegate(id.to_string());
-        }
-        _ => {}
+        _ => focused::on_action(id),
     }
 }
 
-fn open_home(open: &mut impl FnMut(&Path)) {
+fn open_home() {
     if let Some(home) = env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        open(&home);
+        xdg_open(home);
     }
 }
 
-fn open_user_dir(kind: &str, fallback: &str, open: &mut impl FnMut(&Path)) {
+fn open_user_dir(kind: &str, fallback: &str) {
     if let Some(path) = xdg_user_dir(kind)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
     {
-        open(&path);
+        xdg_open(path);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
     use super::*;
-    use barrier_kit::menu::{MenuItem, SearchSource};
-
-    fn label(item: &MenuItem) -> Option<&str> {
-        match item {
-            MenuItem::Action { label, .. }
-            | MenuItem::Submenu { label, .. }
-            | MenuItem::Header { label, .. } => Some(label),
-            _ => None,
-        }
-    }
-
-    fn labels_with_separators(items: &[MenuItem]) -> Vec<String> {
-        items
-            .iter()
-            .map(|item| match item {
-                MenuItem::Action { label, .. }
-                | MenuItem::Submenu { label, .. }
-                | MenuItem::Header { label, .. } => label.clone(),
-                MenuItem::SearchField { placeholder } => placeholder.clone(),
-                MenuItem::Separator => "—".to_string(),
-                _ => String::new(),
-            })
-            .collect()
-    }
-
-    fn top_level_icon_labels(items: &[MenuItem]) -> Vec<String> {
-        items
-            .iter()
-            .filter_map(|item| match item {
-                MenuItem::Action { label, icon, .. } | MenuItem::Submenu { label, icon, .. } => {
-                    icon.is_some().then(|| label.clone())
-                }
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn is_enabled(item: &MenuItem) -> bool {
-        match item {
-            MenuItem::Action { enabled, .. } | MenuItem::Submenu { enabled, .. } => *enabled,
-            _ => false,
-        }
-    }
 
     fn enabled(items: &[MenuItem], wanted: &str) -> bool {
-        items
-            .iter()
-            .find(|item| label(item) == Some(wanted))
-            .map(is_enabled)
-            .unwrap_or(false)
-    }
-
-    fn action_id(item: &MenuItem) -> Option<&str> {
-        match item {
-            MenuItem::Action { id, .. } => Some(id),
-            _ => None,
-        }
+        items.iter().any(
+            |item| matches!(item, MenuItem::Action { label, enabled: true, .. } if label == wanted),
+        )
     }
 
     fn all_actions(items: &[MenuItem], out: &mut Vec<MenuItem>) {
@@ -739,45 +499,6 @@ mod tests {
     }
 
     #[test]
-    fn desktop_title_is_escritorio() {
-        assert_eq!(TITLE, "Escritorio");
-    }
-
-    #[test]
-    fn escritorio_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&malaysia_menu_items(&[])),
-            vec![
-                "Acerca de Malaysia",
-                "—",
-                "Ajustes…",
-                "—",
-                "Vaciar papelera…",
-                "—",
-                "Servicios",
-                "—",
-                "Ocultar Escritorio",
-                "Ocultar otros",
-                "Mostrar todo",
-            ]
-        );
-    }
-
-    #[test]
-    fn escritorio_settings_is_enabled_and_has_no_shortcut() {
-        let items = malaysia_menu_items(&[]);
-        let settings = items
-            .iter()
-            .find(|item| label(item) == Some("Ajustes…"))
-            .expect("Ajustes… must exist");
-        assert!(is_enabled(settings));
-        assert!(
-            matches!(settings, MenuItem::Action { shortcut: None, .. }),
-            "Ajustes… must not show a shortcut"
-        );
-    }
-
-    #[test]
     fn escritorio_show_and_hide_enabled_states_follow_toplevels() {
         let not_minimized = vec![toplevel(false)];
         assert!(enabled(
@@ -795,193 +516,13 @@ mod tests {
     }
 
     #[test]
-    fn archivo_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&file_menu_items()),
-            vec![
-                "Nueva ventana",
-                "Nueva carpeta en el escritorio",
-                "Nueva carpeta con la selección",
-                "Nueva pestaña",
-                "Abrir",
-                "Abrir con",
-                "Cerrar ventana",
-                "—",
-                "Obtener información",
-                "Renombrar",
-                "Comprimir",
-                "Duplicar",
-                "Crear enlace",
-                "Vista rápida",
-                "—",
-                "Compartir…",
-                "—",
-                "Mover a la papelera",
-                "Expulsar",
-                "—",
-                "Imprimir",
-            ]
-        );
-    }
-
-    #[test]
-    fn edicion_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&edit_menu_items()),
-            vec![
-                "Deshacer",
-                "Rehacer",
-                "—",
-                "Cortar",
-                "Copiar",
-                "Pegar",
-                "Seleccionar todo",
-                "—",
-                "Mostrar portapapeles",
-                "—",
-                "Buscar",
-                "—",
-                "Emojis y símbolos",
-            ]
-        );
-    }
-
-    #[test]
-    fn visualizacion_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&view_menu_items()),
-            vec![
-                "Como iconos",
-                "Como lista",
-                "Como columnas",
-                "Como galería",
-                "—",
-                "Mostrar/ocultar Dock",
-                "—",
-                "Cambiar fondo de pantalla…",
-                "Mostrar opciones de visualización",
-                "—",
-                "Ver en pantalla completa",
-            ]
-        );
-    }
-
-    #[test]
-    fn ir_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&go_menu_items()),
-            vec![
-                "Atrás",
-                "Adelante",
-                "Carpeta contenedora",
-                "—",
-                "Documentos",
-                "Escritorio",
-                "Descargas",
-                "Inicio",
-                "Imágenes",
-                "Música",
-                "Vídeos",
-                "Aplicaciones",
-                "Papelera",
-                "—",
-                "Carpetas recientes",
-                "—",
-                "Ir a la carpeta…",
-                "Conectarse al servidor…",
-            ]
-        );
-    }
-
-    #[test]
-    fn ventana_menu_labels_and_order_when_no_windows() {
-        assert_eq!(
-            labels_with_separators(&window_menu_items(&[], &[])),
-            vec![
-                "Minimizar",
-                "Maximizar",
-                "Rellenar",
-                "Centrar",
-                "—",
-                "Trasladar y redimensionar",
-                "Ventana a pantalla completa",
-                "—",
-                "Traer todo al frente",
-                "Mostrar escritorio",
-                "—",
-                "No hay ventanas abiertas",
-            ]
-        );
-    }
-
-    #[test]
-    fn ayuda_menu_labels_and_order() {
-        assert_eq!(
-            labels_with_separators(&help_menu_items()),
-            vec![
-                "Buscar",
-                "Documentación de Malaysia",
-                "Atajos de teclado",
-                "—",
-                "Informar de un problema…",
-            ]
-        );
-    }
-
-    #[test]
-    fn only_the_expected_rows_have_icons() {
-        assert_eq!(
-            top_level_icon_labels(&malaysia_menu_items(&[])),
-            vec!["Ajustes…", "Vaciar papelera…"]
-        );
-        assert_eq!(
-            top_level_icon_labels(&file_menu_items()),
-            vec!["Compartir…", "Mover a la papelera", "Expulsar", "Imprimir",]
-        );
-        assert_eq!(
-            top_level_icon_labels(&edit_menu_items()),
-            vec!["Buscar", "Emojis y símbolos"]
-        );
-        assert_eq!(
-            top_level_icon_labels(&view_menu_items()),
-            vec!["Como lista", "Como columnas", "Como galería"]
-        );
-        assert_eq!(
-            top_level_icon_labels(&go_menu_items()),
-            vec![
-                "Documentos",
-                "Escritorio",
-                "Descargas",
-                "Inicio",
-                "Imágenes",
-                "Música",
-                "Vídeos",
-                "Aplicaciones",
-                "Papelera",
-            ]
-        );
-        assert_eq!(
-            top_level_icon_labels(&window_menu_items(&[], &[])),
-            vec!["Trasladar y redimensionar", "Ventana a pantalla completa"]
-        );
-        assert_eq!(
-            top_level_icon_labels(&help_menu_items()),
-            vec!["Documentación de Malaysia", "Atajos de teclado"]
-        );
-    }
-
-    #[test]
     fn enabled_desktop_items_have_no_unwired_shortcut() {
         const WIRED: &[&str] = &["Super+Space"];
         let toplevels = vec![toplevel(false), toplevel(true)];
         let mut actions = Vec::new();
-        all_actions(&malaysia_menu_items(&toplevels), &mut actions);
-        all_actions(&file_menu_items(), &mut actions);
-        all_actions(&edit_menu_items(), &mut actions);
-        all_actions(&view_menu_items(), &mut actions);
-        all_actions(&go_menu_items(), &mut actions);
-        all_actions(&window_menu_items(&[], &toplevels), &mut actions);
-        all_actions(&help_menu_items(), &mut actions);
+        for title in desktop_menus(&[], &toplevels) {
+            all_actions(&title.items, &mut actions);
+        }
 
         for item in &actions {
             let MenuItem::Action {
@@ -1006,111 +547,6 @@ mod tests {
     }
 
     #[test]
-    fn desktop_show_all_unminimizes_minimized_windows() {
-        let toplevels = vec![
-            ToplevelInfo {
-                title: "A".into(),
-                app_id: "a".into(),
-                active: true,
-                maximized: false,
-                minimized: false,
-                restorable: false,
-                app_menu: None,
-                gtk_menus: None,
-            },
-            ToplevelInfo {
-                title: "B".into(),
-                app_id: "b".into(),
-                active: false,
-                maximized: false,
-                minimized: true,
-                restorable: false,
-                app_menu: None,
-                gtk_menus: None,
-            },
-        ];
-        let minimized = Rc::new(RefCell::new(Vec::<usize>::new()));
-        let unminimized = Rc::new(RefCell::new(Vec::<usize>::new()));
-        let min = minimized.clone();
-        let unmin = unminimized.clone();
-        on_action_with(
-            "desktop-show-all".to_string(),
-            &toplevels,
-            move |index| min.borrow_mut().push(index),
-            move |index| unmin.borrow_mut().push(index),
-            |_, _| {},
-            |_| {},
-            |_| {},
-        );
-        assert_eq!(*unminimized.borrow(), vec![1]);
-        assert!(
-            minimized.borrow().is_empty(),
-            "desktop-show-all must not minimize windows"
-        );
-    }
-
-    #[test]
-    fn desktop_show_all_does_nothing_when_no_window_is_minimized() {
-        let toplevels = vec![ToplevelInfo {
-            title: "A".into(),
-            app_id: "a".into(),
-            active: true,
-            maximized: false,
-            minimized: false,
-            restorable: false,
-            app_menu: None,
-            gtk_menus: None,
-        }];
-        on_action_with(
-            "desktop-show-all".to_string(),
-            &toplevels,
-            |_| panic!("must not minimize"),
-            |_| panic!("must not unminimize"),
-            |_, _| panic!("must not spawn"),
-            |_| panic!("must not open"),
-            |_| panic!("must not delegate"),
-        );
-    }
-
-    #[test]
-    fn window_front_all_unminimizes_minimized_windows() {
-        let toplevels = vec![
-            ToplevelInfo {
-                title: "A".into(),
-                app_id: "a".into(),
-                active: true,
-                maximized: false,
-                minimized: false,
-                restorable: false,
-                app_menu: None,
-                gtk_menus: None,
-            },
-            ToplevelInfo {
-                title: "B".into(),
-                app_id: "b".into(),
-                active: false,
-                maximized: false,
-                minimized: true,
-                restorable: false,
-                app_menu: None,
-                gtk_menus: None,
-            },
-        ];
-        let unminimized = Rc::new(RefCell::new(Vec::<usize>::new()));
-        let unmin = unminimized.clone();
-        on_action_with(
-            "window-front-all".to_string(),
-            &toplevels,
-            |_| {},
-            move |index| unmin.borrow_mut().push(index),
-            |_, _| {},
-            |_| {},
-            |_| {},
-        );
-        assert_eq!(*unminimized.borrow(), vec![1]);
-    }
-
-    #[test]
     fn window_front_all_is_enabled_only_when_a_window_is_minimized() {
         let not_minimized = vec![toplevel(false)];
         assert!(!enabled(
@@ -1123,154 +559,5 @@ mod tests {
             &window_menu_items(&[], &minimized),
             "Traer todo al frente"
         ));
-    }
-
-    #[test]
-    fn on_action_with_ignores_malaysia_settings() {
-        on_action_with(
-            "malaysia-settings".to_string(),
-            &[],
-            |_| panic!("must not minimize"),
-            |_| panic!("must not unminimize"),
-            |_, _| panic!("must not spawn"),
-            |_| panic!("must not open"),
-            |_| panic!("must not delegate"),
-        );
-    }
-
-    #[test]
-    fn edit_search_and_go_applications_spawn_the_launcher() {
-        for id in ["edit-search", "go-applications"] {
-            let spawned = Rc::new(RefCell::new(String::new()));
-            let s = spawned.clone();
-            on_action_with(
-                id.to_string(),
-                &[],
-                |_| {},
-                |_| {},
-                move |binary, _args| *s.borrow_mut() = binary.to_string(),
-                |_| {},
-                |_| {},
-            );
-            assert_eq!(*spawned.borrow(), "launcher", "{id} should spawn launcher");
-        }
-    }
-
-    #[test]
-    fn help_topics_use_their_documentation_urls() {
-        let items = help_menu_items();
-        let docs = items
-            .iter()
-            .find(|item| label(item) == Some("Documentación de Malaysia"))
-            .expect("missing docs item");
-        let shortcuts = items
-            .iter()
-            .find(|item| label(item) == Some("Atajos de teclado"))
-            .expect("missing shortcuts item");
-
-        assert!(is_enabled(docs));
-        assert!(is_enabled(shortcuts));
-
-        let docs_url = help_topics::topics()
-            .iter()
-            .find(|topic| topic.title == "Documentación de Malaysia")
-            .map(|topic| topic.url)
-            .expect("docs topic missing");
-        let shortcuts_url = help_topics::topics()
-            .iter()
-            .find(|topic| topic.title == "Atajos de teclado")
-            .map(|topic| topic.url)
-            .expect("shortcuts topic missing");
-
-        let docs_id = action_id(docs).expect("docs must be an action");
-        let shortcuts_id = action_id(shortcuts).expect("shortcuts must be an action");
-        assert_eq!(docs_id, format!("app-help-topic:{docs_url}"));
-        assert_eq!(shortcuts_id, format!("app-help-topic:{shortcuts_url}"));
-    }
-
-    fn find_search<'a>(
-        entries: &'a [SearchableEntry],
-        wanted_label: &str,
-    ) -> Option<&'a SearchableEntry> {
-        entries
-            .iter()
-            .find(|entry| label(&entry.item) == Some(wanted_label))
-    }
-
-    #[test]
-    fn search_finds_desktop_menu_entries_with_title_indices() {
-        let toplevels = vec![toplevel(false), toplevel(true)];
-        let entries = searchable_menu_items(Rc::new(vec![]), Rc::new(toplevels));
-
-        let settings = find_search(&entries, "Ajustes…").expect("Ajustes missing");
-        assert_eq!(settings.path, "Escritorio");
-        assert_eq!(settings.location.as_ref().unwrap().title_index, 0);
-
-        let new_window = find_search(&entries, "Nueva ventana").expect("Nueva ventana missing");
-        assert_eq!(new_window.path, "Archivo");
-        assert_eq!(new_window.location.as_ref().unwrap().title_index, 1);
-
-        let undo = find_search(&entries, "Deshacer").expect("Deshacer missing");
-        assert_eq!(undo.path, "Edición");
-        assert_eq!(undo.location.as_ref().unwrap().title_index, 2);
-
-        let as_icons = find_search(&entries, "Como iconos").expect("Como iconos missing");
-        assert_eq!(as_icons.path, "Visualización");
-        assert_eq!(as_icons.location.as_ref().unwrap().title_index, 3);
-
-        let documents = find_search(&entries, "Documentos").expect("Documentos missing");
-        assert_eq!(documents.path, "Ir");
-        assert_eq!(documents.location.as_ref().unwrap().title_index, 4);
-
-        let minimize = find_search(&entries, "Minimizar").expect("Minimizar missing");
-        assert_eq!(minimize.path, "Ventana");
-        assert_eq!(minimize.location.as_ref().unwrap().title_index, 5);
-
-        let show_desktop =
-            find_search(&entries, "Mostrar escritorio").expect("Mostrar escritorio missing");
-        assert_eq!(show_desktop.path, "Ventana");
-        assert_eq!(show_desktop.location.as_ref().unwrap().title_index, 5);
-
-        let left = find_search(&entries, "Izquierda").expect("Izquierda missing");
-        assert_eq!(left.path, "Ventana › Trasladar y redimensionar");
-        assert!(!left.location.as_ref().unwrap().indices.is_empty());
-
-        assert!(
-            entries.iter().all(|entry| {
-                action_id(&entry.item)
-                    .map(|id| !id.starts_with("app-help-topic:"))
-                    .unwrap_or(true)
-            }),
-            "Ayuda menu must not contribute app-help-topic entries to menu search"
-        );
-    }
-
-    #[test]
-    fn search_includes_help_topics() {
-        let topics = focused::help_search_topics();
-        let docs = topics
-            .iter()
-            .find(|entry| label(&entry.item) == Some("Documentación de Malaysia"))
-            .expect("docs topic missing");
-        assert_eq!(docs.path, "Temas de ayuda");
-        assert!(matches!(docs.source, SearchSource::Help));
-        assert!(docs.location.is_none());
-    }
-
-    #[test]
-    fn is_help_action_recognizes_help_ids() {
-        assert!(is_help_action("app-help-topic:https://example.com"));
-        assert!(is_help_action("app-help-topics-index"));
-        assert!(!is_help_action("help-report"));
-        assert!(!is_help_action("malaysia-settings"));
-    }
-
-    #[test]
-    fn desktop_help_title_index_points_to_ayuda() {
-        let labels: Vec<&str> = desktop_menus(Rc::new(vec![]), Rc::new(vec![]))
-            .into_iter()
-            .map(|(label, _)| label)
-            .collect();
-        assert_eq!(desktop_help_title_index(&labels), Some(6));
     }
 }

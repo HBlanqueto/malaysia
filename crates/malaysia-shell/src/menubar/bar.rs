@@ -533,16 +533,15 @@ impl App for BarApp {
                 let app_name = app_name.clone();
                 Rc::new(move || focused::help_menu_items(&app_name))
             };
+            let sources = remote::MenuSources {
+                app_name,
+                app_items,
+                window_items,
+                help_items,
+            };
             if let Some(remote_menu) = remote_menu.filter(|menu| !menu.items.is_empty()) {
-                let sources = remote::MenuSources {
-                    app_name: app_name.clone(),
-                    app_items: app_items.clone(),
-                    window_items: window_items.clone(),
-                    help_items: help_items.clone(),
-                };
                 let snapshot = self.menu_snapshot;
                 let composition: Rc<dyn Fn() -> Vec<remote::Title>> = {
-                    let sources = sources.clone();
                     Rc::new(move || {
                         let items = snapshot
                             .read()
@@ -663,137 +662,45 @@ impl App for BarApp {
                         )
                     });
                 }
-            } else if let Some(MenuChoice::Remembered(labels)) = choice.as_ref() {
-                let sources = remote::MenuSources {
-                    app_name: app_name.clone(),
-                    app_items: app_items.clone(),
-                    window_items: window_items.clone(),
-                    help_items: help_items.clone(),
-                };
-                let remote_items: Vec<MenuItem> = labels
-                    .iter()
-                    .map(|label| MenuItem::Submenu {
-                        id: Some("0".to_string()),
-                        label: label.clone(),
-                        enabled: true,
-                        items: Vec::new(),
-                        icon: None,
-                    })
-                    .collect();
-                let titles = sources.compose(&remote_items);
-                for (index, title) in titles.iter().enumerate() {
-                    let items: MenuItems = {
-                        let items = title.visible_items();
-                        Rc::new(move || items.clone())
-                    };
-                    specs.push(MenuTitleSpec {
-                        bold: index == 0,
-                        enabled: title.enabled,
-                        ..MenuTitleSpec::new(
-                            title.label.clone(),
-                            items,
-                            Rc::new(focused::on_action),
-                            title_anchor(index + 1),
-                        )
-                    });
-                }
             } else if matches!(choice, Some(MenuChoice::Waiting)) {
                 specs.push(MenuTitleSpec {
                     bold: true,
                     ..MenuTitleSpec::new(
-                        app_name.clone(),
-                        app_items.clone(),
+                        sources.app_name,
+                        sources.app_items,
                         Rc::new(focused::on_action),
                         title_anchor(1),
                     )
                 });
             } else {
-                let help_searchable: SearchableItems = {
-                    let app_name = app_name.clone();
-                    let app_id = app_id.clone();
-                    Rc::new(move || menu::SearchableLists {
-                        menu: focused::searchable_menu_items(
-                            &app_name,
-                            &app_id,
-                            &Toplevels::get().list.read().clone(),
-                        ),
-                        help: focused::help_search_topics(),
-                    })
+                let remembered: Vec<MenuItem> = match &choice {
+                    Some(MenuChoice::Remembered(labels)) => labels
+                        .iter()
+                        .map(|label| MenuItem::Submenu {
+                            id: Some("0".to_string()),
+                            label: label.clone(),
+                            enabled: true,
+                            items: Vec::new(),
+                            icon: None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
                 };
-                let reveal_roots: barrier_kit::menu::RevealRoots = {
-                    let roots = Rc::new(vec![(app_items)(), (window_items)()]);
-                    Rc::new(move || (*roots).clone())
-                };
-                let focused_titles = [
-                    (
-                        app_name.clone(),
-                        app_items,
-                        1usize,
-                        None,
-                        None::<Rc<RefCell<SearchQuery>>>,
-                        None::<barrier_kit::menu::RevealRoots>,
-                    ),
-                    ("Ventana".to_string(), window_items, 2, None, None, None),
-                    (
-                        "Ayuda".to_string(),
-                        help_items,
-                        3,
-                        Some(help_searchable),
-                        Some(help_query.clone()),
-                        Some(reveal_roots),
-                    ),
-                ];
-                for (offset, (label, items, anchor, searchable, query_state, reveal_roots)) in
-                    focused_titles.into_iter().enumerate()
-                {
-                    specs.push(MenuTitleSpec {
-                        bold: offset == 0,
-                        searchable,
-                        query_state,
-                        reveal_roots,
-                        ..MenuTitleSpec::new(
-                            label,
-                            items,
-                            Rc::new(focused::on_action),
-                            title_anchor(anchor),
-                        )
-                    });
-                }
+                let help_query = remembered.is_empty().then(|| help_query.clone());
+                specs.extend(title_specs(
+                    sources.compose(&remembered),
+                    Rc::new(focused::on_action),
+                    help_query,
+                    title_anchor,
+                ));
             }
         } else {
-            let entries = Rc::new(self.entries.clone());
-            let toplevels = Rc::new(Toplevels::get().list.read().clone());
-            let desktop_menus = appmenu::desktop_menus(entries.clone(), toplevels.clone());
-            let desktop_searchable: SearchableItems = {
-                let entries = entries.clone();
-                let toplevels = toplevels.clone();
-                Rc::new(move || menu::SearchableLists {
-                    menu: appmenu::searchable_menu_items(entries.clone(), toplevels.clone()),
-                    help: focused::help_search_topics(),
-                })
-            };
-            let desktop_reveal_roots: RevealRoots = {
-                let menus = desktop_menus.clone();
-                Rc::new(move || menus.iter().map(|(_, items)| items()).collect())
-            };
-            let labels: Vec<&str> = desktop_menus.iter().map(|(label, _)| *label).collect();
-            let help_index = appmenu::desktop_help_title_index(&labels)
-                .expect("Ayuda must be present in the desktop menus");
-            for (offset, (label, items)) in desktop_menus.into_iter().enumerate() {
-                let is_help = offset == help_index;
-                specs.push(MenuTitleSpec {
-                    bold: offset == 0,
-                    searchable: is_help.then(|| desktop_searchable.clone()),
-                    query_state: is_help.then(|| help_query.clone()),
-                    reveal_roots: is_help.then(|| desktop_reveal_roots.clone()),
-                    ..MenuTitleSpec::new(
-                        label.to_string(),
-                        items,
-                        Rc::new(appmenu::on_action),
-                        title_anchor(offset + 1),
-                    )
-                });
-            }
+            specs.extend(title_specs(
+                appmenu::desktop_menus(&self.entries, &toplevels),
+                Rc::new(appmenu::on_action),
+                Some(help_query.clone()),
+                title_anchor,
+            ));
         }
         let titles = Rc::new(specs);
         let mut left = rect()
@@ -805,6 +712,48 @@ impl App for BarApp {
 
         root.child(left).child(clock::clock_label(now, text))
     }
+}
+
+fn title_specs(
+    titles: Vec<remote::Title>,
+    on_activate: Rc<dyn Fn(String)>,
+    help_query: Option<Rc<RefCell<SearchQuery>>>,
+    title_anchor: impl Fn(usize) -> TitleAnchor,
+) -> Vec<MenuTitleSpec> {
+    let titles = Rc::new(titles);
+    let help_index = titles.len() - 1;
+    let searchable: SearchableItems = {
+        let titles = titles.clone();
+        Rc::new(move || menu::SearchableLists {
+            menu: remote::searchable(&titles),
+            help: focused::help_search_topics(),
+        })
+    };
+    let reveal_roots: RevealRoots = {
+        let titles = titles.clone();
+        Rc::new(move || titles.iter().map(remote::Title::visible_items).collect())
+    };
+    titles
+        .iter()
+        .enumerate()
+        .map(|(index, title)| {
+            let items = title.visible_items();
+            let query_state = help_query.clone().filter(|_| index == help_index);
+            MenuTitleSpec {
+                bold: index == 0,
+                enabled: title.enabled,
+                searchable: query_state.is_some().then(|| searchable.clone()),
+                reveal_roots: query_state.is_some().then(|| reveal_roots.clone()),
+                query_state,
+                ..MenuTitleSpec::new(
+                    title.label.clone(),
+                    Rc::new(move || items.clone()),
+                    on_activate.clone(),
+                    title_anchor(index + 1),
+                )
+            }
+        })
+        .collect()
 }
 
 fn schedule_snapshot_drain(

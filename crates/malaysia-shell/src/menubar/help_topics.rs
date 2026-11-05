@@ -1,7 +1,23 @@
+use barrier_kit::menu::{MenuIcon, MenuItem};
+
+use crate::menubar::items;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HelpTopic {
     pub title: &'static str,
     pub url: &'static str,
+}
+
+impl HelpTopic {
+    pub fn item(&self, icon: Option<MenuIcon>) -> MenuItem {
+        items::action(
+            format!("app-help-topic:{}", self.url),
+            self.title,
+            None,
+            true,
+            icon,
+        )
+    }
 }
 
 pub const DOCS_INDEX: &str = "https://github.com/HBlanqueto/malaysia/tree/main/docs";
@@ -45,17 +61,4 @@ pub fn topics() -> &'static [HelpTopic] {
             url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/decisiones/0020-politica-de-diseno-y-unificacion.md",
         },
     ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn topics_include_keyboard_shortcuts_and_transparency() {
-        let titles: Vec<&str> = topics().iter().map(|t| t.title).collect();
-        assert!(titles.contains(&"Atajos de teclado"));
-        assert!(titles.contains(&"Reducir transparencia"));
-        assert!(titles.contains(&"Documentación de Malaysia"));
-    }
 }

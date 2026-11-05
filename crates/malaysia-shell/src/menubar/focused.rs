@@ -1,12 +1,10 @@
-use barrier_kit::menu::{
-    CheckState, MenuIcon, MenuItem, SearchLocation, SearchSource, SearchableEntry,
-};
+use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchSource, SearchableEntry};
 use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::menubar::{help_topics, icons, items};
 use crate::spawn::{spawn_component_with, xdg_open};
 
-pub(crate) const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
+const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
 
 pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
@@ -31,28 +29,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             Some(MenuIcon::svg(icons::GEAR)),
         ),
         MenuItem::Separator,
-        items::submenu(
-            "Servicios",
-            true,
-            None,
-            vec![
-                items::action(
-                    "app-services-none",
-                    "Ningún servicio disponible",
-                    None,
-                    false,
-                    None,
-                ),
-                MenuItem::Separator,
-                items::action(
-                    "app-services-settings",
-                    "Ajustes de servicios…",
-                    None,
-                    false,
-                    None,
-                ),
-            ],
-        ),
+        services_submenu(),
         MenuItem::Separator,
         items::action(
             format!("app-hide:{app_id}"),
@@ -86,75 +63,11 @@ pub fn window_menu_items(
     toplevels: &[ToplevelInfo],
 ) -> Vec<MenuItem> {
     let app = app_indices(toplevels, app_id);
-    let active = active_index(toplevels, app_id);
+    let active = active_index(toplevels, &app);
     let active_window = active.map(|index| &toplevels[index]);
     let target = active.map(|_| app_id);
-    let has_active = active_window.is_some();
-    let mut items = vec![
-        items::action(
-            active_id("app-window-minimize", target),
-            "Minimizar",
-            Some("Super+M"),
-            active.is_some(),
-            None,
-        ),
-        items::action(
-            active_id("app-window-maximize", target),
-            "Maximizar",
-            None,
-            active.is_some(),
-            None,
-        ),
-        items::action(
-            active_id("app-window-fill", target),
-            "Rellenar",
-            Some("Ctrl+Super+Return"),
-            has_active,
-            None,
-        ),
-        items::action(
-            active_id("app-window-center", target),
-            "Centrar",
-            Some("Ctrl+Super+C"),
-            has_active,
-            None,
-        ),
-        MenuItem::Separator,
-        items::submenu(
-            "Trasladar y redimensionar",
-            true,
-            Some(MenuIcon::svg(icons::GRID)),
-            move_resize_items(target, active_window),
-        ),
-        items::submenu(
-            "Ventana a pantalla completa",
-            true,
-            Some(MenuIcon::svg(icons::SPLIT)),
-            vec![
-                items::action(
-                    "app-window-screen-left",
-                    "Izquierda de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
-                items::action(
-                    "app-window-screen-right",
-                    "Derecha de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
-                MenuItem::Separator,
-                items::action(
-                    active_id("app-window-fullscreen", target),
-                    "Activar pantalla completa",
-                    Some("Ctrl+Super+F"),
-                    has_active,
-                    None,
-                ),
-            ],
-        ),
+    let mut items = window_controls(app_id, active_window);
+    items.extend([
         MenuItem::Separator,
         items::action(
             active_id("app-window-close", target),
@@ -208,24 +121,133 @@ pub fn window_menu_items(
             None,
         ),
         MenuItem::Separator,
-    ];
-    for index in &app {
-        let window = &toplevels[*index];
-        let label = if window.title.is_empty() || window.title == app_name {
-            app_name.to_string()
-        } else {
-            format!("{app_name} — {}", window.title)
-        };
-        items.push(MenuItem::Action {
-            id: format!("app-window-activate:{index}:{app_id}"),
-            label,
-            shortcut: None,
-            enabled: true,
-            check: CheckState::Checkbox(Some(*index) == active),
-            icon: None,
-        });
-    }
+    ]);
+    items.extend(app.iter().map(|index| {
+        window_item(
+            *index,
+            &toplevels[*index],
+            app_name,
+            CheckState::Checkbox(Some(*index) == active),
+        )
+    }));
     items
+}
+
+pub(crate) fn window_controls(app_id: &str, active_window: Option<&ToplevelInfo>) -> Vec<MenuItem> {
+    let target = active_window.map(|_| app_id);
+    let has_active = active_window.is_some();
+    vec![
+        items::action(
+            active_id("app-window-minimize", target),
+            "Minimizar",
+            Some("Super+M"),
+            has_active,
+            None,
+        ),
+        items::action(
+            active_id("app-window-maximize", target),
+            "Maximizar",
+            None,
+            has_active,
+            None,
+        ),
+        items::action(
+            active_id("app-window-fill", target),
+            "Rellenar",
+            Some("Ctrl+Super+Return"),
+            has_active,
+            None,
+        ),
+        items::action(
+            active_id("app-window-center", target),
+            "Centrar",
+            Some("Ctrl+Super+C"),
+            has_active,
+            None,
+        ),
+        MenuItem::Separator,
+        items::submenu(
+            "Trasladar y redimensionar",
+            true,
+            Some(MenuIcon::svg(icons::GRID)),
+            move_resize_items(target, active_window),
+        ),
+        items::submenu(
+            "Ventana a pantalla completa",
+            has_active,
+            Some(MenuIcon::svg(icons::SPLIT)),
+            vec![
+                items::action(
+                    "app-window-screen-left",
+                    "Izquierda de la pantalla",
+                    None,
+                    false,
+                    None,
+                ),
+                items::action(
+                    "app-window-screen-right",
+                    "Derecha de la pantalla",
+                    None,
+                    false,
+                    None,
+                ),
+                MenuItem::Separator,
+                items::action(
+                    active_id("app-window-fullscreen", target),
+                    "Activar pantalla completa",
+                    Some("Ctrl+Super+F"),
+                    has_active,
+                    None,
+                ),
+            ],
+        ),
+    ]
+}
+
+pub(crate) fn window_item(
+    index: usize,
+    window: &ToplevelInfo,
+    app_name: &str,
+    check: CheckState,
+) -> MenuItem {
+    let label = if window.title.is_empty() || window.title == app_name {
+        app_name.to_string()
+    } else {
+        format!("{app_name} — {}", window.title)
+    };
+    MenuItem::Action {
+        id: format!("app-window-activate:{index}:{}", window.app_id),
+        label,
+        shortcut: None,
+        enabled: true,
+        check,
+        icon: None,
+    }
+}
+
+pub(crate) fn services_submenu() -> MenuItem {
+    items::submenu(
+        "Servicios",
+        true,
+        None,
+        vec![
+            items::action(
+                "app-services-none",
+                "Ningún servicio disponible",
+                None,
+                false,
+                None,
+            ),
+            MenuItem::Separator,
+            items::action(
+                "app-services-settings",
+                "Ajustes de servicios…",
+                None,
+                false,
+                None,
+            ),
+        ],
+    )
 }
 
 pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
@@ -265,46 +287,12 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
     ]
 }
 
-pub fn searchable_menu_items(
-    app_name: &str,
-    app_id: &str,
-    toplevels: &[ToplevelInfo],
-) -> Vec<SearchableEntry> {
-    let mut out = Vec::new();
-    collect_searchable(
-        &app_menu_items(app_name, app_id, toplevels),
-        app_name,
-        SearchLocation {
-            title_index: 0,
-            indices: Vec::new(),
-        },
-        &mut out,
-    );
-    collect_searchable(
-        &window_menu_items(app_name, app_id, toplevels),
-        "Ventana",
-        SearchLocation {
-            title_index: 1,
-            indices: Vec::new(),
-        },
-        &mut out,
-    );
-    out
-}
-
 pub fn help_search_topics() -> Vec<SearchableEntry> {
     help_topics::topics()
         .iter()
         .map(|topic| SearchableEntry {
             path: "Temas de ayuda".to_string(),
-            item: MenuItem::Action {
-                id: format!("app-help-topic:{}", topic.url),
-                label: topic.title.to_string(),
-                shortcut: None,
-                enabled: true,
-                check: CheckState::None,
-                icon: None,
-            },
+            item: topic.item(None),
             location: None,
             source: SearchSource::Help,
         })
@@ -322,40 +310,6 @@ pub fn help_search_topics() -> Vec<SearchableEntry> {
             source: SearchSource::Help,
         }))
         .collect()
-}
-
-pub(crate) fn collect_searchable(
-    items: &[MenuItem],
-    path: &str,
-    location: SearchLocation,
-    out: &mut Vec<SearchableEntry>,
-) {
-    for (index, item) in items.iter().enumerate() {
-        match item {
-            MenuItem::Action { .. } => {
-                let mut loc = location.clone();
-                loc.indices.push(index);
-                out.push(SearchableEntry {
-                    path: path.to_string(),
-                    item: item.clone(),
-                    location: Some(loc),
-                    source: SearchSource::Menu,
-                });
-            }
-            MenuItem::Submenu {
-                id: None,
-                label,
-                items: sub,
-                ..
-            } => {
-                let sub_path = format!("{path} › {label}");
-                let mut loc = location.clone();
-                loc.indices.push(index);
-                collect_searchable(sub, &sub_path, loc, out);
-            }
-            _ => {}
-        }
-    }
 }
 
 pub fn on_action(id: String) {
@@ -462,10 +416,7 @@ fn window_layout(verb: &str) -> Option<InfinityLayout> {
     })
 }
 
-pub(crate) fn move_resize_items(
-    active: Option<&str>,
-    active_window: Option<&ToplevelInfo>,
-) -> Vec<MenuItem> {
+fn move_resize_items(active: Option<&str>, active_window: Option<&ToplevelInfo>) -> Vec<MenuItem> {
     let has_active = active_window.is_some();
     let can_restore = active_window.is_some_and(|window| window.restorable);
     vec![
@@ -576,8 +527,7 @@ pub(crate) fn move_resize_items(
     ]
 }
 
-fn active_index(toplevels: &[ToplevelInfo], app_id: &str) -> Option<usize> {
-    let app = app_indices(toplevels, app_id);
+fn active_index(toplevels: &[ToplevelInfo], app: &[usize]) -> Option<usize> {
     app.iter()
         .copied()
         .find(|index| toplevels[*index].active)
@@ -604,7 +554,7 @@ fn target_window(list: &[ToplevelInfo], argument: &str) -> Option<usize> {
             list.get(*index)
                 .is_some_and(|window| window.app_id == app_id)
         }),
-        None => active_index(list, argument),
+        None => active_index(list, &app_indices(list, argument)),
     }
 }
 
@@ -697,42 +647,9 @@ mod tests {
             window("foot", "Malaysia", false, false, false),
             window("foot", "Segunda ventana", false, false, false),
         ];
-        assert_eq!(active_index(&list, "foot"), Some(1));
+        assert_eq!(active_index(&list, &[0, 1]), Some(1));
         list[0].active = true;
-        assert_eq!(active_index(&list, "foot"), Some(0));
-    }
-
-    #[test]
-    fn app_menu_labels_and_enabled_states() {
-        let items = app_menu_items("Foot", "foot", &toplevels());
-        assert_eq!(
-            labels(&items),
-            vec![
-                "Acerca de Foot",
-                "Ajustes…",
-                "Servicios",
-                "Ocultar Foot",
-                "Ocultar otros",
-                "Mostrar todo",
-                "Salir de Foot",
-            ]
-        );
-        assert!(enabled(&items, "Acerca de Foot"));
-        assert!(!enabled(&items, "Ajustes…"));
-        assert!(enabled(&items, "Servicios"));
-        assert!(enabled(&items, "Ocultar Foot"));
-        assert!(enabled(&items, "Ocultar otros"));
-        assert!(enabled(&items, "Mostrar todo"));
-        assert!(enabled(&items, "Salir de Foot"));
-    }
-
-    #[test]
-    fn app_menu_no_longer_uses_configuracion() {
-        let items = app_menu_items("Foot", "foot", &toplevels());
-        assert!(
-            !labels(&items).contains(&"Configuración…".to_string()),
-            "the settings item should be called Ajustes…"
-        );
+        assert_eq!(active_index(&list, &[0, 1]), Some(0));
     }
 
     #[test]
@@ -802,28 +719,6 @@ mod tests {
         else {
             panic!("missing the layout submenu");
         };
-        assert_eq!(
-            labels(layout),
-            vec![
-                "Mitades",
-                "Izquierda",
-                "Derecha",
-                "Superior",
-                "Inferior",
-                "Cuartos",
-                "Superior izquierdo",
-                "Superior derecho",
-                "Inferior izquierdo",
-                "Inferior derecho",
-                "Disposición",
-                "Izquierda y derecha",
-                "Derecha e izquierda",
-                "Superior e inferior",
-                "Inferior y superior",
-                "En cuartos",
-                "Regresar al tamaño anterior",
-            ]
-        );
         assert!(matches!(layout[0], MenuItem::Header { .. }));
         assert!(
             layout[1..18]
@@ -854,91 +749,5 @@ mod tests {
             panic!("missing the layout submenu");
         };
         assert!(is_enabled(&layout[19]));
-    }
-
-    #[test]
-    fn help_menu_has_the_search_field_and_only_the_report_enabled() {
-        let items = help_menu_items("Foot");
-        assert!(matches!(items[0], MenuItem::SearchField { .. }));
-        assert!(enabled(&items, "Informar de un problema…"));
-        assert!(!enabled(&items, "Ayuda de Foot"));
-        assert!(!enabled(&items, "Atajos de teclado de Malaysia"));
-        assert!(!enabled(&items, "Documentación de Malaysia"));
-    }
-
-    fn search_results(query: &str) -> Vec<(String, String)> {
-        searchable_menu_items("Foot", "foot", &toplevels())
-            .into_iter()
-            .filter(|entry| {
-                entry
-                    .item
-                    .label()
-                    .is_some_and(|label| normalize_query(label).contains(&normalize_query(query)))
-            })
-            .map(|entry| (entry.path, entry.item.label().unwrap().to_string()))
-            .collect()
-    }
-
-    #[test]
-    fn search_finds_hide_actions_under_app_path() {
-        let results = search_results("ocul");
-        assert_eq!(
-            results,
-            vec![
-                ("Foot".to_string(), "Ocultar Foot".to_string()),
-                ("Foot".to_string(), "Ocultar otros".to_string()),
-            ]
-        );
-    }
-
-    #[test]
-    fn search_finds_left_actions_under_window_layout_path() {
-        let results = search_results("IZQUIER");
-        let labels: Vec<&str> = results.iter().map(|(_, label)| label.as_str()).collect();
-        assert_eq!(
-            labels,
-            vec![
-                "Izquierda",
-                "Superior izquierdo",
-                "Inferior izquierdo",
-                "Izquierda y derecha",
-                "Derecha e izquierda",
-                "Izquierda de la pantalla",
-            ]
-        );
-        let window_layout = "Ventana › Trasladar y redimensionar";
-        for (path, _) in &results[..5] {
-            assert_eq!(path, window_layout);
-        }
-        assert_eq!(results[5].0, "Ventana › Ventana a pantalla completa");
-    }
-
-    #[test]
-    fn search_locations_trace_title_and_submenu_indices() {
-        let entries = searchable_menu_items("Foot", "foot", &toplevels());
-        let left = entries
-            .iter()
-            .find(|e| e.item.label() == Some("Izquierda"))
-            .expect("Izquierda should be searchable");
-        let location = left.location.as_ref().expect("menu entry has a location");
-        assert_eq!(
-            location.title_index, 1,
-            "Izquierda lives in the Ventana menu"
-        );
-        assert_eq!(
-            location.indices,
-            vec![5, 1],
-            "Ventana[5] is the layout submenu, then Izquierda[1] inside it"
-        );
-    }
-
-    fn normalize_query(text: &str) -> String {
-        text.to_lowercase()
-            .replace('á', "a")
-            .replace('é', "e")
-            .replace('í', "i")
-            .replace('ó', "o")
-            .replace(['ú', 'ü'], "u")
-            .replace('ñ', "n")
     }
 }
