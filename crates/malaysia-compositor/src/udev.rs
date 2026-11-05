@@ -513,7 +513,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
 }
 
 fn start_shell_session(socket: &str) -> bool {
-    if let Some(config_home) = crate::xdg::config_home()
+    if let Some(config_home) = vow_appearance::xdg::config_home()
         && remove_stale_unit_links(&config_home.join("systemd/user"), Path::new(SYSTEM_UNITS))
     {
         match systemctl(&["--user", "daemon-reload"], None) {

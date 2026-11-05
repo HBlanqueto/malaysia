@@ -7,72 +7,7 @@ pub fn desktop_dir() -> PathBuf {
     if let Some(path) = explicit {
         return PathBuf::from(path);
     }
-    if let Some(dir) = config_home()
-        .map(|dir| dir.join("user-dirs.dirs"))
-        .and_then(|file| std::fs::read_to_string(file).ok())
-        .and_then(|text| parse_desktop_dir(&text))
-    {
-        return dir;
-    }
-    std::env::var_os("HOME")
-        .map(|home| PathBuf::from(home).join("Desktop"))
+    vow_appearance::xdg::user_dir("DESKTOP")
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
         .unwrap_or_else(|| PathBuf::from("Desktop"))
-}
-
-pub fn config_home() -> Option<PathBuf> {
-    std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-}
-
-fn parse_desktop_dir(text: &str) -> Option<PathBuf> {
-    for line in text.lines() {
-        let line = line.trim();
-        if line.starts_with('#') {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        if key.trim() != "XDG_DESKTOP_DIR" {
-            continue;
-        }
-        let value = value.trim().trim_matches('"');
-        if value.is_empty() {
-            return None;
-        }
-        let expanded = match value.strip_prefix("$HOME/") {
-            Some(rest) => std::env::var_os("HOME")
-                .map(|home| PathBuf::from(home).join(rest))
-                .unwrap_or_else(|| PathBuf::from(value)),
-            None => PathBuf::from(value),
-        };
-        return Some(expanded);
-    }
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_desktop_dir_comes_from_xdg_not_a_fixed_name() {
-        let spanish = "XDG_DESKTOP_DIR=\"$HOME/Escritorio\"\n";
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default();
-        assert_eq!(parse_desktop_dir(spanish), Some(home.join("Escritorio")));
-        let english = "# comment\nXDG_DESKTOP_DIR=\"$HOME/Desktop\"\n";
-        assert_eq!(parse_desktop_dir(english), Some(home.join("Desktop")));
-        assert_eq!(
-            parse_desktop_dir("XDG_DESKTOP_DIR=\"/mnt/desktop\"\n"),
-            Some(PathBuf::from("/mnt/desktop"))
-        );
-        assert_eq!(parse_desktop_dir("XDG_DESKTOP_DIR=\"\"\n"), None);
-        assert_eq!(
-            parse_desktop_dir("XDG_DOCUMENTS_DIR=\"$HOME/Docs\"\n"),
-            None
-        );
-    }
 }
