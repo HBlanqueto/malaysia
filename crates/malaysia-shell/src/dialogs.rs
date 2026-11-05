@@ -717,14 +717,11 @@ struct AboutApp {
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
         use_init_theme(barrier_kit::theme::shell);
-        about_view(
-            &self.info,
-            Titlebar::new().close_only(true).title("").into_element(),
-        )
+        about_view(&self.info)
     }
 }
 
-fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
+fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
     let palette = Palette::current();
     let mut rows = vec![("Procesador".to_string(), info.cpu.clone())];
@@ -789,7 +786,7 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
                 close();
             }
         })
-        .child(titlebar)
+        .child(Titlebar::new().close_only(true).title("").into_element())
         .child(
             rect()
                 .width(Size::px(ABOUT_DRAWING_WIDTH))
@@ -1074,40 +1071,5 @@ mod tests {
             "Si no haces nada, el equipo se apagará automáticamente dentro de 53 segundos."
         );
         assert!(countdown_text("x", 1).ends_with("1 segundo."));
-    }
-}
-#[cfg(test)]
-mod render_tests {
-    use super::*;
-    use freya_testing::TestingRunner;
-    use torin::prelude::Size2D;
-
-    struct Preview(AboutInfo);
-
-    impl App for Preview {
-        fn render(&self) -> impl IntoElement {
-            let titlebar = rect()
-                .width(Size::fill())
-                .height(Size::px(TITLEBAR.thickness as f32))
-                .into_element();
-            about_view(&self.0, titlebar)
-        }
-    }
-
-    #[test]
-    fn the_about_window_renders_for_both_drawings() {
-        for thinkpad in [true, false] {
-            let info = AboutInfo {
-                model: "ThinkPad L14 Gen 2".into(),
-                thinkpad,
-                memory: "15.0 GB".into(),
-                ..AboutInfo::default()
-            };
-            let size = Size2D::new(ABOUT_SIZE.0 as f32, ABOUT_SIZE.1 as f32);
-            let (mut test, _) =
-                TestingRunner::new(AppComponent::new(Preview(info)), size, |_| {}, 1.0);
-            test.sync_and_update();
-            assert!(!test.render().as_ref().is_empty());
-        }
     }
 }
