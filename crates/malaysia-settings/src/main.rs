@@ -95,8 +95,7 @@ mod tests {
     impl App for TestApp {
         fn render(&self) -> impl IntoElement {
             let resolved = resolve(&self.config, None);
-            let dark = matches!(resolved.scheme, ColorScheme::Dark | ColorScheme::DarkTint);
-            use_init_theme(|| theme::for_scheme(dark));
+            use_init_theme(|| theme::for_scheme(resolved.scheme.is_dark()));
             settings_window(&self.config, None, &resolved)
         }
     }

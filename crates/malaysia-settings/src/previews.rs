@@ -3,7 +3,9 @@ use torin::prelude::{Alignment, Direction, Position, Size};
 use vow_design::{SETTINGS, TITLEBAR};
 
 use barrier_kit::theme::color as rgba;
-use vow_appearance::{AppearanceConfig, ColorScheme, Resolved, WindowColorMode, resolve};
+use vow_appearance::{
+    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, WindowColorMode, resolve,
+};
 use vow_design::Rgba;
 
 fn preview_for_theme(
@@ -187,9 +189,9 @@ pub fn window_color_preview(
     )
 }
 
-pub fn traffic_shape_preview(resolved: &Resolved, round: bool) -> Rect {
+pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> Rect {
     let diameter = TITLEBAR.buttons.diameter as f32;
-    let radius = traffic_radius(diameter, round);
+    let radius = shape.corner_radius(diameter);
     rect()
         .width(Size::fill())
         .height(Size::fill())
@@ -207,14 +209,6 @@ pub fn traffic_shape_preview(resolved: &Resolved, round: bool) -> Rect {
                 .background(rgba(light))
                 .into_element()
         }))
-}
-
-pub fn traffic_radius(size: f32, round: bool) -> f32 {
-    if round {
-        size / 2.0
-    } else {
-        size * TITLEBAR.buttons.corner_radius as f32 / TITLEBAR.buttons.diameter as f32
-    }
 }
 
 #[cfg(test)]

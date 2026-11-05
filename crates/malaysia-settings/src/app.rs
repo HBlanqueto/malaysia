@@ -15,7 +15,7 @@ use vow_appearance::{
 };
 use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
 
-use crate::previews::{theme_preview, traffic_radius, traffic_shape_preview, window_color_preview};
+use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
 
 const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
@@ -277,10 +277,7 @@ fn traffic_shape_cards(
         .fold(
             ChoiceCards::new("Forma de los semáforos"),
             |cards, &(shape, caption)| {
-                cards.option(
-                    caption,
-                    traffic_shape_preview(resolved, shape == TrafficLightShape::Round),
-                )
+                cards.option(caption, traffic_shape_preview(resolved, shape))
             },
         )
         .selected(
@@ -304,8 +301,8 @@ fn traffic_popup(
         .into_iter()
         .fold(PopUpButton::new("Semáforos"), |popup, (style, label)| {
             let lights = traffic_lights(style, config, resolved, dominant);
-            let round = config.traffic_light_shape == TrafficLightShape::Round;
-            popup.icon_item(label, MenuIcon::Svg(traffic_row_svg(lights, round).into()))
+            let svg = traffic_row_svg(lights, config.traffic_light_shape);
+            popup.icon_item(label, MenuIcon::Svg(svg.into()))
         })
         .selected(
             TRAFFIC
@@ -334,11 +331,11 @@ fn traffic_lights(
     }
 }
 
-fn traffic_row_svg(lights: [Rgba; 3], round: bool) -> String {
+fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
     let size = MENU_POPOVER.swatch_grid_size;
     let dot = MENU_POPOVER.swatch_grid_dot;
     let gap = MENU_POPOVER.swatch_grid_gap;
-    let corner = traffic_radius(dot, round);
+    let corner = shape.corner_radius(dot);
     let y = (size - dot) / 2.0;
     let circles: String = lights
         .iter()
@@ -398,7 +395,7 @@ mod tests {
         let row = 3.0 * MENU_POPOVER.swatch_grid_dot + 2.0 * MENU_POPOVER.swatch_grid_gap;
         assert!(row <= MENU_POPOVER.swatch_grid_size);
         const { assert!(MENU_POPOVER.swatch_grid_size <= MENU_POPOVER.leading_column) };
-        let svg = traffic_row_svg([Rgba::TRANSPARENT; 3], false);
+        let svg = traffic_row_svg([Rgba::TRANSPARENT; 3], TrafficLightShape::Square);
         assert_eq!(svg.matches("<rect").count(), 3);
     }
 }
