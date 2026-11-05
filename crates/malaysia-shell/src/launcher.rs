@@ -757,10 +757,14 @@ mod golden_tests {
                 };
                 let path = golden_path(name, dark);
                 let actual = render(&case);
-                if update || !path.exists() {
+                if update {
                     fs::create_dir_all(path.parent().unwrap()).unwrap();
                     fs::write(&path, &actual).unwrap();
                 } else {
+                    assert!(
+                        path.exists(),
+                        "{name}: missing golden {path:?}; run with UPDATE_GOLDEN=1"
+                    );
                     let actual_path = std::env::temp_dir().join(format!("{name}-{dark}.png"));
                     fs::write(&actual_path, &actual).unwrap();
                     let (gw, gh, golden) = decode(&path);

@@ -15,7 +15,7 @@ pub fn topics() -> &'static [HelpTopic] {
         },
         HelpTopic {
             title: "Atajos de teclado",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/atajos.md",
+            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#atajos-fijos-del-compositor",
         },
         HelpTopic {
             title: "Dock",
@@ -31,11 +31,11 @@ pub fn topics() -> &'static [HelpTopic] {
         },
         HelpTopic {
             title: "Apariencia",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/apariencia.md",
+            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
         },
         HelpTopic {
             title: "Reducir transparencia",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/accesibilidad.md",
+            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
         },
         HelpTopic {
             title: "Menú global",
