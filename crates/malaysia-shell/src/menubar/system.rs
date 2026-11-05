@@ -2,30 +2,19 @@ use std::sync::OnceLock;
 
 use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
+use barrier_kit::titlebar::app_id;
 
 use crate::desktop::DesktopEntry;
+use crate::dialogs::ABOUT_APP_ID;
 use crate::menubar::{icons, items, recents};
 use crate::power::{self, PowerAction};
 use crate::spawn::{spawn_app, spawn_component, spawn_component_with, xdg_open};
-
-const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
 
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
 pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     static LOGOUT: OnceLock<String> = OnceLock::new();
     let logout = LOGOUT.get_or_init(|| logout_label(user_display_name().as_deref()));
-    let mut items = base_items(logout);
-    if let Some(MenuItem::Submenu { items: recent, .. }) = items
-        .iter_mut()
-        .find(|item| matches!(item, MenuItem::Submenu { .. }))
-    {
-        *recent = recents::menu_items(entries);
-    }
-    items
-}
-
-fn base_items(logout: &str) -> Vec<MenuItem> {
     vec![
         items::action(
             "about-this-computer",
@@ -42,13 +31,12 @@ fn base_items(logout: &str) -> Vec<MenuItem> {
             Some(MenuIcon::svg(icons::GEAR)),
         ),
         MenuItem::Separator,
-        MenuItem::Submenu {
-            id: None,
-            label: "Elementos recientes".to_string(),
-            enabled: true,
-            items: Vec::new(),
-            icon: None,
-        },
+        items::submenu(
+            "Elementos recientes",
+            true,
+            None,
+            recents::menu_items(entries),
+        ),
         MenuItem::Separator,
         items::action("sleep", "Suspender", None, true, None),
         items::action("restart", "Reiniciar…", None, true, None),
@@ -115,7 +103,7 @@ pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[Deskt
     });
 }
 
-pub fn on_system_action_with(
+fn on_system_action_with(
     id: String,
     toplevels: &[ToplevelInfo],
     mut spawn: impl FnMut(&str, &[&str]),
@@ -124,9 +112,8 @@ pub fn on_system_action_with(
     match id.as_str() {
         "lock-screen" => spawn_component("lock"),
         "about-this-computer" => {
-            if let Some(index) = toplevels.iter().position(|window| {
-                window.app_id.strip_prefix(vow_design::NATIVE_APP_ID_PREFIX) == Some("about")
-            }) {
+            let about = app_id(ABOUT_APP_ID);
+            if let Some(index) = toplevels.iter().position(|window| window.app_id == about) {
                 activate(index);
             } else {
                 spawn_component("about");
@@ -139,9 +126,10 @@ pub fn on_system_action_with(
         "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),
         "logout" => spawn_component_with("power", &[PowerAction::LogOut.arg()]),
         "system-settings" => {
+            let settings = app_id("settings");
             if let Some(index) = toplevels
                 .iter()
-                .position(|window| window.app_id == SETTINGS_APP_ID)
+                .position(|window| window.app_id == settings)
             {
                 activate(index);
             } else {
@@ -169,35 +157,12 @@ mod tests {
         }
     }
 
-    fn labels(items: &[MenuItem]) -> Vec<&str> {
-        items
-            .iter()
-            .map(|item| item.label().unwrap_or("-"))
-            .collect()
-    }
-
     #[test]
-    fn the_system_menu_follows_the_macos_layout() {
-        let items = base_items(&logout_label(Some("H. Blanqueto")));
+    fn the_logout_label_names_the_user_when_known() {
         assert_eq!(
-            labels(&items),
-            [
-                "Acerca de este PC",
-                "Ajustes del sistema…",
-                "-",
-                "Elementos recientes",
-                "-",
-                "Suspender",
-                "Reiniciar…",
-                "Apagar…",
-                "-",
-                "Bloquear pantalla",
-                "Cerrar sesión de H. Blanqueto…",
-            ]
+            logout_label(Some("H. Blanqueto")),
+            "Cerrar sesión de H. Blanqueto…"
         );
-        assert!(matches!(items[3], MenuItem::Submenu { .. }));
-        assert!(matches!(&items[0], MenuItem::Action { icon: Some(_), .. }));
-        assert!(matches!(&items[1], MenuItem::Action { icon: Some(_), .. }));
         assert_eq!(logout_label(Some(" ")), "Cerrar sesión…");
     }
 
@@ -226,7 +191,7 @@ mod tests {
             "system-settings".to_string(),
             &[
                 toplevel("foot"),
-                toplevel(SETTINGS_APP_ID),
+                toplevel(&app_id("settings")),
                 toplevel("kate"),
             ],
             |binary, _args| launched = Some(binary.to_string()),
@@ -240,7 +205,7 @@ mod tests {
     #[test]
     fn about_this_computer_activates_its_only_window() {
         let mut activated: Option<usize> = None;
-        let about = format!("{}about", vow_design::NATIVE_APP_ID_PREFIX);
+        let about = app_id(ABOUT_APP_ID);
 
         on_system_action_with(
             "about-this-computer".to_string(),

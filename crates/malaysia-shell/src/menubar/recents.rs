@@ -21,16 +21,16 @@ pub const CLEAR_ID: &str = "recent-clear";
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
-pub struct Recents {
-    pub apps: Vec<String>,
-    pub cleared_at: i64,
+struct Recents {
+    apps: Vec<String>,
+    cleared_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Document {
-    pub path: PathBuf,
-    pub name: String,
-    pub modified: i64,
+struct Document {
+    path: PathBuf,
+    name: String,
+    modified: i64,
 }
 
 fn store_path() -> PathBuf {
@@ -38,14 +38,14 @@ fn store_path() -> PathBuf {
 }
 
 impl Recents {
-    pub fn load_from(path: &Path) -> Self {
+    fn load_from(path: &Path) -> Self {
         std::fs::read_to_string(path)
             .ok()
             .and_then(|text| toml::from_str(&text).ok())
             .unwrap_or_default()
     }
 
-    pub fn save_to(&self, path: &Path) {
+    fn save_to(&self, path: &Path) {
         let Ok(text) = toml::to_string(self) else {
             return;
         };
@@ -58,7 +58,7 @@ impl Recents {
         }
     }
 
-    pub fn push_app(&mut self, app_id: &str) -> bool {
+    fn push_app(&mut self, app_id: &str) -> bool {
         let app_id = app_id.trim();
         if app_id.is_empty() || self.apps.first().is_some_and(|first| first == app_id) {
             return false;
@@ -132,7 +132,7 @@ fn timestamp(value: &str) -> i64 {
         .unwrap_or(0)
 }
 
-pub fn parse_xbel(text: &str) -> Vec<Document> {
+fn parse_xbel(text: &str) -> Vec<Document> {
     let mut documents: Vec<Document> = text
         .split("<bookmark ")
         .skip(1)
@@ -215,18 +215,18 @@ fn build_items(
     entries: &[DesktopEntry],
     icon: impl Fn(&DesktopEntry) -> Option<MenuIcon>,
 ) -> Vec<MenuItem> {
-    let mut apps: Vec<(&DesktopEntry, String)> = recents
+    let mut apps: Vec<&DesktopEntry> = recents
         .apps
         .iter()
-        .filter_map(|id| find_entry(id, entries).map(|entry| (entry, id.clone())))
+        .filter_map(|id| find_entry(id, entries))
         .collect();
-    apps.sort_by_key(|(entry, _)| entry.name.to_lowercase());
-    apps.dedup_by(|a, b| a.0.id == b.0.id);
+    apps.sort_by_key(|entry| entry.name.to_lowercase());
+    apps.dedup_by(|a, b| a.id == b.id);
 
     let mut out = Vec::new();
     if !apps.is_empty() {
         out.push(items::header("Aplicaciones"));
-        for (entry, _) in &apps {
+        for entry in apps {
             out.push(items::action(
                 format!("{APP_PREFIX}{}", entry.id),
                 entry.name.clone(),
