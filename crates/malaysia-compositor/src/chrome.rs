@@ -1066,9 +1066,7 @@ mod tests {
     #[test]
     fn the_close_button_is_at_the_left() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
-        let x = 100.0
-            + traffic::button_rect(0).0
-            + f64::from(TITLEBAR.buttons.diameter) / 2.0;
+        let x = 100.0 + traffic::button_rect(0).0 + f64::from(TITLEBAR.buttons.diameter) / 2.0;
         assert_eq!(
             button_at(outer(), insets(), Point::from((x, y))),
             Some(ButtonKind::Close)
@@ -1078,9 +1076,7 @@ mod tests {
     #[test]
     fn the_three_buttons_are_in_tengen_order() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
-        let start = 100.0
-            + traffic::button_rect(0).0
-            + f64::from(TITLEBAR.buttons.diameter) / 2.0;
+        let start = 100.0 + traffic::button_rect(0).0 + f64::from(TITLEBAR.buttons.diameter) / 2.0;
         let step = f64::from(TITLEBAR.buttons.diameter + TITLEBAR.buttons.spacing);
         for (index, expected) in [
             ButtonKind::Close,

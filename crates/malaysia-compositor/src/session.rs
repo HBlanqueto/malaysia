@@ -1084,13 +1084,17 @@ fn ssd_frame_rect(
     Rectangle::new(location, size)
 }
 
-fn frame_radius(state: crate::decoration::WindowState, role: crate::decoration::Role) -> u32 {
+fn frame_radius(
+    state: crate::decoration::WindowState,
+    role: crate::decoration::Role,
+    toolbar: bool,
+) -> u32 {
     if state == crate::decoration::WindowState::Fullscreen {
         return 0;
     }
     match role {
         crate::decoration::Role::Dialog => vow_design::DIALOG.corner_radius,
-        _ => vow_design::WINDOW.corner_radius,
+        _ => crate::window_style::toplevel_radius(toolbar),
     }
 }
 
@@ -1162,7 +1166,11 @@ fn append_window_frame<R: MalaysiaRenderer>(
             )
         };
     let frame_rect_physical = physical_rect(frame_rect_logical, scale);
-    let radius_logical = frame_radius(data.state, data.role);
+    let radius_logical = frame_radius(
+        data.state,
+        data.role,
+        crate::window_style::has_toolbar(&data.surface),
+    );
     let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
     let exponent = frame_exponent(data.role);
 
@@ -2264,15 +2272,22 @@ mod tests {
 
         for state in [WindowState::Normal, WindowState::Maximized] {
             assert_eq!(
-                frame_radius(state, Role::Toplevel),
+                frame_radius(state, Role::Toplevel, false),
                 vow_design::WINDOW.corner_radius
+            );
+            assert_eq!(
+                frame_radius(state, Role::Toplevel, true),
+                vow_design::WINDOW_TOOLBAR.corner_radius
             );
             assert!(frame_has_border(state));
         }
-        assert_eq!(frame_radius(WindowState::Fullscreen, Role::Toplevel), 0);
+        assert_eq!(
+            frame_radius(WindowState::Fullscreen, Role::Toplevel, true),
+            0
+        );
         assert!(!frame_has_border(WindowState::Fullscreen));
         assert_eq!(
-            frame_radius(WindowState::Maximized, Role::Dialog),
+            frame_radius(WindowState::Maximized, Role::Dialog, true),
             vow_design::DIALOG.corner_radius
         );
     }

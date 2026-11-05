@@ -422,7 +422,7 @@ impl State {
                 return Some(FocusFrame {
                     window: transition.window,
                     rect: transition.desk,
-                    radius: f64::from(vow_design::WINDOW.corner_radius),
+                    radius: f64::from(self.window_radius(transition.window)),
                 });
             }
             tracing::info!(
@@ -456,7 +456,7 @@ impl State {
             vow_design::SPACE_SLIDE_EASE,
             elapsed.as_secs_f64() / SLIDE.as_secs_f64(),
         );
-        let corner = f64::from(vow_design::WINDOW.corner_radius);
+        let corner = f64::from(self.window_radius(transition.window));
         let (rect, radius) = if transition.entering {
             (
                 lerp_rect(transition.desk, full, eased),

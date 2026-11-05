@@ -63,5 +63,6 @@ since 0048; a stub here points there.
 | [0056](0056-xwayland-satellite.en.md) | X11 apps with xwayland-satellite | accepted |
 | 0056 | BarrierKit draws with Vulkan ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | accepted |
 | 0057 | Full-width fullscreen glass and sidebar over a tinted background ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | accepted |
+| [0058](0058-radio-de-ventana-con-barra-de-herramientas.en.md) | Window radius with a toolbar | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

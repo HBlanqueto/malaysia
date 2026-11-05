@@ -328,6 +328,7 @@ impl State {
 
         crate::infinity::InfinityGlobalData::create_global(display_handle);
         crate::focus_notice::FocusNoticeGlobalData::create_global(display_handle);
+        crate::window_style::WindowStyleGlobalData::create_global(display_handle);
         Ok(Self {
             loop_signal,
             needs_redraw: false,
