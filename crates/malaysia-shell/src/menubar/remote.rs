@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use barrier_kit::menu::{
-    CheckState, ItemsSource, MenuItem, SearchLocation, SearchSource, SearchableEntry,
-    normalize_separators,
+    ItemsSource, MenuItem, SearchLocation, SearchSource, SearchableEntry, normalize_query,
+    normalize_separators, submenu_contents,
 };
 
 #[derive(Clone)]
@@ -23,38 +23,8 @@ pub struct Title {
 
 impl Title {
     pub fn visible_items(&self) -> Vec<MenuItem> {
-        if self.items.is_empty() && self.remote_id.is_some() {
-            vec![loading()]
-        } else {
-            self.items.clone()
-        }
+        submenu_contents(self.remote_id.is_some(), &self.items)
     }
-}
-
-fn loading() -> MenuItem {
-    MenuItem::Action {
-        id: String::new(),
-        label: "Cargando…".to_string(),
-        shortcut: None,
-        enabled: false,
-        check: CheckState::None,
-        icon: None,
-    }
-}
-
-pub fn unavailable() -> MenuItem {
-    MenuItem::Action {
-        id: String::new(),
-        label: "No disponible".to_string(),
-        shortcut: None,
-        enabled: false,
-        check: CheckState::None,
-        icon: None,
-    }
-}
-
-fn normalize(label: &str) -> String {
-    barrier_kit::views::search::fold(barrier_kit::menu::strip_mnemonic(label).trim())
 }
 
 impl MenuSources {
@@ -65,7 +35,7 @@ impl MenuSources {
         let mut app_remote = None;
         let mut window_remote = None;
         let mut help_remote = None;
-        let app_name = normalize(&self.app_name);
+        let app_name = normalize_query(&self.app_name);
         let mut seen = HashSet::from(["sistema".to_string()]);
         let mut middle = Vec::new();
         let has_about_slot = app_items
@@ -88,7 +58,7 @@ impl MenuSources {
             if has_about_slot && about.is_none() && matches!(item, MenuItem::Submenu { .. }) {
                 about = take_about(&mut children);
             }
-            let normalized = normalize(&label);
+            let normalized = normalize_query(&label);
             if normalized == app_name {
                 if seen.insert(normalized) {
                     let rest = fill_slots(&mut app_items, children);
@@ -183,11 +153,11 @@ fn fill_slots(items: &mut [MenuItem], extras: Vec<MenuItem>) -> Vec<MenuItem> {
 }
 
 fn same_slot(slot: &str, label: &str) -> bool {
-    normalize(slot) == normalize(label) || (is_about(slot) && is_about(label))
+    normalize_query(slot) == normalize_query(label) || (is_about(slot) && is_about(label))
 }
 
 fn is_about(label: &str) -> bool {
-    let label = normalize(label);
+    let label = normalize_query(label);
     let label = label.trim_end_matches(['…', '.']).trim_end();
     ["acerca de", "about", "sobre"].iter().any(|prefix| {
         label.strip_prefix(prefix).is_some_and(|rest| {
@@ -324,14 +294,7 @@ mod tests {
     use std::rc::Rc;
 
     fn action(label: &str) -> MenuItem {
-        MenuItem::Action {
-            id: format!("static:{label}"),
-            label: label.to_string(),
-            shortcut: None,
-            enabled: true,
-            check: CheckState::None,
-            icon: None,
-        }
+        MenuItem::action(format!("static:{label}"), label)
     }
 
     fn submenu(label: &str, id: &str, items: Vec<MenuItem>) -> MenuItem {
@@ -460,20 +423,13 @@ mod tests {
 
     #[test]
     fn app_entries_take_the_places_of_the_greyed_out_fallbacks() {
-        let disabled = |label: &str, shortcut: Option<&str>| MenuItem::Action {
-            id: format!("static:{label}"),
-            label: label.to_string(),
-            shortcut: shortcut.map(str::to_string),
-            enabled: false,
-            check: CheckState::None,
-            icon: None,
-        };
+        let disabled = |label: &str| action(label).with_enabled(false);
         let sources = MenuSources {
             app_name: "Calculadora".to_string(),
             app_items: Rc::new(move || {
                 vec![
-                    disabled("Acerca de Calculadora", None),
-                    disabled("Ajustes…", None),
+                    disabled("Acerca de Calculadora"),
+                    disabled("Ajustes…"),
                     action("Salir de Calculadora"),
                 ]
             }),
@@ -484,22 +440,8 @@ mod tests {
             "Calculadora",
             "7",
             vec![
-                MenuItem::Action {
-                    id: "dbusmenu:3".to_string(),
-                    label: "Ajustes…".to_string(),
-                    shortcut: Some("Ctrl+comma".to_string()),
-                    enabled: true,
-                    check: CheckState::None,
-                    icon: None,
-                },
-                MenuItem::Action {
-                    id: "dbusmenu:4".to_string(),
-                    label: "Acerca de Calculadora".to_string(),
-                    shortcut: None,
-                    enabled: true,
-                    check: CheckState::None,
-                    icon: None,
-                },
+                MenuItem::action("dbusmenu:3", "Ajustes…").with_shortcut("Ctrl+comma"),
+                MenuItem::action("dbusmenu:4", "Acerca de Calculadora"),
             ],
         )];
         let titles = sources.compose(&remote);
@@ -521,23 +463,11 @@ mod tests {
     fn the_apps_about_entry_moves_from_its_help_menu_into_the_app_menu() {
         let sources = MenuSources {
             app_name: "Firefox".to_string(),
-            app_items: Rc::new(|| {
-                vec![MenuItem::Action {
-                    id: "app-about:firefox".to_string(),
-                    label: "Acerca de Firefox".to_string(),
-                    shortcut: None,
-                    enabled: true,
-                    check: CheckState::None,
-                    icon: None,
-                }]
-            }),
+            app_items: Rc::new(|| vec![MenuItem::action("app-about:firefox", "Acerca de Firefox")]),
             window_items: Rc::new(Vec::new),
             help_items: Rc::new(Vec::new),
         };
-        let mut about = action("About Firefox");
-        if let MenuItem::Action { id, .. } = &mut about {
-            *id = "dbusmenu:9".to_string();
-        }
+        let about = MenuItem::action("dbusmenu:9", "About Firefox");
         let remote = vec![submenu(
             "Help",
             "5",
@@ -581,7 +511,7 @@ mod tests {
         let archivo = &titles[1];
         assert!(matches!(
             &archivo.visible_items().as_slice(),
-            [MenuItem::Action { label, enabled: false, .. }] if label == "Cargando…"
+            [MenuItem::Action { id, enabled: false, .. }] if id.is_empty()
         ));
     }
 

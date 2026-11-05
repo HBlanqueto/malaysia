@@ -1,4 +1,4 @@
-use barrier_kit::views::search::fold;
+use barrier_kit::views::search::{fold, word_start};
 use std::{
     collections::{HashMap, HashSet},
     env,
@@ -428,17 +428,6 @@ fn score(entry: &DesktopEntry, query: &str) -> Option<u8> {
         return Some(3);
     }
     None
-}
-
-fn word_start(name: &str, query: &str) -> bool {
-    name.char_indices().any(|(index, _)| {
-        if index == 0 {
-            return false;
-        }
-        let before = name[..index].chars().next_back();
-        let boundary = before.is_none_or(|ch| !ch.is_alphanumeric());
-        boundary && name[index..].starts_with(query)
-    })
 }
 
 #[cfg(test)]

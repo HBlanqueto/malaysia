@@ -7,7 +7,7 @@ use vow_appearance::data_dir;
 
 use crate::desktop::DesktopEntry;
 use crate::launcher::{IconData, load_icon_sized};
-use crate::menubar::{find_entry, icons, items};
+use crate::menubar::{find_entry, icons};
 
 const MAX_APPS: usize = 10;
 const MAX_DOCUMENTS: usize = 10;
@@ -226,40 +226,31 @@ fn build_items(
 
     let mut out = Vec::new();
     if !apps.is_empty() {
-        out.push(items::header("Aplicaciones"));
+        out.push(MenuItem::header("Aplicaciones"));
         for entry in apps {
-            out.push(items::action(
-                format!("{APP_PREFIX}{}", entry.id),
-                entry.name.clone(),
-                None,
-                true,
-                icon(entry),
-            ));
+            out.push(
+                MenuItem::action(format!("{APP_PREFIX}{}", entry.id), entry.name.clone())
+                    .with_icon(icon(entry)),
+            );
         }
         out.push(MenuItem::Separator);
     }
     if !documents.is_empty() {
         let mut documents = documents.to_vec();
         documents.sort_by_key(|doc| doc.name.to_lowercase());
-        out.push(items::header("Documentos"));
+        out.push(MenuItem::header("Documentos"));
         for doc in &documents {
-            out.push(items::action(
-                format!("{DOC_PREFIX}{}", doc.path.display()),
-                doc.name.clone(),
-                None,
-                true,
-                Some(MenuIcon::svg(document_icon(&doc.path))),
-            ));
+            out.push(
+                MenuItem::action(
+                    format!("{DOC_PREFIX}{}", doc.path.display()),
+                    doc.name.clone(),
+                )
+                .with_icon(MenuIcon::svg(document_icon(&doc.path))),
+            );
         }
         out.push(MenuItem::Separator);
     }
-    out.push(items::action(
-        CLEAR_ID,
-        "Vaciar menú",
-        None,
-        !out.is_empty(),
-        None,
-    ));
+    out.push(MenuItem::action(CLEAR_ID, "Vaciar menú").with_enabled(!out.is_empty()));
     out
 }
 

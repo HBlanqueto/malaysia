@@ -429,34 +429,8 @@ pub fn accel_keys(accel: &str) -> Option<Vec<String>> {
     if rest.is_empty() {
         return None;
     }
-    keys.push(key_name(rest));
+    keys.push(rest.to_string());
     Some(keys)
-}
-
-fn key_name(keysym: &str) -> String {
-    let symbol = match keysym {
-        "comma" => ",",
-        "period" => ".",
-        "minus" => "-",
-        "equal" => "=",
-        "slash" => "/",
-        "question" => "?",
-        "backslash" => "\\",
-        "semicolon" => ";",
-        "apostrophe" => "'",
-        "bracketleft" => "[",
-        "bracketright" => "]",
-        "Delete" => "⌦",
-        "BackSpace" => "⌫",
-        "space" => "␣",
-        "Page_Up" => "⇞",
-        "Page_Down" => "⇟",
-        "Home" => "↖",
-        "End" => "↘",
-        _ if keysym.chars().count() == 1 => return keysym.to_uppercase(),
-        _ => keysym,
-    };
-    symbol.to_string()
 }
 
 pub fn action_object<'a>(
@@ -1036,13 +1010,14 @@ mod tests {
     fn accelerators_become_kit_shortcuts() {
         assert_eq!(
             accel_keys("<Primary>s").unwrap(),
-            vec!["Control".to_string(), "S".to_string()]
+            vec!["Control".to_string(), "s".to_string()]
         );
         assert_eq!(
             accel_keys("<Shift><Control>z").unwrap(),
-            vec!["Shift", "Control", "Z"]
+            vec!["Shift", "Control", "z"]
         );
-        assert_eq!(accel_keys("<Primary>comma").unwrap(), vec!["Control", ","]);
+        let comma = accel_keys("<Primary>comma").unwrap();
+        assert_eq!(barrier_kit::menu::format_shortcut(&comma.join("+")), "⌃,");
         assert_eq!(accel_keys("F11").unwrap(), vec!["F11"]);
         assert_eq!(accel_keys("<Bogus>x"), None);
         assert_eq!(accel_keys("<Primary>"), None);

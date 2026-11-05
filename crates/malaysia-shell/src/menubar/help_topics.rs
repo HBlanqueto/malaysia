@@ -1,7 +1,5 @@
 use barrier_kit::menu::{MenuIcon, MenuItem};
 
-use crate::menubar::items;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct HelpTopic {
     pub title: &'static str,
@@ -10,13 +8,7 @@ pub struct HelpTopic {
 
 impl HelpTopic {
     pub fn item(&self, icon: Option<MenuIcon>) -> MenuItem {
-        items::action(
-            format!("app-help-topic:{}", self.url),
-            self.title,
-            None,
-            true,
-            icon,
-        )
+        MenuItem::action(format!("app-help-topic:{}", self.url), self.title).with_icon(icon)
     }
 }
 

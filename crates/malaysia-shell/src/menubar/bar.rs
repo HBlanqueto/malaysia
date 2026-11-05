@@ -762,7 +762,8 @@ fn schedule_snapshot_drain(
                         {
                             continue;
                         }
-                        let children = mapped.unwrap_or_else(|| vec![remote::unavailable()]);
+                        let children =
+                            mapped.unwrap_or_else(|| vec![MenuItem::placeholder("No disponible")]);
                         let mut items = current.items.clone();
                         if remote::merge_subtree(&mut items, id, &children) {
                             snapshot.set(Some(Arc::new(RemoteMenu {

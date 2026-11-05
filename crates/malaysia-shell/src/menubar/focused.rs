@@ -1,7 +1,7 @@
 use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchSource, SearchableEntry};
 use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
-use crate::menubar::{help_topics, icons, items};
+use crate::menubar::{help_topics, icons};
 use crate::spawn::{spawn_component_with, xdg_open};
 
 const ISSUES_URL: &str = "https://github.com/HBlanqueto/malaysia/issues";
@@ -13,47 +13,30 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
         .any(|window| window.app_id != app_id && !window.minimized);
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     vec![
-        items::action(
+        MenuItem::action(
             format!("app-about:{app_id}"),
             format!("Acerca de {app_name}"),
-            None,
-            !app_id.is_empty(),
-            Some(MenuIcon::svg(icons::INFO)),
-        ),
+        )
+        .with_enabled(!app_id.is_empty())
+        .with_icon(MenuIcon::svg(icons::INFO)),
         MenuItem::Separator,
-        items::action(
-            "app-settings",
-            "Ajustes…",
-            None,
-            false,
-            Some(MenuIcon::svg(icons::GEAR)),
-        ),
+        MenuItem::action("app-settings", "Ajustes…")
+            .with_enabled(false)
+            .with_icon(MenuIcon::svg(icons::GEAR)),
         MenuItem::Separator,
         services_submenu(),
         MenuItem::Separator,
-        items::action(
-            format!("app-hide:{app_id}"),
-            format!("Ocultar {app_name}"),
-            Some("Super+H"),
-            has_windows,
-            None,
-        ),
-        items::action(
-            format!("app-hide-others:{app_id}"),
-            "Ocultar otros",
-            Some("Alt+Super+H"),
-            other_unminimized,
-            None,
-        ),
-        items::action("app-show-all", "Mostrar todo", None, any_minimized, None),
+        MenuItem::action(format!("app-hide:{app_id}"), format!("Ocultar {app_name}"))
+            .with_shortcut("Super+H")
+            .with_enabled(has_windows),
+        MenuItem::action(format!("app-hide-others:{app_id}"), "Ocultar otros")
+            .with_shortcut("Alt+Super+H")
+            .with_enabled(other_unminimized),
+        MenuItem::action("app-show-all", "Mostrar todo").with_enabled(any_minimized),
         MenuItem::Separator,
-        items::action(
-            format!("app-quit:{app_id}"),
-            format!("Salir de {app_name}"),
-            Some("Super+Q"),
-            has_windows,
-            None,
-        ),
+        MenuItem::action(format!("app-quit:{app_id}"), format!("Salir de {app_name}"))
+            .with_shortcut("Super+Q")
+            .with_enabled(has_windows),
     ]
 }
 
@@ -67,57 +50,23 @@ pub fn window_menu_items(
     let mut items = window_controls(active);
     items.extend([
         MenuItem::Separator,
-        items::action(
-            active_id("app-window-close", active),
-            "Cerrar ventana",
-            Some("Super+W"),
-            active.is_some(),
-            None,
-        ),
+        MenuItem::action(active_id("app-window-close", active), "Cerrar ventana")
+            .with_shortcut("Super+W")
+            .with_enabled(active.is_some()),
         MenuItem::Separator,
-        items::action(
-            format!("app-window-front:{app_id}"),
-            "Traer todo al frente",
-            None,
-            !app.is_empty(),
-            None,
-        ),
-        items::action(
-            "app-window-remove",
-            "Quitar ventana del conjunto",
-            None,
-            false,
-            None,
-        ),
+        MenuItem::action(format!("app-window-front:{app_id}"), "Traer todo al frente")
+            .with_enabled(!app.is_empty()),
+        MenuItem::action("app-window-remove", "Quitar ventana del conjunto").with_enabled(false),
         MenuItem::Separator,
-        items::action(
-            "app-tab-previous",
-            "Mostrar pestaña anterior",
-            Some("Ctrl+Shift+Tab"),
-            false,
-            None,
-        ),
-        items::action(
-            "app-tab-next",
-            "Mostrar pestaña siguiente",
-            Some("Ctrl+Tab"),
-            false,
-            None,
-        ),
-        items::action(
-            "app-tab-new-window",
-            "Mover pestaña a una ventana nueva",
-            None,
-            false,
-            None,
-        ),
-        items::action(
-            "app-tab-merge",
-            "Unir todas las ventanas",
-            None,
-            false,
-            None,
-        ),
+        MenuItem::action("app-tab-previous", "Mostrar pestaña anterior")
+            .with_shortcut("Ctrl+Shift+Tab")
+            .with_enabled(false),
+        MenuItem::action("app-tab-next", "Mostrar pestaña siguiente")
+            .with_shortcut("Ctrl+Tab")
+            .with_enabled(false),
+        MenuItem::action("app-tab-new-window", "Mover pestaña a una ventana nueva")
+            .with_enabled(false),
+        MenuItem::action("app-tab-merge", "Unir todas las ventanas").with_enabled(false),
         MenuItem::Separator,
     ]);
     items.extend(app.iter().map(|window| {
@@ -130,70 +79,38 @@ pub fn window_menu_items(
 pub(crate) fn window_controls(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
     let has_active = active.is_some();
     vec![
-        items::action(
-            active_id("app-window-minimize", active),
-            "Minimizar",
-            Some("Super+M"),
-            has_active,
-            None,
-        ),
-        items::action(
-            active_id("app-window-maximize", active),
-            "Maximizar",
-            None,
-            has_active,
-            None,
-        ),
-        items::action(
-            active_id("app-window-fill", active),
-            "Rellenar",
-            Some("Ctrl+Super+Return"),
-            has_active,
-            None,
-        ),
-        items::action(
-            active_id("app-window-center", active),
-            "Centrar",
-            Some("Ctrl+Super+C"),
-            has_active,
-            None,
-        ),
+        MenuItem::action(active_id("app-window-minimize", active), "Minimizar")
+            .with_shortcut("Super+M")
+            .with_enabled(has_active),
+        MenuItem::action(active_id("app-window-maximize", active), "Maximizar")
+            .with_enabled(has_active),
+        MenuItem::action(active_id("app-window-fill", active), "Rellenar")
+            .with_shortcut("Ctrl+Super+Return")
+            .with_enabled(has_active),
+        MenuItem::action(active_id("app-window-center", active), "Centrar")
+            .with_shortcut("Ctrl+Super+C")
+            .with_enabled(has_active),
         MenuItem::Separator,
-        items::submenu(
-            "Trasladar y redimensionar",
-            true,
-            Some(MenuIcon::svg(icons::GRID)),
-            move_resize_items(active),
-        ),
-        items::submenu(
+        MenuItem::submenu("Trasladar y redimensionar", move_resize_items(active))
+            .with_icon(MenuIcon::svg(icons::GRID)),
+        MenuItem::submenu(
             "Ventana a pantalla completa",
-            has_active,
-            Some(MenuIcon::svg(icons::SPLIT)),
             vec![
-                items::action(
-                    "app-window-screen-left",
-                    "Izquierda de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
-                items::action(
-                    "app-window-screen-right",
-                    "Derecha de la pantalla",
-                    None,
-                    false,
-                    None,
-                ),
+                MenuItem::action("app-window-screen-left", "Izquierda de la pantalla")
+                    .with_enabled(false),
+                MenuItem::action("app-window-screen-right", "Derecha de la pantalla")
+                    .with_enabled(false),
                 MenuItem::Separator,
-                items::action(
+                MenuItem::action(
                     active_id("app-window-fullscreen", active),
                     "Activar pantalla completa",
-                    Some("Ctrl+Super+F"),
-                    has_active,
-                    None,
-                ),
+                )
+                .with_shortcut("Ctrl+Super+F")
+                .with_enabled(has_active),
             ],
-        ),
+        )
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::SPLIT)),
     ]
 }
 
@@ -203,37 +120,16 @@ pub(crate) fn window_item(window: &ToplevelInfo, app_name: &str, check: CheckSta
     } else {
         format!("{app_name} — {}", window.title)
     };
-    MenuItem::Action {
-        id: format!("app-window-activate:{}", window.id),
-        label,
-        shortcut: None,
-        enabled: true,
-        check,
-        icon: None,
-    }
+    MenuItem::action(format!("app-window-activate:{}", window.id), label).with_check(check)
 }
 
 pub(crate) fn services_submenu() -> MenuItem {
-    items::submenu(
+    MenuItem::submenu(
         "Servicios",
-        true,
-        None,
         vec![
-            items::action(
-                "app-services-none",
-                "Ningún servicio disponible",
-                None,
-                false,
-                None,
-            ),
+            MenuItem::action("app-services-none", "Ningún servicio disponible").with_enabled(false),
             MenuItem::Separator,
-            items::action(
-                "app-services-settings",
-                "Ajustes de servicios…",
-                None,
-                false,
-                None,
-            ),
+            MenuItem::action("app-services-settings", "Ajustes de servicios…").with_enabled(false),
         ],
     )
 }
@@ -243,35 +139,11 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
         MenuItem::SearchField {
             placeholder: "Buscar".to_string(),
         },
-        items::action(
-            "app-help",
-            format!("Ayuda de {app_name}"),
-            None,
-            false,
-            None,
-        ),
+        MenuItem::action("app-help", format!("Ayuda de {app_name}")).with_enabled(false),
         MenuItem::Separator,
-        items::action(
-            "app-help-shortcuts",
-            "Atajos de teclado de Malaysia",
-            None,
-            false,
-            None,
-        ),
-        items::action(
-            "app-help-docs",
-            "Documentación de Malaysia",
-            None,
-            false,
-            None,
-        ),
-        items::action(
-            "app-help-report",
-            "Informar de un problema…",
-            None,
-            true,
-            None,
-        ),
+        MenuItem::action("app-help-shortcuts", "Atajos de teclado de Malaysia").with_enabled(false),
+        MenuItem::action("app-help-docs", "Documentación de Malaysia").with_enabled(false),
+        MenuItem::action("app-help-report", "Informar de un problema…"),
     ]
 }
 
@@ -286,14 +158,7 @@ pub fn help_search_topics() -> Vec<SearchableEntry> {
         })
         .chain(std::iter::once(SearchableEntry {
             path: "Temas de ayuda".to_string(),
-            item: MenuItem::Action {
-                id: "app-help-topics-index".to_string(),
-                label: "Mostrar todos los temas de ayuda".to_string(),
-                shortcut: None,
-                enabled: true,
-                check: CheckState::None,
-                icon: None,
-            },
+            item: MenuItem::action("app-help-topics-index", "Mostrar todos los temas de ayuda"),
             location: None,
             source: SearchSource::Help,
         }))
@@ -403,110 +268,89 @@ fn move_resize_items(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
     let has_active = active.is_some();
     let can_restore = active.is_some_and(|window| window.restorable);
     vec![
-        items::header("Mitades"),
-        items::action(
-            active_id("app-move-left", active),
-            "Izquierda",
-            Some("Ctrl+Super+Left"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALF_LEFT)),
-        ),
-        items::action(
-            active_id("app-move-right", active),
-            "Derecha",
-            Some("Ctrl+Super+Right"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALF_RIGHT)),
-        ),
-        items::action(
-            active_id("app-move-up", active),
-            "Superior",
-            Some("Ctrl+Super+Up"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALF_TOP)),
-        ),
-        items::action(
-            active_id("app-move-down", active),
-            "Inferior",
-            Some("Ctrl+Super+Down"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALF_BOTTOM)),
-        ),
+        MenuItem::header("Mitades"),
+        MenuItem::action(active_id("app-move-left", active), "Izquierda")
+            .with_shortcut("Ctrl+Super+Left")
+            .with_enabled(has_active)
+            .with_icon(MenuIcon::svg(icons::HALF_LEFT)),
+        MenuItem::action(active_id("app-move-right", active), "Derecha")
+            .with_shortcut("Ctrl+Super+Right")
+            .with_enabled(has_active)
+            .with_icon(MenuIcon::svg(icons::HALF_RIGHT)),
+        MenuItem::action(active_id("app-move-up", active), "Superior")
+            .with_shortcut("Ctrl+Super+Up")
+            .with_enabled(has_active)
+            .with_icon(MenuIcon::svg(icons::HALF_TOP)),
+        MenuItem::action(active_id("app-move-down", active), "Inferior")
+            .with_shortcut("Ctrl+Super+Down")
+            .with_enabled(has_active)
+            .with_icon(MenuIcon::svg(icons::HALF_BOTTOM)),
         MenuItem::Separator,
-        items::header("Cuartos"),
-        items::action(
+        MenuItem::header("Cuartos"),
+        MenuItem::action(
             active_id("app-quarter-top-left", active),
             "Superior izquierdo",
-            None,
-            has_active,
-            Some(MenuIcon::svg(icons::QUARTER_TOP_LEFT)),
-        ),
-        items::action(
+        )
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::QUARTER_TOP_LEFT)),
+        MenuItem::action(
             active_id("app-quarter-top-right", active),
             "Superior derecho",
-            None,
-            has_active,
-            Some(MenuIcon::svg(icons::QUARTER_TOP_RIGHT)),
-        ),
-        items::action(
+        )
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::QUARTER_TOP_RIGHT)),
+        MenuItem::action(
             active_id("app-quarter-bottom-left", active),
             "Inferior izquierdo",
-            None,
-            has_active,
-            Some(MenuIcon::svg(icons::QUARTER_BOTTOM_LEFT)),
-        ),
-        items::action(
+        )
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::QUARTER_BOTTOM_LEFT)),
+        MenuItem::action(
             active_id("app-quarter-bottom-right", active),
             "Inferior derecho",
-            None,
-            has_active,
-            Some(MenuIcon::svg(icons::QUARTER_BOTTOM_RIGHT)),
-        ),
+        )
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::QUARTER_BOTTOM_RIGHT)),
         MenuItem::Separator,
-        items::header("Disposición"),
-        items::action(
+        MenuItem::header("Disposición"),
+        MenuItem::action(
             active_id("app-layout-side-by-side", active),
             "Izquierda y derecha",
-            Some("Ctrl+Shift+Super+Left"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALVES_LEFT_RIGHT)),
-        ),
-        items::action(
+        )
+        .with_shortcut("Ctrl+Shift+Super+Left")
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::HALVES_LEFT_RIGHT)),
+        MenuItem::action(
             active_id("app-layout-reversed-side-by-side", active),
             "Derecha e izquierda",
-            Some("Ctrl+Shift+Super+Right"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALVES_RIGHT_LEFT)),
-        ),
-        items::action(
+        )
+        .with_shortcut("Ctrl+Shift+Super+Right")
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::HALVES_RIGHT_LEFT)),
+        MenuItem::action(
             active_id("app-layout-stacked", active),
             "Superior e inferior",
-            Some("Ctrl+Shift+Super+Up"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALVES_TOP_BOTTOM)),
-        ),
-        items::action(
+        )
+        .with_shortcut("Ctrl+Shift+Super+Up")
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::HALVES_TOP_BOTTOM)),
+        MenuItem::action(
             active_id("app-layout-reversed-stacked", active),
             "Inferior y superior",
-            Some("Ctrl+Shift+Super+Down"),
-            has_active,
-            Some(MenuIcon::svg(icons::HALVES_BOTTOM_TOP)),
-        ),
-        items::action(
-            active_id("app-layout-quarters", active),
-            "En cuartos",
-            None,
-            has_active,
-            Some(MenuIcon::svg(icons::GRID)),
-        ),
+        )
+        .with_shortcut("Ctrl+Shift+Super+Down")
+        .with_enabled(has_active)
+        .with_icon(MenuIcon::svg(icons::HALVES_BOTTOM_TOP)),
+        MenuItem::action(active_id("app-layout-quarters", active), "En cuartos")
+            .with_enabled(has_active)
+            .with_icon(MenuIcon::svg(icons::GRID)),
         MenuItem::Separator,
-        items::action(
+        MenuItem::action(
             active_id("app-move-restore", active),
             "Regresar al tamaño anterior",
-            Some("Ctrl+Super+R"),
-            can_restore,
-            None,
-        ),
+        )
+        .with_shortcut("Ctrl+Super+R")
+        .with_enabled(can_restore),
     ]
 }
 
@@ -553,15 +397,6 @@ mod tests {
         }
     }
 
-    fn label(item: &MenuItem) -> Option<&str> {
-        match item {
-            MenuItem::Action { label, .. }
-            | MenuItem::Submenu { label, .. }
-            | MenuItem::Header { label, .. } => Some(label),
-            _ => None,
-        }
-    }
-
     fn is_enabled(item: &MenuItem) -> bool {
         match item {
             MenuItem::Action { enabled, .. } | MenuItem::Submenu { enabled, .. } => *enabled,
@@ -572,14 +407,14 @@ mod tests {
     fn labels(items: &[MenuItem]) -> Vec<String> {
         items
             .iter()
-            .filter_map(|item| label(item).map(ToOwned::to_owned))
+            .filter_map(|item| item.label().map(ToOwned::to_owned))
             .collect()
     }
 
     fn find<'a>(items: &'a [MenuItem], wanted: &str) -> &'a MenuItem {
         items
             .iter()
-            .find(|item| label(item) == Some(wanted))
+            .find(|item| item.label() == Some(wanted))
             .unwrap_or_else(|| panic!("missing «{wanted}» in {:?}", labels(items)))
     }
 
@@ -635,7 +470,7 @@ mod tests {
             .filter(|item| matches!(item, MenuItem::Action { id, .. } if id.starts_with("app-window-activate:")))
             .collect();
         assert_eq!(listed.len(), 2);
-        let names: Vec<&str> = listed.iter().filter_map(|item| label(item)).collect();
+        let names: Vec<&str> = listed.iter().filter_map(|item| item.label()).collect();
         assert_eq!(names, vec!["Foot — Malaysia", "Foot — Segunda ventana"]);
         assert!(matches!(
             listed[0],
@@ -676,7 +511,7 @@ mod tests {
         let items = window_menu_items("Foot", "foot", &toplevels());
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
-            .find(|item| label(item) == Some("Trasladar y redimensionar"))
+            .find(|item| item.label() == Some("Trasladar y redimensionar"))
         else {
             panic!("missing the layout submenu");
         };
@@ -705,7 +540,7 @@ mod tests {
         let items = window_menu_items("Foot", "foot", &toplevels);
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
-            .find(|item| label(item) == Some("Trasladar y redimensionar"))
+            .find(|item| item.label() == Some("Trasladar y redimensionar"))
         else {
             panic!("missing the layout submenu");
         };

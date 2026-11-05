@@ -7,7 +7,6 @@ pub mod focused;
 pub mod gtkmenus;
 pub mod help_topics;
 pub mod icons;
-pub mod items;
 pub mod menu;
 pub mod recents;
 pub mod remote;

@@ -6,7 +6,7 @@ use barrier_kit::titlebar::app_id;
 
 use crate::desktop::DesktopEntry;
 use crate::dialogs::ABOUT_APP_ID;
-use crate::menubar::{icons, items, recents};
+use crate::menubar::{icons, recents};
 use crate::power::{self, PowerAction};
 use crate::spawn::{spawn_component, spawn_component_with, spawn_settings, xdg_open};
 
@@ -16,40 +16,19 @@ pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     static LOGOUT: OnceLock<String> = OnceLock::new();
     let logout = LOGOUT.get_or_init(|| logout_label(user_display_name().as_deref()));
     vec![
-        items::action(
-            "about-this-computer",
-            "Acerca de este PC",
-            None,
-            true,
-            Some(MenuIcon::svg(icons::LAPTOP)),
-        ),
-        items::action(
-            "system-settings",
-            "Ajustes del sistema…",
-            None,
-            true,
-            Some(MenuIcon::svg(icons::GEAR)),
-        ),
+        MenuItem::action("about-this-computer", "Acerca de este PC")
+            .with_icon(MenuIcon::svg(icons::LAPTOP)),
+        MenuItem::action("system-settings", "Ajustes del sistema…")
+            .with_icon(MenuIcon::svg(icons::GEAR)),
         MenuItem::Separator,
-        items::submenu(
-            "Elementos recientes",
-            true,
-            None,
-            recents::menu_items(entries),
-        ),
+        MenuItem::submenu("Elementos recientes", recents::menu_items(entries)),
         MenuItem::Separator,
-        items::action("sleep", "Suspender", None, true, None),
-        items::action("restart", "Reiniciar…", None, true, None),
-        items::action("shutdown", "Apagar…", None, true, None),
+        MenuItem::action("sleep", "Suspender"),
+        MenuItem::action("restart", "Reiniciar…"),
+        MenuItem::action("shutdown", "Apagar…"),
         MenuItem::Separator,
-        items::action(
-            "lock-screen",
-            "Bloquear pantalla",
-            Some("Ctrl+Alt+L"),
-            true,
-            None,
-        ),
-        items::action("logout", logout, None, true, None),
+        MenuItem::action("lock-screen", "Bloquear pantalla").with_shortcut("Ctrl+Alt+L"),
+        MenuItem::action("logout", logout),
     ]
 }
 
