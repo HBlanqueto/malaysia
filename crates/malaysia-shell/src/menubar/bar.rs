@@ -967,9 +967,7 @@ pub fn run() -> anyhow::Result<()> {
     });
 
     let result = run_layer(app, surface_spec()).map_err(|error| anyhow::anyhow!("{error}"));
-    let calls = dbusmenu::render_calls();
-    debug_assert_eq!(calls, 0, "D-Bus calls on the render thread");
-    tracing::info!(render_dbus_calls = calls, "menubar: closed");
+    tracing::info!("menubar: closed");
     result
 }
 

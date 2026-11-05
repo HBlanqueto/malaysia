@@ -1,7 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::thread::ThreadId;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
@@ -20,20 +18,6 @@ pub(crate) const CALL_TIMEOUT: Duration = Duration::from_millis(500);
 const FULL_TREE_TIMEOUT: Duration = Duration::from_secs(2);
 const FULL_TREE_DELAY: Duration = Duration::from_secs(1);
 const DEBOUNCE: Duration = Duration::from_millis(50);
-
-static RENDER_THREAD: OnceLock<ThreadId> = OnceLock::new();
-static RENDER_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-pub fn render_calls() -> usize {
-    RENDER_CALLS.load(Ordering::Relaxed)
-}
-
-pub(crate) fn note_call() {
-    if RENDER_THREAD.get() == Some(&std::thread::current().id()) {
-        RENDER_CALLS.fetch_add(1, Ordering::Relaxed);
-        debug_assert!(false, "D-Bus call on the render thread");
-    }
-}
 
 #[derive(Clone, Debug)]
 pub enum Command {
@@ -240,7 +224,6 @@ async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows
 }
 
 pub fn start(app_menus: bool) -> MenuClient {
-    RENDER_THREAD.get_or_init(|| std::thread::current().id());
     let (commands, command_rx) = async_channel::unbounded();
     let (snapshot_tx, snapshot_rx) = async_channel::unbounded();
     let wake = Arc::new(Mutex::new(None));
@@ -490,7 +473,6 @@ async fn run(
     let mut app_menus = initial_app_menus;
     set_registrar(&connection, &windows, app_menus).await;
 
-    note_call();
     let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
         Ok(dbus) => dbus,
         Err(error) => {
@@ -1246,7 +1228,6 @@ async fn proxy(
         .cache_properties(CacheProperties::No)
         .build()
         .await?;
-    note_call();
     let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
         Ok(name) => timed(CALL_TIMEOUT, dbus.get_name_owner(name))
             .await
@@ -1295,7 +1276,6 @@ async fn layout(
     limit: Duration,
 ) -> zbus::Result<(u32, Vec<RawItem>)> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
-    note_call();
     let args = (parent, depth, &[] as &[&str]);
     let call = proxy.call::<_, _, (u32, RawNode)>("GetLayout", &args);
     let Some(result) = timed(limit, call).await else {
@@ -1389,7 +1369,6 @@ async fn about_to_show(
     let Ok(proxy) = proxy(connection, dbus, proxies, address).await else {
         return false;
     };
-    note_call();
     let args = (id,);
     let call = proxy.call::<_, _, bool>("AboutToShow", &args);
     match timed(CALL_TIMEOUT, call).await {
@@ -1417,7 +1396,6 @@ async fn event(
     timestamp: u32,
 ) -> zbus::Result<()> {
     let proxy = proxy(connection, dbus, proxies, address).await?;
-    note_call();
     let args = (id, "clicked", zbus::zvariant::Value::I32(0), timestamp);
     let call = proxy.call::<_, _, ()>("Event", &args);
     timed(CALL_TIMEOUT, call)

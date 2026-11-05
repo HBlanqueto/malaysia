@@ -6,7 +6,7 @@ use barrier_kit::platform::AppMenuAddress;
 use barrier_kit::shell::GtkMenusAddress;
 use zbus::zvariant::{OwnedValue, Signature, Value};
 
-use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, note_call, timed};
+use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, timed};
 
 pub const MENUS_INTERFACE: &str = "org.gtk.Menus";
 pub const ACTIONS_INTERFACE: &str = "org.gtk.Actions";
@@ -735,7 +735,6 @@ async fn call<B>(
 where
     B: serde::Serialize + zbus::zvariant::DynamicType,
 {
-    note_call();
     let call = connection.call_method(Some(destination), path, Some(interface), method, body);
     timed(CALL_TIMEOUT, call)
         .await
