@@ -475,51 +475,75 @@ fn available(workspace: Rectangle<i32, Logical>) -> Rectangle<i32, Logical> {
     )
 }
 
+struct Tiles {
+    area: Rectangle<i32, Logical>,
+    half_w: i32,
+    half_h: i32,
+}
+
+impl Tiles {
+    fn new(workspace: Rectangle<i32, Logical>) -> Self {
+        let area = available(workspace);
+        Self {
+            area,
+            half_w: (area.size.w - TILE_GAP) / 2,
+            half_h: (area.size.h - TILE_GAP) / 2,
+        }
+    }
+
+    fn rect(&self, dx: i32, dy: i32, w: i32, h: i32) -> SceneRect<f64, SceneLogical> {
+        SceneRect::new(
+            ScenePoint::new(
+                f64::from(self.area.loc.x + dx),
+                f64::from(self.area.loc.y + dy),
+            ),
+            SceneSize::new(f64::from(w), f64::from(h)),
+        )
+    }
+
+    fn column(&self, right: bool, h: i32, dy: i32) -> SceneRect<f64, SceneLogical> {
+        let dx = if right { self.half_w + TILE_GAP } else { 0 };
+        self.rect(dx, dy, self.half_w, h)
+    }
+
+    fn row(&self, bottom: bool) -> SceneRect<f64, SceneLogical> {
+        let dy = if bottom { self.half_h + TILE_GAP } else { 0 };
+        self.rect(0, dy, self.area.size.w, self.half_h)
+    }
+
+    fn quarter(&self, right: bool, bottom: bool) -> SceneRect<f64, SceneLogical> {
+        let dy = if bottom { self.half_h + TILE_GAP } else { 0 };
+        self.column(right, self.half_h, dy)
+    }
+
+    fn half(&self, right: bool) -> SceneRect<f64, SceneLogical> {
+        self.column(right, self.area.size.h, 0)
+    }
+
+    fn centered(&self, size: Size<i32, Logical>) -> SceneRect<f64, SceneLogical> {
+        let w = size.w.min(self.area.size.w);
+        let h = size.h.min(self.area.size.h);
+        self.rect((self.area.size.w - w) / 2, (self.area.size.h - h) / 2, w, h)
+    }
+}
+
 fn arranged_rect(
     workspace: Rectangle<i32, Logical>,
     layout: Layout,
     current_size: Size<i32, Logical>,
 ) -> SceneRect<f64, SceneLogical> {
-    let area = available(workspace);
-    let loc = area.loc;
-    let size = area.size;
-    let half_w = (size.w - TILE_GAP) / 2;
-    let half_h = (size.h - TILE_GAP) / 2;
-    let rect = |x, y, w, h| {
-        SceneRect::new(
-            ScenePoint::new(f64::from(x), f64::from(y)),
-            SceneSize::new(f64::from(w), f64::from(h)),
-        )
-    };
+    let tiles = Tiles::new(workspace);
     match layout {
-        Layout::Fill => rect(loc.x, loc.y, size.w, size.h),
-        Layout::Center => {
-            let w = current_size.w.min(area.size.w);
-            let h = current_size.h.min(area.size.h);
-            let x = loc.x + (area.size.w - w) / 2;
-            let y = loc.y + (area.size.h - h) / 2;
-            rect(x, y, w, h)
-        }
-        Layout::Left => rect(loc.x, loc.y, half_w, size.h),
-        Layout::Right => rect(loc.x + half_w + TILE_GAP, loc.y, half_w, size.h),
-        Layout::Top => rect(loc.x, loc.y, size.w, half_h),
-        Layout::Bottom => rect(loc.x, loc.y + half_h + TILE_GAP, size.w, half_h),
-        Layout::TopLeft => rect(loc.x, loc.y, half_w, half_h),
-        Layout::TopRight => rect(loc.x + half_w + TILE_GAP, loc.y, half_w, half_h),
-        Layout::BottomLeft => rect(loc.x, loc.y + half_h + TILE_GAP, half_w, half_h),
-        Layout::BottomRight => rect(
-            loc.x + half_w + TILE_GAP,
-            loc.y + half_h + TILE_GAP,
-            half_w,
-            half_h,
-        ),
-        _ => {
-            let w = current_size.w.min(area.size.w);
-            let h = current_size.h.min(area.size.h);
-            let x = loc.x + (area.size.w - w) / 2;
-            let y = loc.y + (area.size.h - h) / 2;
-            rect(x, y, w, h)
-        }
+        Layout::Fill => tiles.rect(0, 0, tiles.area.size.w, tiles.area.size.h),
+        Layout::Left => tiles.half(false),
+        Layout::Right => tiles.half(true),
+        Layout::Top => tiles.row(false),
+        Layout::Bottom => tiles.row(true),
+        Layout::TopLeft => tiles.quarter(false, false),
+        Layout::TopRight => tiles.quarter(true, false),
+        Layout::BottomLeft => tiles.quarter(false, true),
+        Layout::BottomRight => tiles.quarter(true, true),
+        _ => tiles.centered(current_size),
     }
 }
 
@@ -527,66 +551,22 @@ fn pair_rects(
     workspace: Rectangle<i32, Logical>,
     layout: PairLayout,
 ) -> [SceneRect<f64, SceneLogical>; 2] {
-    let area = available(workspace);
-    let loc = area.loc;
-    let size = area.size;
-    let half_w = (size.w - TILE_GAP) / 2;
-    let half_h = (size.h - TILE_GAP) / 2;
-    let rect = |x, y, w, h| {
-        SceneRect::new(
-            ScenePoint::new(f64::from(x), f64::from(y)),
-            SceneSize::new(f64::from(w), f64::from(h)),
-        )
-    };
+    let tiles = Tiles::new(workspace);
     match layout {
-        PairLayout::SideBySide | PairLayout::SideBySideReversed => {
-            let left = rect(loc.x, loc.y, half_w, size.h);
-            let right = rect(loc.x + half_w + TILE_GAP, loc.y, half_w, size.h);
-            if matches!(layout, PairLayout::SideBySide) {
-                [left, right]
-            } else {
-                [right, left]
-            }
-        }
-        PairLayout::Stacked | PairLayout::StackedReversed => {
-            let top = rect(loc.x, loc.y, size.w, half_h);
-            let bottom = rect(loc.x, loc.y + half_h + TILE_GAP, size.w, half_h);
-            if matches!(layout, PairLayout::Stacked) {
-                [top, bottom]
-            } else {
-                [bottom, top]
-            }
-        }
-        _ => {
-            let left = rect(loc.x, loc.y, half_w, size.h);
-            let right = rect(loc.x + half_w + TILE_GAP, loc.y, half_w, size.h);
-            [left, right]
-        }
+        PairLayout::SideBySideReversed => [tiles.half(true), tiles.half(false)],
+        PairLayout::Stacked => [tiles.row(false), tiles.row(true)],
+        PairLayout::StackedReversed => [tiles.row(true), tiles.row(false)],
+        _ => [tiles.half(false), tiles.half(true)],
     }
 }
 
 fn quarter_rects(workspace: Rectangle<i32, Logical>) -> [SceneRect<f64, SceneLogical>; 4] {
-    let area = available(workspace);
-    let loc = area.loc;
-    let size = area.size;
-    let half_w = (size.w - TILE_GAP) / 2;
-    let half_h = (size.h - TILE_GAP) / 2;
-    let rect = |x, y, w, h| {
-        SceneRect::new(
-            ScenePoint::new(f64::from(x), f64::from(y)),
-            SceneSize::new(f64::from(w), f64::from(h)),
-        )
-    };
+    let tiles = Tiles::new(workspace);
     [
-        rect(loc.x, loc.y, half_w, half_h),
-        rect(loc.x + half_w + TILE_GAP, loc.y, half_w, half_h),
-        rect(loc.x, loc.y + half_h + TILE_GAP, half_w, half_h),
-        rect(
-            loc.x + half_w + TILE_GAP,
-            loc.y + half_h + TILE_GAP,
-            half_w,
-            half_h,
-        ),
+        tiles.quarter(false, false),
+        tiles.quarter(true, false),
+        tiles.quarter(false, true),
+        tiles.quarter(true, true),
     ]
 }
 

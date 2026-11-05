@@ -233,6 +233,19 @@ impl<S> Default for LayerFocus<S> {
 }
 
 impl<S: Clone + Eq> LayerFocus<S> {
+    fn remember_window(&mut self, focused_window: Option<WindowId>) {
+        if self.previous_window.is_none() {
+            self.previous_window = focused_window;
+        }
+    }
+
+    fn grab_exclusive(&mut self, surface: &S, focused_window: Option<WindowId>) {
+        if !self.exclusive.contains(surface) {
+            self.exclusive.push(surface.clone());
+        }
+        self.remember_window(focused_window);
+    }
+
     pub fn mapped(
         &mut self,
         surface: S,
@@ -241,12 +254,7 @@ impl<S: Clone + Eq> LayerFocus<S> {
     ) -> bool {
         match mode {
             KeyboardInteractivity::Exclusive => {
-                if !self.exclusive.contains(&surface) {
-                    self.exclusive.push(surface.clone());
-                }
-                if self.previous_window.is_none() {
-                    self.previous_window = focused_window;
-                }
+                self.grab_exclusive(&surface, focused_window);
                 self.on_demand = None;
                 self.focused = Some(surface);
                 true
@@ -263,12 +271,7 @@ impl<S: Clone + Eq> LayerFocus<S> {
     ) -> bool {
         match mode {
             KeyboardInteractivity::Exclusive => {
-                if !self.exclusive.contains(&surface) {
-                    self.exclusive.push(surface.clone());
-                }
-                if self.previous_window.is_none() {
-                    self.previous_window = focused_window;
-                }
+                self.grab_exclusive(&surface, focused_window);
                 let changed = self.focused.as_ref() != Some(&surface);
                 self.focused = Some(surface);
                 changed
@@ -277,9 +280,7 @@ impl<S: Clone + Eq> LayerFocus<S> {
                 if self.focused.as_ref() == Some(&surface) {
                     return false;
                 }
-                if self.previous_window.is_none() {
-                    self.previous_window = focused_window;
-                }
+                self.remember_window(focused_window);
                 self.on_demand = Some(surface.clone());
                 self.focused = Some(surface);
                 true

@@ -47,7 +47,6 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
-use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::wayland::presentation::Refresh;
 use smithay::wayland::shell::wlr_layer::Layer;
 use smithay::wayland::socket::ListeningSocketSource;
@@ -918,17 +917,11 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
     } else {
         theme.palette.titlebar_bg.unfocused
     };
-    let [r, g, b, _] = background.to_rgba8();
     append_buffer(
         &mut state.revealed_titlebar_backdrop,
         rect.loc,
         rect.size,
-        [
-            f32::from(r) / 255.0,
-            f32::from(g) / 255.0,
-            f32::from(b) / 255.0,
-            1.0,
-        ],
+        [background.r, background.g, background.b, 1.0],
         scale,
         elements,
     );
@@ -1664,54 +1657,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
             ));
         }
 
-        let capture_scale = session.state.scale.fractional_scale();
-        for pending in std::mem::take(&mut session.state.pending_captures) {
-            if session.state.locked {
-                pending.frame.fail(CaptureFailureReason::Unknown);
-                continue;
-            }
-            let (size, window_elements) = match &pending.target {
-                crate::capture::CaptureTarget::Output { size } => (*size, None),
-                crate::capture::CaptureTarget::Window { id, size } => {
-                    let Some(surface) = session.state.windows.surface_of(*id).cloned() else {
-                        pending.frame.fail(CaptureFailureReason::Unknown);
-                        continue;
-                    };
-                    (
-                        *size,
-                        Some(build_window_elements(renderer, &surface, capture_scale)),
-                    )
-                }
-            };
-            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
-            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
-                crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
-                    without_cursor =
-                        build_output_elements(&mut session.state, renderer, &session.cursor, false);
-                    &without_cursor
-                }
-                _ => window_elements.as_deref().unwrap_or(&elements),
-            };
-            let damage = Rectangle::from_size(Size::from((size.w, size.h)));
-            match crate::capture::capture_into_buffer(
-                renderer,
-                drawn,
-                size,
-                capture_scale,
-                vow_design::DESKTOP_CLEAR,
-                &pending.frame.buffer(),
-            ) {
-                Ok(()) => pending.frame.success(
-                    Transform::Normal,
-                    Some(vec![damage]),
-                    Duration::from(session.state.clock.now()),
-                ),
-                Err(error) => {
-                    tracing::warn!(%error, "screencopy frame failed");
-                    pending.frame.fail(CaptureFailureReason::Unknown);
-                }
-            }
-        }
+        crate::capture::serve_pending(&mut session.state, renderer, &session.cursor, &elements);
 
         let result = session
             .damage_tracker

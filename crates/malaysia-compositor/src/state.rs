@@ -714,43 +714,35 @@ impl State {
     }
 
     pub(crate) fn client_disconnected(&mut self, client_id: ClientId) {
+        let display = self.display_handle.clone();
+        let owned = |surface: &WlSurface| {
+            display
+                .get_client(surface.id())
+                .is_ok_and(|client| client.id() == client_id)
+        };
         let windows: Vec<WlSurface> = self
             .windows
             .surfaces()
-            .filter(|surface| {
-                self.display_handle
-                    .get_client(surface.id())
-                    .is_ok_and(|client| client.id() == client_id)
-            })
+            .filter(|s| owned(s))
             .cloned()
             .collect();
         for surface in windows {
             self.forget_window(&surface);
         }
-
         let popups: Vec<WlSurface> = self
             .popups
             .surfaces()
-            .filter(|surface| {
-                self.display_handle
-                    .get_client(surface.id())
-                    .is_ok_and(|client| client.id() == client_id)
-            })
+            .filter(|s| owned(s))
             .cloned()
             .collect();
         for surface in popups {
             self.popup_destroyed(&surface);
         }
-
         let layers: Vec<WlSurface> = self
             .layers
             .surfaces()
-            .filter(|layer| {
-                self.display_handle
-                    .get_client(layer.wl_surface().id())
-                    .is_ok_and(|client| client.id() == client_id)
-            })
             .map(|layer| layer.wl_surface().clone())
+            .filter(owned)
             .collect();
         for surface in layers {
             self.layer_surface_destroyed(&surface);

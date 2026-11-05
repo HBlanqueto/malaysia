@@ -39,16 +39,15 @@ use smithay::desktop::utils::{
 use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1::TrancheFlags;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{DeviceFd, Rectangle, Size, Transform};
+use smithay::utils::{DeviceFd, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder};
 use smithay::wayland::drm_syncobj::supports_syncobj_eventfd;
-use smithay::wayland::image_copy_capture::CaptureFailureReason;
 use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::wayland::presentation::Refresh;
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{error, info, warn};
 
-use crate::cursor::{Cursors, OutputRenderElement};
+use crate::cursor::Cursors;
 use crate::state::{ClientState, State};
 use vow_appearance::watch::AppearanceWatch;
 
@@ -900,58 +899,7 @@ impl Udev {
                 request,
             ));
         }
-        let capture_scale = self.state.scale.fractional_scale();
-        for pending in std::mem::take(&mut self.state.pending_captures) {
-            let (size, window_elements) = match &pending.target {
-                crate::capture::CaptureTarget::Output { size } => (*size, None),
-                crate::capture::CaptureTarget::Window { id, size } => {
-                    let Some(surface) = self.state.windows.surface_of(*id).cloned() else {
-                        pending.frame.fail(CaptureFailureReason::Unknown);
-                        continue;
-                    };
-                    (
-                        *size,
-                        Some(crate::session::build_window_elements(
-                            gles,
-                            &surface,
-                            capture_scale,
-                        )),
-                    )
-                }
-            };
-            let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
-            let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
-                crate::capture::CaptureTarget::Output { .. } if !pending.draw_cursor => {
-                    without_cursor = crate::session::build_output_elements(
-                        &mut self.state,
-                        gles,
-                        &self.cursor,
-                        false,
-                    );
-                    &without_cursor
-                }
-                _ => window_elements.as_deref().unwrap_or(&capture_elements),
-            };
-            let damage = Rectangle::from_size(Size::from((size.w, size.h)));
-            match crate::capture::capture_into_buffer(
-                gles,
-                drawn,
-                size,
-                capture_scale,
-                vow_design::DESKTOP_CLEAR,
-                &pending.frame.buffer(),
-            ) {
-                Ok(()) => pending.frame.success(
-                    Transform::Normal,
-                    Some(vec![damage]),
-                    Duration::from(self.state.clock.now()),
-                ),
-                Err(error) => {
-                    warn!(%error, "screencopy frame failed");
-                    pending.frame.fail(CaptureFailureReason::Unknown);
-                }
-            }
-        }
+        crate::capture::serve_pending(&mut self.state, gles, &self.cursor, &capture_elements);
         if self.state.theme_fade.is_some() {
             self.compositor.reset_buffer_ages();
         }

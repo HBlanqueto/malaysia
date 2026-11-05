@@ -968,23 +968,22 @@ impl State {
         if let Some(requested) = requested {
             self.windows.set_requested_decoration(surface, requested);
         }
-        let native = self.windows.is_native(surface);
-        if native && requested.is_none() && self.windows.mark_native_warning(surface) {
-            tracing::warn!(
-                app_id = %self.windows.app_id(surface),
-                "native app without a decoration mode"
-            );
-        }
-        let effective = crate::decoration::effective_decoration(
-            self.config.window.decorations,
-            requested,
-            native,
-        );
+        let effective = self.effective_decoration(surface, requested);
         self.windows.set_decoration(surface, effective);
     }
 
     fn apply_initial_decoration(&mut self, surface: &WlSurface) {
         let requested = self.windows.requested_decoration(surface);
+        let effective = self.effective_decoration(surface, requested);
+        self.windows.set_initial_decoration(surface, effective);
+        self.windows.send_initial_configure(surface);
+    }
+
+    fn effective_decoration(
+        &mut self,
+        surface: &WlSurface,
+        requested: Option<Decoration>,
+    ) -> Decoration {
         let native = self.windows.is_native(surface);
         if native && requested.is_none() && self.windows.mark_native_warning(surface) {
             tracing::warn!(
@@ -992,13 +991,7 @@ impl State {
                 "native app without a decoration mode"
             );
         }
-        let effective = crate::decoration::effective_decoration(
-            self.config.window.decorations,
-            requested,
-            native,
-        );
-        self.windows.set_initial_decoration(surface, effective);
-        self.windows.send_initial_configure(surface);
+        crate::decoration::effective_decoration(self.config.window.decorations, requested, native)
     }
 }
 

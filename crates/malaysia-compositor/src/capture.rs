@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use smithay::backend::allocator::{Format, Fourcc, Modifier};
@@ -17,10 +17,11 @@ use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::utils::{Buffer as BufferCoord, Logical, Physical, Rectangle, Scale, Size, Transform};
 use smithay::wayland::dmabuf::get_dmabuf;
-use smithay::wayland::image_copy_capture::Frame;
+use smithay::wayland::image_copy_capture::{CaptureFailureReason, Frame};
 use smithay::wayland::shm::with_buffer_contents_mut;
 
-use crate::cursor::OutputRenderElement;
+use crate::cursor::{Cursors, OutputRenderElement};
+use crate::state::State;
 
 pub(crate) struct CaptureDma {
     pub node: DrmNode,
@@ -93,7 +94,8 @@ pub(crate) fn screenshot_png(
     scale: f64,
     clear: [f32; 4],
 ) -> std::io::Result<Vec<u8>> {
-    render_png(renderer, elements, size, transform, scale, clear)
+    let (w, h, rgba) = render_and_read(renderer, elements, size, transform, scale, clear)?;
+    encode_png(w, h, &rgba)
 }
 
 pub(crate) fn screenshot_region_png(
@@ -121,18 +123,6 @@ pub(crate) fn save_png(png: &[u8]) -> std::io::Result<PathBuf> {
     write_png(&path, png)?;
     tracing::info!(path = %path.display(), "screenshot saved");
     Ok(path)
-}
-
-fn render_png(
-    renderer: &mut GlesRenderer,
-    elements: &[OutputRenderElement<GlesRenderer>],
-    size: Size<i32, Physical>,
-    transform: Transform,
-    scale: f64,
-    clear: [f32; 4],
-) -> std::io::Result<Vec<u8>> {
-    let (w, h, rgba) = render_and_read(renderer, elements, size, transform, scale, clear)?;
-    encode_png(w, h, &rgba)
 }
 
 fn crop_region(
@@ -245,6 +235,64 @@ fn render_and_read(
         flipped[dst..dst + stride].copy_from_slice(&bytes[src..src + stride]);
     }
     Ok((w, h, flipped))
+}
+
+pub(crate) fn serve_pending(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+    elements: &[OutputRenderElement<GlesRenderer>],
+) {
+    let scale = state.scale.fractional_scale();
+    for pending in std::mem::take(&mut state.pending_captures) {
+        if state.locked {
+            pending.frame.fail(CaptureFailureReason::Unknown);
+            continue;
+        }
+        let (size, window_elements) = match &pending.target {
+            CaptureTarget::Output { size } => (*size, None),
+            CaptureTarget::Window { id, size } => {
+                let Some(surface) = state.windows.surface_of(*id).cloned() else {
+                    pending.frame.fail(CaptureFailureReason::Unknown);
+                    continue;
+                };
+                (
+                    *size,
+                    Some(crate::session::build_window_elements(
+                        renderer, &surface, scale,
+                    )),
+                )
+            }
+        };
+        let without_cursor: Vec<OutputRenderElement<GlesRenderer>>;
+        let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
+            CaptureTarget::Output { .. } if !pending.draw_cursor => {
+                without_cursor =
+                    crate::session::build_output_elements(state, renderer, cursor, false);
+                &without_cursor
+            }
+            _ => window_elements.as_deref().unwrap_or(elements),
+        };
+        let damage = Rectangle::from_size(Size::from((size.w, size.h)));
+        match capture_into_buffer(
+            renderer,
+            drawn,
+            size,
+            scale,
+            vow_design::DESKTOP_CLEAR,
+            &pending.frame.buffer(),
+        ) {
+            Ok(()) => pending.frame.success(
+                Transform::Normal,
+                Some(vec![damage]),
+                Duration::from(state.clock.now()),
+            ),
+            Err(error) => {
+                tracing::warn!(%error, "screencopy frame failed");
+                pending.frame.fail(CaptureFailureReason::Unknown);
+            }
+        }
+    }
 }
 
 pub(crate) fn capture_into_buffer(
