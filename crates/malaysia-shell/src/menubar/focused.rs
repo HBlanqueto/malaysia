@@ -169,18 +169,17 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
 pub fn help_search_topics() -> Vec<SearchableEntry> {
     help_topics::topics()
         .iter()
-        .map(|topic| SearchableEntry {
+        .map(|topic| topic.item(None))
+        .chain([MenuItem::action(
+            "app-help-topics-index",
+            tr!("help-show-all-topics"),
+        )])
+        .map(|item| SearchableEntry {
             path: tr!("help-topics").to_string(),
-            item: topic.item(None),
+            item,
             location: None,
             source: SearchSource::Help,
         })
-        .chain(std::iter::once(SearchableEntry {
-            path: tr!("help-topics").to_string(),
-            item: MenuItem::action("app-help-topics-index", tr!("help-show-all-topics")),
-            location: None,
-            source: SearchSource::Help,
-        }))
         .collect()
 }
 
