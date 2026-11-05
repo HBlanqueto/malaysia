@@ -241,7 +241,7 @@ pub(crate) fn take_snapshot(
             &mut framebuffer,
             0,
             &elements,
-            [0.06, 0.06, 0.09, 1.0],
+            vow_design::DESKTOP_CLEAR,
         );
         let elapsed = start.elapsed();
         if rendered.is_err() {
@@ -391,8 +391,10 @@ mod tests {
     #[allow(unsafe_code)]
     fn try_test_renderer() -> Option<GlesRenderer> {
         let device = EGLDevice::enumerate().ok()?.next()?;
+        // SAFETY: the display owns `device`, so the native handle lives as long as the display.
         let display = unsafe { EGLDisplay::new(device) }.ok()?;
         let context = EGLContext::new(&display).ok()?;
+        // SAFETY: `context` was just created on this thread and is not shared with another.
         unsafe { GlesRenderer::new(context) }.ok()
     }
 

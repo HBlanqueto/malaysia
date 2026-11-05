@@ -9,6 +9,7 @@ use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource, WEnum};
 use smithay::utils::{Logical, Point, Rectangle, Size};
 use tracing::info;
+use vow_design::{TILE_GAP, TILE_MARGIN};
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use malaysia_scene::scene::WindowId;
 
@@ -22,9 +23,6 @@ pub(crate) mod protocol {
 
 use protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
 use protocol::infinity_window_manager_v1::{Layout, PairLayout};
-
-const TILE_MARGIN: i32 = 8;
-const TILE_GAP: i32 = 8;
 
 #[derive(Debug, Clone)]
 pub struct InfinityGlobalData;

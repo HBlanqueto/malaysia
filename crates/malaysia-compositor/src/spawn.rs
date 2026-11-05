@@ -205,6 +205,7 @@ mod tests {
         let command = self::command("true", &Config::default());
         let env = child_env(&command);
 
+        // SAFETY: environment mutation is isolated to this single-threaded test.
         match previous {
             Some(value) => unsafe {
                 std::env::set_var("QT_WAYLAND_DISABLE_WINDOWDECORATION", value)

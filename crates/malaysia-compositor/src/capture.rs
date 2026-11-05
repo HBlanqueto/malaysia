@@ -112,7 +112,7 @@ pub(crate) fn screenshot_region_png(
         size,
         transform,
         scale,
-        [0.06, 0.06, 0.09, 1.0],
+        vow_design::DESKTOP_CLEAR,
     )?;
     let (width, height, cropped) = crop_region(region, scale, w, h, &rgba)?;
     encode_png(width, height, &cropped)
@@ -474,7 +474,7 @@ fn capture_dir() -> PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new("/tmp").to_path_buf());
-    base.join("malaysia-compositor")
+    base.join("malaysia")
 }
 
 #[cfg(test)]

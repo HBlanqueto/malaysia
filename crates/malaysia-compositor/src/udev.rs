@@ -1,7 +1,5 @@
 //! The direct session: DRM/KMS, libseat and libinput.
 
-#![allow(unsafe_code)]
-
 use std::os::fd::AsFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -944,7 +942,7 @@ impl Udev {
                 drawn,
                 size,
                 capture_scale,
-                [0.06, 0.06, 0.09, 1.0],
+                vow_design::DESKTOP_CLEAR,
                 &pending.frame.buffer(),
             ) {
                 Ok(()) => pending.frame.success(
@@ -964,7 +962,7 @@ impl Udev {
         match self.compositor.render_frame(
             &mut renderer,
             &elements,
-            [0.06, 0.06, 0.09, 1.0],
+            vow_design::DESKTOP_CLEAR,
             self.frame_flags,
         ) {
             Ok(mut result) => {

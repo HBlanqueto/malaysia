@@ -513,7 +513,9 @@ impl TextEngine {
             palette.title.unfocused
         };
         let group_width = 3 * diameter + 2 * gap;
-        let reserve = margin + group_width + (12.0 * scale).round() as i32;
+        let reserve = margin
+            + group_width
+            + (f64::from(vow_design::TITLEBAR_TITLE_GAP) * scale).round() as i32;
         let max_width = (w - 2 * reserve).max(1);
         self.draw_title(
             &mut pixels,
@@ -1133,7 +1135,10 @@ mod tests {
             let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale).round() as i32;
             let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
             let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
-            let reserve = margin + 3 * diameter + 2 * gap + (12.0 * scale).round() as i32;
+            let reserve = margin
+                + 3 * diameter
+                + 2 * gap
+                + (f64::from(vow_design::TITLEBAR_TITLE_GAP) * scale).round() as i32;
             let max_width = width - 2 * reserve;
 
             let fitted = text.fit_title(&title, TITLEBAR.font, scale, max_width as f32);

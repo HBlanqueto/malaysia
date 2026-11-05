@@ -1621,7 +1621,7 @@ fn capture_output_png(
         size,
         transform,
         scale,
-        [0.06, 0.06, 0.09, 1.0],
+        vow_design::DESKTOP_CLEAR,
     )
 }
 
@@ -1700,7 +1700,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 drawn,
                 size,
                 capture_scale,
-                [0.06, 0.06, 0.09, 1.0],
+                vow_design::DESKTOP_CLEAR,
                 &pending.frame.buffer(),
             ) {
                 Ok(()) => pending.frame.success(
@@ -1722,7 +1722,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 &mut framebuffer,
                 age,
                 &elements,
-                [0.06, 0.06, 0.09, 1.0],
+                vow_design::DESKTOP_CLEAR,
             )
             .map_err(DrawError::Output)?;
 
@@ -2376,8 +2376,10 @@ mod tests {
             .expect("EGL device enumeration should work")
             .next()
             .expect("the pixel test needs an EGL device");
+        // SAFETY: the display owns `device`, so the native handle lives as long as the display.
         let display = unsafe { EGLDisplay::new(device) }.expect("the test needs an EGL display");
         let context = EGLContext::new(&display).expect("the test needs an EGL context");
+        // SAFETY: `context` was just created on this thread and is not shared with another.
         unsafe { GlesRenderer::new(context) }.expect("the test needs a GLES renderer")
     }
 
