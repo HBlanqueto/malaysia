@@ -613,10 +613,7 @@ pub struct Bridge {
 
 impl Bridge {
     pub fn from_env() -> Option<Self> {
-        let config_home = std::env::var_os("XDG_CONFIG_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
+        let config_home = vow_appearance::xdg::config_home()?;
         Some(Self { config_home })
     }
 
