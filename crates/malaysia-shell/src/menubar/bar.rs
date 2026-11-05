@@ -62,8 +62,7 @@ struct Decision {
 }
 
 impl MenuMemory {
-    fn remember(&mut self, app_id: &str, labels: Vec<String>) -> bool {
-        let changed = self.titles.get(app_id) != Some(&labels);
+    fn remember(&mut self, app_id: &str, labels: Vec<String>) {
         self.titles.insert(app_id.to_string(), labels);
         if self
             .grace
@@ -72,7 +71,6 @@ impl MenuMemory {
         {
             self.grace = None;
         }
-        changed
     }
 
     fn forget(&mut self, app_id: &str) {
@@ -195,7 +193,7 @@ pub struct BarApp {
     pub app_menus: State<bool>,
     pub window_store: PathBuf,
     pub menubar_store: PathBuf,
-    pub entries: Vec<DesktopEntry>,
+    pub entries: Rc<Vec<DesktopEntry>>,
     pub dbus: MenuClient,
     pub menu_snapshot: State<Option<Arc<RemoteMenu>>>,
 }
@@ -254,8 +252,6 @@ impl App for BarApp {
         let active_app = self.active_app.read().clone();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
-        let last_gtk_menus =
-            use_hook(|| Rc::new(RefCell::new(None::<(String, Option<GtkMenusAddress>)>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
         let previous_len = use_hook(|| Rc::new(Cell::new(0usize)));
         let pending_new = use_hook(|| Rc::new(Cell::new(None::<usize>)));
@@ -291,6 +287,7 @@ impl App for BarApp {
             gtk_menus: info.gtk_menus.clone(),
             enabled: app_menus_enabled,
         });
+        let address = key.as_ref().and_then(MenuKey::address);
         {
             let mut snapshot_state = self.menu_snapshot;
             let mut last = last_app_menu.borrow_mut();
@@ -355,32 +352,7 @@ impl App for BarApp {
                 *last = key;
             }
         }
-        {
-            let mut last = last_gtk_menus.borrow_mut();
-            let key = active_info.map(|info| (info.app_id.clone(), info.gtk_menus.clone()));
-            if *last != key {
-                match &key {
-                    Some((app_id, Some(menu))) => {
-                        tracing::info!(
-                            app_id = %app_id,
-                            bus = %menu.unique_bus_name,
-                            menubar = %menu.menubar_path,
-                            appmenu = %menu.app_menu_path,
-                            "menubar: gtk_menus"
-                        );
-                    }
-                    Some((app_id, None)) => {
-                        tracing::info!(app_id = %app_id, "menubar: gtk_menus none");
-                    }
-                    None => {}
-                }
-                *last = key;
-            }
-        }
         let remote_menu = self.menu_snapshot.read().as_ref().cloned();
-        let menu_ready = remote_menu
-            .as_ref()
-            .is_some_and(|menu| !menu.items.is_empty());
         let choice = if focused && app_menus_enabled {
             let active_index = toplevels
                 .iter()
@@ -408,34 +380,24 @@ impl App for BarApp {
 
             let app_id = app_id.clone().unwrap_or_default();
             let mut stored = memory.borrow_mut();
-            if menu_ready && let Some(menu) = &remote_menu {
+            if let Some(menu) = remote_menu.as_ref().filter(|menu| !menu.items.is_empty()) {
                 stored.remember(&app_id, title_labels(&menu.items));
-            }
-            let decision = if menu_ready {
-                Decision {
-                    choice: MenuChoice::Fallback,
-                    started: None,
-                }
+                None
             } else {
-                let address = active_info.and_then(|info| {
-                    info.app_menu
-                        .clone()
-                        .or_else(|| info.gtk_menus.as_ref().map(gtkmenus::address))
-                });
-                stored.decide(&app_id, address.as_ref(), newly_mapped, Instant::now())
-            };
-            drop(stored);
-            if let Some(deadline) = decision.started {
-                let tick = menu_tick;
-                let delay =
-                    deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1);
-                Timers::get().after(delay, move || {
-                    let mut tick = tick;
-                    let next = *tick.peek() + 1;
-                    tick.set(next);
-                });
+                let decision =
+                    stored.decide(&app_id, address.as_ref(), newly_mapped, Instant::now());
+                if let Some(deadline) = decision.started {
+                    let tick = menu_tick;
+                    let delay = deadline.saturating_duration_since(Instant::now())
+                        + Duration::from_millis(1);
+                    Timers::get().after(delay, move || {
+                        let mut tick = tick;
+                        let next = *tick.peek() + 1;
+                        tick.set(next);
+                    });
+                }
+                Some(decision.choice)
             }
-            Some(decision.choice)
         } else {
             None
         };
@@ -487,7 +449,7 @@ impl App for BarApp {
             }
             anchors[index].clone()
         };
-        let system_entries = Rc::new(self.entries.clone());
+        let system_entries = self.entries.clone();
         let system_items = {
             let entries = system_entries.clone();
             move || system::system_menu_items(&entries)
@@ -903,7 +865,7 @@ fn surface_spec() -> LayerSpec {
 pub fn run() -> anyhow::Result<()> {
     let window_store = data_dir().join("window.domain");
     let menubar_store = config_dir().join("menubar.domain");
-    let entries = crate::desktop::read_entries();
+    let entries = Rc::new(crate::desktop::read_entries());
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));
     let app_menus = State::create_global(load_app_menus(&menubar_store));
@@ -974,7 +936,7 @@ mod tests {
     fn remembered_titles_are_shown_then_replaced() {
         let mut memory = MenuMemory::default();
         let now = Instant::now();
-        assert!(memory.remember("firefox", vec!["File".into(), "Edit".into()]));
+        memory.remember("firefox", vec!["File".into(), "Edit".into()]);
         let shown = memory.decide("firefox", None, true, now);
         assert_eq!(
             shown.choice,
@@ -982,22 +944,12 @@ mod tests {
         );
         assert!(shown.started.is_some());
 
-        assert!(memory.remember("firefox", vec!["File".into(), "Edit".into(), "View".into()]));
+        memory.remember("firefox", vec!["File".into(), "Edit".into(), "View".into()]);
         let replaced = memory.decide("firefox", None, false, now);
         assert_eq!(
             replaced.choice,
             MenuChoice::Remembered(vec!["File".into(), "Edit".into(), "View".into()])
         );
-    }
-
-    #[test]
-    fn equal_titles_do_not_change_the_remembered_set() {
-        let mut memory = MenuMemory::default();
-        let labels = vec!["File".to_string(), "Edit".to_string()];
-        assert!(memory.remember("firefox", labels.clone()));
-        assert!(!memory.remember("firefox", labels.clone()));
-        let decision = memory.decide("firefox", None, true, Instant::now());
-        assert_eq!(decision.choice, MenuChoice::Remembered(labels));
     }
 
     #[test]
