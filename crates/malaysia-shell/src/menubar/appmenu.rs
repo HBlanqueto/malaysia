@@ -350,7 +350,7 @@ fn go_menu_items() -> Vec<MenuItem> {
 
 fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
-    let mut items = focused::window_controls("", None);
+    let mut items = focused::window_controls(None);
     items.extend([
         MenuItem::Separator,
         items::action(
@@ -378,9 +378,9 @@ fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Ve
             None,
         ));
     }
-    items.extend(toplevels.iter().enumerate().map(|(index, window)| {
+    items.extend(toplevels.iter().map(|window| {
         let name = resolve_app_name(Some(&window.app_id), entries);
-        focused::window_item(index, window, &name, CheckState::None)
+        focused::window_item(window, &name, CheckState::None)
     }));
     items
 }
@@ -442,9 +442,8 @@ pub fn on_action(id: String) {
         "file-new-folder-desktop" => create_desktop_folder(),
         "window-show-desktop" => {
             let toplevels = Toplevels::get();
-            let count = toplevels.list.read().len();
-            for index in 0..count {
-                toplevels.minimize(index);
+            for window in toplevels.list.read().iter() {
+                toplevels.minimize(window.id);
             }
         }
         _ => focused::on_action(id),
@@ -487,14 +486,9 @@ mod tests {
 
     fn toplevel(minimized: bool) -> ToplevelInfo {
         ToplevelInfo {
-            title: String::new(),
             app_id: "foot".to_string(),
-            active: false,
-            maximized: false,
             minimized,
-            restorable: false,
-            app_menu: None,
-            gtk_menus: None,
+            ..Default::default()
         }
     }
 

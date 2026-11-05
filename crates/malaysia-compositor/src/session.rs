@@ -551,7 +551,7 @@ fn append_screenshot_overlay<R: MalaysiaRenderer>(
             append_solid(
                 Point::from((0, 0)),
                 output,
-                vow_design::SCREENSHOT_IDLE_DIM,
+                vow_design::SCREENSHOT_IDLE_DIM.premultiplied(),
                 scale,
                 elements,
             );
@@ -576,7 +576,7 @@ fn append_dim_outside<R: MalaysiaRenderer>(
     scale: f64,
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
-    let dim = vow_design::SCREENSHOT_DIM;
+    let dim = vow_design::SCREENSHOT_DIM.premultiplied();
     let left = rect.loc.x.clamp(0, output.w);
     let top = rect.loc.y.clamp(0, output.h);
     let right = (rect.loc.x + rect.size.w).clamp(left, output.w);
@@ -617,7 +617,7 @@ fn append_border<R: MalaysiaRenderer>(
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     const BORDER: i32 = vow_design::SCREENSHOT_BORDER_WIDTH;
-    let color = vow_design::SCREENSHOT_BORDER;
+    let color = vow_design::SCREENSHOT_BORDER.premultiplied();
     let (x, y) = (rect.loc.x, rect.loc.y);
     let (w, h) = (rect.size.w, rect.size.h);
     if w <= 0 || h <= 0 {
@@ -767,7 +767,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
             append_solid(
                 Point::from((0, drop)),
                 Size::from((state.logical_output_size().w, frame.bar)),
-                vow_design::SPACE_GAP_COLOR,
+                vow_design::SPACE_GAP_COLOR.premultiplied(),
                 scale,
                 &mut elements,
             );
@@ -833,7 +833,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
                     &mut state.focus_backdrop,
                     Point::from((0, 0)),
                     size,
-                    vow_design::SPACE_GAP_COLOR,
+                    vow_design::SPACE_GAP_COLOR.premultiplied(),
                     scale,
                     &mut elements,
                 );
@@ -976,7 +976,7 @@ fn append_focus_transition<R: MalaysiaRenderer>(
     append_solid(
         frame.rect.loc,
         frame.rect.size,
-        vow_design::SPACE_GAP_COLOR,
+        vow_design::SPACE_GAP_COLOR.premultiplied(),
         scale,
         elements,
     );
@@ -1046,7 +1046,7 @@ fn append_sliding_spaces<R: MalaysiaRenderer>(
     append_solid(
         Point::from((0, 0)),
         output,
-        vow_design::SPACE_GAP_COLOR,
+        vow_design::SPACE_GAP_COLOR.premultiplied(),
         scale,
         elements,
     );
@@ -1620,7 +1620,7 @@ fn capture_output_png(
         size,
         transform,
         scale,
-        vow_design::DESKTOP_CLEAR,
+        vow_design::DESKTOP_CLEAR.premultiplied(),
     )
 }
 
@@ -1674,7 +1674,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 &mut framebuffer,
                 age,
                 &elements,
-                vow_design::DESKTOP_CLEAR,
+                vow_design::DESKTOP_CLEAR.premultiplied(),
             )
             .map_err(DrawError::Output)?;
 

@@ -1,5 +1,5 @@
 use malaysia_scene::scene::Decoration;
-use vow_design::{Titlebar, TitlebarPosition};
+use vow_design::Titlebar;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Insets {
@@ -69,39 +69,22 @@ pub(crate) fn effective_decoration(
 }
 
 fn titlebar_inset(titlebar: &Titlebar) -> Insets {
-    let thickness = f64::from(titlebar.thickness);
-    match titlebar.position {
-        TitlebarPosition::Top => Insets {
-            top: thickness,
-            ..Insets::ZERO
-        },
-        TitlebarPosition::Bottom => Insets {
-            bottom: thickness,
-            ..Insets::ZERO
-        },
-        TitlebarPosition::Left => Insets {
-            left: thickness,
-            ..Insets::ZERO
-        },
-        TitlebarPosition::Right => Insets {
-            right: thickness,
-            ..Insets::ZERO
-        },
-        TitlebarPosition::None => Insets::ZERO,
+    Insets {
+        top: f64::from(titlebar.thickness),
+        ..Insets::ZERO
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use vow_design::{TITLEBAR, Titlebar, TitlebarPosition};
+    use vow_design::{TITLEBAR, Titlebar};
 
     use super::{Insets, Role, WindowState, effective_decoration};
     use crate::config::DecorationPolicy;
     use malaysia_scene::scene::Decoration;
 
-    fn titlebar(position: TitlebarPosition, thickness: u32) -> Titlebar {
+    fn titlebar(thickness: u32) -> Titlebar {
         Titlebar {
-            position,
             thickness,
             ..TITLEBAR
         }
@@ -124,7 +107,7 @@ mod tests {
 
     #[test]
     fn a_normal_toplevel_gets_a_top_inset() {
-        let bar = titlebar(TitlebarPosition::Top, 24);
+        let bar = titlebar(24);
         let insets = Insets::for_window(
             Role::Toplevel,
             WindowState::Normal,
@@ -140,44 +123,8 @@ mod tests {
     }
 
     #[test]
-    fn the_titlebar_side_follows_the_configuration() {
-        let bar = titlebar(TitlebarPosition::Left, 32);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Normal,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets.left, 32.0);
-        assert_eq!(insets.top, 0.0);
-        assert_eq!(insets.horizontal(), 32.0);
-
-        let bar = titlebar(TitlebarPosition::Bottom, 20);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Normal,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets.bottom, 20.0);
-        assert_eq!(insets.vertical(), 20.0);
-    }
-
-    #[test]
-    fn no_titlebar_reserves_nothing() {
-        let bar = titlebar(TitlebarPosition::None, 32);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Normal,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets, Insets::ZERO);
-    }
-
-    #[test]
     fn a_dialog_is_never_decorated() {
-        let bar = titlebar(TitlebarPosition::Top, 32);
+        let bar = titlebar(32);
         let insets =
             Insets::for_window(Role::Dialog, WindowState::Normal, Decoration::Server, &bar);
         assert_eq!(insets, Insets::ZERO);
@@ -185,7 +132,7 @@ mod tests {
 
     #[test]
     fn fullscreen_reserves_nothing() {
-        let bar = titlebar(TitlebarPosition::Top, 32);
+        let bar = titlebar(32);
         let insets = Insets::for_window(
             Role::Toplevel,
             WindowState::Fullscreen,
@@ -197,7 +144,7 @@ mod tests {
 
     #[test]
     fn client_side_chrome_reserves_nothing() {
-        let bar = titlebar(TitlebarPosition::Top, 32);
+        let bar = titlebar(32);
         let insets = Insets::for_window(
             Role::Toplevel,
             WindowState::Normal,
@@ -247,7 +194,7 @@ mod tests {
 
     #[test]
     fn a_maximized_window_keeps_its_titlebar_for_now() {
-        let bar = titlebar(TitlebarPosition::Top, 32);
+        let bar = titlebar(32);
         let insets = Insets::for_window(
             Role::Toplevel,
             WindowState::Maximized,

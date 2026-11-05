@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use vow_appearance::{
-    AppearanceConfig, ColorScheme, WindowColorMode, read_appearance, read_dominant, resolve,
+    AppearanceConfig, ColorScheme, WindowColorMode, load_dominant, read_appearance, resolve,
 };
 use vow_design::Rgba;
 use zbus::blocking::Connection;
@@ -58,7 +58,7 @@ impl Values {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
         let dominant = if appearance.window_color == WindowColorMode::Wallpaper {
-            read_dominant()
+            load_dominant()
         } else {
             None
         };
@@ -234,7 +234,7 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option
                 }
             };
             if let Some(bridge) = &bridge {
-                bridge.sync(appearance.as_ref(), read_dominant());
+                bridge.sync(appearance.as_ref(), load_dominant());
             }
             let new = Values::from_appearance(appearance.as_ref());
             let old = {

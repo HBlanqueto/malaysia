@@ -112,7 +112,7 @@ pub(crate) fn screenshot_region_png(
         size,
         transform,
         scale,
-        vow_design::DESKTOP_CLEAR,
+        vow_design::DESKTOP_CLEAR.premultiplied(),
     )?;
     let (width, height, cropped) = crop_region(region, scale, w, h, &rgba)?;
     encode_png(width, height, &cropped)
@@ -279,7 +279,7 @@ pub(crate) fn serve_pending(
             drawn,
             size,
             scale,
-            vow_design::DESKTOP_CLEAR,
+            vow_design::DESKTOP_CLEAR.premultiplied(),
             &pending.frame.buffer(),
         ) {
             Ok(()) => pending.frame.success(

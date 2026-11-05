@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
 use nix::sys::signal::{SigSet, Signal};
-use vow_appearance::{read_appearance, read_dominant};
+use vow_appearance::{load_dominant, read_appearance};
 
 use settings::OBJECT_PATH;
 
@@ -25,7 +25,7 @@ fn main() -> Result<()> {
 
     let bridge = gtk::Bridge::from_env();
     match (&bridge, read_appearance()) {
-        (Some(bridge), Ok(appearance)) => bridge.sync(appearance.as_ref(), read_dominant()),
+        (Some(bridge), Ok(appearance)) => bridge.sync(appearance.as_ref(), load_dominant()),
         (Some(_), Err(error)) => {
             tracing::warn!(%error, "appearance.domain unreadable; GTK bridge not written")
         }

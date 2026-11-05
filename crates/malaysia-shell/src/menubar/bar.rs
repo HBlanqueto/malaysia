@@ -401,7 +401,7 @@ impl App for BarApp {
         } else {
             None
         };
-        let palette = barrier_kit::theme::shell_palette(&resolved);
+        let palette = resolved.shell;
         let over_focus = Toplevels::get().space.read().focus_bar.over_focus();
         let text = if over_focus {
             theme::color(vow_design::FOCUS_BAR_TEXT)

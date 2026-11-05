@@ -13,7 +13,7 @@ impl App for DockApp {
         let toplevels = Toplevels::get();
         let entries = toplevels.list.read().clone();
         let resolved = barrier_kit::theme::resolved();
-        let palette = barrier_kit::theme::shell_palette(&resolved);
+        let palette = resolved.shell;
         let background = theme::color(barrier_kit::theme::surface_background(
             &resolved,
             barrier_kit::theme::SurfaceKind::LayerShell,
@@ -23,7 +23,7 @@ impl App for DockApp {
         let text = theme::color(palette.text);
         let active_text = theme::color(palette.tile_text_active);
 
-        let tiles = entries.iter().enumerate().map(|(index, entry)| {
+        let tiles = entries.iter().map(|entry| {
             let toplevels = toplevels.clone();
             let title = if entry.title.is_empty() {
                 entry.app_id.clone()
@@ -32,13 +32,14 @@ impl App for DockApp {
             };
             let initial = title.chars().next().unwrap_or('?').to_string();
             let is_active = entry.active;
+            let id = entry.id;
             rect()
                 .width(Size::px(DOCK_TILESIZE as f32))
                 .height(Size::px(DOCK_TILESIZE as f32))
                 .corner_radius((DOCK_TILESIZE / 4) as f32)
                 .background(if is_active { active_tile } else { tile })
                 .center()
-                .on_press(move |_| toplevels.activate(index))
+                .on_press(move |_| toplevels.activate(id))
                 .child(
                     label()
                         .text(initial)

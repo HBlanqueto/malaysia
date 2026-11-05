@@ -9,7 +9,6 @@ use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::input::Input;
 use freya_components::svg_viewer::SvgViewer;
-use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
@@ -47,7 +46,7 @@ struct LauncherApp {
 
 impl App for LauncherApp {
     fn render(&self) -> impl IntoElement {
-        use_init_theme(barrier_kit::theme::shell);
+        barrier_kit::theme::use_shell_theme();
 
         let open = use_animation(|conf| {
             conf.on_creation(OnCreation::Run);

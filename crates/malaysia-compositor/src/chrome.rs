@@ -20,7 +20,7 @@ use vow_appearance::{
 };
 use vow_design::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
-    TRAFFIC_RIM_WIDTH, TitlebarPosition,
+    TRAFFIC_RIM_WIDTH,
 };
 
 use crate::config::Config;
@@ -357,7 +357,7 @@ pub(crate) fn button_center(
     insets: Insets,
     kind: ButtonKind,
 ) -> Option<Point<f64, Logical>> {
-    if TITLEBAR.position != TitlebarPosition::Top || insets.top < f64::from(TITLEBAR.thickness) {
+    if insets.top < f64::from(TITLEBAR.thickness) {
         return None;
     }
     let index = TITLEBAR
@@ -378,7 +378,7 @@ pub(crate) fn button_at(
     location: Point<f64, Logical>,
 ) -> Option<ButtonKind> {
     let titlebar = TITLEBAR;
-    if titlebar.position != TitlebarPosition::Top || insets.top < f64::from(titlebar.thickness) {
+    if insets.top < f64::from(titlebar.thickness) {
         return None;
     }
     if location.y < outer.y() || location.y >= outer.y() + f64::from(titlebar.thickness) {
@@ -1055,7 +1055,6 @@ mod tests {
 
     #[test]
     fn the_titlebar_uses_tengen_metrics() {
-        assert_eq!(TITLEBAR.position, TitlebarPosition::Top);
         assert_eq!(TITLEBAR.thickness, 32);
         assert_eq!(TITLEBAR.buttons.diameter, 14);
         assert_eq!(TITLEBAR.buttons.spacing, 9);

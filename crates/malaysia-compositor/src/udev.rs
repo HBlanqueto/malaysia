@@ -906,7 +906,7 @@ impl Udev {
         match self.compositor.render_frame(
             &mut renderer,
             &elements,
-            vow_design::DESKTOP_CLEAR,
+            vow_design::DESKTOP_CLEAR.premultiplied(),
             self.frame_flags,
         ) {
             Ok(mut result) => {

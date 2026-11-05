@@ -10,10 +10,10 @@ use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
 use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, ScrollBars, TintParts, TintStrength,
-    TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope, derived_lights,
-    load_appearance,
+    TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope, lights_for,
+    load_appearance, palette,
 };
-use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS, TITLEBAR};
+use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
 
 use crate::previews::{theme_preview, traffic_radius, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
@@ -303,7 +303,7 @@ fn traffic_popup(
     TRAFFIC
         .into_iter()
         .fold(PopUpButton::new("Semáforos"), |popup, (style, label)| {
-            let lights = traffic_lights(style, resolved, dominant);
+            let lights = traffic_lights(style, config, resolved, dominant);
             let round = config.traffic_light_shape == TrafficLightShape::Round;
             popup.icon_item(label, MenuIcon::Svg(traffic_row_svg(lights, round).into()))
         })
@@ -320,14 +320,17 @@ fn traffic_popup(
 
 fn traffic_lights(
     style: TrafficLightStyle,
+    config: &AppearanceConfig,
     resolved: &Resolved,
     dominant: Option<Rgba>,
 ) -> [Rgba; 3] {
+    let normal_accent = config
+        .accent_color
+        .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
+        .unwrap_or(palette(resolved.scheme).accent);
     match style {
         TrafficLightStyle::Auto => resolved.lights,
-        TrafficLightStyle::Standard => TITLEBAR.buttons.order.map(|button| button.color),
-        TrafficLightStyle::Accent => derived_lights(resolved.accent),
-        TrafficLightStyle::Wallpaper => derived_lights(dominant.unwrap_or(resolved.accent)),
+        style => lights_for(style, normal_accent, dominant),
     }
 }
 

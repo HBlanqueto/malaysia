@@ -1231,9 +1231,6 @@ impl State {
         id: WindowId,
         location: Point<f64, Logical>,
     ) -> Option<Point<f64, Logical>> {
-        if TITLEBAR.position != vow_design::TitlebarPosition::Top {
-            return None;
-        }
         let (outer, insets) = self.chrome_frame(id)?;
         if insets.top < f64::from(TITLEBAR.thickness) {
             return None;

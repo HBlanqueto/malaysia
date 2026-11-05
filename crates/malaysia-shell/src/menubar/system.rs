@@ -102,7 +102,7 @@ pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[Deskt
         id,
         toplevels,
         |_, _| spawn_settings(),
-        |index| barrier_kit::shell::Toplevels::get().activate(index),
+        |id| barrier_kit::shell::Toplevels::get().activate(id),
     );
 }
 
@@ -110,14 +110,14 @@ fn on_system_action_with(
     id: String,
     toplevels: &[ToplevelInfo],
     mut spawn: impl FnMut(&str, &[&str]),
-    mut activate: impl FnMut(usize),
+    mut activate: impl FnMut(u64),
 ) {
     match id.as_str() {
         "lock-screen" => spawn_component("lock"),
         "about-this-computer" => {
             let about = app_id(ABOUT_APP_ID);
-            if let Some(index) = toplevels.iter().position(|window| window.app_id == about) {
-                activate(index);
+            if let Some(window) = toplevels.iter().find(|window| window.app_id == about) {
+                activate(window.id);
             } else {
                 spawn_component("about");
             }
@@ -130,11 +130,8 @@ fn on_system_action_with(
         "logout" => spawn_component_with("power", &[PowerAction::LogOut.arg()]),
         "system-settings" => {
             let settings = app_id("settings");
-            if let Some(index) = toplevels
-                .iter()
-                .position(|window| window.app_id == settings)
-            {
-                activate(index);
+            if let Some(window) = toplevels.iter().find(|window| window.app_id == settings) {
+                activate(window.id);
             } else {
                 spawn("malaysia-settings", &[]);
             }
@@ -147,16 +144,11 @@ fn on_system_action_with(
 mod tests {
     use super::*;
 
-    fn toplevel(app_id: &str) -> ToplevelInfo {
+    fn toplevel(id: u64, app_id: &str) -> ToplevelInfo {
         ToplevelInfo {
-            title: String::new(),
+            id,
             app_id: app_id.to_string(),
-            active: false,
-            maximized: false,
-            minimized: false,
-            restorable: false,
-            app_menu: None,
-            gtk_menus: None,
+            ..Default::default()
         }
     }
 
@@ -172,13 +164,13 @@ mod tests {
     #[test]
     fn system_settings_spawns_when_no_settings_window_exists() {
         let mut launched: Option<String> = None;
-        let mut activated: Option<usize> = None;
+        let mut activated: Option<u64> = None;
 
         on_system_action_with(
             "system-settings".to_string(),
-            &[toplevel("foot"), toplevel("org.kde.kate")],
+            &[toplevel(10, "foot"), toplevel(11, "org.kde.kate")],
             |binary, _args| launched = Some(binary.to_string()),
-            |index| activated = Some(index),
+            |id| activated = Some(id),
         );
 
         assert_eq!(launched, Some("malaysia-settings".to_string()));
@@ -188,35 +180,35 @@ mod tests {
     #[test]
     fn system_settings_activates_existing_window_and_does_not_spawn() {
         let mut launched: Option<String> = None;
-        let mut activated: Option<usize> = None;
+        let mut activated: Option<u64> = None;
 
         on_system_action_with(
             "system-settings".to_string(),
             &[
-                toplevel("foot"),
-                toplevel(&app_id("settings")),
-                toplevel("kate"),
+                toplevel(10, "foot"),
+                toplevel(11, &app_id("settings")),
+                toplevel(12, "kate"),
             ],
             |binary, _args| launched = Some(binary.to_string()),
-            |index| activated = Some(index),
+            |id| activated = Some(id),
         );
 
-        assert_eq!(activated, Some(1), "must activate the settings window");
+        assert_eq!(activated, Some(11), "must activate the settings window");
         assert!(launched.is_none(), "must not spawn when the window exists");
     }
 
     #[test]
     fn about_this_computer_activates_its_only_window() {
-        let mut activated: Option<usize> = None;
+        let mut activated: Option<u64> = None;
         let about = app_id(ABOUT_APP_ID);
 
         on_system_action_with(
             "about-this-computer".to_string(),
-            &[toplevel("foot"), toplevel(&about)],
+            &[toplevel(10, "foot"), toplevel(11, &about)],
             |_, _| {},
-            |index| activated = Some(index),
+            |id| activated = Some(id),
         );
 
-        assert_eq!(activated, Some(1));
+        assert_eq!(activated, Some(11));
     }
 }

@@ -239,7 +239,7 @@ pub(crate) fn take_snapshot(
             &mut framebuffer,
             0,
             &elements,
-            vow_design::DESKTOP_CLEAR,
+            vow_design::DESKTOP_CLEAR.premultiplied(),
         );
         let elapsed = start.elapsed();
         if rendered.is_err() {

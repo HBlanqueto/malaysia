@@ -5,12 +5,13 @@ use std::rc::Rc;
 
 use barrier_kit::controls::{Button, ButtonStyle};
 use barrier_kit::menu::measure_text_weight;
-use barrier_kit::platform::{Decorations, Timers, WindowControls, WindowOptions, run_window};
-use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use barrier_kit::platform::{Timers, WindowControls, WindowOptions, run_window};
+use barrier_kit::shell::{
+    Anchors, KeyboardInteractivity, Layer, LayerSpec, ToplevelInfo, Toplevels, run_layer,
+};
 use barrier_kit::style::Palette;
 use barrier_kit::titlebar::Titlebar;
 use freya_components::svg_viewer::SvgViewer;
-use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
@@ -209,7 +210,7 @@ struct ConfirmApp {
 
 impl App for ConfirmApp {
     fn render(&self) -> impl IntoElement {
-        use_init_theme(barrier_kit::theme::shell);
+        barrier_kit::theme::use_shell_theme();
         let action = self.action;
         let remaining = self.remaining;
         let timers = Timers::get();
@@ -275,21 +276,19 @@ pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
 
 #[derive(Clone, Debug, PartialEq)]
 struct RunningApp {
-    index: usize,
+    id: u64,
     app_id: String,
 }
 
-fn running_apps(app_ids: &[String]) -> Vec<RunningApp> {
-    let mut seen = Vec::new();
-    let mut apps = Vec::new();
-    for (index, app_id) in app_ids.iter().enumerate() {
-        if app_id.is_empty() || seen.contains(app_id) {
+fn running_apps(windows: &[ToplevelInfo]) -> Vec<RunningApp> {
+    let mut apps: Vec<RunningApp> = Vec::new();
+    for window in windows {
+        if window.app_id.is_empty() || apps.iter().any(|app| app.app_id == window.app_id) {
             continue;
         }
-        seen.push(app_id.clone());
         apps.push(RunningApp {
-            index,
-            app_id: app_id.clone(),
+            id: window.id,
+            app_id: window.app_id.clone(),
         });
     }
     apps
@@ -317,15 +316,9 @@ impl ForceQuitApp {
 
 impl App for ForceQuitApp {
     fn render(&self) -> impl IntoElement {
-        use_init_theme(barrier_kit::theme::shell);
+        barrier_kit::theme::use_shell_theme();
         let toplevels = Toplevels::get();
-        let app_ids: Vec<String> = toplevels
-            .list
-            .read()
-            .iter()
-            .map(|window| window.app_id.clone())
-            .collect();
-        let apps = running_apps(&app_ids);
+        let apps = running_apps(&toplevels.list.read());
         let selected = (*self.selected.read()).min(apps.len().saturating_sub(1));
         let palette = Palette::current();
         let text = theme::color(palette.label);
@@ -338,7 +331,7 @@ impl App for ForceQuitApp {
             move || {
                 if let Some(app) = apps.get(selected) {
                     tracing::info!(app_id = %app.app_id, "force quit requested");
-                    toplevels.force_quit(app.index);
+                    toplevels.force_quit(app.id);
                 }
             }
         };
@@ -708,7 +701,7 @@ struct AboutApp {
 
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
-        use_init_theme(barrier_kit::theme::shell);
+        barrier_kit::theme::use_shell_theme();
         about_view(&self.info)
     }
 }
@@ -844,7 +837,6 @@ pub fn run_about() -> anyhow::Result<()> {
     run_window(
         AppComponent::new(AboutApp { info }),
         WindowOptions::new("Acerca de este PC", ABOUT_APP_ID)
-            .decorations(Decorations::Client)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
             .max_size(Some(ABOUT_SIZE)),
@@ -861,7 +853,7 @@ struct AboutAppInfo {
 
 impl App for AboutAppInfo {
     fn render(&self) -> impl IntoElement {
-        use_init_theme(barrier_kit::theme::shell);
+        barrier_kit::theme::use_shell_theme();
         let resolved = barrier_kit::theme::resolved();
         let palette = Palette::current();
         let focused = WindowControls::get().status.read().activated;
@@ -923,7 +915,6 @@ pub fn run_about_app(app_id: Option<&str>) -> anyhow::Result<()> {
     run_window(
         AppComponent::new(info),
         WindowOptions::new(window_title, ABOUT_APP_INFO_ID)
-            .decorations(Decorations::Client)
             .size(ABOUT_APP_SIZE)
             .min_size(Some(ABOUT_APP_SIZE))
             .max_size(Some(ABOUT_APP_SIZE)),
@@ -937,17 +928,21 @@ mod tests {
 
     #[test]
     fn one_row_per_app_keeps_the_first_window() {
-        let ids = ["kate", "foot", "kate", ""].map(String::from);
-        let apps = running_apps(&ids);
+        let windows =
+            [(7, "kate"), (3, "foot"), (9, "kate"), (4, "")].map(|(id, app_id)| ToplevelInfo {
+                id,
+                app_id: app_id.into(),
+                ..Default::default()
+            });
         assert_eq!(
-            apps,
+            running_apps(&windows),
             vec![
                 RunningApp {
-                    index: 0,
+                    id: 7,
                     app_id: "kate".into()
                 },
                 RunningApp {
-                    index: 1,
+                    id: 3,
                     app_id: "foot".into()
                 },
             ]

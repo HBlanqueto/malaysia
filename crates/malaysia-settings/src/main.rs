@@ -3,9 +3,8 @@ mod previews;
 mod state;
 
 use barrier_kit::app::{Instance, Launch, launch};
-use barrier_kit::platform::{Decorations, WindowOptions, run_window};
+use barrier_kit::platform::{WindowOptions, run_window};
 use barrier_kit::theme;
-use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use vow_appearance::{load_appearance, load_dominant};
@@ -22,7 +21,6 @@ fn main() {
     run_window(
         AppComponent::new(SettingsApp { instance }),
         WindowOptions::new("Ajustes del sistema", "settings")
-            .decorations(Decorations::Client)
             .size((SETTINGS.window_width, SETTINGS.window_height))
             .min_size(Some((SETTINGS.window_width, SETTINGS.window_min_height)))
             .max_size(Some((SETTINGS.window_width, 0))),
@@ -42,7 +40,7 @@ impl App for SettingsApp {
                 instance.listen();
             }
         });
-        use_init_theme(theme::shell);
+        theme::use_shell_theme();
         settings_window(&load_appearance(), load_dominant(), &theme::resolved())
     }
 }
@@ -164,7 +162,7 @@ mod tests {
             let path = dir.join("appearance.domain");
             let purple = ACCENT_SWATCHES
                 .iter()
-                .find(|(name, _)| *name == "Morado")
+                .find(|(id, _)| *id == "purple")
                 .map(|(_, color)| color)
                 .expect("purple swatch exists");
             let initial = AppearanceConfig {
@@ -174,7 +172,10 @@ mod tests {
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
-            let node = find_label(&test, "Morado").expect("purple accent swatch label exists");
+            let node = ["Purple", "Morado"]
+                .into_iter()
+                .find_map(|name| find_label(&test, name))
+                .expect("purple accent swatch label exists");
             click_node(&mut test, node);
 
             let config = vow_appearance::load_appearance();
