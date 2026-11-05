@@ -5,6 +5,7 @@ use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
 use barrier_kit::shell::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
+use crate::localize::tr;
 use crate::menubar::remote::Title;
 use crate::menubar::{
     create_desktop_folder, focused, help_topics, icons, resolve_app_name, system,
@@ -15,75 +16,77 @@ fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
-        MenuItem::action("malaysia-about", "Acerca de Malaysia").with_enabled(false),
+        MenuItem::action("malaysia-about", tr!("desktop-about")).with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("malaysia-settings", "Ajustes…").with_icon(MenuIcon::svg(icons::GEAR)),
+        MenuItem::action("malaysia-settings", tr!("menu-settings"))
+            .with_icon(MenuIcon::svg(icons::GEAR)),
         MenuItem::Separator,
-        MenuItem::action("malaysia-empty-trash", "Vaciar papelera…")
+        MenuItem::action("malaysia-empty-trash", tr!("desktop-empty-trash"))
             .with_shortcut("Shift+Super+BackSpace")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::TRASH)),
         MenuItem::Separator,
         focused::services_submenu(),
         MenuItem::Separator,
-        MenuItem::action("desktop-hide", "Ocultar Escritorio")
+        MenuItem::action("desktop-hide", tr!("desktop-hide"))
             .with_shortcut("Super+H")
             .with_enabled(false),
-        MenuItem::action("app-hide-others", "Ocultar otros").with_enabled(other_unminimized),
-        MenuItem::action("app-show-all", "Mostrar todo").with_enabled(any_minimized),
+        MenuItem::action("app-hide-others", tr!("menu-hide-others"))
+            .with_enabled(other_unminimized),
+        MenuItem::action("app-show-all", tr!("menu-show-all")).with_enabled(any_minimized),
     ]
 }
 
 fn file_menu_items() -> Vec<MenuItem> {
     vec![
-        MenuItem::action("file-new-window", "Nueva ventana"),
-        MenuItem::action("file-new-folder-desktop", "Nueva carpeta en el escritorio"),
+        MenuItem::action("file-new-window", tr!("file-new-window")),
+        MenuItem::action("file-new-folder-desktop", tr!("file-new-folder-desktop")),
         MenuItem::action(
             "file-new-folder-selection",
-            "Nueva carpeta con la selección",
+            tr!("file-new-folder-selection"),
         )
         .with_shortcut("Ctrl+Super+N")
         .with_enabled(false),
-        MenuItem::action("file-new-tab", "Nueva pestaña")
+        MenuItem::action("file-new-tab", tr!("file-new-tab"))
             .with_shortcut("Super+T")
             .with_enabled(false),
-        MenuItem::action("file-open", "Abrir")
+        MenuItem::action("file-open", tr!("file-open"))
             .with_shortcut("Super+O")
             .with_enabled(false),
-        MenuItem::submenu("Abrir con", Vec::new()).with_enabled(false),
-        MenuItem::action("file-close-window", "Cerrar ventana")
+        MenuItem::submenu(tr!("file-open-with"), Vec::new()).with_enabled(false),
+        MenuItem::action("file-close-window", tr!("menu-close-window"))
             .with_shortcut("Super+W")
             .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("file-get-info", "Obtener información")
+        MenuItem::action("file-get-info", tr!("file-get-info"))
             .with_shortcut("Super+I")
             .with_enabled(false),
-        MenuItem::action("file-rename", "Renombrar").with_enabled(false),
-        MenuItem::action("file-compress", "Comprimir").with_enabled(false),
-        MenuItem::action("file-duplicate", "Duplicar")
+        MenuItem::action("file-rename", tr!("file-rename")).with_enabled(false),
+        MenuItem::action("file-compress", tr!("file-compress")).with_enabled(false),
+        MenuItem::action("file-duplicate", tr!("file-duplicate"))
             .with_shortcut("Super+D")
             .with_enabled(false),
-        MenuItem::action("file-make-alias", "Crear enlace")
+        MenuItem::action("file-make-alias", tr!("file-make-alias"))
             .with_shortcut("Ctrl+Super+A")
             .with_enabled(false),
-        MenuItem::action("file-quick-look", "Vista rápida")
+        MenuItem::action("file-quick-look", tr!("file-quick-look"))
             .with_shortcut("Super+Y")
             .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("file-share", "Compartir…")
+        MenuItem::action("file-share", tr!("file-share"))
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::SHARE)),
         MenuItem::Separator,
-        MenuItem::action("file-move-to-trash", "Mover a la papelera")
+        MenuItem::action("file-move-to-trash", tr!("file-move-to-trash"))
             .with_shortcut("Super+BackSpace")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::TRASH)),
-        MenuItem::action("file-eject", "Expulsar")
+        MenuItem::action("file-eject", tr!("file-eject"))
             .with_shortcut("Super+E")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::EJECT)),
         MenuItem::Separator,
-        MenuItem::action("file-print", "Imprimir")
+        MenuItem::action("file-print", tr!("file-print"))
             .with_shortcut("Super+P")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::PRINTER)),
@@ -92,33 +95,33 @@ fn file_menu_items() -> Vec<MenuItem> {
 
 fn edit_menu_items() -> Vec<MenuItem> {
     vec![
-        MenuItem::action("edit-undo", "Deshacer")
+        MenuItem::action("edit-undo", tr!("edit-undo"))
             .with_shortcut("Super+Z")
             .with_enabled(false),
-        MenuItem::action("edit-redo", "Rehacer")
+        MenuItem::action("edit-redo", tr!("edit-redo"))
             .with_shortcut("Shift+Super+Z")
             .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("edit-cut", "Cortar")
+        MenuItem::action("edit-cut", tr!("edit-cut"))
             .with_shortcut("Super+X")
             .with_enabled(false),
-        MenuItem::action("edit-copy", "Copiar")
+        MenuItem::action("edit-copy", tr!("edit-copy"))
             .with_shortcut("Super+C")
             .with_enabled(false),
-        MenuItem::action("edit-paste", "Pegar")
+        MenuItem::action("edit-paste", tr!("edit-paste"))
             .with_shortcut("Super+V")
             .with_enabled(false),
-        MenuItem::action("edit-select-all", "Seleccionar todo")
+        MenuItem::action("edit-select-all", tr!("edit-select-all"))
             .with_shortcut("Super+A")
             .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("edit-show-clipboard", "Mostrar portapapeles").with_enabled(false),
+        MenuItem::action("edit-show-clipboard", tr!("edit-show-clipboard")).with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("edit-search", "Buscar")
+        MenuItem::action("edit-search", tr!("menu-search"))
             .with_shortcut("Super+Space")
             .with_icon(MenuIcon::svg(icons::SEARCH)),
         MenuItem::Separator,
-        MenuItem::action("edit-emoji", "Emojis y símbolos")
+        MenuItem::action("edit-emoji", tr!("edit-emoji"))
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::EMOJI)),
     ]
@@ -126,34 +129,31 @@ fn edit_menu_items() -> Vec<MenuItem> {
 
 fn view_menu_items() -> Vec<MenuItem> {
     vec![
-        MenuItem::action("view-as-icons", "Como iconos")
+        MenuItem::action("view-as-icons", tr!("view-as-icons"))
             .with_shortcut("Super+1")
             .with_enabled(false)
             .with_check(CheckState::Checkbox(true)),
-        MenuItem::action("view-as-list", "Como lista")
+        MenuItem::action("view-as-list", tr!("view-as-list"))
             .with_shortcut("Super+2")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::VIEW_LIST)),
-        MenuItem::action("view-as-columns", "Como columnas")
+        MenuItem::action("view-as-columns", tr!("view-as-columns"))
             .with_shortcut("Super+3")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::VIEW_COLUMNS)),
-        MenuItem::action("view-as-gallery", "Como galería")
+        MenuItem::action("view-as-gallery", tr!("view-as-gallery"))
             .with_shortcut("Super+4")
             .with_enabled(false)
             .with_icon(MenuIcon::svg(icons::VIEW_GALLERY)),
         MenuItem::Separator,
-        MenuItem::action("view-toggle-dock", "Mostrar/ocultar Dock").with_enabled(false),
+        MenuItem::action("view-toggle-dock", tr!("view-toggle-dock")).with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("view-change-wallpaper", "Cambiar fondo de pantalla…").with_enabled(false),
-        MenuItem::action(
-            "view-show-view-options",
-            "Mostrar opciones de visualización",
-        )
-        .with_shortcut("Super+J")
-        .with_enabled(false),
+        MenuItem::action("view-change-wallpaper", tr!("view-change-wallpaper")).with_enabled(false),
+        MenuItem::action("view-show-view-options", tr!("view-show-view-options"))
+            .with_shortcut("Super+J")
+            .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("view-fullscreen", "Ver en pantalla completa")
+        MenuItem::action("view-fullscreen", tr!("view-fullscreen"))
             .with_shortcut("Ctrl+Super+F")
             .with_enabled(false),
     ]
@@ -161,32 +161,36 @@ fn view_menu_items() -> Vec<MenuItem> {
 
 fn go_menu_items() -> Vec<MenuItem> {
     vec![
-        MenuItem::action("go-back", "Atrás")
+        MenuItem::action("go-back", tr!("go-back"))
             .with_shortcut("Super+[")
             .with_enabled(false),
-        MenuItem::action("go-forward", "Adelante")
+        MenuItem::action("go-forward", tr!("go-forward"))
             .with_shortcut("Super+]")
             .with_enabled(false),
-        MenuItem::action("go-enclosing-folder", "Carpeta contenedora")
+        MenuItem::action("go-enclosing-folder", tr!("go-enclosing-folder"))
             .with_shortcut("Super+Up")
             .with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("go-documents", "Documentos").with_icon(MenuIcon::svg(icons::DOCUMENTS)),
-        MenuItem::action("go-desktop", "Escritorio").with_icon(MenuIcon::svg(icons::DESKTOP)),
-        MenuItem::action("go-downloads", "Descargas").with_icon(MenuIcon::svg(icons::DOWNLOADS)),
-        MenuItem::action("go-home", "Inicio").with_icon(MenuIcon::svg(icons::HOUSE)),
-        MenuItem::action("go-pictures", "Imágenes").with_icon(MenuIcon::svg(icons::PICTURES)),
-        MenuItem::action("go-music", "Música").with_icon(MenuIcon::svg(icons::MUSIC)),
-        MenuItem::action("go-videos", "Vídeos").with_icon(MenuIcon::svg(icons::VIDEOS)),
-        MenuItem::action("go-applications", "Aplicaciones").with_icon(MenuIcon::svg(icons::APPS)),
-        MenuItem::action("go-trash", "Papelera").with_icon(MenuIcon::svg(icons::TRASH)),
+        MenuItem::action("go-documents", tr!("go-documents"))
+            .with_icon(MenuIcon::svg(icons::DOCUMENTS)),
+        MenuItem::action("go-desktop", tr!("go-desktop")).with_icon(MenuIcon::svg(icons::DESKTOP)),
+        MenuItem::action("go-downloads", tr!("go-downloads"))
+            .with_icon(MenuIcon::svg(icons::DOWNLOADS)),
+        MenuItem::action("go-home", tr!("go-home")).with_icon(MenuIcon::svg(icons::HOUSE)),
+        MenuItem::action("go-pictures", tr!("go-pictures"))
+            .with_icon(MenuIcon::svg(icons::PICTURES)),
+        MenuItem::action("go-music", tr!("go-music")).with_icon(MenuIcon::svg(icons::MUSIC)),
+        MenuItem::action("go-videos", tr!("go-videos")).with_icon(MenuIcon::svg(icons::VIDEOS)),
+        MenuItem::action("go-applications", tr!("go-applications"))
+            .with_icon(MenuIcon::svg(icons::APPS)),
+        MenuItem::action("go-trash", tr!("go-trash")).with_icon(MenuIcon::svg(icons::TRASH)),
         MenuItem::Separator,
-        MenuItem::submenu("Carpetas recientes", Vec::new()).with_enabled(false),
+        MenuItem::submenu(tr!("go-recent-folders"), Vec::new()).with_enabled(false),
         MenuItem::Separator,
-        MenuItem::action("go-to-folder", "Ir a la carpeta…")
+        MenuItem::action("go-to-folder", tr!("go-to-folder"))
             .with_shortcut("Shift+Super+G")
             .with_enabled(false),
-        MenuItem::action("go-connect-to-server", "Conectarse al servidor…")
+        MenuItem::action("go-connect-to-server", tr!("go-connect-to-server"))
             .with_shortcut("Super+K")
             .with_enabled(false),
     ]
@@ -197,12 +201,13 @@ fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Ve
     let mut items = focused::window_controls(None);
     items.extend([
         MenuItem::Separator,
-        MenuItem::action("app-show-all", "Traer todo al frente").with_enabled(any_minimized),
-        MenuItem::action("window-show-desktop", "Mostrar escritorio"),
+        MenuItem::action("app-show-all", tr!("menu-bring-all-to-front"))
+            .with_enabled(any_minimized),
+        MenuItem::action("window-show-desktop", tr!("window-show-desktop")),
         MenuItem::Separator,
     ]);
     if toplevels.is_empty() {
-        items.push(MenuItem::action("window-none", "No hay ventanas abiertas").with_enabled(false));
+        items.push(MenuItem::action("window-none", tr!("window-none")).with_enabled(false));
     }
     items.extend(toplevels.iter().map(|window| {
         let name = resolve_app_name(Some(&window.app_id), entries);
@@ -215,24 +220,24 @@ fn help_menu_items() -> Vec<MenuItem> {
     let topics = help_topics::topics();
     vec![
         MenuItem::SearchField {
-            placeholder: "Buscar".to_string(),
+            placeholder: tr!("menu-search").to_string(),
         },
         topics[0].item(Some(MenuIcon::svg(icons::BOOK))),
         topics[1].item(Some(MenuIcon::svg(icons::KEYBOARD))),
         MenuItem::Separator,
-        MenuItem::action("app-help-report", "Informar de un problema…"),
+        MenuItem::action("app-help-report", tr!("menu-report-issue")),
     ]
 }
 
 pub fn desktop_menus(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<Title> {
     [
-        ("Escritorio", malaysia_menu_items(toplevels)),
-        ("Archivo", file_menu_items()),
-        ("Edición", edit_menu_items()),
-        ("Visualización", view_menu_items()),
-        ("Ir", go_menu_items()),
-        ("Ventana", window_menu_items(entries, toplevels)),
-        ("Ayuda", help_menu_items()),
+        (tr!("desktop"), malaysia_menu_items(toplevels)),
+        (tr!("menu-file"), file_menu_items()),
+        (tr!("edit"), edit_menu_items()),
+        (tr!("view"), view_menu_items()),
+        (tr!("go"), go_menu_items()),
+        (tr!("menu-window"), window_menu_items(entries, toplevels)),
+        (tr!("menu-help"), help_menu_items()),
     ]
     .into_iter()
     .map(|(label, items)| Title {
@@ -317,16 +322,22 @@ mod tests {
         let not_minimized = vec![toplevel(false)];
         assert!(enabled(
             &malaysia_menu_items(&not_minimized),
-            "Ocultar otros"
+            tr!("menu-hide-others")
         ));
         assert!(!enabled(
             &malaysia_menu_items(&not_minimized),
-            "Mostrar todo"
+            tr!("menu-show-all")
         ));
 
         let minimized = vec![toplevel(true)];
-        assert!(!enabled(&malaysia_menu_items(&minimized), "Ocultar otros"));
-        assert!(enabled(&malaysia_menu_items(&minimized), "Mostrar todo"));
+        assert!(!enabled(
+            &malaysia_menu_items(&minimized),
+            tr!("menu-hide-others")
+        ));
+        assert!(enabled(
+            &malaysia_menu_items(&minimized),
+            tr!("menu-show-all")
+        ));
     }
 
     #[test]
@@ -365,13 +376,13 @@ mod tests {
         let not_minimized = vec![toplevel(false)];
         assert!(!enabled(
             &window_menu_items(&[], &not_minimized),
-            "Traer todo al frente"
+            tr!("menu-bring-all-to-front")
         ));
 
         let minimized = vec![toplevel(true)];
         assert!(enabled(
             &window_menu_items(&[], &minimized),
-            "Traer todo al frente"
+            tr!("menu-bring-all-to-front")
         ));
     }
 }

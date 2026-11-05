@@ -2,6 +2,7 @@ mod desktop;
 mod dialogs;
 mod dock;
 mod launcher;
+mod localize;
 mod lock;
 mod menubar;
 mod pam;

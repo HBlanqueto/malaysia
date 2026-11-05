@@ -22,6 +22,7 @@ use vow_design::{
 };
 
 use crate::desktop::{self, DesktopEntry};
+use crate::localize::tr;
 use barrier_kit::style::Palette;
 use barrier_kit::theme;
 
@@ -160,7 +161,7 @@ impl App for LauncherApp {
         ));
 
         let list = if results.is_empty() {
-            empty_state(Symbol::MagnifyingGlass, "Sin resultados").into_element()
+            empty_state(Symbol::MagnifyingGlass, tr!("launcher-no-results")).into_element()
         } else {
             rect()
                 .width(Size::fill())
@@ -197,7 +198,7 @@ impl App for LauncherApp {
                             .width(Size::fill())
                             .height(Size::px(LAUNCHER_SEARCH_HEIGHT as f32))
                             .child(
-                                SearchField::new(self.query, "Buscar aplicaciones")
+                                SearchField::new(self.query, tr!("launcher-search"))
                                     .auto_focus(true)
                                     .on_navigate(on_navigate),
                             ),

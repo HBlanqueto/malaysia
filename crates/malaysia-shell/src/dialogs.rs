@@ -25,6 +25,7 @@ use vow_design::{
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
+use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
 use barrier_kit::theme;
@@ -91,7 +92,7 @@ fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) 
         .direction(Direction::Horizontal)
         .main_align(Alignment::End)
         .spacing(DIALOG_PADDING / 2.0)
-        .child(Button::new("Cancelar").on_press(|_| close()))
+        .child(Button::new(tr!("dialog-cancel")).on_press(|_| close()))
         .child(
             Button::new(default_label.to_string())
                 .style(ButtonStyle::Primary)
@@ -111,7 +112,6 @@ const SLEEP_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" 
 
 struct ConfirmText {
     question: &'static str,
-    outcome: &'static str,
     button: &'static str,
     glyph: &'static str,
 }
@@ -119,35 +119,35 @@ struct ConfirmText {
 fn confirm_text(action: PowerAction) -> ConfirmText {
     match action {
         PowerAction::Restart => ConfirmText {
-            question: "¿Quieres reiniciar el equipo?",
-            outcome: "el equipo se reiniciará",
-            button: "Reiniciar",
+            question: tr!("power-restart-question"),
+            button: tr!("power-restart-button"),
             glyph: RESTART_SVG,
         },
         PowerAction::ShutDown => ConfirmText {
-            question: "¿Quieres apagar el equipo?",
-            outcome: "el equipo se apagará",
-            button: "Apagar",
+            question: tr!("power-shut-down-question"),
+            button: tr!("power-shut-down-button"),
             glyph: POWER_SVG,
         },
         PowerAction::LogOut => ConfirmText {
-            question: "¿Seguro que quieres salir de todas las apps y cerrar la sesión?",
-            outcome: "la sesión se cerrará",
-            button: "Cerrar sesión",
+            question: tr!("power-log-out-question"),
+            button: tr!("power-log-out-button"),
             glyph: LOGOUT_SVG,
         },
         PowerAction::Suspend => ConfirmText {
-            question: "¿Quieres suspender el equipo?",
-            outcome: "el equipo se suspenderá",
-            button: "Suspender",
+            question: tr!("power-sleep-question"),
+            button: tr!("power-sleep-button"),
             glyph: SLEEP_SVG,
         },
     }
 }
 
-fn countdown_text(outcome: &str, seconds: u32) -> String {
-    let unit = if seconds == 1 { "segundo" } else { "segundos" };
-    format!("Si no haces nada, {outcome} automáticamente dentro de {seconds} {unit}.")
+fn countdown_text(action: PowerAction, seconds: u32) -> String {
+    match action {
+        PowerAction::Restart => tr!("power-restart-countdown", seconds = seconds),
+        PowerAction::ShutDown => tr!("power-shut-down-countdown", seconds = seconds),
+        PowerAction::LogOut => tr!("power-log-out-countdown", seconds = seconds),
+        PowerAction::Suspend => tr!("power-sleep-countdown", seconds = seconds),
+    }
 }
 
 fn schedule_tick(timers: Timers, remaining: State<u32>, action: PowerAction) {
@@ -191,7 +191,7 @@ fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> Rect {
         .content(Content::Flex)
         .spacing(CONFIRM_BUTTON_GAP)
         .child(
-            Button::new("Cancelar")
+            Button::new(tr!("dialog-cancel"))
                 .width(Size::flex(1.0))
                 .on_press(|_| close()),
         )
@@ -247,7 +247,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
         .child(
             label()
                 .width(Size::fill())
-                .text(countdown_text(text.outcome, seconds))
+                .text(countdown_text(action, seconds))
                 .font_size(CALLOUT.size as f32)
                 .color(theme::color(palette.label)),
         )
@@ -372,10 +372,8 @@ impl App for ForceQuitApp {
                 }
                 _ => {}
             })
-            .child(title("Forzar salida de aplicaciones"))
-            .child(body(
-                "Si una app no responde, selecciónala y pulsa Forzar salida. Se perderán los cambios sin guardar.",
-            ))
+            .child(title(tr!("force-quit-title")))
+            .child(body(tr!("force-quit-body")))
             .child(
                 rect()
                     .width(Size::fill())
@@ -384,7 +382,7 @@ impl App for ForceQuitApp {
                     .spacing(2.0)
                     .children(rows),
             )
-            .child(buttons("Forzar salida", force_quit, count > 0))
+            .child(buttons(tr!("force-quit-button"), force_quit, count > 0))
     }
 }
 
@@ -432,7 +430,7 @@ impl AboutInfo {
             thinkpad: model.contains("ThinkPad"),
             model,
             subtitle: built_in_panel_inches()
-                .map(|inches| format!("{inches} pulgadas"))
+                .map(|inches| tr!("about-screen-size", inches = inches))
                 .unwrap_or_else(|| read("/proc/sys/kernel/hostname").trim().to_string()),
             cpu: cpu_name(&cpuinfo),
             graphics: graphics(&cpuinfo),
@@ -490,7 +488,7 @@ fn model_name(vendor: &str, name: &str, version: &str, family: &str) -> String {
         .into_iter()
         .find(|value| is_real(value))
         .map(str::to_string)
-        .unwrap_or_else(|| "Este equipo".to_string())
+        .unwrap_or_else(|| tr!("about-unnamed-model").to_string())
 }
 
 fn startup_disk(mounts: &str) -> String {
@@ -499,23 +497,27 @@ fn startup_disk(mounts: &str) -> String {
         let device = fields.next()?;
         (fields.next() == Some("/")).then_some(device)
     }) else {
-        return "Desconocido".to_string();
+        return tr!("about-unknown").to_string();
     };
     let Some(name) = std::fs::canonicalize(device)
         .ok()
         .and_then(|path| path.file_name()?.to_str().map(str::to_string))
     else {
-        return "Desconocido".to_string();
+        return tr!("about-unknown").to_string();
     };
     let block = Path::new("/sys/class/block").join(physical_disk(&name));
     let read = |file: &str| std::fs::read_to_string(block.join(file)).unwrap_or_default();
     let kind = if read("queue/rotational").trim() == "1" {
-        "Disco duro"
+        tr!("about-hard-disk")
     } else {
-        "SSD"
+        tr!("about-ssd")
     };
     match read("size").trim().parse::<u64>() {
-        Ok(sectors) => format!("{kind} de {}", disk_size(sectors * 512)),
+        Ok(sectors) => tr!(
+            "about-disk-size",
+            kind = kind,
+            size = disk_size(sectors * 512)
+        ),
         Err(_) => kind.to_string(),
     }
 }
@@ -554,7 +556,7 @@ fn cpu_name(cpuinfo: &str) -> String {
         .find_map(|line| line.strip_prefix("model name"))
         .and_then(|rest| rest.split_once(':'))
         .map(|(_, model)| short_cpu(model))
-        .unwrap_or_else(|| "Desconocido".to_string())
+        .unwrap_or_else(|| tr!("about-unknown").to_string())
 }
 
 fn short_cpu(model: &str) -> String {
@@ -692,7 +694,7 @@ fn memory(meminfo: &str) -> String {
             let gib = kib / 1024.0 / 1024.0;
             format!("{} GB", ((gib / 2.0).ceil() * 2.0) as u32)
         })
-        .unwrap_or_else(|| "Desconocida".to_string())
+        .unwrap_or_else(|| tr!("about-unknown-memory").to_string())
 }
 
 struct AboutApp {
@@ -709,14 +711,14 @@ impl App for AboutApp {
 fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
     let resolved = barrier_kit::theme::resolved();
     let palette = Palette::current();
-    let mut rows = vec![("Procesador".to_string(), info.cpu.clone())];
+    let mut rows = vec![(tr!("about-processor").to_string(), info.cpu.clone())];
     if let Some(graphics) = &info.graphics {
-        rows.push(("Gráficos".to_string(), graphics.clone()));
+        rows.push((tr!("about-graphics").to_string(), graphics.clone()));
     }
-    rows.push(("Memoria".to_string(), info.memory.clone()));
-    rows.push(("Disco de arranque".to_string(), info.disk.clone()));
+    rows.push((tr!("about-memory").to_string(), info.memory.clone()));
+    rows.push((tr!("about-startup-disk").to_string(), info.disk.clone()));
     if let Some(serial) = &info.serial {
-        rows.push(("Número de serie".to_string(), serial.clone()));
+        rows.push((tr!("about-serial-number").to_string(), serial.clone()));
     }
     rows.push(info.system.clone());
     let label_width = rows
@@ -815,7 +817,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
             rect()
                 .margin(Gaps::new(ABOUT_BUTTON_GAP, 0.0, 0.0, 0.0))
                 .child(
-                    Button::new("Más información…")
+                    Button::new(tr!("about-more-info"))
                         .small(true)
                         .on_press(|_| crate::spawn::spawn_settings()),
                 ),
@@ -826,8 +828,8 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
                 .direction(Direction::Vertical)
                 .cross_align(Alignment::Center)
                 .margin(Gaps::new(0.0, 0.0, ABOUT_FOOTER_BOTTOM, 0.0))
-                .child(footer("™ y © 2026 Malaysia"))
-                .child(footer("Todos los derechos reservados.")),
+                .child(footer(tr!("about-copyright")))
+                .child(footer(tr!("about-rights"))),
         )
 }
 
@@ -836,7 +838,7 @@ pub fn run_about() -> anyhow::Result<()> {
     tracing::info!(?info, "about this computer");
     run_window(
         AppComponent::new(AboutApp { info }),
-        WindowOptions::new("Acerca de este PC", ABOUT_APP_ID)
+        WindowOptions::new(tr!("about-this-computer"), ABOUT_APP_ID)
             .size(ABOUT_SIZE)
             .min_size(Some(ABOUT_SIZE))
             .max_size(Some(ABOUT_SIZE)),
@@ -896,7 +898,7 @@ pub fn run_about_app(app_id: Option<&str>) -> anyhow::Result<()> {
         app_id: app_id.to_string(),
         icon: entry.and_then(|entry| load_icon(entry.icon.as_deref())),
     };
-    let window_title = format!("Acerca de {}", info.name);
+    let window_title = tr!("app-about", app = info.name.as_str());
     run_window(
         AppComponent::new(info),
         WindowOptions::new(window_title, ABOUT_APP_INFO_ID)
@@ -948,7 +950,7 @@ mod tests {
         );
         assert_eq!(memory("MemTotal:       15728640 kB\n"), "16 GB");
         assert_eq!(memory("MemTotal:       7990000 kB\n"), "8 GB");
-        assert_eq!(memory(""), "Desconocida");
+        assert_eq!(memory(""), tr!("about-unknown-memory"));
     }
 
     #[test]
@@ -1013,7 +1015,7 @@ mod tests {
         );
         assert_eq!(
             model_name("ASUS", "System Product Name", "", "To be filled by O.E.M."),
-            "Este equipo"
+            tr!("about-unnamed-model")
         );
     }
 
@@ -1031,17 +1033,17 @@ mod tests {
             PowerAction::LogOut,
         ] {
             let text = confirm_text(action);
-            assert!(text.question.starts_with('¿') && text.question.ends_with('?'));
+            assert!(text.question.ends_with('?'));
             assert!(!text.button.is_empty());
         }
     }
 
     #[test]
     fn the_countdown_reads_like_macos() {
-        assert_eq!(
-            countdown_text(confirm_text(PowerAction::ShutDown).outcome, 53),
-            "Si no haces nada, el equipo se apagará automáticamente dentro de 53 segundos."
+        assert!(countdown_text(PowerAction::ShutDown, 53).contains("53"));
+        assert_ne!(
+            countdown_text(PowerAction::ShutDown, 1),
+            countdown_text(PowerAction::ShutDown, 2).replace('2', "1")
         );
-        assert!(countdown_text("x", 1).ends_with("1 segundo."));
     }
 }

@@ -5,6 +5,8 @@ use barrier_kit::menu::{
     normalize_separators, submenu_contents,
 };
 
+use crate::localize::tr;
+
 #[derive(Clone)]
 pub struct MenuSources {
     pub app_name: String,
@@ -36,7 +38,7 @@ impl MenuSources {
         let mut window_remote = None;
         let mut help_remote = None;
         let app_name = normalize_query(&self.app_name);
-        let mut seen = HashSet::from(["sistema".to_string()]);
+        let mut seen = HashSet::from([normalize_query(tr!("menubar-system"))]);
         let mut middle = Vec::new();
         let has_about_slot = app_items
             .iter()
@@ -98,13 +100,13 @@ impl MenuSources {
         });
         titles.extend(middle);
         titles.push(Title {
-            label: "Ventana".to_string(),
+            label: tr!("menu-window").to_string(),
             items: window_items,
             remote_id: window_remote,
             enabled: true,
         });
         titles.push(Title {
-            label: "Ayuda".to_string(),
+            label: tr!("menu-help").to_string(),
             items: help_items,
             remote_id: help_remote,
             enabled: true,
@@ -364,8 +366,8 @@ mod tests {
                 "Sesiones",
                 "Herramientas",
                 "Preferencias",
-                "Ventana",
-                "Ayuda",
+                tr!("menu-window"),
+                tr!("menu-help"),
             ]
         );
         assert_eq!(titles[1].remote_id, Some(1));
@@ -400,7 +402,10 @@ mod tests {
             submenu("Kate", "21", vec![action("Preferencias de Kate")]),
         ];
         let titles = sources().compose(&remote);
-        assert_eq!(labels(&titles), vec!["Kate", "Ventana", "Ayuda"]);
+        assert_eq!(
+            labels(&titles),
+            vec!["Kate", tr!("menu-window"), tr!("menu-help")]
+        );
         let app = &titles[0];
         assert_eq!(
             app.items.last().unwrap().label(),
@@ -502,7 +507,10 @@ mod tests {
             submenu("archivo", "4", Vec::new()),
         ];
         let titles = sources().compose(&remote);
-        assert_eq!(labels(&titles), vec!["Kate", "Archivo", "Ventana", "Ayuda"]);
+        assert_eq!(
+            labels(&titles),
+            vec!["Kate", "Archivo", tr!("menu-window"), tr!("menu-help")]
+        );
     }
 
     #[test]

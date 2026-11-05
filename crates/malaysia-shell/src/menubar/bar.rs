@@ -22,6 +22,7 @@ use vow_design::{
 };
 
 use crate::desktop::DesktopEntry;
+use crate::localize::tr;
 use crate::menubar::dbusmenu::{self, MenuClient};
 use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
@@ -455,7 +456,7 @@ impl App for BarApp {
         let mut specs = vec![MenuTitleSpec {
             glyph: Some(system::SNOWFLAKE_SVG),
             ..MenuTitleSpec::new(
-                "Sistema".to_string(),
+                tr!("menubar-system").to_string(),
                 Rc::new(system_items),
                 Rc::new(move |id| {
                     let toplevels = Toplevels::get().list.read().clone();
@@ -760,8 +761,9 @@ fn schedule_snapshot_drain(
                         {
                             continue;
                         }
-                        let children =
-                            mapped.unwrap_or_else(|| vec![MenuItem::placeholder("No disponible")]);
+                        let children = mapped.unwrap_or_else(|| {
+                            vec![MenuItem::placeholder(tr!("menubar-unavailable"))]
+                        });
                         let mut items = current.items.clone();
                         if remote::merge_subtree(&mut items, id, &children) {
                             snapshot.set(Some(Arc::new(RemoteMenu {

@@ -6,6 +6,7 @@ use barrier_kit::titlebar::app_id;
 
 use crate::desktop::DesktopEntry;
 use crate::dialogs::ABOUT_APP_ID;
+use crate::localize::tr;
 use crate::menubar::{icons, recents};
 use crate::power::{self, PowerAction};
 use crate::spawn::{spawn_component, spawn_component_with, spawn_settings, xdg_open};
@@ -16,26 +17,26 @@ pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
     static LOGOUT: OnceLock<String> = OnceLock::new();
     let logout = LOGOUT.get_or_init(|| logout_label(user_display_name().as_deref()));
     vec![
-        MenuItem::action("about-this-computer", "Acerca de este PC")
+        MenuItem::action("about-this-computer", tr!("about-this-computer"))
             .with_icon(MenuIcon::svg(icons::LAPTOP)),
-        MenuItem::action("system-settings", "Ajustes del sistema…")
+        MenuItem::action("system-settings", tr!("system-settings"))
             .with_icon(MenuIcon::svg(icons::GEAR)),
         MenuItem::Separator,
-        MenuItem::submenu("Elementos recientes", recents::menu_items(entries)),
+        MenuItem::submenu(tr!("system-recent-items"), recents::menu_items(entries)),
         MenuItem::Separator,
-        MenuItem::action("sleep", "Suspender"),
-        MenuItem::action("restart", "Reiniciar…"),
-        MenuItem::action("shutdown", "Apagar…"),
+        MenuItem::action("sleep", tr!("system-sleep")),
+        MenuItem::action("restart", tr!("system-restart")),
+        MenuItem::action("shutdown", tr!("system-shut-down")),
         MenuItem::Separator,
-        MenuItem::action("lock-screen", "Bloquear pantalla").with_shortcut("Ctrl+Alt+L"),
+        MenuItem::action("lock-screen", tr!("system-lock-screen")).with_shortcut("Ctrl+Alt+L"),
         MenuItem::action("logout", logout),
     ]
 }
 
 fn logout_label(name: Option<&str>) -> String {
     match name.map(str::trim).filter(|name| !name.is_empty()) {
-        Some(name) => format!("Cerrar sesión de {name}…"),
-        None => "Cerrar sesión…".to_string(),
+        Some(name) => tr!("system-log-out-user", name = name),
+        None => tr!("system-log-out").to_string(),
     }
 }
 
@@ -133,11 +134,8 @@ mod tests {
 
     #[test]
     fn the_logout_label_names_the_user_when_known() {
-        assert_eq!(
-            logout_label(Some("H. Blanqueto")),
-            "Cerrar sesión de H. Blanqueto…"
-        );
-        assert_eq!(logout_label(Some(" ")), "Cerrar sesión…");
+        assert!(logout_label(Some("H. Blanqueto")).contains("H. Blanqueto"));
+        assert_eq!(logout_label(Some(" ")), tr!("system-log-out"));
     }
 
     #[test]

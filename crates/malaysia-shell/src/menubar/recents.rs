@@ -8,6 +8,7 @@ use vow_appearance::data_dir;
 
 use crate::desktop::DesktopEntry;
 use crate::launcher::{IconData, load_icon_sized};
+use crate::localize::tr;
 use crate::menubar::{find_entry, icons};
 
 const MAX_APPS: usize = 10;
@@ -209,7 +210,7 @@ fn build_items(
 
     let mut out = Vec::new();
     if !apps.is_empty() {
-        out.push(MenuItem::header("Aplicaciones"));
+        out.push(MenuItem::header(tr!("recents-applications")));
         for entry in apps {
             out.push(
                 MenuItem::action(format!("{APP_PREFIX}{}", entry.id), entry.name.clone())
@@ -221,7 +222,7 @@ fn build_items(
     if !documents.is_empty() {
         let mut documents = documents.to_vec();
         documents.sort_by_key(|doc| doc.name.to_lowercase());
-        out.push(MenuItem::header("Documentos"));
+        out.push(MenuItem::header(tr!("recents-documents")));
         for doc in &documents {
             out.push(
                 MenuItem::action(
@@ -233,7 +234,7 @@ fn build_items(
         }
         out.push(MenuItem::Separator);
     }
-    out.push(MenuItem::action(CLEAR_ID, "Vaciar menú").with_enabled(!out.is_empty()));
+    out.push(MenuItem::action(CLEAR_ID, tr!("recents-clear")).with_enabled(!out.is_empty()));
     out
 }
 
@@ -317,14 +318,14 @@ mod tests {
         assert_eq!(
             labels,
             [
-                "Aplicaciones",
+                tr!("recents-applications"),
                 "Firefox",
                 "Telegram",
                 "-",
-                "Documentos",
+                tr!("recents-documents"),
                 "a.pdf",
                 "-",
-                "Vaciar menú"
+                tr!("recents-clear")
             ]
         );
     }

@@ -6,6 +6,7 @@ use barrier_kit::platform::AppMenuAddress;
 use barrier_kit::shell::GtkMenusAddress;
 use zbus::zvariant::{OwnedValue, Signature, Value};
 
+use crate::localize::tr;
 use crate::menubar::dbusmenu::{CALL_TIMEOUT, RawItem, timed};
 use crate::menubar::dbusmenu_map::prop;
 
@@ -260,11 +261,11 @@ impl Builder<'_> {
                 .map(|target| target.action.clone());
             match action.as_deref().map(primary_slot) {
                 Some(PrimarySlot::About) => {
-                    app.push(relabel(child, &format!("Acerca de {}", self.app_name)))
+                    app.push(relabel(child, &tr!("app-about", app = self.app_name)))
                 }
-                Some(PrimarySlot::Preferences) => app.push(relabel(child, "Ajustes…")),
+                Some(PrimarySlot::Preferences) => app.push(relabel(child, tr!("menu-settings"))),
                 Some(PrimarySlot::Quit) => {
-                    app.push(relabel(child, &format!("Salir de {}", self.app_name)))
+                    app.push(relabel(child, &tr!("app-quit", app = self.app_name)))
                 }
                 Some(PrimarySlot::Help) => help.push(child),
                 Some(PrimarySlot::Window) => {}
@@ -280,10 +281,15 @@ impl Builder<'_> {
         for (label, items) in [
             (self.app_name.to_string(), app),
             (
-                if opens_files { "Archivo" } else { "Opciones" }.to_string(),
+                if opens_files {
+                    tr!("menu-file")
+                } else {
+                    tr!("menu-options")
+                }
+                .to_string(),
                 rest,
             ),
-            ("Ayuda".to_string(), help),
+            (tr!("menu-help").to_string(), help),
         ] {
             let has_entries = items.iter().any(|item| {
                 !matches!(
@@ -957,7 +963,10 @@ mod tests {
         let tree = Tree::build(&Export::new(""), &menubar, &actions, "Calculadora");
         let items = menu_items(&tree.items);
         let titles: Vec<_> = items.iter().filter_map(|item| item.label()).collect();
-        assert_eq!(titles, vec!["Calculadora", "Archivo", "Ayuda"]);
+        assert_eq!(
+            titles,
+            vec!["Calculadora", tr!("menu-file"), tr!("menu-help")]
+        );
         let children = |index: usize| match &items[index] {
             MenuItem::Submenu { items, .. } => items
                 .iter()
@@ -965,7 +974,13 @@ mod tests {
                 .collect::<Vec<_>>(),
             _ => panic!("expected a submenu"),
         };
-        assert_eq!(children(0), vec!["Ajustes…", "Acerca de Calculadora"]);
+        assert_eq!(
+            children(0),
+            vec![
+                tr!("menu-settings").to_string(),
+                tr!("app-about", app = "Calculadora")
+            ]
+        );
         assert_eq!(children(1), vec!["Ventana nueva", "Limpiar histórico"]);
         assert_eq!(children(2), vec!["Atajos de teclado", "Ayuda"]);
     }

@@ -4,6 +4,8 @@ use std::sync::mpsc::{Receiver, Sender};
 
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::localize::tr;
+
 const PAM_SUCCESS: c_int = 0;
 const PAM_CONV_ERR: c_int = 19;
 const PAM_BUF_ERR: c_int = 5;
@@ -125,7 +127,7 @@ fn converse(
     answers: &Receiver<Zeroizing<String>>,
 ) -> Outcome {
     let Ok(user_c) = CString::new(user) else {
-        return Outcome::Denied("invalid user name".to_string());
+        return Outcome::Denied(tr!("lock-invalid-user").to_string());
     };
     let service = resolve_service(|name| std::path::Path::new("/etc/pam.d").join(name).is_file());
 
@@ -139,7 +141,7 @@ fn converse(
     // SAFETY: `service` and `user_c` are NUL-terminated, and `conv` and `state` outlive `pamh`, which `pam_end` releases below.
     let status = unsafe { pam_start(service.as_ptr(), user_c.as_ptr(), &conv, &mut pamh) };
     if status != PAM_SUCCESS || pamh.is_null() {
-        return Outcome::Denied(format!("PAM unavailable (status {status})"));
+        return Outcome::Denied(tr!("lock-pam-unavailable", status = status));
     }
 
     let (outcome, last_status) = authenticate(pamh);
@@ -174,7 +176,7 @@ fn strerror(pamh: *mut PamHandle, status: c_int) -> String {
     // SAFETY: `pamh` is a live handle from `pam_start`.
     let message = unsafe { pam_strerror(pamh, status) };
     if message.is_null() {
-        return format!("authentication failed (status {status})");
+        return tr!("lock-authentication-failed", status = status);
     }
     // SAFETY: `pam_strerror` returns a static NUL-terminated string, checked non-null above.
     unsafe { CStr::from_ptr(message) }
@@ -327,7 +329,7 @@ pub fn current_user() -> Option<String> {
 pub fn prompt_label(text: &str) -> String {
     let label = text.trim().trim_end_matches(':').trim_end().to_string();
     if label.is_empty() {
-        "Contraseña".to_string()
+        tr!("lock-password").to_string()
     } else {
         label
     }
@@ -340,6 +342,8 @@ mod tests {
 
     use zeroize::Zeroizing;
 
+    use crate::localize::tr;
+
     use super::{
         ConversationState, PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PamMessage, PamResponse,
         conversation, prompt_label, resolve_service,
@@ -349,7 +353,7 @@ mod tests {
     fn prompt_labels_lose_terminal_punctuation() {
         assert_eq!(prompt_label("Password: "), "Password");
         assert_eq!(prompt_label("Contraseña:"), "Contraseña");
-        assert_eq!(prompt_label("  "), "Contraseña");
+        assert_eq!(prompt_label("  "), tr!("lock-password"));
     }
 
     #[test]

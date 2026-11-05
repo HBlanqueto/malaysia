@@ -18,10 +18,11 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use crate::desktop::DesktopEntry;
+use crate::localize::tr;
 
 pub fn resolve_app_name(app_id: Option<&str>, entries: &[DesktopEntry]) -> String {
     let Some(app_id) = app_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return "Escritorio".to_string();
+        return tr!("desktop").to_string();
     };
     match find_entry(app_id, entries) {
         Some(entry) => entry.name.clone(),
@@ -85,10 +86,10 @@ pub fn create_desktop_folder() {
     let desktop = vow_appearance::xdg::user_dir("DESKTOP")
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
         .unwrap_or_else(|| PathBuf::from("."));
-    let mut target = desktop.join("Carpeta sin título");
+    let mut target = desktop.join(tr!("desktop-untitled-folder"));
     if target.exists() {
         for i in 2..100 {
-            target = desktop.join(format!("Carpeta sin título {i}"));
+            target = desktop.join(tr!("desktop-untitled-folder-numbered", number = i));
             if !target.exists() {
                 break;
             }
@@ -194,7 +195,7 @@ mod tests {
     #[test]
     fn no_window_or_no_app_id_is_escritorio() {
         let entries = Vec::new();
-        assert_eq!(resolve_app_name(None, &entries), "Escritorio");
-        assert_eq!(resolve_app_name(Some("   "), &entries), "Escritorio");
+        assert_eq!(resolve_app_name(None, &entries), tr!("desktop"));
+        assert_eq!(resolve_app_name(Some("   "), &entries), tr!("desktop"));
     }
 }

@@ -1,4 +1,8 @@
+use std::sync::LazyLock;
+
 use barrier_kit::menu::{MenuIcon, MenuItem};
+
+use crate::localize::tr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HelpTopic {
@@ -15,42 +19,45 @@ impl HelpTopic {
 pub const DOCS_INDEX: &str = "https://github.com/HBlanqueto/malaysia/tree/main/docs";
 
 pub fn topics() -> &'static [HelpTopic] {
-    &[
-        HelpTopic {
-            title: "Documentación de Malaysia",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/README.md",
-        },
-        HelpTopic {
-            title: "Atajos de teclado",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#atajos-fijos-del-compositor",
-        },
-        HelpTopic {
-            title: "Dock",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/dock.md",
-        },
-        HelpTopic {
-            title: "Barra de menús",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/menubar.md",
-        },
-        HelpTopic {
-            title: "Ventanas",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/ventanas.md",
-        },
-        HelpTopic {
-            title: "Apariencia",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
-        },
-        HelpTopic {
-            title: "Reducir transparencia",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
-        },
-        HelpTopic {
-            title: "Menú global",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/decisiones/0036-menu-global.md",
-        },
-        HelpTopic {
-            title: "Decoraciones y efectos",
-            url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/decisiones/0020-politica-de-diseno-y-unificacion.md",
-        },
-    ]
+    static TOPICS: LazyLock<[HelpTopic; 9]> = LazyLock::new(|| {
+        [
+            HelpTopic {
+                title: tr!("help-docs"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/README.md",
+            },
+            HelpTopic {
+                title: tr!("help-topic-shortcuts"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#atajos-fijos-del-compositor",
+            },
+            HelpTopic {
+                title: tr!("help-topic-dock"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/dock.md",
+            },
+            HelpTopic {
+                title: tr!("help-topic-menubar"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/menubar.md",
+            },
+            HelpTopic {
+                title: tr!("help-topic-windows"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/arquitectura/ventanas.md",
+            },
+            HelpTopic {
+                title: tr!("help-topic-appearance"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
+            },
+            HelpTopic {
+                title: tr!("help-topic-reduce-transparency"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/configuracion/opciones.md#appearance--apariencia-system-settings--appearance",
+            },
+            HelpTopic {
+                title: tr!("help-topic-global-menu"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/decisiones/0036-menu-global.md",
+            },
+            HelpTopic {
+                title: tr!("help-topic-decorations"),
+                url: "https://github.com/HBlanqueto/malaysia/tree/main/docs/decisiones/0020-politica-de-diseno-y-unificacion.md",
+            },
+        ]
+    });
+    &*TOPICS
 }

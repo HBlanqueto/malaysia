@@ -11,6 +11,7 @@ use vow_design::{
     LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE,
 };
 
+use crate::localize::tr;
 use crate::pam;
 use barrier_kit::theme;
 
@@ -117,7 +118,7 @@ impl App for LockApp {
             })
             .child(
                 label()
-                    .text("Sesión bloqueada")
+                    .text(tr!("lock-title"))
                     .font_size(LOCK_FONT_SIZE * LOCK_TITLE_SCALE)
                     .color(ink),
             )
@@ -137,7 +138,7 @@ impl App for LockApp {
                     .child(
                         label()
                             .text(if masked.is_empty() {
-                                "Contraseña".to_string()
+                                tr!("lock-password").to_string()
                             } else {
                                 masked
                             })
@@ -158,7 +159,7 @@ pub fn run() -> anyhow::Result<()> {
     let user = pam::current_user().unwrap_or_default();
     start_attempt(&attempt, &events, &user);
     let app = AppComponent::new(LockApp {
-        label: State::create_global("Contraseña".to_string()),
+        label: State::create_global(tr!("lock-password").to_string()),
         field: State::create_global(PasswordField::default()),
         events,
         received,
@@ -175,7 +176,7 @@ fn start_attempt(attempt: &RefCell<Option<pam::Attempt>>, events: &Sender<pam::E
     if user.is_empty() {
         eprintln!("lock: cannot resolve the current user for PAM");
         let _ = events.try_send(pam::Event::Ended(pam::Outcome::Denied(
-            "No se pudo identificar al usuario".to_string(),
+            tr!("lock-unknown-user").to_string(),
         )));
         return;
     }
