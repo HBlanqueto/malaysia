@@ -11,7 +11,7 @@ use vow_appearance::{
 };
 use vow_design::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
-    TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH,
+    TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
 };
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
@@ -75,6 +75,7 @@ struct Traffic {
     style: TrafficLightStyle,
     shape: TrafficLightShape,
     inactive: Rgba,
+    rim: TrafficRim,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -97,6 +98,7 @@ impl SchemeColors {
             style: resolved.traffic_style,
             shape: resolved.traffic_shape,
             inactive: palette(resolved.scheme).traffic_lights_inactive,
+            rim: palette(resolved.scheme).traffic_rim,
         };
         let mut colors = vec![
             ("accent_bg_color", resolved.accent),
@@ -269,6 +271,7 @@ fn traffic_states(traffic: &Traffic, focused: bool, group_hovered: bool) -> [But
         traffic.lights,
         traffic.style,
         traffic.inactive,
+        traffic.rim,
         TrafficInput {
             focused,
             group_hovered,

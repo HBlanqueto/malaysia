@@ -603,24 +603,24 @@ const PCI_IDS: [&str; 3] = [
 ];
 
 fn graphics(cpuinfo: &str) -> Option<String> {
-    let device = gpu_device();
+    if let Some(integrated) = integrated_gpu(cpuinfo) {
+        return Some(integrated);
+    }
+    let device = gpu_device()?;
     let read = |file: &str| {
-        let device = device.as_ref()?;
         std::fs::read_to_string(device.join(file))
             .ok()
             .map(|value| value.trim().to_string())
     };
-    let name = integrated_gpu(cpuinfo).or_else(|| {
-        let ids = PCI_IDS
-            .iter()
-            .find_map(|path| std::fs::read_to_string(path).ok())?;
-        let (vendor, device) = (read("vendor")?, read("device")?);
-        pci_name(
-            &ids,
-            vendor.trim_start_matches("0x"),
-            device.trim_start_matches("0x"),
-        )
-    })?;
+    let ids = PCI_IDS
+        .iter()
+        .find_map(|path| std::fs::read_to_string(path).ok())?;
+    let (vendor, id) = (read("vendor")?, read("device")?);
+    let name = pci_name(
+        &ids,
+        vendor.trim_start_matches("0x"),
+        id.trim_start_matches("0x"),
+    )?;
     match read("mem_info_vram_total").and_then(|bytes| bytes.parse::<u64>().ok()) {
         Some(bytes) if bytes > 0 => Some(format!("{name} {} MB", bytes / 1024 / 1024)),
         _ => Some(name),
@@ -782,6 +782,7 @@ fn about_view(info: &AboutInfo, titlebar: Element) -> impl IntoElement + use<> {
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
+        .font_family(TEXT.family)
         .direction(Direction::Vertical)
         .content(Content::flex())
         .cross_align(Alignment::Center)

@@ -458,6 +458,7 @@ impl TextEngine {
             theme.lights,
             theme.traffic_style,
             palette.traffic_lights_inactive,
+            palette.traffic_rim,
             input,
         );
         for (index, visual) in visuals.iter().enumerate() {
