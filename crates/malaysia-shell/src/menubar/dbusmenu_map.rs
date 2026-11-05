@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, OnceLock};
+use std::collections::{BTreeSet, HashMap};
+use std::sync::Mutex;
 
 use barrier_kit::menu::{CheckState, MNEMONIC_MARK, MenuItem, normalize_separators};
 use zbus::zvariant::OwnedValue;
@@ -107,15 +107,13 @@ fn shortcut(props: &HashMap<String, OwnedValue>) -> Option<String> {
 }
 
 fn debug_once(key: &str, value: Option<&OwnedValue>) {
-    static SEEN: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-    let seen = SEEN.get_or_init(|| Mutex::new(HashSet::new()));
-    let Ok(mut seen) = seen.lock() else {
-        return;
-    };
-    if !seen.insert(key.to_string()) {
-        return;
+    static SEEN: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+    if SEEN
+        .lock()
+        .is_ok_and(|mut seen| seen.insert(key.to_string()))
+    {
+        tracing::debug!(property = key, value = ?value, "menubar: unsupported dbusmenu property");
     }
-    tracing::debug!(property = key, value = ?value, "menubar: unsupported dbusmenu property");
 }
 
 #[cfg(test)]
