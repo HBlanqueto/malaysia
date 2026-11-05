@@ -7,7 +7,6 @@ use barrier_kit::menu::{
 use barrier_kit::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
-use bytes::Bytes;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;

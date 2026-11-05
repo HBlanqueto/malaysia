@@ -18,14 +18,10 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 chrono.workspace = true
 serde.workspace = true
 toml.workspace = true
-png.workspace = true
 barrier-kit = { workspace = true, features = ["shell"] }
 freya-animation.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
-freya-engine.workspace = true
-bytes = "1"
-keyboard-types.workspace = true
 torin.workspace = true
 async-io.workspace = true
 async-channel.workspace = true
@@ -36,5 +32,4 @@ libc.workspace = true
 zeroize.workspace = true
 zbus.workspace = true
 [dev-dependencies]
-freya-testing.workspace = true
-png.workspace = true
+freya-engine.workspace = true

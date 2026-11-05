@@ -13,7 +13,6 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
     ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
@@ -182,7 +181,7 @@ fn power_badge(glyph: &'static str) -> Rect {
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
         .child(
-            SvgViewer::new(bytes::Bytes::from_static(glyph.as_bytes()))
+            SvgViewer::new(Bytes::from_static(glyph.as_bytes()))
                 .width(Size::px(POWER_GLYPH_SIZE))
                 .height(Size::px(POWER_GLYPH_SIZE))
                 .color(Color::WHITE)

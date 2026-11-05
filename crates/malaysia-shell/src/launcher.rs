@@ -12,7 +12,6 @@ use freya_components::svg_viewer::SvgViewer;
 use freya_components::theming::hooks::use_init_theme;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use keyboard_types::{Key, NamedKey};
 use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_design::{
     LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
@@ -267,7 +266,7 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
         Some(IconData {
             path,
             svg: Some(bytes),
-        }) => SvgViewer::new((path.clone(), bytes::Bytes::from(bytes.clone())))
+        }) => SvgViewer::new((path.clone(), Bytes::from(bytes.clone())))
             .width(Size::px(size))
             .height(Size::px(size))
             .into_element(),
