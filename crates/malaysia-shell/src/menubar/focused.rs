@@ -22,7 +22,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             !app_id.is_empty(),
             Some(MenuIcon::svg(icons::INFO)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "app-settings",
             "Ajustes…",
@@ -30,9 +30,8 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             false,
             Some(MenuIcon::svg(icons::GEAR)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::submenu(
-            None,
             "Servicios",
             true,
             None,
@@ -44,7 +43,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
                     false,
                     None,
                 ),
-                items::separator(),
+                MenuItem::Separator,
                 items::action(
                     "app-services-settings",
                     "Ajustes de servicios…",
@@ -54,7 +53,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
                 ),
             ],
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             format!("app-hide:{app_id}"),
             format!("Ocultar {app_name}"),
@@ -70,7 +69,7 @@ pub fn app_menu_items(app_name: &str, app_id: &str, toplevels: &[ToplevelInfo]) 
             None,
         ),
         items::action("app-show-all", "Mostrar todo", None, any_minimized, None),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             format!("app-quit:{app_id}"),
             format!("Salir de {app_name}"),
@@ -120,16 +119,14 @@ pub fn window_menu_items(
             has_active,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::submenu(
-            None,
             "Trasladar y redimensionar",
             true,
             Some(MenuIcon::svg(icons::GRID)),
             move_resize_items(target, active_window),
         ),
         items::submenu(
-            None,
             "Ventana a pantalla completa",
             true,
             Some(MenuIcon::svg(icons::SPLIT)),
@@ -148,7 +145,7 @@ pub fn window_menu_items(
                     false,
                     None,
                 ),
-                items::separator(),
+                MenuItem::Separator,
                 items::action(
                     active_id("app-window-fullscreen", target),
                     "Activar pantalla completa",
@@ -158,7 +155,7 @@ pub fn window_menu_items(
                 ),
             ],
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             active_id("app-window-close", target),
             "Cerrar ventana",
@@ -166,7 +163,7 @@ pub fn window_menu_items(
             active.is_some(),
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             format!("app-window-front:{app_id}"),
             "Traer todo al frente",
@@ -181,7 +178,7 @@ pub fn window_menu_items(
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "app-tab-previous",
             "Mostrar pestaña anterior",
@@ -210,7 +207,7 @@ pub fn window_menu_items(
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
     ];
     for index in &app {
         let window = &toplevels[*index];
@@ -243,7 +240,7 @@ pub fn help_menu_items(app_name: &str) -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "app-help-shortcuts",
             "Atajos de teclado de Malaysia",
@@ -501,7 +498,7 @@ pub(crate) fn move_resize_items(
             has_active,
             Some(MenuIcon::svg(icons::HALF_BOTTOM)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::header("Cuartos"),
         items::action(
             active_id("app-quarter-top-left", active),
@@ -531,7 +528,7 @@ pub(crate) fn move_resize_items(
             has_active,
             Some(MenuIcon::svg(icons::QUARTER_BOTTOM_RIGHT)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::header("Disposición"),
         items::action(
             active_id("app-layout-side-by-side", active),
@@ -568,7 +565,7 @@ pub(crate) fn move_resize_items(
             has_active,
             Some(MenuIcon::svg(icons::GRID)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             active_id("app-move-restore", active),
             "Regresar al tamaño anterior",

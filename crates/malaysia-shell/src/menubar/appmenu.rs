@@ -19,7 +19,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let other_unminimized = toplevels.iter().any(|window| !window.minimized);
     vec![
         items::action("malaysia-about", "Acerca de Malaysia", None, false, None),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "malaysia-settings",
             "Ajustes…",
@@ -27,7 +27,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             true,
             Some(MenuIcon::svg(icons::GEAR)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "malaysia-empty-trash",
             "Vaciar papelera…",
@@ -35,9 +35,8 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::TRASH)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::submenu(
-            None,
             "Servicios",
             true,
             None,
@@ -49,7 +48,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
                     false,
                     None,
                 ),
-                items::separator(),
+                MenuItem::Separator,
                 items::action(
                     "services-settings",
                     "Ajustes de servicios…",
@@ -59,7 +58,7 @@ pub fn malaysia_menu_items(toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
                 ),
             ],
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "desktop-hide",
             "Ocultar Escritorio",
@@ -109,7 +108,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             None,
         ),
         items::action("file-open", "Abrir", Some("Super+O"), false, None),
-        items::submenu(None, "Abrir con", false, None, Vec::new()),
+        items::submenu("Abrir con", false, None, Vec::new()),
         items::action(
             "file-close-window",
             "Cerrar ventana",
@@ -117,7 +116,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "file-get-info",
             "Obtener información",
@@ -142,7 +141,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "file-share",
             "Compartir…",
@@ -150,7 +149,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::SHARE)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "file-move-to-trash",
             "Mover a la papelera",
@@ -165,7 +164,7 @@ pub fn file_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::EJECT)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "file-print",
             "Imprimir",
@@ -180,7 +179,7 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
     vec![
         items::action("edit-undo", "Deshacer", Some("Super+Z"), false, None),
         items::action("edit-redo", "Rehacer", Some("Shift+Super+Z"), false, None),
-        items::separator(),
+        MenuItem::Separator,
         items::action("edit-cut", "Cortar", Some("Super+X"), false, None),
         items::action("edit-copy", "Copiar", Some("Super+C"), false, None),
         items::action("edit-paste", "Pegar", Some("Super+V"), false, None),
@@ -191,7 +190,7 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "edit-show-clipboard",
             "Mostrar portapapeles",
@@ -199,7 +198,7 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "edit-search",
             "Buscar",
@@ -207,7 +206,7 @@ pub fn edit_menu_items() -> Vec<MenuItem> {
             true,
             Some(MenuIcon::svg(icons::SEARCH)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "edit-emoji",
             "Emojis y símbolos",
@@ -249,7 +248,7 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             Some(MenuIcon::svg(icons::VIEW_GALLERY)),
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "view-toggle-dock",
             "Mostrar/ocultar Dock",
@@ -257,7 +256,7 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "view-change-wallpaper",
             "Cambiar fondo de pantalla…",
@@ -272,7 +271,7 @@ pub fn view_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "view-fullscreen",
             "Ver en pantalla completa",
@@ -294,7 +293,7 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "go-documents",
             "Documentos",
@@ -358,9 +357,9 @@ pub fn go_menu_items() -> Vec<MenuItem> {
             true,
             Some(MenuIcon::svg(icons::TRASH)),
         ),
-        items::separator(),
-        items::submenu(None, "Carpetas recientes", false, None, Vec::new()),
-        items::separator(),
+        MenuItem::Separator,
+        items::submenu("Carpetas recientes", false, None, Vec::new()),
+        MenuItem::Separator,
         items::action(
             "go-to-folder",
             "Ir a la carpeta…",
@@ -397,16 +396,14 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             false,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::submenu(
-            None,
             "Trasladar y redimensionar",
             true,
             Some(MenuIcon::svg(icons::GRID)),
             focused::move_resize_items(None, None),
         ),
         items::submenu(
-            None,
             "Ventana a pantalla completa",
             false,
             Some(MenuIcon::svg(icons::SPLIT)),
@@ -425,7 +422,7 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
                     false,
                     None,
                 ),
-                items::separator(),
+                MenuItem::Separator,
                 items::action(
                     "window-fullscreen-toggle",
                     "Activar pantalla completa",
@@ -435,7 +432,7 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
                 ),
             ],
         ),
-        items::separator(),
+        MenuItem::Separator,
         items::action(
             "window-front-all",
             "Traer todo al frente",
@@ -450,7 +447,7 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
             true,
             None,
         ),
-        items::separator(),
+        MenuItem::Separator,
     ];
 
     if toplevels.is_empty() {
@@ -489,7 +486,7 @@ pub fn help_menu_items() -> Vec<MenuItem> {
         },
         help_topic_item("Documentación de Malaysia", icons::BOOK),
         help_topic_item("Atajos de teclado", icons::KEYBOARD),
-        items::separator(),
+        MenuItem::Separator,
         items::action("help-report", "Informar de un problema…", None, true, None),
     ]
 }

@@ -235,7 +235,7 @@ fn build_items(
                 icon(entry),
             ));
         }
-        out.push(items::separator());
+        out.push(MenuItem::Separator);
     }
     if !documents.is_empty() {
         let mut documents = documents.to_vec();
@@ -250,7 +250,7 @@ fn build_items(
                 Some(MenuIcon::svg(document_icon(&doc.path))),
             ));
         }
-        out.push(items::separator());
+        out.push(MenuItem::Separator);
     }
     out.push(items::action(
         CLEAR_ID,

@@ -25,21 +25,16 @@ pub fn header(label: &str) -> MenuItem {
 }
 
 pub fn submenu(
-    id: Option<String>,
     label: impl Into<String>,
     enabled: bool,
     icon: Option<MenuIcon>,
     items: Vec<MenuItem>,
 ) -> MenuItem {
     MenuItem::Submenu {
-        id,
+        id: None,
         label: label.into(),
         enabled,
         icon,
         items,
     }
-}
-
-pub fn separator() -> MenuItem {
-    MenuItem::Separator
 }
