@@ -59,7 +59,7 @@ copia código ni plantillas (ChromaLeon es GPL-3.0, Malaysia es MIT).
    (`vow_appearance::traffic::glyph_svg`) se pinta como `background-image` en
    un SVG `data:`. En GTK 4 el semáforo se
    dibuja en la imagen del botón, que GTK centra (el botón ocupa todo el alto
-   de la headerbar); los controles empiezan a `margin_start` del borde,
+   de la headerbar); los controles empiezan a `traffic::inset(TITLEBAR_CLIENT_HEIGHT)` del borde,
    descontado el relleno de la headerbar de libadwaita. La atenuación de
    libadwaita sin foco (`filter: opacity(0.5)`), en la headerbar o en la barra
    superior de `AdwToolbarView`, pasa a los demás hijos y no afecta a los

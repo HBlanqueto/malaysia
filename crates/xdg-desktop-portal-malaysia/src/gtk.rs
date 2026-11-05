@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use vow_appearance::backdrop::Oklab;
-use vow_appearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, visual};
+use vow_appearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
 use vow_appearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, palette, resolve,
 };
 use vow_design::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
-    TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
+    TITLEBAR_CLIENT_HEIGHT, TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
 };
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
@@ -343,7 +343,7 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
             "windowcontrols.start:dir(ltr)",
             &format!(
                 "margin-left: {}px;",
-                buttons.margin_start.saturating_sub(ADWAITA_HEADERBAR_START)
+                (inset(TITLEBAR_CLIENT_HEIGHT) as u32).saturating_sub(ADWAITA_HEADERBAR_START)
             ),
         );
         rule(ADWAITA_BACKDROP_BARS, "filter: none;");

@@ -59,7 +59,7 @@ copy code or templates (ChromaLeon is GPL-3.0, Malaysia is MIT).
    (`vow_appearance::traffic::glyph_svg`) is painted as a `data:` SVG
    `background-image`. In GTK 4 the light is
    drawn on the button's image, which GTK centres (the button fills the
-   headerbar's height); the controls start `margin_start` from the edge, less
+   headerbar's height); the controls start `traffic::inset(TITLEBAR_CLIENT_HEIGHT)` from the edge, less
    the libadwaita headerbar padding. libadwaita's unfocused dimming
    (`filter: opacity(0.5)`), on the headerbar or on the `AdwToolbarView` top
    bar, moves to the other children and does not reach the traffic lights.

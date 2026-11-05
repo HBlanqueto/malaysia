@@ -503,7 +503,7 @@ impl TextEngine {
             }
         }
         let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
-        let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
+        let margin = (traffic::button_rect(0).0 * scale).round() as i32;
 
         let text_color = if focused {
             palette.title.focused
@@ -1059,7 +1059,7 @@ mod tests {
         assert_eq!(TITLEBAR.thickness, 32);
         assert_eq!(TITLEBAR.buttons.diameter, 14);
         assert_eq!(TITLEBAR.buttons.spacing, 9);
-        assert_eq!(TITLEBAR.buttons.margin_start, 15);
+        assert_eq!(traffic::button_rect(0), (9.0, 9.0, 14.0));
         assert_eq!(vow_design::WINDOW.corner_radius, 16);
     }
 
@@ -1067,7 +1067,7 @@ mod tests {
     fn the_close_button_is_at_the_left() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
         let x = 100.0
-            + f64::from(TITLEBAR.buttons.margin_start)
+            + traffic::button_rect(0).0
             + f64::from(TITLEBAR.buttons.diameter) / 2.0;
         assert_eq!(
             button_at(outer(), insets(), Point::from((x, y))),
@@ -1079,7 +1079,7 @@ mod tests {
     fn the_three_buttons_are_in_tengen_order() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
         let start = 100.0
-            + f64::from(TITLEBAR.buttons.margin_start)
+            + traffic::button_rect(0).0
             + f64::from(TITLEBAR.buttons.diameter) / 2.0;
         let step = f64::from(TITLEBAR.buttons.diameter + TITLEBAR.buttons.spacing);
         for (index, expected) in [
@@ -1101,7 +1101,7 @@ mod tests {
     #[test]
     fn the_buttons_are_rounded_squares() {
         let y = 50.0 + f64::from(TITLEBAR.thickness) / 2.0;
-        let x = 100.0 + f64::from(TITLEBAR.buttons.margin_start);
+        let x = 100.0 + traffic::button_rect(0).0;
         assert_eq!(
             button_at(outer(), insets(), Point::from((x + 0.1, y - 5.9))),
             None
@@ -1132,7 +1132,7 @@ mod tests {
             let width = (800.0 * scale).round() as i32;
             let diameter = (f64::from(TITLEBAR.buttons.diameter) * scale).round() as i32;
             let gap = (f64::from(TITLEBAR.buttons.spacing) * scale).round() as i32;
-            let margin = (f64::from(TITLEBAR.buttons.margin_start) * scale).round() as i32;
+            let margin = (traffic::button_rect(0).0 * scale).round() as i32;
             let reserve = margin
                 + 3 * diameter
                 + 2 * gap
