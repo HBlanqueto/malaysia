@@ -155,16 +155,19 @@ rest get Malaysia's chrome). `"force_server"` draws Malaysia's chrome on every
 window; `"force_client"` draws none.
 
 `double_click_titlebar` uses macOS's words: "**Fill / Minimize / Zoom / No
-Action**".
+Action**". `fill` and `zoom` maximize and never enter focus mode; in focus mode,
+they leave it. This holds for every window: SSD, GTK (`gtk_surface.titlebar_gesture`)
+and the other CSD apps, whose `set_maximized` right after a double click counts as
+a double click.
 
 `green_button` decides what the green traffic light does. As in macOS, the default
 value is **`focus`**: the focus mode of ADR 0051. The window gets its own
 space to the right of its desktop and grows to cover the screen
 while the desktop slides away. It gets the xdg `fullscreen` state; the bar
 and the dock hide. Repeating leaves focus. With `focus`, a CSD app's own green
-traffic light (`set_maximized`) does the same. `zoom` maximizes
-keeping the frame; `fullscreen` still only records the request; `none`
-does nothing. An app that requests fullscreen (F11) and `Ctrl+Super+F` always enter
+traffic light (`set_maximized`) does the same. A fixed-width window is
+maximized. `fullscreen` is an alias of `focus`. `zoom` maximizes
+keeping the frame; `none` does nothing. An app that requests fullscreen (F11) and `Ctrl+Super+F` always enter
 focus mode. Double-clicking the bar is still governed by `double_click_titlebar`.
 
 `focus_titlebar_apps` lists the CSD apps that focus mode treats like an SSD
@@ -382,7 +385,7 @@ scale = 1.5                     # 1.0 .. 4.0
 decorations = "default"         # default | force_server | force_client
 titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
-green_button = "focus"          # focus | zoom | fullscreen | none
+green_button = "focus"          # focus | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20

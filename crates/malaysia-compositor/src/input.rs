@@ -976,6 +976,9 @@ impl State {
             .is_some()
         {
             tracing::info!(?location, window = ?id, "press landed on the client surface");
+            if button == BUTTON_LEFT {
+                self.register_client_click(id, location, time);
+            }
             return;
         }
         if button == BUTTON_LEFT {
@@ -1018,9 +1021,6 @@ impl State {
                         "maximize ignored: the window is fixed-size"
                     );
                 }
-            }
-            GreenButtonAction::Fullscreen => {
-                tracing::info!(window = id.get(), "fullscreen requested");
             }
             GreenButtonAction::None => {}
         }
@@ -1348,6 +1348,31 @@ impl State {
         );
         self.titlebar_click = previous;
         action
+    }
+
+    fn register_client_click(
+        &mut self,
+        id: WindowId,
+        location: Point<f64, Logical>,
+        time: InputTime,
+    ) {
+        let (previous, action) = double_click(
+            self.client_click,
+            id,
+            location,
+            u64::from(time.millis()),
+            self.config.window.double_click_titlebar,
+        );
+        self.client_click = previous;
+        self.client_double_click = action.map(|_| (id, std::time::Instant::now()));
+    }
+
+    pub(crate) fn followed_double_click(&self, id: WindowId) -> bool {
+        self.client_double_click.is_some_and(|(clicked, at)| {
+            clicked == id
+                && at.elapsed().as_millis()
+                    <= u128::from(vow_design::TITLEBAR_DOUBLE_CLICK.interval_ms)
+        })
     }
 
     fn note_client_input_serial(&self, surface: &WlSurface, serial: Serial) {

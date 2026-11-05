@@ -25,9 +25,9 @@ pub enum DoubleClickAction {
 #[serde(rename_all = "lowercase")]
 pub enum GreenButtonAction {
     #[default]
+    #[serde(alias = "fullscreen")]
     Focus,
     Zoom,
-    Fullscreen,
     None,
 }
 
@@ -226,7 +226,7 @@ mod tests {
         for (text, expected) in [
             ("focus", GreenButtonAction::Focus),
             ("zoom", GreenButtonAction::Zoom),
-            ("fullscreen", GreenButtonAction::Fullscreen),
+            ("fullscreen", GreenButtonAction::Focus),
             ("none", GreenButtonAction::None),
         ] {
             let parsed: Config = toml::from_str(&format!("[window]\ngreen_button = \"{text}\"\n"))
@@ -293,7 +293,7 @@ mod tests {
             parsed.window.double_click_titlebar,
             DoubleClickAction::Minimize
         );
-        assert_eq!(parsed.window.green_button, GreenButtonAction::Fullscreen);
+        assert_eq!(parsed.window.green_button, GreenButtonAction::Focus);
         assert_eq!(parsed.window.resize_border, 8);
         assert_eq!(parsed.window.resize_corner, 20);
         assert!(!parsed.menubar.app_menus);

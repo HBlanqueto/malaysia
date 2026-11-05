@@ -806,7 +806,9 @@ impl XdgShellHandler for State {
             return;
         };
         tracing::info!(window = id.get(), "maximize_request");
-        if self.in_focus_mode(id) {
+        if self.followed_double_click(id) {
+            self.apply_titlebar_double_click(id);
+        } else if self.in_focus_mode(id) {
             self.exit_focus_mode(id);
         } else if self.config.window.green_button == crate::config::GreenButtonAction::Focus
             && !self.has_fixed_width(id)

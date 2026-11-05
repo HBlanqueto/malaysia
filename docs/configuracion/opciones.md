@@ -155,16 +155,19 @@ resto reciben el chrome de Malaysia). `"force_server"` dibuja el chrome de Malay
 las ventanas; `"force_client"` no dibuja ninguno.
 
 `double_click_titlebar` usa las palabras de macOS: "**Fill / Minimize / Zoom / No
-Action**".
+Action**". `fill` y `zoom` maximizan y nunca entran en modo foco; en modo foco,
+salen de él. Vale para toda ventana: SSD, GTK (`gtk_surface.titlebar_gesture`) y
+el resto de CSD, cuyo `set_maximized` justo después de un doble clic cuenta como
+doble clic.
 
 `green_button` decide qué hace el semáforo verde. Como en macOS, el valor por
 defecto es **`focus`**: el modo foco del ADR 0051. La ventana recibe un
 espacio propio a la derecha de su escritorio y crece hasta cubrir la pantalla
 mientras el escritorio se desliza. Recibe el estado xdg `fullscreen`; la barra
 y el dock se ocultan. Repetir sale del foco. Con `focus`, el semáforo verde
-propio de una app CSD (`set_maximized`) hace lo mismo. `zoom` maximiza
-conservando el marco; `fullscreen` todavía solo registra la petición; `none`
-no hace nada. Una app que pide fullscreen (F11) y `Ctrl+Super+F` entran
+propio de una app CSD (`set_maximized`) hace lo mismo. Una ventana de ancho fijo
+se maximiza. `fullscreen` es un alias de `focus`. `zoom` maximiza
+conservando el marco; `none` no hace nada. Una app que pide fullscreen (F11) y `Ctrl+Super+F` entran
 siempre en modo foco. El doble clic de la barra sigue gobernado por `double_click_titlebar`.
 
 `focus_titlebar_apps` lista las apps CSD que en modo foco se tratan como una
@@ -383,7 +386,7 @@ scale = 1.5                     # 1.0 .. 4.0
 decorations = "default"         # default | force_server | force_client
 titlebar = true
 double_click_titlebar = "zoom"  # fill | minimize | zoom | none
-green_button = "focus"          # focus | zoom | fullscreen | none
+green_button = "focus"          # focus | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20

@@ -166,6 +166,8 @@ pub struct State {
     pub(crate) border: Option<GlesPixelProgram>,
     pub(crate) chrome_pointer: Option<(WindowId, vow_appearance::traffic::TrafficPointer)>,
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
+    pub(crate) client_click: Option<crate::input::TitlebarClick>,
+    pub(crate) client_double_click: Option<(WindowId, std::time::Instant)>,
     pub(crate) screenshot: Option<ScreenshotRequest>,
     pub(crate) screenshot_mode: Option<ScreenshotMode>,
 }
@@ -419,6 +421,8 @@ impl State {
             border: None,
             chrome_pointer: None,
             titlebar_click: None,
+            client_click: None,
+            client_double_click: None,
             screenshot: None,
             screenshot_mode: None,
         })
@@ -498,25 +502,13 @@ impl State {
     }
 
     pub(crate) fn apply_titlebar_double_click(&mut self, id: WindowId) {
-        let zooms = matches!(
-            self.config.window.double_click_titlebar,
-            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill
-        );
-        if zooms
-            && (self.in_focus_mode(id)
-                || (self.config.window.green_button == crate::config::GreenButtonAction::Focus
-                    && !self.has_fixed_width(id)))
-        {
-            self.toggle_focus_mode(id);
-            return;
-        }
         match self.config.window.double_click_titlebar {
-            crate::config::DoubleClickAction::Zoom => {
-                if self.windows.zoom_supported(id) {
-                    self.toggle_maximize(id);
-                }
+            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill
+                if self.in_focus_mode(id) =>
+            {
+                self.exit_focus_mode(id);
             }
-            crate::config::DoubleClickAction::Fill => {
+            crate::config::DoubleClickAction::Zoom | crate::config::DoubleClickAction::Fill => {
                 if self.windows.zoom_supported(id) {
                     self.toggle_maximize(id);
                 }
