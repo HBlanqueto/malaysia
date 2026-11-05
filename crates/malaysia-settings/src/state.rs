@@ -22,7 +22,13 @@ fn full_account_name() -> Option<String> {
     if pw.is_null() {
         return None;
     }
-    let gecos = unsafe { std::ffi::CStr::from_ptr((*pw).pw_gecos) };
+    // SAFETY: `pw` was checked non-null above.
+    let gecos = unsafe { (*pw).pw_gecos };
+    if gecos.is_null() {
+        return None;
+    }
+    // SAFETY: `pw_gecos` is a NUL-terminated `passwd` field, checked non-null.
+    let gecos = unsafe { std::ffi::CStr::from_ptr(gecos) };
     gecos
         .to_str()
         .ok()?

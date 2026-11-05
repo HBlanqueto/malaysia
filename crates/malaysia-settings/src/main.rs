@@ -80,8 +80,10 @@ mod tests {
         ));
         fs::create_dir_all(&dir).unwrap();
         let old = env::var_os("MALAYSIA_CONFIG_DIR");
+        // SAFETY: `ENV_LOCK` serialises every test that touches the environment.
         unsafe { env::set_var("MALAYSIA_CONFIG_DIR", &dir) };
         let result = f(dir.clone());
+        // SAFETY: `ENV_LOCK` serialises every test that touches the environment.
         match old {
             Some(v) => unsafe { env::set_var("MALAYSIA_CONFIG_DIR", v) },
             None => unsafe { env::remove_var("MALAYSIA_CONFIG_DIR") },
