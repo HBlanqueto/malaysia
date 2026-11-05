@@ -224,7 +224,7 @@ async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows
     }
 }
 
-pub fn start(app_menus: bool) -> MenuClient {
+pub fn start(app_menus_enabled: bool) -> MenuClient {
     let (commands, command_rx) = async_channel::unbounded();
     let (snapshot_tx, snapshot_rx) = async_channel::unbounded();
     let wake = Arc::new(Mutex::new(None));
@@ -232,7 +232,7 @@ pub fn start(app_menus: bool) -> MenuClient {
     std::thread::Builder::new()
         .name("malaysia-dbusmenu".to_string())
         .spawn(move || {
-            async_io::block_on(run(command_rx, snapshot_tx, thread_wake, app_menus));
+            async_io::block_on(run(command_rx, snapshot_tx, thread_wake, app_menus_enabled));
         })
         .expect("malaysia-dbusmenu thread");
     MenuClient {
@@ -255,16 +255,8 @@ struct MenuCache {
 }
 
 impl MenuCache {
-    fn get(&self, id: i32) -> Option<&CachedSubtree> {
-        self.subtrees.get(&id)
-    }
-
     fn put(&mut self, id: i32, revision: u32, items: Vec<RawItem>) {
         self.subtrees.insert(id, CachedSubtree { revision, items });
-    }
-
-    fn full(&self) -> Option<&CachedSubtree> {
-        self.full.as_ref()
     }
 
     fn put_full(&mut self, revision: u32, items: Vec<RawItem>) {
@@ -357,30 +349,7 @@ fn apply_properties(
     changed
 }
 
-#[derive(Default)]
-struct MenuCaches {
-    menus: HashMap<AppMenuAddress, MenuCache>,
-}
-
-impl MenuCaches {
-    fn get(&self, address: &AppMenuAddress) -> Option<&MenuCache> {
-        self.menus.get(address)
-    }
-
-    fn get_mut(&mut self, address: &AppMenuAddress) -> Option<&mut MenuCache> {
-        self.menus.get_mut(address)
-    }
-
-    fn entry(&mut self, address: &AppMenuAddress) -> &mut MenuCache {
-        self.menus.entry(address.clone()).or_default()
-    }
-
-    fn evict_service(&mut self, service: &str) -> bool {
-        let before = self.menus.len();
-        self.menus.retain(|address, _| address.service != service);
-        before != self.menus.len()
-    }
-}
+type MenuCaches = HashMap<AppMenuAddress, MenuCache>;
 
 struct AddressProxy {
     proxy: zbus::Proxy<'static>,
@@ -453,7 +422,7 @@ async fn run(
     commands: Receiver<Command>,
     snapshots: Sender<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
-    initial_app_menus: bool,
+    mut app_menus_enabled: bool,
 ) {
     let builder = match zbus::connection::Builder::session() {
         Ok(builder) => builder.method_timeout(FULL_TREE_TIMEOUT),
@@ -471,8 +440,7 @@ async fn run(
     };
 
     let windows: RegistrarWindows = Arc::new(Mutex::new(HashMap::new()));
-    let mut app_menus = initial_app_menus;
-    set_registrar(&connection, &windows, app_menus).await;
+    set_registrar(&connection, &windows, app_menus_enabled).await;
 
     let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
         Ok(dbus) => dbus,
@@ -496,95 +464,67 @@ async fn run(
         }
     };
 
-    let mut proxies: ProxyCache = HashMap::new();
-    let mut caches = MenuCaches::default();
+    let mut worker = Worker {
+        connection,
+        dbus,
+        proxies: HashMap::new(),
+        caches: HashMap::new(),
+        snapshots,
+        wake,
+    };
     let mut focused: Option<(AppMenuAddress, u64)> = None;
     let mut pending = Pending::default();
     let mut deadline: Option<Instant> = None;
     let mut background = BackgroundFullTree::default();
     let mut gtk: Option<gtkmenus::Session> = None;
     loop {
-        let timer = match (deadline, background.next()) {
-            (Some(debounce), Some(full)) => Some(debounce.min(full)),
-            (debounce, full) => debounce.or(full),
-        };
-        let selected = if let Some(at) = timer {
-            future::or(
-                future::or(async { Event::Command(commands.recv().await) }, async {
-                    Event::Owner(owner_changes.next().await)
-                }),
-                future::or(async { Event::Menu(menu_signals.next().await) }, async {
-                    async_io::Timer::at(at).await;
-                    Event::Timer
-                }),
-            )
-            .await
-        } else {
-            future::or(
-                future::or(async { Event::Command(commands.recv().await) }, async {
-                    Event::Owner(owner_changes.next().await)
-                }),
-                async { Event::Menu(menu_signals.next().await) },
-            )
-            .await
-        };
+        let timer = deadline.into_iter().chain(background.next()).min();
+        let selected = future::or(
+            future::or(async { Event::Command(commands.recv().await) }, async {
+                Event::Owner(owner_changes.next().await)
+            }),
+            future::or(async { Event::Menu(menu_signals.next().await) }, async {
+                timer
+                    .map_or_else(async_io::Timer::never, async_io::Timer::at)
+                    .await;
+                Event::Timer
+            }),
+        )
+        .await;
         match selected {
             Event::Command(Ok(Command::SetAppMenus(enabled))) => {
-                if enabled == app_menus {
+                if enabled == app_menus_enabled {
                     continue;
                 }
-                app_menus = enabled;
+                app_menus_enabled = enabled;
                 pending = Pending::default();
                 deadline = None;
                 if !enabled {
                     focused = None;
                     background = BackgroundFullTree::default();
-                    end_gtk(&connection, &mut gtk).await;
+                    end_gtk(&worker.connection, &mut gtk).await;
                 }
                 tracing::info!(enabled, "menubar: app_menus changed");
-                set_registrar(&connection, &windows, enabled).await;
+                set_registrar(&worker.connection, &windows, enabled).await;
             }
             Event::Command(Ok(Command::Focus {
                 address,
                 generation,
             })) => {
-                if !app_menus {
+                if !app_menus_enabled {
                     continue;
                 }
-                end_gtk(&connection, &mut gtk).await;
+                end_gtk(&worker.connection, &mut gtk).await;
                 focused = Some((address.clone(), generation));
                 pending = Pending::default();
                 deadline = None;
                 background.schedule(
                     &address,
                     generation,
-                    caches
-                        .get(&address)
-                        .and_then(|cache| cache.full())
-                        .is_some(),
+                    worker.has_full_tree(&address),
                     Instant::now(),
                 );
-                if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
-                    tracing::info!(
-                        generation,
-                        service = %address.service,
-                        titles = root.items.len(),
-                        cached = true,
-                        "menubar: dbusmenu root snapshot"
-                    );
-                    send(
-                        &snapshots,
-                        &wake,
-                        MenuSnapshot {
-                            generation,
-                            address,
-                            parent: None,
-                            items: Some(root.items.clone()),
-                            cached: true,
-                        },
-                    )
-                    .await;
-                } else {
+                if !worker.send_cached_root(&address, generation).await {
                     pending.focus = Some((address, generation));
                     arm(&mut deadline);
                 }
@@ -594,17 +534,17 @@ async fn run(
                 app_name,
                 generation,
             })) => {
-                if !app_menus {
+                if !app_menus_enabled {
                     continue;
                 }
                 focused = None;
                 pending = Pending::default();
                 deadline = None;
                 background = BackgroundFullTree::default();
-                end_gtk(&connection, &mut gtk).await;
+                end_gtk(&worker.connection, &mut gtk).await;
                 let session =
-                    gtkmenus::Session::open(&connection, menus, app_name, generation).await;
-                send_gtk(&snapshots, &wake, &session, 0, false).await;
+                    gtkmenus::Session::open(&worker.connection, menus, app_name, generation).await;
+                worker.send_gtk(&session, 0, false).await;
                 gtk = Some(session);
             }
             Event::Command(Ok(Command::Unfocus)) => {
@@ -612,120 +552,68 @@ async fn run(
                 pending = Pending::default();
                 deadline = None;
                 background = BackgroundFullTree::default();
-                end_gtk(&connection, &mut gtk).await;
+                end_gtk(&worker.connection, &mut gtk).await;
             }
             Event::Command(Ok(Command::Open {
                 address,
                 id,
                 generation,
             })) => {
-                if !app_menus {
+                if !app_menus_enabled {
                     continue;
                 }
                 if let Some(session) = gtk_for(&gtk, &address, generation) {
-                    send_gtk(&snapshots, &wake, session, id, true).await;
+                    worker.send_gtk(session, id, true).await;
                     continue;
                 }
                 let started = Instant::now();
-                let cached = caches
+                let cached = worker
+                    .caches
                     .get(&address)
-                    .and_then(|cache| cache.get(id))
-                    .cloned();
-                let shown = about_to_show(&connection, &dbus, &mut proxies, &address, id).await;
-                let had_cache = cached.is_some();
-                let items = if shown || cached.is_none() {
-                    fetch_subtree(&connection, &dbus, &mut proxies, &mut caches, &address, id).await
+                    .and_then(|cache| cache.subtrees.get(&id))
+                    .map(|subtree| subtree.items.clone());
+                let needs_update = worker.about_to_show(&address, id).await;
+                let from_cache = !needs_update && cached.is_some();
+                let items = if from_cache {
+                    cached
                 } else {
-                    cached.map(|subtree| subtree.items)
+                    worker.fetch_subtree(&address, id).await
                 };
                 pending.subtrees.retain(|pending| *pending != id);
-                let from_cache = !shown && had_cache;
-                let count = items.as_ref().map_or(0, Vec::len);
                 tracing::info!(
                     generation,
                     id,
                     service = %address.service,
-                    items = count,
+                    items = items.as_ref().map_or(0, Vec::len),
                     cached = from_cache,
                     ms = started.elapsed().as_millis(),
                     "menubar: dbusmenu submenu snapshot"
                 );
-                send(
-                    &snapshots,
-                    &wake,
-                    MenuSnapshot {
+                worker
+                    .send(MenuSnapshot {
                         generation,
                         address,
                         parent: Some(id),
                         items,
                         cached: from_cache,
-                    },
-                )
-                .await;
+                    })
+                    .await;
             }
             Event::Command(Ok(Command::FullTree {
                 address,
                 generation,
             })) => {
-                if !app_menus {
+                if !app_menus_enabled {
                     continue;
                 }
                 if let Some(session) = gtk_for(&gtk, &address, generation) {
-                    send_gtk(&snapshots, &wake, session, 0, true).await;
+                    worker.send_gtk(session, 0, true).await;
                     continue;
                 }
-                let started = Instant::now();
-                let cached = caches.get(&address).and_then(|cache| cache.full()).cloned();
-                let (items, from_cache) = match cached {
-                    Some(full) => (Some(full.items), true),
-                    None => match layout(
-                        &connection,
-                        &dbus,
-                        &mut proxies,
-                        &address,
-                        0,
-                        -1,
-                        FULL_TREE_TIMEOUT,
-                    )
-                    .await
-                    {
-                        Ok((revision, items)) => {
-                            caches.entry(&address).put_full(revision, items.clone());
-                            background.cancel(&address);
-                            (Some(items), false)
-                        }
-                        Err(error) => {
-                            tracing::warn!(
-                                %error,
-                                service = %address.service,
-                                "menubar: dbusmenu full GetLayout failed"
-                            );
-                            (None, false)
-                        }
-                    },
-                };
-                if let Some(items) = items {
-                    let count = items.len();
-                    tracing::info!(
-                        generation,
-                        service = %address.service,
-                        items = count,
-                        cached = from_cache,
-                        ms = started.elapsed().as_millis(),
-                        "menubar: dbusmenu full tree snapshot"
-                    );
-                    send(
-                        &snapshots,
-                        &wake,
-                        MenuSnapshot {
-                            generation,
-                            address,
-                            parent: None,
-                            items: Some(items),
-                            cached: from_cache,
-                        },
-                    )
-                    .await;
+                let cached = worker.has_full_tree(&address);
+                worker.send_full_tree(&address, generation).await;
+                if !cached && worker.has_full_tree(&address) {
+                    background.cancel(&address);
                 }
             }
             Event::Command(Ok(Command::Activate {
@@ -734,12 +622,10 @@ async fn run(
                 timestamp,
             })) => {
                 if let Some(session) = gtk.as_ref().filter(|session| session.address == address) {
-                    session.activate(&connection, id).await;
+                    session.activate(&worker.connection, id).await;
                     continue;
                 }
-                if let Err(error) =
-                    event(&connection, &dbus, &mut proxies, &address, id, timestamp).await
-                {
+                if let Err(error) = worker.event(&address, id, timestamp).await {
                     tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
                 } else {
                     tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
@@ -758,39 +644,39 @@ async fn run(
                     gtk.take_if(|session| session.menus.unique_bus_name == service)
                 {
                     tracing::info!(%service, "menubar: GTK menu service vanished");
-                    send(
-                        &snapshots,
-                        &wake,
-                        MenuSnapshot {
+                    worker
+                        .send(MenuSnapshot {
                             generation: session.generation,
                             address: session.address,
                             parent: None,
                             items: None,
                             cached: false,
-                        },
-                    )
-                    .await;
+                        })
+                        .await;
                 }
-                proxies.retain(|address, _| address.service != service);
-                let evicted = caches.evict_service(&service);
+                worker
+                    .proxies
+                    .retain(|address, _| address.service != service);
+                let cached_menus = worker.caches.len();
+                worker
+                    .caches
+                    .retain(|address, _| address.service != service);
+                let evicted = cached_menus != worker.caches.len();
                 if let Some((address, generation)) = &focused
                     && address.service == service
                 {
                     tracing::info!(%service, generation, evicted, "menubar: menu service vanished");
                     pending = Pending::default();
                     deadline = None;
-                    send(
-                        &snapshots,
-                        &wake,
-                        MenuSnapshot {
+                    worker
+                        .send(MenuSnapshot {
                             generation: *generation,
                             address: address.clone(),
                             parent: None,
                             items: None,
                             cached: false,
-                        },
-                    )
-                    .await;
+                        })
+                        .await;
                 }
             }
             Event::Owner(None) => break,
@@ -801,16 +687,16 @@ async fn run(
                     .is_some_and(|interface| interface.starts_with("org.gtk.")) =>
             {
                 if let Some(session) = gtk.as_mut()
-                    && session.signal(&connection, &message).await
+                    && session.signal(&worker.connection, &message).await
                 {
-                    send_gtk(&snapshots, &wake, session, 0, false).await;
+                    worker.send_gtk(session, 0, false).await;
                 }
             }
             Event::Menu(Some(Ok(message))) => {
                 handle_signal(
                     message,
-                    &proxies,
-                    &mut caches,
+                    &worker.proxies,
+                    &mut worker.caches,
                     &focused,
                     &mut pending,
                     &mut deadline,
@@ -824,31 +710,13 @@ async fn run(
                 let now = Instant::now();
                 if deadline.is_some_and(|at| at <= now) {
                     deadline = None;
-                    flush(
-                        &connection,
-                        &dbus,
-                        &mut proxies,
-                        &mut caches,
-                        &snapshots,
-                        &wake,
-                        &focused,
-                        &mut pending,
-                    )
-                    .await;
+                    worker.flush(&focused, &mut pending).await;
                 }
-                if let Some((address, generation)) = background.due(now) {
-                    prefetch_full_tree(
-                        &connection,
-                        &dbus,
-                        &mut proxies,
-                        &mut caches,
-                        &snapshots,
-                        &wake,
-                        &focused,
-                        &address,
-                        generation,
-                    )
-                    .await;
+                if let Some((address, generation)) = background.due(now)
+                    && focused == Some((address.clone(), generation))
+                    && !worker.has_full_tree(&address)
+                {
+                    worker.send_full_tree(&address, generation).await;
                 }
             }
         }
@@ -868,27 +736,6 @@ async fn end_gtk(connection: &zbus::Connection, gtk: &mut Option<gtkmenus::Sessi
     if let Some(session) = gtk.take() {
         session.close(connection).await;
     }
-}
-
-async fn send_gtk(
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    session: &gtkmenus::Session,
-    id: i32,
-    cached: bool,
-) {
-    send(
-        snapshots,
-        wake,
-        MenuSnapshot {
-            generation: session.generation,
-            address: session.address.clone(),
-            parent: (id != 0).then_some(id),
-            items: session.tree.children(id),
-            cached,
-        },
-    )
-    .await;
 }
 
 fn arm(deadline: &mut Option<Instant>) {
@@ -964,7 +811,7 @@ fn handle_signal(
             let changed = caches
                 .get_mut(&address)
                 .is_some_and(|cache| cache.apply_properties(&updated, &removed));
-            tracing::info!(
+            tracing::debug!(
                 service = %address.service,
                 ?updated,
                 ?removed,
@@ -980,222 +827,295 @@ fn handle_signal(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn flush(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    caches: &mut MenuCaches,
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    focused: &Option<(AppMenuAddress, u64)>,
-    pending: &mut Pending,
-) {
-    let Some((address, generation)) = focused.clone() else {
-        *pending = Pending::default();
-        return;
-    };
+struct Worker {
+    connection: zbus::Connection,
+    dbus: zbus::fdo::DBusProxy<'static>,
+    proxies: ProxyCache,
+    caches: MenuCaches,
+    snapshots: Sender<MenuSnapshot>,
+    wake: Arc<Mutex<Option<WakeHandle>>>,
+}
 
-    let focus_fetch = pending
-        .focus
-        .take()
-        .is_some_and(|(pending, pending_generation)| {
-            pending == address && pending_generation == generation
-        });
-    if focus_fetch {
-        if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
-            send(
-                snapshots,
-                wake,
-                MenuSnapshot {
-                    generation,
-                    address: address.clone(),
-                    parent: None,
-                    items: Some(root.items.clone()),
-                    cached: true,
-                },
-            )
-            .await;
-        } else {
-            fetch_root(
-                connection, dbus, proxies, caches, snapshots, wake, &address, generation,
-            )
-            .await;
+impl Worker {
+    async fn flush(&mut self, focused: &Option<(AppMenuAddress, u64)>, pending: &mut Pending) {
+        let Some((address, generation)) = focused.clone() else {
+            *pending = Pending::default();
+            return;
+        };
+
+        if pending.focus.take() == *focused && !self.send_cached_root(&address, generation).await {
+            self.fetch_root(&address, generation).await;
         }
-    }
 
-    let mut subtrees = std::mem::take(&mut pending.subtrees);
-    subtrees.sort_unstable();
-    subtrees.dedup();
-    for id in subtrees {
-        if id == 0 {
-            if caches
-                .get(&address)
-                .and_then(|cache| cache.get(0))
-                .is_none()
-            {
-                fetch_root(
-                    connection, dbus, proxies, caches, snapshots, wake, &address, generation,
-                )
-                .await;
-            }
-            send_cached_subtrees(caches, snapshots, wake, &address, generation).await;
-        } else {
-            let items = fetch_subtree(connection, dbus, proxies, caches, &address, id).await;
-            send(
-                snapshots,
-                wake,
-                MenuSnapshot {
+        let mut subtrees = std::mem::take(&mut pending.subtrees);
+        subtrees.sort_unstable();
+        subtrees.dedup();
+        for id in subtrees {
+            if id == 0 {
+                if !self
+                    .caches
+                    .get(&address)
+                    .is_some_and(|cache| cache.subtrees.contains_key(&0))
+                {
+                    self.fetch_root(&address, generation).await;
+                }
+                self.send_cached_subtrees(&address, generation).await;
+            } else {
+                let items = self.fetch_subtree(&address, id).await;
+                self.send(MenuSnapshot {
                     generation,
                     address: address.clone(),
                     parent: Some(id),
                     items,
                     cached: false,
-                },
-            )
-            .await;
+                })
+                .await;
+            }
+        }
+
+        if std::mem::take(&mut pending.snapshot)
+            && self.send_cached_root(&address, generation).await
+        {
+            self.send_cached_subtrees(&address, generation).await;
         }
     }
 
-    if pending.snapshot {
-        pending.snapshot = false;
-        if let Some(root) = caches.get(&address).and_then(|cache| cache.get(0)) {
-            send(
-                snapshots,
-                wake,
-                MenuSnapshot {
-                    generation,
-                    address: address.clone(),
-                    parent: None,
-                    items: Some(root.items.clone()),
-                    cached: true,
-                },
-            )
-            .await;
-            send_cached_subtrees(caches, snapshots, wake, &address, generation).await;
-        }
+    async fn send_cached_root(&self, address: &AppMenuAddress, generation: u64) -> bool {
+        let Some(root) = self
+            .caches
+            .get(address)
+            .and_then(|cache| cache.subtrees.get(&0))
+        else {
+            return false;
+        };
+        tracing::info!(
+            generation,
+            service = %address.service,
+            titles = root.items.len(),
+            cached = true,
+            "menubar: dbusmenu root snapshot"
+        );
+        self.send(MenuSnapshot {
+            generation,
+            address: address.clone(),
+            parent: None,
+            items: Some(root.items.clone()),
+            cached: true,
+        })
+        .await;
+        true
     }
-}
 
-#[allow(clippy::too_many_arguments)]
-async fn fetch_root(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    caches: &mut MenuCaches,
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    address: &AppMenuAddress,
-    generation: u64,
-) {
-    let started = Instant::now();
-    let items = match layout(connection, dbus, proxies, address, 0, 1, CALL_TIMEOUT).await {
-        Ok((revision, items)) => {
-            caches.entry(address).put(0, revision, items.to_vec());
-            Some(items)
-        }
-        Err(error) => {
-            tracing::warn!(%error, service = %address.service, "menubar: dbusmenu GetLayout failed");
-            None
-        }
-    };
-    let count = items.as_ref().map_or(0, Vec::len);
-    tracing::info!(
-        generation,
-        service = %address.service,
-        titles = count,
-        cached = false,
-        ms = started.elapsed().as_millis(),
-        "menubar: dbusmenu root snapshot"
-    );
-    send(
-        snapshots,
-        wake,
-        MenuSnapshot {
+    async fn fetch_root(&mut self, address: &AppMenuAddress, generation: u64) {
+        let started = Instant::now();
+        let items = self.fetch_subtree(address, 0).await;
+        tracing::info!(
+            generation,
+            service = %address.service,
+            titles = items.as_ref().map_or(0, Vec::len),
+            cached = false,
+            ms = started.elapsed().as_millis(),
+            "menubar: dbusmenu root snapshot"
+        );
+        self.send(MenuSnapshot {
             generation,
             address: address.clone(),
             parent: None,
             items,
             cached: false,
-        },
-    )
-    .await;
-}
-
-async fn send_cached_subtrees(
-    caches: &MenuCaches,
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    address: &AppMenuAddress,
-    generation: u64,
-) {
-    let Some(cache) = caches.get(address) else {
-        return;
-    };
-    let mut ids: Vec<i32> = cache
-        .subtrees
-        .keys()
-        .copied()
-        .filter(|id| *id != 0)
-        .collect();
-    ids.sort_unstable();
-    for id in ids {
-        let Some(subtree) = cache.get(id) else {
-            continue;
-        };
-        send(
-            snapshots,
-            wake,
-            MenuSnapshot {
-                generation,
-                address: address.clone(),
-                parent: Some(id),
-                items: Some(subtree.items.clone()),
-                cached: true,
-            },
-        )
+        })
         .await;
     }
-}
 
-async fn fetch_subtree(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    caches: &mut MenuCaches,
-    address: &AppMenuAddress,
-    id: i32,
-) -> Option<Vec<RawItem>> {
-    match layout(connection, dbus, proxies, address, id, 1, CALL_TIMEOUT).await {
-        Ok((revision, items)) => {
-            caches.entry(address).put(id, revision, items.to_vec());
-            Some(items)
-        }
-        Err(error) => {
-            tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu GetLayout failed");
-            None
+    async fn send_cached_subtrees(&self, address: &AppMenuAddress, generation: u64) {
+        let Some(cache) = self.caches.get(address) else {
+            return;
+        };
+        let mut subtrees: Vec<_> = cache.subtrees.iter().filter(|(id, _)| **id != 0).collect();
+        subtrees.sort_unstable_by_key(|(id, _)| **id);
+        for (id, subtree) in subtrees {
+            self.send(MenuSnapshot {
+                generation,
+                address: address.clone(),
+                parent: Some(*id),
+                items: Some(subtree.items.clone()),
+                cached: true,
+            })
+            .await;
         }
     }
-}
 
-async fn send(
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    snapshot: MenuSnapshot,
-) {
-    let _ = snapshots.send(snapshot).await;
-    notify(wake);
-}
+    async fn fetch_subtree(&mut self, address: &AppMenuAddress, id: i32) -> Option<Vec<RawItem>> {
+        match self.layout(address, id, 1, CALL_TIMEOUT).await {
+            Ok((revision, items)) => {
+                self.caches
+                    .entry(address.clone())
+                    .or_default()
+                    .put(id, revision, items.clone());
+                Some(items)
+            }
+            Err(error) => {
+                tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu GetLayout failed");
+                None
+            }
+        }
+    }
 
-fn notify(wake: &Arc<Mutex<Option<WakeHandle>>>) {
-    if let Some(wake) = wake.lock().ok().and_then(|slot| slot.clone()) {
-        wake.wake();
+    fn has_full_tree(&self, address: &AppMenuAddress) -> bool {
+        self.caches
+            .get(address)
+            .is_some_and(|cache| cache.full.is_some())
+    }
+
+    async fn send_full_tree(&mut self, address: &AppMenuAddress, generation: u64) {
+        let started = Instant::now();
+        let cached = self
+            .caches
+            .get(address)
+            .and_then(|cache| cache.full.as_ref())
+            .map(|full| full.items.clone());
+        let from_cache = cached.is_some();
+        let items = match cached {
+            Some(items) => items,
+            None => match self.layout(address, 0, -1, FULL_TREE_TIMEOUT).await {
+                Ok((revision, items)) => {
+                    self.caches
+                        .entry(address.clone())
+                        .or_default()
+                        .put_full(revision, items.clone());
+                    items
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        service = %address.service,
+                        "menubar: dbusmenu full GetLayout failed"
+                    );
+                    return;
+                }
+            },
+        };
+        tracing::info!(
+            generation,
+            service = %address.service,
+            items = items.len(),
+            cached = from_cache,
+            ms = started.elapsed().as_millis(),
+            "menubar: dbusmenu full tree snapshot"
+        );
+        self.send(MenuSnapshot {
+            generation,
+            address: address.clone(),
+            parent: None,
+            items: Some(items),
+            cached: from_cache,
+        })
+        .await;
+    }
+
+    async fn send_gtk(&self, session: &gtkmenus::Session, id: i32, cached: bool) {
+        self.send(MenuSnapshot {
+            generation: session.generation,
+            address: session.address.clone(),
+            parent: (id != 0).then_some(id),
+            items: session.tree.children(id),
+            cached,
+        })
+        .await;
+    }
+
+    async fn send(&self, snapshot: MenuSnapshot) {
+        let _ = self.snapshots.send(snapshot).await;
+        if let Some(wake) = self.wake.lock().ok().and_then(|slot| slot.clone()) {
+            wake.wake();
+        }
+    }
+
+    async fn proxy(&mut self, address: &AppMenuAddress) -> zbus::Result<zbus::Proxy<'static>> {
+        if let Some(entry) = self.proxies.get(address) {
+            return Ok(entry.proxy.clone());
+        }
+        let proxy: zbus::Proxy<'static> = zbus::proxy::Builder::new(&self.connection)
+            .destination(address.service.clone())?
+            .path(address.path.clone())?
+            .interface(DBUSMENU_INTERFACE)?
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await?;
+        let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
+            Ok(name) => timed(CALL_TIMEOUT, self.dbus.get_name_owner(name))
+                .await
+                .and_then(Result::ok)
+                .map(|owner| owner.to_string()),
+            Err(_) => None,
+        };
+        self.proxies.insert(
+            address.clone(),
+            AddressProxy {
+                proxy: proxy.clone(),
+                owner,
+            },
+        );
+        Ok(proxy)
+    }
+
+    async fn layout(
+        &mut self,
+        address: &AppMenuAddress,
+        parent: i32,
+        depth: i32,
+        limit: Duration,
+    ) -> zbus::Result<(u32, Vec<RawItem>)> {
+        let proxy = self.proxy(address).await?;
+        let args = (parent, depth, &[] as &[&str]);
+        let call = proxy.call::<_, _, DbusMenuLayout>("GetLayout", &args);
+        let Some(result) = timed(limit, call).await else {
+            return Err(zbus::Error::Failure("GetLayout timed out".to_string()));
+        };
+        let (revision, root) = result?;
+        Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
+    }
+
+    async fn about_to_show(&mut self, address: &AppMenuAddress, id: i32) -> bool {
+        let Ok(proxy) = self.proxy(address).await else {
+            return false;
+        };
+        let args = (id,);
+        let call = proxy.call::<_, _, bool>("AboutToShow", &args);
+        match timed(CALL_TIMEOUT, call).await {
+            Some(Ok(needs_update)) => {
+                tracing::debug!(id, needs_update, "menubar: dbusmenu AboutToShow");
+                needs_update
+            }
+            Some(Err(error)) => {
+                tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed");
+                false
+            }
+            None => {
+                tracing::warn!(id, "menubar: dbusmenu AboutToShow timed out");
+                false
+            }
+        }
+    }
+
+    async fn event(
+        &mut self,
+        address: &AppMenuAddress,
+        id: i32,
+        timestamp: u32,
+    ) -> zbus::Result<()> {
+        let proxy = self.proxy(address).await?;
+        let args = (id, "clicked", zbus::zvariant::Value::I32(0), timestamp);
+        let call = proxy.call::<_, _, ()>("Event", &args);
+        timed(CALL_TIMEOUT, call)
+            .await
+            .unwrap_or_else(|| Err(zbus::Error::Failure("Event timed out".to_string())))
     }
 }
 
 async fn menu_stream(
     connection: &zbus::Connection,
-) -> zbus::Result<impl futures_lite::Stream<Item = zbus::Result<zbus::Message>> + Unpin> {
+) -> zbus::Result<impl futures_lite::Stream<Item = zbus::Result<zbus::Message>> + Unpin + use<>> {
     Ok(signal_stream(connection, DBUSMENU_INTERFACE)
         .await?
         .or(signal_stream(connection, gtkmenus::MENUS_INTERFACE).await?)
@@ -1213,39 +1133,6 @@ async fn signal_stream(
     zbus::MessageStream::for_match_rule(rule, connection, None).await
 }
 
-async fn proxy(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    address: &AppMenuAddress,
-) -> zbus::Result<zbus::Proxy<'static>> {
-    if let Some(entry) = proxies.get(address) {
-        return Ok(entry.proxy.clone());
-    }
-    let proxy: zbus::Proxy<'static> = zbus::proxy::Builder::new(connection)
-        .destination(address.service.clone())?
-        .path(address.path.clone())?
-        .interface(DBUSMENU_INTERFACE)?
-        .cache_properties(CacheProperties::No)
-        .build()
-        .await?;
-    let owner = match zbus::names::BusName::try_from(address.service.as_str()) {
-        Ok(name) => timed(CALL_TIMEOUT, dbus.get_name_owner(name))
-            .await
-            .and_then(Result::ok)
-            .map(|owner| owner.to_string()),
-        Err(_) => None,
-    };
-    proxies.insert(
-        address.clone(),
-        AddressProxy {
-            proxy: proxy.clone(),
-            owner,
-        },
-    );
-    Ok(proxy)
-}
-
 fn raw_item(value: OwnedValue) -> Option<RawItem> {
     let value: zbus::zvariant::Value<'_> = value.into();
     let (id, properties, children) = value.downcast::<LayoutItem>().ok()?;
@@ -1256,141 +1143,12 @@ fn raw_item(value: OwnedValue) -> Option<RawItem> {
     })
 }
 
-async fn layout(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    address: &AppMenuAddress,
-    parent: i32,
-    depth: i32,
-    limit: Duration,
-) -> zbus::Result<(u32, Vec<RawItem>)> {
-    let proxy = proxy(connection, dbus, proxies, address).await?;
-    let args = (parent, depth, &[] as &[&str]);
-    let call = proxy.call::<_, _, DbusMenuLayout>("GetLayout", &args);
-    let Some(result) = timed(limit, call).await else {
-        return Err(zbus::Error::Failure("GetLayout timed out".to_string()));
-    };
-    let (revision, root) = result?;
-    Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
-}
-
 pub(crate) async fn timed<F: std::future::Future>(limit: Duration, future: F) -> Option<F::Output> {
     future::or(async move { Some(future.await) }, async move {
         async_io::Timer::after(limit).await;
         None
     })
     .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn prefetch_full_tree(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    caches: &mut MenuCaches,
-    snapshots: &Sender<MenuSnapshot>,
-    wake: &Arc<Mutex<Option<WakeHandle>>>,
-    focused: &Option<(AppMenuAddress, u64)>,
-    address: &AppMenuAddress,
-    generation: u64,
-) {
-    let still_focused = has_focus(focused, address, generation);
-    if !still_focused || caches.get(address).and_then(|cache| cache.full()).is_some() {
-        return;
-    }
-    let started = Instant::now();
-    match layout(connection, dbus, proxies, address, 0, -1, FULL_TREE_TIMEOUT).await {
-        Ok((revision, items)) => {
-            caches.entry(address).put_full(revision, items.clone());
-            let still_focused = has_focus(focused, address, generation);
-            tracing::info!(
-                generation,
-                service = %address.service,
-                items = items.len(),
-                focused = still_focused,
-                ms = started.elapsed().as_millis(),
-                "menubar: dbusmenu full tree prefetch"
-            );
-            if still_focused {
-                send(
-                    snapshots,
-                    wake,
-                    MenuSnapshot {
-                        generation,
-                        address: address.clone(),
-                        parent: None,
-                        items: Some(items),
-                        cached: false,
-                    },
-                )
-                .await;
-            }
-        }
-        Err(error) => {
-            tracing::warn!(
-                %error,
-                service = %address.service,
-                "menubar: dbusmenu full tree prefetch failed"
-            );
-        }
-    }
-}
-
-fn has_focus(
-    focused: &Option<(AppMenuAddress, u64)>,
-    address: &AppMenuAddress,
-    generation: u64,
-) -> bool {
-    focused
-        .as_ref()
-        .is_some_and(|(current, current_generation)| {
-            current == address && *current_generation == generation
-        })
-}
-
-async fn about_to_show(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    address: &AppMenuAddress,
-    id: i32,
-) -> bool {
-    let Ok(proxy) = proxy(connection, dbus, proxies, address).await else {
-        return false;
-    };
-    let args = (id,);
-    let call = proxy.call::<_, _, bool>("AboutToShow", &args);
-    match timed(CALL_TIMEOUT, call).await {
-        Some(Ok(shown)) => {
-            tracing::debug!(id, shown, "menubar: dbusmenu AboutToShow");
-            shown
-        }
-        Some(Err(error)) => {
-            tracing::warn!(%error, id, "menubar: dbusmenu AboutToShow failed");
-            false
-        }
-        None => {
-            tracing::warn!(id, "menubar: dbusmenu AboutToShow timed out");
-            false
-        }
-    }
-}
-
-async fn event(
-    connection: &zbus::Connection,
-    dbus: &zbus::fdo::DBusProxy<'_>,
-    proxies: &mut ProxyCache,
-    address: &AppMenuAddress,
-    id: i32,
-    timestamp: u32,
-) -> zbus::Result<()> {
-    let proxy = proxy(connection, dbus, proxies, address).await?;
-    let args = (id, "clicked", zbus::zvariant::Value::I32(0), timestamp);
-    let call = proxy.call::<_, _, ()>("Event", &args);
-    timed(CALL_TIMEOUT, call)
-        .await
-        .unwrap_or_else(|| Err(zbus::Error::Failure("Event timed out".to_string())))
 }
 
 #[cfg(test)]
@@ -1420,14 +1178,6 @@ mod tests {
     }
 
     #[test]
-    fn a_cached_subtree_is_a_hit() {
-        let mut cache = MenuCache::default();
-        cache.put(7, 3, vec![item(8, &[], Vec::new())]);
-        assert_eq!(cache.get(7).unwrap().revision, 3);
-        assert_eq!(cache.get(7).unwrap().items[0].id, 8);
-    }
-
-    #[test]
     fn a_layout_update_drops_the_subtree_and_its_cached_descendants() {
         let mut cache = MenuCache::default();
         cache.put(
@@ -1441,8 +1191,8 @@ mod tests {
         let mut dropped = cache.invalidate(7, 2);
         dropped.sort_unstable();
         assert_eq!(dropped, [7, 8]);
-        assert!(cache.get(0).is_some());
-        assert!(cache.get(9).is_some());
+        assert!(cache.subtrees.contains_key(&0));
+        assert!(cache.subtrees.contains_key(&9));
     }
 
     #[test]
@@ -1451,7 +1201,7 @@ mod tests {
         cache.put(0, 1, vec![item(7, &[], Vec::new())]);
         cache.put(8, 3, Vec::new());
         assert_eq!(cache.invalidate(7, 2), [0]);
-        assert!(cache.get(8).is_some());
+        assert!(cache.subtrees.contains_key(&8));
     }
 
     #[test]
@@ -1459,7 +1209,7 @@ mod tests {
         let mut cache = MenuCache::default();
         cache.put(0, 9, vec![item(1, &[], Vec::new())]);
         assert!(cache.invalidate(0, 8).is_empty());
-        assert!(cache.get(0).is_some());
+        assert!(cache.subtrees.contains_key(&0));
     }
 
     #[test]
@@ -1467,9 +1217,9 @@ mod tests {
         let mut cache = MenuCache::default();
         cache.put_full(3, vec![item(1, &[], Vec::new())]);
         assert!(!cache.invalidate_full(3));
-        assert!(cache.full().is_some());
+        assert!(cache.full.is_some());
         assert!(cache.invalidate_full(4));
-        assert!(cache.full().is_none());
+        assert!(cache.full.is_none());
     }
 
     #[test]
@@ -1490,8 +1240,10 @@ mod tests {
         )];
         assert!(cache.apply_properties(&updated, &[]));
         assert_eq!(
-            i32::try_from(cache.get(0).unwrap().items[0].properties["toggle-state"].clone())
-                .unwrap(),
+            i32::try_from(
+                cache.subtrees.get(&0).unwrap().items[0].properties["toggle-state"].clone()
+            )
+            .unwrap(),
             1
         );
     }
@@ -1509,21 +1261,9 @@ mod tests {
         )];
         assert!(cache.apply_properties(&updated, &[]));
         assert!(
-            !bool::try_from(cache.full().unwrap().items[0].properties["enabled"].clone()).unwrap()
+            !bool::try_from(cache.full.as_ref().unwrap().items[0].properties["enabled"].clone())
+                .unwrap()
         );
-    }
-
-    #[test]
-    fn eviction_drops_every_entry_of_the_service() {
-        let mut caches = MenuCaches::default();
-        caches.entry(&address("org.kde.kate")).put(0, 1, Vec::new());
-        caches.entry(&address("org.kde.kate")).put(7, 1, Vec::new());
-        caches
-            .entry(&address("org.mozilla.firefox"))
-            .put(0, 1, Vec::new());
-        assert!(caches.evict_service("org.kde.kate"));
-        assert!(caches.get(&address("org.kde.kate")).is_none());
-        assert!(caches.get(&address("org.mozilla.firefox")).is_some());
     }
 
     #[test]
@@ -1545,8 +1285,10 @@ mod tests {
         )];
         assert!(cache.apply_properties(&updated, &[]));
         assert_eq!(
-            i32::try_from(cache.get(4).unwrap().items[0].properties["toggle-state"].clone())
-                .unwrap(),
+            i32::try_from(
+                cache.subtrees.get(&4).unwrap().items[0].properties["toggle-state"].clone()
+            )
+            .unwrap(),
             1
         );
     }
