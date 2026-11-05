@@ -22,7 +22,7 @@ use vow_appearance::{
 };
 use vow_design::{
     ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
-    TRAFFIC_RIM, TRAFFIC_RIM_WIDTH, TitlebarPosition,
+    TRAFFIC_RIM_WIDTH, TitlebarPosition,
 };
 
 use crate::config::Config;
@@ -488,7 +488,7 @@ impl TextEngine {
                 diameter,
                 radius,
                 (f64::from(TRAFFIC_RIM_WIDTH) * scale) as f32,
-                TRAFFIC_RIM,
+                visual.rim,
             );
             if let Some(glyph) = visual.glyph {
                 draw_glyph(

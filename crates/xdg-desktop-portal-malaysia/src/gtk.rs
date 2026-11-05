@@ -11,7 +11,7 @@ use vow_appearance::{
 };
 use vow_design::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
-    TRAFFIC_GLYPHS,
+    TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH,
 };
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
@@ -368,7 +368,8 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
             ),
         };
         let shape = format!(
-            "border: none; border-radius: {radius}px; box-shadow: none; background: {};",
+            "border: none; border-radius: {radius}px; box-shadow: {}; background: {};",
+            rim(focused[index].rim),
             css_color(focused[index].fill)
         );
         match toolkit {
@@ -411,14 +412,20 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
         };
         rule(
             &backdrop_light,
-            &format!("background: {};", css_color(backdrop[index].fill)),
+            &format!(
+                "background: {}; box-shadow: {};",
+                css_color(backdrop[index].fill),
+                rim(backdrop[index].rim)
+            ),
         );
         rule(
             &hover,
             &format!(
                 "background-color: {}; background-image: {glyph}; background-position: center; \
-                 background-repeat: no-repeat; background-size: {box_size}px {box_size}px;",
+                 background-repeat: no-repeat; background-size: {box_size}px {box_size}px; \
+                 box-shadow: {};",
                 css_color(hovered[index].fill),
+                rim(hovered[index].rim),
                 box_size = TRAFFIC_GLYPHS.box_size
             ),
         );
@@ -427,6 +434,10 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
             &format!("background-color: {};", css_color(pressed)),
         );
     }
+}
+
+fn rim(color: Rgba) -> String {
+    format!("inset 0 0 0 {TRAFFIC_RIM_WIDTH}px {}", css_color(color))
 }
 
 fn gtk4_css(appearance: &AppearanceConfig, dominant: Option<Rgba>) -> String {
