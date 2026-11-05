@@ -1,6 +1,7 @@
 use barrier_kit::choices::{ChoiceCards, ColorWell, RadioGroup};
 use barrier_kit::controls::{Checkbox, Slider};
 use barrier_kit::menu::MenuIcon;
+use barrier_kit::patterns::language::system_language_row;
 use barrier_kit::patterns::preferences::{Pane, PaneGroup, PreferencesWindow};
 use barrier_kit::popup_button::PopUpButton;
 use barrier_kit::symbol::Symbol;
@@ -105,11 +106,13 @@ fn appearance(
     let tint_disabled = config.window_color == WindowColorMode::Neutral;
     Form::new()
         .section(
-            Section::new().row(
-                Row::new("Apariencia")
-                    .keywords(&["tema", "claro", "oscuro", "automático"])
-                    .control(scheme_cards(config, dominant, error)),
-            ),
+            Section::new()
+                .row(
+                    Row::new("Apariencia")
+                        .keywords(&["tema", "claro", "oscuro", "automático"])
+                        .control(scheme_cards(config, dominant, error)),
+                )
+                .row(system_language_row()),
         )
         .section(
             Section::titled("Color")
