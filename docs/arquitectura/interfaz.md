@@ -26,7 +26,7 @@ Las zonas exclusivas de menubar y dock recortan el workspace. El lock sustituye 
 
 ## Diseño
 
-Temas `light`/`dark`/`dark-tint`; radio 16, semáforos 12 (radio 4), titlebar SSD 32 y CSD 44; Geist 13/600 y 13/400. Sombras `SHADOW`/`SHADOW_DARK` por shader y recorte al radio 16. `appearance.window_color` (`neutral`/`accent`/`wallpaper`) y `traffic_lights` tiñen la titlebar; `window_tint_scope = "desktop"` tiñe menubar y dock. El blur de fondo está en el catálogo, pero aún no se dibuja.
+Temas `light`/`dark`/`dark-tint`; radio 16, semáforos 14 (radio 4), titlebar SSD 32 y CSD 44; Geist 13/600 y 13/400. Sombras `SHADOW`/`SHADOW_DARK` por shader y recorte al radio 16. `appearance.window_color` (`neutral`/`accent`/`wallpaper`) y `traffic_lights` tiñen la titlebar; `window_tint_scope = "desktop"` tiñe menubar y dock. El blur de fondo está en el catálogo, pero aún no se dibuja.
 
 ## Shell
 

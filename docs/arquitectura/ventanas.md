@@ -2,7 +2,7 @@
 
 > Mapa general: [`interfaz.md`](interfaz.md).
 
-La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px lógicos, semáforos de 14 px (radio 5) con 9 px de separación y radio de ventana 16.
+La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px lógicos, semáforos de 14 px (radio 4) con 9 px de separación y radio de ventana 16.
 
 ## Qué se dibuja
 

@@ -2,7 +2,7 @@
 
 > Overview map: [`interfaz.en.md`](interfaz.en.md).
 
-The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar of 32 logical px, 14 px traffic lights (radius 5) with 9 px spacing and a window radius of 16.
+The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar of 32 logical px, 14 px traffic lights (radius 4) with 9 px spacing and a window radius of 16.
 
 ## What is drawn
 
