@@ -272,6 +272,22 @@ start() {
     fi
 }
 
+logged_socket() {
+    sed -n 's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
+        "$LOG_FILE" 2>/dev/null | tail -n 1
+}
+
+wait_socket() {
+    _waited=0
+    while [ "$_waited" -lt 100 ]; do
+        _sock=$(logged_socket)
+        [ -n "$_sock" ] && return 0
+        _waited=$((_waited + 1))
+        sleep 0.1
+    done
+    return 1
+}
+
 watch() {
     require_devshell
     require cargo
@@ -451,23 +467,7 @@ check() {
 smoke() {
     require_devshell
     require cargo
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for smoke: $1"
-    fi
-    if [ -n "$_release" ]; then
-        _profile=release
-        cargo build --release -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
-    else
-        _profile=debug
-        cargo build -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the smoke test"
-    fi
+    build_probes "$@"
     MALAYSIA_BIN="$script_dir/target/$_profile/malaysia-compositor" \
         "$script_dir/target/$_profile/smoke" ||
         fail "$EXIT_SMOKE" "smoke test failed"
@@ -476,23 +476,7 @@ smoke() {
 block4() {
     require_devshell
     require cargo
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for block4: $1"
-    fi
-    if [ -n "$_release" ]; then
-        _profile=release
-        cargo build --release -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    else
-        _profile=debug
-        cargo build -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    fi
+    build_probes "$@"
     MALAYSIA_BIN="$script_dir/target/$_profile/malaysia-compositor" \
         MALAYSIA_STRESS_BIN="$script_dir/target/$_profile/window_stress" \
         MALAYSIA_RESIZE_BIN="$script_dir/target/$_profile/resize_client" \
@@ -516,21 +500,11 @@ titlebar() {
         esac
         stop >/dev/null 2>&1 || true
         MALAYSIA_TEST_INPUT=1 MALAYSIA_TEST_TITLEBAR_BUTTON="$scenario" start
-        _socket=
-        _waited=0
-        while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
-            _socket=$(sed -n \
-                's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-                "$LOG_FILE" 2>/dev/null | tail -n 1)
-            [ -n "$_socket" ] && break
-            sleep 0.1
-            _waited=$((_waited + 1))
-        done
-        if [ -z "$_socket" ]; then
+        if ! wait_socket; then
             stop >/dev/null 2>&1 || true
             fail "$EXIT_SMOKE" "titlebar: the compositor never opened a socket"
         fi
-        WAYLAND_DISPLAY="$_socket" foot -a malaysia-titlebar >/dev/null 2>&1 &
+        WAYLAND_DISPLAY="$_sock" foot -a malaysia-titlebar >/dev/null 2>&1 &
         _waited=0
         while ! grep -q "$expected" "$LOG_FILE" 2>/dev/null && [ "$_waited" -lt 50 ]; do
             sleep 0.1
@@ -549,23 +523,7 @@ titlebar() {
 decoration() {
     require_devshell
     require cargo
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for decoration: $1"
-    fi
-    if [ -n "$_release" ]; then
-        _profile=release
-        cargo build --release -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    else
-        _profile=debug
-        cargo build -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    fi
+    build_probes "$@"
     MALAYSIA_BIN="$script_dir/target/$_profile/malaysia-compositor" \
         "$script_dir/target/$_profile/decoration_probe" ||
         fail "$EXIT_SMOKE" "decoration probe failed"
@@ -574,23 +532,7 @@ decoration() {
 move() {
     require_devshell
     require cargo
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for move: $1"
-    fi
-    if [ -n "$_release" ]; then
-        _profile=release
-        cargo build --release -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    else
-        _profile=debug
-        cargo build -p malaysia-compositor -p sctk-probe ||
-            fail "$EXIT_SMOKE" "could not build the compositor and the probes"
-    fi
+    build_probes "$@"
     MALAYSIA_BIN="$script_dir/target/$_profile/malaysia-compositor" \
         MALAYSIA_MOVE_BIN="$script_dir/target/$_profile/move_client" \
         MALAYSIA_HOVER_BIN="$script_dir/target/$_profile/hover_client" \
@@ -632,21 +574,11 @@ run_one_probe() {
     else
         start
     fi
-    _socket=
-    _waited=0
-    while [ -z "$_socket" ] && [ "$_waited" -lt 100 ]; do
-        _socket=$(sed -n \
-            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-            "$LOG_FILE" 2>/dev/null | tail -n 1)
-        [ -n "$_socket" ] && break
-        sleep 0.1
-        _waited=$((_waited + 1))
-    done
-    if [ -z "$_socket" ]; then
+    if ! wait_socket; then
         stop >/dev/null 2>&1 || true
         fail "$EXIT_SMOKE" "$_probe: the compositor never opened a socket"
     fi
-    if ! env "$@" WAYLAND_DISPLAY="$_socket" "$script_dir/target/$_profile/$_probe"; then
+    if ! env "$@" WAYLAND_DISPLAY="$_sock" "$script_dir/target/$_profile/$_probe"; then
         stop >/dev/null 2>&1 || true
         fail "$EXIT_SMOKE" "$_probe failed"
     fi
@@ -700,6 +632,30 @@ activation() {
     require cargo
     build_probes "$@"
     run_one_probe activation --test-input
+}
+
+session_client() {
+    _name=$1
+    shift
+    env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
+        MALAYSIA_SHELL_EXE="$_shell_bin" \
+        "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
+    _pids="$_pids $!"
+    printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
+}
+
+wait_session_end() {
+    _compositor=$(read_pid)
+    while kill -0 "$_compositor" 2>/dev/null; do
+        if [ -n "$_wallpaper_pid" ] && ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
+            _wp_code=0
+            wait "$_wallpaper_pid" 2>/dev/null || _wp_code=$?
+            printf '%s: malaysia-wallpaper terminó (código %s); log: %s\n' \
+                "$1" "$_wp_code" "$RUNTIME_DIR/demo-wallpaper.log" >&2
+            _wallpaper_pid=
+        fi
+        sleep 1
+    done
 }
 
 isolate_session_dirs() {
@@ -773,17 +729,7 @@ demo() {
     _apps_bin=$_kit_bin
 
     start
-    _sock=
-    _waited=0
-    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
-        _sock=$(sed -n \
-            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-            "$LOG_FILE" 2>/dev/null | tail -n 1)
-        [ -n "$_sock" ] && break
-        _waited=$((_waited + 1))
-        sleep 0.1
-    done
-    if [ -z "$_sock" ]; then
+    if ! wait_socket; then
         stop
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
@@ -792,34 +738,25 @@ demo() {
     XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
     export XDG_DATA_DIRS
 
-    demo_client() {
-        _name=$1
-        shift
-        env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
-            MALAYSIA_SHELL_EXE="$_shell_bin" \
-            "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
-        _pids="$_pids $!"
-        printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
-    }
-    demo_client wallpaper "$_wallpaper_bin"
-    demo_client menubar "$_shell_bin" menubar
-    demo_client dock "$_shell_bin" dock
+    session_client wallpaper "$_wallpaper_bin"
+    session_client menubar "$_shell_bin" menubar
+    session_client dock "$_shell_bin" dock
     check_wallpaper_ready demo
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
     if [ -z "${_demo_apps+set}" ]; then
         if command -v foot >/dev/null 2>&1; then
-            demo_client foot-1 foot -T "Malaysia"
-            demo_client foot-2 foot -T "Segunda ventana"
+            session_client foot-1 foot -T "Malaysia"
+            session_client foot-2 foot -T "Segunda ventana"
         elif command -v wezterm >/dev/null 2>&1; then
-            demo_client wezterm wezterm start
+            session_client wezterm wezterm start
         else
             printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
         fi
     fi
     for _app in $_apps; do
         if [ -x "$_apps_bin/$_app" ]; then
-            demo_client "$_app" "$_apps_bin/$_app"
+            session_client "$_app" "$_apps_bin/$_app"
         else
             printf 'demo: %s not found in %s; skipping it\n' "$_app" "$_apps_bin" >&2
         fi
@@ -830,17 +767,7 @@ demo() {
     printf 'demo: logs: %s/demo-*.log\n' "$RUNTIME_DIR"
     printf 'demo: close the host window or press Ctrl-C to end\n'
 
-    _compositor=$(read_pid)
-    while kill -0 "$_compositor" 2>/dev/null; do
-        if [ -n "$_wallpaper_pid" ] && ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
-            _wp_code=0
-            wait "$_wallpaper_pid" 2>/dev/null || _wp_code=$?
-            printf 'demo: malaysia-wallpaper terminó durante la demo (código %s); log: %s\n' \
-                "$_wp_code" "$RUNTIME_DIR/demo-wallpaper.log" >&2
-            _wallpaper_pid=
-        fi
-        sleep 1
-    done
+    wait_session_end demo
 }
 
 video() {
@@ -926,17 +853,7 @@ lab() {
         "$DBUS_SESSION_BUS_ADDRESS" "$_lab_bus_pid"
 
     start
-    _sock=
-    _waited=0
-    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
-        _sock=$(sed -n \
-            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-            "$LOG_FILE" 2>/dev/null | tail -n 1)
-        [ -n "$_sock" ] && break
-        _waited=$((_waited + 1))
-        sleep 0.1
-    done
-    if [ -z "$_sock" ]; then
+    if ! wait_socket; then
         stop
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
@@ -945,20 +862,10 @@ lab() {
     XDG_DATA_DIRS="$script_dir/share:$_data_dirs"
     export XDG_DATA_DIRS
 
-    lab_client() {
-        _name=$1
-        shift
-        env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
-            MALAYSIA_SHELL_EXE="$_shell_bin" \
-            "$@" >"$RUNTIME_DIR/demo-$_name.log" 2>&1 &
-        _pids="$_pids $!"
-        printf '%s\n' "$!" >"$RUNTIME_DIR/demo-$_name.pid"
-    }
-
     lab_app_client() {
         _name=$1
         shift
-        lab_client "$_name" env \
+        session_client "$_name" env \
             HOME="$_session_dirs/home" \
             XDG_CONFIG_HOME="$_session_dirs/home/.config" \
             XDG_DATA_HOME="$_session_dirs/home/.local/share" \
@@ -970,24 +877,24 @@ lab() {
             "$@"
     }
 
-    lab_client wallpaper "$_wallpaper_bin"
-    lab_client menubar "$_shell_bin" menubar
-    lab_client dock "$_shell_bin" dock
+    session_client wallpaper "$_wallpaper_bin"
+    session_client menubar "$_shell_bin" menubar
+    session_client dock "$_shell_bin" dock
     check_wallpaper_ready lab
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
 
     if command -v foot >/dev/null 2>&1; then
-        lab_client foot-1 foot -T "Malaysia"
-        lab_client foot-2 foot -T "Segunda ventana"
+        session_client foot-1 foot -T "Malaysia"
+        session_client foot-2 foot -T "Segunda ventana"
     elif command -v wezterm >/dev/null 2>&1; then
-        lab_client wezterm wezterm start
+        session_client wezterm wezterm start
     else
         printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
     fi
 
     if [ -x "$_show" ]; then
-        lab_client tengen-app-show "$_show"
+        session_client tengen-app-show "$_show"
     else
         printf 'lab: tengen-app-show not found; skipping it\n' >&2
     fi
@@ -1038,7 +945,7 @@ lab() {
 
     sleep 0.5
     if [ -x "$_ondina" ]; then
-        lab_client ondina "$_ondina"
+        session_client ondina "$_ondina"
     fi
 
     cat <<'EOF'
@@ -1059,17 +966,7 @@ EOF
     printf 'lab: follow compositor log: ./dev.sh log -f\n'
     printf 'lab: close the host window or press Ctrl-C to end\n'
 
-    _compositor=$(read_pid)
-    while kill -0 "$_compositor" 2>/dev/null; do
-        if [ -n "$_wallpaper_pid" ] && ! kill -0 "$_wallpaper_pid" 2>/dev/null; then
-            _wp_code=0
-            wait "$_wallpaper_pid" 2>/dev/null || _wp_code=$?
-            printf 'lab: malaysia-wallpaper terminó durante la demo (código %s); log: %s\n' \
-                "$_wp_code" "$RUNTIME_DIR/demo-wallpaper.log" >&2
-            _wallpaper_pid=
-        fi
-        sleep 1
-    done
+    wait_session_end lab
 }
 
 app() {
@@ -1098,9 +995,7 @@ app() {
     if ! is_running; then
         fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
     fi
-    _sock=$(sed -n \
-        's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-        "$LOG_FILE" 2>/dev/null | tail -n 1)
+    _sock=$(logged_socket)
     [ -n "$_sock" ] ||
         fail "$EXIT_RUN_FAILED" "the demo has no Wayland socket yet; see: ./dev.sh log"
 
@@ -1329,17 +1224,7 @@ wallpaper_check() {
     trap 'stop; rm -rf "$_config_dir"' EXIT INT TERM
 
     start
-    _sock=
-    _waited=0
-    while [ -z "$_sock" ] && [ "$_waited" -lt 100 ]; do
-        _sock=$(sed -n \
-            's/.*listening on the Wayland socket socket=\(wayland-[0-9]*\).*/\1/p' \
-            "$LOG_FILE" 2>/dev/null | tail -n 1)
-        [ -n "$_sock" ] && break
-        _waited=$((_waited + 1))
-        sleep 0.1
-    done
-    if [ -z "$_sock" ]; then
+    if ! wait_socket; then
         fail "$EXIT_RUN_FAILED" "the compositor did not announce a socket; see: ./dev.sh log"
     fi
 
