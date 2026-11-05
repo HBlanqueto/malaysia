@@ -261,7 +261,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
 
 pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
     let action = arg.and_then(PowerAction::from_arg).ok_or_else(|| {
-        anyhow::anyhow!("usage: malaysia-shell power <restart|shutdown|logout>")
+        anyhow::anyhow!("usage: malaysia-shell power <suspend|restart|shutdown|logout>")
     })?;
     run_layer(
         AppComponent::new(ConfirmApp {

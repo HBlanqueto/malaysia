@@ -19,7 +19,7 @@ components:
   dock        the app dock at the bottom (running apps), Top layer
   lock        the session lock screen (ext-session-lock-v1)
   launcher    the application launcher on the Overlay layer
-  power <restart|shutdown|logout>
+  power <suspend|restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
   force-quit  the «Forzar salida» list of running apps
   about       «Acerca de este PC»
@@ -42,11 +42,11 @@ fn main() -> ExitCode {
         Some(other) => {
             eprintln!("malaysia-shell: unknown component '{other}'");
             eprintln!("{USAGE}");
-            Ok(())
+            return ExitCode::FAILURE;
         }
         None => {
             eprintln!("{USAGE}");
-            Ok(())
+            return ExitCode::FAILURE;
         }
     };
     match result {
