@@ -8,9 +8,8 @@ Componente nativo (ADR 0023): dock inferior que lista las apps abiertas y las ac
 
 ```
 ext-foreign-toplevel-list-v1 ──► lista de ventanas (tiles)
-zwlr_foreign_toplevel_management_v1 ──► activar / cerrar / minimizar
+zwlr_foreign_toplevel_management_v1 ──► activar / cerrar / minimizar; estado activo
 dock.domain ──► tilesize, orientation
-window.domain ──► app activa resaltada
         ▼
 frame RGBA (barrier-kit) → layer-shell Top → EGL/dmabuf
 ```
@@ -18,7 +17,7 @@ frame RGBA (barrier-kit) → layer-shell Top → EGL/dmabuf
 1. Superficie en capa `Top`, anclada abajo, alto `tilesize + 2×padding` (64 px por defecto) y `exclusive_zone` igual; las ventanas no se meten debajo.
 2. `ext-foreign-toplevel-list-v1` da un tile por ventana mapeada. Cada tile muestra el título sobre la `ShellPalette` de Tengen (`tile`, activo `tile_active`), elegida por `appearance.color_scheme`.
 3. Un clic envía `activate` por `zwlr_foreign_toplevel_management_v1`; el compositor restaura si estaba minimizada, eleva y enfoca. `close`, `set_rectangle` y `set_minimized` se manejan; `set_maximized` y `set_fullscreen` se reconocen pero no se implementan.
-4. La app activa se resalta desde `window.domain`, que `use_watched` relee cuando cambia.
+4. La ventana activa se resalta con el estado `activated` de `zwlr_foreign_toplevel_management_v1`.
 
 ## Lado del compositor
 

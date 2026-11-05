@@ -1,8 +1,5 @@
 //! The dock component: running apps at the screen edge.
 
-use std::path::PathBuf;
-
-use barrier_kit::app::use_watched;
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -10,19 +7,13 @@ use torin::prelude::{Alignment, Direction, Gaps, Size};
 use vow_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
 use barrier_kit::theme;
-use vow_appearance::data_dir;
 
-struct DockApp {
-    window_store: PathBuf,
-}
+struct DockApp;
 
 impl App for DockApp {
     fn render(&self) -> impl IntoElement {
         let toplevels = Toplevels::get();
         let entries = toplevels.list.read().clone();
-        let store = self.window_store.clone();
-        let active = use_watched(move || load_active_title(&store).unwrap_or_default());
-        let active = active.read().clone();
         let resolved = barrier_kit::theme::resolved();
         let palette = barrier_kit::theme::shell_palette(&resolved);
         let background = theme::color(barrier_kit::theme::surface_background(
@@ -42,7 +33,7 @@ impl App for DockApp {
                 entry.title.clone()
             };
             let initial = title.chars().next().unwrap_or('?').to_string();
-            let is_active = entry.title == active && !active.is_empty();
+            let is_active = entry.active;
             rect()
                 .width(Size::px(DOCK_TILESIZE as f32))
                 .height(Size::px(DOCK_TILESIZE as f32))
@@ -78,8 +69,7 @@ impl App for DockApp {
 }
 
 pub fn run() -> anyhow::Result<()> {
-    let window_store = data_dir().join("window.domain");
-    let app = AppComponent::new(DockApp { window_store });
+    let app = AppComponent::new(DockApp);
 
     run_layer(
         app,
@@ -93,20 +83,4 @@ pub fn run() -> anyhow::Result<()> {
         },
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
-}
-
-fn load_active_title(store_path: &PathBuf) -> anyhow::Result<String> {
-    #[derive(serde::Deserialize)]
-    struct WindowStore {
-        #[serde(default)]
-        active: Active,
-    }
-    #[derive(Default, serde::Deserialize)]
-    struct Active {
-        #[serde(default)]
-        title: String,
-    }
-    let text = std::fs::read_to_string(store_path)?;
-    let store: WindowStore = toml::from_str(&text)?;
-    Ok(store.active.title)
 }

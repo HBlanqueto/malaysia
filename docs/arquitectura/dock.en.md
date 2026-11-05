@@ -8,9 +8,8 @@ Native component (ADR 0023): a bottom dock that lists the open apps and activate
 
 ```
 ext-foreign-toplevel-list-v1 ──► window list (tiles)
-zwlr_foreign_toplevel_management_v1 ──► activate / close / minimize
+zwlr_foreign_toplevel_management_v1 ──► activate / close / minimize; active state
 dock.domain ──► tilesize, orientation
-window.domain ──► active app highlighted
         ▼
 RGBA frame (barrier-kit) → layer-shell Top → EGL/dmabuf
 ```
@@ -18,7 +17,7 @@ RGBA frame (barrier-kit) → layer-shell Top → EGL/dmabuf
 1. Surface on the `Top` layer, anchored at the bottom, height `tilesize + 2×padding` (64 px by default) and an equal `exclusive_zone`; windows do not go underneath.
 2. `ext-foreign-toplevel-list-v1` gives one tile per mapped window. Each tile shows the title on Tengen's `ShellPalette` (`tile`, active `tile_active`), chosen by `appearance.color_scheme`.
 3. A click sends `activate` through `zwlr_foreign_toplevel_management_v1`; the compositor restores the window if it was minimized, raises it and focuses it. `close`, `set_rectangle` and `set_minimized` are handled; `set_maximized` and `set_fullscreen` are recognized but not implemented.
-4. The active app is highlighted from `window.domain`, which `use_watched` reads again when it changes.
+4. The active window is highlighted from the `activated` state of `zwlr_foreign_toplevel_management_v1`.
 
 ## Compositor side
 

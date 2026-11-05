@@ -71,9 +71,6 @@ fn exec_matches(entry: &DesktopEntry, stem: &str) -> bool {
 #[derive(Default, serde::Deserialize)]
 pub struct ActiveWindow {
     #[serde(default)]
-    #[allow(dead_code)]
-    pub title: String,
-    #[serde(default)]
     pub app_id: String,
 }
 
