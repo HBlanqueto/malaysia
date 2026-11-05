@@ -32,7 +32,7 @@ const KEYS: [(&str, &str); 8] = [
 
 const UNSET_ACCENT: (f64, f64, f64) = (-1.0, -1.0, -1.0);
 
-const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
+pub(crate) const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Values {

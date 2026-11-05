@@ -1,4 +1,3 @@
-// Signed-distance function of the window shape, used for clip, border and shadow.
 float window_sdf(vec2 p, vec4 rect, float radius, float exponent) {
     vec2 half_size = rect.zw * 0.5;
     vec2 center = rect.xy + half_size;

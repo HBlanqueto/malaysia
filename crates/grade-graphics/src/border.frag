@@ -22,7 +22,6 @@ void main() {
         coverage = window_coverage(dist) - window_coverage(dist + width);
     }
 
-    // Tahoe panels: the rim brightens along the top and bottom edges and fades towards the sides.
     float from_edge = min(px.y - rect.y, rect.y + rect.w - px.y);
     vec4 tint = mix(edge_color, color, smoothstep(0.0, max(radius, 1.0), from_edge));
     gl_FragColor = tint * (coverage * alpha);

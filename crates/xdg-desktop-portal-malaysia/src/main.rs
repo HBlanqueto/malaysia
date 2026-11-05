@@ -10,8 +10,9 @@ use anyhow::Result;
 use nix::sys::signal::{SigSet, Signal};
 use vow_appearance::{read_appearance, read_dominant};
 
+use settings::OBJECT_PATH;
+
 const BUS_NAME: &str = "org.freedesktop.impl.portal.desktop.malaysia";
-const OBJECT_PATH: &str = "/org/freedesktop/portal/desktop";
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
