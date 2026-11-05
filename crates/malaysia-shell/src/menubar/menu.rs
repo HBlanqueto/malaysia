@@ -329,11 +329,12 @@ pub fn menu_title(
 }
 
 fn title_pill(color: Rgba, palette: MenuPalette) -> Rect {
-    let bled = |context: SizeFnContext| Some(context.parent + 2.0 * MENUBAR_TITLE_BLEED);
+    let overhang = MENUBAR_TITLE_PADDING_X + MENUBAR_TITLE_BLEED;
+    let bled = move |context: SizeFnContext| Some(context.parent + 2.0 * overhang);
     rect()
         .position(
             Position::new_absolute()
-                .left(-MENUBAR_TITLE_BLEED)
+                .left(-overhang)
                 .top(MENUBAR_TEXT_LIFT),
         )
         .width(Size::func(bled))
