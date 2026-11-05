@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use barrier_kit::menu::{CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry};
+use barrier_kit::menu::{
+    CheckState, MenuItem, SearchLocation, SearchSource, SearchableEntry, normalize_separators,
+};
 
 #[derive(Clone)]
 pub struct MenuSources {
@@ -16,7 +18,6 @@ pub struct Title {
     pub label: String,
     pub items: Vec<MenuItem>,
     pub remote_id: Option<i32>,
-    pub bold: bool,
     pub enabled: bool,
 }
 
@@ -30,7 +31,7 @@ impl Title {
     }
 }
 
-pub fn loading() -> MenuItem {
+fn loading() -> MenuItem {
     MenuItem::Action {
         id: String::new(),
         label: "Cargando…".to_string(),
@@ -52,7 +53,7 @@ pub fn unavailable() -> MenuItem {
     }
 }
 
-pub fn normalize(label: &str) -> String {
+fn normalize(label: &str) -> String {
     barrier_kit::views::search::fold(barrier_kit::menu::strip_mnemonic(label).trim())
 }
 
@@ -80,12 +81,7 @@ impl MenuSources {
                     items,
                     enabled,
                     ..
-                } => (
-                    label.clone(),
-                    id.as_ref().and_then(|id| id.parse::<i32>().ok()),
-                    items.clone(),
-                    *enabled,
-                ),
+                } => (label.clone(), submenu_id(id), items.clone(), *enabled),
                 MenuItem::Action { label, .. } => (label.clone(), None, vec![item.clone()], true),
                 _ => continue,
             };
@@ -114,7 +110,6 @@ impl MenuSources {
                     label,
                     items: children,
                     remote_id: id,
-                    bold: false,
                     enabled,
                 });
             }
@@ -129,7 +124,6 @@ impl MenuSources {
             label: self.app_name.clone(),
             items: app_items,
             remote_id: app_remote,
-            bold: true,
             enabled: true,
         });
         titles.extend(middle);
@@ -137,14 +131,12 @@ impl MenuSources {
             label: "Ventana".to_string(),
             items: window_items,
             remote_id: window_remote,
-            bold: false,
             enabled: true,
         });
         titles.push(Title {
             label: "Ayuda".to_string(),
             items: help_items,
             remote_id: help_remote,
-            bold: false,
             enabled: true,
         });
         titles
@@ -209,12 +201,7 @@ fn take_about(items: &mut Vec<MenuItem>) -> Option<MenuItem> {
         .iter()
         .position(|item| matches!(item, MenuItem::Action { label, .. } if is_about(label)))?;
     let about = items.remove(index);
-    let is_separator = |item: Option<&MenuItem>| matches!(item, Some(MenuItem::Separator));
-    if is_separator(items.get(index)) && (index == 0 || is_separator(items.get(index - 1))) {
-        items.remove(index);
-    } else if index == items.len() && index > 0 && is_separator(items.get(index - 1)) {
-        items.remove(index - 1);
-    }
+    normalize_separators(items);
     Some(about)
 }
 
@@ -284,6 +271,10 @@ fn collect(
     }
 }
 
+fn submenu_id(id: &Option<String>) -> Option<i32> {
+    id.as_deref()?.parse().ok()
+}
+
 pub fn merge_subtree(items: &mut [MenuItem], id: i32, children: &[MenuItem]) -> bool {
     for item in items.iter_mut() {
         let MenuItem::Submenu {
@@ -294,7 +285,7 @@ pub fn merge_subtree(items: &mut [MenuItem], id: i32, children: &[MenuItem]) -> 
         else {
             continue;
         };
-        if item_id.as_deref().and_then(|id| id.parse::<i32>().ok()) == Some(id) {
+        if submenu_id(item_id) == Some(id) {
             *current = children.to_vec();
             return true;
         }
@@ -315,7 +306,7 @@ pub fn find_subtree(items: &[MenuItem], id: i32) -> Option<Vec<MenuItem>> {
         else {
             continue;
         };
-        if item_id.as_deref().and_then(|id| id.parse::<i32>().ok()) == Some(id) {
+        if submenu_id(item_id) == Some(id) {
             return Some(current.clone());
         }
         if let Some(found) = find_subtree(current, id) {
@@ -413,7 +404,6 @@ mod tests {
                 "Ayuda",
             ]
         );
-        assert!(titles[0].bold);
         assert_eq!(titles[1].remote_id, Some(1));
     }
 

@@ -645,7 +645,7 @@ impl App for BarApp {
                         None
                     };
                     specs.push(MenuTitleSpec {
-                        bold: title.bold,
+                        bold: index == 0,
                         searchable,
                         live_items,
                         on_open,
@@ -687,7 +687,7 @@ impl App for BarApp {
                         Rc::new(move || items.clone())
                     };
                     specs.push(MenuTitleSpec {
-                        bold: title.bold,
+                        bold: index == 0,
                         enabled: title.enabled,
                         ..MenuTitleSpec::new(
                             title.label.clone(),
