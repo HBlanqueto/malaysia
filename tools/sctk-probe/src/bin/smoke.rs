@@ -1,12 +1,12 @@
-use std::fs;
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, Stdio};
-use std::sync::{Arc, Mutex};
+use std::process::{Command, ExitCode, Stdio};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
+use sctk_probe::harness::{
+    host_wayland_display, snapshot, wait_for_socket, ChildGuard, Sink, TempDir,
+};
+
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 
 const MAPPED_LOG_LINE: &str = "window mapped";
@@ -41,7 +41,7 @@ fn run() -> Result<(), String> {
     }
     let client = std::env::var("MALAYSIA_SMOKE_CLIENT").unwrap_or_else(|_| "foot".to_string());
 
-    let runtime = TempDir::create()?;
+    let runtime = TempDir::create("smoke")?;
     let host_display = host_wayland_display()?;
 
     let mut compositor = ChildGuard::spawn(
@@ -72,52 +72,6 @@ fn run() -> Result<(), String> {
     let lines = snapshot(&trace);
     let compositor_lines = snapshot(&compositor_log);
     analyze(&lines, &compositor_lines)
-}
-
-fn host_wayland_display() -> Result<Option<String>, String> {
-    let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
-        return Ok(None);
-    };
-    if display.starts_with('/') {
-        return Ok(Some(display));
-    }
-    let runtime = std::env::var("XDG_RUNTIME_DIR")
-        .map_err(|_| "WAYLAND_DISPLAY is relative but XDG_RUNTIME_DIR is not set".to_string())?;
-    Ok(Some(format!("{runtime}/{display}")))
-}
-
-fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
-    let deadline = Instant::now() + SOCKET_TIMEOUT;
-    loop {
-        if let Some(name) = find_socket(dir) {
-            return Ok(name);
-        }
-        if let Some(status) = compositor.poll()? {
-            return Err(format!(
-                "compositor exited ({status}) before creating a socket; log:\n{}",
-                snapshot(log).join("\n")
-            ));
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "timed out waiting for the Wayland socket in {}; log:\n{}",
-                dir.display(),
-                snapshot(log).join("\n")
-            ));
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-fn find_socket(dir: &Path) -> Option<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.starts_with("wayland-") && !name.ends_with(".lock"))
-        .collect();
-    names.sort();
-    names.into_iter().next()
 }
 
 fn wait_for_sequence(trace: &Sink, client: &mut ChildGuard) -> Result<(), String> {
@@ -590,103 +544,6 @@ fn first_argument(body: &str) -> Option<u64> {
         .take_while(char::is_ascii_digit)
         .collect();
     digits.parse().ok()
-}
-
-struct ChildGuard {
-    child: Child,
-}
-
-impl ChildGuard {
-    fn spawn(command: &mut Command, wayland_display: Option<&str>) -> Result<Self, String> {
-        if let Some(display) = wayland_display {
-            command.env("WAYLAND_DISPLAY", display);
-        }
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-        let child = command
-            .spawn()
-            .map_err(|error| format!("failed to start `{:?}`: {error}", command.get_program()))?;
-        Ok(Self { child })
-    }
-
-    fn capture(&mut self) -> Result<Sink, String> {
-        let stdout = self
-            .child
-            .stdout
-            .take()
-            .ok_or_else(|| "child stdout was not piped".to_string())?;
-        let stderr = self
-            .child
-            .stderr
-            .take()
-            .ok_or_else(|| "child stderr was not piped".to_string())?;
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        drain(stdout, Arc::clone(&sink));
-        drain(stderr, Arc::clone(&sink));
-        Ok(sink)
-    }
-
-    fn poll(&mut self) -> Result<Option<std::process::ExitStatus>, String> {
-        self.child
-            .try_wait()
-            .map_err(|error| format!("failed to poll the child: {error}"))
-    }
-}
-
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-type Sink = Arc<Mutex<Vec<String>>>;
-
-fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
-    thread::spawn(move || {
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(line) => sink.lock().expect("capture sink poisoned").push(line),
-                Err(_) => break,
-            }
-        }
-    });
-}
-
-fn snapshot(sink: &Sink) -> Vec<String> {
-    sink.lock().expect("capture sink poisoned").clone()
-}
-
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn create() -> Result<Self, String> {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| format!("clock is before the epoch: {error}"))?
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("malaysia-smoke-{}-{unique}", std::process::id()));
-        fs::create_dir_all(&path)
-            .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).map_err(|error| {
-                format!("failed to set permissions on {}: {error}", path.display())
-            })?;
-        }
-        Ok(Self(path))
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
 }
 
 #[cfg(test)]

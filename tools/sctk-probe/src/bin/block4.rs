@@ -1,12 +1,13 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, Stdio};
-use std::sync::{Arc, Mutex};
+use std::process::{Command, ExitCode, Stdio};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
+use sctk_probe::harness::{
+    host_wayland_display, probe_binary, snapshot, wait_for_socket, ChildGuard, Sink, TempDir,
+};
+
 const STRESS_TIMEOUT: Duration = Duration::from_secs(30);
 const LIVE_OBJECTS_LOG_LINE: &str = "live objects";
 const WINDOW_REMOVED_LOG_LINE: &str = "window removed";
@@ -108,7 +109,7 @@ fn run() -> Result<(), String> {
         ));
     }
 
-    let runtime = TempDir::create()?;
+    let runtime = TempDir::create("block4")?;
     let host_display = host_wayland_display()?;
 
     let mut compositor = ChildGuard::spawn(
@@ -207,7 +208,7 @@ fn run_resize_case(
     bound: Option<(&str, u32)>,
     expect: impl Fn(u32, u32) -> (u32, u32),
 ) -> Result<(), String> {
-    let runtime = TempDir::create()?;
+    let runtime = TempDir::create("block4")?;
     let host_display = host_wayland_display()?;
     let mut compositor = ChildGuard::spawn(
         Command::new(binary)
@@ -279,17 +280,6 @@ fn size_of(line: &str) -> Result<(u32, u32), String> {
         .and_then(|value| u32::try_from(value).ok())
         .ok_or_else(|| format!("`height` is missing from `{line}`"))?;
     Ok((width, height))
-}
-
-fn probe_binary(repo: &Path, variable: &str, name: &str) -> PathBuf {
-    std::env::var_os(variable)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
-                .unwrap_or_else(|| repo.join("target/debug").join(name))
-        })
 }
 
 fn wait_for_baseline(log: &Sink, timeout: Duration) -> Option<LiveObjects> {
@@ -369,153 +359,6 @@ fn resident_kb(pid: u32) -> u64 {
         .unwrap_or(0)
 }
 
-fn host_wayland_display() -> Result<Option<String>, String> {
-    let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
-        return Ok(None);
-    };
-    if display.starts_with('/') {
-        return Ok(Some(display));
-    }
-    let runtime = std::env::var("XDG_RUNTIME_DIR")
-        .map_err(|_| "WAYLAND_DISPLAY is relative but XDG_RUNTIME_DIR is not set".to_string())?;
-    Ok(Some(format!("{runtime}/{display}")))
-}
-
-fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
-    let deadline = Instant::now() + SOCKET_TIMEOUT;
-    loop {
-        if let Some(name) = find_socket(dir) {
-            return Ok(name);
-        }
-        if let Some(status) = compositor.poll()? {
-            return Err(format!(
-                "compositor exited ({status}) before creating a socket; log:\n{}",
-                snapshot(log).join("\n")
-            ));
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "timed out waiting for the Wayland socket in {}; log:\n{}",
-                dir.display(),
-                snapshot(log).join("\n")
-            ));
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-fn find_socket(dir: &Path) -> Option<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.starts_with("wayland-") && !name.ends_with(".lock"))
-        .collect();
-    names.sort();
-    names.into_iter().next()
-}
-
-struct ChildGuard {
-    child: Child,
-}
-
-impl ChildGuard {
-    fn spawn(command: &mut Command, wayland_display: Option<&str>) -> Result<Self, String> {
-        if let Some(display) = wayland_display {
-            command.env("WAYLAND_DISPLAY", display);
-        }
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-        let child = command
-            .spawn()
-            .map_err(|error| format!("failed to start `{:?}`: {error}", command.get_program()))?;
-        Ok(Self { child })
-    }
-
-    fn capture(&mut self) -> Result<Sink, String> {
-        let stdout = self
-            .child
-            .stdout
-            .take()
-            .ok_or_else(|| "child stdout was not piped".to_string())?;
-        let stderr = self
-            .child
-            .stderr
-            .take()
-            .ok_or_else(|| "child stderr was not piped".to_string())?;
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        drain(stdout, Arc::clone(&sink));
-        drain(stderr, Arc::clone(&sink));
-        Ok(sink)
-    }
-
-    fn id(&self) -> u32 {
-        self.child.id()
-    }
-
-    fn poll(&mut self) -> Result<Option<std::process::ExitStatus>, String> {
-        self.child
-            .try_wait()
-            .map_err(|error| format!("failed to poll the child: {error}"))
-    }
-}
-
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-type Sink = Arc<Mutex<Vec<String>>>;
-
-fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
-    thread::spawn(move || {
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(line) => sink.lock().expect("capture sink poisoned").push(line),
-                Err(_) => break,
-            }
-        }
-    });
-}
-
-fn snapshot(sink: &Sink) -> Vec<String> {
-    sink.lock().expect("capture sink poisoned").clone()
-}
-
 fn stripped(sink: &Sink) -> Vec<String> {
     snapshot(sink).iter().map(|line| strip_ansi(line)).collect()
-}
-
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn create() -> Result<Self, String> {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| format!("clock is before the epoch: {error}"))?
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("malaysia-block4-{}-{unique}", std::process::id()));
-        fs::create_dir_all(&path)
-            .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).map_err(|error| {
-                format!("failed to set permissions on {}: {error}", path.display())
-            })?;
-        }
-        Ok(Self(path))
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
 }

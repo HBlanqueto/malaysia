@@ -1,12 +1,13 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode, Stdio};
-use std::sync::{Arc, Mutex};
+use std::process::{Command, ExitCode, Stdio};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
-const SOCKET_TIMEOUT: Duration = Duration::from_secs(15);
+use sctk_probe::harness::{
+    host_wayland_display, resolve, snapshot, wait_for_socket, ChildGuard, TempDir,
+};
+
 const APP_TIMEOUT: Duration = Duration::from_secs(6);
 const TITLEBAR: i32 = 32;
 
@@ -220,7 +221,7 @@ fn run() -> Result<(), String> {
         ));
     }
 
-    let runtime = TempDir::create()?;
+    let runtime = TempDir::create("decoration")?;
     let host_display = host_wayland_display()?;
     let mut compositor = ChildGuard::spawn(
         Command::new(&binary)
@@ -405,7 +406,7 @@ fn run_native_decoration(host_display: Option<&str>) -> Result<Vec<String>, Stri
         ("force_client", &["a"][..]),
         ("force_server", &["b", "c", "d"][..]),
     ] {
-        let runtime = TempDir::create()?;
+        let runtime = TempDir::create("decoration")?;
         let config = runtime.path().join("config");
         fs::create_dir_all(&config).map_err(|error| format!("creating config: {error}"))?;
         fs::write(
@@ -654,166 +655,6 @@ fn cases(runtime: &Path) -> Vec<Case> {
             },
         },
     ]
-}
-
-fn resolve(variable: &str, fallback: &str) -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os(variable) {
-        let path = PathBuf::from(path);
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-    which(fallback)
-}
-
-fn which(command: &str) -> Option<PathBuf> {
-    let paths = std::env::var_os("PATH")?;
-    std::env::split_paths(&paths)
-        .map(|dir| dir.join(command))
-        .find(|candidate| candidate.is_file())
-}
-
-fn host_wayland_display() -> Result<Option<String>, String> {
-    let Ok(display) = std::env::var("WAYLAND_DISPLAY") else {
-        return Ok(None);
-    };
-    if display.starts_with('/') {
-        return Ok(Some(display));
-    }
-    let runtime = std::env::var("XDG_RUNTIME_DIR")
-        .map_err(|_| "WAYLAND_DISPLAY is relative but XDG_RUNTIME_DIR is not set".to_string())?;
-    Ok(Some(format!("{runtime}/{display}")))
-}
-
-fn wait_for_socket(dir: &Path, compositor: &mut ChildGuard, log: &Sink) -> Result<String, String> {
-    let deadline = Instant::now() + SOCKET_TIMEOUT;
-    loop {
-        if let Some(name) = find_socket(dir) {
-            return Ok(name);
-        }
-        if let Some(status) = compositor.poll()? {
-            return Err(format!(
-                "compositor exited ({status}) before creating a socket; log:\n{}",
-                snapshot(log).join("\n")
-            ));
-        }
-        if Instant::now() >= deadline {
-            return Err(format!(
-                "timed out waiting for the Wayland socket in {}; log:\n{}",
-                dir.display(),
-                snapshot(log).join("\n")
-            ));
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-fn find_socket(dir: &Path) -> Option<String> {
-    let mut names: Vec<String> = fs::read_dir(dir)
-        .ok()?
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| name.starts_with("wayland-") && !name.ends_with(".lock"))
-        .collect();
-    names.sort();
-    names.into_iter().next()
-}
-
-struct ChildGuard {
-    child: Child,
-}
-
-impl ChildGuard {
-    fn spawn(command: &mut Command, wayland_display: Option<&str>) -> Result<Self, String> {
-        if let Some(display) = wayland_display {
-            command.env("WAYLAND_DISPLAY", display);
-        }
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-        let child = command
-            .spawn()
-            .map_err(|error| format!("failed to start `{:?}`: {error}", command.get_program()))?;
-        Ok(Self { child })
-    }
-
-    fn capture(&mut self) -> Result<Sink, String> {
-        let stdout = self
-            .child
-            .stdout
-            .take()
-            .ok_or_else(|| "child stdout was not piped".to_string())?;
-        let stderr = self
-            .child
-            .stderr
-            .take()
-            .ok_or_else(|| "child stderr was not piped".to_string())?;
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        drain(stdout, Arc::clone(&sink));
-        drain(stderr, Arc::clone(&sink));
-        Ok(sink)
-    }
-
-    fn poll(&mut self) -> Result<Option<std::process::ExitStatus>, String> {
-        self.child
-            .try_wait()
-            .map_err(|error| format!("failed to poll the child: {error}"))
-    }
-
-    fn kill(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-type Sink = Arc<Mutex<Vec<String>>>;
-
-fn drain<R: Read + Send + 'static>(reader: R, sink: Sink) {
-    thread::spawn(move || {
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(line) => sink.lock().expect("capture sink poisoned").push(line),
-                Err(_) => break,
-            }
-        }
-    });
-}
-
-fn snapshot(sink: &Sink) -> Vec<String> {
-    sink.lock().expect("capture sink poisoned").clone()
-}
-
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn create() -> Result<Self, String> {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| format!("clock is before the epoch: {error}"))?
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "malaysia-decoration-{}-{unique}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&path)
-            .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
-        Ok(Self(path))
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
 }
 
 #[cfg(test)]

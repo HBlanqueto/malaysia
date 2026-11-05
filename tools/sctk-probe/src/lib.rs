@@ -1,4 +1,5 @@
 pub mod dmabuf;
+pub mod harness;
 
 use smithay_client_toolkit::reexports::{
     calloop,
