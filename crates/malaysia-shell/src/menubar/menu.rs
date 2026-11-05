@@ -213,25 +213,16 @@ fn navigate_title(
     titles: &Rc<Vec<MenuTitleSpec>>,
     state: &MenuState,
 ) {
-    let len = titles.len();
-    if len == 0 {
-        return;
-    }
+    let len = titles.len() as isize;
     let delta = match direction {
         MenuNavigation::Prev => -1,
         MenuNavigation::Next => 1,
     };
-    let mut index = (current_index as isize + delta).rem_euclid(len as isize) as usize;
-    let start = index;
-    loop {
-        if titles[index].enabled {
-            open_root_menu(titles, index, state);
-            return;
-        }
-        index = (index as isize + delta).rem_euclid(len as isize) as usize;
-        if index == start {
-            break;
-        }
+    if let Some(index) = (1..=len)
+        .map(|step| (current_index as isize + delta * step).rem_euclid(len) as usize)
+        .find(|&index| titles[index].enabled)
+    {
+        open_root_menu(titles, index, state);
     }
 }
 
