@@ -470,7 +470,7 @@ pub fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -
                 format!("{name} — {title}", title = window.title)
             };
             items.push(items::action(
-                format!("window-activate-{index}"),
+                format!("app-window-activate:{index}:{}", window.app_id),
                 label,
                 None,
                 true,
@@ -583,20 +583,17 @@ pub fn on_action(id: String) {
         &list,
         |index| toplevels.minimize(index),
         |index| toplevels.unset_minimized(index),
-        |index| toplevels.activate(index),
         |binary, _args| spawn_component(binary),
         |path| xdg_open(path),
         focused::on_action,
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn on_action_with(
     id: String,
     toplevels: &[ToplevelInfo],
     mut minimize: impl FnMut(usize),
     mut unminimize: impl FnMut(usize),
-    mut activate: impl FnMut(usize),
     mut spawn: impl FnMut(&str, &[&str]),
     mut open: impl FnMut(&Path),
     mut delegate: impl FnMut(String),
@@ -634,12 +631,7 @@ pub fn on_action_with(
             }
         }
         "help-report" => open(Path::new(focused::ISSUES_URL)),
-        id if id.starts_with("window-activate-") => {
-            if let Ok(index) = id["window-activate-".len()..].parse::<usize>() {
-                activate(index);
-            }
-        }
-        id if is_help_action(id) => {
+        id if id.starts_with("app-window-activate:") || is_help_action(id) => {
             delegate(id.to_string());
         }
         _ => {}
@@ -1049,7 +1041,6 @@ mod tests {
             &toplevels,
             move |index| min.borrow_mut().push(index),
             move |index| unmin.borrow_mut().push(index),
-            |_| {},
             |_, _| {},
             |_| {},
             |_| {},
@@ -1078,7 +1069,6 @@ mod tests {
             &toplevels,
             |_| panic!("must not minimize"),
             |_| panic!("must not unminimize"),
-            |_| panic!("must not activate"),
             |_, _| panic!("must not spawn"),
             |_| panic!("must not open"),
             |_| panic!("must not delegate"),
@@ -1116,7 +1106,6 @@ mod tests {
             &toplevels,
             |_| {},
             move |index| unmin.borrow_mut().push(index),
-            |_| {},
             |_, _| {},
             |_| {},
             |_| {},
@@ -1146,7 +1135,6 @@ mod tests {
             &[],
             |_| panic!("must not minimize"),
             |_| panic!("must not unminimize"),
-            |_| panic!("must not activate"),
             |_, _| panic!("must not spawn"),
             |_| panic!("must not open"),
             |_| panic!("must not delegate"),
@@ -1161,7 +1149,6 @@ mod tests {
             on_action_with(
                 id.to_string(),
                 &[],
-                |_| {},
                 |_| {},
                 |_| {},
                 move |binary, _args| *s.borrow_mut() = binary.to_string(),

@@ -89,31 +89,32 @@ pub fn window_menu_items(
     let app = app_indices(toplevels, app_id);
     let active = active_index(toplevels, app_id);
     let active_window = active.map(|index| &toplevels[index]);
+    let target = active.map(|_| app_id);
     let has_active = active_window.is_some();
     let mut items = vec![
         items::action(
-            active_id("app-window-minimize", active),
+            active_id("app-window-minimize", target),
             "Minimizar",
             Some("Super+M"),
             active.is_some(),
             None,
         ),
         items::action(
-            active_id("app-window-maximize", active),
+            active_id("app-window-maximize", target),
             "Maximizar",
             None,
             active.is_some(),
             None,
         ),
         items::action(
-            active_id("app-window-fill", active),
+            active_id("app-window-fill", target),
             "Rellenar",
             Some("Ctrl+Super+Return"),
             has_active,
             None,
         ),
         items::action(
-            active_id("app-window-center", active),
+            active_id("app-window-center", target),
             "Centrar",
             Some("Ctrl+Super+C"),
             has_active,
@@ -125,7 +126,7 @@ pub fn window_menu_items(
             "Trasladar y redimensionar",
             true,
             Some(MenuIcon::svg(icons::GRID)),
-            move_resize_items(active, active_window),
+            move_resize_items(target, active_window),
         ),
         items::submenu(
             None,
@@ -149,7 +150,7 @@ pub fn window_menu_items(
                 ),
                 items::separator(),
                 items::action(
-                    active_id("app-window-fullscreen", active),
+                    active_id("app-window-fullscreen", target),
                     "Activar pantalla completa",
                     Some("Ctrl+Super+F"),
                     has_active,
@@ -159,7 +160,7 @@ pub fn window_menu_items(
         ),
         items::separator(),
         items::action(
-            active_id("app-window-close", active),
+            active_id("app-window-close", target),
             "Cerrar ventana",
             Some("Super+W"),
             active.is_some(),
@@ -219,7 +220,7 @@ pub fn window_menu_items(
             format!("{app_name} — {}", window.title)
         };
         items.push(MenuItem::Action {
-            id: format!("app-window-activate:{index}"),
+            id: format!("app-window-activate:{index}:{app_id}"),
             label,
             shortcut: None,
             enabled: true,
@@ -422,7 +423,7 @@ pub fn on_action(id: String) {
             toplevels.arrange_quarters();
         }
         _ => {
-            if let Ok(index) = argument.parse::<usize>() {
+            if let Some(index) = target_window(&list, argument) {
                 on_window_action(&toplevels, &list, verb, index);
             }
         }
@@ -465,7 +466,7 @@ fn window_layout(verb: &str) -> Option<InfinityLayout> {
 }
 
 pub(crate) fn move_resize_items(
-    active: Option<usize>,
+    active: Option<&str>,
     active_window: Option<&ToplevelInfo>,
 ) -> Vec<MenuItem> {
     let has_active = active_window.is_some();
@@ -595,8 +596,19 @@ fn app_indices(toplevels: &[ToplevelInfo], app_id: &str) -> Vec<usize> {
         .collect()
 }
 
-fn active_id(prefix: &str, active: Option<usize>) -> String {
-    active.map_or_else(String::new, |index| format!("{prefix}:{index}"))
+fn active_id(prefix: &str, app_id: Option<&str>) -> String {
+    app_id.map_or_else(String::new, |app_id| format!("{prefix}:{app_id}"))
+}
+
+// The list can change between building the menu and the click, so indices are rechecked.
+fn target_window(list: &[ToplevelInfo], argument: &str) -> Option<usize> {
+    match argument.split_once(':') {
+        Some((index, app_id)) => index.parse().ok().filter(|index: &usize| {
+            list.get(*index)
+                .is_some_and(|window| window.app_id == app_id)
+        }),
+        None => active_index(list, argument),
+    }
 }
 
 #[cfg(test)]
@@ -668,6 +680,18 @@ mod tests {
                 false,
             ),
         ]
+    }
+
+    #[test]
+    fn a_window_that_moved_in_the_list_is_not_targeted() {
+        let list = vec![
+            window("foot", "Malaysia", false, false, false),
+            window("firefox", "Web", true, false, false),
+        ];
+        assert_eq!(target_window(&list, "1:firefox"), Some(1));
+        assert_eq!(target_window(&list, "0:firefox"), None);
+        assert_eq!(target_window(&list, "5:foot"), None);
+        assert_eq!(target_window(&list, "firefox"), Some(1));
     }
 
     #[test]
@@ -813,11 +837,11 @@ mod tests {
         assert!(!is_enabled(&layout[19]));
         assert!(matches!(
             &layout[1],
-            MenuItem::Action { id, .. } if id == "app-move-left:0"
+            MenuItem::Action { id, .. } if id == "app-move-left:foot"
         ));
         assert!(matches!(
             &layout[19],
-            MenuItem::Action { id, .. } if id == "app-move-restore:0"
+            MenuItem::Action { id, .. } if id == "app-move-restore:foot"
         ));
     }
 
