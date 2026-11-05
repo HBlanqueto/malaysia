@@ -7,7 +7,7 @@ use barrier_kit::shell::{ToplevelInfo, Toplevels};
 use crate::desktop::DesktopEntry;
 use crate::menubar::remote::Title;
 use crate::menubar::{
-    create_desktop_folder, focused, help_topics, icons, resolve_app_name, system, xdg_user_dir,
+    create_desktop_folder, focused, help_topics, icons, resolve_app_name, system,
 };
 use crate::spawn::{spawn_component, xdg_open};
 
@@ -277,7 +277,7 @@ fn open_home() {
 }
 
 fn open_user_dir(kind: &str, fallback: &str) {
-    if let Some(path) = xdg_user_dir(kind)
+    if let Some(path) = vow_appearance::xdg::user_dir(kind)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
     {
         xdg_open(path);

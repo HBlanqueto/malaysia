@@ -68,8 +68,8 @@ pub fn clear() {
     let _ = write_toml(&path, &recents);
 }
 
-fn xbel_path() -> PathBuf {
-    crate::desktop::data_home().join("recently-used.xbel")
+fn xbel_path() -> Option<PathBuf> {
+    Some(vow_appearance::xdg::data_home()?.join("recently-used.xbel"))
 }
 
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
@@ -143,7 +143,9 @@ fn parse_xbel(text: &str) -> Vec<Document> {
 }
 
 fn documents(cleared_at: i64) -> Vec<Document> {
-    let text = std::fs::read_to_string(xbel_path()).unwrap_or_default();
+    let text = xbel_path()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .unwrap_or_default();
     parse_xbel(&text)
         .into_iter()
         .filter(|doc| doc.modified > cleared_at && doc.path.is_file())
