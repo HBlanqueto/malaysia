@@ -654,8 +654,8 @@ fn systemctl(args: &[&str], socket: Option<&str>) -> std::io::Result<std::proces
 }
 
 fn missing_target_help() -> &'static str {
-    "malaysia-session.target no está instalado en el user manager; la sesión sigue sin shell. \
-     Instálalo con el módulo de NixOS (programs.malaysia.enable)."
+    "malaysia-session.target is not installed in the user manager; the session runs without a shell. \
+     Install it with the NixOS module (programs.malaysia.enable)."
 }
 
 impl Udev {
@@ -1198,7 +1198,7 @@ fn scanout_feedback(
             .filter(|format| render_formats.contains(format))
             .copied()
             .collect();
-        // Cross-device buffers scan out glitched unless Linear: https://github.com/YaLTeR/niri/blob/main/src/backend/tty.rs (surface_dmabuf_feedback).
+        // Cross-device buffers scan out glitched unless Linear: niri a8562a1 src/backend/tty.rs (surface_dmabuf_feedback).
         if render_node != scanout_node {
             formats.retain(|format| format.modifier == Modifier::Linear);
         }

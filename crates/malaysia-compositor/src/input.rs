@@ -1205,15 +1205,7 @@ impl State {
     }
 
     fn spawn_shell_component(&self, component: &str) -> Option<std::process::Child> {
-        let shell = crate::spawn::bin_dir()
-            .map(|dir| dir.join("malaysia-shell"))
-            .unwrap_or_else(|| "malaysia-shell".into());
-        let mut command = crate::spawn::shell_command(shell);
-        command.arg(component);
-        if let Some(display) = self.idle.wayland_display() {
-            command.env("WAYLAND_DISPLAY", display);
-        }
-        match crate::spawn::spawn_shell(command) {
+        match crate::spawn::shell_component(component, self.idle.wayland_display()) {
             Ok(child) => {
                 tracing::info!(component, "started a shell component");
                 Some(child)

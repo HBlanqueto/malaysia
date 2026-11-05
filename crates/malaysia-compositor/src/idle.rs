@@ -290,17 +290,11 @@ impl IdleState {
                 Ok(Some(_)) | Err(_) => self.auto_lock_child = None,
             }
         }
-        let Some(display) = &self.wayland_display else {
+        let Some(display) = self.wayland_display.as_deref() else {
             error!("starting the lock screen: the Wayland socket is not known yet");
             return false;
         };
-        let shell = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("malaysia-shell")))
-            .unwrap_or_else(|| "malaysia-shell".into());
-        let mut command = crate::spawn::shell_command(shell);
-        command.arg("lock").env("WAYLAND_DISPLAY", display);
-        match crate::spawn::spawn_shell(command) {
+        match crate::spawn::shell_component("lock", Some(display)) {
             Ok(child) => {
                 self.auto_lock_child = Some(child);
                 true

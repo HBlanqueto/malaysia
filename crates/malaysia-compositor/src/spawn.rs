@@ -28,13 +28,16 @@ pub fn command(program: impl AsRef<OsStr>, config: &Config) -> Command {
     command
 }
 
-pub fn shell_command(program: impl AsRef<OsStr>) -> Command {
-    let mut command = Command::new(program);
+pub fn shell_component(component: &str, display: Option<&str>) -> io::Result<Child> {
+    let shell = bin_dir()
+        .map(|dir| dir.join("malaysia-shell"))
+        .unwrap_or_else(|| PathBuf::from("malaysia-shell"));
+    let mut command = Command::new(shell);
+    command.arg(component);
+    if let Some(display) = display {
+        command.env("WAYLAND_DISPLAY", display);
+    }
     apply_x11_display(&mut command);
-    command
-}
-
-pub fn spawn_shell(mut command: Command) -> io::Result<Child> {
     command.spawn()
 }
 
