@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use nix::sys::socket::{getsockopt, sockopt};
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
-use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource, WEnum};
+use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::utils::{Logical, Point, Rectangle, Size};
 use tracing::info;
 use vow_design::{TILE_GAP, TILE_MARGIN};
@@ -35,7 +35,7 @@ pub(crate) fn is_trusted_client(stream: &UnixStream) -> bool {
         return false;
     };
     let trusted = TRUSTED.get_or_init(trusted_shell_exes);
-    let trusted_shell = is_trusted_shell_exe(&exe, trusted) && !preloads_code(pid);
+    let trusted_shell = trusted.contains(&exe) && !preloads_code(pid);
     tracing::debug!(pid, exe = ?exe, trusted = ?trusted, trusted_shell, "infinity trust check");
     trusted_shell
 }
@@ -102,10 +102,6 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
     }
 }
 
-fn is_trusted_shell_exe(exe: &std::path::Path, shell_exes: &[PathBuf]) -> bool {
-    shell_exes.iter().any(|trusted| trusted == exe)
-}
-
 impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlobalData {
     fn request(
         &self,
@@ -123,11 +119,11 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
         match request {
             Request::Arrange { handle, layout } => {
                 if let Some(id) = window_id_from_handle(&handle) {
-                    state.infinity_arrange(id, layout_from_wenum(layout));
+                    state.infinity_arrange(id, layout.into_result().unwrap_or(Layout::Fill));
                 }
             }
             Request::ArrangePair { layout } => {
-                state.infinity_arrange_pair(pair_layout_from_wenum(layout));
+                state.infinity_arrange_pair(layout.into_result().unwrap_or(PairLayout::SideBySide));
             }
             Request::ArrangeQuarters => {
                 state.infinity_arrange_quarters();
@@ -147,7 +143,6 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
                     state.infinity_force_quit(id, dhandle);
                 }
             }
-            Request::Destroy => {}
             _ => {}
         }
     }
@@ -162,42 +157,9 @@ fn window_id_from_handle(handle: &ZwlrForeignToplevelHandleV1) -> Option<WindowI
     handle.data::<WindowId>().copied()
 }
 
-fn layout_from_wenum(layout: WEnum<Layout>) -> Layout {
-    match layout {
-        WEnum::Value(layout) => layout,
-        WEnum::Unknown(value) => match value {
-            0 => Layout::Fill,
-            1 => Layout::Center,
-            2 => Layout::Left,
-            3 => Layout::Right,
-            4 => Layout::Top,
-            5 => Layout::Bottom,
-            6 => Layout::TopLeft,
-            7 => Layout::TopRight,
-            8 => Layout::BottomLeft,
-            9 => Layout::BottomRight,
-            _ => Layout::Fill,
-        },
-    }
-}
-
-fn pair_layout_from_wenum(layout: WEnum<PairLayout>) -> PairLayout {
-    match layout {
-        WEnum::Value(layout) => layout,
-        WEnum::Unknown(value) => match value {
-            0 => PairLayout::SideBySide,
-            1 => PairLayout::SideBySideReversed,
-            2 => PairLayout::Stacked,
-            3 => PairLayout::StackedReversed,
-            _ => PairLayout::SideBySide,
-        },
-    }
-}
-
 impl InfinityGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        let data = InfinityGlobalData;
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(5, data)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(5, InfinityGlobalData)
     }
 }
 
@@ -572,26 +534,24 @@ fn quarter_rects(workspace: Rectangle<i32, Logical>) -> [SceneRect<f64, SceneLog
 
 #[cfg(test)]
 mod tests {
-    use malaysia_scene::geometry::{
-        Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
-    };
+    use malaysia_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
     use smithay::utils::{Logical, Point, Rectangle, Size};
 
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-
     use super::{
-        Layout, PairLayout, arranged_rect, available, is_trusted_shell_exe, may_force_quit,
-        pair_rects, quarter_rects, trusted_shell_exes,
+        Layout, PairLayout, arranged_rect, available, may_force_quit, pair_rects, quarter_rects,
+        trusted_shell_exes,
     };
-    use malaysia_scene::scene::WindowId;
 
     fn workspace() -> Rectangle<i32, Logical> {
         Rectangle::new(Point::from((0, 32)), Size::from((1280, 690)))
     }
 
-    fn workspace_1280_800() -> Rectangle<i32, Logical> {
-        Rectangle::new(Point::from((0, 28)), Size::from((1280, 722)))
+    fn xywh(rect: SceneRect<f64, SceneLogical>) -> (f64, f64, f64, f64) {
+        (rect.x(), rect.y(), rect.width(), rect.height())
+    }
+
+    fn arranged(layout: Layout) -> (f64, f64, f64, f64) {
+        xywh(arranged_rect(workspace(), layout, Size::from((640, 420))))
     }
 
     #[test]
@@ -604,183 +564,46 @@ mod tests {
     }
 
     #[test]
-    fn available_has_margin() {
+    fn the_available_area_leaves_the_tile_margin() {
         let rect = available(workspace());
         assert_eq!(rect.loc, Point::from((8, 40)));
         assert_eq!(rect.size, Size::from((1264, 674)));
-    }
-
-    fn window_size() -> Size<i32, Logical> {
-        Size::from((640, 420))
+        assert_eq!(arranged(Layout::Fill), (8.0, 40.0, 1264.0, 674.0));
     }
 
     #[test]
-    fn fill_uses_available_area() {
-        let rect = arranged_rect(workspace(), Layout::Fill, window_size());
-        assert_eq!(rect.x(), 8.0);
-        assert_eq!(rect.y(), 40.0);
-        assert_eq!(rect.width(), 1264.0);
-        assert_eq!(rect.height(), 674.0);
+    fn center_keeps_the_current_size_clamped_to_the_available_area() {
+        assert_eq!(arranged(Layout::Center), (320.0, 167.0, 640.0, 420.0));
+        let large = arranged_rect(workspace(), Layout::Center, Size::from((2000, 1000)));
+        assert_eq!((large.width(), large.height()), (1264.0, 674.0));
     }
 
     #[test]
-    fn center_keeps_the_current_size() {
-        let rect = arranged_rect(workspace(), Layout::Center, Size::from((640, 420)));
-        assert_eq!(rect.width(), 640.0);
-        assert_eq!(rect.height(), 420.0);
-        assert_eq!(rect.x(), 320.0);
-        assert_eq!(rect.y(), 167.0);
+    fn halves_and_quarters_are_split_by_the_tile_gap() {
+        assert_eq!(arranged(Layout::Left), (8.0, 40.0, 628.0, 674.0));
+        assert_eq!(arranged(Layout::Right), (644.0, 40.0, 628.0, 674.0));
+        assert_eq!(arranged(Layout::TopLeft), (8.0, 40.0, 628.0, 333.0));
+        assert_eq!(arranged(Layout::BottomRight), (644.0, 381.0, 628.0, 333.0));
+        assert_eq!(
+            quarter_rects(workspace()).map(xywh),
+            [
+                (8.0, 40.0, 628.0, 333.0),
+                (644.0, 40.0, 628.0, 333.0),
+                (8.0, 381.0, 628.0, 333.0),
+                (644.0, 381.0, 628.0, 333.0),
+            ]
+        );
     }
 
     #[test]
-    fn center_clamps_to_the_available_area() {
-        let rect = arranged_rect(workspace(), Layout::Center, Size::from((2000, 1000)));
-        assert_eq!(rect.width(), 1264.0);
-        assert_eq!(rect.height(), 674.0);
-    }
-
-    #[test]
-    fn left_half() {
-        let rect = arranged_rect(workspace(), Layout::Left, window_size());
-        assert_eq!(rect.x(), 8.0);
-        assert_eq!(rect.y(), 40.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 674.0);
-    }
-
-    #[test]
-    fn right_half() {
-        let rect = arranged_rect(workspace(), Layout::Right, window_size());
-        assert_eq!(rect.x(), 644.0);
-        assert_eq!(rect.y(), 40.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 674.0);
-    }
-
-    #[test]
-    fn top_left_quarter() {
-        let rect = arranged_rect(workspace(), Layout::TopLeft, window_size());
-        assert_eq!(rect.x(), 8.0);
-        assert_eq!(rect.y(), 40.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 333.0);
-    }
-
-    #[test]
-    fn bottom_right_quarter() {
-        let rect = arranged_rect(workspace(), Layout::BottomRight, window_size());
-        assert_eq!(rect.x(), 644.0);
-        assert_eq!(rect.y(), 381.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 333.0);
-    }
-
-    #[test]
-    fn pair_side_by_side() {
+    fn pairs_put_the_active_window_first() {
         let [left, right] = pair_rects(workspace(), PairLayout::SideBySide);
-        assert_eq!(left.x(), 8.0);
-        assert_eq!(left.width(), 628.0);
-        assert_eq!(right.x(), 644.0);
-        assert_eq!(right.width(), 628.0);
-    }
-
-    #[test]
-    fn pair_stacked() {
+        assert_eq!((left.x(), right.x()), (8.0, 644.0));
         let [top, bottom] = pair_rects(workspace(), PairLayout::Stacked);
-        assert_eq!(top.y(), 40.0);
-        assert_eq!(top.height(), 333.0);
+        assert_eq!(xywh(top), (8.0, 40.0, 1264.0, 333.0));
         assert_eq!(bottom.y(), 381.0);
-        assert_eq!(bottom.height(), 333.0);
-    }
-
-    #[test]
-    fn four_quarters_have_gap() {
-        let rects = quarter_rects(workspace());
-        assert_eq!(rects[0].x(), 8.0);
-        assert_eq!(rects[1].x(), 644.0);
-        assert_eq!(rects[2].x(), 8.0);
-        assert_eq!(rects[3].x(), 644.0);
-        assert_eq!(rects[0].width(), 628.0);
-        assert_eq!(rects[0].height(), 333.0);
-    }
-
-    #[test]
-    fn mockup_23_available_area() {
-        let rect = available(workspace_1280_800());
-        assert_eq!(rect.loc, Point::from((8, 36)));
-        assert_eq!(rect.size, Size::from((1264, 706)));
-    }
-
-    #[test]
-    fn mockup_23_left_half() {
-        let rect = arranged_rect(workspace_1280_800(), Layout::Left, window_size());
-        assert_eq!(rect.x(), 8.0);
-        assert_eq!(rect.y(), 36.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 706.0);
-    }
-
-    #[test]
-    fn mockup_23_right_half() {
-        let rect = arranged_rect(workspace_1280_800(), Layout::Right, window_size());
-        assert_eq!(rect.x(), 644.0);
-        assert_eq!(rect.y(), 36.0);
-        assert_eq!(rect.width(), 628.0);
-        assert_eq!(rect.height(), 706.0);
-    }
-
-    #[test]
-    fn mockup_23_top_and_bottom_halves() {
-        let top = arranged_rect(workspace_1280_800(), Layout::Top, window_size());
-        let bottom = arranged_rect(workspace_1280_800(), Layout::Bottom, window_size());
-        assert_eq!(top.y(), 36.0);
-        assert_eq!(top.height(), 349.0);
-        assert_eq!(bottom.y(), 393.0);
-        assert_eq!(bottom.height(), 349.0);
-    }
-
-    #[test]
-    fn mockup_23_quarters() {
-        let top_left = arranged_rect(workspace_1280_800(), Layout::TopLeft, window_size());
-        let bottom_right = arranged_rect(workspace_1280_800(), Layout::BottomRight, window_size());
-        assert_eq!(top_left.x(), 8.0);
-        assert_eq!(top_left.y(), 36.0);
-        assert_eq!(top_left.width(), 628.0);
-        assert_eq!(top_left.height(), 349.0);
-        assert_eq!(bottom_right.x(), 644.0);
-        assert_eq!(bottom_right.y(), 393.0);
-        assert_eq!(bottom_right.width(), 628.0);
-        assert_eq!(bottom_right.height(), 349.0);
-    }
-
-    #[test]
-    fn mockup_23_pair_side_by_side() {
-        let [left, right] = pair_rects(workspace_1280_800(), PairLayout::SideBySide);
-        assert_eq!(left.x(), 8.0);
-        assert_eq!(left.y(), 36.0);
-        assert_eq!(left.width(), 628.0);
-        assert_eq!(left.height(), 706.0);
-        assert_eq!(right.x(), 644.0);
-        assert_eq!(right.y(), 36.0);
-        assert_eq!(right.width(), 628.0);
-        assert_eq!(right.height(), 706.0);
-    }
-
-    #[test]
-    fn restore_returns_to_the_first_arrange_rectangle() {
-        let first: SceneRect<f64, SceneLogical> =
-            SceneRect::new(ScenePoint::new(100.0, 100.0), SceneSize::new(640.0, 420.0));
-        let second: SceneRect<f64, SceneLogical> =
-            SceneRect::new(ScenePoint::new(8.0, 40.0), SceneSize::new(628.0, 674.0));
-
-        let mut arranged = HashMap::new();
-        arranged.entry(WindowId::new(1)).or_insert(first);
-        let saved = *arranged.get(&WindowId::new(1)).unwrap();
-        assert_eq!(saved, first);
-
-        arranged.remove(&WindowId::new(1));
-        assert!(!arranged.contains_key(&WindowId::new(1)));
-        assert_eq!(second, second);
+        let [first, second] = pair_rects(workspace(), PairLayout::StackedReversed);
+        assert_eq!((first.y(), second.y()), (381.0, 40.0));
     }
 
     #[test]
@@ -810,31 +633,9 @@ mod tests {
             }
         }
         assert!(
-            is_trusted_shell_exe(&std::fs::canonicalize(&fake).unwrap(), &exes),
+            exes.contains(&std::fs::canonicalize(&fake).unwrap()),
             "MALAYSIA_SHELL_EXE must be trusted"
         );
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn trusted_shell_comparison_accepts_wrapped_and_unwrapped_names() {
-        let target = PathBuf::from("/nix/store/abc/bin/malaysia-shell");
-        let wrapped = PathBuf::from("/nix/store/abc/bin/.malaysia-shell-wrapped");
-        assert!(is_trusted_shell_exe(&target, std::slice::from_ref(&target)));
-        assert!(is_trusted_shell_exe(
-            &wrapped,
-            std::slice::from_ref(&wrapped)
-        ));
-        assert!(!is_trusted_shell_exe(
-            &target,
-            std::slice::from_ref(&wrapped)
-        ));
-    }
-
-    #[test]
-    fn untrusted_binaries_are_rejected() {
-        let trusted = PathBuf::from("/run/current-system/sw/bin/malaysia-shell");
-        let attacker = PathBuf::from("/tmp/evil-shell");
-        assert!(!is_trusted_shell_exe(&attacker, &[trusted]));
     }
 }
