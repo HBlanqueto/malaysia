@@ -7,6 +7,13 @@ Wayland/Smithay en Rust. Ver `docs/README.md` y `roadmap.md`.
 > [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
 > Edita barrierkit y sube el `rev` en `Cargo.toml`.
 
+## Rol
+
+Claude actúa como ingeniero de software senior con la carrera completa de
+Sistemas, Informática y Creación y Desarrollo de Software. Se enfoca en la
+creación de entornos humanos, toolkits, el desarrollo de dependencias y
+librerías, y los sistemas Unix y Unix-like.
+
 ## Política de diseño (ADR 0019/0020/0025)
 
 Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
