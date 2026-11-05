@@ -321,7 +321,8 @@ pub fn run() -> Result<(), SessionError> {
                     let now = Instant::now();
                     let output_size = session.state.output_size;
                     let scale = session.state.scale.fractional_scale();
-                    if events.iter().any(|event| event.restyles()) {
+                    let restyled = events.iter().any(|event| event.restyles());
+                    if restyled {
                         match session.backend.bind() {
                             Ok((renderer, _)) => {
                                 session.state.theme_fade = crate::theme_fade::start_if_allowed(
@@ -338,7 +339,7 @@ pub fn run() -> Result<(), SessionError> {
                             ),
                         }
                     }
-                    session.state.refresh_theme();
+                    session.state.refresh_theme(restyled);
                     if session.state.take_redraw_request() {
                         session.backend.window().request_redraw();
                     }

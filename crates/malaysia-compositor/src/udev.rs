@@ -333,7 +333,8 @@ pub fn run(options: DrmOptions) -> Result<()> {
                     let now = Instant::now();
                     let output_size = data.state.output_size;
                     let scale = data.state.scale.fractional_scale();
-                    if events.iter().any(|event| event.restyles()) {
+                    let restyled = events.iter().any(|event| event.restyles());
+                    if restyled {
                         let Ok(mut renderer) = data.gpu.single_renderer(&data.render_node) else {
                             return Ok(PostAction::Continue);
                         };
@@ -346,7 +347,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
                             now,
                         );
                     }
-                    data.state.refresh_theme();
+                    data.state.refresh_theme(restyled);
                 }
                 Ok(PostAction::Continue)
             },

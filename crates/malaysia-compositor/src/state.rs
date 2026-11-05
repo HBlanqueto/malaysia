@@ -428,10 +428,12 @@ impl State {
         })
     }
 
-    pub(crate) fn refresh_theme(&mut self) {
+    pub(crate) fn refresh_theme(&mut self, restyled: bool) {
         self.config = Config::load();
-        self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
-        self.request_redraw();
+        if restyled {
+            self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
+            self.request_redraw();
+        }
     }
 
     pub(crate) fn theme_fade_mark_committed(
