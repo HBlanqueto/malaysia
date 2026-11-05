@@ -435,16 +435,23 @@ impl BarApp {
         title_anchor: impl Fn(usize) -> TitleAnchor,
     ) -> Vec<MenuTitleSpec> {
         let snapshot = self.menu_snapshot;
-        let composition: Rc<dyn Fn() -> Vec<remote::Title>> = Rc::new(move || {
-            let items = snapshot
-                .read()
-                .as_ref()
-                .map(|menu| menu.items.clone())
-                .unwrap_or_default();
-            sources.compose(&items)
-        });
         let address = remote_menu.address.clone();
         let generation = remote_menu.generation;
+        let remote_items: Rc<dyn Fn() -> Vec<MenuItem>> = {
+            let address = address.clone();
+            let rendered = remote_menu.items.clone();
+            Rc::new(move || {
+                snapshot
+                    .read()
+                    .as_ref()
+                    .filter(|menu| menu.generation == generation && menu.address == address)
+                    .map_or_else(|| rendered.clone(), |menu| menu.items.clone())
+            })
+        };
+        let composition: Rc<dyn Fn() -> Vec<remote::Title>> = {
+            let remote_items = remote_items.clone();
+            Rc::new(move || sources.compose(&remote_items()))
+        };
         let on_activate: Rc<dyn Fn(String)> = {
             let dbus = self.dbus.clone();
             let address = address.clone();
@@ -471,8 +478,7 @@ impl BarApp {
         };
         let submenu_source: barrier_kit::menu::SubmenuSource = Rc::new(move |id| {
             let id = id.parse::<i32>().ok()?;
-            let menu = snapshot.read().as_ref().cloned()?;
-            remote::find_subtree(&menu.items, id)
+            remote::find_subtree(&remote_items(), id)
         });
         let reveal_roots: RevealRoots = {
             let composition = composition.clone();
@@ -490,9 +496,11 @@ impl BarApp {
             .map(|(index, title)| {
                 let items: ItemsSource = {
                     let composition = composition.clone();
+                    let label = title.label.clone();
                     Rc::new(move || {
                         composition()
-                            .get(index)
+                            .iter()
+                            .find(|title| title.label == label)
                             .map(remote::Title::visible_items)
                             .unwrap_or_default()
                     })
