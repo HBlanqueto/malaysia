@@ -294,16 +294,7 @@ impl MenuCache {
     }
 
     fn invalidate_full(&mut self, revision: u32) -> bool {
-        if self
-            .full
-            .as_ref()
-            .is_some_and(|full| revision > full.revision)
-        {
-            self.full = None;
-            true
-        } else {
-            false
-        }
+        self.full.take_if(|full| revision > full.revision).is_some()
     }
 
     fn apply_properties(
@@ -363,6 +354,21 @@ struct Pending {
     focus: Option<(AppMenuAddress, u64)>,
     subtrees: Vec<i32>,
     snapshot: bool,
+    deadline: Option<Instant>,
+}
+
+impl Pending {
+    fn arm(&mut self) {
+        self.deadline
+            .get_or_insert_with(|| Instant::now() + DEBOUNCE);
+    }
+}
+
+#[derive(Default)]
+struct Focus {
+    current: Option<(AppMenuAddress, u64)>,
+    pending: Pending,
+    background: BackgroundFullTree,
 }
 
 #[derive(Default)]
@@ -387,13 +393,7 @@ impl BackgroundFullTree {
     }
 
     fn cancel(&mut self, address: &AppMenuAddress) {
-        if self
-            .wait
-            .as_ref()
-            .is_some_and(|(pending, _, _)| pending == address)
-        {
-            self.wait = None;
-        }
+        self.wait.take_if(|(pending, _, _)| pending == address);
     }
 
     fn next(&self) -> Option<Instant> {
@@ -401,13 +401,9 @@ impl BackgroundFullTree {
     }
 
     fn due(&mut self, now: Instant) -> Option<(AppMenuAddress, u64)> {
-        if self.wait.as_ref().is_some_and(|(_, _, at)| *at <= now) {
-            self.wait
-                .take()
-                .map(|(address, generation, _)| (address, generation))
-        } else {
-            None
-        }
+        self.wait
+            .take_if(|(_, _, at)| *at <= now)
+            .map(|(address, generation, _)| (address, generation))
     }
 }
 
@@ -418,51 +414,40 @@ enum Event {
     Timer,
 }
 
+fn logged<T, E: std::fmt::Display>(result: Result<T, E>, what: &str) -> Option<T> {
+    result
+        .inspect_err(|error| tracing::error!(%error, "menubar: could not {what}"))
+        .ok()
+}
+
 async fn run(
     commands: Receiver<Command>,
     snapshots: Sender<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
-    mut app_menus_enabled: bool,
-) {
-    let builder = match zbus::connection::Builder::session() {
-        Ok(builder) => builder.method_timeout(FULL_TREE_TIMEOUT),
-        Err(error) => {
-            tracing::error!(%error, "menubar: could not build the session bus connection");
-            return;
-        }
-    };
-    let connection = match builder.build().await {
-        Ok(connection) => connection,
-        Err(error) => {
-            tracing::error!(%error, "menubar: could not connect to the session bus");
-            return;
-        }
-    };
-
-    let windows: RegistrarWindows = Arc::new(Mutex::new(HashMap::new()));
+    app_menus_enabled: bool,
+) -> Option<()> {
+    let builder = logged(
+        zbus::connection::Builder::session(),
+        "build the session bus connection",
+    )?;
+    let connection = logged(
+        builder.method_timeout(FULL_TREE_TIMEOUT).build().await,
+        "connect to the session bus",
+    )?;
+    let windows = RegistrarWindows::default();
     set_registrar(&connection, &windows, app_menus_enabled).await;
-
-    let dbus = match zbus::fdo::DBusProxy::new(&connection).await {
-        Ok(dbus) => dbus,
-        Err(error) => {
-            tracing::error!(%error, "menubar: could not create the bus proxy");
-            return;
-        }
-    };
-    let mut owner_changes = match dbus.receive_name_owner_changed().await {
-        Ok(stream) => stream,
-        Err(error) => {
-            tracing::error!(%error, "menubar: could not listen for name changes");
-            return;
-        }
-    };
-    let mut menu_signals = match menu_stream(&connection).await {
-        Ok(stream) => stream,
-        Err(error) => {
-            tracing::error!(%error, "menubar: could not listen for dbusmenu signals");
-            return;
-        }
-    };
+    let dbus = logged(
+        zbus::fdo::DBusProxy::new(&connection).await,
+        "create the bus proxy",
+    )?;
+    let mut owner_changes = logged(
+        dbus.receive_name_owner_changed().await,
+        "listen for name changes",
+    )?;
+    let mut menu_signals = logged(
+        menu_stream(&connection).await,
+        "listen for dbusmenu signals",
+    )?;
 
     let mut worker = Worker {
         connection,
@@ -471,14 +456,19 @@ async fn run(
         caches: HashMap::new(),
         snapshots,
         wake,
+        windows,
+        app_menus_enabled,
+        focus: Focus::default(),
+        gtk: None,
     };
-    let mut focused: Option<(AppMenuAddress, u64)> = None;
-    let mut pending = Pending::default();
-    let mut deadline: Option<Instant> = None;
-    let mut background = BackgroundFullTree::default();
-    let mut gtk: Option<gtkmenus::Session> = None;
     loop {
-        let timer = deadline.into_iter().chain(background.next()).min();
+        let timer = worker
+            .focus
+            .pending
+            .deadline
+            .into_iter()
+            .chain(worker.focus.background.next())
+            .min();
         let selected = future::or(
             future::or(async { Event::Command(commands.recv().await) }, async {
                 Event::Owner(owner_changes.next().await)
@@ -492,233 +482,20 @@ async fn run(
         )
         .await;
         match selected {
-            Event::Command(Ok(Command::SetAppMenus(enabled))) => {
-                if enabled == app_menus_enabled {
-                    continue;
-                }
-                app_menus_enabled = enabled;
-                pending = Pending::default();
-                deadline = None;
-                if !enabled {
-                    focused = None;
-                    background = BackgroundFullTree::default();
-                    end_gtk(&worker.connection, &mut gtk).await;
-                }
-                tracing::info!(enabled, "menubar: app_menus changed");
-                set_registrar(&worker.connection, &windows, enabled).await;
-            }
-            Event::Command(Ok(Command::Focus {
-                address,
-                generation,
-            })) => {
-                if !app_menus_enabled {
-                    continue;
-                }
-                end_gtk(&worker.connection, &mut gtk).await;
-                focused = Some((address.clone(), generation));
-                pending = Pending::default();
-                deadline = None;
-                background.schedule(
-                    &address,
-                    generation,
-                    worker.has_full_tree(&address),
-                    Instant::now(),
-                );
-                if !worker.send_cached_root(&address, generation).await {
-                    pending.focus = Some((address, generation));
-                    arm(&mut deadline);
-                }
-            }
-            Event::Command(Ok(Command::GtkFocus {
-                menus,
-                app_name,
-                generation,
-            })) => {
-                if !app_menus_enabled {
-                    continue;
-                }
-                focused = None;
-                pending = Pending::default();
-                deadline = None;
-                background = BackgroundFullTree::default();
-                end_gtk(&worker.connection, &mut gtk).await;
-                let session =
-                    gtkmenus::Session::open(&worker.connection, menus, app_name, generation).await;
-                worker.send_gtk(&session, 0, false).await;
-                gtk = Some(session);
-            }
-            Event::Command(Ok(Command::Unfocus)) => {
-                focused = None;
-                pending = Pending::default();
-                deadline = None;
-                background = BackgroundFullTree::default();
-                end_gtk(&worker.connection, &mut gtk).await;
-            }
-            Event::Command(Ok(Command::Open {
-                address,
-                id,
-                generation,
-            })) => {
-                if !app_menus_enabled {
-                    continue;
-                }
-                if let Some(session) = gtk_for(&gtk, &address, generation) {
-                    worker.send_gtk(session, id, true).await;
-                    continue;
-                }
-                let started = Instant::now();
-                let cached = worker
-                    .caches
-                    .get(&address)
-                    .and_then(|cache| cache.subtrees.get(&id))
-                    .map(|subtree| subtree.items.clone());
-                let needs_update = worker.about_to_show(&address, id).await;
-                let from_cache = !needs_update && cached.is_some();
-                let items = if from_cache {
-                    cached
-                } else {
-                    worker.fetch_subtree(&address, id).await
-                };
-                pending.subtrees.retain(|pending| *pending != id);
-                tracing::info!(
-                    generation,
-                    id,
-                    service = %address.service,
-                    items = items.as_ref().map_or(0, Vec::len),
-                    cached = from_cache,
-                    ms = started.elapsed().as_millis(),
-                    "menubar: dbusmenu submenu snapshot"
-                );
-                worker
-                    .send(MenuSnapshot {
-                        generation,
-                        address,
-                        parent: Some(id),
-                        items,
-                        cached: from_cache,
-                    })
-                    .await;
-            }
-            Event::Command(Ok(Command::FullTree {
-                address,
-                generation,
-            })) => {
-                if !app_menus_enabled {
-                    continue;
-                }
-                if let Some(session) = gtk_for(&gtk, &address, generation) {
-                    worker.send_gtk(session, 0, true).await;
-                    continue;
-                }
-                let cached = worker.has_full_tree(&address);
-                worker.send_full_tree(&address, generation).await;
-                if !cached && worker.has_full_tree(&address) {
-                    background.cancel(&address);
-                }
-            }
-            Event::Command(Ok(Command::Activate {
-                address,
-                id,
-                timestamp,
-            })) => {
-                if let Some(session) = gtk.as_ref().filter(|session| session.address == address) {
-                    session.activate(&worker.connection, id).await;
-                    continue;
-                }
-                if let Err(error) = worker.event(&address, id, timestamp).await {
-                    tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
-                } else {
-                    tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
-                }
-            }
-            Event::Command(Err(_)) => break,
+            Event::Command(Ok(command)) => worker.on_command(command).await,
             Event::Owner(Some(signal)) => {
-                let Ok(args) = signal.args() else {
-                    continue;
-                };
-                if args.new_owner().is_some() {
-                    continue;
-                }
-                let service = args.name().to_string();
-                if let Some(session) =
-                    gtk.take_if(|session| session.menus.unique_bus_name == service)
+                if let Ok(args) = signal.args()
+                    && args.new_owner().is_none()
                 {
-                    tracing::info!(%service, "menubar: GTK menu service vanished");
-                    worker
-                        .send(MenuSnapshot {
-                            generation: session.generation,
-                            address: session.address,
-                            parent: None,
-                            items: None,
-                            cached: false,
-                        })
-                        .await;
-                }
-                worker
-                    .proxies
-                    .retain(|address, _| address.service != service);
-                let cached_menus = worker.caches.len();
-                worker
-                    .caches
-                    .retain(|address, _| address.service != service);
-                let evicted = cached_menus != worker.caches.len();
-                if let Some((address, generation)) = &focused
-                    && address.service == service
-                {
-                    tracing::info!(%service, generation, evicted, "menubar: menu service vanished");
-                    pending = Pending::default();
-                    deadline = None;
-                    worker
-                        .send(MenuSnapshot {
-                            generation: *generation,
-                            address: address.clone(),
-                            parent: None,
-                            items: None,
-                            cached: false,
-                        })
-                        .await;
+                    worker.service_vanished(&args.name().to_string()).await;
                 }
             }
-            Event::Owner(None) => break,
-            Event::Menu(Some(Ok(message)))
-                if message
-                    .header()
-                    .interface()
-                    .is_some_and(|interface| interface.starts_with("org.gtk.")) =>
-            {
-                if let Some(session) = gtk.as_mut()
-                    && session.signal(&worker.connection, &message).await
-                {
-                    worker.send_gtk(session, 0, false).await;
-                }
-            }
-            Event::Menu(Some(Ok(message))) => {
-                handle_signal(
-                    message,
-                    &worker.proxies,
-                    &mut worker.caches,
-                    &focused,
-                    &mut pending,
-                    &mut deadline,
-                );
-            }
+            Event::Menu(Some(Ok(message))) => worker.on_signal(message).await,
             Event::Menu(Some(Err(error))) => {
                 tracing::warn!(%error, "menubar: dbusmenu signal stream error");
             }
-            Event::Menu(None) => break,
-            Event::Timer => {
-                let now = Instant::now();
-                if deadline.is_some_and(|at| at <= now) {
-                    deadline = None;
-                    worker.flush(&focused, &mut pending).await;
-                }
-                if let Some((address, generation)) = background.due(now)
-                    && focused == Some((address.clone(), generation))
-                    && !worker.has_full_tree(&address)
-                {
-                    worker.send_full_tree(&address, generation).await;
-                }
-            }
+            Event::Command(Err(_)) | Event::Owner(None) | Event::Menu(None) => return None,
+            Event::Timer => worker.on_timer().await,
         }
     }
 }
@@ -732,99 +509,10 @@ fn gtk_for<'a>(
         .filter(|session| session.address == *address && session.generation == generation)
 }
 
-async fn end_gtk(connection: &zbus::Connection, gtk: &mut Option<gtkmenus::Session>) {
-    if let Some(session) = gtk.take() {
-        session.close(connection).await;
-    }
-}
-
-fn arm(deadline: &mut Option<Instant>) {
-    if deadline.is_none() {
-        *deadline = Some(Instant::now() + DEBOUNCE);
-    }
-}
-
 fn signal_address(proxies: &ProxyCache, sender: &str, path: &str) -> Option<AppMenuAddress> {
     proxies.iter().find_map(|(address, entry)| {
         (address.path == path && entry.owner.as_deref() == Some(sender)).then(|| address.clone())
     })
-}
-
-fn handle_signal(
-    message: zbus::Message,
-    proxies: &ProxyCache,
-    caches: &mut MenuCaches,
-    focused: &Option<(AppMenuAddress, u64)>,
-    pending: &mut Pending,
-    deadline: &mut Option<Instant>,
-) {
-    let Some(sender) = message.header().sender().map(ToString::to_string) else {
-        return;
-    };
-    let Some(path) = message.header().path().map(ToString::to_string) else {
-        return;
-    };
-    let Some(address) = signal_address(proxies, &sender, &path) else {
-        return;
-    };
-    let is_focused = focused
-        .as_ref()
-        .is_some_and(|(focused, _)| *focused == address);
-    match message.header().member().map(|member| member.as_str()) {
-        Some("LayoutUpdated") => {
-            let Ok((revision, parent)) = message.body().deserialize::<(u32, i32)>() else {
-                return;
-            };
-            let (dropped, full_invalidated) = caches
-                .get_mut(&address)
-                .map(|cache| {
-                    (
-                        cache.invalidate(parent, revision),
-                        cache.invalidate_full(revision),
-                    )
-                })
-                .unwrap_or_default();
-            tracing::debug!(
-                service = %address.service,
-                revision,
-                parent,
-                ?dropped,
-                full_invalidated,
-                "menubar: dbusmenu LayoutUpdated"
-            );
-            let refetch: Vec<i32> = dropped
-                .into_iter()
-                .filter(|id| *id == parent || *id == 0)
-                .collect();
-            if is_focused && !refetch.is_empty() {
-                pending.subtrees.extend(refetch);
-                arm(deadline);
-            }
-        }
-        Some("ItemsPropertiesUpdated") => {
-            let Ok((updated, removed)) = message.body().deserialize::<(
-                Vec<(i32, HashMap<String, OwnedValue>)>,
-                Vec<(i32, Vec<String>)>,
-            )>() else {
-                return;
-            };
-            let changed = caches
-                .get_mut(&address)
-                .is_some_and(|cache| cache.apply_properties(&updated, &removed));
-            tracing::debug!(
-                service = %address.service,
-                ?updated,
-                ?removed,
-                changed,
-                "menubar: dbusmenu ItemsPropertiesUpdated"
-            );
-            if changed && is_focused {
-                pending.snapshot = true;
-                arm(deadline);
-            }
-        }
-        _ => {}
-    }
 }
 
 struct Worker {
@@ -834,16 +522,238 @@ struct Worker {
     caches: MenuCaches,
     snapshots: Sender<MenuSnapshot>,
     wake: Arc<Mutex<Option<WakeHandle>>>,
+    windows: RegistrarWindows,
+    app_menus_enabled: bool,
+    focus: Focus,
+    gtk: Option<gtkmenus::Session>,
 }
 
 impl Worker {
-    async fn flush(&mut self, focused: &Option<(AppMenuAddress, u64)>, pending: &mut Pending) {
+    fn dbusmenu_signal(&mut self, message: zbus::Message) {
+        let Some(sender) = message.header().sender().map(ToString::to_string) else {
+            return;
+        };
+        let Some(path) = message.header().path().map(ToString::to_string) else {
+            return;
+        };
+        let Some(address) = signal_address(&self.proxies, &sender, &path) else {
+            return;
+        };
+        let is_focused = self
+            .focus
+            .current
+            .as_ref()
+            .is_some_and(|(focused, _)| *focused == address);
+        match message.header().member().map(|member| member.as_str()) {
+            Some("LayoutUpdated") => {
+                let Ok((revision, parent)) = message.body().deserialize::<(u32, i32)>() else {
+                    return;
+                };
+                let (dropped, full_invalidated) = self
+                    .caches
+                    .get_mut(&address)
+                    .map(|cache| {
+                        (
+                            cache.invalidate(parent, revision),
+                            cache.invalidate_full(revision),
+                        )
+                    })
+                    .unwrap_or_default();
+                tracing::debug!(
+                    service = %address.service,
+                    revision,
+                    parent,
+                    ?dropped,
+                    full_invalidated,
+                    "menubar: dbusmenu LayoutUpdated"
+                );
+                let refetch: Vec<i32> = dropped
+                    .into_iter()
+                    .filter(|id| *id == parent || *id == 0)
+                    .collect();
+                if is_focused && !refetch.is_empty() {
+                    self.focus.pending.subtrees.extend(refetch);
+                    self.focus.pending.arm();
+                }
+            }
+            Some("ItemsPropertiesUpdated") => {
+                let Ok((updated, removed)) = message.body().deserialize::<(
+                    Vec<(i32, HashMap<String, OwnedValue>)>,
+                    Vec<(i32, Vec<String>)>,
+                )>() else {
+                    return;
+                };
+                let changed = self
+                    .caches
+                    .get_mut(&address)
+                    .is_some_and(|cache| cache.apply_properties(&updated, &removed));
+                tracing::debug!(
+                    service = %address.service,
+                    ?updated,
+                    ?removed,
+                    changed,
+                    "menubar: dbusmenu ItemsPropertiesUpdated"
+                );
+                if changed && is_focused {
+                    self.focus.pending.snapshot = true;
+                    self.focus.pending.arm();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    async fn on_command(&mut self, command: Command) {
+        match command {
+            Command::SetAppMenus(enabled) => {
+                if enabled == self.app_menus_enabled {
+                    return;
+                }
+                self.app_menus_enabled = enabled;
+                self.focus.pending = Pending::default();
+                if !enabled {
+                    self.focus = Focus::default();
+                    self.end_gtk().await;
+                }
+                tracing::info!(enabled, "menubar: app_menus changed");
+                set_registrar(&self.connection, &self.windows, enabled).await;
+            }
+            Command::Focus {
+                address,
+                generation,
+            } => {
+                if !self.app_menus_enabled {
+                    return;
+                }
+                self.end_gtk().await;
+                self.focus.current = Some((address.clone(), generation));
+                self.focus.pending = Pending::default();
+                self.focus.background.schedule(
+                    &address,
+                    generation,
+                    self.has_full_tree(&address),
+                    Instant::now(),
+                );
+                if !self.send_cached_root(&address, generation).await {
+                    self.focus.pending.focus = Some((address, generation));
+                    self.focus.pending.arm();
+                }
+            }
+            Command::GtkFocus {
+                menus,
+                app_name,
+                generation,
+            } => {
+                if !self.app_menus_enabled {
+                    return;
+                }
+                self.focus = Focus::default();
+                self.end_gtk().await;
+                let session =
+                    gtkmenus::Session::open(&self.connection, menus, app_name, generation).await;
+                self.send_gtk(&session, 0, false).await;
+                self.gtk = Some(session);
+            }
+            Command::Unfocus => {
+                self.focus = Focus::default();
+                self.end_gtk().await;
+            }
+            Command::Open {
+                address,
+                id,
+                generation,
+            } => {
+                if !self.app_menus_enabled {
+                    return;
+                }
+                if let Some(session) = gtk_for(&self.gtk, &address, generation) {
+                    self.send_gtk(session, id, true).await;
+                    return;
+                }
+                self.focus.pending.subtrees.retain(|pending| *pending != id);
+                self.send_subtree(address, id, generation).await;
+            }
+            Command::FullTree {
+                address,
+                generation,
+            } => {
+                if !self.app_menus_enabled {
+                    return;
+                }
+                if let Some(session) = gtk_for(&self.gtk, &address, generation) {
+                    self.send_gtk(session, 0, true).await;
+                    return;
+                }
+                let cached = self.has_full_tree(&address);
+                self.send_full_tree(&address, generation).await;
+                if !cached && self.has_full_tree(&address) {
+                    self.focus.background.cancel(&address);
+                }
+            }
+            Command::Activate {
+                address,
+                id,
+                timestamp,
+            } => {
+                if let Some(session) = self
+                    .gtk
+                    .as_ref()
+                    .filter(|session| session.address == address)
+                {
+                    session.activate(&self.connection, id).await;
+                    return;
+                }
+                if let Err(error) = self.event(&address, id, timestamp).await {
+                    tracing::warn!(%error, id, service = %address.service, "menubar: dbusmenu Event failed");
+                } else {
+                    tracing::info!(id, service = %address.service, "menubar: dbusmenu Event sent");
+                }
+            }
+        }
+    }
+
+    async fn on_signal(&mut self, message: zbus::Message) {
+        let gtk_signal = message
+            .header()
+            .interface()
+            .is_some_and(|interface| interface.starts_with("org.gtk."));
+        if !gtk_signal {
+            self.dbusmenu_signal(message);
+        } else if let Some(session) = self.gtk.as_mut()
+            && session.signal(&self.connection, &message).await
+            && let Some(session) = &self.gtk
+        {
+            self.send_gtk(session, 0, false).await;
+        }
+    }
+
+    async fn on_timer(&mut self) {
+        let now = Instant::now();
+        if self.focus.pending.deadline.is_some_and(|at| at <= now) {
+            let pending = std::mem::take(&mut self.focus.pending);
+            self.flush(pending).await;
+        }
+        if let Some((address, generation)) = self.focus.background.due(now)
+            && self.focus.current == Some((address.clone(), generation))
+            && !self.has_full_tree(&address)
+        {
+            self.send_full_tree(&address, generation).await;
+        }
+    }
+
+    async fn end_gtk(&mut self) {
+        if let Some(session) = self.gtk.take() {
+            session.close(&self.connection).await;
+        }
+    }
+
+    async fn flush(&mut self, mut pending: Pending) {
+        let focused = self.focus.current.clone();
         let Some((address, generation)) = focused.clone() else {
-            *pending = Pending::default();
             return;
         };
 
-        if pending.focus.take() == *focused && !self.send_cached_root(&address, generation).await {
+        if pending.focus.take() == focused && !self.send_cached_root(&address, generation).await {
             self.fetch_root(&address, generation).await;
         }
 
@@ -877,6 +787,74 @@ impl Worker {
             && self.send_cached_root(&address, generation).await
         {
             self.send_cached_subtrees(&address, generation).await;
+        }
+    }
+
+    async fn send_subtree(&mut self, address: AppMenuAddress, id: i32, generation: u64) {
+        let started = Instant::now();
+        let cached = self
+            .caches
+            .get(&address)
+            .and_then(|cache| cache.subtrees.get(&id))
+            .map(|subtree| subtree.items.clone());
+        let needs_update = self.about_to_show(&address, id).await;
+        let from_cache = !needs_update && cached.is_some();
+        let items = if from_cache {
+            cached
+        } else {
+            self.fetch_subtree(&address, id).await
+        };
+        tracing::info!(
+            generation,
+            id,
+            service = %address.service,
+            items = items.as_ref().map_or(0, Vec::len),
+            cached = from_cache,
+            ms = started.elapsed().as_millis(),
+            "menubar: dbusmenu submenu snapshot"
+        );
+        self.send(MenuSnapshot {
+            generation,
+            address,
+            parent: Some(id),
+            items,
+            cached: from_cache,
+        })
+        .await;
+    }
+
+    async fn service_vanished(&mut self, service: &str) {
+        if let Some(session) = self
+            .gtk
+            .take_if(|session| session.menus.unique_bus_name == service)
+        {
+            tracing::info!(%service, "menubar: GTK menu service vanished");
+            self.send(MenuSnapshot {
+                generation: session.generation,
+                address: session.address,
+                parent: None,
+                items: None,
+                cached: false,
+            })
+            .await;
+        }
+        self.proxies.retain(|address, _| address.service != service);
+        let cached_menus = self.caches.len();
+        self.caches.retain(|address, _| address.service != service);
+        let evicted = cached_menus != self.caches.len();
+        if let Some((address, generation)) = self.focus.current.clone()
+            && address.service == service
+        {
+            tracing::info!(%service, generation, evicted, "menubar: menu service vanished");
+            self.focus.pending = Pending::default();
+            self.send(MenuSnapshot {
+                generation,
+                address,
+                parent: None,
+                items: None,
+                cached: false,
+            })
+            .await;
         }
     }
 
