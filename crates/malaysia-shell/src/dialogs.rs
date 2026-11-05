@@ -708,9 +708,7 @@ impl App for AboutApp {
     }
 }
 
-fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
-    let resolved = barrier_kit::theme::resolved();
-    let palette = Palette::current();
+fn spec_rows(info: &AboutInfo, palette: &Palette) -> Vec<Element> {
     let mut rows = vec![(tr!("about-processor").to_string(), info.cpu.clone())];
     if let Some(graphics) = &info.graphics {
         rows.push((tr!("about-graphics").to_string(), graphics.clone()));
@@ -726,28 +724,35 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
         .map(|(name, _)| measure_text_weight(name, CAPTION.size as f32, FontWeight::SEMI_BOLD))
         .fold(0.0, f32::max)
         .ceil();
-    let rows = rows.into_iter().map(|(name, value)| {
-        rect()
-            .direction(Direction::Horizontal)
-            .spacing(ABOUT_COLUMN_GAP)
-            .child(
-                label()
-                    .text(name)
-                    .width(Size::px(label_width))
-                    .text_align(TextAlign::Right)
-                    .font_size(CAPTION.size as f32)
-                    .font_weight(FontWeight::SEMI_BOLD)
-                    .color(theme::color(palette.label)),
-            )
-            .child(
-                label()
-                    .text(value)
-                    .width(Size::px(ABOUT_VALUE_WIDTH))
-                    .font_size(CAPTION.size as f32)
-                    .color(theme::color(palette.secondary_label)),
-            )
-            .into_element()
-    });
+    rows.into_iter()
+        .map(|(name, value)| {
+            rect()
+                .direction(Direction::Horizontal)
+                .spacing(ABOUT_COLUMN_GAP)
+                .child(
+                    label()
+                        .text(name)
+                        .width(Size::px(label_width))
+                        .text_align(TextAlign::Right)
+                        .font_size(CAPTION.size as f32)
+                        .font_weight(FontWeight::SEMI_BOLD)
+                        .color(theme::color(palette.label)),
+                )
+                .child(
+                    label()
+                        .text(value)
+                        .width(Size::px(ABOUT_VALUE_WIDTH))
+                        .font_size(CAPTION.size as f32)
+                        .color(theme::color(palette.secondary_label)),
+                )
+                .into_element()
+        })
+        .collect()
+}
+
+fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
+    let resolved = barrier_kit::theme::resolved();
+    let palette = Palette::current();
     let drawing = if info.thinkpad {
         THINKPAD_SVG
     } else {
@@ -811,7 +816,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
             rect()
                 .direction(Direction::Vertical)
                 .spacing(ABOUT_SPEC_ROW_GAP)
-                .children(rows),
+                .children(spec_rows(info, &palette)),
         )
         .child(
             rect()
