@@ -1,13 +1,6 @@
 // Adapted from Otto's `components/otto-auth-ui/src/pam.rs` (MIT, Copyright (c) 2024 Riccardo Canalicchio); see NOTICE.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::{
-    io::Write,
-    os::unix::net::UnixStream,
-    sync::{
-        Arc, Mutex,
-        mpsc::{Receiver, Sender},
-    },
-};
+use std::sync::mpsc::{Receiver, Sender};
 
 use zeroize::{Zeroize, Zeroizing};
 
@@ -66,7 +59,7 @@ unsafe extern "C" {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    Prompt { text: String, secret: bool },
+    Prompt(String),
     Info(String),
     Error(String),
 }
@@ -77,51 +70,28 @@ pub enum Outcome {
     Denied(String),
 }
 
-pub type EventBuffer = Arc<Mutex<Vec<Event>>>;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     Said(Message),
     Ended(Outcome),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Service {
-    pub preferred: &'static str,
-    pub fallback: &'static str,
-}
-
-impl Service {
-    pub const LOCK: Service = Service {
-        preferred: "malaysia-lock",
-        fallback: "login",
-    };
-}
+const SERVICE: &str = "malaysia-lock";
+const FALLBACK_SERVICE: &str = "login";
 
 pub struct Attempt {
     answers: Sender<Zeroizing<String>>,
 }
 
 impl Attempt {
-    pub fn start(
-        events: EventBuffer,
-        notify: Option<UnixStream>,
-        service: Service,
-        user: String,
-    ) -> Self {
+    pub fn start(events: async_channel::Sender<Event>, user: String) -> Self {
         let (answers, answer_rx) = std::sync::mpsc::channel();
 
         std::thread::Builder::new()
             .name("malaysia-pam".to_string())
             .spawn(move || {
-                let outcome = converse(&service, &user, &events, &notify, &answer_rx);
-                if let Ok(mut buffer) = events.lock() {
-                    buffer.push(Event::Ended(outcome));
-                }
-                if let Some(stream) = &notify {
-                    let mut stream = stream;
-                    let _ = stream.write_all(&[1]);
-                }
+                let outcome = converse(&user, &events, &answer_rx);
+                let _ = events.try_send(Event::Ended(outcome));
             })
             .expect("could not start the PAM thread");
 
@@ -133,47 +103,33 @@ impl Attempt {
     }
 }
 
-fn service_name(service: Service) -> CString {
-    resolve_service(service, |name| {
-        std::path::Path::new("/etc/pam.d").join(name).is_file()
-    })
-}
-
-fn resolve_service(service: Service, installed: impl Fn(&str) -> bool) -> CString {
-    if installed(service.preferred) {
-        return CString::new(service.preferred).expect("no interior nul");
+fn resolve_service(installed: impl Fn(&str) -> bool) -> CString {
+    if installed(SERVICE) {
+        return CString::new(SERVICE).expect("no interior nul");
     }
-    if installed(service.fallback) {
+    if installed(FALLBACK_SERVICE) {
         eprintln!(
-            "lock: /etc/pam.d/{} is not installed; falling back to {}",
-            service.preferred, service.fallback
+            "lock: /etc/pam.d/{SERVICE} is not installed; falling back to {FALLBACK_SERVICE}"
         );
-        return CString::new(service.fallback).expect("no interior nul");
+        return CString::new(FALLBACK_SERVICE).expect("no interior nul");
     }
     eprintln!(
-        "lock: no PAM service found ({} or {}); authentication will fail",
-        service.preferred, service.fallback
+        "lock: no PAM service found ({SERVICE} or {FALLBACK_SERVICE}); authentication will fail"
     );
-    CString::new(service.preferred).expect("no interior nul")
+    CString::new(SERVICE).expect("no interior nul")
 }
 
 fn converse(
-    service: &Service,
     user: &str,
-    events: &EventBuffer,
-    notify: &Option<UnixStream>,
+    events: &async_channel::Sender<Event>,
     answers: &Receiver<Zeroizing<String>>,
 ) -> Outcome {
     let Ok(user_c) = CString::new(user) else {
         return Outcome::Denied("invalid user name".to_string());
     };
-    let service = service_name(*service);
+    let service = resolve_service(|name| std::path::Path::new("/etc/pam.d").join(name).is_file());
 
-    let mut state = ConversationState {
-        events,
-        notify,
-        answers,
-    };
+    let mut state = ConversationState { events, answers };
     let conv = PamConv {
         conv: Some(conversation),
         appdata_ptr: &mut state as *mut ConversationState as *mut c_void,
@@ -186,27 +142,22 @@ fn converse(
         return Outcome::Denied(format!("PAM unavailable (status {status})"));
     }
 
-    let outcome = authenticate(pamh);
-    let end_status = if matches!(outcome, Outcome::Authenticated) {
-        PAM_SUCCESS
-    } else {
-        PAM_CONV_ERR
-    };
+    let (outcome, last_status) = authenticate(pamh);
     // SAFETY: `pamh` comes from a successful `pam_start` and is not used after this call.
-    unsafe { pam_end(pamh, end_status) };
+    unsafe { pam_end(pamh, last_status) };
     outcome
 }
 
-fn authenticate(pamh: *mut PamHandle) -> Outcome {
+fn authenticate(pamh: *mut PamHandle) -> (Outcome, c_int) {
     // SAFETY: `pamh` is a live handle from `pam_start`.
     let status = unsafe { pam_authenticate(pamh, 0) };
     if status != PAM_SUCCESS {
-        return Outcome::Denied(strerror(pamh, status));
+        return (Outcome::Denied(strerror(pamh, status)), status);
     }
     // SAFETY: `pamh` is a live handle from `pam_start`.
     let status = unsafe { pam_acct_mgmt(pamh, 0) };
     if status != PAM_SUCCESS {
-        return Outcome::Denied(strerror(pamh, status));
+        return (Outcome::Denied(strerror(pamh, status)), status);
     }
     // SAFETY: `pamh` is a live handle from `pam_start`.
     let status = unsafe { pam_setcred(pamh, PAM_REFRESH_CRED) };
@@ -216,7 +167,7 @@ fn authenticate(pamh: *mut PamHandle) -> Outcome {
             strerror(pamh, status)
         );
     }
-    Outcome::Authenticated
+    (Outcome::Authenticated, status)
 }
 
 fn strerror(pamh: *mut PamHandle, status: c_int) -> String {
@@ -232,8 +183,7 @@ fn strerror(pamh: *mut PamHandle, status: c_int) -> String {
 }
 
 struct ConversationState<'a> {
-    events: &'a EventBuffer,
-    notify: &'a Option<UnixStream>,
+    events: &'a async_channel::Sender<Event>,
     answers: &'a Receiver<Zeroizing<String>>,
 }
 
@@ -296,14 +246,11 @@ unsafe extern "C" fn conversation(
 
         let answer = match style {
             PAM_PROMPT_ECHO_OFF | PAM_PROMPT_ECHO_ON => {
-                let secret = style == PAM_PROMPT_ECHO_OFF;
-                if let Ok(mut buffer) = state.events.lock() {
-                    buffer.push(Event::Said(Message::Prompt { text, secret }));
-                    if let Some(stream) = state.notify.as_ref() {
-                        let mut stream = stream;
-                        let _ = stream.write_all(&[1]);
-                    }
-                } else {
+                if state
+                    .events
+                    .try_send(Event::Said(Message::Prompt(text)))
+                    .is_err()
+                {
                     // SAFETY: `responses` is the array allocated above and is never handed to PAM.
                     unsafe { discard_responses(responses, count) };
                     return PAM_CONV_ERR;
@@ -323,13 +270,7 @@ unsafe extern "C" fn conversation(
                 } else {
                     Message::Info(text)
                 };
-                if let Ok(mut buffer) = state.events.lock() {
-                    buffer.push(Event::Said(message));
-                    if let Some(stream) = state.notify.as_ref() {
-                        let mut stream = stream;
-                        let _ = stream.write_all(&[1]);
-                    }
-                }
+                let _ = state.events.try_send(Event::Said(message));
                 None
             }
             _ => None,
@@ -370,7 +311,7 @@ unsafe extern "C" fn conversation(
 pub fn current_user() -> Option<String> {
     // SAFETY: `getuid` has no preconditions.
     let uid = unsafe { libc::getuid() };
-    // SAFETY: the static entry is copied below before any other `getpw*` call on this thread.
+    // SAFETY: the entry is process-wide static storage; the lock calls this before the PAM thread exists.
     let pw = unsafe { libc::getpwuid(uid) };
     if pw.is_null() {
         return None;
@@ -395,13 +336,13 @@ pub fn prompt_label(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::ffi::{CString, c_void};
-    use std::sync::{Arc, Mutex, mpsc};
+    use std::sync::mpsc;
 
     use zeroize::Zeroizing;
 
     use super::{
-        ConversationState, EventBuffer, PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PamMessage, PamResponse,
-        Service, conversation, prompt_label, resolve_service,
+        ConversationState, PAM_CONV_ERR, PAM_PROMPT_ECHO_OFF, PamMessage, PamResponse,
+        conversation, prompt_label, resolve_service,
     };
 
     #[test]
@@ -414,7 +355,7 @@ mod tests {
     #[test]
     fn a_missing_malaysia_lock_falls_back_to_login() {
         let only = |present: &'static [&'static str]| move |name: &str| present.contains(&name);
-        let pick = |present| resolve_service(Service::LOCK, only(present));
+        let pick = |present| resolve_service(only(present));
         assert_eq!(
             pick(&["malaysia-lock", "login"]).to_str(),
             Ok("malaysia-lock")
@@ -425,13 +366,11 @@ mod tests {
 
     #[test]
     fn a_failed_conversation_leaves_resp_null() {
-        let events: EventBuffer = Arc::new(Mutex::new(Vec::new()));
+        let (events, _received) = async_channel::unbounded();
         let (answers, answer_rx) = mpsc::channel();
         answers.send(Zeroizing::new("secret".to_string())).unwrap();
-        let notify = None;
         let mut state = ConversationState {
             events: &events,
-            notify: &notify,
             answers: &answer_rx,
         };
 
