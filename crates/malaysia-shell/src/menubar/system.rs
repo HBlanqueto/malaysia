@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use barrier_kit::menu::{MenuIcon, MenuItem};
 use barrier_kit::shell::ToplevelInfo;
 
@@ -11,7 +13,9 @@ const SETTINGS_APP_ID: &str = "io.github.hblanqueto.malaysia.settings";
 pub const SNOWFLAKE_SVG: &[u8] = include_bytes!("snowflake.svg");
 
 pub fn system_menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
-    let mut items = base_items(&logout_label(user_display_name().as_deref()));
+    static LOGOUT: OnceLock<String> = OnceLock::new();
+    let logout = LOGOUT.get_or_init(|| logout_label(user_display_name().as_deref()));
+    let mut items = base_items(logout);
     if let Some(MenuItem::Submenu { items: recent, .. }) = items
         .iter_mut()
         .find(|item| matches!(item, MenuItem::Submenu { .. }))
@@ -128,7 +132,9 @@ pub fn on_system_action_with(
                 spawn_component("about");
             }
         }
-        "sleep" => power::run(PowerAction::Suspend),
+        "sleep" => {
+            std::thread::spawn(|| power::run(PowerAction::Suspend));
+        }
         "restart" => spawn_component_with("power", &[PowerAction::Restart.arg()]),
         "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),
         "logout" => spawn_component_with("power", &[PowerAction::LogOut.arg()]),

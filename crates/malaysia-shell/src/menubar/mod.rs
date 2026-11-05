@@ -16,8 +16,7 @@ pub mod system;
 pub use bar::run;
 
 use std::env;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
 use crate::desktop::DesktopEntry;
 
@@ -86,12 +85,25 @@ pub fn load_active_window(store_path: &PathBuf) -> Option<ActiveWindow> {
 }
 
 pub fn xdg_user_dir(kind: &str) -> Option<PathBuf> {
-    let output = Command::new("xdg-user-dir").arg(kind).output().ok()?;
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() {
-        return None;
+    let home = PathBuf::from(env::var_os("HOME")?);
+    let config = env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".config"));
+    let text = std::fs::read_to_string(config.join("user-dirs.dirs")).ok()?;
+    user_dir_from(&text, kind, &home)
+}
+
+fn user_dir_from(text: &str, kind: &str, home: &Path) -> Option<PathBuf> {
+    let key = format!("XDG_{kind}_DIR=");
+    let value = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&key))?
+        .trim()
+        .trim_matches('"');
+    match value.strip_prefix("$HOME") {
+        Some(rest) => Some(home.join(rest.trim_start_matches('/'))),
+        None => Some(PathBuf::from(value)).filter(|path| path.is_absolute()),
     }
-    Some(PathBuf::from(path))
 }
 
 pub fn create_desktop_folder() {
@@ -116,6 +128,22 @@ pub fn create_desktop_folder() {
 mod tests {
     use super::*;
     use crate::desktop::DesktopEntry;
+
+    #[test]
+    fn user_dirs_expand_home_and_reject_relative_paths() {
+        let text = "# comment\nXDG_DESKTOP_DIR=\"$HOME/Escritorio\"\nXDG_MUSIC_DIR=\"/srv/music\"\nXDG_VIDEOS_DIR=\"videos\"\n";
+        let home = Path::new("/home/ana");
+        assert_eq!(
+            user_dir_from(text, "DESKTOP", home),
+            Some(PathBuf::from("/home/ana/Escritorio"))
+        );
+        assert_eq!(
+            user_dir_from(text, "MUSIC", home),
+            Some(PathBuf::from("/srv/music"))
+        );
+        assert_eq!(user_dir_from(text, "VIDEOS", home), None);
+        assert_eq!(user_dir_from(text, "PICTURES", home), None);
+    }
 
     fn entry(id: &str, name: &str, wm_class: Option<&str>) -> DesktopEntry {
         DesktopEntry {

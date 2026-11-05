@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use barrier_kit::menu::{MenuIcon, MenuItem};
@@ -191,9 +193,19 @@ fn document_icon(path: &Path) -> &'static str {
 }
 
 pub fn menu_items(entries: &[DesktopEntry]) -> Vec<MenuItem> {
+    thread_local! {
+        static ICONS: RefCell<HashMap<String, Option<MenuIcon>>> = RefCell::default();
+    }
     let recents = Recents::load_from(&store_path());
     build_items(&recents, &documents(recents.cleared_at), entries, |entry| {
-        menu_icon(load_icon_sized(entry.icon.as_deref(), MENU_ICON_SIZES))
+        ICONS.with_borrow_mut(|icons| {
+            icons
+                .entry(entry.id.clone())
+                .or_insert_with(|| {
+                    menu_icon(load_icon_sized(entry.icon.as_deref(), MENU_ICON_SIZES))
+                })
+                .clone()
+        })
     })
 }
 
