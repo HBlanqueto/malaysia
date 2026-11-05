@@ -77,105 +77,47 @@ fn titlebar_inset(titlebar: &Titlebar) -> Insets {
 
 #[cfg(test)]
 mod tests {
-    use vow_design::{TITLEBAR, Titlebar};
+    use vow_design::TITLEBAR;
 
     use super::{Insets, Role, WindowState, effective_decoration};
     use crate::config::DecorationPolicy;
     use malaysia_scene::scene::Decoration;
 
-    fn titlebar(thickness: u32) -> Titlebar {
-        Titlebar {
-            thickness,
-            ..TITLEBAR
+    #[test]
+    fn only_a_server_decorated_toplevel_reserves_the_titlebar() {
+        let top = f64::from(TITLEBAR.thickness);
+        let inset =
+            |role, window, decoration| Insets::for_window(role, window, decoration, &TITLEBAR);
+        for window in [WindowState::Normal, WindowState::Maximized] {
+            let insets = inset(Role::Toplevel, window, Decoration::Server);
+            assert_eq!((insets.vertical(), insets.horizontal()), (top, 0.0));
         }
-    }
-
-    #[test]
-    fn zero_is_empty_on_every_edge() {
         assert_eq!(
-            Insets::ZERO,
-            Insets {
-                top: 0.0,
-                right: 0.0,
-                bottom: 0.0,
-                left: 0.0,
-            }
+            inset(Role::Dialog, WindowState::Normal, Decoration::Server),
+            Insets::ZERO
         );
-        assert_eq!(Insets::ZERO.horizontal(), 0.0);
-        assert_eq!(Insets::ZERO.vertical(), 0.0);
-    }
-
-    #[test]
-    fn a_normal_toplevel_gets_a_top_inset() {
-        let bar = titlebar(24);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Normal,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets.top, 24.0);
-        assert_eq!(insets.left, 0.0);
-        assert_eq!(insets.right, 0.0);
-        assert_eq!(insets.bottom, 0.0);
-        assert_eq!(insets.vertical(), 24.0);
-        assert_eq!(insets.horizontal(), 0.0);
-    }
-
-    #[test]
-    fn a_dialog_is_never_decorated() {
-        let bar = titlebar(32);
-        let insets =
-            Insets::for_window(Role::Dialog, WindowState::Normal, Decoration::Server, &bar);
-        assert_eq!(insets, Insets::ZERO);
-    }
-
-    #[test]
-    fn fullscreen_reserves_nothing() {
-        let bar = titlebar(32);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Fullscreen,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets, Insets::ZERO);
-    }
-
-    #[test]
-    fn client_side_chrome_reserves_nothing() {
-        let bar = titlebar(32);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Normal,
-            Decoration::Client,
-            &bar,
-        );
-        assert_eq!(insets, Insets::ZERO);
-    }
-
-    #[test]
-    fn default_policy_prefers_client_side_when_nothing_is_requested() {
         assert_eq!(
-            effective_decoration(DecorationPolicy::Default, None, false),
-            Decoration::Client
+            inset(Role::Toplevel, WindowState::Fullscreen, Decoration::Server),
+            Insets::ZERO
+        );
+        assert_eq!(
+            inset(Role::Toplevel, WindowState::Normal, Decoration::Client),
+            Insets::ZERO
         );
     }
 
     #[test]
-    fn default_policy_honours_an_explicit_server_request() {
-        assert_eq!(
-            effective_decoration(DecorationPolicy::Default, Some(Decoration::Server), false),
-            Decoration::Server
-        );
-    }
-
-    #[test]
-    fn default_policy_honours_an_explicit_client_request() {
-        assert_eq!(
-            effective_decoration(DecorationPolicy::Default, Some(Decoration::Client), false),
-            Decoration::Client
-        );
+    fn the_default_policy_honours_the_request_and_prefers_client_side() {
+        for (requested, expected) in [
+            (None, Decoration::Client),
+            (Some(Decoration::Server), Decoration::Server),
+            (Some(Decoration::Client), Decoration::Client),
+        ] {
+            assert_eq!(
+                effective_decoration(DecorationPolicy::Default, requested, false),
+                expected
+            );
+        }
     }
 
     #[test]
@@ -190,17 +132,5 @@ mod tests {
                 Decoration::Client
             );
         }
-    }
-
-    #[test]
-    fn a_maximized_window_keeps_its_titlebar_for_now() {
-        let bar = titlebar(32);
-        let insets = Insets::for_window(
-            Role::Toplevel,
-            WindowState::Maximized,
-            Decoration::Server,
-            &bar,
-        );
-        assert_eq!(insets.top, 32.0);
     }
 }

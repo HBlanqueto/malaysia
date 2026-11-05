@@ -18,10 +18,7 @@ struct StoredActive<'a> {
 }
 
 pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
-    let path = dir.join("window.domain");
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
+    let _ = std::fs::create_dir_all(dir);
     let (title, app_id) = match active {
         Some(window) => (window.title.as_str(), window.app_id.as_str()),
         None => ("", ""),
@@ -30,7 +27,7 @@ pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
         active: StoredActive { title, app_id },
     };
     if let Ok(text) = toml::to_string(&store) {
-        let _ = std::fs::write(&path, text);
+        let _ = std::fs::write(dir.join("window.domain"), text);
     }
 }
 

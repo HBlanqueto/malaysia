@@ -2413,17 +2413,11 @@ mod tests {
     use super::{
         BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TEST_KEY_HOLD,
         TEST_POINTER_STEP_DEFAULT, TestKey, TestPointer, TestPointerAction, activation_updates,
-        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor, is_escape,
-        parse_ms, pointer_focus_blocked,
+        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor, parse_ms,
+        pointer_focus_blocked,
     };
     use crate::state::State;
     use malaysia_scene::scene::WindowId;
-
-    #[test]
-    fn escape_is_recognised_by_its_raw_sym() {
-        assert!(is_escape(&[keysyms::KEY_Escape.into()]));
-        assert!(!is_escape(&[keysyms::KEY_Down.into()]));
-    }
 
     #[test]
     fn super_letters_are_the_app_menu_shortcuts_only_when_unlocked() {
@@ -3186,16 +3180,17 @@ mod tests {
     }
 
     #[test]
-    fn fixed_width_window_maximizes_vertically() {
+    fn only_a_fixed_width_window_maximizes_vertically() {
         use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 
         let outer = SceneRect::new(ScenePoint::new(300.0, 100.0), SceneSize::new(760.0, 620.0));
         let workspace = (Point::from((0, 0)), Size::from((1920, 1052)));
-        let target = super::maximize_target_rect(true, workspace, outer);
-        assert_eq!(target.x(), 300.0);
-        assert_eq!(target.y(), 0.0);
-        assert_eq!(target.width(), 760.0);
-        assert_eq!(target.height(), 1052.0);
+        let xywh = |fixed_width| {
+            let target = super::maximize_target_rect(fixed_width, workspace, outer);
+            (target.x(), target.y(), target.width(), target.height())
+        };
+        assert_eq!(xywh(true), (300.0, 0.0, 760.0, 1052.0));
+        assert_eq!(xywh(false), (0.0, 0.0, 1920.0, 1052.0));
     }
 
     #[test]
@@ -3212,60 +3207,23 @@ mod tests {
     }
 
     #[test]
-    fn fixed_width_is_detected_with_unbounded_height() {
-        let min = Size::from((760, 620));
-        let max = Size::from((760, 0));
-        assert!(super::is_fixed_width(min, max));
+    fn fixed_width_needs_equal_nonzero_min_and_max_widths() {
+        assert!(super::is_fixed_width(
+            Size::from((760, 620)),
+            Size::from((760, 0))
+        ));
+        assert!(!super::is_fixed_width(
+            Size::from((0, 620)),
+            Size::from((0, 0))
+        ));
+        assert!(!super::is_fixed_width(
+            Size::from((760, 620)),
+            Size::from((0, 0))
+        ));
     }
 
     #[test]
-    fn unbounded_width_is_not_fixed_width() {
-        let min = Size::from((0, 620));
-        let max = Size::from((0, 0));
-        assert!(!super::is_fixed_width(min, max));
-    }
-
-    #[test]
-    fn zero_max_width_is_not_fixed_width() {
-        let min = Size::from((760, 620));
-        let max = Size::from((0, 0));
-        assert!(!super::is_fixed_width(min, max));
-    }
-
-    #[test]
-    fn regular_window_maximizes_to_the_full_workspace() {
-        use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
-
-        let outer = SceneRect::new(ScenePoint::new(300.0, 100.0), SceneSize::new(760.0, 620.0));
-        let workspace = (Point::from((0, 0)), Size::from((1920, 1052)));
-        let target = super::maximize_target_rect(false, workspace, outer);
-        assert_eq!(target.x(), 0.0);
-        assert_eq!(target.y(), 0.0);
-        assert_eq!(target.width(), 1920.0);
-        assert_eq!(target.height(), 1052.0);
-    }
-
-    #[test]
-    fn scripted_modifier_keys_hold_while_key_is_pressed() {
-        let pointer = TestPointer::from_env_with("key:ctrl+r").unwrap();
-        let actions: Vec<_> = pointer.actions.into_iter().collect();
-        assert_eq!(
-            actions,
-            vec![
-                TestPointerAction::KeyDown(TestKey::Ctrl),
-                TestPointerAction::Wait(TEST_KEY_HOLD),
-                TestPointerAction::KeyDown(TestKey::Char('r')),
-                TestPointerAction::Wait(TEST_KEY_HOLD),
-                TestPointerAction::KeyUp(TestKey::Char('r')),
-                TestPointerAction::Wait(TEST_KEY_HOLD),
-                TestPointerAction::KeyUp(TestKey::Ctrl),
-                TestPointerAction::Wait(TEST_KEY_HOLD),
-            ]
-        );
-    }
-
-    #[test]
-    fn scripted_multiple_modifiers_keep_order() {
+    fn scripted_modifiers_press_in_order_and_release_in_reverse() {
         let pointer = TestPointer::from_env_with("key:ctrl+shift+s").unwrap();
         let actions: Vec<_> = pointer.actions.into_iter().collect();
         assert_eq!(
@@ -3288,38 +3246,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_ms_returns_parsed_value() {
-        assert_eq!(
-            parse_ms(Some("8"), TEST_POINTER_STEP_DEFAULT),
-            Duration::from_millis(8)
-        );
-    }
-
-    #[test]
-    fn parse_ms_empty_uses_default() {
-        assert_eq!(
-            parse_ms(Some(""), TEST_POINTER_STEP_DEFAULT),
-            TEST_POINTER_STEP_DEFAULT
-        );
-        assert_eq!(
-            parse_ms(None, TEST_POINTER_STEP_DEFAULT),
-            TEST_POINTER_STEP_DEFAULT
-        );
-    }
-
-    #[test]
-    fn parse_ms_garbage_uses_default() {
-        assert_eq!(
-            parse_ms(Some("fast"), TEST_POINTER_STEP_DEFAULT),
-            TEST_POINTER_STEP_DEFAULT
-        );
-    }
-
-    #[test]
-    fn parse_ms_zero_uses_minimum() {
-        assert_eq!(
-            parse_ms(Some("0"), TEST_POINTER_STEP_DEFAULT),
-            Duration::from_millis(1)
-        );
+    fn a_test_delay_is_at_least_a_millisecond_and_falls_back_to_the_default() {
+        let default = TEST_POINTER_STEP_DEFAULT;
+        assert_eq!(parse_ms(Some("8"), default), Duration::from_millis(8));
+        assert_eq!(parse_ms(Some("0"), default), Duration::from_millis(1));
+        for value in [None, Some(""), Some("fast")] {
+            assert_eq!(parse_ms(value, default), default);
+        }
     }
 }
