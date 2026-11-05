@@ -1172,6 +1172,11 @@ mod tests {
         text.rasterize("", input.focused, 400, scale, theme, input)
     }
 
+    fn close_centre() -> (i32, i32) {
+        let (x, y, size) = traffic::button_rect(0);
+        ((x + size / 2.0) as i32, (y + size / 2.0) as i32)
+    }
+
     fn pixel(pixels: &[u8], width: i32, x: i32, y: i32) -> [u8; 4] {
         let index = ((y * width + x) * 4) as usize;
         pixels[index..index + 4].try_into().unwrap()
@@ -1186,7 +1191,8 @@ mod tests {
             ..TrafficInput::default()
         };
         let (pixels, width, _) = render_with(input, 1.0);
-        let center = pixel(&pixels, width, 22, 16);
+        let (x, y) = close_centre();
+        let center = pixel(&pixels, width, x, y);
         let fill = TITLEBAR.buttons.order[0].color.to_rgba8();
         assert_ne!(center, fill, "the glyph must cover the light's centre");
         let mut expected = fill;
@@ -1202,7 +1208,8 @@ mod tests {
             ..TrafficInput::default()
         };
         let (pixels, width, _) = render_with(input, 1.0);
-        let center = pixel(&pixels, width, 22, 16);
+        let (x, y) = close_centre();
+        let center = pixel(&pixels, width, x, y);
         assert_eq!(center, TITLEBAR.buttons.order[0].color.to_rgba8());
     }
 
@@ -1215,7 +1222,8 @@ mod tests {
             ..TrafficInput::default()
         };
         let (pixels, width, _) = render_with(input, 1.0);
-        let center = pixel(&pixels, width, 22, 16);
+        let (x, y) = close_centre();
+        let center = pixel(&pixels, width, x, y);
         let expected = TITLEBAR.buttons.order[0]
             .color
             .darken(vow_design::TRAFFIC_PRESSED_DARKEN)
@@ -1234,7 +1242,8 @@ mod tests {
             ..TrafficInput::default()
         };
         let (pixels, width, _) = render_with(input, 1.0);
-        let sample = pixel(&pixels, width, 26, 16);
+        let (x, y) = close_centre();
+        let sample = pixel(&pixels, width, x + 4, y);
         assert_eq!(sample, TITLEBAR.buttons.order[0].color.to_rgba8());
         assert_ne!(sample, LIGHT.traffic_lights_inactive.to_rgba8());
     }
