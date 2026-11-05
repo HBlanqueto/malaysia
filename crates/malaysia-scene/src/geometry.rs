@@ -4,7 +4,7 @@ use std::ops::{Add, Sub};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Logical;
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Point<N, Space> {
     pub x: N,
     pub y: N,
@@ -20,14 +20,6 @@ impl<N, Space> Point<N, Space> {
         }
     }
 }
-
-impl<N: Copy, Space> Clone for Point<N, Space> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<N: Copy, Space> Copy for Point<N, Space> {}
 
 impl<N: Add<Output = N>, Space> Add for Point<N, Space> {
     type Output = Self;
@@ -45,7 +37,7 @@ impl<N: Sub<Output = N>, Space> Sub for Point<N, Space> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Size<N, Space> {
     pub width: N,
     pub height: N,
@@ -62,21 +54,13 @@ impl<N, Space> Size<N, Space> {
     }
 }
 
-impl<N: Copy, Space> Clone for Size<N, Space> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<N: Copy, Space> Copy for Size<N, Space> {}
-
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rect<N, Space> {
     location: Point<N, Space>,
     size: Size<N, Space>,
 }
 
-impl<N: Copy, Space> Rect<N, Space> {
+impl<N: Copy, Space: Copy> Rect<N, Space> {
     pub fn new(location: Point<N, Space>, size: Size<N, Space>) -> Self {
         Self { location, size }
     }
@@ -90,15 +74,7 @@ impl<N: Copy, Space> Rect<N, Space> {
     }
 }
 
-impl<N: Copy, Space> Clone for Rect<N, Space> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<N: Copy, Space> Copy for Rect<N, Space> {}
-
-impl<N: Copy, Space> Rect<N, Space> {
+impl<N: Copy, Space: Copy> Rect<N, Space> {
     pub fn x(&self) -> N {
         self.location.x
     }
@@ -119,6 +95,7 @@ impl<N: Copy, Space> Rect<N, Space> {
 impl<N, Space> Rect<N, Space>
 where
     N: PartialOrd + Add<Output = N> + Copy,
+    Space: Copy,
 {
     pub fn contains(&self, point: Point<N, Space>) -> bool {
         point.x >= self.location.x
