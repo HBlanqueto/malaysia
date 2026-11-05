@@ -124,7 +124,7 @@ derivados del acento/wallpaper en los otros).
 
 | Opción | Tipo | Default | Estado | Consumida por |
 |---|---|---|---|---|
-| `language.language` | `"es"` \| `"en"` | ausente | **activa** | apps del kit (`vow_appearance::language`), **Ajustes del sistema** |
+| `language.language` | `"es"` \| `"en"` | ausente | **activa** | apps del kit (`vow_appearance::language`), **Ajustes del sistema**, shell (sus textos y los nombres localizados de los `.desktop`) |
 
 Ausente o vacío, el idioma sale de `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` y `LANG`,
 en el orden de gettext.

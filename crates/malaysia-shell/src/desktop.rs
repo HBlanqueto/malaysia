@@ -163,24 +163,10 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
 }
 
 pub fn locale_candidates() -> Vec<String> {
-    let source = ["LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
-        .iter()
-        .find_map(|name| env::var(name).ok().filter(|value| !value.is_empty()));
-    let Some(source) = source else {
-        return Vec::new();
-    };
     let mut out = Vec::new();
-    for candidate in source.split(':') {
-        let candidate = candidate
-            .split('.')
-            .next()
-            .unwrap_or(candidate)
-            .split('@')
-            .next()
-            .unwrap_or(candidate);
-        if candidate.is_empty() || candidate == "C" || candidate == "POSIX" {
-            continue;
-        }
+    for tag in vow_appearance::language::requested_languages(None) {
+        let candidate = tag.replace('-', "_");
+        let candidate = candidate.as_str();
         if !out.iter().any(|value| value == candidate) {
             out.push(candidate.to_string());
         }

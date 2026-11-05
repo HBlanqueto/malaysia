@@ -124,7 +124,7 @@ derived from the accent/wallpaper in the others).
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `language.language` | `"es"` \| `"en"` | absent | **active** | kit apps (`vow_appearance::language`), **System Settings** |
+| `language.language` | `"es"` \| `"en"` | absent | **active** | kit apps (`vow_appearance::language`), **System Settings**, shell (its text and the localised `.desktop` names) |
 
 When absent or empty, the language comes from `LANGUAGE`, `LC_ALL`,
 `LC_MESSAGES` and `LANG`, in gettext order.
