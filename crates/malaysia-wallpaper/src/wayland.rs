@@ -41,7 +41,7 @@ use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
 
-use crate::image::{Wallpaper, load_snapshot, reload};
+use crate::image::{Wallpaper, reload};
 use crate::render::{RenderContext, WallpaperTexture};
 use vow_appearance::data_dir;
 use vow_appearance::watch::{AppearanceEvent, AppearanceWatch};
@@ -95,7 +95,7 @@ impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
         let store_path = data_dir().join("wallpaper.domain");
         let state_path = vow_appearance::wallpaper_state_path();
-        let wallpaper = load_snapshot(&store_path, &state_path);
+        let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
 
         let connection = Connection::connect_to_env()?;
         let (globals, mut event_queue) = registry_queue_init(&connection)?;
@@ -140,8 +140,8 @@ impl App {
             appearance_watch,
         };
 
-        if let Some(loaded) = app.wallpaper.image.take() {
-            app.texture = Some(app.render.upload_texture(&loaded.decoded));
+        if let Some(decoded) = app.wallpaper.image.take() {
+            app.texture = Some(app.render.upload_texture(&decoded));
         }
 
         event_queue.roundtrip(&mut app)?;
@@ -212,8 +212,8 @@ impl App {
             return;
         }
         self.wallpaper = next;
-        if let Some(loaded) = self.wallpaper.image.take() {
-            self.texture = Some(self.render.upload_texture(&loaded.decoded));
+        if let Some(decoded) = self.wallpaper.image.take() {
+            self.texture = Some(self.render.upload_texture(&decoded));
         }
         self.schedule_redraw_all();
     }

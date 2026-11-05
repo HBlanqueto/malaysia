@@ -22,16 +22,7 @@ pub struct DecodedImage {
 #[derive(Clone, Default, PartialEq)]
 pub struct Wallpaper {
     pub selection: Option<(PathBuf, String)>,
-    pub image: Option<LoadedImage>,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct LoadedImage {
-    pub decoded: DecodedImage,
-}
-
-pub fn load_snapshot(store_path: &Path, state_path: &Path) -> Wallpaper {
-    reload(&Wallpaper::default(), store_path, state_path)
+    pub image: Option<DecodedImage>,
 }
 
 pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wallpaper {
@@ -74,7 +65,7 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
         tracing::error!(%error, "failed to write the state");
     }
     Wallpaper {
-        image: Some(LoadedImage { decoded }),
+        image: Some(decoded),
         selection,
     }
 }
@@ -415,7 +406,7 @@ mod tests {
         let dir = scratch("default");
         let store = dir.join("wallpaper.domain");
         let state = dir.join("wallpaper.state");
-        let wallpaper = load_snapshot(&store, &state);
+        let wallpaper = reload(&Wallpaper::default(), &store, &state);
         assert!(
             wallpaper.image.is_some(),
             "the embedded default should load"
@@ -450,7 +441,7 @@ mod tests {
         let store = dir.join("wallpaper.domain");
         std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
         let state = dir.join("wallpaper.state");
-        let wallpaper = load_snapshot(&store, &state);
+        let wallpaper = reload(&Wallpaper::default(), &store, &state);
         assert!(
             wallpaper.image.is_some(),
             "the embedded default should load"
@@ -468,7 +459,7 @@ mod tests {
             "[desktops]\ndefault = \"file:///no/such/file.jpg\"\n",
         )
         .unwrap();
-        let wallpaper = load_snapshot(&store, &state);
+        let wallpaper = reload(&Wallpaper::default(), &store, &state);
         assert!(
             wallpaper.image.is_some(),
             "the embedded default should load"
@@ -497,7 +488,7 @@ mod tests {
             format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
         )
         .unwrap();
-        let first = load_snapshot(&store, &state);
+        let first = reload(&Wallpaper::default(), &store, &state);
         assert_eq!(
             first.selection.as_ref().map(|(path, _)| path),
             Some(&orange)
@@ -537,7 +528,7 @@ mod tests {
             format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
         )
         .unwrap();
-        let mut first = load_snapshot(&store, &state);
+        let mut first = reload(&Wallpaper::default(), &store, &state);
         assert!(first.image.take().is_some());
 
         let missing = dir.join("missing.png");

@@ -265,7 +265,7 @@ impl RenderContext {
         });
 
         let (bytes_per_row, data) = match &image.pixels {
-            Pixels::Srgb8(pixels) => (width * 4, bytemuck::cast_slice(pixels).to_vec()),
+            Pixels::Srgb8(pixels) => (width * 4, pixels.clone()),
             Pixels::Srgb16(pixels) => (width * 8, srgb16_to_linear_f16(pixels)),
         };
 
@@ -303,16 +303,10 @@ impl RenderContext {
 
         tracing::info!(
             elapsed_ms = upload_start.elapsed().as_millis(),
-            "wallpaper texture uploaded with mipmaps"
-        );
-
-        let gpu_bytes = gpu_texture_bytes(width, height, format, mip_level_count);
-        tracing::info!(
             width,
             height,
             ?format,
             mip_level_count,
-            gpu_bytes,
             "wallpaper texture uploaded"
         );
 
@@ -445,26 +439,6 @@ pub fn mip_level_count(
         return 1;
     }
     max_mip_levels(width, height)
-}
-
-fn gpu_texture_bytes(
-    width: u32,
-    height: u32,
-    format: wgpu::TextureFormat,
-    mip_level_count: u32,
-) -> u64 {
-    let bpp = match format {
-        wgpu::TextureFormat::Rgba8UnormSrgb => 4,
-        wgpu::TextureFormat::Rgba16Float => 8,
-        _ => 4,
-    };
-    let mut total = 0u64;
-    for level in 0..mip_level_count {
-        let w = (width >> level).max(1) as u64;
-        let h = (height >> level).max(1) as u64;
-        total += w * h * bpp;
-    }
-    total
 }
 
 fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
