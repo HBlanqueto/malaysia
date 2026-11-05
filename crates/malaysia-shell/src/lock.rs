@@ -37,6 +37,9 @@ enum Action {
 fn apply_pam_event(model: &mut Model, field: &mut PasswordField, event: &pam::Event) -> Action {
     match event {
         pam::Event::Said(pam::Message::Prompt { text, .. }) => {
+            if *field.state() == FieldState::Verifying {
+                field.reset();
+            }
             model.label = pam::prompt_label(text);
             Action::Continue
         }
@@ -415,6 +418,25 @@ mod tests {
             .is_none()
         );
         assert_eq!(field.masked(), "");
+    }
+
+    #[test]
+    fn a_second_prompt_after_submit_accepts_keys_again() {
+        let mut model = model();
+        let mut field = PasswordField::default();
+        typed(&mut model, &mut field, "a");
+        field.take().expect("submit a non-empty field");
+        apply_pam_event(
+            &mut model,
+            &mut field,
+            &pam::Event::Said(pam::Message::Prompt {
+                text: "Verification code:".to_string(),
+                secret: true,
+            }),
+        );
+        assert!(matches!(field.state(), FieldState::Idle));
+        typed(&mut model, &mut field, "1");
+        assert_eq!(field.masked(), "•");
     }
 
     #[test]
