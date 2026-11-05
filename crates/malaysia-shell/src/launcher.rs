@@ -50,26 +50,7 @@ struct LauncherApp {
 impl App for LauncherApp {
     fn render(&self) -> impl IntoElement {
         barrier_kit::theme::use_shell_theme();
-
-        let open = use_animation(|conf| {
-            conf.on_creation(OnCreation::Run);
-            Spring::new(0.0, 1.0, Duration::from_millis(LAUNCHER_OPEN_MS), 0.15)
-        });
-        let mut close = use_animation(|_| {
-            Spring::new(1.0, 0.0, Duration::from_millis(LAUNCHER_CLOSE_MS), 0.15)
-        });
-        let mut started = self.close_started;
-        use_side_effect_with_deps(&*self.closing.read(), move |closing| {
-            if *closing && !started() {
-                started.set(true);
-                close.start();
-            }
-        });
-        use_side_effect(move || {
-            if started() && !*close.is_running().read() {
-                std::process::exit(0);
-            }
-        });
+        let progress = self.use_progress();
 
         let platform = Platform::get();
         let mut closing = self.closing;
@@ -99,41 +80,10 @@ impl App for LauncherApp {
         .map(|index| self.entries[index].clone())
         .collect();
         let selected = (*self.selected.read()).min(results.len().saturating_sub(1));
-        let progress = if *self.close_started.read() {
-            close.get().current()
-        } else {
-            open.get().current()
-        };
 
-        let activation = Activation::get();
-        let timers = Timers::get();
-        let launch = {
-            let activation = activation.clone();
-            let close = self.close.clone();
-            Rc::new(move |entry: AppEntry| {
-                let activation = activation.clone();
-                let close = close.clone();
-                let timers = timers.clone();
-                let launched = Rc::new(Cell::new(false));
-                let fallback_entry = entry.clone();
-                let fallback_close = close.clone();
-                let fallback_launched = launched.clone();
-                timers.after(Duration::from_millis(250), move || {
-                    if !fallback_launched.replace(true) {
-                        spawn_entry(&fallback_entry.desktop, None);
-                        fallback_close();
-                    }
-                });
-                activation.request(move |token| {
-                    if !launched.replace(true) {
-                        spawn_entry(&entry.desktop, token.as_deref());
-                        close();
-                    }
-                });
-            }) as Rc<dyn Fn(AppEntry)>
-        };
+        let launch = launcher(self.close.clone());
         let launch_for_enter = launch.clone();
-        let launch_for_click = launch.clone();
+        let launch_for_click = launch;
         let close_for_escape = self.close.clone();
         let mut selection = self.selected;
         let visible = results.clone();
@@ -211,6 +161,53 @@ impl App for LauncherApp {
                     ),
             )
     }
+}
+
+impl LauncherApp {
+    fn use_progress(&self) -> f32 {
+        let open = use_animation(|conf| {
+            conf.on_creation(OnCreation::Run);
+            Spring::new(0.0, 1.0, Duration::from_millis(LAUNCHER_OPEN_MS), 0.15)
+        });
+        let mut close = use_animation(|_| {
+            Spring::new(1.0, 0.0, Duration::from_millis(LAUNCHER_CLOSE_MS), 0.15)
+        });
+        let mut started = self.close_started;
+        use_side_effect_with_deps(&*self.closing.read(), move |closing| {
+            if *closing && !started() {
+                started.set(true);
+                close.start();
+            }
+        });
+        use_side_effect(move || {
+            if started() && !*close.is_running().read() {
+                std::process::exit(0);
+            }
+        });
+        if *self.close_started.read() {
+            close.get().current()
+        } else {
+            open.get().current()
+        }
+    }
+}
+
+fn launcher(close: Rc<dyn Fn()>) -> Rc<dyn Fn(AppEntry)> {
+    let activation = Activation::get();
+    let timers = Timers::get();
+    Rc::new(move |entry: AppEntry| {
+        let close = close.clone();
+        let launched = Cell::new(false);
+        let launch = Rc::new(move |token: Option<String>| {
+            if !launched.replace(true) {
+                spawn_entry(&entry.desktop, token.as_deref());
+                close();
+            }
+        });
+        let fallback = launch.clone();
+        timers.after(Duration::from_millis(250), move || fallback(None));
+        activation.request(move |token| launch(token));
+    })
 }
 
 pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Element {
@@ -392,18 +389,15 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
 }
 
 fn icon_data(path: &std::path::Path) -> Option<IconData> {
-    if path.extension().and_then(|ext| ext.to_str()) == Some("svg") {
-        let bytes = std::fs::read(path).ok()?;
-        Some(IconData {
-            path: path.to_path_buf(),
-            svg: Some(bytes),
-        })
+    let svg = if path.extension().is_some_and(|ext| ext == "svg") {
+        Some(std::fs::read(path).ok()?)
     } else {
-        Some(IconData {
-            path: path.to_path_buf(),
-            svg: None,
-        })
-    }
+        None
+    };
+    Some(IconData {
+        path: path.to_path_buf(),
+        svg,
+    })
 }
 
 pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
