@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 
 use half::f16;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
+use vow_design::Rgba;
 use wgpu::util::DeviceExt;
 
 use crate::image::{DecodedImage, Pixels};
@@ -471,7 +472,11 @@ fn srgb16_to_linear_f16(pixels: &[u16]) -> Vec<u8> {
     static TABLE: LazyLock<[f16; 65536]> = LazyLock::new(|| {
         let mut table = [f16::ZERO; 65536];
         for (i, entry) in table.iter_mut().enumerate() {
-            *entry = f16::from_f32(crate::image::srgb_to_linear(i as f32 / 65535.0));
+            let channel = Rgba {
+                r: i as f32 / 65535.0,
+                ..Rgba::TRANSPARENT
+            };
+            *entry = f16::from_f32(channel.to_linear().r);
         }
         table
     });
@@ -636,10 +641,10 @@ mod tests {
 
     use crate::image::{
         DEFAULT_WALLPAPER_BYTES, DecodedImage, Pixels, decode_image_bytes, decode_png,
-        linear_to_srgb, srgb_to_linear,
     };
 
     use super::{RenderContext, WallpaperTexture, mip_level_count};
+    use vow_design::Rgba;
 
     fn padded_bytes_per_row(width: u32) -> u32 {
         let unpadded = width * 4;
@@ -728,7 +733,7 @@ mod tests {
         let xf = sample_x - x0 as f32;
         let yf = sample_y - y0 as f32;
 
-        let mut linear = [0.0f32; 4];
+        let mut linear = Rgba::TRANSPARENT;
         for dy in 0..2 {
             for dx in 0..2 {
                 let sx = (x0 + dx).clamp(0, image.size.0 as i32 - 1) as u32;
@@ -737,17 +742,19 @@ mod tests {
                     (if dx == 0 { 1.0 - xf } else { xf }) * (if dy == 0 { 1.0 - yf } else { yf });
                 let offset = ((sy * image.size.0 + sx) * 4) as usize;
                 let [r, g, b, a] = image.rgba8_at(offset);
-                linear[0] += srgb_to_linear(r as f32 / 255.0) * weight;
-                linear[1] += srgb_to_linear(g as f32 / 255.0) * weight;
-                linear[2] += srgb_to_linear(b as f32 / 255.0) * weight;
-                linear[3] += a as f32 * weight;
+                let sample = Rgba::rgb8(r, g, b).to_linear();
+                linear.r += sample.r * weight;
+                linear.g += sample.g * weight;
+                linear.b += sample.b * weight;
+                linear.a += a as f32 * weight;
             }
         }
+        let srgb = Rgba::from_linear(linear);
         [
-            (linear_to_srgb(linear[0]) * 255.0).round() as u8,
-            (linear_to_srgb(linear[1]) * 255.0).round() as u8,
-            (linear_to_srgb(linear[2]) * 255.0).round() as u8,
-            (linear[3]).round() as u8,
+            (srgb.r * 255.0).round() as u8,
+            (srgb.g * 255.0).round() as u8,
+            (srgb.b * 255.0).round() as u8,
+            linear.a.round() as u8,
         ]
     }
 

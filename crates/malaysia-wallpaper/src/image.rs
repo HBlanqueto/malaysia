@@ -70,8 +70,7 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
         None => load_default_image(),
     };
 
-    let dominant = dominant(&decoded);
-    if let Err(error) = write_state(state_path, dominant) {
+    if let Err(error) = vow_appearance::write_dominant(state_path, dominant(&decoded)) {
         tracing::error!(%error, "failed to write the state");
     }
     Wallpaper {
@@ -351,167 +350,43 @@ fn average_2x2<T: Copy + Into<f32>>(
     let mut out = Vec::with_capacity((new_w * new_h * 4) as usize);
     for y in 0..new_h {
         for x in 0..new_w {
-            let mut sum = [0.0f32; 4];
+            let mut sum = Rgba::TRANSPARENT;
             for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
                 let sx = (x * 2 + dx).min(old_w - 1);
                 let sy = (y * 2 + dy).min(old_h - 1);
                 let offset = ((sy * old_w + sx) * 4) as usize;
-                for (channel, total) in sum.iter_mut().enumerate() {
-                    let value = pixels[offset + channel].into() / max;
-                    *total += if channel < 3 {
-                        srgb_to_linear(value)
-                    } else {
-                        value
-                    };
-                }
+                let [r, g, b, a] =
+                    [0, 1, 2, 3].map(|channel| pixels[offset + channel].into() / max);
+                let linear = Rgba { r, g, b, a }.to_linear();
+                sum.r += linear.r;
+                sum.g += linear.g;
+                sum.b += linear.b;
+                sum.a += linear.a;
             }
-            out.extend(sum.iter().enumerate().map(|(channel, total)| {
-                let mean = total / 4.0;
-                let value = if channel < 3 {
-                    linear_to_srgb(mean)
-                } else {
-                    mean
-                };
-                from((value * max).round())
-            }));
+            let mean = Rgba::from_linear(Rgba {
+                r: sum.r / 4.0,
+                g: sum.g / 4.0,
+                b: sum.b / 4.0,
+                a: sum.a / 4.0,
+            });
+            out.extend([mean.r, mean.g, mean.b, mean.a].map(|value| from((value * max).round())));
         }
     }
     out
 }
 
-pub(crate) fn srgb_to_linear(v: f32) -> f32 {
-    if v <= 0.04045 {
-        v / 12.92
-    } else {
-        ((v + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-pub(crate) fn linear_to_srgb(c: f32) -> f32 {
-    if c <= 0.0031308 {
-        c * 12.92
-    } else {
-        c.powf(1.0 / 2.4) * 1.055 - 0.055
-    }
-}
-
 pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
-    const SAMPLE_TARGET: f64 = 65_536.0;
-    const MIN_CHROMA: f32 = 0.12;
-
-    let (width, height) = image.size;
-    if width == 0 || height == 0 {
-        return None;
-    }
-    let (width, height) = (width as usize, height as usize);
-    let step = ((width * height) as f64 / SAMPLE_TARGET)
-        .sqrt()
-        .round()
-        .max(1.0) as usize;
-    let mut weights = [0.0f32; 4096];
-    let mut sums = [[0.0f32; 3]; 4096];
-
-    for y in (0..height).step_by(step) {
-        for x in (0..width).step_by(step) {
-            let index = (y * width + x) * 4;
-            let [r, g, b, a] = image.rgba8_at(index);
-            if a < 128 {
-                continue;
-            }
-            let (r, g, b) = (
-                f32::from(r) / 255.0,
-                f32::from(g) / 255.0,
-                f32::from(b) / 255.0,
-            );
-            let chroma = r.max(g).max(b) - r.min(g).min(b);
-            if chroma < MIN_CHROMA {
-                continue;
-            }
-            let bucket = (bucket(r) << 8) | (bucket(g) << 4) | bucket(b);
-            weights[bucket] += chroma;
-            sums[bucket][0] += r * chroma;
-            sums[bucket][1] += g * chroma;
-            sums[bucket][2] += b * chroma;
-        }
-    }
-
-    let mut neighbourhood_weights = [0.0f32; 4096];
-    let mut neighbourhood_sums = [[0.0f32; 3]; 4096];
-    for bucket in 0..4096 {
-        let r = (bucket >> 8) & 0xF;
-        let g = (bucket >> 4) & 0xF;
-        let b = bucket & 0xF;
-        let mut weight = 0.0f32;
-        let mut sum = [0.0f32; 3];
-        for dr in -1..=1 {
-            for dg in -1..=1 {
-                for db in -1..=1 {
-                    let nr = r as isize + dr;
-                    let ng = g as isize + dg;
-                    let nb = b as isize + db;
-                    if !(0..16).contains(&nr) || !(0..16).contains(&ng) || !(0..16).contains(&nb) {
-                        continue;
-                    }
-                    let idx = ((nr as usize) << 8) | ((ng as usize) << 4) | (nb as usize);
-                    weight += weights[idx];
-                    sum[0] += sums[idx][0];
-                    sum[1] += sums[idx][1];
-                    sum[2] += sums[idx][2];
-                }
-            }
-        }
-        neighbourhood_weights[bucket] = weight;
-        neighbourhood_sums[bucket] = sum;
-    }
-
-    let (bucket, weight) = neighbourhood_weights
-        .iter()
-        .enumerate()
-        .max_by(|a, b| a.1.total_cmp(b.1))?;
-    if *weight == 0.0 {
-        return None;
-    }
-    let sum = neighbourhood_sums[bucket];
-    Some(normalize_lightness(Rgba {
-        r: sum[0] / weight,
-        g: sum[1] / weight,
-        b: sum[2] / weight,
-        a: 1.0,
-    }))
-}
-
-fn bucket(channel: f32) -> usize {
-    ((channel * 16.0) as usize).min(15)
-}
-
-fn normalize_lightness(color: Rgba) -> Rgba {
-    let (hue, saturation, lightness) = color.to_hsl();
-    Rgba::from_hsl(hue, saturation, lightness.clamp(0.45, 0.65), 1.0)
-}
-
-pub fn write_state(path: &Path, dominant: Option<Rgba>) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    match dominant {
-        Some(color) => {
-            let temporary = path.with_extension("state.tmp");
-            std::fs::write(
-                &temporary,
-                format!(
-                    "# Generated by malaysia-wallpaper.\ndominant = [{:.6}, {:.6}, {:.6}]\n",
-                    color.r, color.g, color.b
-                ),
-            )?;
-            std::fs::rename(temporary, path)?;
-        }
-        None => match std::fs::remove_file(path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        },
-    }
-    Ok(())
+    let (width, height) = (image.size.0 as usize, image.size.1 as usize);
+    let step = width
+        .max(height)
+        .div_ceil(vow_design::BACKDROP.samples as usize)
+        .max(1);
+    let samples: Vec<u8> = (0..height)
+        .step_by(step)
+        .flat_map(|y| (0..width).step_by(step).map(move |x| (y * width + x) * 4))
+        .flat_map(|index| image.rgba8_at(index))
+        .collect();
+    vow_appearance::backdrop::dominant_from_pixels(&samples)
 }
 
 #[cfg(test)]
@@ -734,37 +609,6 @@ mod tests {
     }
 
     #[test]
-    fn a_green_gradient_across_bucket_boundaries_beats_a_concentrated_red() {
-        let mut rgba = Vec::new();
-        for y in 0..64 {
-            for x in 0..64 {
-                let (r, g, b) = if x < 38 {
-                    let t = y as f32 / 63.0;
-                    (
-                        (0.02 * 255.0) as u8,
-                        ((0.47 + 0.06 * t) * 255.0) as u8,
-                        (0.02 * 255.0) as u8,
-                    )
-                } else if x >= 48 {
-                    (255, 0, 0)
-                } else {
-                    (128, 128, 128)
-                };
-                rgba.extend_from_slice(&[r, g, b, 255]);
-            }
-        }
-        let image = DecodedImage {
-            size: (64, 64),
-            pixels: Pixels::Srgb8(rgba),
-        };
-        let color = dominant(&image).expect("a dominant colour");
-        assert!(
-            color.g > color.r && color.g > color.b,
-            "expected green to beat the concentrated red, got {color:?}"
-        );
-    }
-
-    #[test]
     fn a_dark_colour_is_lifted_into_the_lightness_band() {
         let image = DecodedImage {
             size: (16, 16),
@@ -776,23 +620,6 @@ mod tests {
             (0.45..=0.65).contains(&lightness),
             "lightness {lightness} is outside the band"
         );
-    }
-
-    #[test]
-    fn the_state_file_records_and_clears_the_dominant_colour() {
-        let dir = scratch("state");
-        let path = dir.join("wallpaper.state");
-        let color = Rgba {
-            r: 0.2,
-            g: 0.4,
-            b: 0.6,
-            a: 1.0,
-        };
-        write_state(&path, Some(color)).unwrap();
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains("dominant = [0.200000, 0.400000, 0.600000]"));
-        write_state(&path, None).unwrap();
-        assert!(!path.exists());
     }
 
     #[test]

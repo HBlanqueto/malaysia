@@ -94,7 +94,7 @@ impl Drop for OutputSurface {
 impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
         let store_path = data_dir().join("wallpaper.domain");
-        let state_path = data_dir().join("wallpaper.state");
+        let state_path = vow_appearance::wallpaper_state_path();
         let wallpaper = load_snapshot(&store_path, &state_path);
 
         let connection = Connection::connect_to_env()?;
