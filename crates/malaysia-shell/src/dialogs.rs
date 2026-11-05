@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use barrier_kit::controls::{Button, ButtonStyle};
 use barrier_kit::menu::measure_text_weight;
+use barrier_kit::patterns::about::about_window;
 use barrier_kit::platform::{Timers, WindowControls, WindowOptions, run_window};
 use barrier_kit::shell::{
     Anchors, KeyboardInteractivity, Layer, LayerSpec, ToplevelInfo, Toplevels, run_layer,
@@ -34,7 +35,6 @@ const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 pub const ABOUT_APP_ID: &str = "about";
 pub const ABOUT_APP_INFO_ID: &str = "about-app";
 const ABOUT_SIZE: (u32, u32) = (ABOUT_WIDTH, ABOUT_HEIGHT);
-const ABOUT_ROW_GAP: f32 = 5.0;
 const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
 const ABOUT_APP_ICON_SIZE: f32 = 64.0;
 const ROW_HEIGHT: f32 = 32.0;
@@ -855,9 +855,7 @@ impl App for AboutAppInfo {
     fn render(&self) -> impl IntoElement {
         barrier_kit::theme::use_shell_theme();
         let resolved = barrier_kit::theme::resolved();
-        let palette = Palette::current();
         let focused = WindowControls::get().status.read().activated;
-        let muted = theme::color(palette.secondary_label);
         rect()
             .width(Size::fill())
             .height(Size::fill())
@@ -867,8 +865,7 @@ impl App for AboutAppInfo {
                 resolved.surfaces.titlebar_inactive
             }))
             .direction(Direction::Vertical)
-            .cross_align(Alignment::Center)
-            .spacing(ABOUT_ROW_GAP)
+            .content(Content::flex())
             .on_global_key_down(|event: Event<KeyboardEventData>| {
                 if matches!(event.key, Key::Named(NamedKey::Escape)) {
                     close();
@@ -877,26 +874,14 @@ impl App for AboutAppInfo {
             .child(Titlebar::new().close_only(true).title("").into_element())
             .child(
                 rect()
-                    .margin(Gaps::new(DIALOG_PADDING, 0.0, DIALOG_PADDING, 0.0))
-                    .child(app_icon(
-                        self.icon.as_ref(),
-                        &self.name,
-                        ABOUT_APP_ICON_SIZE,
+                    .width(Size::fill())
+                    .height(Size::flex(1.0))
+                    .child(about_window(
+                        app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON_SIZE),
+                        self.name.clone(),
+                        self.kind.clone(),
+                        self.app_id.clone(),
                     )),
-            )
-            .child(title(&self.name))
-            .children(self.kind.iter().map(|kind| {
-                label()
-                    .text(kind.clone())
-                    .font_size(CALLOUT.size as f32)
-                    .color(muted)
-                    .into_element()
-            }))
-            .child(
-                label()
-                    .text(self.app_id.clone())
-                    .font_size(CAPTION.size as f32)
-                    .color(muted),
             )
     }
 }
