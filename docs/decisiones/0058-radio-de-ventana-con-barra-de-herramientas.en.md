@@ -1,6 +1,6 @@
 # 0058 — Window radius with a toolbar
 
-Status: accepted (2026-11-05). Implemented in barrierkit (`de059fc`) and in
+Status: superseded by 0059 (2026-11-06). Implemented in barrierkit (`de059fc`) and in
 the compositor; still to be tested in a session.
 
 ## Context

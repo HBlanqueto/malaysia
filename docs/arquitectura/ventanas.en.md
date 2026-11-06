@@ -9,7 +9,7 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - Bar background `titlebar_bg` (focused/unfocused) and a 1 px hairline at the bottom.
 - Close/minimize/maximize traffic lights on the left, with `traffic-close`/`traffic-min`/`traffic-zoom`; gray when the window has no focus.
 - Centered title, rasterized with `cosmic-text` and colored with `title.focused`/`title.unfocused`.
-- Frame for all windows: 16 px corners, or 26 when a CSD app says it has a toolbar (ADR 0058), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Fullscreen removes the frame; maximized keeps it (ADR 0037).
+- Frame for all windows: continuous corners with their bar's radius: 16 (titlebar or SSD), 20 (compact), 26 (unified, CSD without a hint and dialogs) or 15 (utility) (ADR 0059), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Fullscreen removes the frame; maximized keeps it (ADR 0037).
 - Dialogs use the same frame and are centered over the parent window.
 - In dark mode, every window, dialog and popup gets the Tahoe inner border: `panel-inner-edge` (22 %) at the top and bottom, blending into `panel-inner` (9 %) on the sides over the corner radius.
 - The traffic lights are square (radius 4) or round following `appearance.traffic_light_shape`.

@@ -909,7 +909,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
         program,
         physical_rect(rect, scale),
         0,
-        frame_exponent(crate::decoration::Role::Toplevel),
+        vow_design::WINDOW.superellipse_exponent,
     ) {
         elements.push(element.into());
     }
@@ -948,7 +948,7 @@ fn append_focus_transition<R: MalaysiaRenderer>(
     let rect_physical = physical_rect(frame.rect, scale);
     let content_physical = physical_rect(Rectangle::new(frame.rect.loc, geometry.size), scale);
     let radius = (frame.radius * scale).round() as i32;
-    let exponent = frame_exponent(crate::decoration::Role::Toplevel);
+    let exponent = vow_design::WINDOW.superellipse_exponent;
     let surface_elements = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         &surface,
@@ -1088,22 +1088,13 @@ fn ssd_frame_rect(
 fn frame_radius(
     state: crate::decoration::WindowState,
     role: crate::decoration::Role,
-    toolbar: bool,
+    client_decorated: bool,
+    bar: Option<crate::window_style::Bar>,
 ) -> u32 {
     if state == crate::decoration::WindowState::Fullscreen {
         return 0;
     }
-    match role {
-        crate::decoration::Role::Dialog => vow_design::DIALOG.corner_radius,
-        _ => crate::window_style::toplevel_radius(toolbar),
-    }
-}
-
-fn frame_exponent(role: crate::decoration::Role) -> f32 {
-    match role {
-        crate::decoration::Role::Dialog => vow_design::DIALOG.superellipse_exponent,
-        _ => vow_design::WINDOW.superellipse_exponent,
-    }
+    crate::window_style::corner_radius(bar, role, client_decorated)
 }
 
 fn frame_has_border(state: crate::decoration::WindowState) -> bool {
@@ -1170,10 +1161,12 @@ fn append_window_frame<R: MalaysiaRenderer>(
     let radius_logical = frame_radius(
         data.state,
         data.role,
-        crate::window_style::has_toolbar(&data.surface),
+        data.is_client_decorated,
+        crate::window_style::bar(&data.surface),
     );
-    let radius_physical = (f64::from(radius_logical) * scale).round() as i32;
-    let exponent = frame_exponent(data.role);
+    let radius_physical =
+        (crate::window_style::corner_extent(radius_logical) * scale).round() as i32;
+    let exponent = vow_design::WINDOW.superellipse_exponent;
 
     let mut content: Vec<OutputRenderElement<R>> = Vec::new();
     if data.insets.top > 0.0 {
@@ -1347,7 +1340,9 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             Frame {
                 owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
-                radius: (f64::from(vow_design::POPUP.corner_radius) * scale).round() as i32,
+                radius: (crate::window_style::corner_extent(vow_design::POPUP.corner_radius)
+                    * scale)
+                    .round() as i32,
                 exponent: vow_design::POPUP.superellipse_exponent,
                 focused: true,
                 bordered: true,
@@ -2273,24 +2268,16 @@ mod tests {
 
         for state in [WindowState::Normal, WindowState::Maximized] {
             assert_eq!(
-                frame_radius(state, Role::Toplevel, false),
+                frame_radius(state, Role::Toplevel, false, None),
                 vow_design::WINDOW.corner_radius
-            );
-            assert_eq!(
-                frame_radius(state, Role::Toplevel, true),
-                vow_design::WINDOW_TOOLBAR.corner_radius
             );
             assert!(frame_has_border(state));
         }
         assert_eq!(
-            frame_radius(WindowState::Fullscreen, Role::Toplevel, true),
+            frame_radius(WindowState::Fullscreen, Role::Toplevel, true, None),
             0
         );
         assert!(!frame_has_border(WindowState::Fullscreen));
-        assert_eq!(
-            frame_radius(WindowState::Maximized, Role::Dialog, true),
-            vow_design::DIALOG.corner_radius
-        );
     }
 
     #[test]

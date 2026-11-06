@@ -63,6 +63,7 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0056 | Apps X11 con xwayland-satellite | aceptado |
 | 0056 | BarrierKit dibuja con Vulkan ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
 | 0057 | Cristal de pantalla completa a todo el ancho y barra lateral sobre un fondo tintado ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
-| 0058 | Radio de ventana con barra de herramientas | aceptado |
+| 0058 | Radio de ventana con barra de herramientas | sustituido por 0059 |
+| 0059 | Radio por tipo de barra y esquina continua | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.

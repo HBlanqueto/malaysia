@@ -9,7 +9,7 @@ La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px
 - Fondo de barra `titlebar_bg` (focused/unfocused) y hairline de 1 px al pie.
 - Semáforos cerrar/minimizar/maximizar a la izquierda, con `traffic-close`/`traffic-min`/`traffic-zoom`; grises cuando la ventana no tiene foco.
 - Título centrado, rasterizado con `cosmic-text` y coloreado con `title.focused`/`title.unfocused`.
-- Marco para todas las ventanas: esquinas de 16, o de 26 si una app CSD avisa de que tiene barra de herramientas (ADR 0058), sombra (`shadow.frag`), borde exterior (`border.frag`) e inner hairline. Fullscreen elimina el marco; maximizado lo conserva (ADR 0037).
+- Marco para todas las ventanas: esquinas continuas con el radio de su barra: 16 (titlebar o SSD), 20 (compacta), 26 (unificada, CSD sin aviso y diálogos) o 15 (utilitaria) (ADR 0059), sombra (`shadow.frag`), borde exterior (`border.frag`) e inner hairline. Fullscreen elimina el marco; maximizado lo conserva (ADR 0037).
 - Los diálogos usan el mismo marco y se centran sobre la ventana padre.
 - En oscuro, todas las ventanas, diálogos y popups llevan el borde interior de Tahoe: `panel-inner-edge` (22 %) arriba y abajo, que se funde con `panel-inner` (9 %) en los lados a lo largo del radio de la esquina.
 - Los semáforos son cuadrados (radio 4) o redondos según `appearance.traffic_light_shape`.

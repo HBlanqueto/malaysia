@@ -1,6 +1,6 @@
 # 0058 — Radio de ventana con barra de herramientas
 
-Estado: aceptado (2026-11-05). Implementado en barrierkit (`de059fc`) y en
+Estado: sustituido por 0059 (2026-11-06). Implementado en barrierkit (`de059fc`) y en
 el compositor; falta probarlo en sesión.
 
 ## Contexto

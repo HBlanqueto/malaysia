@@ -1,3 +1,6 @@
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New};
@@ -7,14 +10,16 @@ use smithay::wayland::{Dispatch2, GlobalDispatch2};
 use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_style_v1::{
     self, InfinityWindowStyleV1,
 };
+pub(crate) use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_style_v1::Bar;
 use malaysia_scene::scene::WindowId;
 
+use crate::decoration::Role;
 use crate::state::State;
 
 #[derive(Debug, Clone)]
 pub struct WindowStyleGlobalData;
 
-struct HasToolbar;
+struct BarStyle(AtomicU32);
 
 const VERSION: u32 = 1;
 
@@ -48,31 +53,79 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
-        if let infinity_window_style_v1::Request::SetToolbar { surface } = request {
+        if let infinity_window_style_v1::Request::SetBar {
+            surface,
+            bar: WEnum::Value(bar),
+        } = request
+        {
             with_states(&surface, |states| {
-                states.data_map.insert_if_missing_threadsafe(|| HasToolbar);
+                states
+                    .data_map
+                    .insert_if_missing_threadsafe(|| BarStyle(AtomicU32::new(0)));
+                if let Some(style) = states.data_map.get::<BarStyle>() {
+                    style.0.store(bar.into(), Ordering::Relaxed);
+                }
             });
             state.request_redraw();
         }
     }
 }
 
-pub(crate) fn has_toolbar(surface: &WlSurface) -> bool {
+pub(crate) fn bar(surface: &WlSurface) -> Option<Bar> {
     with_states(surface, |states| {
-        states.data_map.get::<HasToolbar>().is_some()
+        let style = states.data_map.get::<BarStyle>()?;
+        Bar::try_from(style.0.load(Ordering::Relaxed)).ok()
     })
 }
 
-pub(crate) fn toplevel_radius(toolbar: bool) -> u32 {
-    if toolbar {
-        vow_design::WINDOW_TOOLBAR.corner_radius
-    } else {
-        vow_design::WINDOW.corner_radius
-    }
+pub(crate) fn corner_radius(bar: Option<Bar>, role: Role, client_decorated: bool) -> u32 {
+    let style = match (bar, role) {
+        (Some(Bar::Compact), _) => vow_design::WINDOW_COMPACT,
+        (Some(Bar::Unified), _) | (None, Role::Dialog) => vow_design::WINDOW_TOOLBAR,
+        (Some(Bar::Utility), _) => vow_design::WINDOW_UTILITY,
+        (None, Role::Toplevel) if client_decorated => vow_design::WINDOW_TOOLBAR,
+        _ => vow_design::WINDOW,
+    };
+    style.corner_radius
+}
+
+// Apple's continuous corner starts 1.5287 R along each edge, not at R (ADR 0059).
+pub(crate) fn corner_extent(radius: u32) -> f64 {
+    f64::from(radius) * f64::from(vow_design::CORNER_EXPANSION)
 }
 
 impl State {
-    pub(crate) fn window_radius(&self, window: WindowId) -> u32 {
-        toplevel_radius(self.windows.surface_of(window).is_some_and(has_toolbar))
+    pub(crate) fn window_corner(&self, window: WindowId) -> f64 {
+        self.windows
+            .iter()
+            .find(|candidate| candidate.id() == window)
+            .map_or(0.0, |window| {
+                corner_extent(corner_radius(
+                    bar(window.surface()),
+                    window.role(),
+                    window.is_client_decorated(),
+                ))
+            })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_bar_gets_the_tahoe_radius() {
+        let radius = |bar| corner_radius(Some(bar), Role::Toplevel, true);
+        assert_eq!(radius(Bar::Titlebar), 16);
+        assert_eq!(radius(Bar::Compact), 20);
+        assert_eq!(radius(Bar::Unified), 26);
+        assert_eq!(radius(Bar::Utility), 15);
+    }
+
+    #[test]
+    fn without_a_bar_ssd_gets_the_titlebar_and_csd_and_dialogs_the_toolbar() {
+        assert_eq!(corner_radius(None, Role::Toplevel, false), 16);
+        assert_eq!(corner_radius(None, Role::Toplevel, true), 26);
+        assert_eq!(corner_radius(None, Role::Dialog, false), 26);
     }
 }
