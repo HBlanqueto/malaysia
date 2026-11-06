@@ -20,7 +20,7 @@ use vow_design::{
     ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
     ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
     ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG,
-    DIALOG_PADDING, HEADLINE, SPACE_2, TEXT, TITLEBAR,
+    DIALOG_PADDING, HEADLINE, SIDEBAR, SPACE_2, TEXT, TITLEBAR,
 };
 
 use crate::desktop::{self, DesktopEntry};
@@ -62,7 +62,9 @@ fn panel() -> Rect {
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
-        .corner_radius(DIALOG.corner_radius as f32)
+        .corner_radius(barrier_kit::style::continuous_corner(
+            DIALOG.corner_radius as f32,
+        ))
         .padding(DIALOG_PADDING)
         .direction(Direction::Vertical)
         .spacing(DIALOG_PADDING / 2.0)
@@ -341,7 +343,7 @@ impl App for ForceQuitApp {
             rect()
                 .width(Size::fill())
                 .height(Size::px(ROW_HEIGHT))
-                .corner_radius(DIALOG.corner_radius as f32 / 2.0)
+                .corner_radius(SIDEBAR.item_radius as f32)
                 .background(if row == selected {
                     theme::color(highlight)
                 } else {
