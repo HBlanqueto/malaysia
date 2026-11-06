@@ -30,6 +30,7 @@ pub type SearchableItems = Rc<dyn Fn() -> SearchableLists>;
 pub struct MenuTitleSpec {
     pub label: String,
     pub glyph: Option<&'static [u8]>,
+    pub icon: Option<Element>,
     pub bold: bool,
     pub items: ItemsSource,
     pub searchable: Option<SearchableItems>,
@@ -55,6 +56,7 @@ impl MenuTitleSpec {
         Self {
             label,
             glyph: None,
+            icon: None,
             bold: false,
             items,
             searchable: None,
@@ -270,7 +272,9 @@ pub fn menu_title(
         title = title.child(title_pill(palette.bar_hover_bg, palette));
     }
 
-    let content = if let Some(glyph) = spec.glyph {
+    let content = if let Some(icon) = &spec.icon {
+        icon.clone()
+    } else if let Some(glyph) = spec.glyph {
         SvgViewer::new(("menubar-snowflake", Bytes::from_static(glyph)))
             .width(Size::px(SYMBOL.grid))
             .height(Size::px(SYMBOL.grid))

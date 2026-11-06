@@ -354,6 +354,14 @@ pub(crate) fn load_icon(icon: Option<&str>) -> Option<IconData> {
 }
 
 pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<IconData> {
+    load_icon_in(icon, sizes, &["apps"])
+}
+
+pub(crate) fn load_icon_in(
+    icon: Option<&str>,
+    sizes: &[&str],
+    contexts: &[&str],
+) -> Option<IconData> {
     let icon = icon?;
     let direct = PathBuf::from(icon);
     if direct.is_absolute() && direct.is_file() {
@@ -365,13 +373,15 @@ pub(crate) fn load_icon_sized(icon: Option<&str>, sizes: &[&str]) -> Option<Icon
     for theme in themes {
         for dir in &data_dirs {
             for size in sizes {
-                let app_dir = dir.join("icons").join(theme).join(size).join("apps");
-                for extension in ["svg", "png"] {
-                    let candidate = app_dir.join(format!("{icon}.{extension}"));
-                    if candidate.is_file()
-                        && let Some(data) = icon_data(&candidate)
-                    {
-                        return Some(data);
+                for context in contexts {
+                    let context_dir = dir.join("icons").join(theme).join(size).join(context);
+                    for extension in ["svg", "png"] {
+                        let candidate = context_dir.join(format!("{icon}.{extension}"));
+                        if candidate.is_file()
+                            && let Some(data) = icon_data(&candidate)
+                        {
+                            return Some(data);
+                        }
                     }
                 }
             }

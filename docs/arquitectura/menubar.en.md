@@ -37,3 +37,12 @@ The bar embeds `MenuView`: without a window it shows ❄ · Escritorio · Archiv
 Each title measures its text plus `title-padding-x` (10) per side. Its pill (`title-open`, 24 high, radius 10) overhangs by `bleed` (3) per side and drops by `text-lift` (1) to sit centred in the bar; it is painted with `title-open.bg` while the menu is open and with `hover-bg` under the pointer. The panel opens shifted to the left so its text (`panel.padding` 5 + `item.padding-x` 13) falls in the column of the title text, as in Tahoe.
 
 «Acerca de {App}» takes the app's «Acerca de…»/«About…» entry from whichever menu holds it (almost always Help) and removes it there (`remote::take_about`). If the app has none, it opens `malaysia-shell about-app <app_id>`: icon, name and `GenericName` from the `.desktop`.
+
+## Status icons
+
+App icons (`NSStatusItem`, the system tray) go on the right, before the clock. The bar is the `org.kde.StatusNotifierWatcher` and the host of the [StatusNotifierItem](https://specifications.freedesktop.org/status-notifier-item/latest/) protocol, like plasmashell; the logic lives in `barrier_kit::shell::use_status_items` and the bar only draws them (`menubar/status.rs`).
+
+1. If another watcher already runs, the bar does not replace it: it follows its signals.
+2. The icon comes from the theme (`IconName`, searched in `status`, `panel`, `devices` and `apps`, or in KDE's `IconThemePath`); without one, `IconPixmap` is painted. With `Status = NeedsAttention` the attention ones are used.
+3. An icon with a menu opens it on press, like the bar menus and like an `NSStatusItem` with a menu; a click on an item sends `Event("clicked")` over dbusmenu. An icon without a menu sends `Activate`.
+4. Every signal from the icon or its menu (`NewIcon`, `NewTitle`, `NewStatus`, `LayoutUpdated`…) reads it again; if its name leaves the bus, it is removed.

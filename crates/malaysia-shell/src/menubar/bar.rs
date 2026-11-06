@@ -10,7 +10,7 @@ use barrier_kit::menu::{ItemsSource, MenuItem};
 use barrier_kit::platform::Timers;
 use barrier_kit::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
-    ToplevelInfo, Toplevels, run_layer,
+    ToplevelInfo, Toplevels, run_layer, use_status_items,
 };
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -28,7 +28,9 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
-use crate::menubar::{appmenu, clock, focused, load_active_window, resolve_app_name, system};
+use crate::menubar::{
+    appmenu, clock, focused, load_active_window, resolve_app_name, status, system,
+};
 use barrier_kit::menu::{RevealRoots, SearchQuery};
 use barrier_kit::platform::AppMenuAddress;
 use barrier_kit::theme;
@@ -170,6 +172,8 @@ impl App for BarApp {
         self.use_app_menus_setting();
 
         let (generation, open_started) = self.use_snapshot_drain();
+        let (status_items, status_host) = use_status_items();
+        let status_anchors = use_hook(status::StatusAnchors::default);
 
         let now = self.clock.read().clone();
         let active_app = self.active_app.read().clone();
@@ -321,9 +325,20 @@ impl App for BarApp {
             ));
         }
 
+        let shown = status_items.read().clone();
+        let status_specs = Rc::new(status::status_titles(&shown, &status_host, &status_anchors));
+        let mut right = rect().height(Size::fill()).direction(Direction::Horizontal);
+        for (index, item) in shown.iter().enumerate() {
+            right = right.child(if item.menu.is_empty() {
+                status::activate_only(item, &status_host)
+            } else {
+                menu::menu_title(index, status_specs.clone(), menu_state.clone(), text)
+            });
+        }
+
         bar_root(bar)
             .child(left)
-            .child(clock::clock_label(now, text))
+            .child(right.child(clock::clock_label(now, text)))
     }
 }
 
