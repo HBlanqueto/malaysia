@@ -14,7 +14,7 @@ uniform float exponent;
 
 void main() {
     vec2 px = v_coords * texture_size;
-    float dist = window_sdf(px, geometry, radius, exponent);
+    float dist = frame_sdf(px, geometry, radius, exponent);
     float coverage = window_coverage(dist);
 
     vec4 color = texture2D(tex, v_coords);

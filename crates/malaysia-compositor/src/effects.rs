@@ -13,6 +13,49 @@ use smithay::utils::{
     Buffer as BufferCoords, Logical, Physical, Point, Rectangle, Scale, Size, Transform,
 };
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Arrow {
+    tip_x: f32,
+    height: f32,
+    tip_radius: f32,
+    fillet: f32,
+}
+
+impl Arrow {
+    pub(crate) fn popover(tip_x: f64, scale: f64) -> Self {
+        let physical = |value: f64| (value * scale) as f32;
+        Self {
+            tip_x: physical(tip_x),
+            height: physical(f64::from(vow_design::POPOVER.arrow_height)),
+            tip_radius: physical(f64::from(vow_design::POPOVER.arrow_tip_radius)),
+            fillet: physical(f64::from(vow_design::POPOVER.arrow_fillet)),
+        }
+    }
+
+    pub(crate) fn is_some(self) -> bool {
+        self.height > 0.0
+    }
+
+    pub(crate) fn uniforms(self, factor: f32) -> [Uniform<'static>; 2] {
+        let popover = vow_design::POPOVER;
+        [
+            Uniform::new(
+                "arrow",
+                [
+                    self.tip_x * factor,
+                    self.height * factor,
+                    self.tip_radius * factor,
+                    self.fillet * factor,
+                ],
+            ),
+            Uniform::new(
+                "arrow_slope",
+                popover.arrow_width / 2.0 / popover.arrow_height,
+            ),
+        ]
+    }
+}
+
 fn frame_to_texture_geometry(
     src: Rectangle<f64, BufferCoords>,
     dst: Rectangle<i32, Physical>,
@@ -93,10 +136,16 @@ pub(crate) struct RoundedTextureElement<R: Renderer> {
     frame_rect: Rectangle<i32, Physical>,
     radius: i32,
     exponent: f32,
+    arrow: Arrow,
     program: GlesTexProgram,
 }
 
 impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
+    pub(crate) fn with_arrow(mut self, arrow: Arrow) -> Self {
+        self.arrow = arrow;
+        self
+    }
+
     pub(crate) fn from_surface_element(
         element: WaylandSurfaceRenderElement<R>,
         frame_rect: Rectangle<i32, Physical>,
@@ -117,6 +166,7 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             frame_rect,
             radius,
             exponent,
+            arrow: Arrow::default(),
             program,
         })
     }
@@ -156,12 +206,14 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             frame_rect,
             radius,
             exponent,
+            arrow: Arrow::default(),
             program,
         }
     }
 
-    fn uniforms(&self) -> [Uniform<'static>; 4] {
+    fn uniforms(&self) -> [Uniform<'static>; 6] {
         let src = self.src();
+        let [arrow, slope] = self.arrow.uniforms(texture_radius(src, self.dst, 1));
         [
             Uniform::new(
                 "texture_size",
@@ -173,6 +225,8 @@ impl<R: MalaysiaRenderer> RoundedTextureElement<R> {
             ),
             Uniform::new("radius", texture_radius(src, self.dst, self.radius)),
             Uniform::new("exponent", self.exponent),
+            arrow,
+            slope,
         ]
     }
 }
@@ -226,7 +280,7 @@ impl<R: MalaysiaRenderer> Element for RoundedTextureElement<R> {
         let Source::Surface(element) = &self.source else {
             return OpaqueRegions::default();
         };
-        if self.remapped {
+        if self.remapped || self.arrow.is_some() {
             return OpaqueRegions::default();
         }
         let frame = Rectangle::new(self.frame_rect.loc - self.dst.loc, self.frame_rect.size);
@@ -406,6 +460,8 @@ pub(crate) fn compile_rounded_clip(renderer: &mut GlesRenderer) -> Option<GlesTe
                 UniformName::new("geometry", UniformType::_4f),
                 UniformName::new("radius", UniformType::_1f),
                 UniformName::new("exponent", UniformType::_1f),
+                UniformName::new("arrow", UniformType::_4f),
+                UniformName::new("arrow_slope", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile rounded-clip shader"))
@@ -424,6 +480,8 @@ pub(crate) fn compile_shadow(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
                 UniformName::new("scale", UniformType::_1f),
                 UniformName::new("exponent", UniformType::_1f),
                 UniformName::new("color", UniformType::_4f),
+                UniformName::new("arrow", UniformType::_4f),
+                UniformName::new("arrow_slope", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile shadow shader"))
@@ -443,6 +501,8 @@ pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
                 UniformName::new("exponent", UniformType::_1f),
                 UniformName::new("color", UniformType::_4f),
                 UniformName::new("edge_color", UniformType::_4f),
+                UniformName::new("arrow", UniformType::_4f),
+                UniformName::new("arrow_slope", UniformType::_1f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile border shader"))

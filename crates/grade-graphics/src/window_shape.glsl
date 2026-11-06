@@ -9,6 +9,35 @@ float window_sdf(vec2 p, vec4 rect, float radius, float exponent) {
         + inside - radius;
 }
 
+uniform vec4 arrow;
+uniform float arrow_slope;
+
+float arrow_triangle(vec2 p, vec2 q) {
+    p.x = abs(p.x);
+    vec2 a = p - q * clamp(dot(p, q) / dot(q, q), 0.0, 1.0);
+    vec2 b = p - q * vec2(clamp(p.x / q.x, 0.0, 1.0), 1.0);
+    float s = -sign(q.y);
+    vec2 d = min(vec2(dot(a, a), s * (p.x * q.y - p.y * q.x)), vec2(dot(b, b), s * (p.y - q.y)));
+    return -sqrt(d.x) * sign(d.y);
+}
+
+float smooth_union(float a, float b, float k) {
+    float h = max(k - abs(a - b), 0.0) / max(k, 0.0001);
+    return min(a, b) - h * h * k * 0.25;
+}
+
+// arrow = (tip x from rect.x, band height, tip radius, fillet); a zero band means no arrow.
+float frame_sdf(vec2 p, vec4 rect, float radius, float exponent) {
+    if (arrow.y <= 0.0) {
+        return window_sdf(p, rect, radius, exponent);
+    }
+    vec4 body = vec4(rect.x, rect.y + arrow.y, rect.z, rect.w - arrow.y);
+    float depth = arrow.y - arrow.z + arrow.w;
+    vec2 apex = vec2(rect.x + arrow.x, rect.y + arrow.z);
+    float spike = arrow_triangle(p - apex, vec2(depth * arrow_slope, depth)) - arrow.z;
+    return smooth_union(window_sdf(p, body, radius, exponent), spike, arrow.w);
+}
+
 float window_coverage(float dist) {
     return clamp(0.5 - dist, 0.0, 1.0);
 }

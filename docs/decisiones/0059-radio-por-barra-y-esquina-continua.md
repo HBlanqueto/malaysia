@@ -61,6 +61,16 @@ ADR 0058 solo distinguía «con barra de herramientas» (26) y «sin ella» (16)
    de diálogo: radio `DIALOG` (26, como sheets y alertas), esquina continua,
    borde y sombra. La shell dibuja el panel sin esquinas; el namespace es
    el identificador de propósito de layer-shell.
+8. **Popovers:** un xdg_popup marcado con `set_popover` (versión 2 del
+   protocolo) recibe la forma de `NSPopover`: la banda superior de
+   `POPOVER.arrow_height` es la flecha y el cuerpo, debajo, lleva la esquina
+   `POPOVER.radius` (20). `window_shape.glsl::frame_sdf` une al cuerpo un
+   triángulo de punta redonda (`arrow_tip_radius`) con un redondeo
+   (`arrow_fillet`). El recorte, el borde y la sombra usan esa distancia,
+   así que la flecha tiene borde y sombra. La punta apunta al centro del
+   rectángulo de anclaje y no entra en las esquinas (`popover_tip`). Medidas
+   de AppKit en macOS 26.7 según el paquete
+   [`popover`](https://pub.dev/packages/popover).
 
 ## Consecuencias
 

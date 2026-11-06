@@ -13,7 +13,7 @@ uniform float alpha;
 
 void main() {
     vec2 px = v_coords * size * scale;
-    float dist = window_sdf(px, rect, radius, exponent);
+    float dist = frame_sdf(px, rect, radius, exponent);
 
     float coverage;
     if (side > 0.0) {

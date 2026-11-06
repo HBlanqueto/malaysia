@@ -214,6 +214,7 @@ impl ChromeCache {
         scale: f64,
         theme: &ChromeTheme,
         focused: bool,
+        arrow: crate::effects::Arrow,
     ) -> Vec<OutputRenderElement<R>> {
         let style = if theme.scheme.is_dark() {
             vow_design::SHADOW_DARK
@@ -222,10 +223,12 @@ impl ChromeCache {
         };
         let mut elements = Vec::with_capacity(2);
         for (slot, layer) in (SHADOW_SLOT..).zip(style.layers(focused)) {
-            let Some((area, uniforms)) = shadow_layer(window_rect, radius, exponent, scale, layer)
+            let Some((area, mut uniforms)) =
+                shadow_layer(window_rect, radius, exponent, scale, layer)
             else {
                 continue;
             };
+            uniforms.extend(arrow.uniforms(1.0));
             elements.push(
                 PrimaryGpu(self.shader((owner, slot), program, area, layer.opacity, uniforms))
                     .into(),

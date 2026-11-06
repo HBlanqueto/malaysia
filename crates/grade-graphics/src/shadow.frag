@@ -20,12 +20,12 @@ float erf(float x) {
 void main() {
     vec2 px = v_coords * size * scale;
 
-    float d = window_sdf(px, vec4(rect.xy + offset, rect.zw), radius, exponent);
+    float d = frame_sdf(px, vec4(rect.xy + offset, rect.zw), radius, exponent);
 
     float sigma = max(blur / 2.0, 0.001);
     float shadow = 0.5 - 0.5 * erf(d / (sqrt(2.0) * sigma));
 
-    float cover = window_coverage(window_sdf(px, rect, radius, exponent));
+    float cover = window_coverage(frame_sdf(px, rect, radius, exponent));
 
     gl_FragColor = color * (shadow * (1.0 - cover) * alpha);
 }

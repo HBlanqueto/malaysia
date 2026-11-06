@@ -5,6 +5,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New};
 use smithay::wayland::compositor::with_states;
+use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
 
 use infinity_protocol::server::style::infinity_window_style_v1::infinity_window_style_v1::{
@@ -23,9 +24,11 @@ struct BarStyle(AtomicU32);
 
 struct AlertLayer(u64);
 
+struct Popover;
+
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 
 impl WindowStyleGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -57,20 +60,28 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State>,
     ) {
-        if let infinity_window_style_v1::Request::SetBar {
-            surface,
-            bar: WEnum::Value(bar),
-        } = request
-        {
-            with_states(&surface, |states| {
-                states
-                    .data_map
-                    .insert_if_missing_threadsafe(|| BarStyle(AtomicU32::new(0)));
-                if let Some(style) = states.data_map.get::<BarStyle>() {
-                    style.0.store(bar.into(), Ordering::Relaxed);
-                }
-            });
-            state.request_redraw();
+        match request {
+            infinity_window_style_v1::Request::SetBar {
+                surface,
+                bar: WEnum::Value(bar),
+            } => {
+                with_states(&surface, |states| {
+                    states
+                        .data_map
+                        .insert_if_missing_threadsafe(|| BarStyle(AtomicU32::new(0)));
+                    if let Some(style) = states.data_map.get::<BarStyle>() {
+                        style.0.store(bar.into(), Ordering::Relaxed);
+                    }
+                });
+                state.request_redraw();
+            }
+            infinity_window_style_v1::Request::SetPopover { surface } => {
+                with_states(&surface, |states| {
+                    states.data_map.insert_if_missing_threadsafe(|| Popover);
+                });
+                state.request_redraw();
+            }
+            _ => {}
         }
     }
 }
@@ -94,6 +105,28 @@ pub(crate) fn alert_layer(surface: &WlSurface) -> Option<u64> {
     with_states(surface, |states| {
         states.data_map.get::<AlertLayer>().map(|alert| alert.0)
     })
+}
+
+pub(crate) fn is_popover(surface: &WlSurface) -> bool {
+    with_states(surface, |states| states.data_map.get::<Popover>().is_some())
+}
+
+pub(crate) fn popover_tip(popup: &PopupSurface, width: f64) -> f64 {
+    let anchor_center = popup.with_pending_state(|state| {
+        let anchor = state.positioner.anchor_rect;
+        f64::from(anchor.loc.x) + f64::from(anchor.size.w) / 2.0 - f64::from(state.geometry.loc.x)
+    });
+    clamped_tip(anchor_center, width)
+}
+
+fn clamped_tip(anchor_center: f64, width: f64) -> f64 {
+    let popover = vow_design::POPOVER;
+    let edge = f64::from(popover.radius) + f64::from(popover.arrow_width) / 2.0;
+    if width < 2.0 * edge {
+        width / 2.0
+    } else {
+        anchor_center.clamp(edge, width - edge)
+    }
 }
 
 pub(crate) fn corner_radius(
@@ -154,6 +187,16 @@ mod tests {
         assert_eq!(corner_radius(None, None, Role::Toplevel, false), 16);
         assert_eq!(corner_radius(None, None, Role::Toplevel, true), 26);
         assert_eq!(corner_radius(None, None, Role::Dialog, false), 26);
+    }
+
+    #[test]
+    fn the_popover_arrow_points_at_the_anchor_but_stays_clear_of_the_corners() {
+        let edge = f64::from(vow_design::POPOVER.radius)
+            + f64::from(vow_design::POPOVER.arrow_width) / 2.0;
+        assert_eq!(clamped_tip(120.0, 300.0), 120.0);
+        assert_eq!(clamped_tip(-40.0, 300.0), edge);
+        assert_eq!(clamped_tip(400.0, 300.0), 300.0 - edge);
+        assert_eq!(clamped_tip(10.0, 40.0), 20.0);
     }
 
     #[test]

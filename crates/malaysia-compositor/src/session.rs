@@ -1228,6 +1228,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
             exponent,
             focused: is_focused,
             bordered: frame_has_border(data.state),
+            arrow: crate::effects::Arrow::default(),
         },
         scale,
         elements,
@@ -1241,6 +1242,7 @@ struct Frame {
     exponent: f32,
     focused: bool,
     bordered: bool,
+    arrow: crate::effects::Arrow,
 }
 
 fn append_ime_popups<R: MalaysiaRenderer>(
@@ -1335,6 +1337,16 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             elements.extend(surface_elements.into_iter().map(|e| e.into()));
             continue;
         }
+        let tip = state
+            .popups
+            .popup_of(id)
+            .filter(|popup| crate::window_style::is_popover(popup.wl_surface()))
+            .map(|popup| crate::window_style::popover_tip(popup, f64::from(frame.size.w)));
+        let corner = if tip.is_some() {
+            vow_design::POPOVER.radius.round() as u32
+        } else {
+            vow_design::POPUP.corner_radius
+        };
         append_frame(
             state,
             Vec::new(),
@@ -1342,12 +1354,13 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             Frame {
                 owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
-                radius: (crate::window_style::corner_extent(vow_design::POPUP.corner_radius)
-                    * scale)
-                    .round() as i32,
+                radius: (crate::window_style::corner_extent(corner) * scale).round() as i32,
                 exponent: vow_design::POPUP.superellipse_exponent,
                 focused: true,
                 bordered: true,
+                arrow: tip.map_or_else(crate::effects::Arrow::default, |tip| {
+                    crate::effects::Arrow::popover(tip, scale)
+                }),
             },
             scale,
             elements,
@@ -1377,7 +1390,7 @@ fn append_frame<R: MalaysiaRenderer>(
                 scale,
                 program.clone(),
             ) {
-                Ok(rounded) => content.push(rounded.into()),
+                Ok(rounded) => content.push(rounded.with_arrow(frame.arrow).into()),
                 Err(element) => content.push((*element).into()),
             }
         }
@@ -1397,7 +1410,7 @@ fn append_frame<R: MalaysiaRenderer>(
                 .map(|line| (line.sides, line.edges))
                 .or(palette.inner_line.map(|color| (color, color)));
             if let Some((color, edge_color)) = inner_line {
-                let (area, uniforms) = border_shader(
+                let (area, mut uniforms) = border_shader(
                     frame_rect_physical,
                     radius_physical,
                     scale,
@@ -1406,6 +1419,7 @@ fn append_frame<R: MalaysiaRenderer>(
                     color,
                     edge_color,
                 );
+                uniforms.extend(frame.arrow.uniforms(1.0));
                 inner = Some(
                     crate::renderer::PrimaryGpu(state.chrome.shader(
                         slot(crate::chrome::INNER_BORDER_SLOT),
@@ -1417,7 +1431,7 @@ fn append_frame<R: MalaysiaRenderer>(
                     .into(),
                 );
             }
-            let (area, uniforms) = border_shader(
+            let (area, mut uniforms) = border_shader(
                 frame_rect_physical,
                 radius_physical,
                 scale,
@@ -1426,6 +1440,7 @@ fn append_frame<R: MalaysiaRenderer>(
                 palette.outer_border,
                 palette.outer_border,
             );
+            uniforms.extend(frame.arrow.uniforms(1.0));
             outer = Some(
                 crate::renderer::PrimaryGpu(state.chrome.shader(
                     slot(crate::chrome::OUTER_BORDER_SLOT),
@@ -1447,6 +1462,7 @@ fn append_frame<R: MalaysiaRenderer>(
                 scale,
                 &state.chrome_theme,
                 is_focused,
+                frame.arrow,
             );
         }
     }
@@ -1904,6 +1920,7 @@ fn append_layers<R: MalaysiaRenderer>(
                     exponent: vow_design::DIALOG.superellipse_exponent,
                     focused: true,
                     bordered: true,
+                    arrow: crate::effects::Arrow::default(),
                 },
                 scale,
                 elements,

@@ -61,6 +61,15 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    radius (26, like sheets and alerts), continuous corner, border and
    shadow. The shell draws the panel without corners; the namespace is the
    layer-shell purpose identifier.
+8. **Popovers:** an xdg_popup marked with `set_popover` (protocol version 2)
+   gets the `NSPopover` shape: the top band of `POPOVER.arrow_height` is the
+   arrow and the body below it has the `POPOVER.radius` corner (20).
+   `window_shape.glsl::frame_sdf` joins to the body a round-tipped triangle
+   (`arrow_tip_radius`) with a fillet (`arrow_fillet`). The clip, the border
+   and the shadow use that distance, so the arrow has a border and a shadow.
+   The tip points at the centre of the anchor rectangle and stays clear of
+   the corners (`popover_tip`). AppKit measurements on macOS 26.7 from the
+   [`popover`](https://pub.dev/packages/popover) package.
 
 ## Consequences
 
