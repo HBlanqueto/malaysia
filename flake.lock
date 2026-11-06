@@ -10,17 +10,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1793978721,
-        "narHash": "sha256-PmAB/c9Mno4sts6WjcgMSVq7ObXy7Agm+aIHiLD3Wro=",
+        "lastModified": 1793979136,
+        "narHash": "sha256-psTibCGlqyoZwXjZurKx3+TxhPPpg4EZNhdR4dhJlWY=",
         "owner": "HBlanqueto",
         "repo": "barrierkit",
-        "rev": "2e4149b40a1316a8a28d48c2f702163ed31d6b0b",
+        "rev": "2fe7a69e29eaae3abcc729f47ab2d001e99355ae",
         "type": "github"
       },
       "original": {
         "owner": "HBlanqueto",
         "repo": "barrierkit",
-        "rev": "2e4149b40a1316a8a28d48c2f702163ed31d6b0b",
+        "rev": "2fe7a69e29eaae3abcc729f47ab2d001e99355ae",
         "type": "github"
       }
     },
