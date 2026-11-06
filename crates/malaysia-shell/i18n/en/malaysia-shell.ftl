@@ -200,3 +200,4 @@ about-serial-number = Serial Number
 about-more-info = More Info…
 about-copyright = ™ and © 2026 Malaysia
 about-rights = All rights reserved.
+dock-show = Show

@@ -1,3 +1,5 @@
+use barrier_kit::context_menu::context_menu;
+use barrier_kit::menu::MenuItem;
 use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
@@ -5,6 +7,8 @@ use torin::prelude::{Direction, Size};
 use vow_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
 use barrier_kit::theme;
+
+use crate::localize::tr;
 
 struct DockApp;
 
@@ -33,7 +37,19 @@ impl App for DockApp {
             let initial = title.chars().next().unwrap_or('?').to_string();
             let is_active = entry.active;
             let id = entry.id;
-            rect()
+            let minimized = entry.minimized;
+            let menu = vec![
+                MenuItem::header(entry.app_id.clone()),
+                if minimized {
+                    MenuItem::action("show", tr!("dock-show"))
+                } else {
+                    MenuItem::action("minimize", tr!("window-minimize"))
+                },
+                MenuItem::Separator,
+                MenuItem::action("close", tr!("menu-close-window")),
+            ];
+            let commands = toplevels.clone();
+            let tile = rect()
                 .width(Size::px(DOCK_TILESIZE as f32))
                 .height(Size::px(DOCK_TILESIZE as f32))
                 .corner_radius((DOCK_TILESIZE / 4) as f32)
@@ -45,8 +61,16 @@ impl App for DockApp {
                         .text(initial)
                         .font_size(DOCK_FONT_SIZE)
                         .color(if is_active { active_text } else { text }),
-                )
-                .into_element()
+                );
+            context_menu(tile, menu, move |command: String| match command.as_str() {
+                "show" => {
+                    commands.unset_minimized(id);
+                    commands.activate(id);
+                }
+                "minimize" => commands.minimize(id),
+                _ => commands.close(id),
+            })
+            .into_element()
         });
 
         rect()

@@ -18,6 +18,7 @@ frame RGBA (barrier-kit) → layer-shell Top → EGL/dmabuf
 2. `ext-foreign-toplevel-list-v1` da un tile por ventana mapeada. Cada tile muestra el título sobre la `ShellPalette` de Tengen (`tile`, activo `tile_active`), elegida por `appearance.color_scheme`.
 3. Un clic envía `activate` por `zwlr_foreign_toplevel_management_v1`; el compositor restaura si estaba minimizada, eleva y enfoca. `close`, `set_rectangle` y `set_minimized` se manejan; `set_maximized` y `set_fullscreen` se reconocen pero no se implementan.
 4. La ventana activa se resalta con el estado `activated` de `zwlr_foreign_toplevel_management_v1`.
+5. El clic secundario en un tile abre el menú del Dock (`context_menu` del kit): el `app_id` como cabecera, Minimizar (o Mostrar si está minimizada) y Cerrar ventana. Cada orden es una request de `zwlr_foreign_toplevel_management_v1`.
 
 ## Lado del compositor
 
