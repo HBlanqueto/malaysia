@@ -1857,7 +1857,7 @@ enum LayerSide {
 }
 
 fn append_layers<R: MalaysiaRenderer>(
-    state: &State,
+    state: &mut State,
     renderer: &mut R,
     elements: &mut Vec<OutputRenderElement<R>>,
     side: LayerSide,
@@ -1870,19 +1870,43 @@ fn append_layers<R: MalaysiaRenderer>(
     };
     let scale = state.scale.fractional_scale();
     for layer in layers {
-        for entry in state.layers.on_layer(layer).filter(|entry| include(entry)) {
-            let location = physical_point(entry.geometry.loc + offset, scale);
-            elements.extend(
+        let entries: Vec<_> = state
+            .layers
+            .on_layer(layer)
+            .filter(|entry| include(entry))
+            .map(|entry| (entry.surface.wl_surface().clone(), entry.geometry))
+            .collect();
+        for (surface, geometry) in entries {
+            let rect = Rectangle::new(geometry.loc + offset, geometry.size);
+            let surface_elements =
                 render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
                     renderer,
-                    entry.surface.wl_surface(),
-                    location,
+                    &surface,
+                    physical_point(rect.loc, scale),
                     scale,
                     1.0,
                     Kind::Unspecified,
-                )
-                .into_iter()
-                .map(|e| e.into()),
+                );
+            let Some(alert) = crate::window_style::alert_layer(&surface) else {
+                elements.extend(surface_elements.into_iter().map(|e| e.into()));
+                continue;
+            };
+            append_frame(
+                state,
+                Vec::new(),
+                surface_elements,
+                Frame {
+                    owner: crate::chrome::FrameOwner::Alert(alert),
+                    rect: physical_rect(rect, scale),
+                    radius: (crate::window_style::corner_extent(vow_design::DIALOG.corner_radius)
+                        * scale)
+                        .round() as i32,
+                    exponent: vow_design::DIALOG.superellipse_exponent,
+                    focused: true,
+                    bordered: true,
+                },
+                scale,
+                elements,
             );
         }
     }

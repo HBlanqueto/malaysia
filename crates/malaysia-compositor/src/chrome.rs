@@ -115,6 +115,7 @@ const SHADOW_SLOT: u8 = 2;
 pub(crate) enum FrameOwner {
     Window(WindowId),
     Popup(PopupId),
+    Alert(u64),
 }
 
 pub(crate) struct ChromeCache {

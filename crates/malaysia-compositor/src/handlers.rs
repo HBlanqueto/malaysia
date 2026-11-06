@@ -653,12 +653,18 @@ impl WlrLayerShellHandler for State {
         namespace: String,
     ) {
         tracing::info!(?layer, %namespace, surface = ?surface.wl_surface().id(), "new layer surface");
+        if namespace == vow_design::ALERT_LAYER_NAMESPACE {
+            crate::window_style::mark_alert_layer(surface.wl_surface());
+        }
         self.layers.add(surface);
         self.request_redraw();
     }
 
     fn layer_destroyed(&mut self, surface: LayerSurface) {
         tracing::info!(surface = ?surface.wl_surface().id(), "layer surface destroyed");
+        if let Some(id) = crate::window_style::alert_layer(surface.wl_surface()) {
+            self.chrome.remove(crate::chrome::FrameOwner::Alert(id));
+        }
         self.layer_surface_destroyed(surface.wl_surface());
         self.layers.destroy(surface.wl_surface());
         self.request_redraw();

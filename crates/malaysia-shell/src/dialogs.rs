@@ -19,7 +19,7 @@ use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
 use vow_design::{
     ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
     ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
-    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION, DIALOG,
+    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION,
     DIALOG_PADDING, HEADLINE, SIDEBAR, SPACE_2, TEXT, TITLEBAR,
 };
 
@@ -41,9 +41,9 @@ const ABOUT_APP_ICON_SIZE: f32 = 64.0;
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
-fn spec(namespace: &str, size: (u32, u32)) -> LayerSpec {
+fn spec(size: (u32, u32)) -> LayerSpec {
     LayerSpec {
-        namespace: namespace.to_string(),
+        namespace: vow_design::ALERT_LAYER_NAMESPACE.to_string(),
         layer: Layer::Overlay,
         anchors: Anchors::default(),
         exclusive_zone: 0,
@@ -62,9 +62,6 @@ fn panel() -> Rect {
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
-        .corner_radius(barrier_kit::style::continuous_corner(
-            DIALOG.corner_radius as f32,
-        ))
         .padding(DIALOG_PADDING)
         .direction(Direction::Vertical)
         .spacing(DIALOG_PADDING / 2.0)
@@ -271,7 +268,7 @@ pub fn run_confirm(arg: Option<&str>) -> anyhow::Result<()> {
             action,
             remaining: State::create_global(COUNTDOWN_SECONDS),
         }),
-        spec("malaysia-dialog", CONFIRM_SIZE),
+        spec(CONFIRM_SIZE),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
@@ -394,11 +391,8 @@ pub fn run_force_quit() -> anyhow::Result<()> {
         icons: Rc::default(),
         selected: State::create_global(0usize),
     };
-    run_layer(
-        AppComponent::new(app),
-        spec("malaysia-dialog", FORCE_QUIT_SIZE),
-    )
-    .map_err(|error| anyhow::anyhow!("{error}"))
+    run_layer(AppComponent::new(app), spec(FORCE_QUIT_SIZE))
+        .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
 const THINKPAD_SVG: &[u8] = include_bytes!("about/thinkpad.svg");

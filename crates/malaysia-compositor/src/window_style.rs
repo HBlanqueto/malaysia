@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::backend::GlobalId;
@@ -20,6 +20,10 @@ use crate::state::State;
 pub struct WindowStyleGlobalData;
 
 struct BarStyle(AtomicU32);
+
+struct AlertLayer(u64);
+
+static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
 const VERSION: u32 = 1;
 
@@ -75,6 +79,20 @@ pub(crate) fn bar(surface: &WlSurface) -> Option<Bar> {
     with_states(surface, |states| {
         let style = states.data_map.get::<BarStyle>()?;
         Bar::try_from(style.0.load(Ordering::Relaxed)).ok()
+    })
+}
+
+pub(crate) fn mark_alert_layer(surface: &WlSurface) {
+    with_states(surface, |states| {
+        states.data_map.insert_if_missing_threadsafe(|| {
+            AlertLayer(NEXT_ALERT.fetch_add(1, Ordering::Relaxed))
+        });
+    });
+}
+
+pub(crate) fn alert_layer(surface: &WlSurface) -> Option<u64> {
+    with_states(surface, |states| {
+        states.data_map.get::<AlertLayer>().map(|alert| alert.0)
     })
 }
 

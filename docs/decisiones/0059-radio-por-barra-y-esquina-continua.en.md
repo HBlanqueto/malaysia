@@ -56,6 +56,11 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
 6. **User's fixed radius:** `window.corner_radius` in `window.domain`
    wins over the table and over `set_bar`, like macOS
    `NSConvolutionOverride1` ([options](../configuracion/opciones.en.md)).
+7. **Shell alerts:** a layer with the `ALERT_LAYER_NAMESPACE` namespace
+   (`malaysia-dialog`) gets the dialog frame from the compositor: `DIALOG`
+   radius (26, like sheets and alerts), continuous corner, border and
+   shadow. The shell draws the panel without corners; the namespace is the
+   layer-shell purpose identifier.
 
 ## Consequences
 

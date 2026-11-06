@@ -56,6 +56,11 @@ ADR 0058 solo distinguía «con barra de herramientas» (26) y «sin ella» (16)
 6. **Radio fijo del usuario:** `window.corner_radius` en `window.domain`
    gana sobre la tabla y sobre `set_bar`, como `NSConvolutionOverride1` en
    macOS ([opciones](../configuracion/opciones.md)).
+7. **Alertas de la shell:** una capa con el namespace
+   `ALERT_LAYER_NAMESPACE` (`malaysia-dialog`) recibe del compositor el marco
+   de diálogo: radio `DIALOG` (26, como sheets y alertas), esquina continua,
+   borde y sombra. La shell dibuja el panel sin esquinas; el namespace es
+   el identificador de propósito de layer-shell.
 
 ## Consecuencias
 
