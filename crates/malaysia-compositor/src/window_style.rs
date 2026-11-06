@@ -78,20 +78,28 @@ pub(crate) fn bar(surface: &WlSurface) -> Option<Bar> {
     })
 }
 
-pub(crate) fn corner_radius(bar: Option<Bar>, role: Role, client_decorated: bool) -> u32 {
-    let style = match (bar, role) {
-        (Some(Bar::Compact), _) => vow_design::WINDOW_COMPACT,
-        (Some(Bar::Unified), _) | (None, Role::Dialog) => vow_design::WINDOW_TOOLBAR,
-        (Some(Bar::Utility), _) => vow_design::WINDOW_UTILITY,
-        (None, Role::Toplevel) if client_decorated => vow_design::WINDOW_TOOLBAR,
-        _ => vow_design::WINDOW,
-    };
-    style.corner_radius
+pub(crate) fn corner_radius(
+    forced: Option<u32>,
+    bar: Option<Bar>,
+    role: Role,
+    client_decorated: bool,
+) -> u32 {
+    let corner = vow_design::WINDOW_CORNER;
+    if let Some(radius) = forced {
+        return radius;
+    }
+    match (bar, role) {
+        (Some(Bar::Compact), _) => corner.compact,
+        (Some(Bar::Unified), _) | (None, Role::Dialog) => corner.unified,
+        (Some(Bar::Utility), _) => corner.utility,
+        (None, Role::Toplevel) if client_decorated => corner.unified,
+        _ => corner.titlebar,
+    }
 }
 
 // Apple's continuous corner starts 1.5287 R along each edge, not at R (ADR 0059).
 pub(crate) fn corner_extent(radius: u32) -> f64 {
-    f64::from(radius) * f64::from(vow_design::CORNER_EXPANSION)
+    f64::from(radius) * f64::from(vow_design::WINDOW_CORNER.expansion)
 }
 
 impl State {
@@ -101,6 +109,7 @@ impl State {
             .find(|candidate| candidate.id() == window)
             .map_or(0.0, |window| {
                 corner_extent(corner_radius(
+                    self.config.window.corner_radius,
                     bar(window.surface()),
                     window.role(),
                     window.is_client_decorated(),
@@ -115,7 +124,7 @@ mod tests {
 
     #[test]
     fn each_bar_gets_the_tahoe_radius() {
-        let radius = |bar| corner_radius(Some(bar), Role::Toplevel, true);
+        let radius = |bar| corner_radius(None, Some(bar), Role::Toplevel, true);
         assert_eq!(radius(Bar::Titlebar), 16);
         assert_eq!(radius(Bar::Compact), 20);
         assert_eq!(radius(Bar::Unified), 26);
@@ -124,8 +133,15 @@ mod tests {
 
     #[test]
     fn without_a_bar_ssd_gets_the_titlebar_and_csd_and_dialogs_the_toolbar() {
-        assert_eq!(corner_radius(None, Role::Toplevel, false), 16);
-        assert_eq!(corner_radius(None, Role::Toplevel, true), 26);
-        assert_eq!(corner_radius(None, Role::Dialog, false), 26);
+        assert_eq!(corner_radius(None, None, Role::Toplevel, false), 16);
+        assert_eq!(corner_radius(None, None, Role::Toplevel, true), 26);
+        assert_eq!(corner_radius(None, None, Role::Dialog, false), 26);
+    }
+
+    #[test]
+    fn a_configured_radius_overrides_every_bar() {
+        for bar in [None, Some(Bar::Titlebar), Some(Bar::Unified)] {
+            assert_eq!(corner_radius(Some(8), bar, Role::Toplevel, true), 8);
+        }
     }
 }

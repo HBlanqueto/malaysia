@@ -69,6 +69,7 @@ pub struct WindowConfig {
     pub green_button: GreenButtonAction,
     pub resize_border: i32,
     pub resize_corner: i32,
+    pub corner_radius: Option<u32>,
     pub qt_server_decorations: bool,
     pub focus_titlebar_apps: Vec<String>,
 }
@@ -81,6 +82,7 @@ impl Default for WindowConfig {
             green_button: GreenButtonAction::default(),
             resize_border: 10,
             resize_corner: 20,
+            corner_radius: None,
             qt_server_decorations: true,
             focus_titlebar_apps: ["firefox", "brave-browser", "chromium-browser"]
                 .map(String::from)

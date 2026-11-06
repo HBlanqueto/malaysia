@@ -163,12 +163,18 @@ pasará a ser por salida.
 | `window.focus` | `"click"` \| `"sloppy"` | `"click"` | pendiente | input |
 | `window.resize_border` | entero (px lógicos) | `10` | **activa** | ancho de la banda exterior de resize en lados |
 | `window.resize_corner` | entero (px lógicos) | `20` | **activa** | longitud de la «L» exterior de resize en esquinas |
+| `window.corner_radius` | entero (pt lógicos), opcional | sin valor | **activa** | radio de todas las ventanas; sin valor, el de su barra (ADR 0059) |
 | `window.qt_server_decorations` | bool | `true` | **activa** | `QT_WAYLAND_DISABLE_WINDOWDECORATION=1` en clientes y sesión |
 | `window.focus_titlebar_apps` | lista de `app_id` | `["firefox", "brave-browser", "chromium-browser"]` | **activa** | modo foco de apps CSD con pestañas |
 
 `window.resize_border` es una banda **exterior** al lado; la «L» de
 `window.resize_corner` es exterior y puede entrar 2 px. El hit-test solo se
 ofrece en ventanas SSD normales (no maximizadas ni fullscreen).
+
+`window.corner_radius` fija un radio para todas las ventanas, sin importar el
+`set_bar` de la app ni su decoración. Equivale a `NSConvolutionOverride1` de
+macOS. Sin la clave, cada ventana recibe el radio de su barra: 16, 20, 26 o 15
+(ADR 0059). La pantalla completa sigue sin esquinas.
 
 `"default"` respeta la negociación (GTK/Libadwaita conservan su headerbar; Qt y el
 resto reciben el chrome de Malaysia). `"force_server"` dibuja el chrome de Malaysia en todas
@@ -415,6 +421,7 @@ green_button = "focus"          # focus | zoom | none
 focus = "click"                 # click | sloppy
 resize_border = 10
 resize_corner = 20
+# corner_radius = 16            # sin la clave: radio según la barra
 qt_server_decorations = true    # false para la barra nativa de Qt
 focus_titlebar_apps = ["firefox", "brave-browser", "chromium-browser"]
 ```

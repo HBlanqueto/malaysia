@@ -1054,7 +1054,7 @@ mod tests {
         assert_eq!(TITLEBAR.buttons.diameter, 14);
         assert_eq!(TITLEBAR.buttons.spacing, 9);
         assert_eq!(traffic::button_rect(0), (9.0, 9.0, 14.0));
-        assert_eq!(vow_design::WINDOW.corner_radius, 16);
+        assert_eq!(vow_design::WINDOW_CORNER.titlebar, 16);
     }
 
     #[test]

@@ -31,8 +31,10 @@ ADR 0058 solo distinguía «con barra de herramientas» (26) y «sin ella» (16)
    pasa a `set_bar(wl_surface, bar)`, con el enum `bar`: `titlebar`,
    `compact`, `unified` y `utility`. Una petición posterior sustituye a la
    anterior.
-2. **Tokens** (`vow-design`): `WINDOW` (16), `WINDOW_COMPACT` (20),
-   `WINDOW_TOOLBAR` (26) y `WINDOW_UTILITY` (15).
+2. **Tokens** (`vow-design`): `components.window.corner` →
+   `WINDOW_CORNER`, con los mismos nombres que el enum `bar`: `titlebar`
+   (16), `compact` (20), `unified` (26) y `utility` (15), más `expansion` y
+   `exponent` de la esquina continua.
 3. **Compositor**, en `window_style::corner_radius`:
 
    | Ventana | Radio |
@@ -44,13 +46,16 @@ ADR 0058 solo distinguía «con barra de herramientas» (26) y «sin ella» (16)
    | Pantalla completa | 0 |
 
 4. **Esquina continua:** el marco, la sombra, el borde y el blur usan una
-   superelipse que empieza a `CORNER_EXPANSION` (1,52866) × R con
-   `superellipse-exponent` 3,34. Se desvía de la curva de Apple como mucho
+   superelipse que empieza a `WINDOW_CORNER.expansion` (1,52866) × R con
+   `WINDOW_CORNER.exponent` 3,34. Se desvía de la curva de Apple como mucho
    0,0076·R (0,2 pt con R = 26); el arco se desviaba 0,014·R. El shader
    limita la extensión a la mitad del lado más corto.
 5. **barrierkit:** una `Titlebar` `close_only` envía `titlebar`; con barra
    lateral en isla (52 pt), `unified`; el resto (40 pt), `compact`. Si
    cambia el estilo de la barra lateral, vuelve a enviarlo.
+6. **Radio fijo del usuario:** `window.corner_radius` en `window.domain`
+   gana sobre la tabla y sobre `set_bar`, como `NSConvolutionOverride1` en
+   macOS ([opciones](../configuracion/opciones.md)).
 
 ## Consecuencias
 
@@ -61,7 +66,7 @@ ADR 0058 solo distinguía «con barra de herramientas» (26) y «sin ella» (16)
   no existe, y el compositor la desconecta. Todas se construyen con el mismo
   rev.
 - La isla de la barra lateral usa el suavizado de freya con
-  `CORNER_EXPANSION − 1` y sigue concéntrica con la ventana. El resto de
+  `WINDOW_CORNER.expansion − 1` y sigue concéntrica con la ventana. El resto de
   controles de barrierkit siguen con arco de círculo.
 
 ## Alternativas descartadas

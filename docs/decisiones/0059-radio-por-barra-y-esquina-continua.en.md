@@ -31,8 +31,10 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    becomes `set_bar(wl_surface, bar)`, with the `bar` enum: `titlebar`,
    `compact`, `unified` and `utility`. A later request replaces the
    earlier one.
-2. **Tokens** (`vow-design`): `WINDOW` (16), `WINDOW_COMPACT` (20),
-   `WINDOW_TOOLBAR` (26) and `WINDOW_UTILITY` (15).
+2. **Tokens** (`vow-design`): `components.window.corner` →
+   `WINDOW_CORNER`, with the same names as the `bar` enum: `titlebar`
+   (16), `compact` (20), `unified` (26) and `utility` (15), plus the
+   continuous corner's `expansion` and `exponent`.
 3. **Compositor**, in `window_style::corner_radius`:
 
    | Window | Radius |
@@ -44,13 +46,16 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    | Fullscreen | 0 |
 
 4. **Continuous corner:** the frame, shadow, border and blur use a
-   superellipse that starts at `CORNER_EXPANSION` (1.52866) × R with
-   `superellipse-exponent` 3.34. It deviates from Apple's curve by at most
+   superellipse that starts at `WINDOW_CORNER.expansion` (1.52866) × R with
+   `WINDOW_CORNER.exponent` 3.34. It deviates from Apple's curve by at most
    0.0076·R (0.2 pt at R = 26); the arc deviated 0.014·R. The shader caps
    the extent at half the shorter side.
 5. **barrierkit:** a `close_only` `Titlebar` sends `titlebar`; with an
    island sidebar (52 pt), `unified`; the rest (40 pt), `compact`. If the
    sidebar style changes, it sends it again.
+6. **User's fixed radius:** `window.corner_radius` in `window.domain`
+   wins over the table and over `set_bar`, like macOS
+   `NSConvolutionOverride1` ([options](../configuracion/opciones.en.md)).
 
 ## Consequences
 
@@ -60,7 +65,7 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
 - A barrierkit app older than this change sends `set_toolbar`, which no
   longer exists, and the compositor disconnects it. All of them are built
   from the same rev.
-- The sidebar island uses freya smoothing with `CORNER_EXPANSION − 1` and
+- The sidebar island uses freya smoothing with `WINDOW_CORNER.expansion − 1` and
   stays concentric with the window. The other barrierkit controls keep a
   circular arc.
 
