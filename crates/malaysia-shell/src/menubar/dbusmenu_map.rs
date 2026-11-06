@@ -58,6 +58,7 @@ fn menu_item(item: &RawItem) -> Option<MenuItem> {
         enabled,
         check: toggle(props),
         icon: None,
+        badge: None,
     })
 }
 
