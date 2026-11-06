@@ -1,0 +1,129 @@
+# Workspace root: shared settings and build profiles for the crates.
+[workspace]
+resolver = "3"
+members = [
+    "crates/malaysia-compositor",
+    "crates/malaysia-scene",
+    "crates/grade-graphics",
+    "crates/malaysia-shell",
+    "crates/malaysia-wallpaper",
+    "crates/malaysia-settings",
+    "crates/xdg-desktop-portal-malaysia",
+    "tools/sctk-probe",
+]
+
+default-members = [
+    "crates/malaysia-compositor",
+    "crates/malaysia-scene",
+    "crates/grade-graphics",
+    "crates/malaysia-shell",
+    "crates/malaysia-wallpaper",
+    "crates/malaysia-settings",
+    "crates/xdg-desktop-portal-malaysia",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/HBlanqueto/malaysia"
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+libc = "0.2"
+zeroize = "1"
+
+calloop = { version = "0.14", features = ["signals"] }
+nix = { version = "0.31", features = ["signal", "socket", "inotify", "poll", "fs", "user"] }
+
+xcursor = "0.3"
+
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+xkbcommon = "0.9"
+
+zbus = { version = "5", features = ["p2p"] }
+
+chrono = "0.4"
+
+grade-graphics = { path = "crates/grade-graphics" }
+malaysia-scene = { path = "crates/malaysia-scene" }
+
+barrier-kit = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b09b57d7fe03d4eb4f0faed14ee849d88080c02e" }
+vow-design = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b09b57d7fe03d4eb4f0faed14ee849d88080c02e" }
+vow-appearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b09b57d7fe03d4eb4f0faed14ee849d88080c02e" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b09b57d7fe03d4eb4f0faed14ee849d88080c02e" }
+
+freya-animation = "=0.4.3"
+freya-core = "=0.4.3"
+freya-components = { version = "=0.4.3", default-features = false }
+freya-engine = "=0.4.3"
+freya-testing = "=0.4.3"
+async-io = "2"
+async-channel = "2"
+futures-lite = "2"
+torin = "=0.4.3"
+i18n-embed = { version = "0.16", features = ["fluent-system"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+
+wayland-client = { version = "0.31", features = ["system"] }
+wayland-scanner = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+wayland-protocols-plasma = { version = "0.3.12", default-features = false }
+
+
+cosmic-text = "0.19"
+
+unicode-segmentation = "1"
+
+png = "0.17"
+libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
+zune-jpeg = "0.5"
+half = { version = "2", features = ["bytemuck"] }
+
+smithay-client-toolkit = "0.19.2"
+sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
+
+wgpu = { version = "24", default-features = false, features = ["wgsl"] }
+raw-window-handle = "0.6"
+bytemuck = { version = "1", features = ["derive"] }
+
+smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca512767cacc07efca55fae8be4", default-features = false, features = [
+    "backend_winit",
+    "backend_drm",
+    "backend_gbm",
+    "backend_egl",
+    "backend_udev",
+    "backend_libinput",
+    "backend_session_libseat",
+    "renderer_gl",
+    "wayland_frontend",
+    "desktop",
+    "renderer_multi",
+] }
+
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+panic = "abort"
+strip = true
+
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
