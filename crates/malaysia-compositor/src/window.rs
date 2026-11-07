@@ -832,9 +832,11 @@ impl Windows {
             |window| self.dialog_parent(window),
             |window| self.floats(window),
         );
-        order
-            .into_iter()
-            .fold(false, |raised, window| self.scene.raise(window) || raised)
+        let mut raised = false;
+        for window in order {
+            raised |= self.scene.raise(window);
+        }
+        raised
     }
 
     fn floats(&self, id: WindowId) -> bool {
