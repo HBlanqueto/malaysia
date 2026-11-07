@@ -7,26 +7,29 @@ the open findings, in [`debt.md`](debt.md).
 
 ```
 docs/
-├── README.md            this index
-├── roadmap.md           status by block and «Now»
-├── debt.md             open technical debt
-├── glossary.md          project names (BarrierKit, Grade, Infinity)
-├── hardware.md          GPU/EGL baseline of the machine
-├── research.md     macOS/GNOME/Otto conclusions
-├── audit-2026-11-03.md  full audit (dead code, performance, niri)
-├── architecture/        what the UI and the shell look like TODAY
-│   ├── interface.md          full visual map
-│   ├── process-model.md  processes and split
-│   ├── windows.md          titlebar, frame and decoration
-│   ├── wallpaper.md         malaysia-wallpaper (wgpu/Vulkan)
-│   ├── menubar.md           top bar and menus
-│   ├── dock.md              dock
-│   ├── lock.md              lock screen
-│   ├── captures.md          screenshots
+├── README.md                  this index
+├── roadmap.md                 status by block and «Now»
+├── debt.md                    open technical debt
+├── glossary.md                project names (BarrierKit, Grade, Infinity)
+├── hardware.md                GPU/EGL baseline of the machine
+├── research.md                macOS, GNOME and Otto conclusions
+├── macos-global-menu-guide.md how the macOS global menu behaves
+├── audit-2026-11-03.md        full audit (dead code, performance, niri)
+├── remake-redo.md             tracking of the running Remake-Redo project
+├── prompts/remake-redo.md     the Remake-Redo brief
+├── architecture/              what the UI and the shell look like today
+│   ├── interface.md           full visual map
+│   ├── process-model.md       processes and split
+│   ├── windows.md             titlebar, frame and decoration
+│   ├── wallpaper.md           malaysia-wallpaper (wgpu/Vulkan)
+│   ├── menubar.md             top bar and menus
+│   ├── dock.md                dock
+│   ├── lock.md                lock screen
+│   ├── captures.md            screenshots
 │   └── malaysia-and-shell.svg diagram of the split
-├── decisions/          ADRs
-├── configuration/
-    └── options.md      canonical options catalog
+├── decisions/                 ADRs and their index
+└── configuration/
+    └── options.md             canonical options catalog
 ```
 
 ## Build and test
@@ -49,14 +52,5 @@ nix build .#default       # installable package
 Day-to-day work uses the `dev` profile: our code unoptimized, dependencies at
 `opt-level = 2` and `debug = "line-tables-only"`. The Nix package uses `dist` (fat
 LTO, `codegen-units = 1`) and splits `buildDepsOnly` from `buildPackage` with crane.
-Skia arrives prebuilt from `nix/skia.nix` through `SKIA_BINARIES_URL`.
-
-
-## Status
-
-Blocks 0–15 are done or accepted, except the pending items the roadmap
-details; 16a (Vulkan background) is in progress. Right now the following are missing: focus mode,
-window capture with frame, the rest of the global menu (14b-2/14e/14f-2), the
-12a portal (`Screenshot`/`ScreenCast`), the 12b services, 8b/8c and the NixOS
-options for polkit/keyring/AT-SPI. For details, dates and test commands,
-read [`roadmap.md`](roadmap.md).
+Skia arrives prebuilt from barrierkit's `skia-binaries` package through
+`SKIA_BINARIES_URL`.
