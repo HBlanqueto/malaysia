@@ -19,7 +19,7 @@ Only SSD windows receive a titlebar (ADR 0014/0019). GTK/Libadwaita and the clie
 
 ## Our own apps
 
-A BarrierKit app uses an `app_id` with the `io.github.hblanqueto.malaysia.` prefix and requests its mode through `xdg-decoration` before the first commit: `Client` draws its own 44 px bar (apps with a toolbar/sidebar); `Server` leaves the 32 px bar to the compositor (simple utilities). `force_server`/`force_client` only affect third-party apps.
+The compositor recognizes a BarrierKit app because it binds `infinity_window_style_v1`, whatever its `app_id` (ADR 0035). The app requests its mode through `xdg-decoration` before the first commit: `Client` draws its own 44 px bar (apps with a toolbar/sidebar); `Server` leaves the 32 px bar to the compositor (simple utilities). `force_server`/`force_client` only affect third-party apps.
 
 ## Moving
 

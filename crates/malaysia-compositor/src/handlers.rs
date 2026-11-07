@@ -997,7 +997,7 @@ impl State {
         surface: &WlSurface,
         requested: Option<Decoration>,
     ) -> Decoration {
-        let native = self.windows.is_native(surface);
+        let native = crate::window_style::is_kit_client(surface);
         if native && requested.is_none() && self.windows.mark_native_warning(surface) {
             tracing::warn!(
                 app_id = %self.windows.app_id(surface),

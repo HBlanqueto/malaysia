@@ -35,8 +35,8 @@ Themes `light`/`dark`/`dark-tint`; radius 16, traffic lights 14 (radius 4), SSD 
 
 ## Windows
 
-- **Our own apps (ADR 0035):** `app_id` with the `io.github.hblanqueto.malaysia.` prefix; their decoration mode is honored before the first commit and `force_server`/`force_client` do not touch them.
+- **Kit apps (ADR 0035):** every client that binds `infinity_window_style_v1`, whatever its `app_id`; their decoration mode is honored before the first commit and `force_server`/`force_client` do not touch them.
 - **SSD:** 32 px titlebar, traffic lights, centered title; close, minimize, maximize, drag and resize.
 - **CSD:** GTK/Libadwaita, wezterm and apps that request it keep their chrome; `force_server` can force the bar (at the risk of duplicating it).
 - **Frame:** 16 px corners, shadow, outer border and hairline for all; fullscreen removes it, maximized keeps it. Dialogs are centered over the parent.
-- **Kit popups** (native app-id or shell layer, ADR 0035): the compositor gives them the same frame (outer border, hairline and shadow) with 12 px corners (`vow_design::POPUP`), clipped to their xdg geometry. The client only paints the background and the rows. Popups from other apps (GTK, Firefox, Qt) are drawn as they are.
+- **Kit popups** (kit client or shell layer, ADR 0035): the compositor gives them the same frame (outer border, hairline and shadow) with 12 px corners (`vow_design::POPUP`), clipped to their xdg geometry. The client only paints the background and the rows. Popups from other apps (GTK, Firefox, Qt) are drawn as they are.

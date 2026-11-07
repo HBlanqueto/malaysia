@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -848,6 +848,7 @@ pub struct ClientState {
     disconnect_ping: Ping,
     pub trusted_shell: bool,
     pub restricted: bool,
+    pub kit_client: AtomicBool,
 }
 
 impl ClientState {
@@ -863,6 +864,7 @@ impl ClientState {
             disconnect_ping,
             trusted_shell,
             restricted: false,
+            kit_client: AtomicBool::new(false),
         }
     }
 

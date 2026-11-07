@@ -33,8 +33,8 @@ Temas `light`/`dark`/`dark-tint`; radio 16, semáforos 14 (radio 4), titlebar SS
 `malaysia-wallpaper` (Background), `malaysia-shell menubar` (Top, 30 px), `dock` (Top, abajo), `lock` (lock surfaces) y `launcher` (Overlay). Leen `~/.config/malaysia/` y `~/.local/share/malaysia/`; no escriben configuración.
 ## Ventanas
 
-- **Apps propias (ADR 0035):** `app_id` con prefijo `io.github.hblanqueto.malaysia.`; su modo de decoración se respeta antes del primer commit y `force_server`/`force_client` no las toca.
+- **Apps del kit (ADR 0035):** todo cliente que enlaza `infinity_window_style_v1`, sea cual sea su `app_id`; su modo de decoración se respeta antes del primer commit y `force_server`/`force_client` no las toca.
 - **SSD:** titlebar de 32 px, semáforos, título centrado; cerrar, minimizar, maximizar, arrastrar y redimensionar.
 - **CSD:** GTK/Libadwaita, wezterm y apps que lo piden conservan su chrome; `force_server` puede forzar la barra (con riesgo de duplicarla).
 - **Marco:** esquinas de 16, sombra, borde exterior y hairline para todas; fullscreen lo elimina, maximizado lo conserva. Diálogos centrados sobre el padre.
-- **Popups del kit** (app-id nativo o capa de la shell, ADR 0035): el compositor les da el mismo marco (borde exterior, hairline y sombra) con esquinas de 12 (`vow_design::POPUP`), recortado a su geometría xdg. El cliente solo pinta el fondo y las filas. Los popups de otras apps (GTK, Firefox, Qt) se dibujan tal cual.
+- **Popups del kit** (cliente del kit o capa de la shell, ADR 0035): el compositor les da el mismo marco (borde exterior, hairline y sombra) con esquinas de 12 (`vow_design::POPUP`), recortado a su geometría xdg. El cliente solo pinta el fondo y las filas. Los popups de otras apps (GTK, Firefox, Qt) se dibujan tal cual.

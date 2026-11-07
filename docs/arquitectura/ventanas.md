@@ -19,7 +19,7 @@ Solo las ventanas SSD reciben titlebar (ADR 0014/0019). GTK/Libadwaita y los cli
 
 ## Apps propias
 
-Una app de BarrierKit usa `app_id` con prefijo `io.github.hblanqueto.malaysia.` y pide su modo por `xdg-decoration` antes del primer commit: `Client` dibuja su barra de 44 px (apps con toolbar/sidebar); `Server` deja la barra de 32 px al compositor (utilidades simples). `force_server`/`force_client` solo afectan a apps ajenas.
+El compositor reconoce una app de BarrierKit porque enlaza `infinity_window_style_v1`, sea cual sea su `app_id` (ADR 0035). La app pide su modo por `xdg-decoration` antes del primer commit: `Client` dibuja su barra de 44 px (apps con toolbar/sidebar); `Server` deja la barra de 32 px al compositor (utilidades simples). `force_server`/`force_client` solo afectan a apps ajenas.
 ## Mover
 
 Al arrastrar, la ventana no pasa por detrás de la barra de menús: su borde superior se detiene en el área de trabajo (`State::workspace`, que descuenta las zonas exclusivas de arriba), como en macOS. En una CSD cuenta el borde visible: se descuenta la sombra que la app dibuja dentro de su superficie (`window_geometry`). Los lados y el borde inferior pueden salir de la pantalla.

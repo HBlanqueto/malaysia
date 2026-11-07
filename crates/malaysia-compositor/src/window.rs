@@ -18,7 +18,7 @@ use smithay::wayland::compositor::{SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{
     Configure, SurfaceCachedState, ToplevelStateSet, ToplevelSurface, XdgToplevelSurfaceData,
 };
-use vow_design::{NATIVE_APP_ID_PREFIX, TITLEBAR};
+use vow_design::TITLEBAR;
 
 use crate::decoration::{Insets, Role, WindowState};
 
@@ -1078,10 +1078,6 @@ impl Windows {
                 .map(|data| data.lock().unwrap().app_id.clone().unwrap_or_default())
                 .unwrap_or_default()
         })
-    }
-
-    pub fn is_native(&self, surface: &WlSurface) -> bool {
-        self.app_id(surface).starts_with(NATIVE_APP_ID_PREFIX)
     }
 
     pub fn mark_native_warning(&mut self, surface: &WlSurface) -> bool {

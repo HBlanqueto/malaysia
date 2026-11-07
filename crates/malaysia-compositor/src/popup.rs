@@ -184,7 +184,7 @@ impl State {
         {
             surface = parent;
         }
-        self.windows.is_native(&surface) || self.layers.entry_of(&surface).is_some()
+        crate::window_style::is_kit_client(&surface) || self.layers.entry_of(&surface).is_some()
     }
 
     pub(crate) fn add_popup(&mut self, popup: PopupSurface, positioner: PositionerState) {

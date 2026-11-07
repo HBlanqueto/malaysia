@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New};
+use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
@@ -17,7 +17,7 @@ pub(crate) use infinity_protocol::server::style::infinity_window_style_v1::infin
 use malaysia_scene::scene::WindowId;
 
 use crate::decoration::Role;
-use crate::state::State;
+use crate::state::{ClientState, State};
 
 #[derive(Debug, Clone)]
 pub struct WindowStyleGlobalData;
@@ -46,10 +46,13 @@ impl GlobalDispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
         &self,
         _state: &mut State,
         _handle: &DisplayHandle,
-        _client: &Client,
+        client: &Client,
         resource: New<InfinityWindowStyleV1>,
         data_init: &mut DataInit<'_, State>,
     ) {
+        if let Some(client_state) = client.get_data::<ClientState>() {
+            client_state.kit_client.store(true, Ordering::Relaxed);
+        }
         data_init.init(resource, WindowStyleGlobalData);
     }
 }
@@ -130,6 +133,15 @@ pub(crate) fn mark_alert_layer(surface: &WlSurface) {
 pub(crate) fn alert_layer(surface: &WlSurface) -> Option<u64> {
     with_states(surface, |states| {
         states.data_map.get::<AlertLayer>().map(|alert| alert.0)
+    })
+}
+
+// ADR 0035: binding Infinity marks a barrier-kit client, whatever its app_id.
+pub(crate) fn is_kit_client(surface: &WlSurface) -> bool {
+    surface.client().is_some_and(|client| {
+        client
+            .get_data::<ClientState>()
+            .is_some_and(|state| state.kit_client.load(Ordering::Relaxed))
     })
 }
 
