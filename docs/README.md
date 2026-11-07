@@ -49,8 +49,11 @@ nix develop
 nix build .#default       # installable package
 ```
 
-Day-to-day work uses the `dev` profile: our code unoptimized, dependencies at
-`opt-level = 2` and `debug = "line-tables-only"`. The Nix package uses `dist` (fat
+Day-to-day work uses the `dev` profile: our code unoptimized with line
+tables; dependencies at `opt-level = 0` without debug info, except the ones
+that cost at run time (Smithay, the `freya-*` crates, `torin`, `ragnarok`,
+`cosmic-text`, `swash` and the image codecs), which keep `opt-level = 2`. The
+list is the `[profile.dev.package.*]` tables of the workspace `Cargo.toml`. The Nix package uses `dist` (fat
 LTO, `codegen-units = 1`) and splits `buildDepsOnly` from `buildPackage` with crane.
 Skia arrives prebuilt from barrierkit's `skia-binaries` package through
 `SKIA_BINARIES_URL`.

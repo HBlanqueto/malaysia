@@ -32,3 +32,16 @@
 
 `cargo-shear`, `cargo-machete` and `cargo-deny` are not in the dev shell;
 they came from the flake's nixpkgs (`nix build --inputs-from .`).
+
+## 2. Phase 2 — profiles
+
+Clean `cargo build` and incremental builds on barrierkit `7172d25`, same
+code, 4 CPUs:
+
+| Profile | Clean | Touch `input.rs` | Touch `bar.rs` |
+|---|---|---|---|
+| Dependencies at `opt-level = 2` (before) | 637.3 s | 3.8–4.4 s | 2.5–2.7 s |
+| `opt-level = 0`, `debug = false`; `2` for 19 run-time crates | 206.6 s | 4.2–4.4 s | 2.6–2.7 s |
+
+The linker is already mold (ADR 0005). The incremental build does not move:
+it is the touched crate plus the link.

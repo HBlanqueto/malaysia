@@ -115,6 +115,64 @@ opt-level = 0
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
+opt-level = 0
+debug = false
+
+[profile.dev.package.smithay]
+opt-level = 2
+
+[profile.dev.package.cosmic-text]
+opt-level = 2
+
+[profile.dev.package.swash]
+opt-level = 2
+
+[profile.dev.package.zune-jpeg]
+opt-level = 2
+
+[profile.dev.package.freya-core]
+opt-level = 2
+
+[profile.dev.package.freya-components]
+opt-level = 2
+
+[profile.dev.package.freya-edit]
+opt-level = 2
+
+[profile.dev.package.freya-animation]
+opt-level = 2
+
+[profile.dev.package.freya-engine]
+opt-level = 2
+
+[profile.dev.package.freya-clipboard]
+opt-level = 2
+
+[profile.dev.package.freya-skia-safe]
+opt-level = 2
+
+[profile.dev.package.torin]
+opt-level = 2
+
+[profile.dev.package.ragnarok]
+opt-level = 2
+
+[profile.dev.package.spellbook]
+opt-level = 2
+
+[profile.dev.package.png]
+opt-level = 2
+
+[profile.dev.package.fdeflate]
+opt-level = 2
+
+[profile.dev.package.miniz_oxide]
+opt-level = 2
+
+[profile.dev.package.crc32fast]
+opt-level = 2
+
+[profile.dev.package.flate2]
 opt-level = 2
 
 [profile.release]
