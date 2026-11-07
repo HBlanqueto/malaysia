@@ -1262,8 +1262,9 @@ mod tests {
                 ..TrafficInput::default()
             };
             let (pixels, width, _) = render_with(input, scale);
-            let x = (22.0 * scale).round() as i32;
-            let y = (16.0 * scale).round() as i32;
+            let (x, y, size) = traffic::button_rect(0);
+            let x = ((x + size / 2.0) * scale).round() as i32;
+            let y = ((y + size / 2.0) * scale).round() as i32;
             let center = pixel(&pixels, width, x, y);
             assert_ne!(
                 center,

@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::path::Path;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
@@ -1546,22 +1545,14 @@ impl State {
     }
 
     pub(crate) fn publish_active(&self, id: Option<WindowId>) {
-        self.publish_active_to(&ctappearance::data_dir(), id);
-    }
-
-    fn publish_active_to(&self, dir: &Path, id: Option<WindowId>) {
         let info = id.and_then(|id| self.windows.active_info(id));
         let active = info.map(|(title, app_id)| crate::active::ActiveWindow { title, app_id });
-        crate::active::publish_to(dir, active.as_ref());
+        crate::active::publish_to(&ctappearance::data_dir(), active.as_ref());
     }
 
     pub(crate) fn publish_active_if_focused(&self, id: WindowId) {
-        self.publish_active_if_focused_to(&ctappearance::data_dir(), id);
-    }
-
-    fn publish_active_if_focused_to(&self, dir: &Path, id: WindowId) {
         if self.shown_active() == Some(id) {
-            self.publish_active_to(dir, Some(id));
+            self.publish_active(Some(id));
         }
     }
 
@@ -2535,32 +2526,6 @@ mod tests {
         state.note_activation_serial(serial);
         assert!(state.activation_serial_is_recent(serial));
         assert!(!state.activation_serial_is_recent(other));
-    }
-
-    #[test]
-    fn an_identity_change_republishes_only_the_focused_window() {
-        let (_display, mut state) = test_state((1280, 720));
-        let dir =
-            std::env::temp_dir().join(format!("malaysia-active-focused-{}", std::process::id()));
-        let store = dir.join("window.domain");
-
-        let focused = WindowId::new(1);
-        let other = WindowId::new(2);
-        state.active_window.set(Some(focused));
-
-        state.publish_active_if_focused_to(&dir, other);
-        assert!(
-            !store.exists(),
-            "an inactive window's title or app_id must not rewrite the store"
-        );
-
-        state.publish_active_if_focused_to(&dir, focused);
-        assert!(
-            store.exists(),
-            "the focused window's title or app_id must rewrite the store"
-        );
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

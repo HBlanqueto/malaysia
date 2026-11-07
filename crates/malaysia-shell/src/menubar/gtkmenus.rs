@@ -812,7 +812,8 @@ mod tests {
             panic!("an action");
         };
         assert_eq!(strip_mnemonic(label), "Prefer Dark");
-        assert_eq!(shortcut.as_deref(), Some("Control+D"));
+        assert_eq!(shortcut.as_deref(), Some("Control+d"));
+        assert_eq!(bk::menu::format_shortcut("Control+d"), "⌃D");
         assert_eq!(*check, CheckState::Checkbox(true));
         assert!(matches!(
             items[1],
