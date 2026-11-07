@@ -35,7 +35,9 @@ El flake expone `nixosModules.default`:
 }
 ```
 
-`programs.malaysia.enable` instala el paquete, registra la sesión en el display
+`programs.malaysia.enable` instala el paquete y el terminal
+[CurseTerm](https://github.com/HBlanqueto/curseterm) (entrada `curseterm` del
+flake), registra la sesión en el display
 manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
 `malaysia-session.target` con `menubar`, `dock` y `wallpaper` (configurable con
 `programs.malaysia.shellComponents`). El display manager ejecuta
@@ -55,8 +57,8 @@ manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
 nix develop
 ./dev.sh build            # compila el workspace
 ./dev.sh run              # compositor anidado
-./dev.sh demo             # shell + ventanas de prueba
-./dev.sh lab              # shell + apps reales
+./dev.sh demo             # shell + CurseTerm + ventanas de prueba
+./dev.sh lab              # shell + CurseTerm + apps reales
 ./dev.sh check            # fmt + clippy + tests
 ./dev.sh titlebar         # cerrar/minimizar/maximizar
 ./dev.sh smoke            # mapeo de toplevels

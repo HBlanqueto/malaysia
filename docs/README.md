@@ -37,8 +37,8 @@ El dev shell es obligatorio para cargo (ADR 0007):
 nix develop
 ./dev.sh build            # debug de los miembros por defecto
 ./dev.sh run              # compositor anidado
-./dev.sh demo             # sesión anidada con shell y ventanas de prueba
-./dev.sh lab              # sesión anidada con apps reales
+./dev.sh demo             # sesión anidada con shell, CurseTerm y ventanas de prueba
+./dev.sh lab              # sesión anidada con CurseTerm y apps reales
 ./dev.sh check            # fmt + clippy + tests
 ./dev.sh titlebar         # cerrar/minimizar/maximizar
 ./dev.sh smoke            # mapeo de toplevels

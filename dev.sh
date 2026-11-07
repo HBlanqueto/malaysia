@@ -25,13 +25,13 @@ Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
     demo [--dark|--light]
-                        Nested session with the shell and demo windows; the flag
+                        Nested session with the shell, CurseTerm and demo windows; the flag
                         forces that appearance in a temporary config (Ctrl-C ends it)
     video [--dark|--light]
                         Like demo, with only Marea (the barrierkit media app) on the
                         desktop; builds that app alone
     lab [--dark|--light]
-                        Nested session with shell + demo windows + optional real
+                        Nested session with shell + CurseTerm + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
     app <name>          Run tengen-app-show, marea or ondina (pinned rev, or ../barrierkit with kit-local) in the demo
@@ -155,6 +155,12 @@ build_kit_apps() {
             --rev "$_kit_rev" --root "$_kit_root" --target-dir "$_kit_build" "$@" ||
             fail "$EXIT_RUN_FAILED" "could not build $* from barrierkit $_kit_rev"
     fi
+}
+
+build_curseterm() {
+    printf 'dev.sh: building curseterm from the flake input (the first time takes a few minutes)\n' >&2
+    _curseterm=$(nix build --no-link --print-out-paths "$script_dir#curseterm") ||
+        fail "$EXIT_RUN_FAILED" "could not build curseterm"
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -727,6 +733,7 @@ demo() {
     # shellcheck disable=SC2086
     build_kit_apps $_apps
     _apps_bin=$_kit_bin
+    [ -n "${_demo_apps+set}" ] || build_curseterm
 
     start
     if ! wait_socket; then
@@ -745,6 +752,7 @@ demo() {
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
     if [ -z "${_demo_apps+set}" ]; then
+        session_client curseterm "$_curseterm/bin/curseterm"
         if command -v foot >/dev/null 2>&1; then
             session_client foot-1 foot -T "Malaysia"
             session_client foot-2 foot -T "Segunda ventana"
@@ -824,6 +832,7 @@ lab() {
     cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
         fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
     build_kit_apps tengen-app-show ondina
+    build_curseterm
     _show="$_kit_bin/tengen-app-show"
     _ondina="$_kit_bin/ondina"
 
@@ -884,6 +893,7 @@ lab() {
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
 
+    session_client curseterm "$_curseterm/bin/curseterm"
     if command -v foot >/dev/null 2>&1; then
         session_client foot-1 foot -T "Malaysia"
         session_client foot-2 foot -T "Segunda ventana"

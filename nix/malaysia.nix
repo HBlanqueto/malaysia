@@ -48,6 +48,7 @@ in
     # hwdata: «Acerca de este PC» names the GPU from /run/current-system/sw/share/hwdata/pci.ids.
     environment.systemPackages = [
       cfg.package
+      self.packages.${pkgs.stdenv.hostPlatform.system}.curseterm
       pkgs.hwdata
     ]
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;

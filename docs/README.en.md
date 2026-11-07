@@ -37,8 +37,8 @@ The dev shell is mandatory for cargo (ADR 0007):
 nix develop
 ./dev.sh build            # debug build of the default members
 ./dev.sh run              # nested compositor
-./dev.sh demo             # nested session with shell and test windows
-./dev.sh lab              # nested session with real apps
+./dev.sh demo             # nested session with shell, CurseTerm and test windows
+./dev.sh lab              # nested session with CurseTerm and real apps
 ./dev.sh check            # fmt + clippy + tests
 ./dev.sh titlebar         # close/minimize/maximize
 ./dev.sh smoke            # toplevel mapping
