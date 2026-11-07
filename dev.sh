@@ -463,6 +463,7 @@ check() {
     check_display_env
     cargo fmt --all -- --check
     "$script_dir/scripts/check-design-tokens.sh"
+    "$script_dir/scripts/check-links.sh"
     "$script_dir/scripts/check-client-only-deps.sh"
     cargo clippy --workspace --all-targets -- -D warnings
     cargo build -p malaysia-compositor

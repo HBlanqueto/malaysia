@@ -69,9 +69,9 @@ Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
 
 ## Referencias rápidas
 
-- **Estado:** `docs/roadmap.md` (única fuente). **Deuda:** `docs/deuda.md`.
-- **ADRs:** `docs/decisiones/`, sobre todo 0019, 0020, 0021, 0023, 0024, 0025 y 0034. Índice: `docs/decisiones/README.md`.
-- **Configuración:** `docs/configuracion/opciones.md` es el catálogo canónico. Un `.domain` TOML por dominio: preferencias
+- **Estado:** `docs/roadmap.md` (única fuente). **Deuda:** `docs/debt.md`.
+- **ADRs:** `docs/decisions/`, sobre todo 0019, 0020, 0021, 0023, 0024, 0025 y 0034. Índice: `docs/decisions/README.md`.
+- **Configuración:** `docs/configuration/options.md` es el catálogo canónico. Un `.domain` TOML por dominio: preferencias
   en `~/.config/malaysia/`, estado/`wallpaper` en `~/.local/share/malaysia/`.
   Override con `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. Las opciones están
   tipadas en `crates/malaysia-compositor/src/config.rs`; cambia **ambos** sitios. El comando `domain` (sintaxis `defaults`) y
@@ -79,14 +79,14 @@ Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
 - **Wallpaper:** `wallpaper.domain` (en `.local/share/malaysia/`) lleva el
   catálogo y la selección; lo dibuja `malaysia-wallpaper` (ADR 0049,
   Vulkan/wgpu por dmabuf) en la capa `Background`.
-- **Investigación:** `docs/investigacion.md` resume macOS, GNOME y Otto.
-- **Interfaz:** `docs/arquitectura/interfaz.md` (Tengen, capas, shell,
+- **Investigación:** `docs/research.md` resume macOS, GNOME y Otto.
+- **Interfaz:** `docs/architecture/interface.md` (Tengen, capas, shell,
   ventanas, capturas, cursor y opciones).
-- **Arquitectura:** `docs/arquitectura/modelo-de-procesos.md` (+
-  `malaysia-y-shell.svg`) fija el reparto: la shell dibuja; el compositor coloca,
+- **Arquitectura:** `docs/architecture/process-model.md` (+
+  `malaysia-and-shell.svg`) fija el reparto: la shell dibuja; el compositor coloca,
   compone y aplica efectos. También:
-  `wallpaper.md`, `menubar.md`, `dock.md`, `lock.md`, `capturas.md` y
-  `ventanas.md`.
+  `wallpaper.md`, `menubar.md`, `dock.md`, `lock.md`, `captures.md` y
+  `windows.md`.
 
 ## Compilar y probar
 
@@ -131,14 +131,15 @@ No modifiques nada fuera del repo y `$XDG_RUNTIME_DIR/malaysia`: sockets, ficher
 Si copias código de un tercero, actualiza `NOTICE` en el mismo commit. Otto es
 MIT; `laye-rs` no tiene licencia y no se usa.
 
-## Documentación (español e inglés)
+## Documentación (solo inglés)
 
 Aplica a `README.md`, `docs/` y los ADR.
 
-1. **Bilingüe.** Cada documento existe en español (`nombre.md`) y en inglés
-   (`nombre.en.md`), en el mismo directorio. Ambos cambian en el mismo commit,
-   con la misma estructura y el mismo contenido; ninguno resume al otro. Los
-   comentarios y el rustdoc del código van solo en inglés.
+1. **Solo en inglés.** Cada documento existe una vez, en inglés, como
+   `nombre.md`; no hay copias en español ni archivos `.en.md`. Los comentarios
+   y el rustdoc del código también van en inglés. El texto visible de la shell
+   y de Ajustes sigue en `i18n/{en,es}/<crate>.ftl`. `./dev.sh check` comprueba
+   los enlaces relativos y sus anclas (`scripts/check-links.sh`).
 2. **Un proceso por documento:** objetivo y alcance (dónde empieza y acaba),
    lector, entradas y salidas, y pasos numerados en orden de ejecución.
 3. **Fuente real.** Cada comando, ruta y nombre se comprueba contra el código
@@ -146,7 +147,7 @@ Aplica a `README.md`, `docs/` y los ADR.
    que describe; si deja de valer, se borra.
 4. **Estilo:** frases cortas, voz activa y presente; una idea por párrafo.
    Nada se repite: se enlaza a su única fuente (`roadmap.md`, el ADR,
-   `opciones.md`). Ejemplos mínimos y ejecutables, mejor en pareja ✗/✓.
+   `options.md`). Ejemplos mínimos y ejecutables, mejor en pareja ✗/✓.
 5. **Comentarios en el código:** reglas 5 y 6 de «Código mínimo».
 
 ## Código mínimo (reglas duras, estilo ponytail)
@@ -222,8 +223,8 @@ fn a_fractional_logical_size_is_ceiled() { … }
 
 - Un módulo por tema (`cursor.rs`, `lock.rs`, `spaces.rs`…). Si un fichero
   pasa de unas 1500 líneas, la siguiente función nueva va a un módulo propio.
-- Una opción nueva se añade en `config.rs` y en `docs/configuracion/opciones.md`,
+- Una opción nueva se añade en `config.rs` y en `docs/configuration/options.md`,
   sin ningún otro sitio.
 - El texto visible de la shell y de Ajustes va en `i18n/{en,es}/<crate>.ftl` y se
-  lee con `tr!`; nunca un literal en el código. Guía: `docs/barrierkit/18-idiomas.md`
+  lee con `tr!`; nunca un literal en el código. Guía: `docs/barrierkit/17-languages.md`
   de barrierkit.

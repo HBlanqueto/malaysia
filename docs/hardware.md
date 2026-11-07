@@ -1,19 +1,19 @@
-# Hardware y línea base gráfica
+# Hardware and graphics baseline
 
-Punto de referencia de la máquina donde se probó Malaysia, no un
-requisito. Sirve para comparar cuando algo se comporte distinto bajo DRM/KMS.
+Reference point of the machine where Malaysia was tested, not a
+requirement. It serves for comparison when something behaves differently under DRM/KMS.
 
-## Máquina
+## Machine
 
 | | |
 |---|---|
-| CPU/GPU | AMD Ryzen 5 PRO 5650U con Radeon Vega («renoir») |
+| CPU/GPU | AMD Ryzen 5 PRO 5650U with Radeon Vega («renoir») |
 | Kernel | 7.2.4-cachyos-lto |
 | Mesa | 26.2.3 |
 | GL renderer | `AMD Radeon Graphics (radeonsi, renoir, ACO, DRM 3.64, 7.2.4-cachyos-lto)` |
 | GL version | OpenGL ES 3.2 Mesa 26.2.3 |
-| EGL | 1.5, `PLATFORM_WAYLAND_KHR` en anidado |
+| EGL | 1.5, `PLATFORM_WAYLAND_KHR` when nested |
 
 
 
-En DRM/KMS compara la plataforma EGL (GBM), el `GlesRenderer`, los formatos/modificadores y libinput; mantén Mesa como constante.
+Under DRM/KMS, compare the EGL platform (GBM), the `GlesRenderer`, the formats/modifiers and libinput; keep Mesa constant.

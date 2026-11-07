@@ -2,22 +2,22 @@
 
 ![Malaysia Compositor](docs/assets/marca/malaysia-banner.jpg)
 
-Escritorio Wayland para NixOS. Su compositor, *Malaysia Compositor*
-(`malaysia-compositor`), está construido sobre Smithay y se desarrolla bloque a bloque. La
-documentación completa vive en [`docs/`](docs/README.md); el estado, en
+Wayland desktop for NixOS. Its compositor, *Malaysia Compositor*
+(`malaysia-compositor`), is built on Smithay and is developed block by block. The
+full documentation lives in [`docs/`](docs/README.md); the status, in
 [`docs/roadmap.md`](docs/roadmap.md).
 
-> **Nota de repositorio (ADR 0048):** `barrier-kit`, `vow-design`,
-> `vow-appearance` e `infinity-protocol` viven en
+> **Repository note (ADR 0048):** `barrier-kit`, `vow-design`,
+> `vow-appearance` and `infinity-protocol` live in
 > [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
-> Este repo contiene el compositor, la shell, Ajustes y los portales.
+> This repo holds the compositor, the shell, Settings and the portals.
 
 > [!NOTE]
-> Proyecto vibecoded, por gusto personal. Su uso previsto es el escritorio diario.
+> Vibecoded project, built for personal enjoyment. Its intended use is the daily desktop.
 
 ## NixOS
 
-El flake expone `nixosModules.default`:
+The flake exposes `nixosModules.default`:
 
 ```nix
 {
@@ -35,65 +35,68 @@ El flake expone `nixosModules.default`:
 }
 ```
 
-`programs.malaysia.enable` instala el paquete y el terminal
-[CurseTerm](https://github.com/HBlanqueto/curseterm) (entrada `curseterm` del
-flake), registra la sesión en el display
-manager, crea `/etc/pam.d/malaysia-lock`, activa `hardware.graphics` y arranca
-`malaysia-session.target` con `menubar`, `dock` y `wallpaper` (configurable con
-`programs.malaysia.shellComponents`). El display manager ejecuta
-`malaysia-compositor --drm`, la sesión directa del Bloque 8a.
-## Datos generales
+`programs.malaysia.enable` installs the package and the
+[CurseTerm](https://github.com/HBlanqueto/curseterm) terminal (the flake's
+`curseterm` input), registers the session in the display
+manager, creates `/etc/pam.d/malaysia-lock`, enables `hardware.graphics` and starts
+`malaysia-session.target` with `menubar`, `dock` and `wallpaper` (configurable with
+`programs.malaysia.shellComponents`). The display manager runs
+`malaysia-compositor --drm`, the direct session of Block 8a.
 
-| Dato | Estado |
+## General facts
+
+| Fact | Status |
 |---|---|
-| Lenguaje | Rust (edición 2024) |
-| Framework | Smithay, fijado por revisión (`023b78b1`, ADR 0028) |
-| Backend | Winit anidado para desarrollo; DRM/KMS directo aceptado en panel real (8a) |
-| Gráficos | EGL + OpenGL ES 3; Vulkan solo en clientes (p. ej. wallpaper, vkcube) |
-| Shell | `malaysia-shell` nativa, un proceso por componente (ADR 0023) |
-## Comandos
+| Language | Rust (2024 edition) |
+| Framework | Smithay, pinned by revision (`023b78b1`, ADR 0028) |
+| Backend | Nested Winit for development; direct DRM/KMS accepted on a real panel (8a) |
+| Graphics | EGL + OpenGL ES 3; Vulkan only in clients (e.g. wallpaper, vkcube) |
+| Shell | Native `malaysia-shell`, one process per component (ADR 0023) |
+
+## Commands
 
 ```sh
 nix develop
-./dev.sh build            # compila el workspace
-./dev.sh run              # compositor anidado
-./dev.sh demo             # shell + CurseTerm + ventanas de prueba
-./dev.sh lab              # shell + CurseTerm + apps reales
+./dev.sh build            # builds the workspace
+./dev.sh run              # nested compositor
+./dev.sh demo             # shell + CurseTerm + test windows
+./dev.sh lab              # shell + CurseTerm + real apps
 ./dev.sh check            # fmt + clippy + tests
-./dev.sh titlebar         # cerrar/minimizar/maximizar
-./dev.sh smoke            # mapeo de toplevels
-./dev.sh drm-vkms         # Direct Session sobre vkms
-nix build .#default       # paquete instalable
+./dev.sh titlebar         # close/minimize/maximize
+./dev.sh smoke            # toplevel mapping
+./dev.sh drm-vkms         # Direct Session on vkms
+nix build .#default       # installable package
 ```
 
-Cada componente de la shell es un proceso:
+Each shell component is a process:
 
 ```sh
-malaysia-wallpaper         # fondo (Vulkan/wgpu, ADR 0049)
-malaysia-shell menubar     # barra superior
+malaysia-wallpaper         # background (Vulkan/wgpu, ADR 0049)
+malaysia-shell menubar     # top bar
 malaysia-shell dock        # dock
-malaysia-shell lock        # bloqueo
+malaysia-shell lock        # lock
 malaysia-shell launcher    # launcher
 ```
-## Configuración (ADR 0021)
 
-La interfaz acordada es el comando `domain`, con la sintaxis de `defaults` de
-macOS. Hablará con el compositor por D-Bus (`org.malaysia.Compositor1`); el
-binario aún no existe:
+## Configuration (ADR 0021)
+
+The agreed interface is the `domain` command, with the syntax of macOS's
+`defaults`. It will talk to the compositor over D-Bus (`org.malaysia.Compositor1`); the
+binary does not exist yet:
 
 ```sh
-domain read   <dominio> <clave>
-domain write  <dominio> <clave> <valor> [-bool | -int | -float | -string]
-domain delete <dominio> <clave>
-domain rename <dominio> <antigua> <nueva>
-domain find   <palabra>
+domain read   <domain> <key>
+domain write  <domain> <key> <value> [-bool | -int | -float | -string]
+domain delete <domain> <key>
+domain rename <domain> <old> <new>
+domain find   <word>
 domain domains
 ```
 
-Un archivo TOML por dominio, como los `.plist` de macOS:
+One TOML file per domain, like macOS's `.plist` files:
 
 ```text
-~/.config/malaysia/                 preferencias
+~/.config/malaysia/                 preferences
 ├── appearance.domain
 ├── window.domain
 ├── dock.domain
@@ -103,23 +106,24 @@ Un archivo TOML por dominio, como los `.plist` de macOS:
 ├── screenshot.domain
 └── effects.domain
 
-~/.local/share/malaysia/            estado y datos
-├── wallpaper.domain            catálogo + selección
-└── window.domain               app activa (la escribe el compositor)
+~/.local/share/malaysia/            state and data
+├── wallpaper.domain            catalog + selection
+└── window.domain               active app (written by the compositor)
 ```
 
-Cada archivo es opcional; si falta, se usan los defaults.
-`MALAYSIA_CONFIG_DIR` y `MALAYSIA_DATA_DIR` permiten otros directorios.
-El catálogo completo, con tipos y estados, está en
-[`docs/configuracion/opciones.md`](docs/configuracion/opciones.md).
-## Documentación
+Each file is optional; if it is missing, the defaults apply.
+`MALAYSIA_CONFIG_DIR` and `MALAYSIA_DATA_DIR` select other directories.
+The full catalog, with types and statuses, is in
+[`docs/configuration/options.md`](docs/configuration/options.md).
 
-- [`docs/README.md`](docs/README.md) — índice y cómo compilar/probar.
-- [`docs/roadmap.md`](docs/roadmap.md) — estado por bloques y pendientes.
-- [`docs/arquitectura/interfaz.md`](docs/arquitectura/interfaz.md) — mapa visual.
-- [`docs/decisiones/`](docs/decisiones/) — ADR.
-- [`docs/deuda.md`](docs/deuda.md) — deuda técnica abierta.
-- [`docs/investigacion.md`](docs/investigacion.md) — conclusiones de macOS,
-  GNOME y Otto.
+## Documentation
 
-`LICENSE` y `NOTICE` cubren la licencia y los avisos de terceros.
+- [`docs/README.md`](docs/README.md) — index and how to build/test.
+- [`docs/roadmap.md`](docs/roadmap.md) — status by block and pending items.
+- [`docs/architecture/interface.md`](docs/architecture/interface.md) — visual map.
+- [`docs/decisions/`](docs/decisions/) — ADRs.
+- [`docs/debt.md`](docs/debt.md) — open technical debt.
+- [`docs/research.md`](docs/research.md) — conclusions from macOS,
+  GNOME and Otto.
+
+`LICENSE` and `NOTICE` cover the license and the third-party notices.

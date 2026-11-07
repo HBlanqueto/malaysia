@@ -1,394 +1,395 @@
 # Roadmap
 
-El compositor se construye por bloques. **Este archivo es la única fuente de
-verdad del estado**: qué está hecho, qué falta y cómo se prueba. El porqué de
-cada decisión vive en los ADR; los hallazgos abiertos, en [`deuda.md`](deuda.md).
+The compositor is built in blocks. **This file is the single source of
+truth for the status**: what is done, what is missing and how it is tested. The why of
+each decision lives in the ADRs; the open findings, in [`debt.md`](debt.md).
 
-## Ahora (2026-10-31)
+## Now (2026-10-31)
 
-- **Menú global (Bloque 14).** 14f-2 aceptado (2026-11-01); falta aceptar
-  14b-2 (diálogos del sistema), los mnemónicos con Alt y el scroll de menús
-  largos; la pantalla completa desde el menú Ventana sigue pendiente. 14d-1,
-  14e y 14f-1 están aceptados (ver §14). Prueba: `./dev.sh demo`
-  y los menús de una app real.
-- **Espacios y modo foco (Bloque 17, ADR 0051).** 17a, 17b y 17c
-  hechos: fila de espacios, deslizamiento con franja negra y modo foco con el
-  botón verde, el borde superior en foco (17d), y la barra negra y los
-  semáforos de barrierkit que aparecen con ella (17e). El modo foco de
-  libadwaita (17f) está hecho en el fork; falta aceptarlo en sesión.
-- **Captura de ventana con marco.** La captura de ventana devuelve solo el
-  contenido del cliente; falta incluir la titlebar Tengen y los efectos.
-- **Portal 12a.** `Settings` y el puente GTK/libadwaita (ADR 0050) están
-  hechos. Faltan `Screenshot`, `ScreenCast` con
-  PipeWire y los diálogos de permiso. Prueba: `./dev.sh screencopy` y
+- **Global menu (Block 14).** 14f-2 accepted (2026-11-01); still to accept:
+  14b-2 (system dialogs), the Alt mnemonics and the scrolling of long
+  menus; fullscreen from the Window menu is still pending. 14d-1,
+  14e and 14f-1 are accepted (see §14). Test: `./dev.sh demo`
+  and the menus of a real app.
+- **Spaces and focus mode (Block 17, ADR 0051).** 17a, 17b and 17c
+  done: space row, slide with a black strip and focus mode with the
+  green button, the top edge in focus (17d), and the black bar and the
+  barrierkit traffic lights that appear with it (17e). The libadwaita focus
+  mode (17f) is done in the fork; it still has to be accepted in a session.
+- **Window capture with frame.** Window capture returns only the
+  client's content; the Tengen titlebar and the effects are still missing.
+- **Portal 12a.** `Settings` and the GTK/libadwaita bridge (ADR 0050) are
+  done. Missing: `Screenshot`, `ScreenCast` with
+  PipeWire and the permission dialogs. Test: `./dev.sh screencopy` and
   `./dev.sh screencopy-window`.
-- **NixOS.** El módulo ya instala paquete, sesión, PAM, `hardware.graphics`,
-  units y `xdg.portal` con GTK de fallback. Faltan polkit, keyring/AT-SPI y una VM.
+- **NixOS.** The module already installs the package, session, PAM, `hardware.graphics`,
+  units and `xdg.portal` with GTK as fallback. Missing: polkit, keyring/AT-SPI and a VM.
 
-## Bloques
+## Blocks
 
-### 0 — Andamiaje
+### 0 — Scaffolding
 
-Workspace de Cargo, Smithay anclado por revisión (`023b78b1`), `tracing` y tipos
-de coordenadas. **Hecho.** Divergencia: los tipos viven en `malaysia-scene`, no
-en el compositor (ADR 0001), y `vow-design` no está vacío. Prueba: `./dev.sh run`.
+Cargo workspace, Smithay pinned by revision (`023b78b1`), `tracing` and coordinate
+types. **Done.** Divergence: the types live in `malaysia-scene`, not
+in the compositor (ADR 0001), and `ctdesign` is not empty. Test: `./dev.sh run`.
 
-### 1 — Un cliente se conecta
+### 1 — A client connects
 
-`CompositorState`, `ShmState`, `SeatState`, `XdgShellState`, socket Wayland y
+`CompositorState`, `ShmState`, `SeatState`, `XdgShellState`, Wayland socket and
 globals (`wl_compositor`, `wl_shm`, `wl_output`, `wl_seat`, `xdg_wm_base`).
-**Hecho.** Prueba: `./dev.sh run` y `wayland-info` lista todos los globals.
+**Done.** Test: `./dev.sh run` and `wayland-info` lists all the globals.
 
-### 2 — Una ventana en pantalla
+### 2 — A window on screen
 
-Backend winit, commit de doble buffer, configure inicial, importación `wl_shm` y
-render. **Hecho.** Divergencia: el mapeo ocurre en el primer commit con buffer,
-no en `ack_configure`; las ventanas se rastrean en `window.rs` sin
-`desktop::Space` (ADR 0015). Prueba: `./dev.sh smoke`.
+winit backend, double-buffered commit, initial configure, `wl_shm` import and
+render. **Done.** Divergence: mapping happens on the first commit with a buffer,
+not on `ack_configure`; windows are tracked in `window.rs` without
+`desktop::Space` (ADR 0015). Test: `./dev.sh smoke`.
 
-### 3 — Entrada
+### 3 — Input
 
-Foco de teclado al mapear, keymap/repeat, hit-testing de puntero, `set_cursor` y
-serials centrales. **Hecho.** La escritura, el hover y los píxeles del cursor se
-verifican a mano. Prueba: `./dev.sh smoke`. `text-input-v3` e
-`input-method-v2` hechos sin aceptar: los popups del método de entrada salen
-bajo el cursor de texto, o encima si no caben. Prueba: `fcitx5` o `ibus` con
-una app GTK. `virtual-keyboard` y `virtual-pointer` hechos sin aceptar, solo
-para la shell de confianza (como infinity); sus eventos pasan por el mismo
-camino que libinput, con atajos, lock e idle. Prueba: un probe de la shell que
-escriba en un `foot` enfocado.
+Keyboard focus on map, keymap/repeat, pointer hit-testing, `set_cursor` and
+central serials. **Done.** Typing, hover and cursor pixels are
+verified by hand. Test: `./dev.sh smoke`. `text-input-v3` and
+`input-method-v2` done, not accepted: input method popups appear
+below the text cursor, or above it if they do not fit. Test: `fcitx5` or `ibus` with
+a GTK app. `virtual-keyboard` and `virtual-pointer` done, not accepted, only
+for the trusted shell (like infinity); their events take the same
+path as libinput, with shortcuts, lock and idle. Test: a shell probe that
+types into a focused `foot`.
 
-### 4 — Ventanas manipulables
+### 4 — Manipulable windows
 
-Mover, redimensionar por bordes, cerrar, apilar y click-to-focus. **Hecho.**
-Pruebas: `./dev.sh block4` (50 ventanas), `./dev.sh move` y
-`./dev.sh decoration`; la sensación de arrastre se prueba a mano.
+Move, resize by edges, close, stack and click-to-focus. **Done.**
+Tests: `./dev.sh block4` (50 windows), `./dev.sh move` and
+`./dev.sh decoration`; the drag feel is tested by hand.
 
 ### 5 — Popups
 
-Árbol de geometría en `malaysia-scene`, superficies en el compositor,
-restricciones contra el output, configure antes de mapear y cierre por clic
-fuera/Esc/muerte del cliente. **Hecho.** Los popups hijos de layer-shell
-funcionan desde `ab8e0b5`; el reposicionado reactivo sigue pendiente. Prueba:
+Geometry tree in `malaysia-scene`, surfaces in the compositor,
+constraints against the output, configure before mapping and dismissal by click
+outside/Esc/client death. **Done.** Layer-shell child popups
+work since `ab8e0b5`; reactive repositioning is still pending. Test:
 `cargo run -p sctk-probe --bin popup_probe`.
 
-### 6 — Portapapeles
+### 6 — Clipboard
 
-`wl_data_device_manager` y selección primaria, con foco ligado al teclado.
-**Hecho.** La selección es por seat; drag & drop no se tocó. Prueba: `wl-copy`
-en un cliente y `wl-paste` en otro.
+`wl_data_device_manager` and primary selection, with focus tied to the keyboard.
+**Done.** The selection is per seat; drag & drop was not touched. Test: `wl-copy`
+in one client and `wl-paste` in another.
 
-### 7 — linux-dmabuf y explicit sync
+### 7 — linux-dmabuf and explicit sync
 
-`zwp_linux_dmabuf_v1` v5 con feedback, sync explícito e implícito, release
-diferido por fence y shell por EGL (`wl_egl_window`, sin `wl_shm`). **Hecho.**
-Sin fallback a v3: sin render node el arranque falla. Prueba: `vkcube`, `mpv`
-(gpu-next), wezterm y Firefox acelerados en anidado; `./dev.sh check`.
+`zwp_linux_dmabuf_v1` v5 with feedback, explicit and implicit sync, release
+deferred by fence and shell over EGL (`wl_egl_window`, without `wl_shm`). **Done.**
+No fallback to v3: without a render node, startup fails. Test: `vkcube`, `mpv`
+(gpu-next), wezterm and Firefox accelerated in nested mode; `./dev.sh check`.
 
 ### 8 — Direct Session (DRM/KMS)
 
-**8a hecha y aceptada** en el panel real el 2026-10-21 (DRM/KMS atómico,
-libseat, libinput, GBM/EGL/GLES, un plano primario; cambio de VT y lock).
-Prueba: `./dev.sh drm-vkms`. **8b** (hotplug, varios outputs, escala por
-monitor) pendiente. **8c**: scanout directo en el plano primario de las
-ventanas a pantalla completa, plano de cursor y feedback dmabuf por
-superficie con tramo de scanout, hechos sin aceptar en el panel real. Los
-planos overlay existen tras `debug.overlay_planes`, apagados por defecto hasta
-aceptarlos con `./dev.sh video`; en i915 quedan apagados (S-02 en
-[`deuda.md`](deuda.md)). Multi-GPU con `GpuManager` y `MultiRenderer` sobre
-GLES, hecho sin aceptar: con `--drm-device` sobre otra GPU que renderiza, se
-compone en la GPU de render y se copia al buffer de la de scanout; un
-dispositivo solo de pantalla (vkms) sigue recibiendo los buffers de la GPU de
-render. Varias salidas en varias GPU esperan a 8b. Prueba: `./dev.sh drm-vkms`
-y `--drm-device` con la segunda GPU de un portátil híbrido. Prueba: con `--log-level=trace`,
-`mpv --fs` debe salir en el plano primario y mover el cursor solo debe tocar el
-plano de cursor.
+**8a done and accepted** on the real panel on 2026-10-21 (atomic DRM/KMS,
+libseat, libinput, GBM/EGL/GLES, one primary plane; VT switching and lock).
+Test: `./dev.sh drm-vkms`. **8b** (hotplug, multiple outputs, per-monitor
+scale) pending. **8c**: direct scanout on the primary plane for
+fullscreen windows, cursor plane and per-surface dmabuf feedback
+with a scanout tranche, done, not accepted on the real panel. The
+overlay planes exist behind `debug.overlay_planes`, off by default until
+they are accepted with `./dev.sh video`; on i915 they stay off (S-02 in
+[`debt.md`](debt.md)). Multi-GPU with `GpuManager` and `MultiRenderer` over
+GLES, done, not accepted: with `--drm-device` on a GPU other than the rendering one, it
+composites on the render GPU and copies to the scanout GPU's buffer; a
+display-only device (vkms) still receives the render GPU's
+buffers. Multiple outputs on multiple GPUs wait for 8b. Test: `./dev.sh drm-vkms`
+and `--drm-device` with the second GPU of a hybrid laptop. Test: with `--log-level=trace`,
+`mpv --fs` must land on the primary plane and moving the cursor must only touch the
+cursor plane.
 
-### 9 — Escala fraccional
+### 9 — Fractional scale
 
-`State::scale`, `display.scale` persistente, `wp_fractional_scale_v1`, render,
-damage, cursor y viewporter de la shell. **Hecho y aceptado** en panel real a
-1.0/1.25/1.5 el 2026-10-21. Pendiente: escala por salida con 8b. Prueba:
-`./dev.sh demo` con `scale = 1.25` en `display.domain`.
+`State::scale`, persistent `display.scale`, `wp_fractional_scale_v1`, render,
+damage, cursor and the shell's viewporter. **Done and accepted** on the real panel at
+1.0/1.25/1.5 on 2026-10-21. Pending: per-output scale with 8b. Test:
+`./dev.sh demo` with `scale = 1.25` in `display.domain`.
 
-### 10 — Lock con autenticación
+### 10 — Lock with authentication
 
-PAM en el proceso del lock, campo enmascarado, auto-lock por
-`ext-idle-notify-v1`, recuperación con backoff y `Ctrl+Alt+L` (bloquea o
-relanza, nunca desbloquea). **Hecho y aceptado** en panel real el 2026-10-21.
-Pendiente: repetir el desbloqueo con credenciales reales del ThinkPad.
+PAM in the lock process, masked field, auto-lock via
+`ext-idle-notify-v1`, recovery with backoff and `Ctrl+Alt+L` (locks or
+relaunches, never unlocks). **Done and accepted** on the real panel on 2026-10-21.
+Pending: repeat the unlock with the ThinkPad's real credentials.
 
-### 11 — Protocolos de uso diario
+### 11 — Everyday protocols
 
 `wp_presentation`, `xdg-activation`, `wp_cursor_shape`, shake-to-locate,
-pointer constraints, relative pointer, captura de salida/ventana y capturas
-macOS (`Shift+Super+3/4`, PrintScreen). **Aceptado en anidado el 2026-10-23.**
-Pendiente: presentation en vkms/DRM, captura rotada y la app de
-`Shift+Super+5` (temporizador, miniatura, `Control` al portapapeles, `Option`
-sin sombra). Pruebas: `./dev.sh presentation`, `activation`, `pointers`,
-`screencopy` y `screencopy-window`.
-**Apps X11 (2026-11-03, ADR 0056):** xwayland-satellite con `-listenfd`; el
-compositor exporta `DISPLAY` a sus hijos y al user manager. Probado contra
-weston headless con `xdpyinfo` y `xeyes`; falta en sesión con OnlyOffice.
+pointer constraints, relative pointer, output/window capture and macOS
+screenshots (`Shift+Super+3/4`, PrintScreen). **Accepted in nested mode on 2026-10-23.**
+Pending: presentation on vkms/DRM, rotated capture and the
+`Shift+Super+5` app (timer, thumbnail, `Control` to the clipboard, `Option`
+without shadow). Tests: `./dev.sh presentation`, `activation`, `pointers`,
+`screencopy` and `screencopy-window`.
+**X11 apps (2026-11-03, ADR 0056):** xwayland-satellite with `-listenfd`; the
+compositor exports `DISPLAY` to its children and to the user manager. Tested against
+headless weston with `xdpyinfo` and `xeyes`; still to test in a session with OnlyOffice.
 
-### 12 — Portales y servicios
+### 12 — Portals and services
 
-**12a parcial:** `xdg-desktop-portal-malaysia` sirve `Settings`
-(`org.freedesktop.appearance` desde `appearance.domain`, `SettingChanged`,
-`UseIn=Malaysia` y GTK de fallback) y `org.gnome.desktop.interface`
-`color-scheme`. **Puente GTK hecho (2026-10-31, ADR 0050):** acento exacto y
-tinte en GTK 3/4 y libadwaita por CSS de usuario; GTK 3 oscuro por
-`settings.ini`; el portal arranca con `malaysia-session.target`. **En vivo
-(2026-11-01, ADR 0055):** el portal publica `org.malaysia.appearance`
-(`gtk4-css`, `accent-color`) y la libadwaita parcheada cambia acento y tinte
-sin reabrir la app; Flatpak y GTK 3 siguen al reabrir. Prueba:
-`cargo test -p xdg-desktop-portal-malaysia`, y en sesión abrir Nautilus con
-`window_color = "wallpaper"`. Faltan `Screenshot`/`ScreenCast` y los
-diálogos de permiso. **12b pendiente:** notificaciones, polkit, keyring/Secret
-Service y AT-SPI.
+**12a partial:** `xdg-desktop-portal-malaysia` serves `Settings`
+(`org.freedesktop.appearance` from `appearance.domain`, `SettingChanged`,
+`UseIn=Malaysia` and GTK as fallback) and `org.gnome.desktop.interface`
+`color-scheme`. **GTK bridge done (2026-10-31, ADR 0050):** exact accent and
+tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
+`settings.ini`; the portal starts with `malaysia-session.target`. **Live
+(2026-11-01, ADR 0055):** the portal publishes `org.malaysia.appearance`
+(`gtk4-css`, `accent-color`) and the patched libadwaita changes accent and tint
+without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
+`cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
+`window_color = "wallpaper"`. Missing: `Screenshot`/`ScreenCast` and the
+permission dialogs. **12b pending:** notifications, polkit, keyring/Secret
+Service and AT-SPI.
 
-### 13 — Chrome y launcher
+### 13 — Chrome and launcher
 
-Launcher `malaysia-shell launcher` + `Super+Space` **hecho (2026-10-23)**.
-Marco unificado **hecho (2026-10-24):** esquinas de 16 px, sombra
-compositor-side, borde interior y titlebar SSD integrados; las CSD reciben
-esquinas/sombra/borde sin titlebar. Glifos de hover y doble clic también hechos.
-Pendiente: modo foco real y captura de ventana con marco. Prueba:
-`./dev.sh titlebar` y `./dev.sh demo`.
-Pendiente también la barra de menús transparente de Tahoe, con opción para
-mostrar su fondo; hasta entonces el escritorio se construye como con
-«Reducir transparencia» y la barra es opaca (`shell-bar`).
+Launcher `malaysia-shell launcher` + `Super+Space` **done (2026-10-23)**.
+Unified frame **done (2026-10-24):** 16 px corners, compositor-side
+shadow, inner border and integrated SSD titlebar; CSD windows receive
+corners/shadow/border without a titlebar. Hover glyphs and double click also done.
+Pending: real focus mode and window capture with frame. Test:
+`./dev.sh titlebar` and `./dev.sh demo`.
+Also pending: Tahoe's transparent menu bar, with an option to show its
+background; until then the desktop is built as with «Reduce transparency»
+and the bar is opaque (`shell-bar`).
 
-### 14 — Menú global
+### 14 — Global menu
 
-`org_kde_kwin_appmenu` + `com.canonical.dbusmenu` (ADR 0036/0040) y
-`gtk_shell1` → `org.gtk.Menus` (ADR 0045). Las fuentes de estado son el
-documento del bloque fusionado en `fb02921` (`git show
-fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
+`org_kde_kwin_appmenu` + `com.canonical.dbusmenu` (ADR 0036/0040) and
+`gtk_shell1` → `org.gtk.Menus` (ADR 0045). The status sources are the
+block document merged in `fb02921` (`git show
+fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
 
-**Hechos:**
+**Done:**
 
-- 14a (popups en BarrierKit): aceptado 2026-10-24; submenús hermanos
-  re-aceptados 2026-10-28.
-- 14b-1 (menú de escritorio): 2026-10-24.
-- 14c (menú por app con respaldo de `.desktop`): 2026-10-25.
-- 14d-1 (compositor, `org_kde_kwin_appmenu` + evento `app_menu` de Infinity
-  v2): implementado; `7c3bfd1` y `fb4005f` en el tag
-  `archivo/historia-hasta-2026-10-26`, código en
+- 14a (popups in BarrierKit): accepted 2026-10-24; sibling submenus
+  re-accepted 2026-10-28.
+- 14b-1 (desktop menu): 2026-10-24.
+- 14c (per-app menu with `.desktop` fallback): 2026-10-25.
+- 14d-1 (compositor, `org_kde_kwin_appmenu` + Infinity v2 `app_menu`
+  event): implemented; `7c3bfd1` and `fb4005f` in the tag
+  `archivo/historia-hasta-2026-10-26`, code in
   `crates/malaysia-compositor/src/appmenu.rs`.
-- 14d-2/3 (cliente dbusmenu, árbol completo): 2026-10-26.
-- 14d-5/6 (títulos recordados, `MENU_GRACE`, separadores): 2026-10-27.
-- 14e (apps propias exportan dbusmenu): aceptado 2026-10-26 con el ejemplo
-  `contador`, retirado el 2026-11-02; hoy lo prueba Ondina (barrierkit
-  `crates/ondina`, `crates/barrier-kit/src/platform/app_menu_export.rs`).
-- 14f-1 (`gtk_shell1` v5 + evento `gtk_menus` de Infinity v3): aceptado
-  2026-10-28 en sesión anidada (`crates/malaysia-compositor/src/gtk.rs`; la
-  barra solo registra la dirección, `crates/malaysia-shell/src/menubar/bar.rs`).
-- Teclado en los popups (barrierkit `crates/barrier-kit/src/menu.rs`,
-  `on_global_key_down`): ↑↓, Inicio/Fin, → abre submenú, ← cierra el nivel,
-  Enter/Espacio activan, ←→ en el menú raíz pasan al título vecino
-  (`with_navigation`, usado en `crates/malaysia-shell/src/menubar/menu.rs`).
-  Esc lo resuelve el compositor (`State::dismiss_topmost_popup`).
+- 14d-2/3 (dbusmenu client, full tree): 2026-10-26.
+- 14d-5/6 (remembered titles, `MENU_GRACE`, separators): 2026-10-27.
+- 14e (own apps export dbusmenu): accepted 2026-10-26 with the
+  `contador` example, removed on 2026-11-02; today Ondina tests it (barrierkit
+  `crates/ondina`, `crates/bk/src/platform/app_menu_export.rs`).
+- 14f-1 (`gtk_shell1` v5 + Infinity v3 `gtk_menus` event): accepted
+  2026-10-28 in a nested session (`crates/malaysia-compositor/src/gtk.rs`; the
+  bar only records the address, `crates/malaysia-shell/src/menubar/bar.rs`).
+- Keyboard in the popups (barrierkit `crates/bk/src/menu.rs`,
+  `on_global_key_down`): ↑↓, Home/End, → opens a submenu, ← closes the level,
+  Enter/Space activate, ←→ in the root menu move to the neighboring title
+  (`with_navigation`, used in `crates/malaysia-shell/src/menubar/menu.rs`).
+  The compositor handles Esc (`State::dismiss_topmost_popup`).
 
-**Pendientes:**
+**Pending:**
 
-- 14f-2: aceptado 2026-11-01 en sesión anidada con
-  `gtk3-demo-application` (menú Preferences en la barra; `7a8199d`,
+- 14f-2: accepted 2026-11-01 in a nested session with
+  `gtk3-demo-application` (Preferences menu in the bar; `7a8199d`,
   `menubar/gtkmenus.rs`, ADR 0045 §5–6).
-- 14b-2: implementado 2026-11-01, falta aceptarlo en anidado.
-  - Suspender va directo; Reiniciar…, Apagar… y Cerrar sesión… abren
-    `malaysia-shell power <acción>`: diálogo estilo macOS (icono, pregunta,
-    cuenta atrás de 60 s que ejecuta la acción, Cancelar/acción a lo ancho).
-    logind: `Suspend`/`Reboot`/`PowerOff(true)` y `TerminateSession` con
-    `XDG_SESSION_ID`, que el compositor importa al user manager
+- 14b-2: implemented 2026-11-01, still to accept in nested mode.
+  - Sleep runs directly; Restart…, Shut Down… and Log Out… open
+    `malaysia-shell power <action>`: a macOS-style dialog (icon, question,
+    60 s countdown that runs the action, full-width Cancel/action).
+    logind: `Suspend`/`Reboot`/`PowerOff(true)` and `TerminateSession` with
+    `XDG_SESSION_ID`, which the compositor imports into the user manager
     (`crates/malaysia-shell/src/power.rs`).
-  - `MALAYSIA_POWER_DRY_RUN=1` (por defecto en `./dev.sh`, forzado en el
-    compositor anidado) solo escribe la llamada en el log.
-  - Menú ❄: Acerca de este PC, Ajustes del sistema… (con iconos),
-    Elementos recientes (apps enfocadas en `recents.domain` y documentos de
-    `recently-used.xbel`; «Vaciar menú» oculta lo anterior), energía,
-    Bloquear pantalla y «Cerrar sesión de <nombre>…» (GECOS).
-  - Forzar salida… (⌥❖Esc, ya no está en el menú ❄): `malaysia-shell force-quit` lista
-    una fila por app de `zwlr_foreign_toplevel` con su icono; el botón pide
-    `force_quit` (Infinity v4, barrierkit `8b96ae7`) y el compositor envía
-    SIGKILL al pid de las credenciales del socket.
-  - Acerca de este PC: `malaysia-shell about`, ventana fija con semáforos
-    como «Acerca de este Mac». Modelo por DMI (Lenovo guarda «ThinkPad …» en
-    `product_version`); dibujo `about/thinkpad.svg` para ThinkPad y
-    `about/generic.svg` para el resto. Subtítulo con las pulgadas del panel
-    (EDID). Filas como en macOS: procesador; gráficos (la GPU integrada del
-    nombre del procesador o, si no, `pci.ids` de `hwdata` y la VRAM);
-    memoria; disco de arranque («SSD de 512 GB», siguiendo LUKS/LVM); número
-    de serie si es legible; y el sistema con su versión (`NAME` y `VERSION`
-    de `/etc/os-release`, p. ej. «NixOS · 26.05 (Yarara)»). «Más
-    información…» abre Ajustes (`crates/malaysia-shell/src/dialogs.rs`). Mide
-    280×547, como en Tahoe.
-- Mnemónicos, Espacio y scroll: implementados 2026-11-01, falta aceptarlos en
-  anidado (barrierkit `bdbd583` y `a2394a6`, `menu.rs`).
-  - dbusmenu y GTK convierten `_` en `MNEMONIC_MARK` (U+2063, invisible y sin
-    ancho); con Alt pulsado la fila subraya esa letra y al soltarlo vuelve al
-    texto normal. Las comparaciones de títulos y la búsqueda la ignoran.
-  - Espacio activa solo sin Ctrl ni Alt (`inserts_text`): Ctrl+Espacio es del
-    método de entrada y Alt+Espacio del menú de ventana. En la búsqueda de
-    Ayuda un espacio se escribe en la consulta.
-  - Menús más altos que la salida: el menú raíz pide `resize_y` sin `slide_y`
-    (no se sube encima de la barra) y los submenús `slide_y` + `resize_y`.
-    `MenuView` muestra franjas ▲/▼ que desplazan al pasar el cursor, la rueda
-    desplaza y el foco del teclado queda a la vista; los submenús se anclan a
-    la fila visible (`PopupHandle::scroll_shift`).
-- «Ajustes del sistema…» del menú ❄ no abre el cliente con
-  `MALAYSIA_TEST_INPUT` en la sesión anidada.
-- Aceptación en DRM de 14a, 14b-1 y 14c.
-- 14f-3 (libadwaita, ADR 0052): el fork `HBlanqueto/libadwaita` publica el
-  menú ☰ como menubar con `x-adw-app-menu` y la barra lo pliega en el título
-  de la app. Falta el overlay de Nix con el fork y aceptarlo con una app
-  libadwaita real.
-- 14f-4 (GTK 3 con `GtkMenuBar`): implementado 2026-11-04, falta aceptarlo con
-  virt-manager. El módulo NixOS instala `appmenu-gtk-module`
-  (`nix/appmenu-gtk-module.nix`) y lo carga con `GTK_MODULES`; la barra
-  resuelve sus acciones `unity.*` en `menubar_path` (`menubar/gtkmenus.rs`).
-  Aceptado 2026-11-04 con virt-manager (parche
+  - `MALAYSIA_POWER_DRY_RUN=1` (default in `./dev.sh`, forced in the
+    nested compositor) only writes the call to the log.
+  - ❄ menu: About This PC, System Settings… (with icons),
+    Recent Items (focused apps in `recents.domain` and documents from
+    `recently-used.xbel`; «Clear Menu» hides the earlier ones), power,
+    Lock Screen and «Log Out <name>…» (GECOS).
+  - Force Quit… (⌥❖Esc, no longer in the ❄ menu): `malaysia-shell force-quit` lists
+    one row per `zwlr_foreign_toplevel` app with its icon; the button requests
+    `force_quit` (Infinity v4, barrierkit `8b96ae7`) and the compositor sends
+    SIGKILL to the pid from the socket credentials.
+  - About This PC: `malaysia-shell about`, a fixed window with traffic lights
+    like «About This Mac». Model from DMI (Lenovo stores «ThinkPad …» in
+    `product_version`); drawing `about/thinkpad.svg` for ThinkPad and
+    `about/generic.svg` for the rest. Subtitle with the panel's inches
+    (EDID). Rows as on macOS: processor; graphics (the integrated GPU from
+    the processor name or, otherwise, `pci.ids` from `hwdata` plus the VRAM);
+    memory; startup disk («512 GB SSD», following LUKS/LVM); serial number if
+    readable; and the system with its version (`NAME` and `VERSION` from
+    `/etc/os-release`, e.g. «NixOS · 26.05 (Yarara)»). «More Info…» opens
+    Settings (`crates/malaysia-shell/src/dialogs.rs`). It measures 280×547,
+    as on Tahoe.
+- Mnemonics, Space and scrolling: implemented 2026-11-01, still to accept in
+  nested mode (barrierkit `bdbd583` and `a2394a6`, `menu.rs`).
+  - dbusmenu and GTK turn `_` into `MNEMONIC_MARK` (U+2063, invisible and
+    zero-width); with Alt held, the row underlines that letter and on release it returns to
+    plain text. Title comparisons and search ignore it.
+  - Space activates only without Ctrl or Alt (`inserts_text`): Ctrl+Space belongs to the
+    input method and Alt+Space to the window menu. In the Help
+    search, a space is typed into the query.
+  - Menus taller than the output: the root menu requests `resize_y` without `slide_y`
+    (it does not go up over the bar) and submenus `slide_y` + `resize_y`.
+    `MenuView` shows ▲/▼ strips that scroll on hover, the wheel
+    scrolls and the keyboard focus stays in view; submenus anchor to
+    the visible row (`PopupHandle::scroll_shift`).
+- «System Settings…» in the ❄ menu does not open the client with
+  `MALAYSIA_TEST_INPUT` in the nested session.
+- Acceptance on DRM of 14a, 14b-1 and 14c.
+- 14f-3 (libadwaita, ADR 0052): the `HBlanqueto/libadwaita` fork publishes the
+  ☰ menu as a menubar with `x-adw-app-menu` and the bar folds it into the
+  app's title. Missing: the Nix overlay with the fork and acceptance with a real
+  libadwaita app.
+- 14f-4 (GTK 3 with `GtkMenuBar`): implemented 2026-11-04, pending acceptance
+  with virt-manager. The NixOS module installs `appmenu-gtk-module`
+  (`nix/appmenu-gtk-module.nix`) and loads it with `GTK_MODULES`; the bar
+  resolves its `unity.*` actions on `menubar_path` (`menubar/gtkmenus.rs`).
+  Accepted 2026-11-04 with virt-manager (patch
   `nix/patches/appmenu-gtk-module-wayland-realize.patch`).
-- 14f-5 (Electron 43): implementado 2026-11-04, falta aceptarlo con Bitwarden.
-  `programs.malaysia.globalMenu.electron.enable` aplica electron/electron#54629
-  (`nix/patches/electron-wayland-appmenu.patch`) y añade `libdbusmenu` al rpath.
-  Chromium 150 ya trae `org_kde_kwin_appmenu` (`ozone_platform_wayland.cc`); falta probarlo.
-- 14g (menús de atajos, ADR 0061): implementado 2026-11-07, falta aceptarlo
-  con WPS y ONLYOFFICE. Catálogo de 57 apps (ofimática sin menú, IDEs,
-  Electron y terminales) en `crates/malaysia-shell/shortcuts/` e Infinity v6
-  `send_shortcut`.
+- 14f-5 (Electron 43): implemented 2026-11-04, pending acceptance with
+  Bitwarden. `programs.malaysia.globalMenu.electron.enable` applies
+  electron/electron#54629 (`nix/patches/electron-wayland-appmenu.patch`) and
+  adds `libdbusmenu` to the rpath. Chromium 150 already ships
+  `org_kde_kwin_appmenu` (`ozone_platform_wayland.cc`); not tested yet.
+- 14g (shortcut menus, ADR 0061): implemented 2026-11-07, pending acceptance
+  with WPS and ONLYOFFICE. Catalog of 57 apps (office apps without a menu,
+  IDEs, Electron and terminals) in `crates/malaysia-shell/shortcuts/` and
+  Infinity v6 `send_shortcut`.
 
-**Fuera del bloque (anotado):** HUD en el launcher y casado por pid del
-Registrar (XWayland).
+**Outside the block (noted):** HUD in the launcher and Registrar matching by
+pid (XWayland).
 
-Prueba: `./dev.sh demo` con apps reales.
+Test: `./dev.sh demo` with real apps.
 
-### 15 — Rebranding a Malaysia
+### 15 — Rebranding to Malaysia
 
-Crates, binarios, D-Bus, variables `MALAYSIA_*`, rutas `~/.config/malaysia` y
-`~/.local/share/malaysia`, Nix, PAM, portal y sesión. **Hecho (2026-10-26).**
-Los nombres antiguos (Yuki, CelestialKit, Neptunia) solo se conservan en los ADR
-como registro histórico (ADR 0043).
+Crates, binaries, D-Bus, `MALAYSIA_*` variables, paths `~/.config/malaysia` and
+`~/.local/share/malaysia`, Nix, PAM, portal and session. **Done (2026-10-26).**
+The old names (Yuki, CelestialKit, Neptunia) are kept only in the superseded ADRs
+as a historical record (ADR 0043).
 
-### 16 — Fondo en Vulkan
+### 16 — Wallpaper on Vulkan
 
-**16a en curso:** `malaysia-wallpaper` es un cliente propio con wgpu/Vulkan
-sobre layer-shell, escala fraccional, mipmaps, dmabuf sin copias y recarga por
-inotify de `wallpaper.domain` (ADR 0049). **16b en curso:** el fondo por
-defecto es `malaysia-dream.heic` (decodificado con libheif). **16c** (fondos
-dinámicos y throttling de frame callbacks) pendiente. Prueba:
+**16a in progress:** `malaysia-wallpaper` is an own client with wgpu/Vulkan
+over layer-shell, fractional scale, mipmaps, zero-copy dmabuf and inotify reload
+of `wallpaper.domain` (ADR 0049). **16b in progress:** the default wallpaper is
+`malaysia-dream.heic` (decoded with libheif). **16c** (dynamic wallpapers and
+frame callback throttling) pending. Test:
 `./dev.sh wallpaper-check`.
 
-### 17 — Espacios y modo foco
+### 17 — Spaces and focus mode
 
-Concepto y plan en el ADR 0051.
+Concept and plan in ADR 0051.
 
-- **17a — Fila de espacios. Hecho (2026-11-01), sin aceptar en sesión.**
-  `malaysia_scene::spaces` guarda la fila (hasta 99 escritorios; los de foco
-  no cuentan) y dónde vive cada ventana. El compositor saca de la escena las
-  ventanas de otros espacios (`Windows::set_off_space`, aparte de minimizar).
-  `Ctrl+Alt+←/→` cambia de espacio y `Ctrl+Alt+N` añade un escritorio. Una
-  ventana nueva va al escritorio mostrado y un diálogo va con su padre.
-  Enfocar una ventana de otro espacio (dock, activación) muestra su espacio.
-  Prueba: `./dev.sh demo`, abrir ventanas, `Ctrl+Alt+N`, abrir otra y alternar
-  con `Ctrl+Alt+←/→`; el log muestra `space shown`.
-- **17b — Deslizamiento. Hecho (2026-11-01), sin aceptar en sesión.** Al
-  cambiar de espacio la fila se desliza (`SPACE_SLIDE_MS` 480 ms, curva
-  `SPACE_SLIDE_EASE`) con una franja negra de `SPACE_GAP` (48 px) entre
-  espacios; los tokens están en `vow-design` (barrierkit `55614a3`). La barra
-  superior (panel Top anclado arriba con zona exclusiva) y el fondo se dibujan
-  dentro de cada escritorio y se van con él; el dock y los demás paneles
-  quedan fijos. Las ventanas del destino reciben la entrada desde el primer
-  frame y una segunda pulsación reorienta el deslizamiento desde donde está.
-  `appearance.reduced_motion` lo quita. Prueba: `./dev.sh demo`, dos
-  escritorios con ventanas y `Ctrl+Alt+←/→`.
-- **17c — Modo foco. Hecho (2026-11-01), sin aceptar en sesión.** El
-  semáforo verde (`green_button = "focus"`), el verde propio de una app CSD,
-  F11 (`set_fullscreen`) y `Ctrl+Super+F` crean un espacio de foco a la
-  derecha del escritorio. La ventana recibe `fullscreen` y crece desde su
-  marco hasta la salida, con la esquina pasando de 16 a 0, mientras la fila se
-  desliza. La ventana se dibuja por encima del dock, que no se mueve hasta
-  quedar tapado. En el espacio de foco la barra y el dock no se dibujan ni
-  reciben clics, y el fondo es negro. Salir hace lo inverso y borra el espacio
-  al terminar; cerrar la ventana lo borra al instante. Durante la animación se
-  ignoran `Ctrl+Alt+←/→`. Al terminar de crecer, la animación sigue
-  dibujando la ventana a pantalla completa hasta que el cliente entrega su
-  buffer a ese tamaño (máximo 300 ms), para no mostrar un frame negro; el log
-  `focus transition handed over` dice cuánto esperó. Prueba: `./dev.sh demo`,
-  botón verde de una ventana SSD, `Ctrl+Alt+←/→` entre el escritorio y el
-  foco, y verde otra vez. Una ventana de ancho fijo (Ajustes) nunca entra en
-  foco: su verde la estira en vertical. Las apps CSD de barrierkit piden
-  fullscreen con su verde (barrierkit `ec9ff5a`), y un `set_maximized` sobre
-  una ventana en foco la saca.
-- **17d — Borde superior. Hecho (2026-11-01), sin aceptar en sesión.** En un
-  espacio de foco quieto, el puntero en el borde superior baja la barra sobre
-  una franja negra (`DURATION_BASE`, 220 ms). Una ventana SSD recupera su
-  titlebar Tengen bajo la barra, encima del contenido y a lo ancho; sus
-  semáforos funcionan (el verde sale del foco) y esa franja no llega al
-  cliente. Una ventana CSD (barrierkit, libadwaita) baja entera la altura de
-  la barra, también para la entrada, y su propia barra queda visible (desde
-  el 17g, solo los clientes v1 de `infinity_focus_v1`). La barra
-  sube cuando el puntero baja más de dos titlebars por debajo de ella, salvo
-  con un menú abierto. La barra negra con texto blanco llega con el 17e. Prueba: `./dev.sh demo`, modo
-  foco con una ventana SSD y con una CSD, y el puntero arriba.
-- **17e — Infinity. Hecho (2026-11-01), sin aceptar en sesión.** Infinity v5 (barrierkit `ee5b141`) añade el evento `space`:
-  posición, número de espacios, escritorio y estado de la barra sobre un
-  foco (`focus_bar`: none, hidden, revealed). El compositor lo envía al
-  bindear y en cada cambio; la shell lo publica en `Toplevels::space`. Sobre
-  un espacio de foco la menubar se pinta con `FOCUS_BAR_BACKGROUND` (negro) y
-  `FOCUS_BAR_TEXT` (blanco). Para las apps, el protocolo aparte
-  `infinity_focus_v1` (barrierkit `c8965c3`) está abierto a cualquier
-  cliente: el objeto de una superficie recibe `bar(1)` cuando la barra baja
-  sobre la ventana CSD en foco (y la ventana baja con ella) y `bar(0)` cuando
-  sube. El kit oculta los semáforos de su titlebar y de su barra lateral en
-  fullscreen y los muestra solo con `bar(1)`, como Finder. Prueba: modo foco
-  con una app de barrierkit (sin semáforos), puntero arriba (aparecen),
-  puntero abajo (se van).
-- **17f — libadwaita. Hecho (2026-11-01), sin aceptar en sesión.** El fork
-  (`src/adw-focus-mode.c`, ADR 0053) liga `infinity_focus_manager_v1` si el
-  compositor lo ofrece y crea un `infinity_focus_surface_v1` por ventana
-  realizada. En fullscreen, las `AdwToolbarView` exteriores (fuera de
-  diálogos y popovers) esconden sus barras superiores; `bar(1)` las muestra
-  con su animación y `bar(0)` las esconde. Al salir de fullscreen vuelven.
-  Una vista cuyo `reveal-top-bars` gestiona la app no se toca.
-  `ADW_DISABLE_FOCUS_MODE` lo desactiva; sin el global no cambia nada. Llega
-  por `nix/patches/libadwaita-focus-mode.patch` en el paquete
-  `libadwaita-global-menu` (dev shell y `system.replaceDependencies`). El
-  compositor no cambia. Tests en el fork (`tests/test-focus-mode.c`).
-  Prueba: `./dev.sh demo`, gnome-calculator y gnome-text-editor lanzadas
-  desde el dev shell; en foco sin headerbar, puntero arriba (aparece bajo la
-  barra), puntero abajo (se va), salir del foco (siempre visible). Con
-  `ADW_DISABLE_FOCUS_MODE=1`, comportamiento upstream.
-- **17g — Titlebar superpuesta. Hecho (2026-11-01), sin aceptar en sesión.**
-  `infinity_focus_v1` v2 (barrierkit `3841a09`, ADR 0054): con
-  `set_overlay` el compositor no mueve la ventana CSD al bajar la barra y le
-  envía `bar_height` antes de `bar(1)`. barrierkit saca la titlebar del
-  layout en fullscreen y la dibuja sobre el contenido debajo de la barra;
-  libadwaita (fork `605edc1`) extiende el contenido y muestra sus barras
-  superiores encima, opacas. Los clientes v1 siguen deslizándose. Prueba:
-  `./dev.sh demo`, modo foco con una app de barrierkit y con
-  gnome-calculator; puntero arriba: la titlebar aparece bajo la barra negra
-  y el contenido no se mueve ni pierde la parte de abajo.
-- **17h — Barras de pantalla completa y Rail en foco. Hecho (2026-11-03),
-  sin aceptar en sesión.** barrierkit `f7362c9` (ADR 0054, «Cambios
-  posteriores»): la titlebar superpuesta se dibuja lisa (por defecto) o con
-  vidrio que difumina lo de debajo; `fullscreen_push` baja el contenido en vez
-  de taparlo; las dos opciones cambian en vivo. Con el Rail la titlebar se
-  queda en su sitio, solo entra el rail desde la izquierda y la primera fila
-  de la barra lateral sube a la fila de la titlebar. Prueba: `./dev.sh demo`,
-  Tengen App Show en foco; en Ventana › Pantalla completa, cada barra y el
-  empuje con el puntero arriba; en Ventana › Titlebar, Rail normal y
-  unificado: nada baja con la barra y el rail entra por la izquierda.
-- **14f-3 — Menú global para apps libadwaita.** Implementado: parche
-  `nix/patches/libadwaita-global-menu.patch`, paquete
-  `packages.<system>.libadwaita-global-menu` y opción de NixOS
-  `programs.malaysia.globalMenu.libadwaita.enable` con
-  `system.replaceDependencies` (ADR 0052). Falta aceptarlo en sesión anidada
-  con una app real (`gnome-text-editor` o `gnome-calculator`).
+- **17a — Space row. Done (2026-11-01), not accepted in a session.**
+  `malaysia_scene::spaces` stores the row (up to 99 desktops; focus spaces
+  do not count) and where each window lives. The compositor removes from the scene the
+  windows of other spaces (`Windows::set_off_space`, separate from minimizing).
+  `Ctrl+Alt+←/→` switches space and `Ctrl+Alt+N` adds a desktop. A
+  new window goes to the shown desktop and a dialog goes with its parent.
+  Focusing a window on another space (dock, activation) shows its space.
+  Test: `./dev.sh demo`, open windows, `Ctrl+Alt+N`, open another one and switch
+  with `Ctrl+Alt+←/→`; the log shows `space shown`.
+- **17b — Slide. Done (2026-11-01), not accepted in a session.** When
+  switching space the row slides (`SPACE_SLIDE_MS` 480 ms, curve
+  `SPACE_SLIDE_EASE`) with a black strip of `SPACE_GAP` (48 px) between
+  spaces; the tokens are in `ctdesign` (barrierkit `55614a3`). The top
+  bar (Top panel anchored at the top with an exclusive zone) and the wallpaper are drawn
+  inside each desktop and leave with it; the dock and the other panels
+  stay fixed. The destination's windows receive input from the first
+  frame and a second press reorients the slide from where it is.
+  `appearance.reduced_motion` removes it. Test: `./dev.sh demo`, two
+  desktops with windows and `Ctrl+Alt+←/→`.
+- **17c — Focus mode. Done (2026-11-01), not accepted in a session.** The
+  green traffic light (`green_button = "focus"`), a CSD app's own green button,
+  F11 (`set_fullscreen`) and `Ctrl+Super+F` create a focus space to the
+  right of the desktop. The window receives `fullscreen` and grows from its
+  frame to the output, with the corner going from 16 to 0, while the row
+  slides. The window is drawn above the dock, which does not move until
+  it is covered. In the focus space the bar and the dock are not drawn and do not
+  receive clicks, and the background is black. Exiting does the reverse and deletes the space
+  at the end; closing the window deletes it instantly. During the animation
+  `Ctrl+Alt+←/→` is ignored. When it finishes growing, the animation keeps
+  drawing the window fullscreen until the client delivers its
+  buffer at that size (300 ms at most), so that no black frame shows; the log
+  `focus transition handed over` says how long it waited. Test: `./dev.sh demo`,
+  green button of an SSD window, `Ctrl+Alt+←/→` between the desktop and the
+  focus space, and green again. A fixed-width window (Settings) never enters
+  focus: its green button stretches it vertically. barrierkit CSD apps request
+  fullscreen with their green button (barrierkit `ec9ff5a`), and a `set_maximized` on
+  a window in focus takes it out.
+- **17d — Top edge. Done (2026-11-01), not accepted in a session.** In a
+  still focus space, the pointer at the top edge lowers the bar over
+  a black strip (`DURATION_BASE`, 220 ms). An SSD window gets back its
+  Tengen titlebar below the bar, above the content and full width; its
+  traffic lights work (green exits focus) and that strip does not reach the
+  client. A CSD window (barrierkit, libadwaita) moves down entirely by the height of
+  the bar, input included, and its own bar stays visible (since
+  17g, only `infinity_focus_v1` v1 clients). The bar
+  goes up when the pointer moves more than two titlebars below it, except
+  with a menu open. The black bar with white text arrives with 17e. Test: `./dev.sh demo`, focus
+  mode with an SSD window and with a CSD one, and the pointer at the top.
+- **17e — Infinity. Done (2026-11-01), not accepted in a session.** Infinity v5 (barrierkit `ee5b141`) adds the `space` event:
+  position, number of spaces, desktop and the state of the bar over a
+  focus space (`focus_bar`: none, hidden, revealed). The compositor sends it on
+  bind and on each change; the shell publishes it in `Toplevels::space`. Over
+  a focus space the menubar is painted with `FOCUS_BAR_BACKGROUND` (black) and
+  `FOCUS_BAR_TEXT` (white). For apps, the separate protocol
+  `infinity_focus_v1` (barrierkit `c8965c3`) is open to any
+  client: a surface's object receives `bar(1)` when the bar lowers
+  over the CSD window in focus (and the window moves down with it) and `bar(0)` when it
+  goes up. The kit hides the traffic lights of its titlebar and of its sidebar in
+  fullscreen and shows them only with `bar(1)`, like Finder. Test: focus mode
+  with a barrierkit app (no traffic lights), pointer at the top (they appear),
+  pointer down (they go away).
+- **17f — libadwaita. Done (2026-11-01), not accepted in a session.** The fork
+  (`src/adw-focus-mode.c`, ADR 0053) binds `infinity_focus_manager_v1` if the
+  compositor offers it and creates one `infinity_focus_surface_v1` per realized
+  window. In fullscreen, the outer `AdwToolbarView`s (outside
+  dialogs and popovers) hide their top bars; `bar(1)` shows them
+  with their animation and `bar(0)` hides them. On leaving fullscreen they come back.
+  A view whose `reveal-top-bars` the app manages is left alone.
+  `ADW_DISABLE_FOCUS_MODE` disables it; without the global nothing changes. It arrives
+  through `nix/patches/libadwaita-focus-mode.patch` in the
+  `libadwaita-global-menu` package (dev shell and `system.replaceDependencies`). The
+  compositor does not change. Tests in the fork (`tests/test-focus-mode.c`).
+  Test: `./dev.sh demo`, gnome-calculator and gnome-text-editor launched
+  from the dev shell; in focus without a headerbar, pointer at the top (it appears below the
+  bar), pointer down (it goes away), leave focus (always visible). With
+  `ADW_DISABLE_FOCUS_MODE=1`, upstream behavior.
+- **17g — Overlay titlebar. Done (2026-11-01), not accepted in a session.**
+  `infinity_focus_v1` v2 (barrierkit `3841a09`, ADR 0054): with
+  `set_overlay` the compositor does not move the CSD window when the bar lowers and
+  sends it `bar_height` before `bar(1)`. barrierkit takes the titlebar out of the
+  layout in fullscreen and draws it over the content below the bar;
+  libadwaita (fork `605edc1`) extends the content and shows its top
+  bars on top, opaque. v1 clients keep sliding. Test:
+  `./dev.sh demo`, focus mode with a barrierkit app and with
+  gnome-calculator; pointer at the top: the titlebar appears below the black bar
+  and the content neither moves nor loses its bottom part.
+- **17h — Fullscreen bars and Rail in focus. Done (2026-11-03),
+  not accepted in a session.** barrierkit `f7362c9` (ADR 0054, «Later
+  changes»): the overlay titlebar is drawn plain (by default) or with
+  glass that blurs what is below; `fullscreen_push` moves the content down instead of
+  covering it; both options change live. With the Rail the titlebar
+  stays in place, only the rail comes in from the left and the first row
+  of the sidebar moves up to the titlebar's row. Test: `./dev.sh demo`,
+  Tengen App Show in focus; in Window › Fullscreen, each bar and the
+  push with the pointer at the top; in Window › Titlebar, normal and
+  unified Rail: nothing moves down with the bar and the rail comes in from the left.
+- **14f-3 — Global menu for libadwaita apps.** Implemented: patch
+  `nix/patches/libadwaita-global-menu.patch`, package
+  `packages.<system>.libadwaita-global-menu` and NixOS option
+  `programs.malaysia.globalMenu.libadwaita.enable` with
+  `system.replaceDependencies` (ADR 0052). Still to accept in a nested session
+  with a real app (`gnome-text-editor` or `gnome-calculator`).
 
-### Transversal — NixOS
+### Cross-cutting — NixOS
 
-`nixosModules.default` (`programs.malaysia.enable`) instala paquete, sesión,
-PAM, `hardware.graphics`, units de shell y `xdg.portal` con GTK de fallback.
-Pendiente: `services.graphical-desktop`, `security.polkit`, keyring/AT-SPI y una
-VM que arranque `malaysia-session.target`.
+`nixosModules.default` (`programs.malaysia.enable`) installs the package, session,
+PAM, `hardware.graphics`, shell units and `xdg.portal` with GTK as fallback.
+Pending: `services.graphical-desktop`, `security.polkit`, keyring/AT-SPI and a
+VM that boots `malaysia-session.target`.

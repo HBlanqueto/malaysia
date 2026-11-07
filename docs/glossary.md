@@ -1,10 +1,10 @@
-# Glosario de nombres
+# Glossary of names
 
-| Nombre | Identificador en código | Equivalente en macOS | Rol |
+| Name | Identifier in code | macOS equivalent | Role |
 |---|---|---|---|
-| **Malaysia** | `malaysia` | Aqua | El **escritorio** completo: compositor, shell, Ajustes y portales. Corre sobre NixOS, que es el sistema operativo. |
-| **Malaysia Compositor** | `malaysia-compositor` | WindowServer | El **compositor** Wayland de Malaysia, sobre Smithay: coloca, compone y aplica los efectos a todas las ventanas. |
-| **BarrierKit** | `barrier-kit` | AppKit | Toolkit de la **shell** y de las **apps propias** de Malaysia (Settings, ...): ventanas, titlebars, semáforos, widgets, texto. Vive en [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit) (ADR 0048). Se construye sobre los crates de núcleo de Freya `=0.4.3`, con runner Wayland propio y tokens de `vow-design` (ADR 0034). Lo usan la shell (ADR 0023) y las apps propias; **no el compositor**. |
-| **Grade Graphics** | `grade-graphics` | Core Graphics + Core Text | Crate de los **shaders GLSL** del compositor (squircle SDF, hairline, inner line, sombra 9-slice) y sus parámetros. El kit iguala el aspecto con los mismos tokens de `vow-design`, sin usar estos shaders para dibujar su contenido (ADR 0033). |
-| **Grade Animation** | `barrier-kit::animation` | Core Animation | Módulo de animación de BarrierKit sobre `freya-animation`, con un resorte propio (duración + rebote) escrito desde cero (ADR 0034). Lo usan la shell y las apps propias; el compositor no lo necesita. |
-| **Infinity** | `infinity` | SkyLight | Protocolo privado app↔compositor, equivalente a `otto-surface-style`: esquinas, sombras, desenfoque y animaciones. El kit lo trata como **opcional** hasta que el compositor lo implemente (ADR 0034). |
+| **Malaysia** | `malaysia` | Aqua | The complete **desktop**: compositor, shell, Settings and portals. It runs on NixOS, which is the operating system. |
+| **Malaysia Compositor** | `malaysia-compositor` | WindowServer | Malaysia's Wayland **compositor**, on Smithay: it places, composes and applies the effects to all windows. |
+| **BarrierKit** | `bk` | AppKit | Toolkit of the **shell** and of Malaysia's **own apps** (Settings, ...): windows, titlebars, traffic lights, widgets, text. It lives in [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit) (ADR 0048). It is built on Freya's core crates `=0.4.3`, with its own Wayland runner and `ctdesign` tokens (ADR 0034). The shell (ADR 0023) and our own apps use it; **not the compositor**. |
+| **Grade Graphics** | `grade-graphics` | Core Graphics + Core Text | Crate of the compositor's **GLSL shaders** (squircle SDF, hairline, inner line, 9-slice shadow) and their parameters. The kit matches the look with the same `ctdesign` tokens, without using these shaders to draw its content (ADR 0033). |
+| **Grade Animation** | `bk::animation` | Core Animation | BarrierKit's animation module on `freya-animation`, with its own spring (duration + bounce) written from scratch (ADR 0034). The shell and our own apps use it; the compositor does not need it. |
+| **Infinity** | `infinity` | SkyLight | Private app↔compositor protocol, equivalent to `otto-surface-style`: corners, shadows, blur and animations. The kit treats it as **optional** until the compositor implements it (ADR 0034). |

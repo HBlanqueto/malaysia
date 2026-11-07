@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="840" viewBox="0 0 1100 840" font-family="DejaVu Sans, Segoe UI, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#616161"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1e88e5"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5e35b1"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="550" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#1a1a1a">Malaysia + malaysia-shell — division of work</text>
+  <text x="550" y="68" text-anchor="middle" font-size="14" fill="#555">the shell draws the content · Malaysia decides placement, layer and framing</text>
+
+  <!-- ============ THE SHELL (top) ============ -->
+  <rect x="40" y="90" width="1020" height="190" rx="14" fill="#e3f2fd" stroke="#1e88e5" stroke-width="2"/>
+  <text x="60" y="118" font-size="18" font-weight="bold" fill="#0d47a1">MALAYSIA-SHELL — the shell (one process per component, ADR 0023)</text>
+  <text x="60" y="140" font-size="13" fill="#1565c0">Draws the CONTENT of the shell surfaces (bk → pixels). It only requests placement; it never decides the order.</text>
+
+  <!-- Wallpaper -->
+  <rect x="60" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="75" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Wallpaper</text>
+  <text x="75" y="196" font-size="12" fill="#333">Background layer · full screen</text>
+  <text x="75" y="214" font-size="12" fill="#333">reads wallpaper.domain → paints the image</text>
+  <text x="75" y="232" font-size="11" fill="#777">malaysia-wallpaper · wgpu/Vulkan + dmabuf</text>
+
+  <!-- Menu bar -->
+  <rect x="390" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="405" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Menu bar</text>
+  <text x="405" y="196" font-size="12" fill="#333">Top layer · exclusive zone</text>
+  <text x="405" y="214" font-size="12" fill="#333">reads menubar.domain (autohide, ...)</text>
+  <text x="405" y="232" font-size="11" fill="#777">active app, clock, menus</text>
+
+  <!-- Dock -->
+  <rect x="720" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
+  <text x="735" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Dock</text>
+  <text x="735" y="196" font-size="12" fill="#333">Top layer · exclusive zone</text>
+  <text x="735" y="214" font-size="12" fill="#333">reads dock.domain (autohide, mineffect...)</text>
+  <text x="735" y="232" font-size="11" fill="#777">open apps · activate</text>
+
+  <!-- Arrow: the shell requests -->
+  <line x1="70" y1="282" x2="70" y2="318" stroke="#1e88e5" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+  <text x="84" y="304" font-size="12" font-weight="bold" fill="#1e88e5">layer-shell: creates a surface, requests layer / anchors / size / exclusive zone</text>
+
+  <!-- ============ SCREEN (middle) ============ -->
+  <rect x="40" y="322" width="1020" height="200" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
+  <text x="60" y="350" font-size="17" font-weight="bold" fill="#333">SCREEN — the composition order (set by Malaysia)</text>
+
+  <!-- Overlay -->
+  <rect x="60" y="364" width="980" height="26" rx="6" fill="#fff3e0" stroke="#ffb74d"/>
+  <text x="78" y="382" font-size="13" fill="#e65100">Overlay — OSD, lock screen (malaysia-shell lock)</text>
+  <!-- Top -->
+  <rect x="60" y="398" width="980" height="26" rx="6" fill="#ffe0b2" stroke="#ffa726"/>
+  <text x="78" y="416" font-size="13" fill="#ef6c00">Top — menu bar + dock (malaysia-shell)</text>
+  <!-- Windows -->
+  <rect x="60" y="432" width="980" height="26" rx="6" fill="#eceff1" stroke="#90a4ae"/>
+  <text x="78" y="450" font-size="13" fill="#37474f">Windows — apps (wezterm, nautilus, ...)</text>
+  <!-- Bottom -->
+  <rect x="60" y="466" width="980" height="26" rx="6" fill="#e0e0e0" stroke="#9e9e9e"/>
+  <text x="78" y="484" font-size="13" fill="#616161">Bottom — desktop widgets (optional)</text>
+  <!-- Background -->
+  <rect x="60" y="500" width="980" height="26" rx="6" fill="#cfd8dc" stroke="#78909c"/>
+  <text x="78" y="518" font-size="13" fill="#37474f">Background — wallpaper (malaysia-wallpaper)</text>
+
+  <!-- Arrow: Malaysia places and composites -->
+  <line x1="1030" y1="524" x2="1030" y2="560" stroke="#5e35b1" stroke-width="2.5" marker-end="url(#arrow-purple)"/>
+  <text x="900" y="546" font-size="12" font-weight="bold" fill="#5e35b1">Malaysia places, composites and configures each surface</text>
+
+  <!-- ============ MALAYSIA_COMPOSITOR (bottom) ============ -->
+  <rect x="40" y="564" width="1020" height="210" rx="14" fill="#ede7f6" stroke="#5e35b1" stroke-width="2"/>
+  <text x="60" y="592" font-size="18" font-weight="bold" fill="#311b92">MALAYSIA_COMPOSITOR — the compositor (display server). Decides placement, layer and framing.</text>
+
+  <!-- Items -->
+  <rect x="60" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="75" y="628" font-size="13" font-weight="bold" fill="#4527a0">Display server</text>
+  <text x="75" y="648" font-size="11" fill="#333">wl_surface, xdg_shell, layer-shell, ...</text>
+  <text x="75" y="666" font-size="11" fill="#333">everything goes through Malaysia</text>
+
+  <rect x="225" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="240" y="628" font-size="13" font-weight="bold" fill="#4527a0">Geometry and layers</text>
+  <text x="240" y="648" font-size="11" fill="#333">computes position/size</text>
+  <text x="240" y="666" font-size="11" fill="#333">assigns the layer</text>
+
+  <rect x="390" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="405" y="628" font-size="13" font-weight="bold" fill="#4527a0">Composition</text>
+  <text x="405" y="648" font-size="11" fill="#333">scene + damage</text>
+  <text x="405" y="666" font-size="11" fill="#333">repaints only the damage</text>
+
+  <rect x="555" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="570" y="628" font-size="13" font-weight="bold" fill="#4527a0">Input</text>
+  <text x="570" y="648" font-size="11" fill="#333">routes events to the</text>
+  <text x="570" y="666" font-size="11" fill="#333">right client</text>
+
+  <rect x="720" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="735" y="628" font-size="13" font-weight="bold" fill="#4527a0">Effects (ADR 0020)</text>
+  <text x="735" y="648" font-size="11" fill="#333">shadow · blur · border</text>
+  <text x="735" y="666" font-size="11" fill="#333">wrap every surface</text>
+
+  <rect x="885" y="606" width="155" height="120" rx="10" fill="#ffffff" stroke="#9575cd" stroke-width="1.5"/>
+  <text x="900" y="628" font-size="13" font-weight="bold" fill="#4527a0">.domain store</text>
+  <text x="900" y="648" font-size="11" fill="#333">owns the config</text>
+  <text x="900" y="666" font-size="11" fill="#333">the shell reads it</text>
+
+  <!-- Future D-Bus -->
+  <text x="60" y="744" font-size="12" fill="#555">
+    <tspan x="60" dy="0" font-weight="bold" fill="#333">Future (ADR 0021):</tspan>
+    <tspan dx="8">D-Bus <tspan font-family="monospace">org.malaysia.Compositor1</tspan> — the settings app and the <tspan font-family="monospace">domain</tspan> command ask Malaysia for changes; Malaysia applies them and notifies (OptionChanged) so the shell and the app stay up to date.</tspan>
+  </text>
+</svg>
