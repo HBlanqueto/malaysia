@@ -1,12 +1,12 @@
+use ctdesign::{SETTINGS, TITLEBAR};
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Position, Size};
-use vow_design::{SETTINGS, TITLEBAR};
 
-use barrier_kit::theme::color as rgba;
-use vow_appearance::{
+use bk::theme::color as rgba;
+use ctappearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, WindowColorMode, resolve,
 };
-use vow_design::Rgba;
+use ctdesign::Rgba;
 
 fn preview_for_theme(
     base_config: &AppearanceConfig,
@@ -214,8 +214,8 @@ pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vow_appearance::{AppearanceConfig, ColorScheme, WindowColorMode};
-    use vow_design::Rgba;
+    use ctappearance::{AppearanceConfig, ColorScheme, WindowColorMode};
+    use ctdesign::Rgba;
 
     #[test]
     fn auto_theme_preview_keeps_window_color_and_uses_dominant() {

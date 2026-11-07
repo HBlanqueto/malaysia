@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use barrier_kit::menu::{
+use bk::menu::{
     ItemsSource, MenuItem, SearchLocation, SearchSource, SearchableEntry, normalize_query,
     normalize_separators, submenu_contents,
 };
@@ -205,7 +205,7 @@ pub fn searchable(titles: &[Title]) -> Vec<SearchableEntry> {
     for (title_index, title) in titles.iter().enumerate() {
         collect(
             &title.items,
-            &barrier_kit::menu::strip_mnemonic(&title.label),
+            &bk::menu::strip_mnemonic(&title.label),
             SearchLocation {
                 title_index,
                 indices: Vec::new(),
@@ -237,7 +237,7 @@ fn collect(
             MenuItem::Submenu { label, items, .. } => {
                 let mut location = location.clone();
                 location.indices.push(index);
-                let label = barrier_kit::menu::strip_mnemonic(label);
+                let label = bk::menu::strip_mnemonic(label);
                 collect(items, &format!("{path} › {label}"), location, out);
             }
             _ => {}
@@ -606,7 +606,7 @@ mod tests {
                     .is_some_and(|label| label.to_lowercase().contains("nuev"))
             })
             .map(|entry| {
-                let label = barrier_kit::menu::strip_mnemonic(entry.item.label().unwrap());
+                let label = bk::menu::strip_mnemonic(entry.item.label().unwrap());
                 format!("{} › {label}", entry.path)
             })
             .collect();
@@ -619,7 +619,7 @@ mod tests {
         let nested = entries
             .iter()
             .find(|entry| {
-                entry.item.label().map(barrier_kit::menu::strip_mnemonic)
+                entry.item.label().map(bk::menu::strip_mnemonic)
                     == Some("documento.txt".to_string())
             })
             .expect("a nested leaf is indexed");
@@ -632,8 +632,7 @@ mod tests {
         let disabled = entries
             .iter()
             .find(|entry| {
-                entry.item.label().map(barrier_kit::menu::strip_mnemonic)
-                    == Some("Guardar".to_string())
+                entry.item.label().map(bk::menu::strip_mnemonic) == Some("Guardar".to_string())
             })
             .expect("a disabled action is still indexed");
         assert!(matches!(

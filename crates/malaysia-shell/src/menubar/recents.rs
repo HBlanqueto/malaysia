@@ -2,9 +2,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use barrier_kit::app::{read_toml, write_toml};
-use barrier_kit::menu::{MenuIcon, MenuItem};
-use vow_appearance::data_dir;
+use bk::app::{read_toml, write_toml};
+use bk::menu::{MenuIcon, MenuItem};
+use ctappearance::data_dir;
 
 use crate::desktop::DesktopEntry;
 use crate::launcher::{IconData, load_icon_sized};
@@ -70,7 +70,7 @@ pub fn clear() {
 }
 
 fn xbel_path() -> Option<PathBuf> {
-    Some(vow_appearance::xdg::data_home()?.join("recently-used.xbel"))
+    Some(ctappearance::xdg::data_home()?.join("recently-used.xbel"))
 }
 
 fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {

@@ -2,16 +2,16 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use vow_appearance::backdrop::Oklab;
-use vow_appearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
-use vow_appearance::{
+use ctappearance::backdrop::Oklab;
+use ctappearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
+use ctappearance::{
     AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, palette, resolve,
 };
-use vow_design::{
+use ctdesign::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
     TITLEBAR_CLIENT_HEIGHT, TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
 };
+use serde::Deserialize;
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
 const END: &str = "/* malaysia:gtk-bridge end */";
@@ -348,9 +348,7 @@ fn push_window_controls(out: &mut String, traffic: &Traffic, toolkit: Toolkit, i
     }
     for (index, button) in buttons.order.iter().enumerate() {
         let name = gtk_button_name(button.kind);
-        let pressed = hovered[index]
-            .fill
-            .darken(vow_design::TRAFFIC_PRESSED_DARKEN);
+        let pressed = hovered[index].fill.darken(ctdesign::TRAFFIC_PRESSED_DARKEN);
         let glyph = hovered[index]
             .glyph
             .map_or("none".to_string(), |glyph| glyph_image(index, glyph));
@@ -592,7 +590,7 @@ impl Default for BridgeOptions {
 }
 
 pub fn enabled() -> bool {
-    let path = vow_appearance::appearance_path();
+    let path = ctappearance::appearance_path();
     let Ok(text) = fs::read_to_string(&path) else {
         return true;
     };
@@ -608,7 +606,7 @@ pub struct Bridge {
 
 impl Bridge {
     pub fn from_env() -> Option<Self> {
-        let config_home = vow_appearance::xdg::config_home()?;
+        let config_home = ctappearance::xdg::config_home()?;
         Some(Self { config_home })
     }
 
@@ -688,7 +686,7 @@ impl Bridge {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vow_appearance::WindowColorMode;
+    use ctappearance::WindowColorMode;
 
     fn temp_home(name: &str) -> PathBuf {
         let dir =

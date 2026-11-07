@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
 
+use ctappearance::{AppearanceConfig, WindowColorMode, load_dominant, read_appearance, resolve};
+use ctdesign::Rgba;
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
-use vow_appearance::{AppearanceConfig, WindowColorMode, load_dominant, read_appearance, resolve};
-use vow_design::Rgba;
 use zbus::blocking::Connection;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
@@ -194,7 +194,7 @@ enum PortalError {
 
 pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option<Bridge>) {
     std::thread::spawn(move || {
-        let watch = match vow_appearance::watch::AppearanceWatch::new() {
+        let watch = match ctappearance::watch::AppearanceWatch::new() {
             Ok(watch) => watch,
             Err(error) => {
                 tracing::error!(%error, "cannot watch appearance files; settings will not update");
@@ -273,8 +273,8 @@ fn owned(value: Value<'static>) -> OwnedValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vow_appearance::ColorScheme;
-    use vow_design::{DARK, LIGHT};
+    use ctappearance::ColorScheme;
+    use ctdesign::{DARK, LIGHT};
 
     #[test]
     fn the_color_scheme_maps_to_the_portal_values() {

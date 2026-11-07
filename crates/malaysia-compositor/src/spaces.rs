@@ -9,7 +9,7 @@ use smithay::utils::{Logical, Point, Rectangle, Size};
 
 use crate::state::State;
 
-const SLIDE: Duration = Duration::from_millis(vow_design::SPACE_SLIDE_MS);
+const SLIDE: Duration = Duration::from_millis(ctdesign::SPACE_SLIDE_MS);
 
 const RELEASE_AT: f64 = 0.6;
 
@@ -73,7 +73,7 @@ fn lerp_rect(
     )
 }
 
-const REVEAL: Duration = Duration::from_millis(vow_design::DURATION_BASE);
+const REVEAL: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct FocusReveal {
@@ -98,7 +98,7 @@ impl FocusReveal {
         lerp(
             self.from,
             target,
-            cubic_bezier(vow_design::SPACE_SLIDE_EASE, t),
+            cubic_bezier(ctdesign::SPACE_SLIDE_EASE, t),
         )
     }
 
@@ -134,7 +134,7 @@ impl State {
             .iter()
             .find(|entry| entry.is_desktop_bar())
             .map(|entry| entry.geometry.size.h)
-            .unwrap_or(vow_design::MENUBAR_HEIGHT)
+            .unwrap_or(ctdesign::MENUBAR_HEIGHT)
     }
 
     pub(crate) fn set_focus_reveal(&mut self, shown: bool) {
@@ -189,7 +189,7 @@ impl State {
             return;
         }
         let reach =
-            f64::from(self.desktop_bar_height()) + 2.0 * f64::from(vow_design::TITLEBAR.thickness);
+            f64::from(self.desktop_bar_height()) + 2.0 * f64::from(ctdesign::TITLEBAR.thickness);
         if location.y > reach {
             self.set_focus_reveal(false);
         }
@@ -215,7 +215,7 @@ impl State {
             return None;
         }
         let size = self.logical_output_size();
-        let thickness = f64::from(vow_design::TITLEBAR.thickness);
+        let thickness = f64::from(ctdesign::TITLEBAR.thickness);
         let outer = SceneRect::new(
             ScenePoint::new(0.0, f64::from(self.desktop_bar_height())),
             SceneSize::new(f64::from(size.w), thickness),
@@ -453,7 +453,7 @@ impl State {
             return None;
         }
         let eased = cubic_bezier(
-            vow_design::SPACE_SLIDE_EASE,
+            ctdesign::SPACE_SLIDE_EASE,
             elapsed.as_secs_f64() / SLIDE.as_secs_f64(),
         );
         let corner = self.window_corner(transition.window);
@@ -493,7 +493,7 @@ impl State {
         };
         let progress =
             now.saturating_duration_since(slide.start).as_secs_f64() / SLIDE.as_secs_f64();
-        let eased = cubic_bezier(vow_design::SPACE_SLIDE_EASE, progress);
+        let eased = cubic_bezier(ctdesign::SPACE_SLIDE_EASE, progress);
         slide.from + (to as f64 - slide.from) * eased
     }
 
@@ -654,7 +654,7 @@ mod tests {
 
     #[test]
     fn the_curve_starts_at_zero_and_ends_at_one() {
-        let curve = vow_design::SPACE_SLIDE_EASE;
+        let curve = ctdesign::SPACE_SLIDE_EASE;
         assert!(cubic_bezier(curve, 0.0).abs() < 1e-6);
         assert!((cubic_bezier(curve, 1.0) - 1.0).abs() < 1e-6);
     }
@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn the_slide_curve_starts_fast() {
-        let curve = vow_design::SPACE_SLIDE_EASE;
+        let curve = ctdesign::SPACE_SLIDE_EASE;
         assert!(cubic_bezier(curve, 0.25) > 0.5);
         let mut previous = 0.0;
         for step in 1..=20 {

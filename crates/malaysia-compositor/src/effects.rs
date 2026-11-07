@@ -26,9 +26,9 @@ impl Arrow {
         let physical = |value: f64| (value * scale) as f32;
         Self {
             tip_x: physical(tip_x),
-            height: physical(f64::from(vow_design::POPOVER.arrow_height)),
-            tip_radius: physical(f64::from(vow_design::POPOVER.arrow_tip_radius)),
-            fillet: physical(f64::from(vow_design::POPOVER.arrow_fillet)),
+            height: physical(f64::from(ctdesign::POPOVER.arrow_height)),
+            tip_radius: physical(f64::from(ctdesign::POPOVER.arrow_tip_radius)),
+            fillet: physical(f64::from(ctdesign::POPOVER.arrow_fillet)),
         }
     }
 
@@ -37,7 +37,7 @@ impl Arrow {
     }
 
     pub(crate) fn uniforms(self, factor: f32) -> [Uniform<'static>; 2] {
-        let popover = vow_design::POPOVER;
+        let popover = ctdesign::POPOVER;
         [
             Uniform::new(
                 "arrow",

@@ -1,6 +1,6 @@
+use ctdesign::MENUBAR_MARGIN;
 use freya_core::prelude::*;
 use torin::prelude::{Gaps, Size};
-use vow_design::MENUBAR_MARGIN;
 
 pub fn clock_label(now: String, color: Color) -> Element {
     rect()

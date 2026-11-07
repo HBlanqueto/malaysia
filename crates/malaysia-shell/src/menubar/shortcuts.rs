@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use barrier_kit::menu::MenuItem;
+use bk::menu::MenuItem;
 use rust_embed::RustEmbed;
 use serde::Deserialize;
 

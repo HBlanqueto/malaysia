@@ -18,7 +18,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 chrono.workspace = true
 serde.workspace = true
 toml.workspace = true
-barrier-kit = { workspace = true, features = ["shell"] }
+bk = { workspace = true, features = ["shell"] }
 freya-animation.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
@@ -26,8 +26,8 @@ torin.workspace = true
 async-io.workspace = true
 async-channel.workspace = true
 futures-lite.workspace = true
-vow-appearance.workspace = true
-vow-design.workspace = true
+ctappearance.workspace = true
+ctdesign.workspace = true
 libc.workspace = true
 zeroize.workspace = true
 zbus.workspace = true

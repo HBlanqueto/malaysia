@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/1a4ef8dbc74f285c9bee7b1ccc1c86d3136b9413";
+      url = "github:HBlanqueto/barrierkit/7172d251e3c047ab512e71e0ea5021a70d4e4c00";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -72,8 +72,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
               "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=1a4ef8dbc74f285c9bee7b1ccc1c86d3136b9413#1a4ef8dbc74f285c9bee7b1ccc1c86d3136b9413" =
-              "sha256-pGJ6oNhsWBvoRYwErZWWITuOY9Q0JSAOAEHevQcIPp8=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=7172d251e3c047ab512e71e0ea5021a70d4e4c00#7172d251e3c047ab512e71e0ea5021a70d4e4c00" =
+              "sha256-eLXwB/PMgfnRIdswoMNm+ILr+in31bSvB1XFiYc4NAo=";
           };
 
           env = {
@@ -94,8 +94,8 @@
             if cargo tree --offline -i freya-skia-bindings --depth 0 --prefix none >/dev/null 2>&1; then
               version="$(cargo tree --offline -i freya-skia-bindings --depth 0 --prefix none \
                 | sed -n 's/.*freya-skia-bindings v\([0-9.]*\).*/\1/p' | head -n1)"
-              if [ "$version" != "0.98.0" ]; then
-                echo "freya-skia-bindings $version no coincide con la derivación 0.98.0" >&2
+              if [ "$version" != "${skia.version}" ]; then
+                echo "freya-skia-bindings $version no coincide con la derivación ${skia.version}" >&2
                 exit 1
               fi
               cargo tree --offline -e features -i freya-skia-bindings --prefix none \

@@ -658,7 +658,7 @@ impl WlrLayerShellHandler for State {
         namespace: String,
     ) {
         tracing::info!(?layer, %namespace, surface = ?surface.wl_surface().id(), "new layer surface");
-        if namespace == vow_design::ALERT_LAYER_NAMESPACE {
+        if namespace == ctdesign::ALERT_LAYER_NAMESPACE {
             crate::window_style::mark_alert_layer(surface.wl_surface());
         }
         self.layers.add(surface);
@@ -819,10 +819,10 @@ impl XdgShellHandler for State {
             self.apply_titlebar_double_click(id);
         } else if self.in_focus_mode(id) {
             self.exit_focus_mode(id);
-        } else if vow_appearance::window::green_action(
+        } else if ctappearance::window::green_action(
             self.config.window.green_button,
             self.has_fixed_width(id),
-        ) == vow_appearance::window::TitlebarAction::Focus
+        ) == ctappearance::window::TitlebarAction::Focus
         {
             self.enter_focus_mode(id, false);
         } else {

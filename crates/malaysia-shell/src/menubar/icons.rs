@@ -83,9 +83,9 @@ pub const FILE_IMAGE: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use barrier_kit::menu::search_icon_svg;
+    use bk::menu::search_icon_svg;
+    use ctdesign::{MENU_DARK, MENU_LIGHT, MenuPalette};
     use freya_engine::prelude::{AlphaType, ColorType, FontMgr, ImageInfo, raster_n32_premul, svg};
-    use vow_design::{MENU_DARK, MENU_LIGHT, MenuPalette};
 
     fn raster(source: &str, width: i32, height: i32) -> Vec<u8> {
         let mut dom = svg::Dom::from_bytes(source.as_bytes(), FontMgr::empty())

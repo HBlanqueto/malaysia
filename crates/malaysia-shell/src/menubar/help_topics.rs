@@ -1,4 +1,4 @@
-use barrier_kit::menu::{MenuIcon, MenuItem};
+use bk::menu::{MenuIcon, MenuItem};
 
 use crate::localize::tr;
 

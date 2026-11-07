@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
+use ctdesign::TITLEBAR;
 use malaysia_scene::geometry::{Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use malaysia_scene::scene::{Edge, WindowId};
 use smithay::backend::input::{
@@ -22,7 +23,6 @@ use smithay::wayland::pointer_constraints::{PointerConstraint, with_pointer_cons
 use smithay::wayland::selection::data_device::set_data_device_focus;
 use smithay::wayland::selection::primary_selection::set_primary_focus;
 use smithay::wayland::shell::wlr_layer::LayerSurface;
-use vow_design::TITLEBAR;
 use xkbcommon::xkb::{self, Keycode, keysyms};
 
 use crate::infinity::protocol::infinity_window_manager_v1::{Layout, PairLayout};
@@ -930,7 +930,7 @@ impl State {
                 .and_then(|(outer, insets)| crate::chrome::button_at(outer, insets, location));
             if let Some(kind) = button_kind {
                 self.clear_chrome_pointer();
-                if kind == vow_design::ButtonKind::Maximize && !self.green_button_admitted(id) {
+                if kind == ctdesign::ButtonKind::Maximize && !self.green_button_admitted(id) {
                     return;
                 }
                 let entry = self
@@ -983,17 +983,17 @@ impl State {
         self.request_redraw();
     }
 
-    fn window_button(&mut self, id: WindowId, kind: vow_design::ButtonKind) {
+    fn window_button(&mut self, id: WindowId, kind: ctdesign::ButtonKind) {
         match kind {
-            vow_design::ButtonKind::Close => self.windows.send_close(id),
-            vow_design::ButtonKind::Minimize => self.set_minimized(id, true),
-            vow_design::ButtonKind::Maximize => self.green_button(id),
+            ctdesign::ButtonKind::Close => self.windows.send_close(id),
+            ctdesign::ButtonKind::Minimize => self.set_minimized(id, true),
+            ctdesign::ButtonKind::Maximize => self.green_button(id),
         }
         self.request_redraw();
     }
 
     fn green_button(&mut self, id: WindowId) {
-        use vow_appearance::window::{TitlebarAction, green_action};
+        use ctappearance::window::{TitlebarAction, green_action};
         match green_action(self.config.window.green_button, self.has_fixed_width(id)) {
             TitlebarAction::Focus => {
                 tracing::info!(window = id.get(), "focus mode requested");
@@ -1231,10 +1231,10 @@ impl State {
         &self,
         id: WindowId,
         location: Point<f64, Logical>,
-    ) -> Option<(Option<vow_design::ButtonKind>, bool)> {
+    ) -> Option<(Option<ctdesign::ButtonKind>, bool)> {
         let local = self.titlebar_point(id, location)?;
-        let hit = vow_appearance::traffic::hit((local.x, local.y));
-        let (gx, gy, gw, gh) = vow_appearance::traffic::group_rect();
+        let hit = ctappearance::traffic::hit((local.x, local.y));
+        let (gx, gy, gw, gh) = ctappearance::traffic::group_rect();
         let over_group = local.x >= gx && local.x < gx + gw && local.y >= gy && local.y < gy + gh;
         Some((hit, over_group))
     }
@@ -1262,7 +1262,7 @@ impl State {
             if let Some(id) = window
                 && let Some((hit, over_group)) = self.chrome_hover_at(id, location)
             {
-                let mut pointer = vow_appearance::traffic::TrafficPointer::default();
+                let mut pointer = ctappearance::traffic::TrafficPointer::default();
                 let moved = pointer.on_motion(hit, over_group);
                 self.chrome_pointer = Some((id, pointer));
                 return changed || moved;
@@ -1275,7 +1275,7 @@ impl State {
         let Some((hit, over_group)) = self.chrome_hover_at(id, location) else {
             return false;
         };
-        let mut pointer = vow_appearance::traffic::TrafficPointer::default();
+        let mut pointer = ctappearance::traffic::TrafficPointer::default();
         let changed = pointer.on_motion(hit, over_group);
         self.chrome_pointer = Some((id, pointer));
         changed
@@ -1356,7 +1356,7 @@ impl State {
         self.client_double_click.is_some_and(|(clicked, at)| {
             clicked == id
                 && at.elapsed().as_millis()
-                    <= u128::from(vow_design::TITLEBAR_DOUBLE_CLICK.interval_ms)
+                    <= u128::from(ctdesign::TITLEBAR_DOUBLE_CLICK.interval_ms)
         })
     }
 
@@ -1546,7 +1546,7 @@ impl State {
     }
 
     pub(crate) fn publish_active(&self, id: Option<WindowId>) {
-        self.publish_active_to(&vow_appearance::data_dir(), id);
+        self.publish_active_to(&ctappearance::data_dir(), id);
     }
 
     fn publish_active_to(&self, dir: &Path, id: Option<WindowId>) {
@@ -1556,7 +1556,7 @@ impl State {
     }
 
     pub(crate) fn publish_active_if_focused(&self, id: WindowId) {
-        self.publish_active_if_focused_to(&vow_appearance::data_dir(), id);
+        self.publish_active_if_focused_to(&ctappearance::data_dir(), id);
     }
 
     fn publish_active_if_focused_to(&self, dir: &Path, id: WindowId) {
@@ -2166,7 +2166,7 @@ impl State {
         let press: ScenePoint<f64, malaysia_scene::geometry::Logical> =
             ScenePoint::new(outer.x() + offset.x, outer.y() + offset.y);
         if (location.x - press.x).hypot(location.y - press.y)
-            <= vow_design::TITLEBAR_DOUBLE_CLICK.slop
+            <= ctdesign::TITLEBAR_DOUBLE_CLICK.slop
         {
             return None;
         }
@@ -2306,8 +2306,8 @@ fn double_click(
     Option<TitlebarClick>,
     Option<crate::config::DoubleClickAction>,
 ) {
-    let interval = u64::from(vow_design::TITLEBAR_DOUBLE_CLICK.interval_ms);
-    let slop = vow_design::TITLEBAR_DOUBLE_CLICK.slop;
+    let interval = u64::from(ctdesign::TITLEBAR_DOUBLE_CLICK.interval_ms);
+    let slop = ctdesign::TITLEBAR_DOUBLE_CLICK.slop;
     let double = previous.is_some_and(|(window, then, point)| {
         window == id
             && now.saturating_sub(then) <= interval
@@ -2324,14 +2324,14 @@ fn test_press_fraction() -> (f64, f64) {
     parse_pair("MALAYSIA_TEST_PRESS_AT").unwrap_or((0.5, 0.5))
 }
 
-fn test_titlebar_button() -> Option<vow_design::ButtonKind> {
+fn test_titlebar_button() -> Option<ctdesign::ButtonKind> {
     match std::env::var("MALAYSIA_TEST_TITLEBAR_BUTTON")
         .ok()?
         .as_str()
     {
-        "close" => Some(vow_design::ButtonKind::Close),
-        "minimize" => Some(vow_design::ButtonKind::Minimize),
-        "maximize" => Some(vow_design::ButtonKind::Maximize),
+        "close" => Some(ctdesign::ButtonKind::Close),
+        "minimize" => Some(ctdesign::ButtonKind::Minimize),
+        "maximize" => Some(ctdesign::ButtonKind::Maximize),
         _ => None,
     }
 }
@@ -2569,7 +2569,7 @@ mod tests {
         state.trigger_cursor_boost();
         assert!(state.cursor_boost_started.is_some());
         let scale = state.cursor_boost_scale();
-        assert!((1.0..=vow_design::CURSOR_SHAKE_SCALE).contains(&scale));
+        assert!((1.0..=ctdesign::CURSOR_SHAKE_SCALE).contains(&scale));
         state.cursor_boost_started = None;
         assert_eq!(state.cursor_boost_scale(), 1.0);
     }
@@ -3084,18 +3084,18 @@ mod tests {
     }
     #[test]
     fn releasing_a_titlebar_button_outside_does_not_fire_it() {
-        let mut pointer = vow_appearance::traffic::TrafficPointer::default();
-        pointer.on_press(Some(vow_design::ButtonKind::Close), true);
+        let mut pointer = ctappearance::traffic::TrafficPointer::default();
+        pointer.on_press(Some(ctdesign::ButtonKind::Close), true);
         assert_eq!(pointer.on_release(None, false), None);
     }
 
     #[test]
     fn pressing_and_releasing_the_same_titlebar_button_fires_it() {
-        let mut pointer = vow_appearance::traffic::TrafficPointer::default();
-        pointer.on_press(Some(vow_design::ButtonKind::Close), true);
+        let mut pointer = ctappearance::traffic::TrafficPointer::default();
+        pointer.on_press(Some(ctdesign::ButtonKind::Close), true);
         assert_eq!(
-            pointer.on_release(Some(vow_design::ButtonKind::Close), true),
-            Some(vow_design::ButtonKind::Close)
+            pointer.on_release(Some(ctdesign::ButtonKind::Close), true),
+            Some(ctdesign::ButtonKind::Close)
         );
     }
 
@@ -3107,10 +3107,10 @@ mod tests {
 
     #[test]
     fn the_traffic_lights_are_not_the_double_click_title_area() {
-        let (x, y, size) = vow_appearance::traffic::button_rect(0);
+        let (x, y, size) = ctappearance::traffic::button_rect(0);
         assert_eq!(
-            vow_appearance::traffic::hit((x + size / 2.0, y + size / 2.0)),
-            Some(vow_design::ButtonKind::Close)
+            ctappearance::traffic::hit((x + size / 2.0, y + size / 2.0)),
+            Some(ctdesign::ButtonKind::Close)
         );
     }
 

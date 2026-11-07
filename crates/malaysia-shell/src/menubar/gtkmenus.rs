@@ -2,8 +2,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use std::time::Instant;
 
-use barrier_kit::platform::AppMenuAddress;
-use barrier_kit::shell::GtkMenusAddress;
+use bk::platform::MainMenuAddress;
+use bk::shell::GtkMenusAddress;
 use zbus::zvariant::{OwnedValue, Signature, Value};
 
 use crate::localize::tr;
@@ -19,13 +19,13 @@ type StartEntry = (u32, u32, Vec<Attributes>);
 type MenuChange = (u32, u32, u32, u32, Vec<Attributes>);
 type ActionDescription = (bool, Signature, Vec<OwnedValue>);
 
-pub fn address(menus: &GtkMenusAddress) -> AppMenuAddress {
+pub fn address(menus: &GtkMenusAddress) -> MainMenuAddress {
     let path = if menus.menubar_path.is_empty() {
         &menus.app_menu_path
     } else {
         &menus.menubar_path
     };
-    AppMenuAddress {
+    MainMenuAddress {
         service: menus.unique_bus_name.clone(),
         path: path.clone(),
     }
@@ -461,7 +461,7 @@ fn action_groups(menus: &GtkMenusAddress) -> [(&'static str, &str); 3] {
 
 pub struct Session {
     pub menus: GtkMenusAddress,
-    pub address: AppMenuAddress,
+    pub address: MainMenuAddress,
     pub generation: u64,
     app_name: String,
     app_menu: Export,
@@ -706,8 +706,8 @@ where
 mod tests {
     use super::*;
     use crate::menubar::dbusmenu_map::menu_items;
-    use barrier_kit::menu::strip_mnemonic;
-    use barrier_kit::menu::{CheckState, MenuItem};
+    use bk::menu::strip_mnemonic;
+    use bk::menu::{CheckState, MenuItem};
 
     fn attrs(pairs: &[(&str, OwnedValue)]) -> Attributes {
         pairs
@@ -1032,7 +1032,7 @@ mod tests {
             vec!["Shift", "Control", "z"]
         );
         let comma = accel_keys("<Primary>comma").unwrap();
-        assert_eq!(barrier_kit::menu::format_shortcut(&comma.join("+")), "⌃,");
+        assert_eq!(bk::menu::format_shortcut(&comma.join("+")), "⌃,");
         assert_eq!(accel_keys("F11").unwrap(), vec!["F11"]);
         assert_eq!(accel_keys("<Bogus>x"), None);
         assert_eq!(accel_keys("<Primary>"), None);

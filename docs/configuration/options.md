@@ -132,7 +132,7 @@ When absent or empty, the language comes from `LANGUAGE`, `LC_ALL`,
 The "Language" row of **System Settings** (Appearance) writes it. Each app
 reads it at startup; the change shows when the app is reopened.
 
-The `language` key in a kit app's own domain (for example `marea.domain`)
+The `language` key in a kit app's own domain (`<name>.domain`)
 wins over this domain. The "Language" row of its preferences writes it. The
 full order is in barrierkit's
 [`17-languages.md`](https://github.com/HBlanqueto/barrierkit/blob/main/docs/barrierkit/17-languages.md).
@@ -344,7 +344,7 @@ makes the compositor blur what is behind (macOS-style vibrancy).
 
 `debug.overlay_planes` is read when the DRM session starts; changing it requires
 a restart. It is off, like niri's `debug.enable-overlay-planes`, until
-it is accepted with `./dev.sh video` on the real panel. On Intel i915 it must stay
+it is accepted on the real panel with a video playing in a window. On Intel i915 it must stay
 off: see S-02 in [`debt.md`](../debt.md).
 
 `MALAYSIA_POWER_DRY_RUN=1` (environment variable, not a domain one): Suspend,

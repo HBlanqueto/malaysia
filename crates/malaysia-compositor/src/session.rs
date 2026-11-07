@@ -56,7 +56,7 @@ use crate::cursor::{Cursors, OutputRenderElement};
 use crate::renderer::MalaysiaRenderer;
 use crate::state::{ClientState, State, StateError};
 use crate::state::{ScreenshotMode, region_rect};
-use vow_appearance::watch::AppearanceWatch;
+use ctappearance::watch::AppearanceWatch;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
@@ -552,7 +552,7 @@ fn append_screenshot_overlay<R: MalaysiaRenderer>(
             append_solid(
                 Point::from((0, 0)),
                 output,
-                vow_design::SCREENSHOT_IDLE_DIM.premultiplied(),
+                ctdesign::SCREENSHOT_IDLE_DIM.premultiplied(),
                 scale,
                 elements,
             );
@@ -577,7 +577,7 @@ fn append_dim_outside<R: MalaysiaRenderer>(
     scale: f64,
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
-    let dim = vow_design::SCREENSHOT_DIM.premultiplied();
+    let dim = ctdesign::SCREENSHOT_DIM.premultiplied();
     let left = rect.loc.x.clamp(0, output.w);
     let top = rect.loc.y.clamp(0, output.h);
     let right = (rect.loc.x + rect.size.w).clamp(left, output.w);
@@ -617,8 +617,8 @@ fn append_border<R: MalaysiaRenderer>(
     scale: f64,
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
-    const BORDER: i32 = vow_design::SCREENSHOT_BORDER_WIDTH;
-    let color = vow_design::SCREENSHOT_BORDER.premultiplied();
+    const BORDER: i32 = ctdesign::SCREENSHOT_BORDER_WIDTH;
+    let color = ctdesign::SCREENSHOT_BORDER.premultiplied();
     let (x, y) = (rect.loc.x, rect.loc.y);
     let (w, h) = (rect.size.w, rect.size.h);
     if w <= 0 || h <= 0 {
@@ -750,7 +750,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
         let reveal_drop = reveal.map(|frame| {
             let travel = frame.bar
                 + if frame.titlebar {
-                    vow_design::TITLEBAR.thickness as i32
+                    ctdesign::TITLEBAR.thickness as i32
                 } else {
                     0
                 };
@@ -768,7 +768,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
             append_solid(
                 Point::from((0, drop)),
                 Size::from((state.logical_output_size().w, frame.bar)),
-                vow_design::SPACE_GAP_COLOR.premultiplied(),
+                ctdesign::SPACE_GAP_COLOR.premultiplied(),
                 scale,
                 &mut elements,
             );
@@ -834,7 +834,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
                     &mut state.focus_backdrop,
                     Point::from((0, 0)),
                     size,
-                    vow_design::SPACE_GAP_COLOR.premultiplied(),
+                    ctdesign::SPACE_GAP_COLOR.premultiplied(),
                     scale,
                     &mut elements,
                 );
@@ -881,7 +881,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
     let width = state.logical_output_size().w;
     let rect = Rectangle::new(
         Point::from((0, y)),
-        Size::from((width, vow_design::TITLEBAR.thickness as i32)),
+        Size::from((width, ctdesign::TITLEBAR.thickness as i32)),
     );
     let focused = state.windows.is_activated(id);
     let pointer = state
@@ -889,7 +889,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
         .as_ref()
         .filter(|(held, _)| *held == id)
         .map(|(_, pointer)| pointer);
-    let input = vow_appearance::traffic::TrafficInput {
+    let input = ctappearance::traffic::TrafficInput {
         focused,
         group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
         pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
@@ -909,7 +909,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
         program,
         physical_rect(rect, scale),
         0,
-        vow_design::WINDOW_CORNER.exponent,
+        ctdesign::WINDOW_CORNER.exponent,
     ) {
         elements.push(element.into());
     }
@@ -948,7 +948,7 @@ fn append_focus_transition<R: MalaysiaRenderer>(
     let rect_physical = physical_rect(frame.rect, scale);
     let content_physical = physical_rect(Rectangle::new(frame.rect.loc, geometry.size), scale);
     let radius = (frame.radius * scale).round() as i32;
-    let exponent = vow_design::WINDOW_CORNER.exponent;
+    let exponent = ctdesign::WINDOW_CORNER.exponent;
     let surface_elements = render_elements_from_surface_tree::<R, WaylandSurfaceRenderElement<R>>(
         renderer,
         &surface,
@@ -977,7 +977,7 @@ fn append_focus_transition<R: MalaysiaRenderer>(
     append_solid(
         frame.rect.loc,
         frame.rect.size,
-        vow_design::SPACE_GAP_COLOR.premultiplied(),
+        ctdesign::SPACE_GAP_COLOR.premultiplied(),
         scale,
         elements,
     );
@@ -992,7 +992,7 @@ fn append_sliding_spaces<R: MalaysiaRenderer>(
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let output = state.logical_output_size();
-    let stride = f64::from(output.w + vow_design::SPACE_GAP);
+    let stride = f64::from(output.w + ctdesign::SPACE_GAP);
     let shown: Vec<_> = state
         .spaces
         .iter()
@@ -1047,7 +1047,7 @@ fn append_sliding_spaces<R: MalaysiaRenderer>(
     append_solid(
         Point::from((0, 0)),
         output,
-        vow_design::SPACE_GAP_COLOR.premultiplied(),
+        ctdesign::SPACE_GAP_COLOR.premultiplied(),
         scale,
         elements,
     );
@@ -1168,7 +1168,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
     );
     let radius_physical =
         (crate::window_style::corner_extent(radius_logical) * scale).round() as i32;
-    let exponent = vow_design::WINDOW_CORNER.exponent;
+    let exponent = ctdesign::WINDOW_CORNER.exponent;
 
     let mut content: Vec<OutputRenderElement<R>> = Vec::new();
     if data.insets.top > 0.0 {
@@ -1177,7 +1177,7 @@ fn append_window_frame<R: MalaysiaRenderer>(
             .as_ref()
             .filter(|(held, _)| *held == id)
             .map(|(_, pointer)| pointer);
-        let input = vow_appearance::traffic::TrafficInput {
+        let input = ctappearance::traffic::TrafficInput {
             focused: is_focused,
             group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
@@ -1343,9 +1343,9 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
             .filter(|popup| crate::window_style::is_popover(popup.wl_surface()))
             .map(|popup| crate::window_style::popover_tip(popup, f64::from(frame.size.w)));
         let corner = if tip.is_some() {
-            vow_design::POPOVER.radius.round() as u32
+            ctdesign::POPOVER.radius.round() as u32
         } else {
-            vow_design::POPUP.corner_radius
+            ctdesign::POPUP.corner_radius
         };
         append_frame(
             state,
@@ -1355,7 +1355,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
                 owner: crate::chrome::FrameOwner::Popup(id),
                 rect: physical_rect(frame, scale),
                 radius: (crate::window_style::corner_extent(corner) * scale).round() as i32,
-                exponent: vow_design::POPUP.superellipse_exponent,
+                exponent: ctdesign::POPUP.superellipse_exponent,
                 focused: true,
                 bordered: true,
                 arrow: tip.map_or_else(crate::effects::Arrow::default, |tip| {
@@ -1489,8 +1489,8 @@ fn border_shader(
     scale: f64,
     exponent: f32,
     outer: bool,
-    color: vow_design::Rgba,
-    edge_color: vow_design::Rgba,
+    color: ctdesign::Rgba,
+    edge_color: ctdesign::Rgba,
 ) -> (
     Rectangle<i32, Logical>,
     Vec<smithay::backend::renderer::gles::Uniform<'static>>,
@@ -1634,7 +1634,7 @@ fn capture_output_png(
         size,
         transform,
         scale,
-        vow_design::DESKTOP_CLEAR.premultiplied(),
+        ctdesign::DESKTOP_CLEAR.premultiplied(),
     )
 }
 
@@ -1688,7 +1688,7 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 &mut framebuffer,
                 age,
                 &elements,
-                vow_design::DESKTOP_CLEAR.premultiplied(),
+                ctdesign::DESKTOP_CLEAR.premultiplied(),
             )
             .map_err(DrawError::Output)?;
 
@@ -1914,10 +1914,10 @@ fn append_layers<R: MalaysiaRenderer>(
                 Frame {
                     owner: crate::chrome::FrameOwner::Alert(alert),
                     rect: physical_rect(rect, scale),
-                    radius: (crate::window_style::corner_extent(vow_design::DIALOG.corner_radius)
+                    radius: (crate::window_style::corner_extent(ctdesign::DIALOG.corner_radius)
                         * scale)
                         .round() as i32,
-                    exponent: vow_design::DIALOG.superellipse_exponent,
+                    exponent: ctdesign::DIALOG.superellipse_exponent,
                     focused: true,
                     bordered: true,
                     arrow: crate::effects::Arrow::default(),
@@ -2312,7 +2312,7 @@ mod tests {
         for state in [WindowState::Normal, WindowState::Maximized] {
             assert_eq!(
                 frame_radius(None, state, Role::Toplevel, false, None),
-                vow_design::WINDOW_CORNER.titlebar
+                ctdesign::WINDOW_CORNER.titlebar
             );
             assert!(frame_has_border(state));
         }

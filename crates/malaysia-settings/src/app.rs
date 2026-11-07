@@ -1,20 +1,20 @@
-use barrier_kit::choices::{ChoiceCards, ColorWell, RadioGroup};
-use barrier_kit::controls::{Checkbox, Slider};
-use barrier_kit::menu::MenuIcon;
-use barrier_kit::patterns::language::system_language_row;
-use barrier_kit::patterns::preferences::{Pane, PaneGroup, PreferencesWindow};
-use barrier_kit::popup_button::PopUpButton;
-use barrier_kit::symbol::Symbol;
-use barrier_kit::views::feedback::Alert;
-use barrier_kit::views::form::{Form, Row, Section};
-use freya_core::prelude::*;
-use torin::prelude::{Direction, Size};
-use vow_appearance::{
+use bk::choices::{ChoiceCards, ColorWell, RadioGroup};
+use bk::controls::{Checkbox, Slider};
+use bk::menu::MenuIcon;
+use bk::patterns::language::system_language_row;
+use bk::patterns::settings::{Pane, PaneGroup, SettingsWindow};
+use bk::popup_button::PopUpButton;
+use bk::symbol::Symbol;
+use bk::views::feedback::Alert;
+use bk::views::form::{Form, Row, Section};
+use ctappearance::{
     AppearanceConfig, ColorScheme, Resolved, ScrollBars, TintParts, TintStrength,
     TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope, lights_for,
     load_appearance, palette,
 };
-use vow_design::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
+use ctdesign::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
+use freya_core::prelude::*;
+use torin::prelude::{Direction, Size};
 
 use crate::localize::{tr, tr_list};
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
@@ -63,7 +63,7 @@ pub fn settings_window(
 ) -> Rect {
     let mut error = use_state(|| None::<String>);
     let name = account_name();
-    let window = PreferencesWindow::new()
+    let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
         .sidebar_resizable(false);

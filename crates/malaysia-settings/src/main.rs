@@ -3,19 +3,19 @@ mod localize;
 mod previews;
 mod state;
 
-use barrier_kit::app::{Instance, Launch, launch};
-use barrier_kit::platform::{WindowOptions, run_window};
-use barrier_kit::theme;
+use bk::app::{Instance, Launch, launch};
+use bk::platform::{WindowOptions, run_window};
+use bk::theme;
+use ctappearance::{load_appearance, load_dominant};
+use ctdesign::SETTINGS;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
-use vow_appearance::{load_appearance, load_dominant};
-use vow_design::SETTINGS;
 
 use crate::app::settings_window;
 use crate::localize::tr;
 
 fn main() {
-    let instance = match launch(&barrier_kit::titlebar::app_id("settings")) {
+    let instance = match launch(&bk::titlebar::app_id("settings")) {
         Ok(Launch::Forwarded) => return,
         Ok(Launch::Primary(instance)) => Some(instance),
         Err(_) => None,
@@ -53,15 +53,15 @@ mod tests {
     use std::fs;
     use std::sync::Mutex;
 
+    use ctappearance::{
+        AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
+    };
+    use ctdesign::ACCENT_SWATCHES;
     use freya_components::theming::hooks::use_init_theme;
     use freya_core::integration::AppComponent;
     use freya_core::prelude::{Label, State};
     use freya_testing::TestingRunner;
     use torin::prelude::Size2D;
-    use vow_appearance::{
-        AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
-    };
-    use vow_design::ACCENT_SWATCHES;
 
     use super::*;
 
@@ -179,7 +179,7 @@ mod tests {
                 .expect("purple accent swatch label exists");
             click_node(&mut test, node);
 
-            let config = vow_appearance::load_appearance();
+            let config = ctappearance::load_appearance();
             let accent = config.accent_color.expect("accent color must be written");
             assert!(
                 (accent[0] - 0.557).abs() < 0.001
@@ -204,7 +204,7 @@ mod tests {
             let node = find_label(&test, tr!("scheme-dark")).expect("dark theme card label exists");
             click_node(&mut test, node);
 
-            let config = vow_appearance::load_appearance();
+            let config = ctappearance::load_appearance();
             assert_eq!(
                 config.color_scheme,
                 ColorScheme::DarkTint,

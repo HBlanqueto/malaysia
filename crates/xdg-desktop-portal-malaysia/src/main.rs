@@ -6,8 +6,8 @@ mod settings;
 use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
+use ctappearance::{load_dominant, read_appearance};
 use nix::sys::signal::{SigSet, Signal};
-use vow_appearance::{load_dominant, read_appearance};
 
 use settings::OBJECT_PATH;
 

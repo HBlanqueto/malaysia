@@ -7,8 +7,8 @@ Wayland desktop for NixOS. Its compositor, *Malaysia Compositor*
 full documentation lives in [`docs/`](docs/README.md); the status, in
 [`docs/roadmap.md`](docs/roadmap.md).
 
-> **Repository note (ADR 0048):** `barrier-kit`, `vow-design`,
-> `vow-appearance` and `infinity-protocol` live in
+> **Repository note (ADR 0048):** `bk`, `ctdesign`,
+> `ctappearance` and `infinity-protocol` live in
 > [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
 > This repo holds the compositor, the shell, Settings and the portals.
 

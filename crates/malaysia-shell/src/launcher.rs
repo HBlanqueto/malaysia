@@ -1,30 +1,30 @@
 use std::{cell::Cell, env, path::PathBuf, rc::Rc, time::Duration};
 
-use barrier_kit::animation::Spring;
-use barrier_kit::controls::SearchField;
-use barrier_kit::platform::Timers;
-use barrier_kit::shell::{
+use bk::animation::Spring;
+use bk::controls::SearchField;
+use bk::platform::Timers;
+use bk::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
-use barrier_kit::symbol::Symbol;
-use barrier_kit::views::feedback::empty_state;
+use bk::symbol::Symbol;
+use bk::views::feedback::ContentUnavailableView;
+use ctdesign::{
+    LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
+    LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
+    LAUNCHER_RESULT_GAP, LAUNCHER_RESULT_HEIGHT, LAUNCHER_SCALE_FROM, LAUNCHER_SEARCH_HEIGHT,
+    LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH,
+};
 use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_design::{
-    LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
-    LAUNCHER_ICON_SIZE, LAUNCHER_MAX_RESULTS, LAUNCHER_OPEN_MS, LAUNCHER_PADDING,
-    LAUNCHER_RESULT_GAP, LAUNCHER_RESULT_HEIGHT, LAUNCHER_SCALE_FROM, LAUNCHER_SEARCH_HEIGHT,
-    LAUNCHER_SUBTITLE_FONT_SIZE, LAUNCHER_WIDTH,
-};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::localize::tr;
-use barrier_kit::style::Palette;
-use barrier_kit::theme;
+use bk::style::Palette;
+use bk::theme;
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct IconData {
@@ -49,10 +49,10 @@ struct LauncherApp {
 
 impl App for LauncherApp {
     fn render(&self) -> impl IntoElement {
-        barrier_kit::theme::use_shell_theme();
+        bk::theme::use_shell_theme();
         let progress = self.use_progress();
 
-        let platform = Platform::get();
+        let platform = Platform::get().current_window();
         let mut closing = self.closing;
         use_side_effect_with_deps(&*platform.is_app_focused.read(), move |focused| {
             if !*focused {
@@ -104,14 +104,15 @@ impl App for LauncherApp {
             result_row(entry, index == selected, move || launch(clicked.clone()))
         });
 
-        let resolved = barrier_kit::theme::resolved();
-        let background = theme::color(barrier_kit::theme::surface_background(
+        let resolved = bk::theme::resolved();
+        let background = theme::color(bk::theme::surface_background(
             &resolved,
-            barrier_kit::theme::SurfaceKind::LayerShell,
+            bk::theme::SurfaceKind::LayerShell,
         ));
 
         let list = if results.is_empty() {
-            empty_state(Symbol::MagnifyingGlass, tr!("launcher-no-results")).into_element()
+            ContentUnavailableView::new(tr!("launcher-no-results"), Symbol::MagnifyingGlass)
+                .into_element()
         } else {
             rect()
                 .width(Size::fill())
@@ -262,7 +263,7 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
     rect()
         .width(Size::fill())
         .height(Size::px(LAUNCHER_RESULT_HEIGHT as f32))
-        .corner_radius(vow_design::LAUNCHER_RESULT_RADIUS)
+        .corner_radius(ctdesign::LAUNCHER_RESULT_RADIUS)
         .background(if selected {
             selected_bg
         } else {

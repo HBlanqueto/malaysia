@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use vow_design::Rgba;
+use ctdesign::Rgba;
 
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -61,7 +61,7 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
         None => load_default_image(),
     };
 
-    if let Err(error) = vow_appearance::write_dominant(state_path, dominant(&decoded)) {
+    if let Err(error) = ctappearance::write_dominant(state_path, dominant(&decoded)) {
         tracing::error!(%error, "failed to write the state");
     }
     Wallpaper {
@@ -370,14 +370,14 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     let (width, height) = (image.size.0 as usize, image.size.1 as usize);
     let step = width
         .max(height)
-        .div_ceil(vow_design::BACKDROP.samples as usize)
+        .div_ceil(ctdesign::BACKDROP.samples as usize)
         .max(1);
     let samples: Vec<u8> = (0..height)
         .step_by(step)
         .flat_map(|y| (0..width).step_by(step).map(move |x| (y * width + x) * 4))
         .flat_map(|index| image.rgba8_at(index))
         .collect();
-    vow_appearance::backdrop::dominant_from_pixels(&samples)
+    ctappearance::backdrop::dominant_from_pixels(&samples)
 }
 
 #[cfg(test)]
@@ -385,7 +385,7 @@ mod tests {
     use std::path::Path;
 
     use super::{Pixels, *};
-    use vow_design::Rgba;
+    use ctdesign::Rgba;
 
     fn scratch(name: &str) -> PathBuf {
         let dir =

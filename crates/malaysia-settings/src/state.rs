@@ -1,9 +1,9 @@
-use vow_appearance::{AppearanceConfig, write_appearance};
+use ctappearance::{AppearanceConfig, write_appearance};
 
 use crate::localize::tr;
 
 pub fn save_config(config: &AppearanceConfig) -> Option<String> {
-    write_appearance(&vow_appearance::appearance_path(), config)
+    write_appearance(&ctappearance::appearance_path(), config)
         .err()
         .map(|e| e.to_string())
 }

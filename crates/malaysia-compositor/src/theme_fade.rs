@@ -17,9 +17,9 @@ use crate::cursor::{Cursors, OutputRenderElement};
 use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 
-pub(crate) const WAIT_MAX: Duration = Duration::from_millis(vow_design::THEME_FADE_WAIT_MS);
+pub(crate) const WAIT_MAX: Duration = Duration::from_millis(ctdesign::THEME_FADE_WAIT_MS);
 
-pub(crate) const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
+pub(crate) const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_SLOW_MS);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FadeTick {
@@ -215,7 +215,7 @@ pub(crate) fn take_snapshot(
             &mut framebuffer,
             0,
             &elements,
-            vow_design::DESKTOP_CLEAR.premultiplied(),
+            ctdesign::DESKTOP_CLEAR.premultiplied(),
         );
         let elapsed = start.elapsed();
         if rendered.is_err() {

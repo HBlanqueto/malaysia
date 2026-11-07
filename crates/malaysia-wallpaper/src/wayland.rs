@@ -43,8 +43,8 @@ use wayland_protocols::wp::viewporter::client::{
 
 use crate::image::{Wallpaper, reload};
 use crate::render::{RenderContext, WallpaperTexture};
-use vow_appearance::data_dir;
-use vow_appearance::watch::{AppearanceEvent, AppearanceWatch};
+use ctappearance::data_dir;
+use ctappearance::watch::{AppearanceEvent, AppearanceWatch};
 
 const NAMESPACE: &str = "malaysia-wallpaper";
 const SCALE_DENOMINATOR: f64 = 120.0;
@@ -94,7 +94,7 @@ impl Drop for OutputSurface {
 impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
         let store_path = data_dir().join("wallpaper.domain");
-        let state_path = vow_appearance::wallpaper_state_path();
+        let state_path = ctappearance::wallpaper_state_path();
         let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
 
         let connection = Connection::connect_to_env()?;

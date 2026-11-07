@@ -29,8 +29,8 @@ wayland-server = "0.31"
 wayland-backend = "0.3"
 wayland-protocols-plasma = { workspace = true, features = ["server"] }
 grade-graphics.workspace = true
-vow-appearance.workspace = true
-vow-design.workspace = true
+ctappearance.workspace = true
+ctdesign.workspace = true
 malaysia-scene.workspace = true
 infinity-protocol = { workspace = true, features = ["server"] }
 

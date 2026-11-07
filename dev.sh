@@ -25,17 +25,12 @@ Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
     demo [--dark|--light]
-                        Nested session with the shell, CurseTerm and demo windows; the flag
+                        Nested session with the shell, CurseTerm, System Settings and demo windows; the flag
                         forces that appearance in a temporary config (Ctrl-C ends it)
-    video [--dark|--light]
-                        Like demo, with only Marea (the barrierkit media app) on the
-                        desktop; builds that app alone
     lab [--dark|--light]
                         Nested session with shell + CurseTerm + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
-    app <name>          Run tengen-app-show, marea or ondina (pinned rev, or ../barrierkit with kit-local) in the demo
-                        (--sin-menubar closes the demo menubar first)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
     stop                Stop the background instance and remove the PID file
     restart             Stop, then run (no rebuild)
@@ -128,33 +123,13 @@ check_wallpaper_ready() {
 
 barrierkit_dir() {
     _dir="$script_dir/../barrierkit"
-    if [ -d "$_dir/crates/barrier-kit" ]; then
+    if [ -d "$_dir/crates/bk" ]; then
         CDPATH='' cd -- "$_dir" && pwd
     fi
 }
 
 kit_is_local() {
     [ -f "$script_dir/.cargo/config.toml" ]
-}
-
-build_kit_apps() {
-    _kit_dir=$(barrierkit_dir)
-    if kit_is_local && [ -n "$_kit_dir" ]; then
-        (cd "$_kit_dir" && cargo build $(printf -- '-p %s ' "$@")) ||
-            fail "$EXIT_RUN_FAILED" "could not build $* in ../barrierkit"
-        _kit_bin="$_kit_dir/target/debug"
-    else
-        _kit_rev=$(sed -n 's/^barrier-kit = .*rev = "\([0-9a-f]*\)".*/\1/p' "$script_dir/Cargo.toml")
-        _kit_root="$script_dir/target/barrierkit-apps"
-        _kit_bin="$_kit_root/bin"
-        _kit_build="$_kit_root/build/$_kit_rev"
-        find "$_kit_root/build" -mindepth 1 -maxdepth 1 ! -name "$_kit_rev" -exec rm -rf {} + 2>/dev/null || true
-        printf 'dev.sh: building %s from barrierkit %s (the first time takes a few minutes)\n' "$*" "$_kit_rev" >&2
-        # Cargo hashes workspace crates by their relative path, so two revs sharing a target dir reuse stale build-script output.
-        cargo install --debug --locked --git https://github.com/HBlanqueto/barrierkit \
-            --rev "$_kit_rev" --root "$_kit_root" --target-dir "$_kit_build" "$@" ||
-            fail "$EXIT_RUN_FAILED" "could not build $* from barrierkit $_kit_rev"
-    fi
 }
 
 build_curseterm() {
@@ -437,9 +412,9 @@ kit_local() {
     mkdir -p "$script_dir/.cargo"
     cat >"$script_dir/.cargo/config.toml" <<EOF
 [patch."https://github.com/HBlanqueto/barrierkit"]
-barrier-kit = { path = "$_dir/crates/barrier-kit" }
-vow-design = { path = "$_dir/crates/vow-design" }
-vow-appearance = { path = "$_dir/crates/vow-appearance" }
+bk = { path = "$_dir/crates/bk" }
+ctdesign = { path = "$_dir/crates/ctdesign" }
+ctappearance = { path = "$_dir/crates/ctappearance" }
 infinity-protocol = { path = "$_dir/crates/infinity-protocol" }
 EOF
     printf 'dev.sh: kit-local enabled: %s\n' "$_dir"
@@ -712,7 +687,6 @@ demo() {
     if [ "$#" -ne 0 ]; then
         fail "$EXIT_USAGE" "unexpected argument for demo: $1"
     fi
-    _apps=${_demo_apps-tengen-app-show ondina}
     if is_running; then
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $(read_pid))"
     fi
@@ -731,10 +705,8 @@ demo() {
         fail "$EXIT_RUN_FAILED" "could not build the demo binaries"
     _shell_bin="$script_dir/target/debug/malaysia-shell"
     _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
-    # shellcheck disable=SC2086
-    build_kit_apps $_apps
-    _apps_bin=$_kit_bin
-    [ -n "${_demo_apps+set}" ] || build_curseterm
+    _settings_bin="$script_dir/target/debug/malaysia-settings"
+    build_curseterm
 
     start
     if ! wait_socket; then
@@ -752,24 +724,16 @@ demo() {
     check_wallpaper_ready demo
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
-    if [ -z "${_demo_apps+set}" ]; then
-        session_client curseterm "$_curseterm/bin/curseterm"
-        if command -v foot >/dev/null 2>&1; then
-            session_client foot-1 foot -T "Malaysia"
-            session_client foot-2 foot -T "Segunda ventana"
-        elif command -v wezterm >/dev/null 2>&1; then
-            session_client wezterm wezterm start
-        else
-            printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
-        fi
+    session_client curseterm "$_curseterm/bin/curseterm"
+    if command -v foot >/dev/null 2>&1; then
+        session_client foot-1 foot -T "Malaysia"
+        session_client foot-2 foot -T "Second window"
+    elif command -v wezterm >/dev/null 2>&1; then
+        session_client wezterm wezterm start
+    else
+        printf 'demo: no foot or wezterm found; the dock will be empty\n' >&2
     fi
-    for _app in $_apps; do
-        if [ -x "$_apps_bin/$_app" ]; then
-            session_client "$_app" "$_apps_bin/$_app"
-        else
-            printf 'demo: %s not found in %s; skipping it\n' "$_app" "$_apps_bin" >&2
-        fi
-    done
+    session_client settings "$_settings_bin"
 
     printf 'demo: wallpaper, menubar and dock on %s\n' "$_sock"
     printf 'demo: more clients: WAYLAND_DISPLAY=%s <program>\n' "$_sock"
@@ -777,11 +741,6 @@ demo() {
     printf 'demo: close the host window or press Ctrl-C to end\n'
 
     wait_session_end demo
-}
-
-video() {
-    _demo_apps=marea
-    demo "$@"
 }
 
 lab() {
@@ -832,10 +791,8 @@ lab() {
     _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
     cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
         fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-    build_kit_apps tengen-app-show ondina
     build_curseterm
-    _show="$_kit_bin/tengen-app-show"
-    _ondina="$_kit_bin/ondina"
+    _settings_bin="$script_dir/target/debug/malaysia-settings"
 
     if ! command -v dbus-daemon >/dev/null 2>&1; then
         fail "$EXIT_RUN_FAILED" \
@@ -897,18 +854,14 @@ lab() {
     session_client curseterm "$_curseterm/bin/curseterm"
     if command -v foot >/dev/null 2>&1; then
         session_client foot-1 foot -T "Malaysia"
-        session_client foot-2 foot -T "Segunda ventana"
+        session_client foot-2 foot -T "Second window"
     elif command -v wezterm >/dev/null 2>&1; then
         session_client wezterm wezterm start
     else
         printf 'lab: no foot or wezterm found; the dock will be empty\n' >&2
     fi
 
-    if [ -x "$_show" ]; then
-        session_client tengen-app-show "$_show"
-    else
-        printf 'lab: tengen-app-show not found; skipping it\n' >&2
-    fi
+    session_client settings "$_settings_bin"
 
     if [ -z "${MALAYSIA_TEST_INPUT:-}" ]; then
         if command -v nautilus >/dev/null 2>&1; then
@@ -954,18 +907,14 @@ lab() {
         fi
     fi
 
-    sleep 0.5
-    if [ -x "$_ondina" ]; then
-        session_client ondina "$_ondina"
-    fi
 
     cat <<'EOF'
 
 lab session running. Manual checklist:
     1) Ventana > Trasladar > Izquierda/Superior izquierdo/Regresar con foot.
     2) ^Win+Left y ^Win+Return (if the host eats the combo, use the menu).
-    3) Resize Tengen App Show and Ondina from 4 corners and 4 edges:
-       no jumps, buttons keep responding; Ondina changes layout at 900 and 620.
+    3) Resize System Settings from 4 corners and 4 edges:
+       no jumps, buttons keep responding.
     4) Resize foot with another window behind it: the back window does not focus.
     5) Nautilus must NOT have the Malaysia titlebar; kate MUST have it.
     6) Help > type "oc": no other menu opens; Down reveals Foot.
@@ -978,73 +927,6 @@ EOF
     printf 'lab: close the host window or press Ctrl-C to end\n'
 
     wait_session_end lab
-}
-
-app() {
-    require_devshell
-    require cargo
-    _sin_menubar=
-    _name=
-    while [ "$#" -gt 0 ]; do
-        case "$1" in
-            --sin-menubar) _sin_menubar=1 ;;
-            -*) fail "$EXIT_USAGE" "unknown option for app: $1" ;;
-            *)
-                [ -z "$_name" ] || fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|marea|ondina"
-                _name=$1
-                ;;
-        esac
-        shift
-    done
-    if [ -z "$_name" ]; then
-        fail "$EXIT_USAGE" "usage: dev.sh app [--sin-menubar] tengen-app-show|marea|ondina"
-    fi
-    case "$_name" in
-        tengen-app-show | marea | ondina) ;;
-        *) fail "$EXIT_USAGE" "unknown app: $_name (tengen-app-show, marea or ondina)" ;;
-    esac
-    if ! is_running; then
-        fail "$EXIT_RUN_FAILED" "the demo is not running; start it with: ./dev.sh demo"
-    fi
-    _sock=$(logged_socket)
-    [ -n "$_sock" ] ||
-        fail "$EXIT_RUN_FAILED" "the demo has no Wayland socket yet; see: ./dev.sh log"
-
-    build_kit_apps "$_name"
-    _bin="$_kit_bin/$_name"
-    [ -x "$_bin" ] || fail "$EXIT_RUN_FAILED" "the app binary is missing: $_bin"
-
-    if [ -n "$_sin_menubar" ]; then
-        _pid_file="$RUNTIME_DIR/demo-menubar.pid"
-        if [ -f "$_pid_file" ]; then
-            _pid=$(cat "$_pid_file" 2>/dev/null || true)
-            case "$_pid" in
-                '' | *[!0-9]*) ;;
-                *)
-                    kill "$_pid" 2>/dev/null || true
-                    _waited=0
-                    while kill -0 "$_pid" 2>/dev/null && [ "$_waited" -lt 50 ]; do
-                        sleep 0.02
-                        _waited=$((_waited + 1))
-                    done
-                    rm -f "$_pid_file"
-                    ;;
-            esac
-        fi
-    fi
-
-    _ld=
-    _old_ifs=$IFS
-    IFS=:
-    for _path in ${LD_LIBRARY_PATH:-}; do
-        case "$_path" in
-            /nix/store/*) _ld="${_ld:+$_ld:}$_path" ;;
-        esac
-    done
-    IFS=$_old_ifs
-    unset _path
-    env -u DISPLAY WAYLAND_DISPLAY="$_sock" XDG_SESSION_TYPE=wayland \
-        LD_LIBRARY_PATH="$_ld" "$_bin"
 }
 
 drm_vkms() {
@@ -1356,9 +1238,7 @@ case "$command_name" in
     titlebar) titlebar "$@" ;;
     decoration) decoration "$@" ;;
     demo) demo "$@" ;;
-    video) video "$@" ;;
     lab) lab "$@" ;;
-    app) app "$@" ;;
     drm-vkms) drm_vkms "$@" ;;
     -h | --help) usage ;;
     *)

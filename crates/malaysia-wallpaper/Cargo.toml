@@ -24,8 +24,8 @@ png.workspace = true
 zune-jpeg.workspace = true
 libheif-rs.workspace = true
 half.workspace = true
-vow-appearance.workspace = true
-vow-design.workspace = true
+ctappearance.workspace = true
+ctdesign.workspace = true
 
 wayland-client = { workspace = true, features = ["system"] }
 wayland-protocols = { workspace = true, features = ["client", "staging"] }

@@ -163,7 +163,7 @@ pub struct State {
     pub(crate) rounded_clip: Option<GlesTexProgram>,
     pub(crate) shadow: Option<GlesPixelProgram>,
     pub(crate) border: Option<GlesPixelProgram>,
-    pub(crate) chrome_pointer: Option<(WindowId, vow_appearance::traffic::TrafficPointer)>,
+    pub(crate) chrome_pointer: Option<(WindowId, ctappearance::traffic::TrafficPointer)>,
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
     pub(crate) client_click: Option<crate::input::TitlebarClick>,
     pub(crate) client_double_click: Option<(WindowId, std::time::Instant)>,
@@ -502,7 +502,7 @@ impl State {
     }
 
     pub(crate) fn apply_titlebar_double_click(&mut self, id: WindowId) {
-        use vow_appearance::window::{TitlebarAction, double_click_action};
+        use ctappearance::window::{TitlebarAction, double_click_action};
         let in_focus_mode = self.in_focus_mode(id);
         let zoomable = in_focus_mode || self.windows.zoom_supported(id);
         match double_click_action(self.config.window.double_click_titlebar, zoomable) {
@@ -658,7 +658,7 @@ impl State {
         self.cursor_boost_started = Some(Instant::now());
         self.idle.arm(
             CURSOR_BOOST_ID,
-            Duration::from_millis(vow_design::CURSOR_SHAKE_TICK_MS),
+            Duration::from_millis(ctdesign::CURSOR_SHAKE_TICK_MS),
         );
         self.request_redraw();
     }
@@ -672,10 +672,10 @@ impl State {
             .last_shake()
             .is_some_and(|last| now.duration_since(last) <= CURSOR_SHAKE_ACTIVE_WINDOW);
         let grown =
-            now.duration_since(started) >= Duration::from_millis(vow_design::CURSOR_SHAKE_GROW_MS);
+            now.duration_since(started) >= Duration::from_millis(ctdesign::CURSOR_SHAKE_GROW_MS);
         if recent && grown {
             self.cursor_boost_started =
-                Some(now - Duration::from_millis(vow_design::CURSOR_SHAKE_GROW_MS));
+                Some(now - Duration::from_millis(ctdesign::CURSOR_SHAKE_GROW_MS));
         }
     }
 
@@ -686,7 +686,7 @@ impl State {
         if boost_animation_active(started.elapsed()) {
             self.idle.arm(
                 CURSOR_BOOST_ID,
-                Duration::from_millis(vow_design::CURSOR_SHAKE_TICK_MS),
+                Duration::from_millis(ctdesign::CURSOR_SHAKE_TICK_MS),
             );
         } else {
             self.cursor_boost_started = None;
@@ -773,9 +773,9 @@ pub(crate) fn region_rect(
 
 fn boost_scale_at(elapsed: Duration) -> f32 {
     let ms = elapsed.as_millis() as f32;
-    let grow = vow_design::CURSOR_SHAKE_GROW_MS as f32;
-    let shrink = vow_design::CURSOR_SHAKE_SHRINK_MS as f32;
-    let full = vow_design::CURSOR_SHAKE_SCALE;
+    let grow = ctdesign::CURSOR_SHAKE_GROW_MS as f32;
+    let shrink = ctdesign::CURSOR_SHAKE_SHRINK_MS as f32;
+    let full = ctdesign::CURSOR_SHAKE_SCALE;
     if ms < grow {
         1.0 + (full - 1.0) * ease_out_cubic(ms / grow)
     } else if ms < grow + shrink {
@@ -786,7 +786,7 @@ fn boost_scale_at(elapsed: Duration) -> f32 {
 }
 
 fn boost_animation_active(elapsed: Duration) -> bool {
-    let total = vow_design::CURSOR_SHAKE_GROW_MS + vow_design::CURSOR_SHAKE_SHRINK_MS;
+    let total = ctdesign::CURSOR_SHAKE_GROW_MS + ctdesign::CURSOR_SHAKE_SHRINK_MS;
     elapsed < Duration::from_millis(total)
 }
 
@@ -959,9 +959,9 @@ mod tests {
 
     #[test]
     fn the_shake_animation_grows_then_shrinks() {
-        let grow = vow_design::CURSOR_SHAKE_GROW_MS;
-        let shrink = vow_design::CURSOR_SHAKE_SHRINK_MS;
-        let full = vow_design::CURSOR_SHAKE_SCALE;
+        let grow = ctdesign::CURSOR_SHAKE_GROW_MS;
+        let shrink = ctdesign::CURSOR_SHAKE_SHRINK_MS;
+        let full = ctdesign::CURSOR_SHAKE_SCALE;
 
         assert_eq!(boost_scale_at(Duration::from_millis(0)), 1.0);
         assert!(boost_scale_at(Duration::from_millis(grow / 2)) > 1.0);

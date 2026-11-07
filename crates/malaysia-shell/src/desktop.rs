@@ -1,10 +1,10 @@
-use barrier_kit::views::search::{fold, word_start};
+use bk::views::search::{fold, word_start};
+use ctappearance::xdg;
 use std::{
     collections::{HashMap, HashSet},
     env,
     path::{Path, PathBuf},
 };
-use vow_appearance::xdg;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopEntry {
@@ -164,7 +164,7 @@ pub fn parse_desktop(text: &str, id: &str, locales: &[String]) -> Option<Desktop
 
 pub fn locale_candidates() -> Vec<String> {
     let mut out = Vec::new();
-    for tag in vow_appearance::language::requested_languages(None) {
+    for tag in ctappearance::language::requested_languages(None) {
         let candidate = tag.replace('-', "_");
         let candidate = candidate.as_str();
         if !out.iter().any(|value| value == candidate) {

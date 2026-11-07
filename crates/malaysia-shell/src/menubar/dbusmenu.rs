@@ -3,9 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
-use barrier_kit::app_menu::layout::{DbusMenuLayout, LayoutItem};
-use barrier_kit::platform::{AppMenuAddress, WakeHandle};
-use barrier_kit::shell::GtkMenusAddress;
+use bk::main_menu::layout::{DbusMenuLayout, LayoutItem};
+use bk::platform::{MainMenuAddress, WakeHandle};
+use bk::shell::GtkMenusAddress;
 use futures_lite::{StreamExt, future};
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
@@ -23,7 +23,7 @@ const DEBOUNCE: Duration = Duration::from_millis(50);
 #[derive(Clone, Debug)]
 pub enum Command {
     Focus {
-        address: AppMenuAddress,
+        address: MainMenuAddress,
         generation: u64,
     },
     GtkFocus {
@@ -33,16 +33,16 @@ pub enum Command {
     },
     Unfocus,
     Open {
-        address: AppMenuAddress,
+        address: MainMenuAddress,
         id: i32,
         generation: u64,
     },
     FullTree {
-        address: AppMenuAddress,
+        address: MainMenuAddress,
         generation: u64,
     },
     Activate {
-        address: AppMenuAddress,
+        address: MainMenuAddress,
         id: i32,
         timestamp: u32,
     },
@@ -59,7 +59,7 @@ pub struct RawItem {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MenuSnapshot {
     pub generation: u64,
-    pub address: AppMenuAddress,
+    pub address: MainMenuAddress,
     pub parent: Option<i32>,
     pub items: Option<Vec<RawItem>>,
     pub cached: bool,
@@ -73,7 +73,7 @@ pub struct MenuClient {
 }
 
 impl MenuClient {
-    pub fn focus(&self, address: AppMenuAddress, generation: u64) {
+    pub fn focus(&self, address: MainMenuAddress, generation: u64) {
         let _ = self.commands.send_blocking(Command::Focus {
             address,
             generation,
@@ -92,7 +92,7 @@ impl MenuClient {
         let _ = self.commands.send_blocking(Command::Unfocus);
     }
 
-    pub fn open(&self, address: AppMenuAddress, id: i32, generation: u64) {
+    pub fn open(&self, address: MainMenuAddress, id: i32, generation: u64) {
         let _ = self.commands.send_blocking(Command::Open {
             address,
             id,
@@ -100,14 +100,14 @@ impl MenuClient {
         });
     }
 
-    pub fn full_tree(&self, address: AppMenuAddress, generation: u64) {
+    pub fn full_tree(&self, address: MainMenuAddress, generation: u64) {
         let _ = self.commands.send_blocking(Command::FullTree {
             address,
             generation,
         });
     }
 
-    pub fn activate(&self, address: AppMenuAddress, id: i32, timestamp: u32) {
+    pub fn activate(&self, address: MainMenuAddress, id: i32, timestamp: u32) {
         let _ = self.commands.send_blocking(Command::Activate {
             address,
             id,
@@ -340,18 +340,18 @@ fn apply_properties(
     changed
 }
 
-type MenuCaches = HashMap<AppMenuAddress, MenuCache>;
+type MenuCaches = HashMap<MainMenuAddress, MenuCache>;
 
 struct AddressProxy {
     proxy: zbus::Proxy<'static>,
     owner: Option<String>,
 }
 
-type ProxyCache = HashMap<AppMenuAddress, AddressProxy>;
+type ProxyCache = HashMap<MainMenuAddress, AddressProxy>;
 
 #[derive(Default)]
 struct Pending {
-    focus: Option<(AppMenuAddress, u64)>,
+    focus: Option<(MainMenuAddress, u64)>,
     subtrees: Vec<i32>,
     snapshot: bool,
     deadline: Option<Instant>,
@@ -366,18 +366,18 @@ impl Pending {
 
 #[derive(Default)]
 struct Focus {
-    current: Option<(AppMenuAddress, u64)>,
+    current: Option<(MainMenuAddress, u64)>,
     pending: Pending,
     background: BackgroundFullTree,
 }
 
 #[derive(Default)]
 struct BackgroundFullTree {
-    wait: Option<(AppMenuAddress, u64, Instant)>,
+    wait: Option<(MainMenuAddress, u64, Instant)>,
 }
 
 impl BackgroundFullTree {
-    fn schedule(&mut self, address: &AppMenuAddress, generation: u64, cached: bool, now: Instant) {
+    fn schedule(&mut self, address: &MainMenuAddress, generation: u64, cached: bool, now: Instant) {
         if cached {
             self.cancel(address);
             return;
@@ -392,7 +392,7 @@ impl BackgroundFullTree {
         }
     }
 
-    fn cancel(&mut self, address: &AppMenuAddress) {
+    fn cancel(&mut self, address: &MainMenuAddress) {
         self.wait.take_if(|(pending, _, _)| pending == address);
     }
 
@@ -400,7 +400,7 @@ impl BackgroundFullTree {
         self.wait.as_ref().map(|(_, _, at)| *at)
     }
 
-    fn due(&mut self, now: Instant) -> Option<(AppMenuAddress, u64)> {
+    fn due(&mut self, now: Instant) -> Option<(MainMenuAddress, u64)> {
         self.wait
             .take_if(|(_, _, at)| *at <= now)
             .map(|(address, generation, _)| (address, generation))
@@ -502,14 +502,14 @@ async fn run(
 
 fn gtk_for<'a>(
     gtk: &'a Option<gtkmenus::Session>,
-    address: &AppMenuAddress,
+    address: &MainMenuAddress,
     generation: u64,
 ) -> Option<&'a gtkmenus::Session> {
     gtk.as_ref()
         .filter(|session| session.address == *address && session.generation == generation)
 }
 
-fn signal_address(proxies: &ProxyCache, sender: &str, path: &str) -> Option<AppMenuAddress> {
+fn signal_address(proxies: &ProxyCache, sender: &str, path: &str) -> Option<MainMenuAddress> {
     proxies.iter().find_map(|(address, entry)| {
         (address.path == path && entry.owner.as_deref() == Some(sender)).then(|| address.clone())
     })
@@ -790,7 +790,7 @@ impl Worker {
         }
     }
 
-    async fn send_subtree(&mut self, address: AppMenuAddress, id: i32, generation: u64) {
+    async fn send_subtree(&mut self, address: MainMenuAddress, id: i32, generation: u64) {
         let started = Instant::now();
         let cached = self
             .caches
@@ -858,7 +858,7 @@ impl Worker {
         }
     }
 
-    async fn send_cached_root(&self, address: &AppMenuAddress, generation: u64) -> bool {
+    async fn send_cached_root(&self, address: &MainMenuAddress, generation: u64) -> bool {
         let Some(root) = self
             .caches
             .get(address)
@@ -884,7 +884,7 @@ impl Worker {
         true
     }
 
-    async fn fetch_root(&mut self, address: &AppMenuAddress, generation: u64) {
+    async fn fetch_root(&mut self, address: &MainMenuAddress, generation: u64) {
         let started = Instant::now();
         let items = self.fetch_subtree(address, 0).await;
         tracing::info!(
@@ -905,7 +905,7 @@ impl Worker {
         .await;
     }
 
-    async fn send_cached_subtrees(&self, address: &AppMenuAddress, generation: u64) {
+    async fn send_cached_subtrees(&self, address: &MainMenuAddress, generation: u64) {
         let Some(cache) = self.caches.get(address) else {
             return;
         };
@@ -923,7 +923,7 @@ impl Worker {
         }
     }
 
-    async fn fetch_subtree(&mut self, address: &AppMenuAddress, id: i32) -> Option<Vec<RawItem>> {
+    async fn fetch_subtree(&mut self, address: &MainMenuAddress, id: i32) -> Option<Vec<RawItem>> {
         match self.layout(address, id, 1, CALL_TIMEOUT).await {
             Ok((revision, items)) => {
                 self.caches
@@ -939,13 +939,13 @@ impl Worker {
         }
     }
 
-    fn has_full_tree(&self, address: &AppMenuAddress) -> bool {
+    fn has_full_tree(&self, address: &MainMenuAddress) -> bool {
         self.caches
             .get(address)
             .is_some_and(|cache| cache.full.is_some())
     }
 
-    async fn send_full_tree(&mut self, address: &AppMenuAddress, generation: u64) {
+    async fn send_full_tree(&mut self, address: &MainMenuAddress, generation: u64) {
         let started = Instant::now();
         let cached = self
             .caches
@@ -1009,7 +1009,7 @@ impl Worker {
         }
     }
 
-    async fn proxy(&mut self, address: &AppMenuAddress) -> zbus::Result<zbus::Proxy<'static>> {
+    async fn proxy(&mut self, address: &MainMenuAddress) -> zbus::Result<zbus::Proxy<'static>> {
         if let Some(entry) = self.proxies.get(address) {
             return Ok(entry.proxy.clone());
         }
@@ -1039,7 +1039,7 @@ impl Worker {
 
     async fn layout(
         &mut self,
-        address: &AppMenuAddress,
+        address: &MainMenuAddress,
         parent: i32,
         depth: i32,
         limit: Duration,
@@ -1054,7 +1054,7 @@ impl Worker {
         Ok((revision, root.2.into_iter().filter_map(raw_item).collect()))
     }
 
-    async fn about_to_show(&mut self, address: &AppMenuAddress, id: i32) -> bool {
+    async fn about_to_show(&mut self, address: &MainMenuAddress, id: i32) -> bool {
         let Ok(proxy) = self.proxy(address).await else {
             return false;
         };
@@ -1078,7 +1078,7 @@ impl Worker {
 
     async fn event(
         &mut self,
-        address: &AppMenuAddress,
+        address: &MainMenuAddress,
         id: i32,
         timestamp: u32,
     ) -> zbus::Result<()> {
@@ -1148,8 +1148,8 @@ mod tests {
         }
     }
 
-    fn address(service: &str) -> AppMenuAddress {
-        AppMenuAddress {
+    fn address(service: &str) -> MainMenuAddress {
+        MainMenuAddress {
             service: service.to_string(),
             path: "/MenuBar/1".to_string(),
         }

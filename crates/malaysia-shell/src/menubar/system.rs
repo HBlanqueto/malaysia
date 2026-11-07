@@ -1,8 +1,8 @@
 use std::sync::OnceLock;
 
-use barrier_kit::menu::{MenuIcon, MenuItem};
-use barrier_kit::shell::ToplevelInfo;
-use barrier_kit::titlebar::app_id;
+use bk::menu::{MenuIcon, MenuItem};
+use bk::shell::ToplevelInfo;
+use bk::titlebar::app_id;
 
 use crate::desktop::DesktopEntry;
 use crate::dialogs::ABOUT_APP_ID;
@@ -82,7 +82,7 @@ pub fn on_system_action(id: String, toplevels: &[ToplevelInfo], entries: &[Deskt
         id,
         toplevels,
         |_, _| spawn_settings(),
-        |id| barrier_kit::shell::Toplevels::get().activate(id),
+        |id| bk::shell::Toplevels::get().activate(id),
     );
 }
 

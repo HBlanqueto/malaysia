@@ -10,7 +10,7 @@ use smithay::input::keyboard::FilterResult;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Size};
 use tracing::info;
 use xkbcommon::xkb::{self, Keycode, Keysym};
-use vow_design::{TILE_GAP, TILE_MARGIN};
+use ctdesign::{TILE_GAP, TILE_MARGIN};
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use malaysia_scene::scene::WindowId;
 

@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
 
-use barrier_kit::menu::{CheckState, MNEMONIC_MARK, MenuItem, normalize_separators};
+use bk::menu::{CheckState, MNEMONIC_MARK, MenuItem, normalize_separators};
 use zbus::zvariant::OwnedValue;
 
 use crate::menubar::dbusmenu::RawItem;
@@ -120,8 +120,8 @@ fn debug_once(key: &str, value: Option<&OwnedValue>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use barrier_kit::menu::strip_mnemonic;
-    use barrier_kit::menu::{CheckState, MenuItem};
+    use bk::menu::strip_mnemonic;
+    use bk::menu::{CheckState, MenuItem};
     use std::collections::HashMap;
 
     fn text(value: &str) -> OwnedValue {

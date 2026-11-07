@@ -1,12 +1,12 @@
-use barrier_kit::context_menu::context_menu;
-use barrier_kit::menu::MenuItem;
-use barrier_kit::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use bk::menu::MenuItem;
+use bk::modifiers::ViewModifiers;
+use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
+use ctdesign::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Direction, Size};
-use vow_design::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 
-use barrier_kit::theme;
+use bk::theme;
 
 use crate::localize::tr;
 
@@ -16,11 +16,11 @@ impl App for DockApp {
     fn render(&self) -> impl IntoElement {
         let toplevels = Toplevels::get();
         let entries = toplevels.list.read().clone();
-        let resolved = barrier_kit::theme::resolved();
+        let resolved = bk::theme::resolved();
         let palette = resolved.shell;
-        let background = theme::color(barrier_kit::theme::surface_background(
+        let background = theme::color(bk::theme::surface_background(
             &resolved,
-            barrier_kit::theme::SurfaceKind::LayerShell,
+            bk::theme::SurfaceKind::LayerShell,
         ));
         let tile = theme::color(palette.tile);
         let active_tile = theme::color(palette.tile_active);
@@ -62,7 +62,7 @@ impl App for DockApp {
                         .font_size(DOCK_FONT_SIZE)
                         .color(if is_active { active_text } else { text }),
                 );
-            context_menu(tile, menu, move |command: String| match command.as_str() {
+            tile.context_menu(menu, move |command: String| match command.as_str() {
                 "show" => {
                     commands.unset_minimized(id);
                     commands.activate(id);

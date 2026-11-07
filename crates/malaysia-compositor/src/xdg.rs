@@ -7,7 +7,7 @@ pub fn desktop_dir() -> PathBuf {
     if let Some(path) = explicit {
         return PathBuf::from(path);
     }
-    vow_appearance::xdg::user_dir("DESKTOP")
+    ctappearance::xdg::user_dir("DESKTOP")
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
         .unwrap_or_else(|| PathBuf::from("Desktop"))
 }

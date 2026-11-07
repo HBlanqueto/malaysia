@@ -5,21 +5,21 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use barrier_kit::app::{load_defaults, use_defaults, use_watched};
-use barrier_kit::menu::{ItemsSource, MenuItem};
-use barrier_kit::platform::Timers;
-use barrier_kit::shell::{
+use bk::app::{load_defaults, use_defaults, use_watched};
+use bk::menu::{ItemsSource, MenuItem};
+use bk::platform::Timers;
+use bk::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
     ToplevelInfo, Toplevels, run_layer, use_status_items,
+};
+use ctappearance::data_dir;
+use ctdesign::{
+    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
+    SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Direction, Gaps, Size};
-use vow_appearance::data_dir;
-use vow_design::{
-    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
-    SANS_FAMILIES,
-};
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;
@@ -31,9 +31,9 @@ use crate::menubar::remote;
 use crate::menubar::{
     appmenu, clock, focused, load_active_window, resolve_app_name, shortcuts, status, system,
 };
-use barrier_kit::menu::{RevealRoots, SearchQuery};
-use barrier_kit::platform::AppMenuAddress;
-use barrier_kit::theme;
+use bk::menu::{RevealRoots, SearchQuery};
+use bk::platform::MainMenuAddress;
+use bk::theme;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
 
@@ -78,7 +78,7 @@ impl MenuMemory {
     fn decide(
         &mut self,
         app_id: &str,
-        address: Option<&AppMenuAddress>,
+        address: Option<&MainMenuAddress>,
         newly_mapped: bool,
         now: Instant,
     ) -> Decision {
@@ -132,20 +132,20 @@ fn title_labels(items: &[MenuItem]) -> Vec<String> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RemoteMenu {
     pub generation: u64,
-    pub address: AppMenuAddress,
+    pub address: MainMenuAddress,
     pub items: Vec<MenuItem>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct MenuKey {
     app_id: String,
-    app_menu: Option<AppMenuAddress>,
+    app_menu: Option<MainMenuAddress>,
     gtk_menus: Option<GtkMenusAddress>,
     enabled: bool,
 }
 
 impl MenuKey {
-    fn address(&self) -> Option<AppMenuAddress> {
+    fn address(&self) -> Option<MainMenuAddress> {
         self.app_menu
             .clone()
             .or_else(|| self.gtk_menus.as_ref().map(gtkmenus::address))
@@ -209,7 +209,7 @@ impl App for BarApp {
         let focused = app_id.is_some();
         let key = active_info.map(|info| MenuKey {
             app_id: info.app_id.clone(),
-            app_menu: info.app_menu.clone(),
+            app_menu: info.main_menu.clone(),
             gtk_menus: info.gtk_menus.clone(),
             enabled: app_menus_enabled,
         });
@@ -493,7 +493,7 @@ impl BarApp {
                 }
             })
         };
-        let submenu_source: barrier_kit::menu::SubmenuSource = Rc::new(move |id| {
+        let submenu_source: bk::menu::SubmenuSource = Rc::new(move |id| {
             let id = id.parse::<i32>().ok()?;
             remote::find_subtree(&remote_items(), id)
         });
@@ -713,8 +713,8 @@ fn bar_colors() -> (Color, Color) {
     let resolved = theme::resolved();
     if Toplevels::get().space.read().focus_bar.over_focus() {
         return (
-            theme::color(vow_design::FOCUS_BAR_TEXT),
-            theme::color(vow_design::FOCUS_BAR_BACKGROUND),
+            theme::color(ctdesign::FOCUS_BAR_TEXT),
+            theme::color(ctdesign::FOCUS_BAR_BACKGROUND),
         );
     }
     (
@@ -866,7 +866,7 @@ fn schedule_next_minute(timers: Timers, clock: State<String>) {
 
 fn is_shell_dialog(app_id: &str) -> bool {
     app_id
-        .strip_prefix(vow_design::NATIVE_APP_ID_PREFIX)
+        .strip_prefix(ctdesign::NATIVE_APP_ID_PREFIX)
         .is_some_and(|name| {
             [
                 crate::dialogs::ABOUT_APP_ID,
@@ -924,7 +924,7 @@ mod tests {
     fn shell_dialogs_are_recognised_by_their_prefixed_app_id() {
         let about = format!(
             "{}{}",
-            vow_design::NATIVE_APP_ID_PREFIX,
+            ctdesign::NATIVE_APP_ID_PREFIX,
             crate::dialogs::ABOUT_APP_ID
         );
         assert!(is_shell_dialog(&about));
@@ -937,7 +937,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("malaysia-menubar-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("menubar.domain");
-        let app_menus = |path: &Path| barrier_kit::app::read_toml::<MenubarConfig>(path).app_menus;
+        let app_menus = |path: &Path| bk::app::read_toml::<MenubarConfig>(path).app_menus;
         assert!(app_menus(&path));
         std::fs::write(&path, "app_menus = false\nautohide = true\n").unwrap();
         assert!(!app_menus(&path));
@@ -1029,8 +1029,8 @@ mod tests {
         assert!(decision.started.is_none());
     }
 
-    fn address() -> AppMenuAddress {
-        AppMenuAddress {
+    fn address() -> MainMenuAddress {
+        MainMenuAddress {
             service: ":1.6".to_string(),
             path: "/com/canonical/menu/0".to_string(),
         }

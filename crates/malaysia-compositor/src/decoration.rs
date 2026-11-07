@@ -1,5 +1,5 @@
+use ctdesign::Titlebar;
 use malaysia_scene::scene::Decoration;
-use vow_design::Titlebar;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Insets {
@@ -77,7 +77,7 @@ fn titlebar_inset(titlebar: &Titlebar) -> Insets {
 
 #[cfg(test)]
 mod tests {
-    use vow_design::TITLEBAR;
+    use ctdesign::TITLEBAR;
 
     use super::{Insets, Role, WindowState, effective_decoration};
     use crate::config::DecorationPolicy;

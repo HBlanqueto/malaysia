@@ -20,7 +20,7 @@ production() {
 
 if matches=$(production crates/malaysia-compositor/src crates/malaysia-shell/src |
     grep -E '0x[0-9a-fA-F]{6,8}|Rgba::(rgb8|rgba8)'); then
-    report "colour literals must live in vow-design" "$matches"
+    report "colour literals must live in ctdesign" "$matches"
 fi
 
 if matches=$(production crates/malaysia-shell/src |
@@ -33,7 +33,7 @@ if matches=$(production \
     crates/malaysia-shell/src/dock.rs \
     crates/malaysia-shell/src/lock.rs |
     grep -E ':[0-9]+:[[:space:]]*const [A-Z0-9_]+: (i32|u32|f32) = [0-9]'); then
-    report "UI measurements must live in vow-design" "$matches"
+    report "UI measurements must live in ctdesign" "$matches"
 fi
 
 exit "$status"

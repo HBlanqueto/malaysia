@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
+use ctdesign::TITLEBAR;
 use malaysia_scene::geometry::{
     Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize,
 };
@@ -18,7 +19,6 @@ use smithay::wayland::compositor::{SurfaceAttributes, with_states};
 use smithay::wayland::shell::xdg::{
     Configure, SurfaceCachedState, ToplevelStateSet, ToplevelSurface, XdgToplevelSurfaceData,
 };
-use vow_design::TITLEBAR;
 
 use crate::decoration::{Insets, Role, WindowState};
 

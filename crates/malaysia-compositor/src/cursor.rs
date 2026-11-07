@@ -81,7 +81,7 @@ impl Cursors {
             }
         }
 
-        let boost = vow_design::CURSOR_SHAKE_SCALE.ceil() as u32;
+        let boost = ctdesign::CURSOR_SHAKE_SCALE.ceil() as u32;
         let boosted_target = target.saturating_mul(boost);
         let boosted_fallback = load_icon(
             CursorIcon::Default,

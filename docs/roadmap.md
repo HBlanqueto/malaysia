@@ -94,7 +94,7 @@ scale) pending. **8c**: direct scanout on the primary plane for
 fullscreen windows, cursor plane and per-surface dmabuf feedback
 with a scanout tranche, done, not accepted on the real panel. The
 overlay planes exist behind `debug.overlay_planes`, off by default until
-they are accepted with `./dev.sh video`; on i915 they stay off (S-02 in
+they are accepted on the real panel with a video playing; on i915 they stay off (S-02 in
 [`debt.md`](debt.md)). Multi-GPU with `GpuManager` and `MultiRenderer` over
 GLES, done, not accepted: with `--drm-device` on a GPU other than the rendering one, it
 composites on the render GPU and copies to the scanout GPU's buffer; a
@@ -179,8 +179,9 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
 - 14d-2/3 (dbusmenu client, full tree): 2026-10-26.
 - 14d-5/6 (remembered titles, `MENU_GRACE`, separators): 2026-10-27.
 - 14e (own apps export dbusmenu): accepted 2026-10-26 with the
-  `contador` example, removed on 2026-11-02; today Ondina tests it (barrierkit
-  `crates/ondina`, `crates/bk/src/platform/app_menu_export.rs`).
+  `contador` example, removed on 2026-11-02; Ondina tested it until barrierkit
+  removed its demo apps (`35dba16`). The export is
+  `crates/bk/src/platform/main_menu_export.rs` in barrierkit.
 - 14f-1 (`gtk_shell1` v5 + Infinity v3 `gtk_menus` event): accepted
   2026-10-28 in a nested session (`crates/malaysia-compositor/src/gtk.rs`; the
   bar only records the address, `crates/malaysia-shell/src/menubar/bar.rs`).

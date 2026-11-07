@@ -1,8 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
-use barrier_kit::menu::{CheckState, MenuIcon, MenuItem};
-use barrier_kit::shell::{ToplevelInfo, Toplevels};
+use bk::menu::{CheckState, MenuIcon, MenuItem};
+use bk::shell::{ToplevelInfo, Toplevels};
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;
@@ -282,7 +282,7 @@ fn open_home() {
 }
 
 fn open_user_dir(kind: &str, fallback: &str) {
-    if let Some(path) = vow_appearance::xdg::user_dir(kind)
+    if let Some(path) = ctappearance::xdg::user_dir(kind)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
     {
         xdg_open(path);

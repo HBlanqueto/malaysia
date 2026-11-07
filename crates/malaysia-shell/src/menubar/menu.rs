@@ -1,23 +1,23 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use barrier_kit::menu::{
+use bk::menu::{
     ItemsSource, MenuNavigation, MenuView, RevealRoots, SearchableEntry, SubmenuSource,
 };
-use barrier_kit::platform::{
+use bk::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
+};
+use ctdesign::{
+    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED,
+    MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
 };
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Gaps, Position, Size, SizeFnContext};
-use vow_design::{
-    MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED,
-    MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
-};
 
 use crate::menubar::icons;
-use barrier_kit::theme;
+use bk::theme;
 
 pub struct SearchableLists {
     pub menu: Vec<SearchableEntry>,
@@ -42,7 +42,7 @@ pub struct MenuTitleSpec {
     pub submenu_source: Option<SubmenuSource>,
     pub anchor: Rc<Cell<(f32, f32)>>,
     pub enabled: bool,
-    pub query_state: Option<Rc<RefCell<barrier_kit::menu::SearchQuery>>>,
+    pub query_state: Option<Rc<RefCell<bk::menu::SearchQuery>>>,
     pub reveal_roots: Option<RevealRoots>,
 }
 
@@ -109,10 +109,8 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     }
 
     let items = (spec.items)();
-    let palette = barrier_kit::theme::menu_palette(
-        &barrier_kit::theme::resolved(),
-        barrier_kit::theme::SurfaceKind::LayerShell,
-    );
+    let palette =
+        bk::theme::menu_palette(&bk::theme::resolved(), bk::theme::SurfaceKind::LayerShell);
     let size = MenuView::preferred_size(&items, palette);
     let (anchor_x, anchor_width) = spec.anchor.get();
     let label = spec.label.clone();
@@ -246,9 +244,8 @@ pub fn menu_title(
     let is_open = state.open_label.read().as_deref() == Some(&label_text);
     let hovered = state.hovered_label.read().as_deref() == Some(&label_text);
 
-    let resolved = barrier_kit::theme::resolved();
-    let palette =
-        barrier_kit::theme::menu_palette(&resolved, barrier_kit::theme::SurfaceKind::LayerShell);
+    let resolved = bk::theme::resolved();
+    let palette = bk::theme::menu_palette(&resolved, bk::theme::SurfaceKind::LayerShell);
 
     let mut container = rect().height(Size::fill()).center();
 

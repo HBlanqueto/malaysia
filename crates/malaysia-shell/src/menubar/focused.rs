@@ -1,5 +1,5 @@
-use barrier_kit::menu::{CheckState, MenuIcon, MenuItem, SearchSource, SearchableEntry};
-use barrier_kit::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
+use bk::menu::{CheckState, MenuIcon, MenuItem, SearchSource, SearchableEntry};
+use bk::shell::{InfinityLayout, InfinityPairLayout, ToplevelInfo, Toplevels};
 
 use crate::localize::tr;
 use crate::menubar::{help_topics, icons};

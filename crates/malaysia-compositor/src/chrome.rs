@@ -2,6 +2,15 @@ use std::collections::HashMap;
 use std::sync::Once;
 
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
+use ctappearance::traffic::{self, TrafficInput};
+use ctappearance::{
+    AppearanceConfig, ColorScheme, TrafficLightShape, TrafficLightStyle, WindowColorMode,
+    load_dominant, palette as base_palette, resolve,
+};
+use ctdesign::{
+    ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
+    TRAFFIC_RIM_WIDTH,
+};
 use malaysia_scene::geometry::{Logical as SceneLogical, Rect as SceneRect};
 use malaysia_scene::scene::{PopupId, WindowId};
 use smithay::backend::allocator::Fourcc;
@@ -13,15 +22,6 @@ use smithay::backend::renderer::gles::{
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use unicode_segmentation::UnicodeSegmentation;
-use vow_appearance::traffic::{self, TrafficInput};
-use vow_appearance::{
-    AppearanceConfig, ColorScheme, TrafficLightShape, TrafficLightStyle, WindowColorMode,
-    load_dominant, palette as base_palette, resolve,
-};
-use vow_design::{
-    ButtonKind, FocusPair, Font, Palette, Rgba, TEXT_LINE_HEIGHT, TITLEBAR, TRAFFIC_GLYPHS,
-    TRAFFIC_RIM_WIDTH,
-};
 
 use crate::config::Config;
 use crate::cursor::OutputRenderElement;
@@ -217,9 +217,9 @@ impl ChromeCache {
         arrow: crate::effects::Arrow,
     ) -> Vec<OutputRenderElement<R>> {
         let style = if theme.scheme.is_dark() {
-            vow_design::SHADOW_DARK
+            ctdesign::SHADOW_DARK
         } else {
-            vow_design::SHADOW
+            ctdesign::SHADOW
         };
         let mut elements = Vec::with_capacity(2);
         for (slot, layer) in (SHADOW_SLOT..).zip(style.layers(focused)) {
@@ -324,7 +324,7 @@ fn shadow_layer(
     radius: i32,
     exponent: f32,
     scale: f64,
-    layer: vow_design::ShadowLayer,
+    layer: ctdesign::ShadowLayer,
 ) -> Option<(Rectangle<i32, Logical>, Vec<Uniform<'static>>)> {
     let margin = (f64::from(shadow_margin(layer)) * scale).ceil() as i32 + 1;
     if margin <= 0 {
@@ -351,7 +351,7 @@ fn shadow_layer(
     Some((area, uniforms))
 }
 
-fn shadow_margin(layer: vow_design::ShadowLayer) -> i32 {
+fn shadow_margin(layer: ctdesign::ShadowLayer) -> i32 {
     (f64::from(layer.blur) * 1.5 + f64::from(layer.y_offset.abs())).round() as i32
 }
 
@@ -510,9 +510,8 @@ impl TextEngine {
             palette.title.unfocused
         };
         let group_width = 3 * diameter + 2 * gap;
-        let reserve = margin
-            + group_width
-            + (f64::from(vow_design::TITLEBAR_TITLE_GAP) * scale).round() as i32;
+        let reserve =
+            margin + group_width + (f64::from(ctdesign::TITLEBAR_TITLE_GAP) * scale).round() as i32;
         let max_width = (w - 2 * reserve).max(1);
         self.draw_title(
             &mut pixels,
@@ -585,7 +584,7 @@ impl TextEngine {
         w: i32,
         h: i32,
         title: &str,
-        color: vow_design::Rgba,
+        color: ctdesign::Rgba,
         font: Font,
         scale: f64,
         max_width: i32,
@@ -696,7 +695,7 @@ fn draw_glyph(
 
 #[allow(clippy::too_many_arguments)]
 fn segment_coverage(
-    segments: &[vow_design::Segment],
+    segments: &[ctdesign::Segment],
     col: i32,
     row: i32,
     origin_x: f32,
@@ -730,7 +729,7 @@ fn segment_coverage(
 }
 
 fn triangle_coverage(
-    triangles: &[vow_design::Triangle],
+    triangles: &[ctdesign::Triangle],
     col: i32,
     row: i32,
     origin_x: f32,
@@ -777,7 +776,7 @@ fn fill_rect(
     y: i32,
     w: i32,
     h: i32,
-    color: vow_design::Rgba,
+    color: ctdesign::Rgba,
 ) {
     for row in y.max(0)..(y + h).min(height) {
         for col in x.max(0)..(x + w).min(width) {
@@ -796,7 +795,7 @@ fn fill_rounded_square(
     cy: i32,
     size: i32,
     radius: f32,
-    color: vow_design::Rgba,
+    color: ctdesign::Rgba,
 ) {
     let half = size as f32 / 2.0;
     let radius = radius.min(half);
@@ -826,7 +825,7 @@ fn stroke_rounded_square(
     size: i32,
     radius: f32,
     stroke: f32,
-    color: vow_design::Rgba,
+    color: ctdesign::Rgba,
 ) {
     let half = size as f32 / 2.0;
     let radius = radius.min(half);
@@ -862,7 +861,7 @@ fn blit_glyph(
     if w == 0 || h == 0 {
         return;
     }
-    let alpha_color = vow_design::Rgba {
+    let alpha_color = ctdesign::Rgba {
         r: f32::from(color[0]) / 255.0,
         g: f32::from(color[1]) / 255.0,
         b: f32::from(color[2]) / 255.0,
@@ -892,7 +891,7 @@ fn blit_glyph(
     }
 }
 
-fn blend(dst: &mut [u8], src: vow_design::Rgba, coverage: f32) {
+fn blend(dst: &mut [u8], src: ctdesign::Rgba, coverage: f32) {
     let a = (src.a * coverage).clamp(0.0, 1.0);
     let inverse = 1.0 - a;
     for (index, channel) in [src.r, src.g, src.b].into_iter().enumerate() {
@@ -909,11 +908,11 @@ fn blend(dst: &mut [u8], src: vow_design::Rgba, coverage: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use malaysia_scene::geometry::Rect;
-    use vow_design::{
+    use ctdesign::{
         BG_WINDOW_LIGHT, ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
         TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
     };
+    use malaysia_scene::geometry::Rect;
 
     fn outer() -> SceneRect<f64, SceneLogical> {
         Rect::new(
@@ -931,7 +930,7 @@ mod tests {
 
     #[test]
     fn shadow_margin_is_three_sigma_plus_the_offset() {
-        let layer = vow_design::ShadowLayer {
+        let layer = ctdesign::ShadowLayer {
             blur: 48,
             y_offset: 18,
             opacity: 0.18,
@@ -980,9 +979,7 @@ mod tests {
         );
         assert_eq!(
             theme.palette.hairline,
-            LIGHT
-                .line
-                .mix(accent, factor * vow_design::LAYER_FACTOR_LINE)
+            LIGHT.line.mix(accent, factor * ctdesign::LAYER_FACTOR_LINE)
         );
         assert_eq!(
             theme.lights[0],
@@ -1009,12 +1006,12 @@ mod tests {
         let accent = theme.palette.accent;
         assert_ne!(accent, wallpaper);
         assert!(
-            accent.contrast_ratio(vow_design::BG_WINDOW_DARK) >= 3.0,
+            accent.contrast_ratio(ctdesign::BG_WINDOW_DARK) >= 3.0,
             "derived accent must contrast with the window background"
         );
         assert_eq!(
             theme.palette.titlebar_bg.focused,
-            vow_design::BG_WINDOW_DARK.mix(wallpaper, factor)
+            ctdesign::BG_WINDOW_DARK.mix(wallpaper, factor)
         );
         assert_eq!(
             theme.palette.titlebar_bg.unfocused,
@@ -1023,7 +1020,7 @@ mod tests {
         assert_eq!(
             theme.palette.hairline,
             DARK.line
-                .mix(wallpaper, factor * vow_design::LAYER_FACTOR_LINE)
+                .mix(wallpaper, factor * ctdesign::LAYER_FACTOR_LINE)
         );
         assert_eq!(theme.lights[2], wallpaper.lighten(TRAFFIC_ZOOM_LIGHTEN));
     }
@@ -1058,7 +1055,7 @@ mod tests {
         assert_eq!(TITLEBAR.buttons.diameter, 14);
         assert_eq!(TITLEBAR.buttons.spacing, 9);
         assert_eq!(traffic::button_rect(0), (9.0, 9.0, 14.0));
-        assert_eq!(vow_design::WINDOW_CORNER.titlebar, 16);
+        assert_eq!(ctdesign::WINDOW_CORNER.titlebar, 16);
     }
 
     #[test]
@@ -1130,7 +1127,7 @@ mod tests {
             let reserve = margin
                 + 3 * diameter
                 + 2 * gap
-                + (f64::from(vow_design::TITLEBAR_TITLE_GAP) * scale).round() as i32;
+                + (f64::from(ctdesign::TITLEBAR_TITLE_GAP) * scale).round() as i32;
             let max_width = width - 2 * reserve;
 
             let fitted = text.fit_title(&title, TITLEBAR.font, scale, max_width as f32);
@@ -1220,7 +1217,7 @@ mod tests {
         let center = pixel(&pixels, width, x, y);
         let expected = TITLEBAR.buttons.order[0]
             .color
-            .darken(vow_design::TRAFFIC_PRESSED_DARKEN)
+            .darken(ctdesign::TRAFFIC_PRESSED_DARKEN)
             .to_rgba8();
         for (actual, expected) in center.iter().zip(expected) {
             assert!(actual.abs_diff(expected) <= 1, "{center:?} != {expected:?}");

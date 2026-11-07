@@ -14,7 +14,7 @@ use crate::renderer::{MalaysiaRenderer, PrimaryGpu};
 use crate::state::State;
 use crate::theme_fade::{ease, progress};
 
-const DURATION: Duration = Duration::from_millis(vow_design::DURATION_BASE);
+const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
 
 pub(crate) struct PopupFade {
     texture: TextureBuffer<GlesTexture>,

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use ctdesign::Rgba;
 use half::f16;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
-use vow_design::Rgba;
 use wgpu::util::DeviceExt;
 
 use crate::image::{DecodedImage, Pixels};
@@ -618,7 +618,7 @@ mod tests {
     };
 
     use super::{RenderContext, WallpaperTexture, mip_level_count};
-    use vow_design::Rgba;
+    use ctdesign::Rgba;
 
     fn padded_bytes_per_row(width: u32) -> u32 {
         let unpadded = width * 4;

@@ -3,32 +3,32 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use barrier_kit::controls::{Button, ButtonStyle, ControlSize};
-use barrier_kit::menu::measure_text_weight;
-use barrier_kit::patterns::about::about_window;
-use barrier_kit::platform::{Timers, WindowControls, WindowOptions, run_window};
-use barrier_kit::shell::{
+use bk::controls::{Button, ControlSize};
+use bk::menu::measure_text_weight;
+use bk::patterns::about::AboutView;
+use bk::platform::{Timers, WindowControls, WindowOptions, run_window};
+use bk::shell::{
     Anchors, KeyboardInteractivity, Layer, LayerSpec, ToplevelInfo, Toplevels, run_layer,
 };
-use barrier_kit::style::Palette;
-use barrier_kit::titlebar::Titlebar;
+use bk::style::Palette;
+use bk::titlebar::Titlebar;
+use ctdesign::{
+    ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
+    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
+    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, BODY, CALLOUT, CAPTION,
+    DIALOG_PADDING, HEADLINE, SIDEBAR, SPACE_2, TITLEBAR,
+};
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
 use freya_core::prelude::*;
 use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
-use vow_design::{
-    ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
-    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
-    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, CALLOUT, CAPTION,
-    DIALOG_PADDING, HEADLINE, SIDEBAR, SPACE_2, TEXT, TITLEBAR,
-};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
 use crate::localize::tr;
 use crate::menubar::{find_entry, resolve_app_name};
 use crate::power::{self, PowerAction};
-use barrier_kit::theme;
+use bk::theme;
 
 const CONFIRM_SIZE: (u32, u32) = (280, 250);
 const CONFIRM_BUTTON_GAP: f32 = 10.0;
@@ -43,7 +43,7 @@ const ICON_SIZE: f32 = 22.0;
 
 fn spec(size: (u32, u32)) -> LayerSpec {
     LayerSpec {
-        namespace: vow_design::ALERT_LAYER_NAMESPACE.to_string(),
+        namespace: ctdesign::ALERT_LAYER_NAMESPACE.to_string(),
         layer: Layer::Overlay,
         anchors: Anchors::default(),
         exclusive_zone: 0,
@@ -57,7 +57,7 @@ fn close() {
 }
 
 fn panel() -> Rect {
-    let resolved = barrier_kit::theme::resolved();
+    let resolved = bk::theme::resolved();
     rect()
         .width(Size::fill())
         .height(Size::fill())
@@ -80,7 +80,7 @@ fn body(text: &str) -> Label {
     let palette = Palette::current();
     label()
         .text(text.to_string())
-        .font_size(TEXT.size as f32)
+        .font_size(BODY.size as f32)
         .color(theme::color(palette.secondary_label))
 }
 
@@ -94,7 +94,7 @@ fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) 
         .child(Button::new(tr!("dialog-cancel")).on_press(|_| close()))
         .child(
             Button::new(default_label.to_string())
-                .style(ButtonStyle::Primary)
+                .style(|style| style.bordered_prominent())
                 .disabled(!enabled)
                 .on_press(move |_| on_default()),
         )
@@ -196,7 +196,7 @@ fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> Rect {
         )
         .child(
             Button::new(default_label.to_string())
-                .style(ButtonStyle::Primary)
+                .style(|style| style.bordered_prominent())
                 .width(Size::flex(1.0))
                 .on_press(move |_| on_default()),
         )
@@ -209,7 +209,7 @@ struct ConfirmApp {
 
 impl App for ConfirmApp {
     fn render(&self) -> impl IntoElement {
-        barrier_kit::theme::use_shell_theme();
+        bk::theme::use_shell_theme();
         let action = self.action;
         let remaining = self.remaining;
         let timers = Timers::get();
@@ -239,7 +239,7 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
                 .width(Size::fill())
                 .padding(Gaps::new(14.0, 0.0, SPACE_2, 0.0))
                 .text(text.question)
-                .font_size(TEXT.size as f32)
+                .font_size(BODY.size as f32)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::color(palette.label)),
         )
@@ -315,7 +315,7 @@ impl ForceQuitApp {
 
 impl App for ForceQuitApp {
     fn render(&self) -> impl IntoElement {
-        barrier_kit::theme::use_shell_theme();
+        bk::theme::use_shell_theme();
         let toplevels = Toplevels::get();
         let apps = running_apps(&toplevels.list.read());
         let selected = (*self.selected.read()).min(apps.len().saturating_sub(1));
@@ -352,7 +352,7 @@ impl App for ForceQuitApp {
                 .spacing(SPACE_2)
                 .on_press(move |_| selected_state.set(row))
                 .child(app_icon(self.icon(&app.app_id).as_ref(), &name, ICON_SIZE))
-                .child(label().text(name).font_size(TEXT.size as f32).color(text))
+                .child(label().text(name).font_size(BODY.size as f32).color(text))
                 .into_element()
         });
 
@@ -699,7 +699,7 @@ struct AboutApp {
 
 impl App for AboutApp {
     fn render(&self) -> impl IntoElement {
-        barrier_kit::theme::use_shell_theme();
+        bk::theme::use_shell_theme();
         about_view(&self.info)
     }
 }
@@ -747,7 +747,7 @@ fn spec_rows(info: &AboutInfo, palette: &Palette) -> Vec<Element> {
 }
 
 fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
-    let resolved = barrier_kit::theme::resolved();
+    let resolved = bk::theme::resolved();
     let palette = Palette::current();
     let drawing = if info.thinkpad {
         THINKPAD_SVG
@@ -765,7 +765,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
-        .font_family(TEXT.family)
+        .font_family(BODY.family)
         .direction(Direction::Vertical)
         .content(Content::flex())
         .cross_align(Alignment::Center)
@@ -856,8 +856,8 @@ struct AboutAppInfo {
 
 impl App for AboutAppInfo {
     fn render(&self) -> impl IntoElement {
-        barrier_kit::theme::use_shell_theme();
-        let resolved = barrier_kit::theme::resolved();
+        bk::theme::use_shell_theme();
+        let resolved = bk::theme::resolved();
         let focused = WindowControls::get().status.read().activated;
         rect()
             .width(Size::fill())
@@ -875,17 +875,17 @@ impl App for AboutAppInfo {
                 }
             })
             .child(Titlebar::new().close_only(true).title("").into_element())
-            .child(
-                rect()
-                    .width(Size::fill())
-                    .height(Size::flex(1.0))
-                    .child(about_window(
-                        app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON_SIZE),
-                        self.name.clone(),
-                        self.kind.clone(),
-                        self.app_id.clone(),
-                    )),
-            )
+            .child(rect().width(Size::fill()).height(Size::flex(1.0)).child({
+                let about = AboutView::new(
+                    app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON_SIZE),
+                    self.name.clone(),
+                    self.app_id.clone(),
+                );
+                match self.kind.clone() {
+                    Some(kind) => about.version(kind),
+                    None => about,
+                }
+            }))
     }
 }
 

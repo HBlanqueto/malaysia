@@ -158,7 +158,7 @@ pub(crate) fn popover_tip(popup: &PopupSurface, width: f64) -> f64 {
 }
 
 fn clamped_tip(anchor_center: f64, width: f64) -> f64 {
-    let popover = vow_design::POPOVER;
+    let popover = ctdesign::POPOVER;
     let edge = f64::from(popover.radius) + f64::from(popover.arrow_width) / 2.0;
     if width < 2.0 * edge {
         width / 2.0
@@ -173,7 +173,7 @@ pub(crate) fn corner_radius(
     role: Role,
     client_decorated: bool,
 ) -> u32 {
-    let corner = vow_design::WINDOW_CORNER;
+    let corner = ctdesign::WINDOW_CORNER;
     if let Some(radius) = forced {
         return radius;
     }
@@ -188,7 +188,7 @@ pub(crate) fn corner_radius(
 
 // Apple's continuous corner starts 1.5287 R along each edge, not at R (ADR 0059).
 pub(crate) fn corner_extent(radius: u32) -> f64 {
-    f64::from(radius) * f64::from(vow_design::WINDOW_CORNER.expansion)
+    f64::from(radius) * f64::from(ctdesign::WINDOW_CORNER.expansion)
 }
 
 impl State {
@@ -229,8 +229,8 @@ mod tests {
 
     #[test]
     fn the_popover_arrow_points_at_the_anchor_but_stays_clear_of_the_corners() {
-        let edge = f64::from(vow_design::POPOVER.radius)
-            + f64::from(vow_design::POPOVER.arrow_width) / 2.0;
+        let edge =
+            f64::from(ctdesign::POPOVER.radius) + f64::from(ctdesign::POPOVER.arrow_width) / 2.0;
         assert_eq!(clamped_tip(120.0, 300.0), 120.0);
         assert_eq!(clamped_tip(-40.0, 300.0), edge);
         assert_eq!(clamped_tip(400.0, 300.0), 300.0 - edge);

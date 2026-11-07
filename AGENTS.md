@@ -2,7 +2,7 @@
 
 Wayland/Smithay en Rust. Ver `docs/README.md` y `roadmap.md`.
 
-> **Repositorio (ADR 0048):** `barrier-kit`, `vow-design`, `vow-appearance` e
+> **Repositorio (ADR 0048):** `bk`, `ctdesign`, `ctappearance` e
 > `infinity-protocol` viven en
 > [`github.com/HBlanqueto/barrierkit`](https://github.com/HBlanqueto/barrierkit).
 > Edita barrierkit y sube el `rev` en `Cargo.toml`.
@@ -35,10 +35,11 @@ Fuentes de partida por área. Las de cada dependencia fijada están en la regla
 Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
 
 0. **Shell nativa:** `malaysia-shell`, un binario con un proceso por componente
-   (`wallpaper`, `menubar`, `dock`, `lock`, `launcher`), cada uno cliente
-   Wayland con `barrier-kit` (ADR 0024). Sin shell externa
-   (Quickshell eliminado, ADR 0025). Lee `.domain`,
-   `~/.local/share/malaysia/` y los tokens de `vow-design`.
+   (`menubar`, `dock`, `lock`, `launcher`, `force-quit`), cada uno cliente
+   Wayland con `bk` (ADR 0024). El fondo es otro binario,
+   `malaysia-wallpaper` (ADR 0049). Sin shell externa (Quickshell eliminado,
+   ADR 0025). Lee `.domain`, `~/.local/share/malaysia/` y los tokens de
+   `ctdesign`.
 1. **GTK/Libadwaita:** conservan headerbar y apariencia; no reciben titlebar ni
    controles del compositor.
 2. **Qt y demás apps:** reciben el chrome unificado del compositor (titlebar y
@@ -49,22 +50,22 @@ Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
 4. **Efectos compositor-side**, no por app (mecanismo tipo
    `otto-surface-style`). El interior de la app es suyo; lo que la rodea es del
    compositor.
-5. **Valores de diseño en `vow-design`** (ADR 0011): radios, sombras, blur,
+5. **Valores de diseño en `ctdesign`** (ADR 0011): radios, sombras, blur,
    colores y márgenes. No pongas literales de diseño en
    `crates/malaysia-compositor/src`.
 6. **Apariencia:** dark/light y accent se publican por
    `org.freedesktop.appearance` (xdg-desktop-portal). El compositor las lee de
    su store.
 7. **La shell** usa el mismo lenguaje y tokens.
-8. **Skia solo en clientes.** La shell y las apps propias (`barrier-kit`, ADR
+8. **Skia solo en clientes.** La shell y las apps propias (`bk`, ADR
    0034) pueden usarlo. El compositor **nunca** usa Skia ni enlaza `freya-*`:
-   sigue con GLES, `grade-graphics` y `cosmic-text`. `barrier-kit` se construye
-   sobre `freya-core`, `freya-components` (`default-features = false`),
-   `freya-animation`, `freya-engine`, `torin` y `ragnarok` `=0.4.3`, **nunca**
-   `freya` ni `freya-winit`, y usa `vow-design`. Grade Animation es un módulo
-   del kit sobre `freya-animation`, con resorte propio. Infinity es el
-   protocolo privado app↔compositor, opcional hasta que el compositor lo
-   implemente. No se usan `otto-kit`, `otto-foundations`, `otto-dbus`,
+   sigue con GLES, `grade-graphics` y `cosmic-text`. `bk` se construye
+   sobre los crates núcleo de Freya `=0.5.0` (`freya-core`, `freya-components`
+   sin features por defecto, `freya-edit`, `freya-animation`, `freya-engine`,
+   `freya-clipboard`, `torin` y `ragnarok`), **nunca** `freya` ni
+   `freya-winit`, y usa `ctdesign`. Grade Animation es un módulo del kit sobre
+   `freya-animation`, con resorte propio. Infinity es el protocolo privado
+   app↔compositor; el compositor lo implementa (`infinity.rs`). No se usan `otto-kit`, `otto-foundations`, `otto-dbus`,
    `otto-surface-style` ni `laye-rs`.
 
 ## Referencias rápidas
@@ -95,7 +96,6 @@ nix develop            # obligatorio (marca MALAYSIA_DEV_SHELL)
 ./dev.sh check         # fmt + clippy + tests
 ./dev.sh run           # compositor anidado
 ./dev.sh demo          # shell + ventanas de prueba
-./dev.sh video         # shell + solo Marea (vídeo, cristal y carátulas)
 ./dev.sh titlebar      # cerrar/minimizar/maximizar
 ./dev.sh smoke         # mapeo de toplevels
 # probes: move, pointers, screencopy, presentation, frames, activation
@@ -205,8 +205,8 @@ spawn::spawn(spawn::command(app, &config), &config)?;
 ```rust
 // ✗ literal de diseño en crates/malaysia-compositor/src
 const FADE: Duration = Duration::from_millis(250);
-// ✓ token de vow-design
-const DURATION: Duration = Duration::from_millis(vow_design::DURATION_SLOW_MS);
+// ✓ token de ctdesign
+const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
 ```
 
 ```rust

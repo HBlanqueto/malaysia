@@ -1,19 +1,19 @@
 use std::{cell::RefCell, rc::Rc};
 
 use async_channel::{Receiver, Sender};
-use barrier_kit::password::{PasswordField, State as FieldState};
-use barrier_kit::shell::{SessionUnlock, run_lock};
-use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Size};
-use vow_design::{
+use bk::password::{PasswordField, State as FieldState};
+use bk::shell::{SessionUnlock, run_lock};
+use ctdesign::{
     LOCK_FIELD_HEIGHT, LOCK_FIELD_WIDTH, LOCK_FONT_SIZE, LOCK_LABEL_FONT_SIZE, LOCK_LABEL_OFFSET,
     LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE,
 };
+use freya_core::integration::AppComponent;
+use freya_core::prelude::*;
+use torin::prelude::{Alignment, Direction, Size};
 
 use crate::localize::tr;
 use crate::pam;
-use barrier_kit::theme;
+use bk::theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -92,7 +92,7 @@ impl App for LockApp {
             _ => None,
         };
         let masked = view.masked();
-        let palette = barrier_kit::theme::lock_palette(&barrier_kit::theme::resolved());
+        let palette = bk::theme::lock_palette(&bk::theme::resolved());
         let background = theme::color(palette.bg_surface);
         let ink = theme::color(palette.ink);
         let muted = theme::color(palette.ink_muted);

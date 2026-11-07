@@ -81,11 +81,11 @@ struct ActiveWindowStore {
 }
 
 pub fn load_active_window(store_path: &Path) -> ActiveWindow {
-    barrier_kit::app::read_toml::<ActiveWindowStore>(store_path).active
+    bk::app::read_toml::<ActiveWindowStore>(store_path).active
 }
 
 pub fn create_desktop_folder() {
-    let desktop = vow_appearance::xdg::user_dir("DESKTOP")
+    let desktop = ctappearance::xdg::user_dir("DESKTOP")
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join("Desktop")))
         .unwrap_or_else(|| PathBuf::from("."));
     let mut target = desktop.join(tr!("desktop-untitled-folder"));

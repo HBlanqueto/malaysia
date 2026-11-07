@@ -49,7 +49,7 @@ use tracing::{error, info, warn};
 
 use crate::cursor::Cursors;
 use crate::state::{ClientState, State};
-use vow_appearance::watch::AppearanceWatch;
+use ctappearance::watch::AppearanceWatch;
 
 pub(crate) const fn render_transform() -> Transform {
     Transform::Flipped180
@@ -514,7 +514,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
 }
 
 fn start_shell_session(socket: &str) -> bool {
-    if let Some(config_home) = vow_appearance::xdg::config_home()
+    if let Some(config_home) = ctappearance::xdg::config_home()
         && remove_stale_unit_links(&config_home.join("systemd/user"), Path::new(SYSTEM_UNITS))
     {
         match systemctl(&["--user", "daemon-reload"], None) {
@@ -907,7 +907,7 @@ impl Udev {
         match self.compositor.render_frame(
             &mut renderer,
             &elements,
-            vow_design::DESKTOP_CLEAR.premultiplied(),
+            ctdesign::DESKTOP_CLEAR.premultiplied(),
             self.frame_flags,
         ) {
             Ok(mut result) => {
