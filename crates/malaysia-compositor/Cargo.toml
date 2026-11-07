@@ -36,3 +36,7 @@ infinity-protocol = { workspace = true, features = ["server"] }
 
 [dev-dependencies]
 sctk.workspace = true
+
+# The code wayland-scanner generates in gtk.rs names wayland_backend.
+[package.metadata.cargo-shear]
+ignored = ["wayland-backend"]

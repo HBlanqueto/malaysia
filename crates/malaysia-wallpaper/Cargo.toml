@@ -34,3 +34,10 @@ sctk = { workspace = true }
 wgpu.workspace = true
 raw-window-handle.workspace = true
 bytemuck.workspace = true
+
+# The "system" feature gives the raw libwayland pointers that wgpu needs (wayland.rs).
+[package.metadata.cargo-shear]
+ignored = ["wayland-client"]
+
+[package.metadata.cargo-machete]
+ignored = ["wayland-client"]
