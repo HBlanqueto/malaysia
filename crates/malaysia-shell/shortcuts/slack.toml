@@ -1,0 +1,93 @@
+ids = ["slack", "com.slack.Slack"]
+sources = [
+  "https://slack.com/help/articles/201374536-Slack-keyboard-shortcuts",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-message", "Ctrl+N"],
+  ["new-canvas", "Ctrl+Shift+N"],
+  ["new-snippet", "Ctrl+Shift+Return"],
+  [],
+  ["attach-file", "Ctrl+O"],
+  ["downloads", "Ctrl+Shift+J"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  [],
+  ["search", "Ctrl+G"],
+  ["find-in-conversation", "Ctrl+F"],
+  [],
+  ["set-status", "Ctrl+Shift+Y"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["home", "Ctrl+Shift+1"],
+  ["direct-messages", "Ctrl+Shift+2"],
+  ["activity", "Ctrl+Shift+M"],
+  ["threads", "Ctrl+Shift+T"],
+  ["all-unreads", "Ctrl+Shift+A"],
+  ["people", "Ctrl+Shift+E"],
+  ["browse-channels", "Ctrl+Shift+L"],
+  [],
+  ["conversation-details", "Ctrl+Shift+I"],
+  ["hide-right-sidebar", "Ctrl+period"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["quick-open", "Ctrl+K"],
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["previous-conversation", "Alt+Up"],
+  ["next-conversation", "Alt+Down"],
+  ["previous-unread", "Shift+Alt+Up"],
+  ["next-unread", "Shift+Alt+Down"],
+  ["jump-to-unread", "Ctrl+J"],
+  [],
+  ["previous-tab", "Ctrl+Page_Up"],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-workspace", "Ctrl+Shift+Tab"],
+  ["next-workspace", "Ctrl+Tab"],
+  ["workspace-switcher", "Ctrl+Shift+S"],
+  [],
+  ["next-section", "F6"],
+  ["previous-section", "Shift+F6"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["strikethrough", "Ctrl+Shift+X"],
+  ["insert-link", "Ctrl+Shift+U"],
+  [],
+  ["quote", "Ctrl+Shift+9"],
+  ["inline-code", "Ctrl+Shift+C"],
+  ["code-block", "Ctrl+Shift+Alt+C"],
+  ["bullet-list", "Ctrl+Shift+8"],
+  ["numbered-list", "Ctrl+Shift+7"],
+  [],
+  ["apply-markdown", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["mark-read", "Escape"],
+  ["mark-all-read", "Shift+Escape"],
+  [],
+  ["toggle-huddle", "Ctrl+Shift+H"],
+  ["toggle-microphone", "Ctrl+Shift+space"],
+]

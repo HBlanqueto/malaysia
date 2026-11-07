@@ -29,7 +29,7 @@ use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
 use crate::menubar::{
-    appmenu, clock, focused, load_active_window, resolve_app_name, status, system,
+    appmenu, clock, focused, load_active_window, resolve_app_name, shortcuts, status, system,
 };
 use barrier_kit::menu::{RevealRoots, SearchQuery};
 use barrier_kit::platform::AppMenuAddress;
@@ -284,9 +284,10 @@ impl App for BarApp {
         };
         let mut specs = vec![system_title(self.entries.clone(), title_anchor(0))];
         if focused {
+            let app_id = app_id.unwrap_or_default();
             let sources = menu_sources(
-                resolve_app_name(app_id.as_deref(), &self.entries),
-                app_id.unwrap_or_default(),
+                resolve_app_name(Some(&app_id), &self.entries),
+                app_id.clone(),
             );
             if let Some(remote_menu) = remote_menu {
                 specs.extend(self.remote_title_specs(
@@ -299,6 +300,7 @@ impl App for BarApp {
             } else {
                 specs.extend(local_title_specs(
                     sources,
+                    shortcuts::menus(&app_id, &self.entries),
                     choice,
                     &help_query,
                     title_anchor,
@@ -612,6 +614,7 @@ fn system_title(entries: Rc<Vec<DesktopEntry>>, anchor: TitleAnchor) -> MenuTitl
 
 fn local_title_specs(
     sources: remote::MenuSources,
+    shortcut_menus: Vec<MenuItem>,
     choice: Option<MenuChoice>,
     help_query: &Rc<RefCell<SearchQuery>>,
     title_anchor: impl Fn(usize) -> TitleAnchor,
@@ -642,8 +645,13 @@ fn local_title_specs(
         })
         .collect();
     let help_query = remembered.is_empty().then(|| help_query.clone());
+    let app_menus = if remembered.is_empty() {
+        shortcut_menus
+    } else {
+        remembered
+    };
     title_specs(
-        sources.compose(&remembered),
+        sources.compose(&app_menus),
         Rc::new(focused::on_action),
         help_query,
         title_anchor,

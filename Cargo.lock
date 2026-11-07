@@ -2346,6 +2346,7 @@ dependencies = [
  "libc",
  "rust-embed",
  "serde",
+ "toml 0.8.23",
  "torin",
  "tracing",
  "tracing-subscriber",

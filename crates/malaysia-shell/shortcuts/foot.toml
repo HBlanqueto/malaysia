@@ -1,0 +1,28 @@
+ids = ["foot", "footclient", "foot-server"]
+sources = [
+  "https://codeberg.org/dnkl/foot/raw/branch/master/doc/foot.ini.5.scd",
+  "https://codeberg.org/dnkl/foot/raw/branch/master/meson.build",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+R"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]

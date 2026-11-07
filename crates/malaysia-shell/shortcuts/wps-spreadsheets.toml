@@ -1,0 +1,106 @@
+ids = ["wps-office-et", "et", "com.wps.Office.et"]
+sources = [
+  "https://www.wps.com/academy/common-shortcut-keys-in-wps-spreadsheet-quick-tutorials-1861871/",
+  "https://help.wps.com/c/wps-sheets-quick-start/2104459910707793921-wps-sheets-new-document-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-quick-start/2101962058915512321-wps-sheets-copy-paste-and-cut-feature-guide",
+  "https://help.wps.com/c/wps-sheets-sheet-printing/2104459967024713730-wps-sheets-printing-feature-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459949224087554-wps-sheets-fill-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459958577385474-wps-sheets-smart-fill-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459959114256386-wps-sheets-find-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459955461017602-wps-sheets-insert-delete-sheet-feature-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2118183493605830657-wps-sheets-chart-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-pivottables/2104459975555928065-wps-sheets-insert-table-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2118183495979806721-wps-sheets-hyperlink-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459958057291777-wps-sheets-add-delete-comment-guide",
+  "https://www.wps.com/academy/popular/shortcut-wps-office",
+  "https://www.wps.com/academy/popular/keyboard-shortcuts",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459919914291202-wps-sheets-bold-function-usage-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459915661266945-wps-sheets-italic-function-usage-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459914105180161-wps-sheets-underline-feature-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459918920241154-wps-sheets-strikethrough-feature-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459965456044034-wps-sheets-hide-rows-columns-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-formulas-functions/2104459971529396226-wps-sheets-display-equation-on-chart-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-formulas-functions/2104459972036907009-wps-sheets-calculation-options-feature-guide",
+  "https://help.wps.com/c/wps-sheets-formulas-functions/2104459971277737986-wps-sheets-name-manager-feature-user-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459918433701890-wps-sheets-group-ungroup-usage-guide",
+  "https://help.wps.com/c/wps-sheets-editing-collaboration/2104459913249542145-wps-sheets-vb-editor-feature-usage-guide",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "F12"],
+  [],
+  ["print-preview", "Ctrl+Alt+P"],
+  ["print", "Ctrl+P"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["fill-down", "Ctrl+D"],
+  ["fill-right", "Ctrl+R"],
+  ["smart-fill", "Ctrl+E"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+  ["go-to", "Ctrl+G"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-sheet", "Shift+F11"],
+  ["insert-table", "Ctrl+T"],
+  ["insert-chart", "Alt+F1"],
+  [],
+  ["autosum", "Alt+equal"],
+  [],
+  ["insert-link", "Ctrl+K"],
+  ["insert-comment", "Shift+F2"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  ["strikethrough", "Ctrl+5"],
+  [],
+  ["merge-center", "Ctrl+M"],
+  [],
+  ["hide-rows", "Ctrl+9"],
+  ["hide-columns", "Ctrl+0"],
+]
+
+[[menus]]
+label = "data"
+items = [
+  ["show-formulas", "Ctrl+grave"],
+  ["name-manager", "Ctrl+F3"],
+  [],
+  ["recalculate", "F9"],
+  ["recalculate-sheet", "Shift+F9"],
+  [],
+  ["group", "Shift+Alt+Right"],
+  ["ungroup", "Shift+Alt+Left"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["spelling", "F7"],
+  ["vb-editor", "Alt+F11"],
+]

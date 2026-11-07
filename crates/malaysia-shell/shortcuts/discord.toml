@@ -1,0 +1,60 @@
+ids = ["discord", "com.discordapp.Discord"]
+sources = [
+  "https://support.discord.com/hc/en-us/articles/225977308--Windows-Discord-Hotkeys",
+  "https://support.discord.com/hc/en-us/articles/1500000056121-Keyboard-Navigation-FAQ",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-server", "Ctrl+Shift+N"],
+  ["new-group", "Ctrl+Shift+T"],
+  [],
+  ["attach-file", "Ctrl+Shift+U"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-pins", "Ctrl+P"],
+  ["toggle-mentions", "Ctrl+I"],
+  ["toggle-member-list", "Ctrl+U"],
+  ["emoji-picker", "Ctrl+E"],
+  [],
+  ["keyboard-shortcuts", "Ctrl+slash"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["quick-open", "Ctrl+K"],
+  [],
+  ["previous-server", "Ctrl+Alt+Up"],
+  ["next-server", "Ctrl+Alt+Down"],
+  ["previous-conversation", "Alt+Up"],
+  ["next-conversation", "Alt+Down"],
+  ["previous-unread", "Shift+Alt+Up"],
+  ["next-unread", "Shift+Alt+Down"],
+  ["previous-mention", "Ctrl+Shift+Alt+Up"],
+  ["next-mention", "Ctrl+Shift+Alt+Down"],
+  [],
+  ["last-channel", "Ctrl+B"],
+  ["active-voice-channel", "Ctrl+Alt+A"],
+  ["jump-to-unread", "Shift+Page_Up"],
+  [],
+  ["next-section", "F6"],
+  ["previous-section", "Shift+F6"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["mark-read", "Escape"],
+  ["mark-server-read", "Shift+Escape"],
+  [],
+  ["start-call", "Ctrl+bracketleft"],
+  ["answer-call", "Ctrl+Return"],
+  [],
+  ["toggle-microphone", "Ctrl+Shift+M"],
+  ["toggle-deafen", "Ctrl+Shift+D"],
+]

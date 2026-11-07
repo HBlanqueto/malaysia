@@ -1,0 +1,138 @@
+ids = ["dev.zed.Zed", "dev.zed.Zed-Preview", "zed"]
+sources = [
+  "https://raw.githubusercontent.com/zed-industries/zed/main/assets/keymaps/default-linux.json",
+  "https://raw.githubusercontent.com/zed-industries/zed/main/crates/zed/resources/zed.desktop.in",
+  "https://raw.githubusercontent.com/zed-industries/zed/main/script/bundle-linux",
+  "https://raw.githubusercontent.com/zed-industries/zed/main/crates/release_channel/src/lib.rs",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-window", "Ctrl+Shift+N"],
+  [],
+  ["open", "Ctrl+O"],
+  ["open-recent", "Ctrl+R"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  ["save-all", "Ctrl+Alt+S"],
+  [],
+  ["close-tab", "Ctrl+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+H"],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["replace-in-files", "Ctrl+Shift+H"],
+  [],
+  ["toggle-comment", "Ctrl+slash"],
+  ["toggle-block-comment", "Shift+Alt+A"],
+  ["format-document", "Ctrl+Shift+I"],
+  ["rename-symbol", "F2"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  ["toggle-sidebar", "Ctrl+B"],
+  ["toggle-right-sidebar", "Ctrl+Alt+B"],
+  ["toggle-panel", "Ctrl+J"],
+  [],
+  ["show-explorer", "Ctrl+Shift+E"],
+  ["show-outline", "Ctrl+Shift+B"],
+  ["show-source-control", "Ctrl+Shift+G"],
+  ["show-debug", "Ctrl+Shift+D"],
+  ["show-extensions", "Ctrl+Shift+X"],
+  ["show-problems", "Ctrl+Shift+M"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["split-editor", "Ctrl+backslash"],
+]
+
+[[menus]]
+label = "selection"
+items = [
+  ["select-all", "Ctrl+A"],
+  ["expand-selection", "Shift+Alt+Right"],
+  ["shrink-selection", "Shift+Alt+Left"],
+  [],
+  ["copy-line-up", "Ctrl+Shift+Alt+Up"],
+  ["copy-line-down", "Ctrl+Shift+Alt+Down"],
+  ["move-line-up", "Alt+Up"],
+  ["move-line-down", "Alt+Down"],
+  [],
+  ["add-cursor-above", "Shift+Alt+Up"],
+  ["add-cursor-below", "Shift+Alt+Down"],
+  ["add-next-occurrence", "Ctrl+D"],
+  ["select-all-occurrences", "Ctrl+Shift+L"],
+  ["select-line", "Ctrl+L"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Ctrl+Alt+minus"],
+  ["forward", "Ctrl+Shift+Alt+minus"],
+  [],
+  ["quick-open", "Ctrl+P"],
+  ["go-to-symbol", "Ctrl+Shift+O"],
+  ["go-to-symbol-workspace", "Ctrl+T"],
+  ["go-to-line", "Ctrl+G"],
+  [],
+  ["go-to-definition", "F12"],
+  ["go-to-type-definition", "Ctrl+F12"],
+  ["go-to-implementation", "Shift+F12"],
+  ["find-references", "Shift+Alt+F12"],
+  ["go-to-bracket", "Ctrl+M"],
+  [],
+  ["next-problem", "F8"],
+  ["previous-problem", "Shift+F8"],
+  [],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+]
+
+[[menus]]
+label = "run"
+items = [
+  ["run-task", "Shift+Alt+T"],
+  ["rerun-task", "Alt+T"],
+  [],
+  ["debug", "F4"],
+  ["stop", "Shift+F5"],
+  ["restart-debugging", "Ctrl+Shift+F5"],
+  [],
+  ["step-over", "F10"],
+  ["step-into", "F11"],
+  ["step-out", "Shift+F11"],
+  [],
+  ["toggle-breakpoint", "F9"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["new-terminal", "Ctrl+Shift+grave"],
+  ["toggle-terminal", "Ctrl+grave"],
+]

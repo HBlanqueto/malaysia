@@ -1,0 +1,66 @@
+ids = ["obsidian", "md.obsidian.Obsidian"]
+sources = [
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Editing%20and%20formatting/Editing%20shortcuts.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/User%20interface/Tabs.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Files%20and%20folders/Manage%20notes.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Getting%20started/Create%20your%20first%20note.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Plugins/Quick%20switcher.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Plugins/Command%20palette.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Plugins/Search.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Editing%20and%20formatting/Find%20and%20replace.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Editing%20and%20formatting/Views%20and%20editing%20mode.md",
+  "https://github.com/obsidianmd/obsidian-help/blob/master/en/Editing%20and%20formatting/Properties.md",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-tab", "Ctrl+T"],
+  ["quick-open", "Ctrl+O"],
+  [],
+  ["reopen-tab", "Ctrl+Shift+T"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-plain", "Ctrl+Shift+V"],
+  ["delete-line", "Ctrl+Shift+K"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+  ["find-in-files", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-reading-view", "Ctrl+E"],
+  ["command-palette", "Ctrl+P"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  [],
+  ["add-property", "Ctrl+semicolon"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+  [],
+  ["first-tab", "Ctrl+1"],
+  ["last-tab", "Ctrl+9"],
+]

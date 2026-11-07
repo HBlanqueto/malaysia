@@ -1,0 +1,85 @@
+ids = ["signal", "signal-desktop", "org.signal.Signal"]
+sources = [
+  "https://support.signal.org/hc/en-us/articles/360036517511-Signal-Desktop-Keyboard-Shortcuts",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-chat", "Ctrl+N"],
+  ["attach-file", "Ctrl+U"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["search", "Ctrl+F"],
+  ["find-in-conversation", "Ctrl+Shift+F"],
+  [],
+  ["emoji-picker", "Ctrl+Shift+J"],
+  ["sticker-picker", "Ctrl+Shift+O"],
+  ["gif-picker", "Ctrl+Shift+G"],
+  [],
+  ["expand-composer", "Ctrl+Shift+K"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  [],
+  ["all-media", "Ctrl+Shift+M"],
+  ["keyboard-shortcuts", "Ctrl+slash"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["previous-conversation", "Alt+Up"],
+  ["next-conversation", "Alt+Down"],
+  ["previous-unread", "Shift+Alt+Up"],
+  ["next-unread", "Shift+Alt+Down"],
+  [],
+  ["jump-to-unread", "Ctrl+J"],
+  ["scroll-to-top", "Ctrl+Up"],
+  ["scroll-to-bottom", "Ctrl+Down"],
+  [],
+  ["next-section", "Ctrl+T"],
+  ["focus-composer", "Ctrl+Shift+T"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["strikethrough", "Ctrl+Shift+X"],
+  ["inline-code", "Ctrl+E"],
+  ["spoiler", "Ctrl+Shift+B"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["conversation-menu", "Ctrl+Shift+L"],
+  ["archive-conversation", "Ctrl+Shift+A"],
+  ["unarchive-conversation", "Ctrl+Shift+U"],
+  ["close-conversation", "Ctrl+Shift+C"],
+  [],
+  ["reply-message", "Ctrl+Shift+R"],
+  ["add-reaction", "Ctrl+Shift+E"],
+  ["forward-message", "Ctrl+Shift+S"],
+  ["delete-message", "Ctrl+Shift+D"],
+  ["message-details", "Ctrl+D"],
+  [],
+  ["record-voice-message", "Ctrl+Shift+Y"],
+  ["start-call", "Shift+Alt+C"],
+  ["start-video-call", "Shift+Alt+Y"],
+  ["answer-call", "Shift+Alt+A"],
+  ["answer-video-call", "Shift+Alt+V"],
+  ["decline-call", "Shift+Alt+D"],
+  ["end-call", "Shift+Alt+E"],
+]

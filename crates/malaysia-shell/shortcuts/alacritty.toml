@@ -1,0 +1,23 @@
+ids = ["Alacritty", "org.alacritty.Alacritty"]
+sources = [
+  "https://raw.githubusercontent.com/alacritty/alacritty/master/extra/man/alacritty-bindings.5.scd",
+  "https://raw.githubusercontent.com/alacritty/alacritty/master/extra/linux/Alacritty.desktop",
+  "https://raw.githubusercontent.com/alacritty/alacritty/master/extra/linux/org.alacritty.Alacritty.appdata.xml",
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]

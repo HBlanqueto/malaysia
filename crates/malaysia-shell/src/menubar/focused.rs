@@ -69,16 +69,6 @@ pub fn window_menu_items(
             tr!("menu-bring-all-to-front"),
         )
         .with_enabled(!app.is_empty()),
-        MenuItem::action("app-window-remove", tr!("window-remove-from-set")).with_enabled(false),
-        MenuItem::Separator,
-        MenuItem::action("app-tab-previous", tr!("window-tab-previous"))
-            .with_shortcut("Ctrl+Shift+Tab")
-            .with_enabled(false),
-        MenuItem::action("app-tab-next", tr!("window-tab-next"))
-            .with_shortcut("Ctrl+Tab")
-            .with_enabled(false),
-        MenuItem::action("app-tab-new-window", tr!("window-tab-to-new-window")).with_enabled(false),
-        MenuItem::action("app-tab-merge", tr!("window-merge-all")).with_enabled(false),
         MenuItem::Separator,
     ]);
     items.extend(app.iter().map(|window| {
@@ -217,6 +207,11 @@ pub fn on_action(id: String) {
             windows.sort_by_key(|window| window.active);
             for window in windows {
                 toplevels.activate(window.id);
+            }
+        }
+        "app-shortcut" => {
+            if let Some(window) = list.iter().find(|window| window.active) {
+                toplevels.send_shortcut(window.id, argument);
             }
         }
         "app-help-report" => xdg_open(ISSUES_URL),
@@ -507,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn window_menu_controls_are_enabled_and_the_rest_is_gray() {
+    fn window_menu_controls_are_enabled() {
         let items = window_menu_items("Foot", "foot", &toplevels());
         assert!(enabled(&items, tr!("window-minimize")));
         assert!(enabled(&items, tr!("window-maximize")));
@@ -517,11 +512,6 @@ mod tests {
         assert!(enabled(&items, tr!("window-full-screen-tile")));
         assert!(enabled(&items, tr!("menu-close-window")));
         assert!(enabled(&items, tr!("menu-bring-all-to-front")));
-        assert!(!enabled(&items, tr!("window-remove-from-set")));
-        assert!(!enabled(&items, tr!("window-tab-previous")));
-        assert!(!enabled(&items, tr!("window-tab-next")));
-        assert!(!enabled(&items, tr!("window-tab-to-new-window")));
-        assert!(!enabled(&items, tr!("window-merge-all")));
     }
 
     #[test]

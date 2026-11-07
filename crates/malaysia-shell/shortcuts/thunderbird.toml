@@ -1,0 +1,91 @@
+ids = ["thunderbird", "org.mozilla.Thunderbird", "net.thunderbird.Thunderbird", "thunderbird-default"]
+sources = [
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/base/content/mainKeySet.inc.xhtml",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/base/content/messenger.xhtml",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/base/content/messenger-menubar.inc.xhtml",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/locales/en-US/chrome/messenger/messenger.dtd",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/locales/en-US/chrome/messenger/viewZoomOverlay.dtd",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/locales/en-US/chrome/communicator/utilityOverlay.dtd",
+  "https://hg-edge.mozilla.org/releases/comm-esr140/raw-file/tip/mail/locales/en-US/messenger/messenger.ftl",
+  "https://raw.githubusercontent.com/mozilla-firefox/firefox/release/toolkit/locales/en-US/toolkit/global/textActions.ftl",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-message", "Ctrl+N"],
+  [],
+  ["get-messages", "F5"],
+  ["get-all-messages", "Shift+F5"],
+  [],
+  ["rename-folder", "F2"],
+  ["save-as", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+  ["close-tab", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["delete", "Delete"],
+  [],
+  ["select-all", "Ctrl+A"],
+  ["select-thread", "Ctrl+Shift+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "Ctrl+G"],
+  ["find-previous", "Ctrl+Shift+G"],
+  ["search", "Ctrl+K"],
+  ["toggle-filter", "Ctrl+Shift+K"],
+  ["search-messages", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["toggle-message-pane", "F8"],
+  ["view-source", "Ctrl+U"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["home", "Alt+Home"],
+  [],
+  ["reopen-tab", "Ctrl+Shift+T"],
+]
+
+[[menus]]
+label = "message"
+items = [
+  ["reply-message", "Ctrl+R"],
+  ["reply-all", "Ctrl+Shift+R"],
+  ["reply-list", "Ctrl+Shift+L"],
+  ["forward-message", "Ctrl+L"],
+  ["edit-as-new", "Ctrl+E"],
+  [],
+  ["open-message", "Ctrl+O"],
+  ["open-in-conversation", "Ctrl+Shift+O"],
+  [],
+  ["move-again", "Ctrl+Shift+M"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["address-book", "Ctrl+Shift+B"],
+  ["downloads", "Ctrl+J"],
+  [],
+  ["clear-recent-history", "Ctrl+Shift+Delete"],
+]

@@ -10,6 +10,7 @@ pub mod icons;
 pub mod menu;
 pub mod recents;
 pub mod remote;
+pub mod shortcuts;
 pub mod status;
 pub mod system;
 
