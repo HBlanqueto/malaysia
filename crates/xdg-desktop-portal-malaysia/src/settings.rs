@@ -339,12 +339,12 @@ mod tests {
     #[test]
     fn an_explicit_accent_is_clamped() {
         let appearance = AppearanceConfig {
-            accent_color: Some([2.0, -1.0, 0.5]),
+            accent_color: Some([-1.0, 0.25, 2.0]),
             ..AppearanceConfig::default()
         };
         assert_eq!(
             Values::from_appearance(Some(&appearance)).accent,
-            (1.0, 0.0, 0.5)
+            (0.0, 0.25, 1.0)
         );
     }
 
