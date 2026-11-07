@@ -817,7 +817,11 @@ impl Windows {
     }
 
     pub fn raise(&mut self, id: WindowId) -> bool {
-        self.scene.raise(id)
+        let stack: Vec<WindowId> = self.scene.iter().map(|(id, _)| id).collect();
+        let order = raise_order(&stack, id, |window| self.dialog_parent(window));
+        order
+            .into_iter()
+            .fold(false, |raised, window| self.scene.raise(window) || raised)
     }
 
     pub fn topmost(&self) -> Option<WindowId> {
@@ -1405,6 +1409,33 @@ fn client_point(
     .then_some(local)
 }
 
+// xdg-shell set_parent: a child is stacked above its parent and every other ancestor.
+fn raise_order<T: Copy + PartialEq>(
+    stack: &[T],
+    target: T,
+    parent_of: impl Fn(T) -> Option<T>,
+) -> Vec<T> {
+    let descends = |window: T| {
+        let mut current = window;
+        for _ in 0..stack.len() {
+            match parent_of(current) {
+                Some(parent) if parent == target => return true,
+                Some(parent) => current = parent,
+                None => return false,
+            }
+        }
+        false
+    };
+    std::iter::once(target)
+        .chain(
+            stack
+                .iter()
+                .copied()
+                .filter(|window| *window != target && descends(*window)),
+        )
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use smithay::utils::{Logical, Point, Rectangle, Size};
@@ -1412,7 +1443,7 @@ mod tests {
     use super::{
         EdgeTarget, anchor_resize_origin, apply_configure_states, at_least_one_pixel, client_point,
         committed_outer, configure_size, edge_hit, geometry_fits, initial_placement,
-        needs_configure_after_commit, outer_size, usable, usable_rect_location,
+        needs_configure_after_commit, outer_size, raise_order, usable, usable_rect_location,
     };
     use crate::decoration::Insets;
     use malaysia_scene::geometry::{
@@ -1790,5 +1821,19 @@ mod tests {
             !needs_configure_after_commit(true, false, committed, Some(committed), insets),
             "no reconfigure when configured size already matches committed"
         );
+    }
+
+    #[test]
+    fn raising_a_parent_keeps_its_children_and_grandchildren_above_it() {
+        let parents = [(2, 1), (3, 2), (5, 1)];
+        let parent_of = |window: u32| {
+            parents
+                .iter()
+                .find(|(child, _)| *child == window)
+                .map(|(_, parent)| *parent)
+        };
+        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 1, parent_of), [1, 2, 3, 5]);
+        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 4, parent_of), [4]);
+        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 2, parent_of), [2, 3]);
     }
 }

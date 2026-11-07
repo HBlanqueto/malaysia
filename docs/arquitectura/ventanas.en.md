@@ -11,6 +11,7 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - Centered title, rasterized with `cosmic-text` and colored with `title.focused`/`title.unfocused`.
 - Frame for all windows: continuous corners with their bar's radius: 16 (titlebar or SSD), 20 (compact), 26 (unified, CSD without a hint and dialogs) or 15 (utility) (ADR 0059), also on shell alerts (`malaysia-dialog` layer), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Fullscreen removes the frame; maximized keeps it (ADR 0037).
 - Dialogs use the same frame and are centered over the parent window.
+- A child window (`set_parent`) always stays above its parent and its other ancestors, as [xdg-shell](https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_parent) asks: raising the parent raises its children with it, in the order they had (`raise_order`).
 - In dark mode, every window, dialog and popup gets the Tahoe inner border: `panel-inner-edge` (22 %) at the top and bottom, blending into `panel-inner` (9 %) on the sides over the corner radius.
 - The traffic lights are square (radius 4) or round following `appearance.traffic_light_shape`.
 

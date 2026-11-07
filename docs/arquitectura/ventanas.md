@@ -11,6 +11,7 @@ La titlebar SSD es del compositor (ADR 0020) y usa Tengen: barra arriba de 32 px
 - Título centrado, rasterizado con `cosmic-text` y coloreado con `title.focused`/`title.unfocused`.
 - Marco para todas las ventanas: esquinas continuas con el radio de su barra: 16 (titlebar o SSD), 20 (compacta), 26 (unificada, CSD sin aviso y diálogos) o 15 (utilitaria) (ADR 0059), también en las alertas de la shell (capa `malaysia-dialog`), sombra (`shadow.frag`), borde exterior (`border.frag`) e inner hairline. Fullscreen elimina el marco; maximizado lo conserva (ADR 0037).
 - Los diálogos usan el mismo marco y se centran sobre la ventana padre.
+- Una ventana hija (`set_parent`) queda siempre encima de su madre y de sus demás ancestros, como pide [xdg-shell](https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_parent): al subir la madre suben con ella sus hijas, en el orden que tenían (`raise_order`).
 - En oscuro, todas las ventanas, diálogos y popups llevan el borde interior de Tahoe: `panel-inner-edge` (22 %) arriba y abajo, que se funde con `panel-inner` (9 %) en los lados a lo largo del radio de la esquina.
 - Los semáforos son cuadrados (radio 4) o redondos según `appearance.traffic_light_shape`.
 
