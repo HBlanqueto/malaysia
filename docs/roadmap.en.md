@@ -254,9 +254,14 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
   electron/electron#54629 (`nix/patches/electron-wayland-appmenu.patch`) and
   adds `libdbusmenu` to the rpath. Chromium 150 already ships
   `org_kde_kwin_appmenu` (`ozone_platform_wayland.cc`); not tested yet.
+- 14g (shortcut menus, ADR 0061): implemented 2026-11-07, pending acceptance
+  with WPS and ONLYOFFICE. Catalog of 21 apps in
+  `crates/malaysia-shell/shortcuts/` and Infinity v6 `send_shortcut`. The
+  shell was not compiled in the session that wrote it (Skia could not be
+  downloaded).
 
-**Outside the block (noted):** HUD in the launcher, per-app shortcut menu and
-Registrar matching by pid (XWayland).
+**Outside the block (noted):** HUD in the launcher and Registrar matching by
+pid (XWayland).
 
 Test: `./dev.sh demo` with real apps.
 

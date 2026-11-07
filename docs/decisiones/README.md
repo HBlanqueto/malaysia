@@ -66,5 +66,6 @@ desde el 0048; aquí queda un stub que remite allí.
 | 0058 | Radio de ventana con barra de herramientas | sustituido por 0059 |
 | 0059 | Radio por tipo de barra y esquina continua | aceptado |
 | 0060 | Gráficas en barrierkit ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | aceptado |
+| 0061 | Menús de atajos para apps sin menú global | aceptado |
 
 > El ADR 0022 (Quickshell) fue eliminado por el 0025.

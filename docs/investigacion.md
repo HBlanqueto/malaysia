@@ -48,6 +48,8 @@ Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investig
 - Se elige `org_kde_kwin_appmenu` + `com.canonical.dbusmenu`: el compositor enruta y la shell consume el árbol.
 - De Otto/Noctalia se toma la dirección del protocolo y el cliente dbusmenu; el dibujo es de BarrierKit.
 - Se descarta AT-SPI, el Registrar de Canonical, `xdg-dbus-annotation` y leer menús en el compositor. Las fuentes GPL se leen como comportamiento; las MIT/Apache, con aviso en `NOTICE`.
+- Qt 6 publica su menú por `org_kde_kwin_appmenu` en Wayland ([`qwaylandappmenu.cpp`](https://codebrowser.dev/qt6/qtbase/src/plugins/platforms/wayland/qwaylandappmenu.cpp.html)); desde 6.9.1 no usa el Registrar en Wayland ([qtbase fa1fab99](https://github.com/qt/qtbase/commit/fa1fab994e76c19a08903e9b641732ce388a30bd)).
+- Sin menú en ninguna vía: WPS y ONLYOFFICE (cinta propia, también en X11), JetBrains desde 2024 (IJPL-156149) y VS Code con su barra de título propia (`"window.titleBarStyle": "native"` lo activa). Para ellas, los menús de atajos del ADR 0061.
 
 Texto completo: `git show 71600868b840a5e308ee645b08e7d26f2f91e51f:docs/investigacion/global-menu.md`
 

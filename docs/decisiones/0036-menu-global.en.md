@@ -12,7 +12,7 @@ The menubar shows the active app and the clock; macOS adds its menus.
 2. The compositor serves `org_kde_kwin_appmenu`, stores the (service, path) pair per surface and publishes the focused window's pair through `window.domain`. **It never speaks dbusmenu or draws menus.**
 3. The menubar is the dbusmenu client: `zbus` and CelestialKit.
 4. Our own apps export through the same path; there is no private shortcut through Infinity.
-5. Sources per app: dbusmenu (KDE), `org.gtk.Menus` through `gtk_shell1` (ADR 0045), an optional shortcuts menu and a `.desktop` fallback (Window and Quit; Quit uses `zwlr_foreign_toplevel_handle_v1.close`, never SIGKILL). With no window, the menubar shows its own «Yuki» menu.
+5. Sources per app: dbusmenu (KDE), `org.gtk.Menus` through `gtk_shell1` (ADR 0045), a shortcut menu (ADR 0061) and a `.desktop` fallback (app menu, Window and Help; Quit uses `zwlr_foreign_toplevel_handle_v1.close`, never SIGKILL). With no window, the menubar shows its own «Yuki» menu.
 
 ## Consequences
 

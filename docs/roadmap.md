@@ -253,9 +253,13 @@ fb02921^:docs/bloques/14-menu-global.md`) y el código citado.
   `programs.malaysia.globalMenu.electron.enable` aplica electron/electron#54629
   (`nix/patches/electron-wayland-appmenu.patch`) y añade `libdbusmenu` al rpath.
   Chromium 150 ya trae `org_kde_kwin_appmenu` (`ozone_platform_wayland.cc`); falta probarlo.
+- 14g (menús de atajos, ADR 0061): implementado 2026-11-07, falta aceptarlo
+  con WPS y ONLYOFFICE. Catálogo de 21 apps en
+  `crates/malaysia-shell/shortcuts/` e Infinity v6 `send_shortcut`. La shell
+  no se compiló en la sesión que lo escribió (Skia no se pudo descargar).
 
-**Fuera del bloque (anotado):** HUD en el launcher, menú de atajos por app y
-casado por pid del Registrar (XWayland).
+**Fuera del bloque (anotado):** HUD en el launcher y casado por pid del
+Registrar (XWayland).
 
 Prueba: `./dev.sh demo` con apps reales.
 

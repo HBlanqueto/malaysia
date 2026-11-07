@@ -66,5 +66,6 @@ since 0048; a stub here points there.
 | [0058](0058-radio-de-ventana-con-barra-de-herramientas.en.md) | Window radius with a toolbar | superseded by 0059 |
 | [0059](0059-radio-por-barra-y-esquina-continua.en.md) | Radius per bar kind and continuous corner | accepted |
 | 0060 | Charts in barrierkit ([barrierkit](https://github.com/HBlanqueto/barrierkit)) | accepted |
+| [0061](0061-menus-de-atajos.en.md) | Shortcut menus for apps without a global menu | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.
