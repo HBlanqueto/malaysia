@@ -1,0 +1,32 @@
+ids = ["cool-retro-term"]
+sources = [
+  "https://raw.githubusercontent.com/Swordfish90/cool-retro-term/master/app/qml/TerminalWindow.qml",
+  "https://raw.githubusercontent.com/Swordfish90/cool-retro-term/master/app/qml/menus/WindowMenu.qml",
+  "https://raw.githubusercontent.com/Swordfish90/cool-retro-term/master/app/main.cpp",
+  "https://raw.githubusercontent.com/Swordfish90/cool-retro-term/master/cool-retro-term.desktop",
+  "https://doc.qt.io/qt-6/qkeysequence.html",
+  "https://doc.qt.io/qt-6/qml-qtquick-controls-menubar.html",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-tab", "Ctrl+Shift+T"],
+  [],
+  ["close-tab", "Ctrl+Shift+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]

@@ -1,0 +1,120 @@
+ids = ["org.apache.netbeans", "netbeans"]
+sources = [
+  "https://raw.githubusercontent.com/apache/netbeans/master/nb/ide.branding/release/shortcuts.pdf",
+  "https://raw.githubusercontent.com/apache/netbeans/master/ide/defaults/src/org/netbeans/modules/defaults/mf-layer.xml",
+  "https://raw.githubusercontent.com/apache/netbeans/master/ide/projectui/src/org/netbeans/modules/project/ui/resources/layer.xml",
+  "https://raw.githubusercontent.com/apache/netbeans/master/ide/editor/src/org/netbeans/modules/editor/resources/NetBeans-keybindings.xml",
+  "https://raw.githubusercontent.com/apache/netbeans/master/platform/core.startup/src/org/netbeans/core/startup/Main.java",
+  "https://raw.githubusercontent.com/apache/netbeans/master/nb/ide.branding/core.startup/src/org/netbeans/core/startup/Bundle_nb.properties",
+  "https://raw.githubusercontent.com/flathub/org.apache.netbeans/master/org.apache.netbeans.desktop",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open-project", "Ctrl+Shift+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-all", "Ctrl+Shift+S"],
+  [],
+  ["close-tab", "Ctrl+W"],
+  ["close-all-documents", "Ctrl+Shift+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-and-indent", "Ctrl+Shift+V"],
+  ["paste-from-history", "Ctrl+Shift+D"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+H"],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["replace-in-files", "Ctrl+Shift+H"],
+  ["find-usages", "Alt+F7"],
+]
+
+[[menus]]
+label = "code"
+items = [
+  ["toggle-comment", "Ctrl+slash"],
+  ["format-document", "Shift+Alt+F"],
+  ["fix-imports", "Ctrl+Shift+I"],
+  ["generate-code", "Alt+Insert"],
+  ["show-context-actions", "Alt+Return"],
+  ["complete-code", "Ctrl+space"],
+  [],
+  ["delete-line", "Ctrl+E"],
+  ["move-line-up", "Shift+Alt+Up"],
+  ["move-line-down", "Shift+Alt+Down"],
+  ["copy-line-up", "Ctrl+Shift+Up"],
+  ["copy-line-down", "Ctrl+Shift+Down"],
+  [],
+  ["rename-symbol", "Ctrl+R"],
+]
+
+[[menus]]
+label = "navigate"
+items = [
+  ["go-to-class", "Ctrl+O"],
+  ["quick-open", "Shift+Alt+O"],
+  ["go-to-line", "Ctrl+G"],
+  ["go-to-definition", "Ctrl+B"],
+  ["go-to-bracket", "Ctrl+bracketleft"],
+  [],
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  ["last-edit-location", "Ctrl+Q"],
+  [],
+  ["next-error", "Ctrl+period"],
+  ["previous-error", "Ctrl+comma"],
+  [],
+  ["toggle-bookmark", "Ctrl+Shift+M"],
+  ["next-bookmark", "Ctrl+Shift+period"],
+  ["previous-bookmark", "Ctrl+Shift+comma"],
+  [],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+]
+
+[[menus]]
+label = "run"
+items = [
+  ["run", "F6"],
+  ["run-file", "Shift+F6"],
+  [],
+  ["build-project", "F11"],
+  ["clean-and-build", "Shift+F11"],
+  ["compile-file", "F9"],
+  [],
+  ["test-file", "Ctrl+F6"],
+  ["test-project", "Alt+F6"],
+]
+
+[[menus]]
+label = "debug"
+items = [
+  ["debug-start", "Ctrl+F5"],
+  ["debug-file", "Ctrl+Shift+F5"],
+  ["stop", "Shift+F5"],
+  ["resume", "F5"],
+  [],
+  ["step-over", "F8"],
+  ["step-into", "F7"],
+  ["step-out", "Ctrl+F7"],
+  ["run-to-cursor", "F4"],
+  [],
+  ["toggle-breakpoint", "Ctrl+F8"],
+  ["evaluate-expression", "Ctrl+F9"],
+]

@@ -1,5 +1,6 @@
-ids = ["discord", "com.discordapp.Discord"]
+ids = ["discord", "com.discordapp.Discord", "vesktop", "dev.vencord.Vesktop"]
 sources = [
+  "https://github.com/Vencord/Vesktop/blob/main/src/main/mainWindow.ts",
   "https://support.discord.com/hc/en-us/articles/225977308--Windows-Discord-Hotkeys",
   "https://support.discord.com/hc/en-us/articles/1500000056121-Keyboard-Navigation-FAQ",
 ]

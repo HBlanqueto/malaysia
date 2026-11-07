@@ -1,0 +1,39 @@
+ids = ["postman", "Postman", "com.getpostman.Postman"]
+sources = [
+  "https://learning.postman.com/docs/getting-started/basics/navigating-postman.md",
+  "https://learning.postman.com/docs/getting-started/installation/settings/shortcut-settings.md",
+  "https://learning.postman.com/docs/getting-started/installation/settings/settings-overview.md",
+  "https://learning.postman.com/docs/use/send-requests/protocols/websocket/create-a-websocket-request.md",
+  "https://learning.postman.com/docs/use/send-requests/response-data/responses.md",
+  "https://learning.postman.com/docs/use/send-requests/create-requests/parameters.md",
+  "https://learning.postman.com/docs/use/send-requests/response-data/troubleshooting-api-requests.md",
+  "https://raw.githubusercontent.com/flathub/com.getpostman.Postman/master/com.getpostman.Postman.desktop",
+  "https://raw.githubusercontent.com/flathub/com.getpostman.Postman/master/com.getpostman.Postman.yaml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-tab", "Ctrl+T"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["find", "Ctrl+F"],
+  ["format-document", "Ctrl+Alt+B"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["search", "Ctrl+K"],
+  ["search-workspace", "Ctrl+Shift+F"],
+  ["search-tabs", "Ctrl+Shift+A"],
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["open-console", "Ctrl+Alt+C"],
+]

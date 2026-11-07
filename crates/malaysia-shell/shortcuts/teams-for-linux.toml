@@ -1,0 +1,94 @@
+ids = ["teams-for-linux", "com.github.IsmaelMartinez.teams_for_linux"]
+sources = [
+  "https://github.com/IsmaelMartinez/teams-for-linux/blob/14ffd51744bdcde4bf76a9dcff219ff2692b59a3/app/menus/appMenu.js",
+  "https://github.com/IsmaelMartinez/teams-for-linux/blob/14ffd51744bdcde4bf76a9dcff219ff2692b59a3/app/browser/tools/shortcuts.js",
+  "https://github.com/IsmaelMartinez/teams-for-linux/blob/14ffd51744bdcde4bf76a9dcff219ff2692b59a3/app/mainAppWindow/index.js",
+  "https://github.com/IsmaelMartinez/teams-for-linux/blob/14ffd51744bdcde4bf76a9dcff219ff2692b59a3/package.json",
+  "https://github.com/flathub/com.github.IsmaelMartinez.teams_for_linux/blob/master/com.github.IsmaelMartinez.teams_for_linux.yml",
+  "https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-microsoft-teams-2e8e2a70-e8d8-4a19-949b-4c36dd5292d2",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-chat", "Alt+N"],
+  ["join-meeting", "Ctrl+J"],
+  [],
+  ["attach-file", "Shift+Alt+O"],
+  [],
+  ["settings", "Ctrl+Shift+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["find-in-conversation", "Ctrl+F"],
+  ["search", "Ctrl+Alt+E"],
+  ["toggle-filter", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["conversation-details", "Alt+P"],
+  ["expand-composer", "Ctrl+Shift+X"],
+  ["keyboard-shortcuts", "Ctrl+period"],
+  [],
+  ["reload", "Ctrl+R"],
+  [],
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  ["strikethrough", "Ctrl+Alt+X"],
+  [],
+  ["heading-1", "Ctrl+Alt+1"],
+  ["heading-2", "Ctrl+Alt+2"],
+  ["heading-3", "Ctrl+Alt+3"],
+  ["quote", "Ctrl+Alt+4"],
+  ["inline-code", "Ctrl+Shift+Alt+C"],
+  ["code-block", "Ctrl+Shift+Alt+B"],
+  [],
+  ["insert-link", "Ctrl+K"],
+  ["mark-important", "Ctrl+Shift+I"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["go-to", "Ctrl+G"],
+  ["all-unreads", "Ctrl+Alt+U"],
+  ["jump-to-unread", "Alt+J"],
+  ["focus-composer", "Shift+Alt+R"],
+  [],
+  ["next-section", "Ctrl+F6"],
+  ["previous-section", "Ctrl+Shift+F6"],
+]
+
+[[menus]]
+label = "conversation"
+items = [
+  ["reply-message", "Alt+R"],
+  ["add-reaction", "Ctrl+Alt+R"],
+  ["mark-all-read", "Shift+Escape"],
+  [],
+  ["start-call", "Shift+Alt+A"],
+  ["start-video-call", "Shift+Alt+V"],
+  ["answer-call", "Shift+Alt+S"],
+  ["decline-call", "Ctrl+Shift+D"],
+  ["end-call", "Ctrl+Shift+H"],
+  [],
+  ["toggle-microphone", "Ctrl+Shift+M"],
+  ["raise-hand", "Ctrl+Shift+K"],
+  ["share-content", "Ctrl+Shift+E"],
+]

@@ -1,0 +1,107 @@
+ids = ["org.godotengine.Editor", "Godot_Editor", "Godot"]
+sources = [
+  "https://docs.godotengine.org/en/4.6/tutorials/editor/default_key_mapping.html",
+  "https://raw.githubusercontent.com/godotengine/godot-docs/4.6/tutorials/editor/default_key_mapping.rst",
+  "https://raw.githubusercontent.com/godotengine/godot/master/misc/dist/linux/org.godotengine.Godot.desktop",
+  "https://raw.githubusercontent.com/godotengine/godot/master/platform/linuxbsd/wayland/display_server_wayland.cpp",
+  "https://raw.githubusercontent.com/godotengine/godot/master/platform/linuxbsd/x11/display_server_x11.cpp",
+  "https://docs.godotengine.org/en/4.6/classes/class_nativemenu.html",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["open", "Ctrl+O"],
+  ["quick-open", "Shift+Alt+O"],
+  ["quick-open-scene", "Ctrl+Shift+O"],
+  ["quick-open-script", "Ctrl+Alt+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  ["save-all", "Ctrl+Shift+Alt+S"],
+  [],
+  ["close-document", "Ctrl+Shift+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["toggle-comment", "Ctrl+K"],
+  ["delete-line", "Ctrl+Shift+K"],
+  ["move-line-up", "Alt+Up"],
+  ["move-line-down", "Alt+Down"],
+  ["duplicate", "Ctrl+Shift+D"],
+  ["add-next-occurrence", "Ctrl+D"],
+  ["auto-indent-lines", "Ctrl+I"],
+  ["complete-code", "Ctrl+space"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["workspace-2d", "Ctrl+F1"],
+  ["workspace-3d", "Ctrl+F2"],
+  ["workspace-script", "Ctrl+F3"],
+  [],
+  ["command-palette", "Ctrl+Shift+P"],
+  ["distraction-free", "Ctrl+Shift+F11"],
+  ["expand-bottom-panel", "Shift+F12"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "find"
+items = [
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["replace", "Ctrl+R"],
+  [],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["replace-in-files", "Ctrl+Shift+R"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["go-to-line", "Ctrl+G"],
+  ["go-to-symbol", "Ctrl+Alt+F"],
+  [],
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  [],
+  ["toggle-bookmark", "Ctrl+Alt+B"],
+  ["next-bookmark", "Ctrl+B"],
+  ["previous-bookmark", "Ctrl+Shift+B"],
+]
+
+[[menus]]
+label = "run"
+items = [
+  ["run", "F5"],
+  ["run-scene", "F6"],
+  ["run-specific-scene", "Ctrl+Shift+F5"],
+  ["pause", "F7"],
+  ["stop", "F8"],
+  [],
+  ["step-over", "F10"],
+  ["step-into", "F11"],
+  ["resume", "F12"],
+  [],
+  ["toggle-breakpoint", "F9"],
+]

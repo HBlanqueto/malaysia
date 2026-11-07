@@ -1,0 +1,51 @@
+ids = ["org.contourterminal.Contour", "contour"]
+sources = [
+  "https://raw.githubusercontent.com/contour-terminal/contour/v0.8.0.9335/src/contour/config/Config.hpp",
+  "https://raw.githubusercontent.com/contour-terminal/contour/v0.8.0.9335/src/contour/config/Actions.hpp",
+  "https://raw.githubusercontent.com/contour-terminal/contour/v0.8.0.9335/src/contour/CMakeLists.txt",
+  "https://raw.githubusercontent.com/contour-terminal/contour/v0.8.0.9335/src/contour/packaging/contour.desktop",
+  "https://raw.githubusercontent.com/contour-terminal/contour/master/src/contour/command/MenuBarTable.hpp",
+  "https://flathub.org/api/v2/appstream/org.contourterminal.Contour",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-tab", "Ctrl+Shift+T"],
+  [],
+  ["settings", "Ctrl+Shift+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["zoom-out", "Ctrl+Shift+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["split-right", "Ctrl+Shift+E"],
+  ["split-down", "Ctrl+Shift+O"],
+  [],
+  ["close-pane", "Ctrl+Shift+X"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]

@@ -1,0 +1,76 @@
+ids = ["sublime_merge", "com.sublimemerge.App"]
+sources = [
+  "https://download.sublimetext.com/sublime_merge_build_2132_x64.tar.xz (sublime_merge/Packages/Default - Merge.sublime-package: Default (Linux).sublime-keymap; Packages/Default.sublime-package: Default (Linux).sublime-keymap, Main.sublime-menu; sublime_merge/sublime_merge.desktop)",
+  "https://www.sublimemerge.com/docs/key_bindings",
+  "https://raw.githubusercontent.com/flathub/com.sublimemerge.App/master/com.sublimemerge.App.yaml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-repository", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  ["switch-repository", "Ctrl+Shift+O"],
+  [],
+  ["new-tab", "Ctrl+T"],
+  ["close-tab", "Ctrl+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["wrap-paragraph", "Alt+Q"],
+]
+
+[[menus]]
+label = "repository"
+items = [
+  ["stash", "Ctrl+S"],
+  ["pop-stash", "Ctrl+Shift+S"],
+  [],
+  ["stage-modified", "Ctrl+Shift+A"],
+  ["unstage-all", "Ctrl+Shift+R"],
+  [],
+  ["pull", "F7"],
+  ["push", "F8"],
+  [],
+  ["checkout-branch", "Ctrl+B"],
+  ["create-branch", "Ctrl+Shift+B"],
+]
+
+[[menus]]
+label = "navigate"
+items = [
+  ["back", "Alt+Left"],
+  ["forward", "Alt+Right"],
+  ["go-to-child", "Alt+Up"],
+  ["go-to-parent", "Alt+Down"],
+  ["go-to-head", "Ctrl+0"],
+  ["go-to-branch", "Ctrl+R"],
+  [],
+  ["find", "Ctrl+F"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  ["reload", "F5"],
+  ["toggle-console", "Ctrl+grave"],
+  [],
+  ["increase-font-size", "Ctrl+equal"],
+  ["decrease-font-size", "Ctrl+minus"],
+]

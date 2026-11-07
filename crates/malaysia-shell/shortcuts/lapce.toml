@@ -1,0 +1,93 @@
+ids = ["dev.lapce.lapce", "lapce"]
+sources = [
+  "https://raw.githubusercontent.com/lapce/lapce/master/defaults/keymaps-nonmacos.toml",
+  "https://raw.githubusercontent.com/lapce/lapce/master/defaults/keymaps-common.toml",
+  "https://raw.githubusercontent.com/lapce/lapce/master/extra/linux/dev.lapce.lapce.desktop",
+  "https://raw.githubusercontent.com/lapce/lapce/master/lapce-app/src/app.rs",
+  "https://raw.githubusercontent.com/lapce/floem/31fa8f444c37f4c314f47d88c23ffdbc25f2ab53/src/window_handle.rs",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  [],
+  ["close-tab", "Ctrl+W"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-in-files", "Ctrl+Shift+F"],
+  [],
+  ["toggle-comment", "Ctrl+slash"],
+  ["increase-indent", "Ctrl+bracketright"],
+  ["decrease-indent", "Ctrl+bracketleft"],
+  ["move-line-up", "Alt+Up"],
+  ["move-line-down", "Alt+Down"],
+  ["copy-line-up", "Shift+Alt+Up"],
+  ["copy-line-down", "Shift+Alt+Down"],
+  [],
+  ["rename-symbol", "F2"],
+  ["show-context-actions", "Ctrl+period"],
+  ["complete-code", "Ctrl+space"],
+]
+
+[[menus]]
+label = "selection"
+items = [
+  ["select-all", "Ctrl+A"],
+  ["select-line", "Ctrl+L"],
+  ["expand-selection", "Ctrl+Shift+Up"],
+  ["shrink-selection", "Ctrl+Shift+Down"],
+  [],
+  ["add-cursor-above", "Ctrl+Alt+Up"],
+  ["add-cursor-below", "Ctrl+Alt+Down"],
+  ["cursors-to-line-ends", "Shift+Alt+I"],
+  ["add-next-occurrence", "Ctrl+D"],
+  ["select-all-occurrences", "Ctrl+Shift+L"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["show-explorer", "Ctrl+Shift+E"],
+  ["show-extensions", "Ctrl+Shift+X"],
+  ["show-problems", "Ctrl+Shift+M"],
+  ["toggle-terminal", "Ctrl+grave"],
+  [],
+  ["split-editor", "Ctrl+backslash"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["quick-open", "Ctrl+P"],
+  ["go-to-symbol", "Ctrl+Shift+O"],
+  ["go-to-symbol-workspace", "Ctrl+T"],
+  ["go-to-line", "Ctrl+G"],
+  [],
+  ["go-to-definition", "F12"],
+  ["go-to-bracket", "Ctrl+Shift+backslash"],
+  [],
+  ["next-problem", "F8"],
+  ["previous-problem", "Shift+F8"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]

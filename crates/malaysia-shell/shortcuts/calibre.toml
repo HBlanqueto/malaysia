@@ -1,0 +1,68 @@
+ids = ["calibre-gui", "com.calibre_ebook.calibre"]
+sources = [
+  "https://manual.calibre-ebook.com/gui.html",
+  "https://raw.githubusercontent.com/kovidgoyal/calibre/master/manual/gui.rst",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["add-empty-books", "Ctrl+Shift+E"],
+  [],
+  ["last-library", "Ctrl+Alt+P"],
+  ["last-virtual-library", "Ctrl+Shift+Alt+P"],
+  ["clear-virtual-library", "Ctrl+Escape"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["edit-field", "F2"],
+  ["download-metadata", "Ctrl+D"],
+  ["merge-keep-originals", "Alt+M"],
+  ["toggle-mark", "Ctrl+M"],
+  [],
+  ["delete", "Delete"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-tag-browser", "Shift+Alt+T"],
+  ["toggle-book-details", "Shift+Alt+D"],
+  ["toggle-cover-browser", "Shift+Alt+B"],
+  ["toggle-cover-grid", "Shift+Alt+G"],
+  ["toggle-bookshelf", "Shift+Alt+H"],
+  ["toggle-jobs", "Shift+Alt+J"],
+  ["toggle-search-bar", "Shift+Alt+F"],
+  ["toggle-wide-layout", "Shift+Alt+L"],
+  [],
+  ["reapply-sort", "F5"],
+  [],
+  ["next-virtual-library", "Ctrl+Tab"],
+  ["previous-virtual-library", "Ctrl+Shift+Tab"],
+]
+
+[[menus]]
+label = "find"
+items = [
+  ["find", "Ctrl+F"],
+  ["advanced-search", "Ctrl+Shift+F"],
+  ["full-text-search", "Ctrl+slash"],
+  [],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["clear-search", "Escape"],
+  [],
+  ["same-author", "Alt+A"],
+  ["same-tags", "Alt+T"],
+  ["same-publisher", "Alt+P"],
+  ["same-series", "Shift+Alt+S"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["browse-notes", "Ctrl+Shift+N"],
+  ["ask-ai", "Ctrl+Alt+A"],
+]

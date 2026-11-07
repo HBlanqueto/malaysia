@@ -1,0 +1,113 @@
+ids = ["masterpdfeditor5", "net.code-industry.masterpdfeditor5", "net.code_industry.MasterPDFEditor"]
+sources = [
+  "https://code-industry.net/masterpdfeditor-help/keyboard_shortcuts/",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  ["save-optimized", "Ctrl+Alt+S"],
+  [],
+  ["print", "Ctrl+P"],
+  ["system-print", "Ctrl+Shift+P"],
+  [],
+  ["document-properties", "Ctrl+D"],
+  ["close-document", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-in-place", "Ctrl+Shift+V"],
+  ["paste-to-pages", "Ctrl+Alt+V"],
+  ["delete", "Delete"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+  [],
+  ["fit-page", "Ctrl+1"],
+  ["fit-width", "Ctrl+2"],
+  ["facing-pages", "Ctrl+3"],
+  [],
+  ["highlight-fields", "Ctrl+H"],
+  ["show-grid", "Ctrl+U"],
+  ["snap-to-grid", "Ctrl+Shift+U"],
+  [],
+  ["object-inspector", "Ctrl+F11"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["first-page", "Home"],
+  ["previous-page", "Page_Up"],
+  ["next-page", "Page_Down"],
+  ["last-page", "End"],
+  [],
+  ["go-to-page", "Ctrl+Alt+G"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-text", "Ctrl+T"],
+  ["insert-image", "Ctrl+I"],
+  ["insert-sticky-note", "Ctrl+6"],
+  [],
+  ["insert-link", "Ctrl+L"],
+  ["insert-text-field", "Ctrl+E"],
+]
+
+[[menus]]
+label = "document"
+items = [
+  ["insert-blank-pages", "Ctrl+Shift+N"],
+  ["insert-pages", "Ctrl+Shift+I"],
+  ["extract-pages", "Ctrl+Shift+E"],
+  ["delete-pages", "Alt+Delete"],
+  [],
+  ["crop-pages", "Ctrl+K"],
+  ["rotate-pages", "Ctrl+R"],
+  ["page-layout", "Ctrl+Shift+L"],
+  [],
+  ["add-header-footer", "Ctrl+Shift+H"],
+  ["add-watermark", "Ctrl+Shift+W"],
+  ["add-background", "Ctrl+Shift+B"],
+  [],
+  ["javascript-console", "Ctrl+J"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["edit-document", "Alt+1"],
+  ["edit-text", "Alt+2"],
+  ["edit-forms", "Alt+3"],
+  ["edit-images", "Alt+4"],
+  ["edit-vector-images", "Alt+5"],
+  [],
+  ["hand-tool", "Alt+6"],
+  ["select-text", "Alt+7"],
+]

@@ -1,0 +1,83 @@
+ids = ["insomnia", "Insomnia", "rest.insomnia.Insomnia"]
+sources = [
+  "https://github.com/Kong/insomnia/blob/54e46851ff4a4ca8a357e351ef8bed713ceda42a/packages/insomnia-data/common-src/hotkeys.ts",
+  "https://github.com/Kong/insomnia/blob/54e46851ff4a4ca8a357e351ef8bed713ceda42a/packages/insomnia/src/main/window-utils.ts",
+  "https://raw.githubusercontent.com/flathub/rest.insomnia.Insomnia/master/rest.insomnia.Insomnia.yml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-request", "Ctrl+Alt+N"],
+  ["new-folder", "Ctrl+Shift+N"],
+  [],
+  ["collection-settings", "Ctrl+Shift+comma"],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["duplicate", "Ctrl+D"],
+  ["rename", "F2"],
+  ["delete", "Ctrl+Shift+BackSpace"],
+  [],
+  ["search", "Ctrl+P"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "Ctrl+backslash"],
+  ["request-history", "Ctrl+Shift+H"],
+  [],
+  ["zoom-reset", "Ctrl+0"],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  [],
+  ["keyboard-shortcuts", "Ctrl+Shift+slash"],
+]
+
+[[menus]]
+label = "request"
+items = [
+  ["send-request", "Ctrl+Return"],
+  ["send-request-options", "Ctrl+Shift+Return"],
+  [],
+  ["focus-url", "Ctrl+L"],
+  ["change-http-method", "Ctrl+Shift+L"],
+  ["focus-response", "Ctrl+apostrophe"],
+  ["request-settings", "Ctrl+Shift+Alt+comma"],
+  ["toggle-pin", "Ctrl+Shift+P"],
+  [],
+  ["generate-client-code", "Ctrl+Shift+G"],
+  ["edit-cookies", "Ctrl+K"],
+  ["edit-environment", "Ctrl+E"],
+  ["switch-environment", "Ctrl+Shift+E"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["open-in-new-tab", "Ctrl+Shift+O"],
+  ["close-tab", "Ctrl+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["reload-plugins", "Ctrl+Shift+R"],
+]

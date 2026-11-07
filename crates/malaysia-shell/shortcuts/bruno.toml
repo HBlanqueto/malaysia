@@ -1,0 +1,75 @@
+ids = ["bruno", "Bruno", "com.usebruno.Bruno"]
+sources = [
+  "https://raw.githubusercontent.com/usebruno/bruno/main/packages/bruno-app/src/providers/Hotkeys/keyMappings.js",
+  "https://raw.githubusercontent.com/usebruno/bruno/main/packages/bruno-electron/src/app/menu-template.js",
+  "https://raw.githubusercontent.com/electron/electron/v33.0.0/lib/browser/api/menu-item-roles.ts",
+  "https://raw.githubusercontent.com/usebruno/bruno/main/packages/bruno-electron/electron-builder-config.js",
+  "https://raw.githubusercontent.com/flathub/com.usebruno.Bruno/master/com.usebruno.Bruno.desktop",
+  "https://raw.githubusercontent.com/flathub/com.usebruno.Bruno/master/com.usebruno.Bruno.yml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-request", "Ctrl+N"],
+  ["import-collection", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-all", "Ctrl+Shift+S"],
+  [],
+  ["settings", "Ctrl+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["duplicate", "Ctrl+D"],
+  ["rename", "Ctrl+R"],
+  [],
+  ["filter-sidebar", "Ctrl+F"],
+  ["search", "Ctrl+K"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "Ctrl+backslash"],
+  ["toggle-layout", "Ctrl+J"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "request"
+items = [
+  ["send-request", "Ctrl+Return"],
+  ["format-document", "Shift+Alt+F"],
+  [],
+  ["edit-environment", "Ctrl+E"],
+  ["open-in-terminal", "Ctrl+T"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["close-tab", "Ctrl+W"],
+  ["close-all-tabs", "Ctrl+Shift+W"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  [],
+  ["next-tab", "Ctrl+Shift+bracketright"],
+  ["previous-tab", "Ctrl+Shift+bracketleft"],
+  ["last-tab", "Ctrl+9"],
+  [],
+  ["move-tab-left", "Ctrl+bracketleft"],
+  ["move-tab-right", "Ctrl+bracketright"],
+]

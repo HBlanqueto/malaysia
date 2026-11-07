@@ -1,0 +1,98 @@
+ids = ["textmaker-2024", "textmaker-free24", "textmaker-nx", "tm"]
+sources = [
+  "https://www.softmaker.net/down/tm2024manual_en.pdf",
+  "https://www.softmaker.net/down/tm2026manual_en.pdf",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  [],
+  ["print", "Ctrl+P"],
+  [],
+  ["file-manager", "F12"],
+  ["close-document", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Y"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  [],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["replace", "Ctrl+H"],
+  ["find-next", "F3"],
+  ["go-to", "Ctrl+G"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-field-codes", "Alt+F9"],
+  ["toggle-ribbon", "Ctrl+F1"],
+  [],
+  ["next-document", "Ctrl+F6"],
+  ["previous-document", "Ctrl+Shift+F6"],
+]
+
+[[menus]]
+label = "insert"
+items = [
+  ["insert-page-break", "Ctrl+Return"],
+  ["insert-column-break", "Ctrl+Shift+Return"],
+  ["insert-line-break", "Shift+Return"],
+  [],
+  ["insert-link", "Ctrl+K"],
+  ["insert-footnote", "Ctrl+Alt+F"],
+  [],
+  ["insert-date", "Ctrl+period"],
+  ["insert-time", "Ctrl+Shift+period"],
+]
+
+[[menus]]
+label = "format"
+items = [
+  ["bold", "Ctrl+B"],
+  ["italic", "Ctrl+I"],
+  ["underline", "Ctrl+U"],
+  [],
+  ["font", "Ctrl+D"],
+  ["increase-font-size", "Ctrl+9"],
+  ["decrease-font-size", "Ctrl+8"],
+  ["clear-formatting", "Ctrl+space"],
+  [],
+  ["align-left", "Ctrl+L"],
+  ["align-center", "Ctrl+E"],
+  ["align-right", "Ctrl+R"],
+  ["justify", "Ctrl+J"],
+  [],
+  ["increase-indent", "Ctrl+M"],
+  ["decrease-indent", "Ctrl+Shift+M"],
+  [],
+  ["body-text", "Alt+0"],
+  ["heading-1", "Alt+1"],
+  ["heading-2", "Alt+2"],
+  ["heading-3", "Alt+3"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["spelling", "F7"],
+  ["thesaurus", "Shift+F7"],
+  [],
+  ["track-changes", "Ctrl+Shift+E"],
+  [],
+  ["update-fields", "F9"],
+]

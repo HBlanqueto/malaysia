@@ -1,0 +1,75 @@
+ids = ["FoxitReader"]
+sources = [
+  "https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/foxit-pdf-reader-user-manual-2026.1.pdf",
+  "https://cdn01.foxitsoftware.com/pub/foxit/manual/reader/en_us/FoxitReader83_Manual.pdf",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["open", "Ctrl+O"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["print", "Ctrl+P"],
+  [],
+  ["close-document", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["copy", "Ctrl+C"],
+  ["select-all", "Ctrl+A"],
+  [],
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  [],
+  ["settings", "Ctrl+K"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-to", "Ctrl+M"],
+  [],
+  ["zoom-reset", "Ctrl+1"],
+  ["fit-page", "Ctrl+0"],
+  ["fit-width", "Ctrl+2"],
+  ["fit-visible", "Ctrl+3"],
+  [],
+  ["rotate-clockwise", "Ctrl+Shift+equal"],
+  ["rotate-counterclockwise", "Ctrl+Shift+minus"],
+  [],
+  ["toggle-sidebar", "F4"],
+  ["text-viewer", "Ctrl+6"],
+  ["auto-scroll", "Ctrl+Shift+H"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["first-page", "Ctrl+Home"],
+  ["previous-page", "Ctrl+Page_Up"],
+  ["next-page", "Ctrl+Page_Down"],
+  ["last-page", "Ctrl+End"],
+  [],
+  ["go-to-page", "Ctrl+G"],
+  [],
+  ["next-tab", "Ctrl+Tab"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["hand-tool", "Alt+3"],
+  ["select-text", "Alt+6"],
+  ["snapshot", "Alt+7"],
+]

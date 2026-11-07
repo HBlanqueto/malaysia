@@ -1,0 +1,53 @@
+ids = ["rio", "com.rioterm.Rio"]
+sources = [
+  "https://rioterm.com/docs/key-bindings",
+  "https://raw.githubusercontent.com/raphamorim/rio/main/frontends/rioterm/src/bindings/mod.rs",
+  "https://raw.githubusercontent.com/raphamorim/rio/main/rio-backend/src/config/navigation.rs",
+  "https://raw.githubusercontent.com/raphamorim/rio/main/frontends/rioterm/src/router/window.rs",
+  "https://raw.githubusercontent.com/raphamorim/rio/main/misc/rio.desktop",
+  "https://flathub.org/api/v2/appstream/com.rioterm.Rio",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-tab", "Ctrl+Shift+T"],
+  [],
+  ["close-tab", "Ctrl+Shift+W"],
+  [],
+  ["settings", "Ctrl+Shift+comma"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["split-right", "Ctrl+Shift+R"],
+  ["split-down", "Ctrl+Shift+D"],
+]
+
+[[menus]]
+label = "tab"
+items = [
+  ["next-tab", "Ctrl+Tab"],
+  ["previous-tab", "Ctrl+Shift+Tab"],
+]

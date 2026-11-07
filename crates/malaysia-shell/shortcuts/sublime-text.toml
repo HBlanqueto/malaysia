@@ -1,0 +1,127 @@
+ids = ["sublime_text", "com.sublimetext.three"]
+sources = [
+  "https://download.sublimetext.com/sublime_text_build_4215_x64.tar.xz (sublime_text/Packages/Default.sublime-package: Default (Linux).sublime-keymap; sublime_text/sublime_text.desktop)",
+  "https://raw.githubusercontent.com/flathub/com.sublimetext.three/master/com.sublimetext.three.yaml",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new", "Ctrl+N"],
+  ["new-window", "Ctrl+Shift+N"],
+  [],
+  ["open", "Ctrl+O"],
+  ["reopen-tab", "Ctrl+Shift+T"],
+  ["switch-project", "Ctrl+Alt+P"],
+  [],
+  ["save", "Ctrl+S"],
+  ["save-as", "Ctrl+Shift+S"],
+  [],
+  ["close-tab", "Ctrl+W"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["undo", "Ctrl+Z"],
+  ["redo", "Ctrl+Shift+Z"],
+  [],
+  ["cut", "Ctrl+X"],
+  ["copy", "Ctrl+C"],
+  ["paste", "Ctrl+V"],
+  ["paste-and-indent", "Ctrl+Shift+V"],
+  [],
+  ["toggle-comment", "Ctrl+slash"],
+  ["toggle-block-comment", "Ctrl+Shift+slash"],
+  ["increase-indent", "Ctrl+bracketright"],
+  ["decrease-indent", "Ctrl+bracketleft"],
+  [],
+  ["duplicate", "Ctrl+Shift+D"],
+  ["delete-line", "Ctrl+Shift+K"],
+  ["join-lines", "Ctrl+Shift+J"],
+  ["move-line-up", "Ctrl+Shift+Up"],
+  ["move-line-down", "Ctrl+Shift+Down"],
+  ["sort-lines", "F9"],
+  [],
+  ["fold", "Ctrl+Shift+bracketleft"],
+  ["unfold", "Ctrl+Shift+bracketright"],
+  ["complete-code", "Ctrl+space"],
+]
+
+[[menus]]
+label = "selection"
+items = [
+  ["select-all", "Ctrl+A"],
+  ["split-into-lines", "Ctrl+Shift+L"],
+  ["select-line", "Ctrl+L"],
+  ["expand-selection", "Ctrl+Shift+A"],
+  [],
+  ["add-cursor-above", "Shift+Alt+Up"],
+  ["add-cursor-below", "Shift+Alt+Down"],
+  ["add-next-occurrence", "Ctrl+D"],
+  ["select-all-occurrences", "Alt+F3"],
+]
+
+[[menus]]
+label = "find"
+items = [
+  ["find", "Ctrl+F"],
+  ["find-next", "F3"],
+  ["find-previous", "Shift+F3"],
+  ["incremental-find", "Ctrl+I"],
+  [],
+  ["replace", "Ctrl+H"],
+  ["replace-next", "Ctrl+Shift+H"],
+  [],
+  ["quick-find", "Ctrl+F3"],
+  ["use-selection-for-find", "Ctrl+E"],
+  [],
+  ["find-in-files", "Ctrl+Shift+F"],
+  ["next-result", "F4"],
+  ["previous-result", "Shift+F4"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["command-palette", "Ctrl+Shift+P"],
+  ["toggle-console", "Ctrl+grave"],
+  [],
+  ["increase-font-size", "Ctrl+equal"],
+  ["decrease-font-size", "Ctrl+minus"],
+  [],
+  ["toggle-spell-check", "F6"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["quick-open", "Ctrl+P"],
+  ["go-to-symbol", "Ctrl+R"],
+  ["go-to-symbol-workspace", "Ctrl+Shift+R"],
+  ["go-to-line", "Ctrl+G"],
+  [],
+  ["go-to-definition", "F12"],
+  ["find-references", "Shift+F12"],
+  ["go-to-bracket", "Ctrl+M"],
+  [],
+  ["back", "Alt+minus"],
+  ["forward", "Shift+Alt+minus"],
+  [],
+  ["next-tab", "Ctrl+Page_Down"],
+  ["previous-tab", "Ctrl+Page_Up"],
+  [],
+  ["toggle-bookmark", "Ctrl+F2"],
+  ["next-bookmark", "F2"],
+  ["previous-bookmark", "Shift+F2"],
+]
+
+[[menus]]
+label = "tools"
+items = [
+  ["build-project", "Ctrl+B"],
+  ["build-with", "Ctrl+Shift+B"],
+  [],
+  ["record-macro", "Ctrl+Alt+Q"],
+  ["play-macro", "Ctrl+Shift+Alt+Q"],
+]

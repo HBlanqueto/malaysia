@@ -1,0 +1,56 @@
+ids = ["com.gexperts.Tilix", "tilix"]
+sources = [
+  "https://raw.githubusercontent.com/gnunn1/tilix/master/data/gsettings/com.gexperts.Tilix.gschema.xml",
+  "https://raw.githubusercontent.com/gnunn1/tilix/master/data/pkg/desktop/com.gexperts.Tilix.desktop.in",
+  "https://raw.githubusercontent.com/gnunn1/tilix/master/source/gx/tilix/constants.d",
+  "https://raw.githubusercontent.com/gnunn1/tilix/master/source/app.d",
+  "https://raw.githubusercontent.com/gnunn1/tilix/master/source/gx/tilix/appwindow.d",
+]
+
+[[menus]]
+label = "file"
+items = [
+  ["new-window", "Ctrl+Shift+N"],
+  ["new-session", "Ctrl+Shift+T"],
+  [],
+  ["open", "Ctrl+Shift+O"],
+  ["save", "Ctrl+Shift+S"],
+]
+
+[[menus]]
+label = "edit"
+items = [
+  ["copy", "Ctrl+Shift+C"],
+  ["paste", "Ctrl+Shift+V"],
+  ["select-all", "Ctrl+Shift+A"],
+  [],
+  ["find", "Ctrl+Shift+F"],
+  ["find-next", "Ctrl+Shift+G"],
+  ["find-previous", "Ctrl+Shift+H"],
+]
+
+[[menus]]
+label = "view"
+items = [
+  ["toggle-sidebar", "F12"],
+  [],
+  ["zoom-in", "Ctrl+equal"],
+  ["zoom-out", "Ctrl+minus"],
+  ["zoom-reset", "Ctrl+0"],
+]
+
+[[menus]]
+label = "terminal"
+items = [
+  ["split-right", "Ctrl+Alt+R"],
+  ["split-down", "Ctrl+Alt+D"],
+  [],
+  ["close-pane", "Ctrl+Shift+W"],
+]
+
+[[menus]]
+label = "go"
+items = [
+  ["next-session", "Ctrl+Page_Down"],
+  ["previous-session", "Ctrl+Page_Up"],
+]
