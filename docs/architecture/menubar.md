@@ -9,11 +9,11 @@ Native component (ADR 0023/0034): a 30 px top bar with the active app, the clock
 ```
 window.domain ──► active app (title/app_id)
         ▼
-RGBA frame (bk) → layer-shell Top (30 px) → EGL/dmabuf
+bk layer surface → layer-shell Top (30 px) → Skia on Vulkan
 ```
 
 1. `Top` layer, anchored top/left/right, `exclusive_zone = 28`; windows do not go underneath.
-2. The text is composed on the CPU with `bk::text` on `ShellPalette` and presented via EGL; the texture upload is partial (the clock or title strip), not the whole frame (ADR 0027).
+2. The bar is a `bk` layer surface (`run_layer`); the kit draws it with Skia on Vulkan ([barrierkit ADR 0056](https://github.com/HBlanqueto/barrierkit/blob/main/docs/decisions/0056-barrierkit-on-vulkan.md)).
 3. The clock shows `%H:%M` and commits at the minute boundary.
 4. The active app is read from `window.domain` (`[active] title`/`app_id`), which the compositor publishes on focus and clears when the session starts; `use_watched` reads it again when inotify reports a change, without polling. The menubar uses the **app_id**, never the window title.
 5. Shell dialogs («Acerca de este PC» and an app's «Acerca de») do not change the active app: the bar keeps the last app that had focus, as on macOS.

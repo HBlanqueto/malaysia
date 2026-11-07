@@ -39,4 +39,4 @@ input.rs → ScreenshotMode (state.rs) → overlay (session.rs)
 
 ## Protocol and limits
 
-Apps and the portal use `ext-image-copy-capture-v1`; the frame goes to the client and does not go through `screenshot.domain`. Missing: on-the-fly `Control`, a clipboard manager, capture with frame and rotated output; the dmabuf path is implemented but the probes use SHM.
+Apps and the portal use `ext-image-copy-capture-v1`; the frame goes to the client and does not go through `screenshot.domain`. Missing: on-the-fly `Control`, a clipboard manager, capture with frame and rotated output; the dmabuf path is implemented and the `screencopy` and `screencopy-window` probes exercise it.

@@ -4,7 +4,7 @@ The compositor is built in blocks. **This file is the single source of
 truth for the status**: what is done, what is missing and how it is tested. The why of
 each decision lives in the ADRs; the open findings, in [`debt.md`](debt.md).
 
-## Now (2026-10-31)
+## Now (2026-11-07)
 
 - **Global menu (Block 14).** 14f-2 accepted (2026-11-01); still to accept:
   14b-2 (system dialogs), the Alt mnemonics and the scrolling of long
@@ -153,7 +153,7 @@ Launcher `malaysia-shell launcher` + `Super+Space` **done (2026-10-23)**.
 Unified frame **done (2026-10-24):** 16 px corners, compositor-side
 shadow, inner border and integrated SSD titlebar; CSD windows receive
 corners/shadow/border without a titlebar. Hover glyphs and double click also done.
-Pending: real focus mode and window capture with frame. Test:
+Pending: window capture with frame (focus mode is Block 17). Test:
 `./dev.sh titlebar` and `./dev.sh demo`.
 Also pending: Tahoe's transparent menu bar, with an option to show its
 background; until then the desktop is built as with «Reduce transparency»
@@ -240,10 +240,6 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
 - «System Settings…» in the ❄ menu does not open the client with
   `MALAYSIA_TEST_INPUT` in the nested session.
 - Acceptance on DRM of 14a, 14b-1 and 14c.
-- 14f-3 (libadwaita, ADR 0052): the `HBlanqueto/libadwaita` fork publishes the
-  ☰ menu as a menubar with `x-adw-app-menu` and the bar folds it into the
-  app's title. Missing: the Nix overlay with the fork and acceptance with a real
-  libadwaita app.
 - 14f-4 (GTK 3 with `GtkMenuBar`): implemented 2026-11-04, pending acceptance
   with virt-manager. The NixOS module installs `appmenu-gtk-module`
   (`nix/appmenu-gtk-module.nix`) and loads it with `GTK_MODULES`; the bar
@@ -378,7 +374,7 @@ Concept and plan in ADR 0051.
   covering it; both options change live. With the Rail the titlebar
   stays in place, only the rail comes in from the left and the first row
   of the sidebar moves up to the titlebar's row. Test: `./dev.sh demo`,
-  Tengen App Show in focus; in Window › Fullscreen, each bar and the
+  System Settings in focus; in Window › Fullscreen, each bar and the
   push with the pointer at the top; in Window › Titlebar, normal and
   unified Rail: nothing moves down with the bar and the rail comes in from the left.
 - **14f-3 — Global menu for libadwaita apps.** Implemented: patch

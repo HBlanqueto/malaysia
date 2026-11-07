@@ -32,7 +32,7 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0024](0024-toolkit-render-stack.md) | Kit render stack | accepted |
 | [0025](0025-native-shell.md) | Native shell (`malaysia-shell`) | accepted |
 | [0026](0026-linux-dmabuf-and-explicit-sync.md) | dmabuf and explicit sync | accepted |
-| [0027](0027-shell-presents-through-egl.md) | Shell through EGL | accepted |
+| [0027](0027-shell-presents-through-egl.md) | Shell through EGL | superseded by barrierkit 0056 (Vulkan) |
 | [0028](0028-smithay-by-revision.md) | Smithay by revision | accepted |
 | [0029](0029-backend-by-flag.md) | Backend by flag | accepted |
 | [0030](0030-direct-session-8a.md) | Direct Session 8a | accepted |

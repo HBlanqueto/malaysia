@@ -43,6 +43,22 @@ Each file is optional; missing files use their default (like macOS's
 `domain` command and the future settings app (both over D-Bus, interface
 `org.malaysia.Compositor1`).
 
+`MALAYSIA_CONFIG_DIR` and `MALAYSIA_DATA_DIR` replace the two directories.
+
+Environment variables that change behavior without a domain:
+
+| Variable | Read by | Effect | Default |
+|---|---|---|---|
+| `MALAYSIA_SCREENSHOT_DIR` | compositor | folder for screenshots | the XDG Desktop folder |
+| `MALAYSIA_RESIZE_CONFIGURE_TIMEOUT_MS` | compositor | how long an interactive resize waits for the client's configure ack | 100 |
+| `MALAYSIA_SHELL_EXE` | compositor | one more `malaysia-shell` binary that Infinity trusts | none |
+| `MALAYSIA_TERMINAL` | launcher | terminal for `.desktop` entries with `Terminal=true`; then `TERMINAL` | `wezterm` |
+| `MALAYSIA_ICON_THEME` | launcher | icon theme searched before `hicolor` | `Adwaita` |
+
+The `MALAYSIA_TEST_*` variables drive the synthetic input of the probes in
+`tools/sctk-probe` and `dev.sh`; `MALAYSIA_BIN_DIR` and `MALAYSIA_ORIG_*`
+are set by the session and the Nix wrappers, not by hand.
+
 Status of each option:
 - **active** — read at runtime and changes the behavior.
 - **pending** — defined in the catalog; not parsed or consumed yet, and it arrives with its effect.

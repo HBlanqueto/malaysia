@@ -11,7 +11,7 @@ ext-foreign-toplevel-list-v1 ──► window list (tiles)
 zwlr_foreign_toplevel_management_v1 ──► activate / close / minimize; active state
 dock.domain ──► tilesize, orientation
         ▼
-RGBA frame (bk) → layer-shell Top → EGL/dmabuf
+bk layer surface → layer-shell Top → Skia on Vulkan
 ```
 
 1. Surface on the `Top` layer, anchored at the bottom, height `tilesize + 2×padding` (64 px by default) and an equal `exclusive_zone`; windows do not go underneath.

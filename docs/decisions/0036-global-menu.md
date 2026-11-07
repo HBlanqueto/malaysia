@@ -1,6 +1,6 @@
 # 0036 — Global menu
 
-Status: accepted (2026-10-23); implemented in 14a–14e and 14f-1 (14f-2 pending). Partly superseded by ADRs 0040 (Infinity v2 channel) and 0045 (GTK menus).
+Status: accepted (2026-10-23); implemented in 14a–14e, 14f-1 and 14f-2 (accepted 2026-11-01). Partly superseded by ADRs 0040 (Infinity v2 channel) and 0045 (GTK menus).
 
 ## Context
 

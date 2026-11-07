@@ -1,6 +1,6 @@
 # 0027 — The shell presents through EGL
 
-Status: accepted (Block 7c).
+Status: superseded by [barrierkit ADR 0056](https://github.com/HBlanqueto/barrierkit/blob/main/docs/decisions/0056-barrierkit-on-vulkan.md): the kit draws with Vulkan, without an EGL fallback.
 
 ## Context
 

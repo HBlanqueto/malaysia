@@ -10,14 +10,14 @@ Native component (ADR 0023) on `ext-session-lock-v1`. Guarantee: **if the client
 lock() ──► locked ──► one ext_session_lock_surface_v1 per output
           │ configure (width, height, serial)
           ▼
-   ack_configure + attach + commit via EGL/dmabuf
+   ack_configure + attach + commit through the kit (Skia on Vulkan)
           ▼
    the compositor renders only lock surfaces and cursor
 ```
 
 1. `lock` requests the session and the compositor confirms `locked`.
 2. On `locked`, the client creates a new surface per output (a role is not reused) and receives the exact size.
-3. It draws a solid background, a masked field, a «verifying» state and the PAM error; it presents via EGL (ADR 0027).
+3. It draws a solid background, a masked field, a «verifying» state and the PAM error; the kit presents it with Vulkan (barrierkit ADR 0056).
 4. Only a successful PAM call triggers `unlock_and_destroy`; the client never unlocks on its own.
 
 ## Recovery

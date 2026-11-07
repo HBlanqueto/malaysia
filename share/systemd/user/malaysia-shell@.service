@@ -1,5 +1,5 @@
 # One unit per shell component (ADR 0023): `%i` is the component name
-# (wallpaper, menubar, dock, ...). A component must be able to crash and
+# (menubar, dock, ...); the wallpaper has its own unit. A component must be able to crash and
 # restart without taking any other component (or the compositor) down.
 #
 # Installed by the flake with the `@out@` placeholder replaced by the store
