@@ -89,8 +89,8 @@ libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 zune-jpeg = "0.5"
 half = { version = "2", features = ["bytemuck"] }
 
-smithay-client-toolkit = "0.19.2"
-sctk = { package = "smithay-client-toolkit", version = "0.19.2" }
+smithay-client-toolkit = "0.20"
+sctk = { package = "smithay-client-toolkit", version = "0.20" }
 
 wgpu = { version = "24", default-features = false, features = ["wgsl"] }
 raw-window-handle = "0.6"
