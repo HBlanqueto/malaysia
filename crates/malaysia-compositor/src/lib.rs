@@ -20,6 +20,7 @@ mod input;
 mod keymap;
 mod layers;
 mod lock;
+mod panels;
 mod popup;
 mod popup_fade;
 mod renderer;

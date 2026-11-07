@@ -626,7 +626,7 @@ impl State {
         );
         let focused = self.focused_window();
         if focused.is_none_or(|id| !self.spaces.is_shown(id)) {
-            match self.windows.topmost_visible(&self.minimized) {
+            match self.focus_fallback(None) {
                 Some(next) => self.focus_window(next),
                 None => self.clear_keyboard_focus(),
             }

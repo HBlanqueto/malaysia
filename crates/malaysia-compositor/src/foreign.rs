@@ -274,7 +274,7 @@ impl State {
 
     fn foreign_states_for(&self, id: WindowId) -> Vec<u8> {
         toplevel_states(
-            self.focused_window() == Some(id),
+            self.shown_active() == Some(id),
             self.minimized.contains(&id),
             self.maximized.contains_key(&id),
             self.fullscreen.contains_key(&id),
@@ -286,6 +286,7 @@ impl State {
             return;
         }
         self.set_minimized(id, false);
+        self.windows.set_deactivated(id, false);
         self.raise_and_focus(id);
     }
 
@@ -299,13 +300,7 @@ impl State {
             self.windows.set_hidden(id, true);
             tracing::info!(window = id.get(), "window minimized");
             if self.focused_window() == Some(id) {
-                let next = self
-                    .windows
-                    .iter_visible(&self.minimized)
-                    .rev()
-                    .find(|window| window.id() != id)
-                    .map(|window| window.id());
-                match next {
+                match self.focus_fallback(Some(id)) {
                     Some(next) => self.focus_window(next),
                     None => self.clear_keyboard_focus(),
                 }

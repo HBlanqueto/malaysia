@@ -883,7 +883,7 @@ fn append_revealed_titlebar<R: MalaysiaRenderer>(
         Point::from((0, y)),
         Size::from((width, vow_design::TITLEBAR.thickness as i32)),
     );
-    let focused = state.focused_window() == Some(id);
+    let focused = state.windows.is_activated(id);
     let pointer = state
         .chrome_pointer
         .as_ref()

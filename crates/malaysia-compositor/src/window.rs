@@ -164,6 +164,7 @@ struct WindowData {
     mapped: bool,
     hidden: bool,
     off_space: bool,
+    deactivated: bool,
     configured: Option<Size<i32, Logical>>,
     resizing: bool,
     resize_edge: Option<Edge>,
@@ -207,7 +208,7 @@ impl WindowData {
     }
 
     fn is_hidden(&self) -> bool {
-        self.hidden || self.off_space
+        self.hidden || self.off_space || self.deactivated
     }
 
     fn geometry_fits_buffer(&self) -> bool {
@@ -342,6 +343,7 @@ impl Windows {
             mapped: false,
             hidden: false,
             off_space: false,
+            deactivated: false,
             configured: None,
             resizing: false,
             resize_edge: None,
@@ -548,6 +550,18 @@ impl Windows {
         self.apply_hidden(index, was)
     }
 
+    pub fn set_deactivated(&mut self, id: WindowId, deactivated: bool) -> bool {
+        let Some(index) = self.index(id) else {
+            return false;
+        };
+        if self.windows[index].deactivated == deactivated {
+            return false;
+        }
+        let was = self.windows[index].is_hidden();
+        self.windows[index].deactivated = deactivated;
+        self.apply_hidden(index, was)
+    }
+
     fn apply_hidden(&mut self, index: usize, was: bool) -> bool {
         let id = self.windows[index].id;
         let hidden = self.windows[index].is_hidden();
@@ -670,12 +684,6 @@ impl Windows {
                 decoration: self.decoration_of(id),
             })
         })
-    }
-
-    pub fn topmost_visible(&self, minimized: &HashSet<WindowId>) -> Option<WindowId> {
-        self.iter_visible(minimized)
-            .next_back()
-            .map(|window| window.id())
     }
 
     pub fn window_under(
@@ -818,10 +826,26 @@ impl Windows {
 
     pub fn raise(&mut self, id: WindowId) -> bool {
         let stack: Vec<WindowId> = self.scene.iter().map(|(id, _)| id).collect();
-        let order = raise_order(&stack, id, |window| self.dialog_parent(window));
+        let order = raise_order(
+            &stack,
+            id,
+            |window| self.dialog_parent(window),
+            |window| self.floats(window),
+        );
         order
             .into_iter()
             .fold(false, |raised, window| self.scene.raise(window) || raised)
+    }
+
+    fn floats(&self, id: WindowId) -> bool {
+        self.surface_of(id)
+            .and_then(crate::window_style::panel)
+            .is_some_and(|flags| flags.contains(crate::window_style::Panel::Floating))
+    }
+
+    pub fn is_activated(&self, id: WindowId) -> bool {
+        self.index(id)
+            .is_some_and(|index| self.windows[index].activated)
     }
 
     pub fn topmost(&self) -> Option<WindowId> {
@@ -1410,10 +1434,12 @@ fn client_point(
 }
 
 // xdg-shell set_parent: a child is stacked above its parent and every other ancestor.
+// AppKit: floating panels stay above every window that does not float.
 fn raise_order<T: Copy + PartialEq>(
     stack: &[T],
     target: T,
     parent_of: impl Fn(T) -> Option<T>,
+    floats: impl Fn(T) -> bool,
 ) -> Vec<T> {
     let descends = |window: T| {
         let mut current = window;
@@ -1426,14 +1452,23 @@ fn raise_order<T: Copy + PartialEq>(
         }
         false
     };
-    std::iter::once(target)
+    let mut order: Vec<T> = std::iter::once(target)
         .chain(
             stack
                 .iter()
                 .copied()
                 .filter(|window| *window != target && descends(*window)),
         )
-        .collect()
+        .collect();
+    if !floats(target) {
+        let floating: Vec<T> = stack
+            .iter()
+            .copied()
+            .filter(|window| floats(*window) && !order.contains(window))
+            .collect();
+        order.extend(floating);
+    }
+    order
 }
 
 #[cfg(test)]
@@ -1832,8 +1867,23 @@ mod tests {
                 .find(|(child, _)| *child == window)
                 .map(|(_, parent)| *parent)
         };
-        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 1, parent_of), [1, 2, 3, 5]);
-        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 4, parent_of), [4]);
-        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 2, parent_of), [2, 3]);
+        let none = |_: u32| false;
+        assert_eq!(
+            raise_order(&[1, 2, 4, 3, 5], 1, parent_of, none),
+            [1, 2, 3, 5]
+        );
+        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 4, parent_of, none), [4]);
+        assert_eq!(raise_order(&[1, 2, 4, 3, 5], 2, parent_of, none), [2, 3]);
+    }
+
+    #[test]
+    fn floating_panels_stay_above_a_raised_window_and_a_raised_panel_tops_them() {
+        let no_parent = |_: u32| None;
+        let floats = |window: u32| window >= 10;
+        assert_eq!(
+            raise_order(&[1, 10, 2, 11], 1, no_parent, floats),
+            [1, 10, 11]
+        );
+        assert_eq!(raise_order(&[1, 10, 2, 11], 10, no_parent, floats), [10]);
     }
 }

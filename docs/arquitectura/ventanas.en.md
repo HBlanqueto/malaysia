@@ -36,3 +36,15 @@ Normal SSD windows (not maximized or fullscreen) are resized from an outer band:
 ## Buttons and double click
 
 Close closes, minimize leaves the tile in the dock, maximize saves the rectangle and sends `maximized`; repeating restores. The traffic lights show their glyph on hover and darken only the pressed button. A double click (400 ms, 4 px) runs `window.double_click_titlebar`.
+
+## Panels
+
+An app declares a window a panel with `infinity_window_style_v1.set_panel` (version 3), as barrierkit's utility windows do. The compositor reproduces AppKit's `NSPanel`:
+
+1. **It is never the main window.** While the panel holds the keyboard, the topmost window of its app that is not a panel stays `activated` and is the one published in `window.domain` and as active in foreign-toplevel, so the menu bar keeps its menus (`shown_active`).
+2. **`hides_on_deactivate`:** the panel hides while the active window belongs to another client or there is none, and comes back at the same place and stacking when a window of its app becomes active. It is its own hiding reason, separate from minimizing (`set_deactivated`). Focus on a shell layer does not count as changing app.
+3. **`floating`:** the panel stays above every window that does not float (`raise_order`).
+4. **`key_only_if_needed`:** neither mapping nor a press gives it the keyboard; it only rises. The app asks for it with an xdg-activation token made from that press, which is accepted because the keyboard stays on the same client.
+5. When the window with the keyboard closes, focus goes to the topmost window that is not a panel (`focus_fallback`).
+
+Sources: [`hidesOnDeactivate`](https://developer.apple.com/documentation/appkit/nswindow/hidesondeactivate), [`isFloatingPanel`](https://developer.apple.com/documentation/appkit/nspanel/isfloatingpanel), [`becomesKeyOnlyIfNeeded`](https://developer.apple.com/documentation/appkit/nspanel/becomeskeyonlyifneeded) and the `activated` state of [xdg-shell](https://wayland.app/protocols/xdg-shell#xdg_toplevel:enum:state:entry:activated), which does not imply holding the keyboard.

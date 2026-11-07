@@ -533,17 +533,6 @@ fn is_escape(syms: &[xkb::Keysym]) -> bool {
         .any(|sym| u32::from(*sym) == keysyms::KEY_Escape)
 }
 
-fn activation_updates(previous: Option<WindowId>, next: Option<WindowId>) -> Vec<(WindowId, bool)> {
-    let mut updates = Vec::new();
-    if let Some(previous) = previous.filter(|previous| Some(*previous) != next) {
-        updates.push((previous, false));
-    }
-    if let Some(next) = next {
-        updates.push((next, true));
-    }
-    updates
-}
-
 fn clamp_pointer(
     location: Point<f64, Logical>,
     size: smithay::utils::Size<i32, Logical>,
@@ -926,7 +915,12 @@ impl State {
             }
             return;
         };
-        self.raise_and_focus(id);
+        if self.takes_focus_on_press(id) {
+            self.raise_and_focus(id);
+        } else {
+            self.windows.raise(id);
+            self.request_redraw();
+        }
 
         if button == BUTTON_LEFT
             && let Some(local) = self.titlebar_point(id, location)
@@ -1153,14 +1147,16 @@ impl State {
             None => tracing::warn!("a window was focused but the seat has no keyboard"),
         }
         if changed {
-            for (window, activated) in activation_updates(previous, Some(id)) {
-                self.windows.set_activated(window, activated);
+            let shown_before = self.shown_active_for(previous);
+            self.sync_panels();
+            let shown = self.shown_active();
+            self.publish_active(shown);
+            for window in [previous, shown_before, Some(id), shown]
+                .into_iter()
+                .flatten()
+            {
+                self.foreign_state_changed(window);
             }
-            self.publish_active(Some(id));
-            if let Some(previous) = previous {
-                self.foreign_state_changed(previous);
-            }
-            self.foreign_state_changed(id);
         }
         self.log_focus_stack(Some(id));
     }
@@ -1522,6 +1518,7 @@ impl State {
     #[track_caller]
     pub(crate) fn clear_keyboard_focus(&mut self) {
         let location = std::panic::Location::caller();
+        let shown_before = self.shown_active();
         let previous = self.active_window.clear();
         if previous.is_some() {
             tracing::info!(
@@ -1539,10 +1536,10 @@ impl State {
             set_primary_focus(&self.display_handle, &self.seat, None);
         }
         if let Some(previous) = previous {
-            for (window, activated) in activation_updates(Some(previous), None) {
-                self.windows.set_activated(window, activated);
+            self.sync_panels();
+            for window in [Some(previous), shown_before].into_iter().flatten() {
+                self.foreign_state_changed(window);
             }
-            self.foreign_state_changed(previous);
         }
         self.publish_active(None);
         self.log_focus_stack(None);
@@ -1563,13 +1560,14 @@ impl State {
     }
 
     fn publish_active_if_focused_to(&self, dir: &Path, id: WindowId) {
-        if self.focused_window() == Some(id) {
+        if self.shown_active() == Some(id) {
             self.publish_active_to(dir, Some(id));
         }
     }
 
     pub(crate) fn forget_window(&mut self, surface: &WlSurface) {
         let active = self.focused_window();
+        let next = self.focus_fallback(self.windows.id_of(surface));
         let Some(id) = self.windows.remove(surface) else {
             return;
         };
@@ -1602,7 +1600,7 @@ impl State {
             "window removed"
         );
         if active == Some(id) {
-            match self.windows.topmost_visible(&self.minimized) {
+            match next.filter(|next| self.windows.surface_of(*next).is_some()) {
                 Some(next) => self.focus_window(next),
                 None => self.clear_keyboard_focus(),
             }
@@ -2380,8 +2378,8 @@ mod tests {
 
     use super::{
         BUTTON_LEFT, CompositorShortcut, DesktopClick, Edge, ShakeDetector, TEST_KEY_HOLD,
-        TEST_POINTER_STEP_DEFAULT, TestKey, TestPointer, TestPointerAction, activation_updates,
-        clamp_pointer, compositor_shortcut, desktop_click, double_click, edge_cursor, parse_ms,
+        TEST_POINTER_STEP_DEFAULT, TestKey, TestPointer, TestPointerAction, clamp_pointer,
+        compositor_shortcut, desktop_click, double_click, edge_cursor, parse_ms,
         pointer_focus_blocked,
     };
     use crate::state::State;
@@ -3105,30 +3103,6 @@ mod tests {
     fn a_click_on_the_desktop_clears_the_keyboard_focus() {
         assert_eq!(desktop_click(false), DesktopClick::ClearFocus);
         assert_eq!(desktop_click(true), DesktopClick::CloseMenu);
-    }
-
-    #[test]
-    fn focus_moves_activated_to_the_new_window_only() {
-        use std::collections::HashSet;
-
-        let a = WindowId::new(1);
-        let b = WindowId::new(2);
-        let mut activated = HashSet::new();
-        let apply = |activated: &mut HashSet<WindowId>, updates: Vec<(WindowId, bool)>| {
-            for (window, on) in updates {
-                if on {
-                    activated.insert(window);
-                } else {
-                    activated.remove(&window);
-                }
-            }
-        };
-        apply(&mut activated, activation_updates(None, Some(a)));
-        assert_eq!(activated, HashSet::from([a]));
-        apply(&mut activated, activation_updates(Some(a), Some(b)));
-        assert_eq!(activated, HashSet::from([b]), "only B keeps Activated");
-        apply(&mut activated, activation_updates(Some(b), None));
-        assert!(activated.is_empty(), "an unfocused window never keeps it");
     }
 
     #[test]

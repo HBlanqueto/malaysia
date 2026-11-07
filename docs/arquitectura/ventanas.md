@@ -35,3 +35,14 @@ Las ventanas SSD normales (no maximizadas ni fullscreen) se redimensionan desde 
 
 Cerrar cierra, minimizar deja el tile en el dock, maximizar guarda el rectángulo y envía `maximized`; repetir restaura. Los semáforos muestran su glifo al pasar el puntero y oscurecen solo el botón pulsado. Doble clic (400 ms, 4 px) ejecuta `window.double_click_titlebar`.
 
+## Paneles
+
+Una app declara panel una ventana con `infinity_window_style_v1.set_panel` (versión 3), como hacen las ventanas auxiliares de barrierkit. El compositor reproduce el `NSPanel` de AppKit:
+
+1. **Nunca es la ventana principal.** Mientras el panel tiene el teclado, la ventana más alta de su app que no es panel sigue `activated` y es la que se publica en `window.domain` y como activa en foreign-toplevel, así que la barra de menús sigue con sus menús (`shown_active`).
+2. **`hides_on_deactivate`:** el panel se oculta mientras la ventana activa es de otro cliente o no hay ninguna, y vuelve en el mismo sitio y orden cuando se activa una ventana de su app. Es un motivo de ocultación propio, separado de minimizar (`set_deactivated`). El foco en una capa de la shell no cuenta como cambio de app.
+3. **`floating`:** el panel queda encima de todas las ventanas que no flotan (`raise_order`).
+4. **`key_only_if_needed`:** ni al mapearse ni al pulsarlo recibe el teclado; solo sube. La app lo pide con un token de xdg-activation hecho con ese clic, que se acepta porque el teclado sigue en su mismo cliente.
+5. Al cerrarse la ventana con el teclado, el foco pasa a la ventana más alta que no es panel (`focus_fallback`).
+
+Fuentes: [`hidesOnDeactivate`](https://developer.apple.com/documentation/appkit/nswindow/hidesondeactivate), [`isFloatingPanel`](https://developer.apple.com/documentation/appkit/nspanel/isfloatingpanel), [`becomesKeyOnlyIfNeeded`](https://developer.apple.com/documentation/appkit/nspanel/becomeskeyonlyifneeded) y el estado `activated` de [xdg-shell](https://wayland.app/protocols/xdg-shell#xdg_toplevel:enum:state:entry:activated), que no implica tener el teclado.

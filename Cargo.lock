@@ -351,7 +351,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 [[package]]
 name = "barrier-kit"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=015f637db705d3fd37a6309fbea08e6b7471f29a#015f637db705d3fd37a6309fbea08e6b7471f29a"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=21c532db205da8454468b4352d9176ddeb798c65#21c532db205da8454468b4352d9176ddeb798c65"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -1010,7 +1010,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1927,8 +1927,9 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=015f637db705d3fd37a6309fbea08e6b7471f29a#015f637db705d3fd37a6309fbea08e6b7471f29a"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=21c532db205da8454468b4352d9176ddeb798c65#21c532db205da8454468b4352d9176ddeb798c65"
 dependencies = [
+ "bitflags 2.13.2",
  "wayland-backend",
  "wayland-client",
  "wayland-protocols-wlr",
@@ -2603,7 +2604,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3478,7 +3479,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3885,8 +3886,8 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d204abcbdf8e88729306a8d0ca01a79d8a49969fe1f84696909d6dbc4321c1a"
 dependencies = [
- "foldhash 0.2.0",
- "hashbrown 0.17.1",
+ "foldhash 0.1.5",
+ "hashbrown 0.15.5",
 ]
 
 [[package]]
@@ -4049,7 +4050,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4491,7 +4492,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vow-appearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=015f637db705d3fd37a6309fbea08e6b7471f29a#015f637db705d3fd37a6309fbea08e6b7471f29a"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=21c532db205da8454468b4352d9176ddeb798c65#21c532db205da8454468b4352d9176ddeb798c65"
 dependencies = [
  "nix",
  "serde",
@@ -4504,7 +4505,7 @@ dependencies = [
 [[package]]
 name = "vow-design"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=015f637db705d3fd37a6309fbea08e6b7471f29a#015f637db705d3fd37a6309fbea08e6b7471f29a"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=21c532db205da8454468b4352d9176ddeb798c65#21c532db205da8454468b4352d9176ddeb798c65"
 dependencies = [
  "serde_json",
 ]
@@ -4879,7 +4880,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

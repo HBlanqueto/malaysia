@@ -168,7 +168,12 @@ impl CompositorHandler for State {
         };
         if let Some(mapped) = self.windows.commit(surface, workspace) {
             self.space_window_mapped(mapped);
-            self.raise_and_focus(mapped);
+            if self.takes_focus_on_press(mapped) {
+                self.raise_and_focus(mapped);
+            } else {
+                self.windows.raise(mapped);
+                self.sync_panels();
+            }
             self.foreign_window_mapped(mapped);
             self.inject_test_shake();
             self.inject_test_press(mapped);
