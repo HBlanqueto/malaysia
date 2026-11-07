@@ -51,7 +51,7 @@ impl RenderContext {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 compatible_surface: None,
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::LowPower,
                 force_fallback_adapter: false,
             })
             .await
