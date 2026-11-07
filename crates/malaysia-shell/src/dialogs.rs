@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use barrier_kit::controls::{Button, ButtonStyle};
+use barrier_kit::controls::{Button, ButtonStyle, ControlSize};
 use barrier_kit::menu::measure_text_weight;
 use barrier_kit::patterns::about::about_window;
 use barrier_kit::platform::{Timers, WindowControls, WindowOptions, run_window};
@@ -819,7 +819,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
                 .margin(Gaps::new(ABOUT_BUTTON_GAP, 0.0, 0.0, 0.0))
                 .child(
                     Button::new(tr!("about-more-info"))
-                        .small(true)
+                        .size(ControlSize::Small)
                         .on_press(|_| crate::spawn::spawn_settings()),
                 ),
         )

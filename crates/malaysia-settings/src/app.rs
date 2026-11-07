@@ -143,7 +143,7 @@ fn appearance(
                         .detail(tr!("tint-strength-help"))
                         .keywords(tr_list!("tint-strength-keywords"))
                         .control(
-                            Slider::stepped(STRENGTHS.len())
+                            Slider::stepped(tr!("tint-strength"), STRENGTHS.len())
                                 .value(strength_index(config))
                                 .labels(tr_list!(
                                     "tint-strength-subtle",
