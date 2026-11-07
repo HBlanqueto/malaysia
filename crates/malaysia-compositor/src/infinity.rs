@@ -5,8 +5,11 @@ use nix::sys::socket::{getsockopt, sockopt};
 use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::zwlr_foreign_toplevel_handle_v1::ZwlrForeignToplevelHandleV1;
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
-use smithay::utils::{Logical, Point, Rectangle, Size};
+use smithay::backend::input::{InputTime, KeyState};
+use smithay::input::keyboard::FilterResult;
+use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Size};
 use tracing::info;
+use xkbcommon::xkb::{self, Keycode, Keysym};
 use vow_design::{TILE_GAP, TILE_MARGIN};
 use malaysia_scene::geometry::{Logical as SceneLogical, Point as ScenePoint, Rect as SceneRect, Size as SceneSize};
 use malaysia_scene::scene::WindowId;
@@ -144,6 +147,11 @@ impl smithay::wayland::Dispatch2<InfinityWindowManagerV1, State> for InfinityGlo
                     state.infinity_force_quit(id, dhandle);
                 }
             }
+            Request::SendShortcut { handle, keys } => {
+                if let Some(id) = window_id_from_handle(&handle) {
+                    state.infinity_send_shortcut(id, &keys);
+                }
+            }
             _ => {}
         }
     }
@@ -160,11 +168,84 @@ fn window_id_from_handle(handle: &ZwlrForeignToplevelHandleV1) -> Option<WindowI
 
 impl InfinityGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(5, InfinityGlobalData)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(6, InfinityGlobalData)
     }
 }
 
+fn chord_keysyms(keys: &str) -> Option<Vec<Keysym>> {
+    let (modifiers, key) = keys.rsplit_once('+').unwrap_or(("", keys));
+    let modifier_names =
+        modifiers
+            .split('+')
+            .filter(|name| !name.is_empty())
+            .map(|name| match name {
+                "Ctrl" => Some("Control_L"),
+                "Shift" => Some("Shift_L"),
+                "Alt" => Some("Alt_L"),
+                _ => None,
+            });
+    modifier_names
+        .chain([Some(key)])
+        .map(|name| {
+            let keysym = xkb::keysym_from_name(name?, xkb::KEYSYM_CASE_INSENSITIVE);
+            (keysym.raw() != xkb::keysyms::KEY_NoSymbol).then_some(keysym)
+        })
+        .collect()
+}
+
 impl State {
+    pub(crate) fn infinity_send_shortcut(&mut self, id: WindowId, keys: &str) {
+        let Some(keysyms) = chord_keysyms(keys) else {
+            tracing::warn!(keys, "send shortcut: unknown key");
+            return;
+        };
+        self.focus_window(id);
+        let Some(keyboard) = self.seat.get_keyboard() else {
+            return;
+        };
+        if keyboard.current_focus().as_ref() != self.windows.surface_of(id) {
+            tracing::warn!(
+                window = id.get(),
+                keys,
+                "send shortcut: the window has no keyboard focus"
+            );
+            return;
+        }
+        let keycodes: Option<Vec<Keycode>> = keyboard.with_xkb_state(self, |context| {
+            let xkb = context.xkb().lock().ok()?;
+            let layout = xkb.active_layout();
+            keysyms
+                .iter()
+                .map(|keysym| {
+                    (8..=255).map(Keycode::new).find(|code| {
+                        xkb.raw_syms_for_key_in_layout(*code, layout)
+                            .contains(keysym)
+                    })
+                })
+                .collect()
+        });
+        let Some(keycodes) = keycodes else {
+            tracing::warn!(keys, "send shortcut: a key is not on the active layout");
+            return;
+        };
+        info!(window = id.get(), keys, "send shortcut");
+        let presses = keycodes.iter().map(|code| (*code, KeyState::Pressed));
+        let releases = keycodes
+            .iter()
+            .rev()
+            .map(|code| (*code, KeyState::Released));
+        for (code, key_state) in presses.chain(releases) {
+            keyboard.input::<(), _>(
+                self,
+                code,
+                key_state,
+                SERIAL_COUNTER.next_serial(),
+                InputTime::from_millis(0),
+                |_, _, _| FilterResult::Forward,
+            );
+        }
+    }
+
     pub(crate) fn infinity_force_quit(&mut self, id: WindowId, dhandle: &DisplayHandle) {
         let Some(client) = self
             .windows
