@@ -5,7 +5,6 @@ use smithay::reexports::wayland_protocols_wlr::foreign_toplevel::v1::server::{
 };
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
-use smithay::utils::{Point, Rectangle, Size};
 use smithay::wayland::foreign_toplevel_list::{ForeignToplevelHandle, ForeignToplevelListState};
 
 use crate::state::State;
@@ -170,19 +169,6 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             }
             zwlr_foreign_toplevel_handle_v1::Request::Close => {
                 state.windows.send_close(id);
-            }
-            zwlr_foreign_toplevel_handle_v1::Request::SetRectangle {
-                surface: _,
-                x,
-                y,
-                width,
-                height,
-            } => {
-                state.dock_rectangle = Some((
-                    id,
-                    Rectangle::new(Point::from((x, y)), Size::from((width, height))),
-                ));
-                tracing::info!(window = id.get(), rect = ?state.dock_rectangle, "dock icon rectangle set");
             }
             zwlr_foreign_toplevel_handle_v1::Request::SetMinimized => {
                 state.set_minimized(id, true);

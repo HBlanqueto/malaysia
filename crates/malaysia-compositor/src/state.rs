@@ -148,7 +148,6 @@ pub struct State {
     pub(crate) focus_notices: Vec<
         infinity_protocol::server::focus::infinity_focus_v1::infinity_focus_surface_v1::InfinityFocusSurfaceV1,
     >,
-    pub dock_rectangle: Option<(WindowId, Rectangle<i32, Logical>)>,
     pub config: Config,
     pub(crate) grab: Option<Grab>,
     pub(crate) test_press: Option<TestPress>,
@@ -402,7 +401,6 @@ impl State {
             fullscreen: HashMap::new(),
             focus_desk: HashMap::new(),
             infinity_managers: Vec::new(),
-            dock_rectangle: None,
             config,
             grab: None,
             test_press: None,
