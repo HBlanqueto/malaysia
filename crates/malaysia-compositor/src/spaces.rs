@@ -282,7 +282,7 @@ impl State {
             .windows
             .iter_visible(&self.minimized)
             .find(|window| window.id() == id)
-            .map(|window| crate::session::window_content_rect(&window))
+            .map(|window| crate::scene_elements::window_content_rect(&window))
         else {
             return;
         };

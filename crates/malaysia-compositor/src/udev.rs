@@ -286,7 +286,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
             }
         })
         .map_err(|error| anyhow!("inserting the disconnect source: {error}"))?;
-    crate::session::watch_overdue_frame_callbacks(&loop_handle);
+    crate::frame_clock::watch_overdue_frame_callbacks(&loop_handle);
 
     let mut udev = Udev {
         loop_handle: loop_handle.clone(),
@@ -734,7 +734,7 @@ impl Udev {
             }
         }
         let now = Duration::from(self.state.clock.now());
-        crate::session::send_frame_callbacks_for_state(&self.state, now);
+        crate::frame_clock::send_frame_callbacks_for_state(&self.state, now);
     }
 
     fn queue_estimated_vblank_timer(&mut self) {
@@ -749,10 +749,10 @@ impl Udev {
                 unreachable!("an estimated vblank is only queued from a queued redraw")
             }
         }
-        let delay = crate::session::next_vblank_delay(
+        let delay = crate::frame_clock::next_vblank_delay(
             self.last_vblank,
             Duration::from(self.state.clock.now()),
-            crate::session::refresh_interval(&self.state),
+            crate::frame_clock::refresh_interval(&self.state),
         );
         match self.loop_handle.insert_source(
             Timer::from_duration(delay),
@@ -782,7 +782,7 @@ impl Udev {
             self.queue_redraw();
         } else {
             let now = Duration::from(self.state.clock.now());
-            crate::session::send_frame_callbacks_for_state(&self.state, now);
+            crate::frame_clock::send_frame_callbacks_for_state(&self.state, now);
         }
     }
 
@@ -826,7 +826,7 @@ impl Udev {
         if let Some(mut feedback) = self.presented_feedback.take() {
             feedback.presented::<_, smithay::utils::Monotonic>(
                 time,
-                Refresh::fixed(crate::session::refresh_interval(&self.state)),
+                Refresh::fixed(crate::frame_clock::refresh_interval(&self.state)),
                 self.vblank_count,
                 wp_presentation_feedback::Kind::Vsync
                     | wp_presentation_feedback::Kind::HwCompletion
@@ -836,7 +836,7 @@ impl Udev {
         if redraw_needed || self.state.animating(Instant::now()) {
             self.queue_redraw();
         } else {
-            crate::session::send_frame_callbacks_for_state(&self.state, time);
+            crate::frame_clock::send_frame_callbacks_for_state(&self.state, time);
         }
     }
 
@@ -857,7 +857,7 @@ impl Udev {
                 return RenderResult::Skipped;
             }
         };
-        let elements = crate::session::build_output_elements(
+        let elements = crate::scene_elements::build_output_elements(
             &mut self.state,
             &mut renderer,
             &self.cursor,
@@ -867,7 +867,7 @@ impl Udev {
         self.state.init_capture_dma(gles);
         let capture_elements = if self.capture_requested || !self.state.pending_captures.is_empty()
         {
-            crate::session::build_output_elements(&mut self.state, gles, &self.cursor, true)
+            crate::scene_elements::build_output_elements(&mut self.state, gles, &self.cursor, true)
         } else {
             Vec::new()
         };
@@ -891,7 +891,7 @@ impl Udev {
             self.output.current_mode(),
         ) {
             let size = smithay::utils::Size::from((mode.size.w, mode.size.h));
-            crate::session::log_screenshot(crate::session::save_screenshot(
+            crate::capture::log_screenshot(crate::capture::save_screenshot(
                 &mut self.state,
                 gles,
                 &self.cursor,
@@ -911,9 +911,9 @@ impl Udev {
             self.frame_flags,
         ) {
             Ok(mut result) => {
-                crate::session::update_primary_scanout_outputs(&self.state, &result.states);
+                crate::frame_clock::update_primary_scanout_outputs(&self.state, &result.states);
                 let mut feedback =
-                    crate::session::take_presentation_feedback(&self.state, &result.states);
+                    crate::frame_clock::take_presentation_feedback(&self.state, &result.states);
                 send_dmabuf_feedbacks(
                     &self.state,
                     &self.output,

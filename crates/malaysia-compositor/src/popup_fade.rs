@@ -51,7 +51,7 @@ fn snapshot(
 ) -> Option<GlesTexture> {
     let output_size = state.output.current_mode()?.size;
     let mut elements = Vec::new();
-    crate::session::append_popups(state, renderer, scale, &mut elements, |id| {
+    crate::scene_elements::append_popups(state, renderer, scale, &mut elements, |id| {
         shown.contains(&id)
     });
     let buffer_size = Size::<i32, BufferCoord>::from((output_size.w, output_size.h));

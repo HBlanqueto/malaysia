@@ -202,7 +202,7 @@ pub(crate) fn take_snapshot(
     scale: f64,
 ) -> Option<GlesTexture> {
     let start = Instant::now();
-    let elements = crate::session::build_output_elements(state, renderer, cursor, false);
+    let elements = crate::scene_elements::build_output_elements(state, renderer, cursor, false);
     let buffer_size = Size::<i32, BufferCoord>::from((output_size.w, output_size.h));
     let mut texture =
         Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, buffer_size).ok()?;

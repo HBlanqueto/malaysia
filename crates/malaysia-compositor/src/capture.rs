@@ -1,3 +1,5 @@
+use crate::config::ScreenshotTarget;
+use crate::scene_elements::{build_output_elements, build_window_elements};
 use std::{
     cell::RefCell,
     fs,
@@ -258,7 +260,7 @@ pub(crate) fn serve_pending(
                 };
                 (
                     *size,
-                    Some(crate::session::build_window_elements(
+                    Some(crate::scene_elements::build_window_elements(
                         renderer, &surface, scale,
                     )),
                 )
@@ -268,7 +270,7 @@ pub(crate) fn serve_pending(
         let drawn: &[OutputRenderElement<GlesRenderer>] = match &pending.target {
             CaptureTarget::Output { .. } if !pending.draw_cursor => {
                 without_cursor =
-                    crate::session::build_output_elements(state, renderer, cursor, false);
+                    crate::scene_elements::build_output_elements(state, renderer, cursor, false);
                 &without_cursor
             }
             _ => window_elements.as_deref().unwrap_or(elements),
@@ -520,6 +522,117 @@ fn capture_dir() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| Path::new("/tmp").to_path_buf());
     base.join("malaysia")
+}
+
+pub(crate) fn save_screenshot(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+    output_size: Size<i32, Physical>,
+    transform: Transform,
+    request: crate::state::ScreenshotRequest,
+) -> std::io::Result<ScreenshotOutcome> {
+    let scale = state.scale.fractional_scale();
+    let png = match request {
+        crate::state::ScreenshotRequest::Focused => match state.focused_window() {
+            Some(id) => capture_window_png(state, renderer, id, transform),
+            None => capture_output_png(state, renderer, cursor, output_size, transform, scale),
+        },
+        crate::state::ScreenshotRequest::Output => {
+            capture_output_png(state, renderer, cursor, output_size, transform, scale)
+        }
+        crate::state::ScreenshotRequest::Window(id) => {
+            capture_window_png(state, renderer, id, transform)
+        }
+        crate::state::ScreenshotRequest::Region(region) => {
+            let elements = screenshot_elements(state, renderer, cursor);
+            crate::capture::screenshot_region_png(
+                renderer,
+                &elements,
+                output_size,
+                transform,
+                region,
+                scale,
+            )
+        }
+    }?;
+
+    if matches!(state.config.screenshot.target, ScreenshotTarget::Clipboard) {
+        state.set_clipboard_png(png);
+        Ok(ScreenshotOutcome::Copied)
+    } else {
+        crate::capture::save_png(&png)?;
+        Ok(ScreenshotOutcome::Saved)
+    }
+}
+
+pub(crate) enum ScreenshotOutcome {
+    Saved,
+    Copied,
+}
+
+pub(crate) fn screenshot_elements(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+) -> Vec<OutputRenderElement<GlesRenderer>> {
+    let include_cursor = state.config.screenshot.show_pointer;
+    build_output_elements(state, renderer, cursor, include_cursor)
+}
+
+pub(crate) fn capture_window_png(
+    state: &State,
+    renderer: &mut GlesRenderer,
+    id: malaysia_scene::scene::WindowId,
+    transform: Transform,
+) -> std::io::Result<Vec<u8>> {
+    let scale = state.scale.fractional_scale();
+    let surface = state
+        .windows
+        .surface_of(id)
+        .cloned()
+        .ok_or_else(|| std::io::Error::other("screenshot: the window is gone"))?;
+    let rect = state
+        .windows
+        .usable_rect(id)
+        .ok_or_else(|| std::io::Error::other("screenshot: the window has no rect"))?;
+    let size = rect.size.to_f64().to_physical(scale).to_i32_round();
+    let elements = build_window_elements(renderer, &surface, scale);
+    crate::capture::screenshot_png(
+        renderer,
+        &elements,
+        size,
+        transform,
+        scale,
+        [0.0, 0.0, 0.0, 0.0],
+    )
+}
+
+pub(crate) fn capture_output_png(
+    state: &mut State,
+    renderer: &mut GlesRenderer,
+    cursor: &Cursors,
+    size: Size<i32, Physical>,
+    transform: Transform,
+    scale: f64,
+) -> std::io::Result<Vec<u8>> {
+    let elements = screenshot_elements(state, renderer, cursor);
+    crate::capture::screenshot_png(
+        renderer,
+        &elements,
+        size,
+        transform,
+        scale,
+        ctdesign::DESKTOP_CLEAR.premultiplied(),
+    )
+}
+
+pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
+    match result {
+        Ok(ScreenshotOutcome::Copied) => tracing::info!("screenshot copied to the clipboard"),
+        Ok(ScreenshotOutcome::Saved) => {}
+        Err(error) => tracing::warn!(%error, "screenshot failed"),
+    }
 }
 
 #[cfg(test)]
