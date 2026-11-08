@@ -85,6 +85,9 @@ They are not domain options; they are fixed and documented here:
 | `Ctrl+Alt+←` / `Ctrl+Alt+→` | shows the space to the left / right, without wrapping around (ADR 0051); not while the session is locked |
 | `Ctrl+Alt+N` | adds a desktop at the end of the row and shows it; at most 99 (ADR 0051) |
 | `Ctrl+Super+F` | enters or leaves focus mode with the focused window (ADR 0051) |
+| `Ctrl+Super+←/→/↑/↓` | moves the focused window to the left, right, top or bottom half (Infinity `arrange`); not while the session is locked |
+| `Shift+Ctrl+Super+←/→/↑/↓` | tiles the two front windows side by side or stacked, focused one first on the arrow's side (`arrange_pair`) |
+| `Ctrl+Super+Return` / `Ctrl+Super+C` / `Ctrl+Super+R` | fills the screen / centers / restores the focused window |
 
 ---
 

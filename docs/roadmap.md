@@ -53,8 +53,8 @@ central serials. **Done.** Typing, hover and cursor pixels are
 verified by hand. Test: `./dev.sh smoke`. `text-input-v3` and
 `input-method-v2` done, not accepted: input method popups appear
 below the text cursor, or above it if they do not fit. Test: `fcitx5` or `ibus` with
-a GTK app. `virtual-keyboard` and `virtual-pointer` done, not accepted, only
-for the trusted shell (like infinity); their events take the same
+a GTK app. `virtual-keyboard` and `virtual-pointer` done, not accepted, offered
+to every client outside a `security-context-v1` sandbox (`security::unrestricted`); their events take the same
 path as libinput, with shortcuts, lock and idle. Test: a shell probe that
 types into a focused `foot`.
 
@@ -75,7 +75,7 @@ work since `ab8e0b5`; reactive repositioning is still pending. Test:
 ### 6 — Clipboard
 
 `wl_data_device_manager` and primary selection, with focus tied to the keyboard.
-**Done.** The selection is per seat; drag & drop was not touched. Test: `wl-copy`
+**Done.** The selection is per seat; drag & drop goes through the same data device (`WaylandDndGrabHandler` in `handlers.rs`). Test: `wl-copy`
 in one client and `wl-paste` in another.
 
 ### 7 — linux-dmabuf and explicit sync
@@ -412,6 +412,6 @@ searching `crates/malaysia-compositor/src`.
   their effect.
 - **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3).
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
-  StatusNotifierItem tray, polkit agent, volume/network/battery/brightness
+  polkit agent, volume/network/battery/brightness
   indicators, OSD and media keys.
 

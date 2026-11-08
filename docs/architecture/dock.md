@@ -9,12 +9,11 @@ Native component (ADR 0023): a bottom dock that lists the open apps and activate
 ```
 ext-foreign-toplevel-list-v1 ──► window list (tiles)
 zwlr_foreign_toplevel_management_v1 ──► activate / close / minimize; active state
-dock.domain ──► tilesize, orientation
         ▼
 bk layer surface → layer-shell Top → Skia on Vulkan
 ```
 
-1. Surface on the `Top` layer, anchored at the bottom, height `tilesize + 2×padding` (64 px by default) and an equal `exclusive_zone`; windows do not go underneath.
+1. Surface on the `Top` layer, anchored at the bottom, height `DOCK_BAR_HEIGHT` from `ctdesign` and an equal `exclusive_zone`; windows do not go underneath. `dock.domain` is not read yet: every key in [`options.md`](../configuration/options.md#dock--shell-dock-malaysia-shell-dock-macos-comappledock) is pending.
 2. `ext-foreign-toplevel-list-v1` gives one tile per mapped window. Each tile shows the title on Tengen's `ShellPalette` (`tile`, active `tile_active`), chosen by `appearance.color_scheme`.
 3. A click sends `activate` through `zwlr_foreign_toplevel_management_v1`; the compositor restores the window if it was minimized, raises it and focuses it. `close`, `set_rectangle` and `set_minimized` are handled; `set_maximized` and `set_fullscreen` are recognized but not implemented.
 4. The active window is highlighted from the `activated` state of `zwlr_foreign_toplevel_management_v1`.

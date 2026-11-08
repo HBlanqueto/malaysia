@@ -13,7 +13,7 @@
   public name in barrierkit.
 - **Inputs:** Apple documentation and release notes, Apple open source,
   WWDC sessions, man pages, and Eclectic Light, yabai and similar sources
-  where Apple is silent. Malaysia at `1d5d25c`, barrierkit at `7172d25`.
+  where Apple is silent. Malaysia at `1d5d25c`, barrierkit at `7172d25` (section 8 applied on `798bc89`).
 - **Outputs:** the comparison tables (sections 1–6) and the proposals
   (section 8). Nothing here is decided; decisions go to an ADR.
 
@@ -78,14 +78,14 @@ Takeaways:
    they write the domain. A `domain` command that writes the file atomically
    gives the same result. D-Bus is only needed for actions that are not
    preferences.
-3. Two domains in different directories have the same name:
-   `~/.config/malaysia/window.domain` holds window preferences, and
-   `~/.local/share/malaysia/window.domain` holds the active app written by
-   `active.rs`. The second is state, and Malaysia already names state
-   `.state` (`wallpaper.state`, `<app_id>.state`).
-4. `options.md` and `docs/architecture/dock.md` say the dock reads
-   `dock.domain`; no code parses `dock.domain` or `effects.domain` (every key
-   is "pending", but `dock.md` presents them as live).
+3. The active app written by `active.rs` lived in
+   `~/.local/share/malaysia/window.domain`, the same name as the window
+   preferences in `~/.config/malaysia/`. It is state, so it is now
+   `innate.state` (Innate Domain, `glossary.md`). The watcher only reports
+   configuration domains, so the menubar takes the active app from
+   foreign-toplevel and records Recent Items from it; the file is the
+   fallback before the toplevel list arrives.
+4. No code parses `dock.domain` or `effects.domain`; `dock.md` now says so.
 
 ## 3. Appearance
 
@@ -95,7 +95,7 @@ Takeaways:
 | `AppleAccentColor` (integers −1…6) and app accent via `NSAccentColorName` when the user picks multicolor [A] ([HIG Color](https://developer.apple.com/design/human-interface-guidelines/color)) | 10.14, app accent 11 | `appearance.accent_color` as RGB or `null`; no "app picks its own accent" |
 | `NSApp.effectiveAppearance` KVO; appearances `aqua`, `darkAqua`, `vibrant*`, `accessibilityHighContrast*` [A] ([names](https://developer.apple.com/documentation/appkit/nsappearance/name-swift.struct)) | 10.14 | `bk::theme::resolved()` plus the inotify watch; GTK/Qt through the portal |
 | Semantic dynamic colours (`labelColor`, `controlAccentColor`, `windowBackgroundColor`) [A] | 10.14 | `ctdesign` tokens resolved per scheme |
-| Desktop tinting: `windowBackgroundColor` takes colour from the wallpaper in Dark mode; user toggle since 11 [A] ([docs](https://developer.apple.com/documentation/appkit/nscolor/windowbackgroundcolor)) | 10.14 | `window_color = wallpaper`, `window_tint_scope`, and a separate `color_scheme = dark_tint` |
+| Desktop tinting: `windowBackgroundColor` takes colour from the wallpaper in Dark mode; user toggle since 11 [A] ([docs](https://developer.apple.com/documentation/appkit/nscolor/windowbackgroundcolor)) | 10.14 | `window_color = wallpaper`, `window_tint_scope`; `color_scheme = dark_tint` is a separate, cooler dark palette (26 of 81 Tengen tokens differ), not a tint |
 | Reduce Transparency, Increase Contrast, Reduce Motion via `NSWorkspace` and `accessibilityDisplayOptionsDidChangeNotification` [A] ([NSWorkspace](https://developer.apple.com/documentation/appkit/nsworkspace)) | 10.10 / 10.12 | `reduce_transparency` (default `true`, ADR 0038), `contrast`, `reduced_motion` |
 | Liquid Glass `NSGlassEffectView`; Clear/Tinted choice; icon styles Default/Dark/Clear/Tinted [A] ([NSGlassEffectView](https://developer.apple.com/documentation/appkit/nsglasseffectview), [adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass)) | 26, Clear/Tinted 26.1 | `.glass` modifier and `ButtonStyle::glass` in bk; no icon styles |
 | Cross-fade on theme change | — | `theme_fade.rs` (ADR 0044); macOS does not document one |
@@ -104,9 +104,9 @@ Takeaways:
 
 1. The appearance path matches macOS closely, and the portal gives
    non-native apps what macOS gives only AppKit apps.
-2. `dark_tint` mixes two macOS settings into one value: the scheme
-   (Dark) and wallpaper tinting. In macOS tinting is a separate switch that
-   applies only in Dark. Malaysia already has that switch, `window_color`.
+2. Tinting is a separate switch in both: macOS's "Allow wallpaper tinting
+   in windows" and Malaysia's `window_color`. `dark_tint` has no macOS
+   counterpart; it is a second dark palette.
 3. macOS Auto follows the time of day. In Malaysia `auto` is the same as
    `light`, which is "auto" in name only.
 
@@ -124,7 +124,7 @@ Takeaways:
 | Quit: `applicationShouldTerminate` at app level; sudden/automatic termination [A] | loginwindow, Dock | Super+Q sends `xdg_toplevel.close` to each window of the `app_id` (`app_shortcuts.rs`) | different: no app-level quit |
 | Dock tile badge `NSDockTile.badgeLabel`, dock menu `applicationDockMenu` [A] ([NSDockTile](https://developer.apple.com/documentation/appkit/nsdocktile), [dock menu](https://developer.apple.com/documentation/appkit/nsapplicationdelegate/applicationdockmenu(_:))) | Dock draws them | none | missing |
 | `collectionBehavior` (`canJoinAllSpaces`, `managed`, `transient`, `stationary`, `primary`/`auxiliary`), window levels, `NSPanel` [A] ([docs](https://developer.apple.com/documentation/appkit/nswindow/collectionbehavior-swift.struct)) | Dock and WindowManager | `infinity_window_style_v1.set_panel` (`hides_on_deactivate`, `floating`, `key_only_if_needed`) and `UtilityWindow` | partial: no Spaces behaviour per window |
-| `NSWindow.ToolbarStyle` `unified`, `unifiedCompact`, `expanded` (11) [A] | AppKit | Infinity `set_bar`: `titlebar`, `compact`, `unified`, `utility` | done, different names |
+| `NSWindow.ToolbarStyle` `unified`, `unifiedCompact`, `expanded` (11) [A] | AppKit | Infinity `set_bar`: `titlebar` (no toolbar), `unified_compact`, `unified`, `utility` | done |
 | Window tabbing (10.12), full screen as a Space (10.7) [A] | AppKit, Dock | focus mode = full-screen space (ADR 0051); no tabs | partial |
 | `NSWindowRestoration` [A] | `talagent` | `<app_id>.state` | done |
 | `NSServices` + `pbs` [A] ([properties](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html)) | pasteboard server | none; Linux has no shared standard | empty submenu only |
@@ -211,9 +211,9 @@ Sources: Apple newsroom pages for
 
 ## 8. Proposals
 
-Each item says where it goes. None is done; each needs the author's decision.
+Each item says where it goes. Sections 8.1 and 8.2 are applied; the rest needs the author's decision.
 
-### 8.1 Documentation fixes (no code)
+### 8.1 Documentation fixes (applied)
 
 1. `docs/architecture/dock.md` and `options.md`: say that `dock.domain` and
    `effects.domain` are not read yet.
@@ -224,13 +224,15 @@ Each item says where it goes. None is done; each needs the author's decision.
    "virtual input only for the shell" with `security::unrestricted` in
    `state.rs` (any unsandboxed client can bind it).
 
-### 8.2 Renames
+### 8.2 Renames (applied)
 
-| Today | Proposal | Reason | Repo |
+| Before | After | Reason | Repo |
 |---|---|---|---|
-| `~/.local/share/malaysia/window.domain` (active app) | `frontmost.state` | name clash with the preferences file `window.domain`; state already uses `.state`; macOS calls it the frontmost application (`NSWorkspace.frontmostApplication`) | malaysia (`active.rs`, menubar, docs) |
-| Infinity `set_bar` entries `titlebar`, `compact`, `unified` | `expanded`, `unified_compact`, `unified` | `NSWindow.ToolbarStyle` names, per barrierkit's naming rule; the protocol summary already cites them. Needs a protocol version bump | barrierkit (`infinity-protocol`, `bk::window_style::Bar`), malaysia (`window_style.rs`) |
-| `color_scheme = "dark_tint"` | `dark` plus `window_color = "wallpaper"` | macOS keeps scheme and wallpaper tinting apart; `dark_tint` duplicates a setting that already exists. Check first that the `dark_tint` palette can be expressed with the tint settings | barrierkit (`ctappearance`), malaysia (portal, settings) |
+| `~/.local/share/malaysia/window.domain` (active app) | `innate.state` | clashed with the preferences file `window.domain`; state uses `.state`. macOS: `NSWorkspace.frontmostApplication` | malaysia |
+| Infinity `set_bar` entry `compact`, `bk` `Bar::Compact`, `WindowCorner::compact` | `unified_compact`, `Bar::UnifiedCompact`, `WindowCorner::unified_compact` | `NSWindow.ToolbarStyle.unifiedCompact`, per barrierkit's naming rule. Entry names are not on the wire, so the protocol version stays | barrierkit, malaysia |
+
+Kept: `titlebar` (a window without a toolbar has no `ToolbarStyle`) and
+`dark_tint` (a palette of its own, see section 3).
 
 ### 8.3 Copy as is (small, mapped to existing standards)
 
