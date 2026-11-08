@@ -93,14 +93,18 @@ fn a_lone_error_is_its_own_description() {
 }
 
 #[test]
-fn only_fullscreen_drops_the_frame() {
+fn maximized_squares_the_corners_and_only_fullscreen_drops_the_border() {
     use crate::decoration::{Role, WindowState};
 
+    assert_eq!(
+        frame_radius(None, WindowState::Normal, Role::Toplevel, false, None),
+        ctdesign::WINDOW_CORNER.titlebar
+    );
+    assert_eq!(
+        frame_radius(None, WindowState::Maximized, Role::Toplevel, false, None),
+        0
+    );
     for state in [WindowState::Normal, WindowState::Maximized] {
-        assert_eq!(
-            frame_radius(None, state, Role::Toplevel, false, None),
-            ctdesign::WINDOW_CORNER.titlebar
-        );
         assert!(frame_has_border(state));
     }
     assert_eq!(

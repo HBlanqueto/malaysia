@@ -108,8 +108,13 @@ impl Window<'_> {
         )
     }
 
-    pub fn state(&self) -> WindowState {
-        self.data.state()
+    // ADR 0037: focus mode tells a browser `maximized` so it keeps its tabs; its frame is still fullscreen.
+    pub fn frame_state(&self) -> WindowState {
+        if self.data.fullscreen {
+            WindowState::Fullscreen
+        } else {
+            self.data.state()
+        }
     }
 
     pub fn is_resizing(&self) -> bool {

@@ -580,7 +580,7 @@ pub(crate) fn frame_radius(
     client_decorated: bool,
     bar: Option<crate::window_style::Bar>,
 ) -> u32 {
-    if state == crate::decoration::WindowState::Fullscreen {
+    if state != crate::decoration::WindowState::Normal {
         return 0;
     }
     crate::window_style::corner_radius(forced, bar, role, client_decorated)
@@ -619,7 +619,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
             insets: window.insets(),
             is_client_decorated: window.is_client_decorated(),
             window_geometry: window.window_geometry(),
-            state: window.state(),
+            state: window.frame_state(),
             role: window.role(),
             resizing: window.is_resizing(),
         }
