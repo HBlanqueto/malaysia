@@ -130,3 +130,104 @@ macro_rules! shm_and_registry {
         }
     };
 }
+
+pub fn is_linear_capture_format(format: u32) -> bool {
+    matches!(format, 0x3432_5241 | 0x3432_5258)
+}
+
+#[macro_export]
+macro_rules! capture_session_and_frame {
+    ($app:ty, $probe:literal) => {
+        impl ::smithay_client_toolkit::reexports::client::Dispatch<
+            ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
+            (),
+        > for $app
+        {
+            fn event(
+                state: &mut Self,
+                _: &::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
+                event: ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event,
+                _: &(),
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                qh: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+            ) {
+                use ::smithay_client_toolkit::reexports::client::WEnum;
+                use ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_session_v1::Event;
+                match event {
+                    Event::BufferSize { width, height } => {
+                        state.size = Some((width as i32, height as i32));
+                    }
+                    Event::ShmFormat { format } => {
+                        if state.shm_format.is_none() {
+                            if let WEnum::Value(format) = format {
+                                state.shm_format = Some(format);
+                            }
+                        }
+                    }
+                    Event::DmabufDevice { .. } => {
+                        state.dma_offered = true;
+                    }
+                    Event::DmabufFormat { format, modifiers } => {
+                        state.dma_offered = true;
+                        if state.dma_format.is_none() && $crate::is_linear_capture_format(format) {
+                            let linear = modifiers
+                                .as_chunks::<8>()
+                                .0
+                                .iter()
+                                .map(|chunk| u64::from_le_bytes(*chunk))
+                                .find(|modifier| *modifier == 0);
+                            if let Some(modifier) = linear {
+                                state.dma_format = Some((format, modifier));
+                            }
+                        }
+                    }
+                    Event::Done => {
+                        println!(
+                            "{}: constraints done (dma-buf offered: {})",
+                            $probe, state.dma_offered
+                        );
+                        state.done = true;
+                        state.start_capture(qh);
+                    }
+                    Event::Stopped => {
+                        eprintln!("{}: FAIL the compositor stopped the session", $probe);
+                        state.failed = true;
+                        state.loop_signal.stop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        impl ::smithay_client_toolkit::reexports::client::Dispatch<
+            ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
+            (),
+        > for $app
+        {
+            fn event(
+                state: &mut Self,
+                _: &::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
+                event: ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event,
+                _: &(),
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+            ) {
+                use ::smithay_client_toolkit::reexports::protocols::ext::image_copy_capture::v1::client::ext_image_copy_capture_frame_v1::Event;
+                match event {
+                    Event::Ready => {
+                        println!("{}: frame ready", $probe);
+                        state.check_pixels();
+                        state.ready = true;
+                        state.loop_signal.stop();
+                    }
+                    Event::Failed { reason } => {
+                        eprintln!("{}: FAIL the frame failed: {reason:?}", $probe);
+                        state.failed = true;
+                        state.loop_signal.stop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
+}

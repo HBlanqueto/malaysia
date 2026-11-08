@@ -4,7 +4,7 @@ use smithay_client_toolkit::{
     delegate_registry, delegate_shm,
     reexports::{
         calloop,
-        client::{self as wayland_client, Connection, Dispatch, QueueHandle, WEnum},
+        client::{self as wayland_client, QueueHandle},
         protocols::{
             ext::{
                 image_capture_source::v1::client::{
@@ -12,13 +12,9 @@ use smithay_client_toolkit::{
                     ext_output_image_capture_source_manager_v1::ExtOutputImageCaptureSourceManagerV1,
                 },
                 image_copy_capture::v1::client::{
-                    ext_image_copy_capture_frame_v1::{
-                        Event as FrameEvent, ExtImageCopyCaptureFrameV1,
-                    },
+                    ext_image_copy_capture_frame_v1::ExtImageCopyCaptureFrameV1,
                     ext_image_copy_capture_manager_v1::{ExtImageCopyCaptureManagerV1, Options},
-                    ext_image_copy_capture_session_v1::{
-                        Event as SessionEvent, ExtImageCopyCaptureSessionV1,
-                    },
+                    ext_image_copy_capture_session_v1::ExtImageCopyCaptureSessionV1,
                 },
             },
             wp::linux_dmabuf::zv1::client::{
@@ -309,86 +305,7 @@ smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCa
 
 smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
 
-impl Dispatch<ExtImageCopyCaptureSessionV1, ()> for App {
-    fn event(
-        state: &mut Self,
-        _: &ExtImageCopyCaptureSessionV1,
-        event: SessionEvent,
-        _: &(),
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-    ) {
-        match event {
-            SessionEvent::BufferSize { width, height } => {
-                state.size = Some((width as i32, height as i32));
-            }
-            SessionEvent::ShmFormat { format } => {
-                if state.shm_format.is_none() {
-                    if let WEnum::Value(format) = format {
-                        state.shm_format = Some(format);
-                    }
-                }
-            }
-            SessionEvent::DmabufDevice { .. } => {
-                state.dma_offered = true;
-            }
-            SessionEvent::DmabufFormat { format, modifiers } => {
-                state.dma_offered = true;
-                if state.dma_format.is_none() && is_linear_capture_format(format) {
-                    let linear = modifiers
-                        .as_chunks::<8>()
-                        .0
-                        .iter()
-                        .map(|chunk| u64::from_le_bytes(*chunk))
-                        .find(|modifier| *modifier == 0);
-                    if let Some(modifier) = linear {
-                        state.dma_format = Some((format, modifier));
-                    }
-                }
-            }
-            SessionEvent::Done => {
-                println!(
-                    "screencopy: constraints done (dma-buf offered: {})",
-                    state.dma_offered
-                );
-                state.done = true;
-                state.start_capture(qh);
-            }
-            SessionEvent::Stopped => {
-                eprintln!("screencopy: FAIL the compositor stopped the session");
-                state.failed = true;
-                state.loop_signal.stop();
-            }
-            _ => {}
-        }
-    }
-}
-
-impl Dispatch<ExtImageCopyCaptureFrameV1, ()> for App {
-    fn event(
-        state: &mut Self,
-        _: &ExtImageCopyCaptureFrameV1,
-        event: FrameEvent,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match event {
-            FrameEvent::Ready => {
-                println!("screencopy: frame ready");
-                state.check_pixels();
-                state.ready = true;
-                state.loop_signal.stop();
-            }
-            FrameEvent::Failed { reason } => {
-                eprintln!("screencopy: FAIL the frame failed: {reason:?}");
-                state.failed = true;
-                state.loop_signal.stop();
-            }
-            _ => {}
-        }
-    }
-}
+sctk_probe::capture_session_and_frame!(App, "screencopy");
 
 delegate_registry!(App);
 delegate_shm!(App);
@@ -398,7 +315,3 @@ smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxDm
 smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
 
 smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WlBuffer);
-
-fn is_linear_capture_format(format: u32) -> bool {
-    matches!(format, 0x3432_5241 | 0x3432_5258)
-}
