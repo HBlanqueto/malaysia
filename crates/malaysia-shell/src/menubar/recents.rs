@@ -36,7 +36,7 @@ struct Document {
 }
 
 fn store_path() -> PathBuf {
-    data_dir().join("recents.domain")
+    data_dir().join("recents.state")
 }
 
 impl Recents {
