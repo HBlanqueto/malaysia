@@ -279,9 +279,8 @@ pub fn menu_title(
             .show_loader(false)
             .into_element()
     } else {
-        let mut text = label()
-            .text(label_text.clone())
-            .max_lines(1)
+        let mut text = Text::new(label_text.clone())
+            .line_limit(1)
             .max_width(Size::px(MENUBAR_TITLE_MAX_WIDTH))
             .color(fg);
         if spec.bold {

@@ -264,9 +264,10 @@ fn window_color_cards(
     }))
 }
 
-fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) -> Rect {
-    rect()
-        .direction(Direction::Vertical)
+fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) -> VStack {
+    VStack::new()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Start)
         .spacing(SETTINGS.check.row_gap as f32)
         .children(PARTS.iter().map(|&(label, part)| {
             let mut current = parts;

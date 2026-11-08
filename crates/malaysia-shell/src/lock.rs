@@ -98,11 +98,10 @@ impl App for LockApp {
         let accent = theme::color(palette.accent);
         let danger = theme::color(palette.danger);
 
-        rect()
+        VStack::new()
             .width(Size::fill())
             .height(Size::fill())
             .background(background)
-            .direction(Direction::Vertical)
             .main_align(Alignment::Center)
             .cross_align(Alignment::Center)
             .spacing(LOCK_LABEL_OFFSET as f32)
@@ -116,14 +115,12 @@ impl App for LockApp {
                 }
             })
             .child(
-                label()
-                    .text(tr!("lock-title"))
+                Text::new(tr!("lock-title"))
                     .font_size(LOCK_FONT_SIZE * LOCK_TITLE_SCALE)
                     .color(ink),
             )
             .child(
-                label()
-                    .text(self.label.read().clone())
+                Text::new(self.label.read().clone())
                     .font_size(LOCK_LABEL_FONT_SIZE)
                     .color(muted),
             )
@@ -135,19 +132,18 @@ impl App for LockApp {
                     .background(if error.is_some() { danger } else { accent })
                     .corner_radius((LOCK_FIELD_HEIGHT / 4) as f32)
                     .child(
-                        label()
-                            .text(if masked.is_empty() {
-                                tr!("lock-password").to_string()
-                            } else {
-                                masked
-                            })
-                            .font_size(LOCK_MASK_FONT_SIZE)
-                            .color(background),
+                        Text::new(if masked.is_empty() {
+                            tr!("lock-password").to_string()
+                        } else {
+                            masked
+                        })
+                        .font_size(LOCK_MASK_FONT_SIZE)
+                        .color(background),
                     ),
             )
             .child(match error {
-                Some(text) => label().text(text).color(danger),
-                None => label().text(" ").color(muted),
+                Some(text) => Text::new(text).color(danger),
+                None => Text::new(" ").color(muted),
             })
     }
 }

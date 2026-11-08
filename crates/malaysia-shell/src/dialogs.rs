@@ -52,39 +52,38 @@ fn close() {
     std::process::exit(0);
 }
 
-fn panel() -> Rect {
+fn panel() -> VStack {
     let resolved = bk::theme::resolved();
-    rect()
+    VStack::new()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Start)
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
         .padding(DIALOG_PADDING)
-        .direction(Direction::Vertical)
         .spacing(DIALOG_PADDING / 2.0)
 }
 
-fn title(text: &str) -> Label {
+fn title(text: &str) -> Text {
     let palette = Palette::current();
-    label()
-        .text(text.to_string())
+    Text::new(text.to_string())
         .font_size(HEADLINE.size as f32)
         .font_weight(FontWeight::BOLD)
         .color(theme::color(palette.label))
 }
 
-fn body(text: &str) -> Label {
+fn body(text: &str) -> Text {
     let palette = Palette::current();
-    label()
-        .text(text.to_string())
+    Text::new(text.to_string())
         .font_size(BODY.size as f32)
         .color(theme::color(palette.secondary_label))
 }
 
-fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) -> Rect {
-    rect()
+fn buttons(default_label: &str, on_default: impl Fn() + 'static, enabled: bool) -> HStack {
+    HStack::new()
+        .cross_align(Alignment::Start)
         .width(Size::fill())
         .height(Size::auto())
-        .direction(Direction::Horizontal)
         .main_align(Alignment::End)
         .spacing(DIALOG_PADDING / 2.0)
         .child(Button::new(tr!("dialog-cancel")).on_press(|_| close()))
@@ -171,11 +170,12 @@ fn power_badge(glyph: &'static str) -> Rect {
         )
 }
 
-fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> Rect {
-    rect()
+fn wide_buttons(default_label: &str, on_default: impl Fn() + 'static) -> HStack {
+    HStack::new()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Start)
         .width(Size::fill())
         .height(Size::auto())
-        .direction(Direction::Horizontal)
         .content(Content::Flex)
         .spacing(CONFIRM_BUTTON_GAP)
         .child(
@@ -207,7 +207,7 @@ impl App for ConfirmApp {
     }
 }
 
-fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
+fn confirm_view(action: PowerAction, seconds: u32) -> VStack {
     let confirm = move || {
         power::run(action);
         close();
@@ -224,18 +224,16 @@ fn confirm_view(action: PowerAction, seconds: u32) -> Rect {
         })
         .child(power_badge(text.glyph))
         .child(
-            label()
+            Text::new(text.question)
                 .width(Size::fill())
                 .padding(Gaps::new(14.0, 0.0, SPACE_2, 0.0))
-                .text(text.question)
                 .font_size(BODY.size as f32)
                 .font_weight(FontWeight::BOLD)
                 .color(theme::color(palette.label)),
         )
         .child(
-            label()
+            Text::new(countdown_text(action, seconds))
                 .width(Size::fill())
-                .text(countdown_text(action, seconds))
                 .font_size(CALLOUT.size as f32)
                 .color(theme::color(palette.label)),
         )
@@ -326,7 +324,8 @@ impl App for ForceQuitApp {
         let rows = apps.iter().enumerate().map(|(row, app)| {
             let name = resolve_app_name(Some(&app.app_id), &self.entries);
             let mut selected_state = self.selected;
-            rect()
+            HStack::new()
+                .main_align(Alignment::Start)
                 .width(Size::fill())
                 .height(Size::px(ROW_HEIGHT))
                 .corner_radius(SIDEBAR.item_radius as f32)
@@ -336,12 +335,11 @@ impl App for ForceQuitApp {
                     Color::TRANSPARENT
                 })
                 .padding(Gaps::new(0.0, SPACE_2, 0.0, SPACE_2))
-                .direction(Direction::Horizontal)
                 .cross_align(Alignment::Center)
                 .spacing(SPACE_2)
                 .on_press(move |_| selected_state.set(row))
                 .child(app_icon(self.icon(&app.app_id).as_ref(), &name, ICON_SIZE))
-                .child(label().text(name).font_size(BODY.size as f32).color(text))
+                .child(Text::new(name).font_size(BODY.size as f32).color(text))
                 .into_element()
         });
 
@@ -363,10 +361,11 @@ impl App for ForceQuitApp {
             .child(title(tr!("force-quit-title")))
             .child(body(tr!("force-quit-body")))
             .child(
-                rect()
+                VStack::new()
+                    .main_align(Alignment::Start)
+                    .cross_align(Alignment::Start)
                     .width(Size::fill())
                     .height(Size::flex(1.0))
-                    .direction(Direction::Vertical)
                     .spacing(2.0)
                     .children(rows),
             )
@@ -711,12 +710,12 @@ fn spec_rows(info: &AboutInfo, palette: &Palette) -> Vec<Element> {
         .ceil();
     rows.into_iter()
         .map(|(name, value)| {
-            rect()
-                .direction(Direction::Horizontal)
+            HStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Start)
                 .spacing(ABOUT_COLUMN_GAP)
                 .child(
-                    label()
-                        .text(name)
+                    Text::new(name)
                         .width(Size::px(label_width))
                         .text_align(TextAlign::Right)
                         .font_size(CAPTION.size as f32)
@@ -724,8 +723,7 @@ fn spec_rows(info: &AboutInfo, palette: &Palette) -> Vec<Element> {
                         .color(theme::color(palette.label)),
                 )
                 .child(
-                    label()
-                        .text(value)
+                    Text::new(value)
                         .width(Size::px(ABOUT_VALUE_WIDTH))
                         .font_size(CAPTION.size as f32)
                         .color(theme::color(palette.secondary_label)),
@@ -745,17 +743,17 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
     };
     let muted = theme::color(palette.secondary_label);
     let footer = |text: &str| {
-        label()
-            .text(text.to_string())
+        Text::new(text.to_string())
             .font_size(CAPTION.size as f32)
             .color(muted)
     };
-    rect()
+    VStack::new()
+        .main_align(Alignment::Start)
+        .spacing(0.0)
         .width(Size::fill())
         .height(Size::fill())
         .background(theme::color(resolved.surfaces.raised))
         .font_family(BODY.family)
-        .direction(Direction::Vertical)
         .content(Content::flex())
         .cross_align(Alignment::Center)
         .on_global_key_down(|event: Event<KeyboardEventData>| {
@@ -782,8 +780,7 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
                 ),
         )
         .child(
-            label()
-                .text(info.model.clone())
+            Text::new(info.model.clone())
                 .text_align(TextAlign::Center)
                 .width(Size::fill())
                 .font_size(ABOUT_TITLE_SIZE)
@@ -791,15 +788,15 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
                 .color(theme::color(palette.label)),
         )
         .child(
-            label()
-                .text(info.subtitle.clone())
+            Text::new(info.subtitle.clone())
                 .margin(Gaps::new(0.0, 0.0, ABOUT_SPECS_GAP, 0.0))
                 .font_size(CALLOUT.size as f32)
                 .color(muted),
         )
         .child(
-            rect()
-                .direction(Direction::Vertical)
+            VStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Start)
                 .spacing(ABOUT_SPEC_ROW_GAP)
                 .children(spec_rows(info, &palette)),
         )
@@ -814,8 +811,9 @@ fn about_view(info: &AboutInfo) -> impl IntoElement + use<> {
         )
         .child(rect().width(Size::fill()).height(Size::flex(1.0)))
         .child(
-            rect()
-                .direction(Direction::Vertical)
+            VStack::new()
+                .main_align(Alignment::Start)
+                .spacing(0.0)
                 .cross_align(Alignment::Center)
                 .margin(Gaps::new(0.0, 0.0, ABOUT_FOOTER_BOTTOM, 0.0))
                 .child(footer(tr!("about-copyright")))
@@ -848,7 +846,10 @@ impl App for AboutAppInfo {
         bk::theme::use_shell_theme();
         let resolved = bk::theme::resolved();
         let focused = WindowControls::get().status.read().activated;
-        rect()
+        VStack::new()
+            .main_align(Alignment::Start)
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
             .width(Size::fill())
             .height(Size::fill())
             .background(theme::color(if focused {
@@ -856,7 +857,6 @@ impl App for AboutAppInfo {
             } else {
                 resolved.surfaces.titlebar_inactive
             }))
-            .direction(Direction::Vertical)
             .content(Content::flex())
             .on_global_key_down(|event: Event<KeyboardEventData>| {
                 if matches!(event.key, Key::Named(NamedKey::Escape)) {

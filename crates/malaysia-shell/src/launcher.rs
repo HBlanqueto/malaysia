@@ -111,9 +111,10 @@ impl App for LauncherApp {
             ContentUnavailableView::new(tr!("launcher-no-results"), Symbol::MagnifyingGlass)
                 .into_element()
         } else {
-            rect()
+            VStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Start)
                 .width(Size::fill())
-                .direction(Direction::Vertical)
                 .spacing(LAUNCHER_RESULT_GAP as f32)
                 .children(rows)
                 .into_element()
@@ -131,7 +132,9 @@ impl App for LauncherApp {
                 }
             })
             .child(
-                rect()
+                VStack::new()
+                    .main_align(Alignment::Start)
+                    .cross_align(Alignment::Start)
                     .width(Size::px(LAUNCHER_WIDTH as f32))
                     .height(Size::px(LAUNCHER_HEIGHT as f32))
                     .background(background)
@@ -139,7 +142,6 @@ impl App for LauncherApp {
                     .opacity(progress)
                     .scale(scale)
                     .padding(LAUNCHER_PADDING as f32)
-                    .direction(Direction::Vertical)
                     .spacing(LAUNCHER_PADDING as f32)
                     .child(
                         rect()
@@ -233,8 +235,7 @@ pub(crate) fn app_icon(icon: Option<&IconData>, name: &str, size: f32) -> Elemen
                 .background(theme::color(fill))
                 .center()
                 .child(
-                    label()
-                        .text(name.chars().next().unwrap_or('?').to_string())
+                    Text::new(name.chars().next().unwrap_or('?').to_string())
                         .font_size(LAUNCHER_FONT_SIZE)
                         .color(text),
                 )
@@ -257,7 +258,8 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
     );
 
     let subtitle = entry.desktop.generic_name.clone().unwrap_or_default();
-    rect()
+    HStack::new()
+        .main_align(Alignment::Start)
         .width(Size::fill())
         .height(Size::px(LAUNCHER_RESULT_HEIGHT as f32))
         .corner_radius(ctdesign::LAUNCHER_RESULT_RADIUS)
@@ -266,25 +268,23 @@ fn result_row(entry: &AppEntry, selected: bool, launch: impl Fn() + 'static) -> 
         } else {
             Color::TRANSPARENT
         })
-        .direction(Direction::Horizontal)
         .cross_align(Alignment::Center)
         .spacing(10.0)
         .padding(Gaps::new(0.0, 10.0, 0.0, 10.0))
         .on_press(move |_| launch())
         .child(icon)
         .child(
-            rect()
-                .direction(Direction::Vertical)
+            VStack::new()
+                .cross_align(Alignment::Start)
+                .spacing(0.0)
                 .main_align(Alignment::Center)
                 .child(
-                    label()
-                        .text(entry.desktop.name.clone())
+                    Text::new(entry.desktop.name.clone())
                         .font_size(LAUNCHER_FONT_SIZE)
                         .color(text),
                 )
                 .maybe_child((!subtitle.is_empty()).then(|| {
-                    label()
-                        .text(subtitle)
+                    Text::new(subtitle)
                         .font_size(LAUNCHER_SUBTITLE_FONT_SIZE)
                         .color(muted)
                 })),

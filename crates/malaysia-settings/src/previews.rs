@@ -78,9 +78,11 @@ fn preview_panel(resolved: &Resolved, align: Alignment) -> Rect {
         .background(rgba(resolved.surfaces.window))
 }
 
-fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
+fn preview_menu(resolved: &Resolved, accent: Rgba) -> VStack {
     let padding = SETTINGS.preview_menu_padding as f32;
-    rect()
+    VStack::new()
+        .main_align(Alignment::Start)
+        .cross_align(Alignment::Start)
         .position(
             Position::new_absolute()
                 .left(SETTINGS.preview_menu_x as f32)
@@ -92,7 +94,6 @@ fn preview_menu(resolved: &Resolved, accent: Rgba) -> Rect {
         .spacing(padding)
         .corner_radius(SETTINGS.preview_radius as f32)
         .background(rgba(resolved.surfaces.window))
-        .direction(Direction::Vertical)
         .child(
             rect()
                 .width(Size::fill())
@@ -130,13 +131,14 @@ fn preview_app(resolved: &Resolved) -> Rect {
                 .background(rgba(resolved.surfaces.sunken)),
         )
         .child(
-            rect()
+            HStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Start)
                 .position(
                     Position::new_absolute()
                         .left(SETTINGS.preview_dots_inset as f32)
                         .top(SETTINGS.preview_dots_inset as f32),
                 )
-                .direction(Direction::Horizontal)
                 .spacing(dot_gap)
                 .children(resolved.lights.iter().map(|color| {
                     rect()
@@ -189,15 +191,14 @@ pub fn window_color_preview(
     )
 }
 
-pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> Rect {
+pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> HStack {
     let diameter = TITLEBAR.buttons.diameter as f32;
     let radius = shape.corner_radius(diameter);
-    rect()
+    HStack::new()
         .width(Size::fill())
         .height(Size::fill())
         .corner_radius(SETTINGS.card_radius as f32)
         .background(rgba(resolved.surfaces.sunken))
-        .direction(Direction::Horizontal)
         .main_align(Alignment::Center)
         .cross_align(Alignment::Center)
         .spacing(TITLEBAR.buttons.spacing as f32)

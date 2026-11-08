@@ -55,8 +55,7 @@ impl App for DockApp {
                 .center()
                 .on_press(move |_| toplevels.activate(id))
                 .child(
-                    label()
-                        .text(initial)
+                    Text::new(initial)
                         .font_size(DOCK_FONT_SIZE)
                         .color(if is_active { active_text } else { text }),
                 );
@@ -71,11 +70,10 @@ impl App for DockApp {
             .into_element()
         });
 
-        rect()
+        HStack::new()
             .width(Size::fill())
             .height(Size::fill())
             .background(background)
-            .direction(Direction::Horizontal)
             .center()
             .spacing(DOCK_GAP as f32)
             .padding(DOCK_PADDING as f32)

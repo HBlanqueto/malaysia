@@ -309,8 +309,9 @@ impl App for BarApp {
             ));
         }
         let titles = Rc::new(specs);
-        let mut left = rect()
-            .direction(Direction::Horizontal)
+        let mut left = HStack::new()
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
             .main_align(Alignment::Start);
         for index in 0..titles.len() {
             left = left.child(menu::menu_title(
@@ -323,7 +324,11 @@ impl App for BarApp {
 
         let shown = status_items.read().clone();
         let status_specs = Rc::new(status::status_titles(&shown, &status_host, &status_anchors));
-        let mut right = rect().height(Size::fill()).direction(Direction::Horizontal);
+        let mut right = HStack::new()
+            .main_align(Alignment::Start)
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
+            .height(Size::fill());
         for (index, item) in shown.iter().enumerate() {
             right = right.child(if item.menu.is_empty() {
                 status::activate_only(item, &status_host)
@@ -552,12 +557,13 @@ impl BarApp {
     }
 }
 
-fn bar_root(background: Color) -> Rect {
-    let mut root = rect()
+fn bar_root(background: Color) -> HStack {
+    let mut root = HStack::new()
+        .cross_align(Alignment::Start)
+        .spacing(0.0)
         .width(Size::fill())
         .height(Size::fill())
         .background(background)
-        .direction(Direction::Horizontal)
         .main_align(Alignment::SpaceBetween)
         .padding(Gaps::new(
             0.0,
