@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_pointer, delegate_registry, delegate_seat,
     delegate_shm, delegate_xdg_shell, delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::{
         calloop,
         client::{self as wayland_client, Connection, QueueHandle},
@@ -13,8 +13,7 @@ use smithay_client_toolkit::{
             zwp_locked_pointer_v1::ZwpLockedPointerV1, zwp_pointer_constraints_v1::Lifetime,
         },
     },
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
+    registry::RegistryState,
     seat::{
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
         pointer_constraints::{PointerConstraintsHandler, PointerConstraintsState},
@@ -29,15 +28,11 @@ use smithay_client_toolkit::{
     },
     shm::{
         slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
+        Shm,
     },
 };
 use wayland_client::protocol::{
-    wl_output::{self, WlOutput},
-    wl_pointer::WlPointer,
-    wl_seat::WlSeat,
-    wl_shm,
-    wl_surface::WlSurface,
+    wl_pointer::WlPointer, wl_seat::WlSeat, wl_shm, wl_surface::WlSurface,
 };
 
 const SIDE: i32 = 64;
@@ -147,41 +142,7 @@ impl App {
     }
 }
 
-impl CompositorHandler for App {
-    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {}
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: i32,
-    ) {
-    }
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-}
+sctk_probe::noop_compositor_handler!(App);
 
 impl WindowHandler for App {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {}
@@ -202,20 +163,9 @@ impl WindowHandler for App {
     }
 }
 
-impl OutputHandler for App {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(App);
 
-impl ShmHandler for App {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
+sctk_probe::shm_and_registry!(App);
 
 impl SeatHandler for App {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -313,13 +263,6 @@ impl PointerConstraintsHandler for App {
         _: &WlPointer,
     ) {
     }
-}
-
-impl ProvidesRegistryState for App {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState,];
 }
 
 delegate_compositor!(App);

@@ -8,10 +8,10 @@ use std::{
 };
 
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_pointer, delegate_registry, delegate_seat,
     delegate_shm, delegate_xdg_shell, delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::{
         calloop,
         client::{self as wayland_client, Connection, Dispatch, Proxy, QueueHandle},
@@ -20,8 +20,7 @@ use smithay_client_toolkit::{
             xdg_activation_v1::XdgActivationV1,
         },
     },
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
+    registry::RegistryState,
     seat::{
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
         Capability, SeatHandler, SeatState,
@@ -35,16 +34,14 @@ use smithay_client_toolkit::{
     },
     shm::{
         slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
+        Shm,
     },
 };
 use wayland_client::protocol::{
     wl_keyboard::{self, WlKeyboard},
-    wl_output::{self, WlOutput},
     wl_pointer::WlPointer,
     wl_seat::WlSeat,
     wl_shm,
-    wl_surface::WlSurface,
 };
 
 const SIDE: i32 = 64;
@@ -390,41 +387,7 @@ impl Parent {
     }
 }
 
-impl CompositorHandler for Parent {
-    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {}
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: i32,
-    ) {
-    }
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-}
+sctk_probe::noop_compositor_handler!(Parent);
 
 impl WindowHandler for Parent {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {}
@@ -450,20 +413,9 @@ impl WindowHandler for Parent {
     }
 }
 
-impl OutputHandler for Parent {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(Parent);
 
-impl ShmHandler for Parent {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
+sctk_probe::shm_and_registry!(Parent);
 
 impl SeatHandler for Parent {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -583,13 +535,6 @@ impl Dispatch<XdgActivationTokenV1, String> for Parent {
             state.tokens.insert(label.clone(), token);
         }
     }
-}
-
-impl ProvidesRegistryState for Parent {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState,];
 }
 
 delegate_compositor!(Parent);
@@ -749,41 +694,7 @@ impl ChildApp {
     }
 }
 
-impl CompositorHandler for ChildApp {
-    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {}
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: i32,
-    ) {
-    }
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-}
+sctk_probe::noop_compositor_handler!(ChildApp);
 
 impl WindowHandler for ChildApp {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
@@ -815,20 +726,9 @@ impl WindowHandler for ChildApp {
     }
 }
 
-impl OutputHandler for ChildApp {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(ChildApp);
 
-impl ShmHandler for ChildApp {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
+sctk_probe::shm_and_registry!(ChildApp);
 
 impl SeatHandler for ChildApp {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -923,13 +823,6 @@ impl Dispatch<XdgActivationTokenV1, String> for ChildApp {
             }
         }
     }
-}
-
-impl ProvidesRegistryState for ChildApp {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState,];
 }
 
 delegate_compositor!(ChildApp);

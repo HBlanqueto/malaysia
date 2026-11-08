@@ -31,3 +31,102 @@ where
 
     (event_loop, globals, qh)
 }
+
+#[macro_export]
+macro_rules! noop_compositor_handler {
+    ($app:ty) => {
+        impl ::smithay_client_toolkit::compositor::CompositorHandler for $app {
+            fn frame(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: u32,
+            ) {
+            }
+            fn surface_enter(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+            ) {
+            }
+            fn surface_leave(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+            ) {
+            }
+            fn scale_factor_changed(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: i32,
+            ) {
+            }
+            fn transform_changed(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: &::smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::Transform,
+            ) {
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! noop_output_handler {
+    ($app:ty) => {
+        impl ::smithay_client_toolkit::output::OutputHandler for $app {
+            fn output_state(&mut self) -> &mut ::smithay_client_toolkit::output::OutputState {
+                &mut self.output_state
+            }
+            fn new_output(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+            ) {
+            }
+            fn update_output(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+            ) {
+            }
+            fn output_destroyed(
+                &mut self,
+                _: &::smithay_client_toolkit::reexports::client::Connection,
+                _: &::smithay_client_toolkit::reexports::client::QueueHandle<Self>,
+                _: ::smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+            ) {
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! shm_and_registry {
+    ($app:ty) => {
+        impl ::smithay_client_toolkit::shm::ShmHandler for $app {
+            fn shm_state(&mut self) -> &mut ::smithay_client_toolkit::shm::Shm {
+                &mut self.shm
+            }
+        }
+        impl ::smithay_client_toolkit::registry::ProvidesRegistryState for $app {
+            fn registry(&mut self) -> &mut ::smithay_client_toolkit::registry::RegistryState {
+                &mut self.registry_state
+            }
+            ::smithay_client_toolkit::registry_handlers![
+                ::smithay_client_toolkit::output::OutputState,
+            ];
+        }
+    };
+}

@@ -1,14 +1,10 @@
 use std::time::Duration;
 
-use smithay_client_toolkit::reexports::client::protocol::{
-    wl_output::{self, WlOutput},
-    wl_surface::WlSurface,
-};
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::{
         calloop,
         client::{Connection, Dispatch, Proxy, QueueHandle},
@@ -17,8 +13,7 @@ use smithay_client_toolkit::{
             zxdg_toplevel_decoration_v1::{self, Mode, ZxdgToplevelDecorationV1},
         },
     },
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
+    registry::RegistryState,
     shell::{
         xdg::{
             window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
@@ -26,7 +21,7 @@ use smithay_client_toolkit::{
         },
         WaylandSurface,
     },
-    shm::{Shm, ShmHandler},
+    shm::Shm,
 };
 
 const NATIVE_PREFIX: &str = "io.github.hblanqueto.malaysia.";
@@ -129,41 +124,7 @@ struct App {
     loop_signal: calloop::LoopSignal,
 }
 
-impl CompositorHandler for App {
-    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {}
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: i32,
-    ) {
-    }
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-}
+sctk_probe::noop_compositor_handler!(App);
 
 impl WindowHandler for App {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {}
@@ -204,27 +165,9 @@ impl WindowHandler for App {
     }
 }
 
-impl OutputHandler for App {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(App);
 
-impl ShmHandler for App {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
-
-impl ProvidesRegistryState for App {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState,];
-}
+sctk_probe::shm_and_registry!(App);
 
 impl Dispatch<ZxdgDecorationManagerV1, ()> for App {
     fn event(

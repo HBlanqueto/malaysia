@@ -4,13 +4,12 @@ use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_output, delegate_registry, delegate_shm, delegate_xdg_shell,
     delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::{
         calloop,
         client::{self as wayland_client, Connection, QueueHandle},
     },
-    registry::{ProvidesRegistryState, RegistryState},
-    registry_handlers,
+    registry::RegistryState,
     shell::{
         xdg::{
             window::{Window, WindowConfigure, WindowDecorations, WindowHandler},
@@ -20,7 +19,7 @@ use smithay_client_toolkit::{
     },
     shm::{
         slot::{Buffer, SlotPool},
-        Shm, ShmHandler,
+        Shm,
     },
 };
 use wayland_client::protocol::{
@@ -185,27 +184,9 @@ impl WindowHandler for App {
     }
 }
 
-impl OutputHandler for App {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(App);
 
-impl ShmHandler for App {
-    fn shm_state(&mut self) -> &mut Shm {
-        &mut self.shm
-    }
-}
-
-impl ProvidesRegistryState for App {
-    fn registry(&mut self) -> &mut RegistryState {
-        &mut self.registry_state
-    }
-    registry_handlers![OutputState,];
-}
+sctk_probe::shm_and_registry!(App);
 
 delegate_compositor!(App);
 delegate_output!(App);

@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::CompositorState,
     delegate_compositor, delegate_output, delegate_registry, delegate_xdg_shell,
     delegate_xdg_window,
-    output::{OutputHandler, OutputState},
+    output::OutputState,
     reexports::{
         calloop,
-        client::{self as wayland_client, Connection, Proxy, QueueHandle},
+        client::{Connection, Proxy, QueueHandle},
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -18,10 +18,6 @@ use smithay_client_toolkit::{
         },
         WaylandSurface,
     },
-};
-use wayland_client::protocol::{
-    wl_output::{self, WlOutput},
-    wl_surface::WlSurface,
 };
 
 fn main() {
@@ -123,41 +119,7 @@ impl App {
     }
 }
 
-impl CompositorHandler for App {
-    fn frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlSurface, _: u32) {}
-    fn surface_enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn surface_leave(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: &WlOutput,
-    ) {
-    }
-    fn scale_factor_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: i32,
-    ) {
-    }
-    fn transform_changed(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &WlSurface,
-        _: wl_output::Transform,
-    ) {
-    }
-}
+sctk_probe::noop_compositor_handler!(App);
 
 impl WindowHandler for App {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &Window) {
@@ -183,14 +145,7 @@ impl WindowHandler for App {
     }
 }
 
-impl OutputHandler for App {
-    fn output_state(&mut self) -> &mut OutputState {
-        &mut self.output_state
-    }
-    fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlOutput) {}
-}
+sctk_probe::noop_output_handler!(App);
 
 impl ProvidesRegistryState for App {
     fn registry(&mut self) -> &mut RegistryState {
