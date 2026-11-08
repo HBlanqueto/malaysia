@@ -1076,7 +1076,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "needs a capture from a real session; run with ./dev.sh wallpaper-check"]
     fn capture_matches_reference() {
         let path = std::env::var_os("MALAYSIA_WALLPAPER_CAPTURE").expect(
             "set MALAYSIA_WALLPAPER_CAPTURE to the PNG path and run with ./dev.sh wallpaper-check",

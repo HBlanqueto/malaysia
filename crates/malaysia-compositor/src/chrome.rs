@@ -1273,29 +1273,4 @@ mod tests {
             );
         }
     }
-    #[test]
-    #[ignore = "manual rasterization benchmark"]
-    fn measure_rasterize_1200_at_150_percent() {
-        use std::time::Instant;
-        let theme = ChromeTheme::from_parts(&AppearanceConfig::default(), None);
-        for hovered in [false, true] {
-            let input = TrafficInput {
-                focused: true,
-                group_hovered: hovered,
-                zoom_supported: true,
-                ..TrafficInput::default()
-            };
-            let mut text = TextEngine::new();
-            let _ = text.rasterize("Malaysia", true, 1200, 1.5, theme, input);
-            let iterations = 20;
-            let start = Instant::now();
-            for _ in 0..iterations {
-                let _ = text.rasterize("Malaysia", true, 1200, 1.5, theme, input);
-            }
-            eprintln!(
-                "rasterize 1200x32 @1.5 hovered={hovered}: {:?}",
-                start.elapsed() / iterations
-            );
-        }
-    }
 }
