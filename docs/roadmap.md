@@ -144,7 +144,7 @@ tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
 without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
 `cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
 `window_color = "accent"`. Missing: `Screenshot`/`ScreenCast` and the
-permission dialogs. **12b pending:** notifications, polkit, keyring/Secret
+permission dialogs. **12b pending:** notifications (plan: ADR 0068), polkit, keyring/Secret
 Service and AT-SPI.
 
 ### 13 — Chrome and launcher
