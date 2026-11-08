@@ -16,3 +16,10 @@ exceptions = [
 
 [licenses.private]
 ignore = false
+
+# The two git dependencies, pinned by rev in Cargo.toml.
+[sources]
+allow-git = [
+    "https://github.com/HBlanqueto/barrierkit",
+    "https://github.com/Smithay/smithay",
+]

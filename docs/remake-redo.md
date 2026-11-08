@@ -45,3 +45,68 @@ code, 4 CPUs:
 
 The linker is already mold (ADR 0005). The incremental build does not move:
 it is the touched crate plus the link.
+
+## 3. Phase 1 — dependencies
+
+Researched on 2026-11-08 against crates.io, Smithay `master` and the wgpu
+changelog.
+
+| Dependency | Was | Latest | What breaks here | What it brings | Decision |
+|---|---|---|---|---|---|
+| barrierkit | `1a4ef8d`, no longer on its `main` | `7172d25` | crate names (its ADR 0062), view and menu names (0063), Freya 0.5 | a pin that stays on `main`, Vulkan kit, Skia m153 | done, `45c67ef` |
+| `freya-*`, `torin` | `=0.4.3` | `=0.5.0` | `Platform::get().current_window()` | the kit's version | done, `45c67ef` |
+| `smithay-client-toolkit` | 0.19.2 | 0.21.1 | nothing at 0.20 | one sctk, calloop and calloop-wayland-source less | 0.20, barrierkit's, `16d4e13` |
+| Smithay | `023b78b1` (2026-10-15) | `65aa86fa` (2026-11-03), 27 commits | winit `0.31.0-beta.3` → `beta.4`; `KeymapFile::change_keymap` and `inject_text_keysyms(time)` change, neither used here | fixes: GLES y-inverted texture matrix, leaked drm_syncobj timeline handles, libinput queued events, `Rectangle::subtract_rects_many_in_place`, layer kept on unmap, `wl_output.done` for v1, tablet frame order | **stop point:** recommended, waiting for approval |
+| `wgpu` | 24.0.5 | 30.0.1 | six majors: `request_adapter` returns `Result` (25), `InstanceDescriptor` takes the display handle (29) and more; the wallpaper uses about six entry points | current ecosystem and fixes | **stop point:** its own step after approval |
+| `toml`, `png`, `zbus` | 0.8, 0.17, 5 | 1.2, 0.18, 6 | barrierkit pins the old ones | bumping only here compiles both | keep in step with barrierkit |
+| `calloop`, `nix`, `cosmic-text`, `libheif-rs`, `zune-jpeg`, `wayland-*`, `xkbcommon` | latest compatible | — | — | — | nothing to do |
+
+## 4. Phase 3 — checks and CI
+
+1. `./dev.sh check` runs `scripts/check-links.sh` (relative links and
+   anchors), copied from barrierkit.
+2. No GitHub workflow is added. Two reasons:
+   - Skia comes from barrierkit's Nix derivation, built from Google's tree;
+     with no binary cache every run rebuilds it.
+   - `check-client-dispatch.sh` and one session test need
+     `EGL_ANDROID_native_fence_sync`, which the software renderer of a
+     hosted runner lacks (`debt.md` R-01).
+
+## 5. Before and after
+
+Same machine (4 CPUs) and commands as section 1; "after" is `7e1e8fa`
+plus this commit.
+
+| Measurement | Before | After |
+|---|---|---|
+| Clean build | 687.5 s | 203.0 s (−70 %) |
+| Incremental, touch `input.rs` | 3.9–4.0 s | 4.1–4.2 s |
+| Incremental, touch `bar.rs` | 2.5–2.6 s | 2.5–2.7 s |
+| `cargo clippy` cold | 260 s | 78 s |
+| Crates in the graph | 431 | 417 |
+| `cargo shear` | 6 findings | clean |
+| `cargo deny` duplicates | 49 | 43 |
+| `cargo deny` sources and yanked | 5 git sources not allowed, 1 yanked | clean |
+| Files over 1500 lines | `session.rs` 3517, `input.rs` 3199, `window.rs` 1887, `handlers.rs` 1520 | `input.rs` 1598 |
+| Documents | 156 files, every one twice | one English copy each |
+
+The incremental target (−25 %) is not met: the touched crate and the link
+dominate, and neither the profile nor the splits change that.
+
+## 6. Pending
+
+1. Approve or reject the Smithay bump (section 3).
+2. Approve or reject wgpu 30 for the wallpaper (section 3).
+3. Licences: `cargo deny` rejects BSL-1.0, CC0-1.0, MPL-2.0 and
+   Apache-2.0 WITH LLVM-exception, all already in the graph; allow them
+   in `deny.toml` or replace the crates. `bandura.jpg` and the solid-colour
+   wallpapers need an origin (`debt.md` R-04).
+4. curseterm pins barrierkit `36e5958` (still on its `main`). To move, it
+   applies barrierkit's ADR 0062 and 0063 renames and Freya 0.5 to 38
+   files.
+5. Not run here: a nested or DRM session, `check-client-dispatch.sh` and
+   one session test (they need a GPU), `nix build` and the wallpaper
+   render tests on hardware.
+
+When 1–3 are decided, this document is deleted.
+
