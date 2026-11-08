@@ -517,7 +517,8 @@ fn install_block(css: &str) -> String {
     out
 }
 
-fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
+pub(crate) fn set_ini_key(ini: &str, section: &str, key: &str, value: &str) -> String {
+    let header = format!("[{section}]");
     let entry = format!("{key}={value}");
     let mut out = Vec::new();
     let mut in_settings = false;
@@ -530,7 +531,7 @@ fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
                 out.push(entry.clone());
                 written = true;
             }
-            in_settings = trimmed == "[Settings]";
+            in_settings = trimmed == header;
             seen_settings |= in_settings;
             out.push(line.to_string());
             continue;
@@ -552,7 +553,7 @@ fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
             if out.last().is_some_and(|line| !line.trim().is_empty()) {
                 out.push(String::new());
             }
-            out.push("[Settings]".to_string());
+            out.push(header);
         }
         out.push(entry);
     }
@@ -561,7 +562,7 @@ fn set_ini_key(ini: &str, key: &str, value: &str) -> String {
     text
 }
 
-fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
+pub(crate) fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
     if fs::read_to_string(path).is_ok_and(|current| current == contents) {
         return Ok(());
     }
@@ -573,7 +574,7 @@ fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
     fs::rename(&tmp, path)
 }
 
-fn is_symlink(path: &Path) -> bool {
+pub(crate) fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
@@ -641,7 +642,7 @@ impl Bridge {
         } else {
             let current = fs::read_to_string(&ini).unwrap_or_default();
             let value = if dark { "true" } else { "false" };
-            write_if_changed(&ini, &set_ini_key(&current, PREFER_DARK, value))?;
+            write_if_changed(&ini, &set_ini_key(&current, "Settings", PREFER_DARK, value))?;
         }
         Ok(())
     }
@@ -822,22 +823,22 @@ mod tests {
     #[test]
     fn the_ini_key_is_set_in_place() {
         assert_eq!(
-            set_ini_key("", PREFER_DARK, "true"),
+            set_ini_key("", "Settings", PREFER_DARK, "true"),
             "[Settings]\ngtk-application-prefer-dark-theme=true\n"
         );
         let ini = "[Settings]\ngtk-theme-name=adw-gtk3\ngtk-application-prefer-dark-theme=0\n";
         assert_eq!(
-            set_ini_key(ini, PREFER_DARK, "true"),
+            set_ini_key(ini, "Settings", PREFER_DARK, "true"),
             "[Settings]\ngtk-theme-name=adw-gtk3\ngtk-application-prefer-dark-theme=true\n"
         );
         let other = "[Other]\na=1\n";
         assert_eq!(
-            set_ini_key(other, PREFER_DARK, "false"),
+            set_ini_key(other, "Settings", PREFER_DARK, "false"),
             "[Other]\na=1\n\n[Settings]\ngtk-application-prefer-dark-theme=false\n"
         );
         let two = "[Settings]\na=1\n[Other]\nb=2\n";
         assert_eq!(
-            set_ini_key(two, PREFER_DARK, "true"),
+            set_ini_key(two, "Settings", PREFER_DARK, "true"),
             "[Settings]\na=1\ngtk-application-prefer-dark-theme=true\n[Other]\nb=2\n"
         );
     }

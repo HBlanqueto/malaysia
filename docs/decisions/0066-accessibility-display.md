@@ -62,7 +62,8 @@ apps ask for by name (`wp_cursor_shape_v1`). A cursor that an app draws
 itself, as a surface, keeps the app's size. This is intended: like a game
 with its own cursor setting, that app owns its pointer.
 
-Text size reaches only BarrierKit apps.
+Text size reaches BarrierKit, GTK and Qt apps, each with its own size or the
+preferred one (ADR 0067).
 
 ## Rejected alternatives
 

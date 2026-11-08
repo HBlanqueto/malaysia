@@ -115,13 +115,15 @@ They are not domain options; they are fixed and documented here:
 | `appearance.show_borders` | bool | `false` | **active** | kit: a border on icon buttons, tool groups and search fields, **System Settings › Accessibility › Display** |
 | `appearance.differentiate_without_color` | bool | `false` | **active** | kit and compositor: the traffic lights keep their symbols in the focused window, **System Settings › Accessibility › Display** |
 | `appearance.display_contrast` | a value of `DISPLAY_CONTRAST` | `1.0` | **active** | compositor: contrast of the whole screen around middle gray, **System Settings › Accessibility › Display** |
-| `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | kit: scales `Text` and sidebar items, **System Settings › Accessibility › Display** |
+| `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | the preferred reading size of every toolkit without its own, **System Settings › Accessibility › Display › Text size** |
+| `appearance.text_sizes` | table: `barrierkit`, `gtk`, `qt`, each a value of `TEXT_SIZES` | empty | **active** | kit (`Text`, sidebar items), portal (`text-scaling-factor` for GTK 4), compositor (`GDK_DPI_SCALE` for GTK 3) and the Qt bridge (qt6ct font); a missing key uses `text_size` (ADR 0067) |
 | `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
 | `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
 | `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws; a cursor an app draws itself keeps the app's size (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
+| `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `~/.config/qt6ct/qt6ct.conf` (Fusion, the Malaysia palette, the Qt text size) and `~/.config/qt6ct/colors/malaysia.conf`; other keys stay (ADR 0067). Only the portal reads it |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
 macOS: "Appearance: **Light / Dark / Auto**" and "**Accent color**"; "Increase
@@ -455,6 +457,9 @@ pointer_size = 1.0
 color_filters = false
 color_filter = "grayscale"
 color_filter_intensity = 1.0
+
+[text_sizes]                    # optional; a missing key uses text_size
+qt = 1.3                        # barrierkit | gtk | qt
 ```
 
 ```toml

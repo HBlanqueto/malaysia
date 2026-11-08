@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
 
-use ctappearance::{AppearanceConfig, TrafficLightStyle, load_dominant, read_appearance, resolve};
+use ctappearance::{
+    AppearanceConfig, Toolkit, TrafficLightStyle, load_dominant, read_appearance, resolve,
+};
 use ctdesign::Rgba;
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use zbus::blocking::Connection;
@@ -16,12 +18,13 @@ pub const GNOME_NAMESPACE: &str = "org.gnome.desktop.interface";
 pub const LIVE_NAMESPACE: &str = "org.malaysia.appearance";
 pub const WM_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
-const KEYS: [(&str, &str); 8] = [
+const KEYS: [(&str, &str); 9] = [
     (NAMESPACE, "color-scheme"),
     (NAMESPACE, "accent-color"),
     (NAMESPACE, "contrast"),
     (NAMESPACE, "reduced-motion"),
     (GNOME_NAMESPACE, "color-scheme"),
+    (GNOME_NAMESPACE, "text-scaling-factor"),
     (LIVE_NAMESPACE, "gtk4-css"),
     (LIVE_NAMESPACE, "accent-color"),
     (WM_NAMESPACE, "button-layout"),
@@ -37,6 +40,7 @@ pub struct Values {
     accent: (f64, f64, f64),
     contrast: u32,
     reduced_motion: u32,
+    text_scaling_factor: f64,
     live_css: String,
     live_accent: (f64, f64, f64),
 }
@@ -81,6 +85,7 @@ impl Values {
             accent,
             contrast: u32::from(appearance.contrast),
             reduced_motion: u32::from(appearance.reduced_motion),
+            text_scaling_factor: f64::from(appearance.text_size_for(Toolkit::Gtk)),
             live_css,
             live_accent,
         }
@@ -93,6 +98,7 @@ impl Values {
             (NAMESPACE, "contrast") => Value::new(self.contrast),
             (NAMESPACE, "reduced-motion") => Value::new(self.reduced_motion),
             (GNOME_NAMESPACE, "color-scheme") => Value::new(self.gnome_color_scheme()),
+            (GNOME_NAMESPACE, "text-scaling-factor") => Value::new(self.text_scaling_factor),
             (LIVE_NAMESPACE, "gtk4-css") => Value::new(self.live_css.clone()),
             (LIVE_NAMESPACE, "accent-color") => Value::new(self.live_accent),
             (WM_NAMESPACE, "button-layout") => Value::new(gtk::button_layout()),
@@ -192,7 +198,12 @@ enum PortalError {
     ZBus(zbus::Error),
 }
 
-pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option<Bridge>) {
+pub fn watch(
+    connection: Connection,
+    values: Arc<RwLock<Values>>,
+    bridge: Option<Bridge>,
+    qt: Option<crate::qt::Bridge>,
+) {
     std::thread::spawn(move || {
         let watch = match ctappearance::watch::AppearanceWatch::new() {
             Ok(watch) => watch,
@@ -229,6 +240,9 @@ pub fn watch(connection: Connection, values: Arc<RwLock<Values>>, bridge: Option
             };
             if let Some(bridge) = &bridge {
                 bridge.sync(appearance.as_ref(), load_dominant());
+            }
+            if let Some(qt) = &qt {
+                qt.sync(appearance.as_ref(), load_dominant());
             }
             let new = Values::from_appearance(appearance.as_ref());
             let old = {

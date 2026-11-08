@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 
 mod gtk;
+mod qt;
 mod settings;
 
 use std::sync::{Arc, RwLock};
@@ -39,7 +40,11 @@ fn main() -> Result<()> {
         .serve_at(OBJECT_PATH, interface)?
         .build()?;
 
-    settings::watch(connection, values, gtk::Bridge::from_env());
+    let qt = qt::Bridge::from_env();
+    if let (Some(qt), Ok(appearance)) = (&qt, read_appearance()) {
+        qt.sync(appearance.as_ref(), load_dominant());
+    }
+    settings::watch(connection, values, gtk::Bridge::from_env(), qt);
     tracing::info!(name = BUS_NAME, path = OBJECT_PATH, "portal backend ready");
 
     let signal = stop.wait()?;

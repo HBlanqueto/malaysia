@@ -49,6 +49,7 @@ in
     environment.systemPackages = [
       cfg.package
       pkgs.hwdata
+      pkgs.qt6Packages.qt6ct
     ]
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
@@ -75,6 +76,9 @@ in
     services.displayManager.sessionPackages = [ cfg.package ];
 
     hardware.graphics.enable = lib.mkDefault true;
+
+    # ADR 0067: QT_PLUGIN_PATH finds qt6ct; the compositor sets QT_QPA_PLATFORMTHEME in its session.
+    qt.enable = lib.mkDefault true;
 
     xdg.portal = {
       enable = lib.mkDefault true;

@@ -9,7 +9,7 @@ use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
     AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBars, TintParts,
-    TintStrength, TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope,
+    TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope,
     lights_for, load_appearance, palette,
 };
 use ctdesign::{
@@ -86,13 +86,22 @@ pub fn settings_window(
                     ACCESSIBILITY_TINT,
                     accessibility(),
                 )
-                .page(Pane::new(
-                    "display",
-                    tr!("display"),
-                    Symbol::Display,
-                    ACCESSIBILITY_TINT,
-                    display(config, error),
-                )),
+                .page(
+                    Pane::new(
+                        "display",
+                        tr!("display"),
+                        Symbol::Display,
+                        ACCESSIBILITY_TINT,
+                        display(config, error),
+                    )
+                    .page(Pane::new(
+                        "text-size",
+                        tr!("text-size"),
+                        Symbol::Display,
+                        ACCESSIBILITY_TINT,
+                        text_size(config, error),
+                    )),
+                ),
             )
             .pane(Pane::new(
                 "appearance",
@@ -360,25 +369,7 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
         )
         .section(
             Section::titled(tr!("text"))
-                .row(
-                    Row::new(tr!("text-size"))
-                        .detail(tr!("text-size-help"))
-                        .control(option_column(
-                            Slider::stepped(tr!("text-size"), TEXT_SIZES.len())
-                                .value(nearest(&TEXT_SIZES, config.text_size))
-                                .labels(tr_list!(
-                                    "text-size-default",
-                                    "step-blank",
-                                    "step-blank",
-                                    "step-blank",
-                                    "step-blank",
-                                    "text-size-largest"
-                                ))
-                                .on_change(edit(error, |config, index: usize| {
-                                    config.text_size = TEXT_SIZES[index];
-                                })),
-                        )),
-                )
+                .row(Row::page(tr!("text-size"), "text-size").detail(tr!("text-size-help")))
                 .row(
                     Row::new(tr!("menu-bar-size")).control(
                         RadioGroup::new(tr!("menu-bar-size"))
@@ -481,6 +472,84 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                     )),
                 ),
         )
+}
+
+const TOOLKITS: [(Toolkit, Text, Text); 3] = [
+    (
+        Toolkit::BarrierKit,
+        || tr!("text-size-barrierkit"),
+        || tr!("text-size-barrierkit-help"),
+    ),
+    (
+        Toolkit::Gtk,
+        || tr!("text-size-gtk"),
+        || tr!("text-size-gtk-help"),
+    ),
+    (
+        Toolkit::Qt,
+        || tr!("text-size-qt"),
+        || tr!("text-size-qt-help"),
+    ),
+];
+
+fn text_size(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
+    let apps = TOOLKITS.iter().fold(
+        Section::titled(tr!("text-size-apps")),
+        |section, &(toolkit, title, help)| {
+            let mut sizes = config.text_sizes;
+            let selected = sizes
+                .get_mut(toolkit)
+                .map_or(0, |size| 1 + nearest(&TEXT_SIZES, size));
+            section.row(
+                Row::new(title()).detail(help()).control(
+                    text_size_names()
+                        .iter()
+                        .fold(PopUpButton::new(title()), |popup, name| popup.item(name))
+                        .selected(selected)
+                        .on_change(edit(error, move |config, index: usize| {
+                            *config.text_sizes.get_mut(toolkit) =
+                                index.checked_sub(1).map(|step| TEXT_SIZES[step]);
+                        })),
+                ),
+            )
+        },
+    );
+    Form::new()
+        .section(
+            Section::new().row(
+                Row::new(tr!("text-size-preferred"))
+                    .detail(tr!("text-size-preferred-help"))
+                    .control(option_column(
+                        Slider::stepped(tr!("text-size-preferred"), TEXT_SIZES.len())
+                            .value(nearest(&TEXT_SIZES, config.text_size))
+                            .labels(tr_list!(
+                                "text-size-default",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "text-size-largest"
+                            ))
+                            .on_change(edit(error, |config, index: usize| {
+                                config.text_size = TEXT_SIZES[index];
+                            })),
+                    )),
+            ),
+        )
+        .section(apps)
+}
+
+fn text_size_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        std::iter::once(tr!("text-size-use-preferred"))
+            .chain(
+                TEXT_SIZES
+                    .iter()
+                    .map(|size| &*Box::leak(format!("{:.0} %", size * 100.0).into_boxed_str())),
+            )
+            .collect()
+    })
 }
 
 const COLOR_FILTER_NAMES: [Text; 4] = [
