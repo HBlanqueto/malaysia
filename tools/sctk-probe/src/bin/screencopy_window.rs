@@ -8,8 +8,7 @@ use smithay_client_toolkit::{
     reexports::{
         calloop,
         client::{
-            self as wayland_client, globals::GlobalList, Connection, Dispatch, Proxy, QueueHandle,
-            WEnum,
+            self as wayland_client, globals::GlobalList, Connection, Dispatch, QueueHandle, WEnum,
         },
         protocols::{
             ext::{
@@ -381,53 +380,13 @@ impl Dispatch<ExtForeignToplevelListV1, ()> for App {
     ]);
 }
 
-impl Dispatch<ExtForeignToplevelHandleV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ExtForeignToplevelHandleV1,
-        _: <ExtForeignToplevelHandleV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelHandleV1);
 
-impl Dispatch<ExtImageCaptureSourceV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ExtImageCaptureSourceV1,
-        _: <ExtImageCaptureSourceV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCaptureSourceV1);
 
-impl Dispatch<ExtForeignToplevelImageCaptureSourceManagerV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ExtForeignToplevelImageCaptureSourceManagerV1,
-        _: <ExtForeignToplevelImageCaptureSourceManagerV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtForeignToplevelImageCaptureSourceManagerV1);
 
-impl Dispatch<ExtImageCopyCaptureManagerV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ExtImageCopyCaptureManagerV1,
-        _: <ExtImageCopyCaptureManagerV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ExtImageCopyCaptureManagerV1);
 
 impl Dispatch<ExtImageCopyCaptureSessionV1, ()> for App {
     fn event(
@@ -509,41 +468,11 @@ delegate_shm!(App);
 delegate_xdg_shell!(App);
 delegate_xdg_window!(App);
 
-impl Dispatch<ZwpLinuxDmabufV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ZwpLinuxDmabufV1,
-        _: <ZwpLinuxDmabufV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxDmabufV1);
 
-impl Dispatch<ZwpLinuxBufferParamsV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ZwpLinuxBufferParamsV1,
-        _: <ZwpLinuxBufferParamsV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpLinuxBufferParamsV1);
 
-impl Dispatch<WlBuffer, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &WlBuffer,
-        _: <WlBuffer as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WlBuffer);
 
 fn is_linear_capture_format(format: u32) -> bool {
     matches!(format, 0x3432_5241 | 0x3432_5258)

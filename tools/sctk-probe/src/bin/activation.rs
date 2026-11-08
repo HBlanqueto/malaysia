@@ -506,17 +506,7 @@ impl Dispatch<WlKeyboard, ()> for Parent {
     }
 }
 
-impl Dispatch<XdgActivationV1, ()> for Parent {
-    fn event(
-        _: &mut Self,
-        _: &XdgActivationV1,
-        _: <XdgActivationV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(Parent: ignore XdgActivationV1);
 
 impl Dispatch<XdgActivationTokenV1, String> for Parent {
     fn event(
@@ -794,17 +784,7 @@ impl Dispatch<WlKeyboard, ()> for ChildApp {
     }
 }
 
-impl Dispatch<XdgActivationV1, ()> for ChildApp {
-    fn event(
-        _: &mut Self,
-        _: &XdgActivationV1,
-        _: <XdgActivationV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(ChildApp: ignore XdgActivationV1);
 
 impl Dispatch<XdgActivationTokenV1, String> for ChildApp {
     fn event(

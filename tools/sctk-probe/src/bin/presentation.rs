@@ -7,7 +7,7 @@ use smithay_client_toolkit::{
     output::OutputState,
     reexports::{
         calloop,
-        client::{self as wayland_client, Connection, Dispatch, Proxy, QueueHandle, WEnum},
+        client::{self as wayland_client, Connection, Dispatch, QueueHandle, WEnum},
         protocols::wp::presentation_time::client::{
             wp_presentation::WpPresentation,
             wp_presentation_feedback::{self, WpPresentationFeedback},
@@ -184,17 +184,7 @@ sctk_probe::noop_output_handler!(App);
 
 sctk_probe::shm_and_registry!(App);
 
-impl Dispatch<WpPresentation, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &WpPresentation,
-        _: <WpPresentation as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore WpPresentation);
 
 impl Dispatch<WpPresentationFeedback, u8> for App {
     fn event(

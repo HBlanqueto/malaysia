@@ -23,7 +23,7 @@ use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::client::protocol::{
     wl_buffer, wl_buffer::WlBuffer, wl_output, wl_shm, wl_shm_pool, wl_surface,
 };
-use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
+use sctk::reexports::client::{Connection, QueueHandle};
 use sctk::reexports::protocols::wp::linux_dmabuf::zv1::client::{
     zwp_linux_buffer_params_v1, zwp_linux_dmabuf_feedback_v1,
 };
@@ -420,41 +420,11 @@ impl OutputHandler for TestClient {
 
 sctk::delegate_output!(TestClient);
 
-impl Dispatch<wl_shm::WlShm, ()> for TestClient {
-    fn event(
-        _state: &mut TestClient,
-        _: &wl_shm::WlShm,
-        _: wl_shm::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<TestClient>,
-    ) {
-    }
-}
+sctk::reexports::client::delegate_noop!(TestClient: ignore wl_shm::WlShm);
 
-impl Dispatch<wl_shm_pool::WlShmPool, ()> for TestClient {
-    fn event(
-        _state: &mut TestClient,
-        _: &wl_shm_pool::WlShmPool,
-        _: wl_shm_pool::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<TestClient>,
-    ) {
-    }
-}
+sctk::reexports::client::delegate_noop!(TestClient: ignore wl_shm_pool::WlShmPool);
 
-impl Dispatch<wl_buffer::WlBuffer, ()> for TestClient {
-    fn event(
-        _state: &mut TestClient,
-        _: &wl_buffer::WlBuffer,
-        _: wl_buffer::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<TestClient>,
-    ) {
-    }
-}
+sctk::reexports::client::delegate_noop!(TestClient: ignore wl_buffer::WlBuffer);
 
 impl sctk::compositor::CompositorHandler for TestClient {
     fn scale_factor_changed(
@@ -1103,17 +1073,7 @@ fn unplaced_toplevel_gets_frame_callbacks() {
             }
         }
 
-        impl Dispatch<wl_compositor::WlCompositor, ()> for Client {
-            fn event(
-                _: &mut Self,
-                _: &wl_compositor::WlCompositor,
-                _: wl_compositor::Event,
-                _: &(),
-                _: &Connection,
-                _: &QueueHandle<Self>,
-            ) {
-            }
-        }
+        sctk::reexports::client::delegate_noop!(Client: ignore wl_compositor::WlCompositor);
 
         impl Dispatch<xdg_wm_base::XdgWmBase, ()> for Client {
             fn event(
@@ -1145,17 +1105,7 @@ fn unplaced_toplevel_gets_frame_callbacks() {
             }
         }
 
-        impl Dispatch<xdg_toplevel::XdgToplevel, ()> for Client {
-            fn event(
-                _: &mut Self,
-                _: &xdg_toplevel::XdgToplevel,
-                _: xdg_toplevel::Event,
-                _: &(),
-                _: &Connection,
-                _: &QueueHandle<Self>,
-            ) {
-            }
-        }
+        sctk::reexports::client::delegate_noop!(Client: ignore xdg_toplevel::XdgToplevel);
 
         impl Dispatch<wl_callback::WlCallback, ()> for Client {
             fn event(
@@ -1173,17 +1123,7 @@ fn unplaced_toplevel_gets_frame_callbacks() {
             }
         }
 
-        impl Dispatch<wl_surface::WlSurface, ()> for Client {
-            fn event(
-                _: &mut Self,
-                _: &wl_surface::WlSurface,
-                _: wl_surface::Event,
-                _: &(),
-                _: &Connection,
-                _: &QueueHandle<Self>,
-            ) {
-            }
-        }
+        sctk::reexports::client::delegate_noop!(Client: ignore wl_surface::WlSurface);
 
         let conn = Connection::from_socket(client_side).expect("client connects");
         let (globals, mut event_queue) = registry_queue_init(&conn).expect("registry initializes");

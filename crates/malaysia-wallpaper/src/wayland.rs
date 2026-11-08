@@ -682,17 +682,7 @@ impl Dispatch<WpViewport, WlSurface> for App {
     }
 }
 
-impl Dispatch<WlRegion, ()> for App {
-    fn event(
-        _state: &mut Self,
-        _proxy: &WlRegion,
-        _event: <WlRegion as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-    ) {
-    }
-}
+sctk::reexports::client::delegate_noop!(App: ignore WlRegion);
 
 delegate_registry!(App);
 delegate_compositor!(App);

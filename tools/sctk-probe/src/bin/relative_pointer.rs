@@ -202,17 +202,7 @@ impl PointerHandler for App {
     }
 }
 
-impl Dispatch<ZwpRelativePointerManagerV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ZwpRelativePointerManagerV1,
-        _: <ZwpRelativePointerManagerV1 as wayland_client::Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZwpRelativePointerManagerV1);
 
 impl Dispatch<ZwpRelativePointerV1, ()> for App {
     fn event(

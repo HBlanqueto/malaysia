@@ -448,17 +448,7 @@ mod tests {
         }
     }
 
-    impl Dispatch<wl_compositor::WlCompositor, ()> for TestClient {
-        fn event(
-            _: &mut Self,
-            _: &wl_compositor::WlCompositor,
-            _: wl_compositor::Event,
-            _: &(),
-            _: &Connection,
-            _: &QueueHandle<Self>,
-        ) {
-        }
-    }
+    sctk::reexports::client::delegate_noop!(TestClient: ignore wl_compositor::WlCompositor);
 
     impl Dispatch<xdg_wm_base::XdgWmBase, ()> for TestClient {
         fn event(
@@ -490,29 +480,9 @@ mod tests {
         }
     }
 
-    impl Dispatch<xdg_toplevel::XdgToplevel, ()> for TestClient {
-        fn event(
-            _: &mut Self,
-            _: &xdg_toplevel::XdgToplevel,
-            _: xdg_toplevel::Event,
-            _: &(),
-            _: &Connection,
-            _: &QueueHandle<Self>,
-        ) {
-        }
-    }
+    sctk::reexports::client::delegate_noop!(TestClient: ignore xdg_toplevel::XdgToplevel);
 
-    impl Dispatch<wl_surface::WlSurface, ()> for TestClient {
-        fn event(
-            _: &mut Self,
-            _: &wl_surface::WlSurface,
-            _: wl_surface::Event,
-            _: &(),
-            _: &Connection,
-            _: &QueueHandle<Self>,
-        ) {
-        }
-    }
+    sctk::reexports::client::delegate_noop!(TestClient: ignore wl_surface::WlSurface);
 
     fn props(bus: &str, menubar: &str, appmenu: &str) -> GtkDbusProperties {
         GtkDbusProperties {

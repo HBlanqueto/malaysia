@@ -7,7 +7,7 @@ use smithay_client_toolkit::{
     output::OutputState,
     reexports::{
         calloop,
-        client::{Connection, Dispatch, Proxy, QueueHandle},
+        client::{Connection, Dispatch, QueueHandle},
         protocols::xdg::decoration::zv1::client::{
             zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
             zxdg_toplevel_decoration_v1::{self, Mode, ZxdgToplevelDecorationV1},
@@ -169,17 +169,7 @@ sctk_probe::noop_output_handler!(App);
 
 sctk_probe::shm_and_registry!(App);
 
-impl Dispatch<ZxdgDecorationManagerV1, ()> for App {
-    fn event(
-        _: &mut Self,
-        _: &ZxdgDecorationManagerV1,
-        _: <ZxdgDecorationManagerV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
+smithay_client_toolkit::reexports::client::delegate_noop!(App: ignore ZxdgDecorationManagerV1);
 
 impl Dispatch<ZxdgToplevelDecorationV1, ()> for App {
     fn event(
