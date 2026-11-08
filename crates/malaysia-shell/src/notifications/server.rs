@@ -538,10 +538,16 @@ struct Control {
 #[zbus::interface(name = "org.malaysia.Notifications1")]
 impl Control {
     fn toggle_panel(&self) {
-        let mut hub = self.link.hub();
-        hub.panel_open = !hub.panel_open;
-        hub.banners.clear();
-        hub.changed();
+        let open = !self.link.hub().panel_open;
+        show_panel(&self.link, open);
+    }
+
+    fn open_panel(&self) {
+        show_panel(&self.link, true);
+    }
+
+    fn close_panel(&self) {
+        show_panel(&self.link, false);
     }
 
     #[zbus(property)]
@@ -556,6 +562,16 @@ impl Control {
         hub.center.save();
         hub.changed();
     }
+}
+
+fn show_panel(link: &Link, open: bool) {
+    let mut hub = link.hub();
+    if hub.panel_open == open {
+        return;
+    }
+    hub.panel_open = open;
+    hub.banners.clear();
+    hub.changed();
 }
 
 pub(crate) fn close(link: &Link, id: u32, by_call: bool) {

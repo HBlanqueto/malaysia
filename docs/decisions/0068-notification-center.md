@@ -274,9 +274,14 @@ Exact names from
    no banner and go to the panel, as `willPresent` does by default.
 9. **Panel:** opened by clicking the clock and by a two-finger swipe from the
    right edge (the compositor reports the gesture); closed by a click outside,
-   the clock or the swipe back. Phase 1 closes it with the clock, Escape or by
-   opening a notification; the swipe and the click outside need the
-   compositor. Stacks, «Show less», «Clear All», hover
+   the clock or the swipe back. The compositor finds the panel by its layer
+   namespace and anchors, and calls `OpenPanel` and `ClosePanel` on
+   `org.malaysia.Notifications1` (`malaysia-compositor/src/notification_panel.rs`).
+   libinput reports a two-finger swipe as finger scrolling with no touch
+   positions, so the right edge of the screen stands in for the right edge of
+   the trackpad: with the pointer there, a leftward swipe opens the panel; over
+   the panel, a rightward one closes it. A press outside the panel and the
+   menu bar closes it too. Stacks, «Show less», «Clear All», hover
    controls and the «More» menu as in Tahoe. Sizes, radii and material are
    tokens in `ctdesign`, calibrated against a real Tahoe screenshot; the
    panel does not use glass until one shows it.

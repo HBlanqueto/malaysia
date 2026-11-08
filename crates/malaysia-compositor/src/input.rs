@@ -378,6 +378,7 @@ impl State {
             return;
         }
         self.pointer_motion(location, time);
+        self.close_notification_panel_outside(location);
         let layer_under = self.layers.surface_under(location);
         if layer_under.is_some() && self.windows.topmost_popup().is_some() {
             tracing::info!(?location, "press outside the popups dismissed them");
@@ -1528,9 +1529,46 @@ impl State {
             }
         }
 
+        if source == AxisSource::Finger {
+            self.follow_edge_swipe(horizontal, event.amount(Axis::Horizontal) == Some(0.0));
+        }
         if let Some(pointer) = self.seat.get_pointer() {
             pointer.axis(self, frame);
             pointer.frame(self);
+        }
+    }
+
+    fn close_notification_panel_outside(&self, location: Point<f64, Logical>) {
+        let Some(panel) = crate::notification_panel::open_panel(&self.layers) else {
+            return;
+        };
+        let on_bar = self
+            .layers
+            .mapped()
+            .iter()
+            .any(|entry| entry.is_desktop_bar() && entry.geometry.to_f64().contains(location));
+        if !panel.to_f64().contains(location) && !on_bar {
+            crate::notification_panel::send(crate::notification_panel::Request::Close);
+        }
+    }
+
+    fn follow_edge_swipe(&mut self, horizontal: f64, ended: bool) {
+        let Some(location) = self
+            .seat
+            .get_pointer()
+            .map(|pointer| pointer.current_location())
+        else {
+            return;
+        };
+        let panel = crate::notification_panel::open_panel(&self.layers);
+        let width = f64::from(self.logical_output_size().w);
+        let at_edge = location.x >= width - ctdesign::NOTIFICATION_EDGE
+            || panel.is_some_and(|panel| panel.to_f64().contains(location));
+        if let Some(request) = self
+            .edge_swipe
+            .feed(horizontal, ended, at_edge, panel.is_some())
+        {
+            crate::notification_panel::send(request);
         }
     }
 }

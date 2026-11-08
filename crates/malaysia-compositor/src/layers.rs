@@ -90,6 +90,8 @@ impl Layers {
                 geometry.loc = entry.geometry.loc;
             }
             let exclusive_zone = exclusive_zone_of(&state);
+            entry.anchors = state.anchor;
+            entry.keyboard_interactivity = state.keyboard_interactivity;
             if geometry != entry.geometry || exclusive_zone != entry.exclusive_zone {
                 entry.surface.with_pending_state(|pending| {
                     pending.size = Some(geometry.size);
