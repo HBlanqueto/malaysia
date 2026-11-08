@@ -1,12 +1,23 @@
 use bk::prelude::*;
-use ctdesign::MENUBAR_MARGIN;
+use ctdesign::{MENUBAR_FONT_SIZE, MENUBAR_MARGIN};
 use torin::prelude::Gaps;
 
-pub fn clock_label(now: String, color: Color) -> Element {
-    rect()
+use crate::notifications::{toggle_do_not_disturb, toggle_panel};
+
+// Wayland sends modifiers only to the focused surface, so Option-click becomes a secondary click.
+pub fn clock_label(now: String, color: Color, do_not_disturb: bool) -> Element {
+    HStack::new()
         .height(Size::fill())
         .padding(Gaps::new(0.0, 0.0, 0.0, MENUBAR_MARGIN as f32))
-        .center()
+        .cross_align(Alignment::Center)
+        .spacing(MENUBAR_MARGIN as f32 / 2.0)
+        .on_press(|_| toggle_panel())
+        .on_secondary_down(|_| toggle_do_not_disturb())
+        .maybe_child(do_not_disturb.then(|| {
+            Image::system(Symbol::Moon)
+                .size(MENUBAR_FONT_SIZE)
+                .color(bk::style::Palette::current().label)
+        }))
         .child(Text::new(now).color(color))
         .into_element()
 }

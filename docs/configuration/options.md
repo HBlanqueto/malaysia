@@ -25,6 +25,7 @@ directories — preferences and state:
 ├── screenshot.domain
 ├── dock.domain
 ├── menubar.domain
+├── notifications.domain
 ├── lock.domain
 ├── effects.domain
 └── debug.domain
@@ -33,8 +34,10 @@ directories — preferences and state:
 ├── wallpaper-selection.state ← current wallpaper per desktop ([desktops]), like
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
-└── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
-                             `cleared_at` (unix; «Clear Menu»), written by the menubar
+├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
+│                            `cleared_at` (unix; «Clear Menu»), written by the menubar
+└── notifications.state    ← delivered notifications, `next_id` and `do_not_disturb`,
+                             written by `malaysia-shell notifications` (ADR 0068)
 ```
 
 Each file is optional; missing files use their default (like macOS's
@@ -358,6 +361,26 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.autohide` | bool | `false` | pending | shell |
 | `menubar.app_menus` | bool | `true` | **active** | shell (dbusmenu and `org.gtk.Menus`) and compositor (`gtk_shell1` `capabilities` 3/0, ADR 0045) |
 
+## `notifications` — notifications (System Settings → Notifications; ADR 0068)
+
+`malaysia-shell notifications` reads the domain for every notification, and
+System Settings writes it. An app gets the defaults until it has a
+`[apps."<app id>"]` table; the app id is the desktop file id without
+`.desktop`.
+
+| Option | Type | Default | Status | Consumed by |
+|---|---|---|---|---|
+| `notifications.show_previews` | `"always"` \| `"when-unlocked"` \| `"never"` | `"always"` | **active** (`when-unlocked` acts as `always` until the lock screen lists notifications) | shell |
+| `notifications.apps.<id>.allow` | bool | `true` | **active** | shell |
+| `notifications.apps.<id>.desktop` | bool | `true` | **active**: banners on the desktop | shell |
+| `notifications.apps.<id>.center` | bool | `true` | **active**: kept in Notification Center | shell |
+| `notifications.apps.<id>.style` | `"temporary"` \| `"persistent"` | `"temporary"` | **active** | shell |
+| `notifications.apps.<id>.critical` | bool | `false` | **active**: urgency 2 or `urgent` breaks through Do Not Disturb and mutes | shell |
+| `notifications.apps.<id>.time_sensitive` | bool | `true` | stored; Focus modes will use it | shell |
+| `notifications.apps.<id>.sound` | bool | `true` | **active** | shell |
+| `notifications.apps.<id>.grouping` | `"automatic"` \| `"by-app"` \| `"off"` | `"automatic"` | **active** (`automatic` groups by app) | shell |
+| `notifications.apps.<id>.muted_until` | unix time | none | **active**; written by «Mute for 1 Hour» and «Mute for Today» | shell |
+
 ## `effects` — compositor surface effects (ADR 0020)
 
 They apply to **every** window, client- or server-decorated.
@@ -535,6 +558,14 @@ default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Min
 # ~/.config/malaysia/menubar.domain
 autohide = false
 app_menus = true                 # global menu of the focused app (dbusmenu)
+```
+
+```toml
+# ~/.config/malaysia/notifications.domain
+show_previews = "always"
+[apps."org.mozilla.firefox"]
+style = "persistent"
+sound = false
 ```
 
 ```toml

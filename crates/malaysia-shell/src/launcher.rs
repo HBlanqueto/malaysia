@@ -423,7 +423,7 @@ pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
         return;
     }
     let program = argv.remove(0);
-    let mut command = crate::spawn::app_command(program);
+    let mut command = crate::spawn::app_command(program, Some(&entry.id));
     command.args(argv);
     if let Some(path) = &entry.path {
         command.current_dir(path);

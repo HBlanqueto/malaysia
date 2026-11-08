@@ -16,8 +16,8 @@ The shell draws its UI with BarrierKit; `malaysia-wallpaper` draws the backgroun
 ## Layers
 
 ```
-Overlay   launcher, screenshots, shell popups
-Top       menubar (top) · dock (bottom) · notifications (future)
+Overlay   launcher, notifications (banners, Notification Center), screenshots, shell popups
+Top       menubar (top) · dock (bottom)
 Windows   client + SSD titlebar + xdg popups
 Bottom    layer-shell Bottom (future)
 Background wallpaper

@@ -32,8 +32,8 @@ in
     };
 
     shellComponents = lib.mkOption {
-      type = lib.types.listOf (lib.types.enum [ "menubar" "dock" ]);
-      default = [ "menubar" "dock" ];
+      type = lib.types.listOf (lib.types.enum [ "menubar" "dock" "notifications" ]);
+      default = [ "menubar" "dock" "notifications" ];
       description = "The malaysia-shell components started in malaysia-session.target.";
     };
 

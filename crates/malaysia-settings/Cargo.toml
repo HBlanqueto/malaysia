@@ -17,6 +17,7 @@ ctappearance.workspace = true
 ctdesign.workspace = true
 
 libc.workspace = true
+serde.workspace = true
 freya-core.workspace = true
 freya-components.workspace = true
 torin.workspace = true

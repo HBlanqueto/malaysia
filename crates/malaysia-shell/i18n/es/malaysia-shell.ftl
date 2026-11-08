@@ -892,3 +892,21 @@ shortcut-zoom-in = Ampliar
 shortcut-zoom-out = Reducir
 shortcut-zoom-reset = Tamaño real
 shortcut-zoom-to = Zoom a…
+
+# Centro de notificaciones (ADR 0068)
+notifications-empty = No hay notificaciones
+notifications-do-not-disturb = No molestar
+notifications-show-less = Mostrar menos
+notifications-clear-all = Borrar todo
+notifications-hidden-preview = Notificación
+notifications-more = { $count ->
+    [one] 1 más
+   *[other] { $count } más
+}
+notifications-mute-hour = Silenciar durante 1 hora
+notifications-mute-today = Silenciar durante el día de hoy
+notifications-turn-off = Desactivar notificaciones
+notifications-settings = Ajustes de notificaciones…
+notifications-now = ahora
+notifications-minutes = hace { $count } min
+notifications-hours = hace { $count } h

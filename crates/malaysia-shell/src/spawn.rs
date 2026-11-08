@@ -13,23 +13,33 @@ const WRAPPER_ENV: [&str; 4] = [
     "GBM_BACKENDS_PATH",
 ];
 
-pub(crate) fn app_command(program: impl AsRef<OsStr>) -> Command {
+pub(crate) fn app_command(program: impl AsRef<OsStr>, app_id: Option<&str>) -> Command {
     // A component restart stops its whole cgroup; apps get their own scope under app.slice.
     if std::env::var_os("INVOCATION_ID").is_none() {
         return Command::new(program);
     }
     let mut command = Command::new("systemd-run");
+    command.args([
+        "--user",
+        "--scope",
+        "--slice=app.slice",
+        "--collect",
+        "--quiet",
+    ]);
+    if let Some(app_id) = app_id {
+        command.arg(format!(
+            "--unit={}",
+            crate::app_scope::scope_name(app_id, unique())
+        ));
+    }
+    command.arg("--").arg(program);
     command
-        .args([
-            "--user",
-            "--scope",
-            "--slice=app.slice",
-            "--collect",
-            "--quiet",
-            "--",
-        ])
-        .arg(program);
-    command
+}
+
+fn unique() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos() as u64)
 }
 
 fn detached(mut command: Command) -> io::Result<()> {
@@ -103,7 +113,7 @@ fn sibling_binary(name: &str) -> Option<PathBuf> {
 
 pub(crate) fn xdg_open(path: impl AsRef<Path>) {
     let path = path.as_ref();
-    let mut command = app_command("xdg-open");
+    let mut command = app_command("xdg-open", None);
     command.arg(path);
     match spawn_client(command) {
         Ok(()) => eprintln!("menubar: xdg-open {}", path.display()),

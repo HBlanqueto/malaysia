@@ -1,7 +1,7 @@
 # 0068 — Notification Center
 
-Status: proposed (2026-11-08). Research basis for roadmap 12b; each phase is
-accepted when it ships.
+Status: phase 1 accepted (2026-11-08); each later phase is accepted when it
+ships.
 
 ## Goal and scope
 
@@ -238,8 +238,8 @@ Exact names from
    loses nothing because of step 3.
 2. **Three entry points, one model.**
    1. `org.freedesktop.Notifications` 1.3 with `actions`, `body`,
-      `body-markup`, `body-images`, `icon-static`, `persistence`, `sound`,
-      and KDE's `inline-reply`.
+      `body-markup` (shown as plain text), `icon-static`, `persistence` and
+      `sound`. KDE's `inline-reply` and `body-images` come with phase 2.
    2. `org.gtk.Notifications`, so GApplications post with a real app id.
    3. The portal crate implements `impl.portal.Notification` v2 and forwards
       to `org.gtk.Notifications`, as xdg-desktop-portal-gnome does.
@@ -254,12 +254,13 @@ Exact names from
 
    | Linux | Malaysia level |
    |---|---|
-   | urgency 0, portal `low`, `transient` | passive |
-   | urgency 1, portal `normal` | active |
-   | portal `high` or `urgent`, urgency 2 | time-sensitive |
-   | system sources (battery, shell), and apps the user allows in «Allow critical alerts» | critical |
+   | urgency 0, GTK and portal `low` | passive |
+   | urgency 1, GTK and portal `normal` | active |
+   | GTK and portal `high` | time-sensitive |
+   | urgency 2, GTK and portal `urgent` | critical, if the app has «Allow critical alerts»; otherwise active |
 
    Urgency 2 alone never breaks through Do Not Disturb (Context, item 5).
+   A `transient` notification shows its banner and is not kept.
 6. **The user decides presentation, not the app.** Per app: locations
    (Desktop, Notification Center, Lock Screen), style Temporary or
    Persistent, previews, sound, badge, grouping, time-sensitive and critical.
@@ -273,12 +274,18 @@ Exact names from
    no banner and go to the panel, as `willPresent` does by default.
 9. **Panel:** opened by clicking the clock and by a two-finger swipe from the
    right edge (the compositor reports the gesture); closed by a click outside,
-   the clock or the swipe back. Stacks, «Show less», «Clear All», hover
+   the clock or the swipe back. Phase 1 closes it with the clock, Escape or by
+   opening a notification; the swipe and the click outside need the
+   compositor. Stacks, «Show less», «Clear All», hover
    controls and the «More» menu as in Tahoe. Sizes, radii and material are
    tokens in `ctdesign`, calibrated against a real Tahoe screenshot; the
    panel does not use glass until one shows it.
-10. **Do Not Disturb, then Focus.** Option-click on the clock toggles Do Not
-    Disturb, and the menubar shows its icon. It turns on by itself while the
+10. **Do Not Disturb, then Focus.** A secondary click on the clock toggles Do
+    Not Disturb, and the menubar shows a moon. Wayland sends modifiers only to
+    the focused surface, so the menubar cannot see Option-click
+    ([`wl_keyboard.modifiers`](https://wayland.app/protocols/wayland#wl_keyboard:event:modifiers)).
+    The panel has the same switch at the top. Until Focus modes exist, Do Not
+    Disturb also silences time-sensitive notifications. It turns on by itself while the
     screen is shared or mirrored, if the setting says so. KDE's `Inhibit`
     lets an app ask for it. Silenced notifications still go to the panel.
     Focus modes with allowed apps come later.
@@ -295,7 +302,10 @@ Exact names from
     menubar gets a live area left of the status items, with compact and
     expanded presentations and the ActivityKit lifecycle (start, update,
     stale date, end, dismissal, 8 + 4 hours). The first sources are ones that
-    exist today: KDE `JobViewServer` transfers and portal `call.ongoing`.
+    exist today: KDE `JobViewServer` transfers, portal `call.ongoing` and
+    CUPS print jobs (pages printed, pause and cancel; the IPP subscription
+    path is checked against CUPS and gnome-settings-daemon before it is
+    built).
     A private interface for bk apps follows only when an app needs it.
 15. **Built with barrierkit.** The component uses what bk already has
     (`Sidebar`, `Form`, `Switch`, `PopUpButton`, `SegmentedControl`,
@@ -312,6 +322,22 @@ Exact names from
     3. Dock badges and progress, Focus modes.
     4. Live Activities, then widgets in the panel.
 
+## Phase 1 as built
+
+1. `crates/malaysia-shell/src/notifications/`: `server.rs` serves the three
+   D-Bus names, `store.rs` holds the model and the presentation rules,
+   `view.rs` draws banners and the panel with bk. The surface grows with the
+   banners and takes the full height for the panel through
+   `bk::shell::set_layer_geometry`.
+2. `org.malaysia.Notifications1` (`TogglePanel`, property `DoNotDisturb`)
+   connects the menubar clock with the component.
+3. `crates/malaysia-shell/src/app_scope.rs` names and reads app scopes.
+4. System Settings › Notifications writes `notifications.domain`
+   ([options](../configuration/options.md#notifications--notifications-system-settings--notifications-adr-0068)).
+5. `share/dbus-1/services/` activates the component through
+   `malaysia-shell@notifications.service`. `dev.sh` does not start it,
+   because in a nested session it would take the host's notification name.
+
 ## Consequences
 
 - GLib apps and Flatpaks get exact app ids, so per-app settings work for
@@ -327,7 +353,10 @@ Exact names from
 ## Not confirmed
 
 - Card radius, sizes, spacing and the banner animation and timeout; Apple
-  publishes none.
+  publishes none and no official image shows a banner. Measured on Apple's
+  WWDC25 video, the expanded Live Activity is about 314 × 132 pt with a 20 pt
+  radius, 3 pt under the menu bar; `NOTIFICATION_RADIUS` uses that 20 pt
+  until a real Tahoe screenshot measures the banner.
 - Whether the Tahoe panel uses Liquid Glass in the final release.
 - Whether Focus-silenced notifications collect in the panel on macOS.
 - The menu bar position of Live Activities relative to status items.

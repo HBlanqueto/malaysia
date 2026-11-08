@@ -68,6 +68,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0065](0065-wallpaper-tinting-per-window.md) | Wallpaper tinting per window | accepted |
 | [0066](0066-accessibility-display.md) | Accessibility › Display | accepted |
 | [0067](0067-text-size-per-toolkit-and-qt-bridge.md) | Text size per toolkit and Qt bridge | accepted |
-| [0068](0068-notification-center.md) | Notification Center | proposed |
+| [0068](0068-notification-center.md) | Notification Center | accepted (phase 1) |
 
 > ADR 0022 (Quickshell) was removed by 0025.

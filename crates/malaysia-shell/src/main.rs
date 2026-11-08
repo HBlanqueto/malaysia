@@ -1,3 +1,4 @@
+mod app_scope;
 mod desktop;
 mod dialogs;
 mod dock;
@@ -5,6 +6,7 @@ mod launcher;
 mod localize;
 mod lock;
 mod menubar;
+mod notifications;
 mod pam;
 mod power;
 mod spawn;
@@ -20,6 +22,8 @@ components:
   dock        the app dock at the bottom (running apps), Top layer
   lock        the session lock screen (ext-session-lock-v1)
   launcher    the application launcher on the Overlay layer
+  notifications
+              the notification server, banners and Notification Center
   power <restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
   force-quit  the «Forzar salida» list of running apps
@@ -36,6 +40,7 @@ fn main() -> ExitCode {
         Some("dock") => dock::run(),
         Some("lock") => lock::run(),
         Some("launcher") => launcher::run(),
+        Some("notifications") => notifications::run(),
         Some("power") => dialogs::run_confirm(std::env::args().nth(2).as_deref()),
         Some("force-quit") => dialogs::run_force_quit(),
         Some("about") => dialogs::run_about(),

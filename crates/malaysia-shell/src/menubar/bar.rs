@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bk::app::{load_defaults, use_defaults};
@@ -171,6 +171,7 @@ impl App for BarApp {
         let status_anchors = use_hook(status::StatusAnchors::default);
 
         let now = self.clock.read().clone();
+        let do_not_disturb = use_do_not_disturb();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
@@ -340,7 +341,7 @@ impl App for BarApp {
 
         bar_root(bar)
             .child(left)
-            .child(right.child(clock::clock_label(now, text)))
+            .child(right.child(clock::clock_label(now, text, do_not_disturb)))
     }
 }
 
@@ -834,6 +835,29 @@ fn now_ms() -> u32 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u32
+}
+
+fn use_do_not_disturb() -> bool {
+    let state = use_state(|| false);
+    use_hook(move || {
+        let latest = Arc::new(Mutex::new(false));
+        let shared = latest.clone();
+        let wake = Timers::get().wakeup(move || {
+            let mut state = state;
+            state.set_if_modified(
+                *shared
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            );
+        });
+        crate::notifications::watch_do_not_disturb(move |on| {
+            *latest
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = on;
+            wake.wake();
+        });
+    });
+    *state.read()
 }
 
 fn schedule_next_minute(timers: Timers, clock: State<String>) {

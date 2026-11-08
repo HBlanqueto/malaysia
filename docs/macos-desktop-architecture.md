@@ -33,7 +33,7 @@ restarts. Malaysia does the same with systemd user units.
 | `Dock.app` | Dock, Spaces, Mission Control, Exposé, hot corners; "the entire spaces system is implemented in Dock.app" and it holds the privileged WindowServer connection [C] ([yabai wiki](https://github.com/koekeishiya/yabai/wiki/Disabling-System-Integrity-Protection)) | Dock: `malaysia-shell dock`. Spaces and window policy: the compositor (`spaces.rs`), driven by the shell through Infinity | split differently (see section 5) |
 | `WindowManager.app` (13) | Stage Manager; Sequoia tiling settings share its `com.apple.WindowManager` domain [C] ([Eclectic Light](https://eclecticlight.co/2023/01/25/curious-bugs-in-help-viewer-and-stage-manager/)) | `arrange*` requests in Infinity, compositor tiling | tiling done; no Stage Manager |
 | `SystemUIServer` (10.1) and `ControlCenter.app` (11) | menu extras; system status items moved to Control Center in Big Sur [C] ([Eclectic Light](https://eclecticlight.co/2020/09/25/whats-right-at-the-end-of-the-menu-bar-and-how-its-changing/)) | `malaysia-shell menubar`: StatusNotifierWatcher and host (`bk/src/shell/status_items.rs`) | status items done; no Control Center, no volume/network/battery |
-| `NotificationCenter.app`, `usernoted` [A] ([man](https://keith.github.io/xcode-man-pages/usernoted.8.html)) | notifications, widgets | none | missing (roadmap 12b) |
+| `NotificationCenter.app`, `usernoted` [A] ([man](https://keith.github.io/xcode-man-pages/usernoted.8.html)) | notifications, widgets | `malaysia-shell notifications` (ADR 0068) | phase 1 done; no widgets |
 | `WallpaperAgent.app` (14) | wallpaper, split out of the Dock; Dock's `desktoppicture.db` retired [C] ([Apple forum, DTS](https://developer.apple.com/forums/thread/761394)) | `malaysia-wallpaper` (ADR 0049) | done, same split |
 | `Finder` | desktop icons | none | missing, not planned |
 | `mds`, `mdworker` (Spotlight) [A] ([man](https://keith.github.io/xcode-man-pages/mds.8.html)) | metadata index and search | `malaysia-shell launcher` (apps only, `.desktop` parsing) | partial |
@@ -129,7 +129,7 @@ Takeaways:
 | `NSServices` + `pbs` [A] ([properties](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/properties.html)) | pasteboard server | none; Linux has no shared standard | empty submenu only |
 | Launch Services: `CFBundleDocumentTypes`, `UTType`, default apps (12) [A] | `lsd` | XDG MIME | read only |
 | `NSDocumentController` Open Recent [A] | — | `recently-used.xbel` + `recents.domain` in the ❄ menu | done |
-| `UNUserNotificationCenter` (10.14), badges (13), Focus (12) [A] | `usernoted` | bk is a client (`bk/src/notifications.rs`); no server | missing server |
+| `UNUserNotificationCenter` (10.14), badges (13), Focus (12) [A] | `usernoted` | bk is a client (`bk/src/notifications.rs`); server in `malaysia-shell notifications` (ADR 0068) | phase 1 done; no badges or Focus |
 | Core Spotlight, App Intents, `.mdimporter` [A] | `mds` | launcher searches apps only | partial |
 | `AXUIElement`, `AXIsProcessTrusted` [A] | TCC | accesskit over AT-SPI (`bk/src/platform/atspi.rs`); session bus not set up | partial |
 | ScreenCaptureKit (12.3), `SCContentSharingPicker` (14); 15 prompts apps that skip the picker [A] ([15 release notes](https://developer.apple.com/documentation/macos-release-notes/macos-15-release-notes)) | WindowServer + TCC | `ext-image-copy-capture-v1` for unsandboxed clients; no portal ScreenCast | partial |

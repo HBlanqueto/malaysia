@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.Notifications
+Exec=@out@/bin/malaysia-shell notifications
+SystemdService=malaysia-shell@notifications.service

@@ -1,5 +1,6 @@
 mod app;
 mod localize;
+mod notifications;
 mod previews;
 mod state;
 

@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/816190fe1c785243512e512280e50bb24928f697";
+      url = "github:HBlanqueto/barrierkit/7a3464b9d4d5d14ea5a47348cedbd23b95056f4d";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -67,8 +67,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=816190fe1c785243512e512280e50bb24928f697#816190fe1c785243512e512280e50bb24928f697" =
-              "sha256-t4TLS3XC/SAC4UzegmSyIUTQftuVghDkIVGXTiAXULE=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=7a3464b9d4d5d14ea5a47348cedbd23b95056f4d#7a3464b9d4d5d14ea5a47348cedbd23b95056f4d" =
+              "sha256-+n9xEN4KAgQ/MhOGDaGEDGBPwNqVXclqKt+jvIAsv6U=";
           };
 
           env = {
@@ -127,9 +127,9 @@
             install -Dm644 share/xdg-desktop-portal/portals/malaysia.portal \
               $out/share/xdg-desktop-portal/portals/malaysia.portal
             mkdir -p $out/share/dbus-1/services
-            sed "s|@out@|$out|g" \
-              share/dbus-1/services/org.freedesktop.impl.portal.desktop.malaysia.service \
-              > $out/share/dbus-1/services/org.freedesktop.impl.portal.desktop.malaysia.service
+            for service in share/dbus-1/services/*.service; do
+              sed "s|@out@|$out|g" "$service" > "$out/share/dbus-1/services/$(basename "$service")"
+            done
 
             mkdir -p $out/share/wallpapers
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
