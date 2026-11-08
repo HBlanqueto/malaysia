@@ -77,13 +77,14 @@ impl Layers {
             return Some(layer_surface);
         }
 
+        let reserved = self.reserved();
         if let Some(entry) = self
             .mapped
             .iter_mut()
             .find(|e| e.surface.wl_surface() == surface)
         {
             let state = cached_state_of(surface);
-            let geometry = geometry_of(&state, output_size);
+            let geometry = geometry_of(&state, output_size, reserved);
             let exclusive_zone = exclusive_zone_of(&state);
             if geometry != entry.geometry || exclusive_zone != entry.exclusive_zone {
                 entry.surface.with_pending_state(|pending| {
@@ -109,7 +110,7 @@ impl Layers {
 
     fn configure(&mut self, surface: &LayerSurface, output_size: Size<i32, Logical>) {
         let state = cached_state_of(surface.wl_surface());
-        let geometry = geometry_of(&state, output_size);
+        let geometry = geometry_of(&state, output_size, self.reserved());
         surface.with_pending_state(|pending| {
             pending.size = Some(geometry.size);
         });
@@ -199,6 +200,10 @@ impl Layers {
             })
             .map(|entry| entry.exclusive_zone)
             .sum()
+    }
+
+    fn reserved(&self) -> (i32, i32) {
+        (self.exclusive_top(), self.exclusive_bottom())
     }
 
     pub fn all(&self) -> impl Iterator<Item = &LayerEntry> {
@@ -357,6 +362,7 @@ fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
 fn geometry_of(
     state: &LayerSurfaceCachedState,
     output_size: Size<i32, Logical>,
+    (reserved_top, reserved_bottom): (i32, i32),
 ) -> Rectangle<i32, Logical> {
     let margins = state.margin;
     let anchors = state.anchor;
@@ -384,7 +390,7 @@ fn geometry_of(
     } else if anchors.contains(Anchor::BOTTOM) {
         output_size.h - margins.bottom - height
     } else {
-        (output_size.h - height) / 2
+        reserved_top + (output_size.h - reserved_top - reserved_bottom - height) / 2
     };
 
     Rectangle::new(
