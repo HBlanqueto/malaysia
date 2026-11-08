@@ -645,7 +645,12 @@ fn menu_sources(app_name: String, app_id: String) -> remote::MenuSources {
     let window_items: ItemsSource = {
         let app_name = app_name.clone();
         Rc::new(move || {
-            focused::window_menu_items(&app_name, &app_id, &Toplevels::get().list.read())
+            focused::window_menu_items(
+                &app_name,
+                &app_id,
+                &Toplevels::get().list.read(),
+                Toplevels::get().focus_bar.peek().over_focus(),
+            )
         })
     };
     let help_items: ItemsSource = {

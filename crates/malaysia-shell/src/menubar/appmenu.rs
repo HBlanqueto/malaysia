@@ -198,7 +198,7 @@ fn go_menu_items() -> Vec<MenuItem> {
 
 fn window_menu_items(entries: &[DesktopEntry], toplevels: &[ToplevelInfo]) -> Vec<MenuItem> {
     let any_minimized = toplevels.iter().any(|window| window.minimized);
-    let mut items = focused::window_controls(None);
+    let mut items = focused::window_controls(None, false);
     items.extend([
         MenuItem::Separator,
         MenuItem::action("app-show-all", tr!("menu-bring-all-to-front"))

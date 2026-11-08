@@ -51,10 +51,11 @@ pub fn window_menu_items(
     app_name: &str,
     app_id: &str,
     toplevels: &[ToplevelInfo],
+    full_screen: bool,
 ) -> Vec<MenuItem> {
     let app: Vec<&ToplevelInfo> = app_windows(toplevels, app_id).collect();
     let active = active_window(&app);
-    let mut items = window_controls(active);
+    let mut items = window_controls(active, full_screen);
     items.extend([
         MenuItem::Separator,
         MenuItem::action(
@@ -78,8 +79,13 @@ pub fn window_menu_items(
     items
 }
 
-pub(crate) fn window_controls(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
+pub(crate) fn window_controls(active: Option<&ToplevelInfo>, full_screen: bool) -> Vec<MenuItem> {
     let has_active = active.is_some();
+    let full_screen_label = if full_screen {
+        tr!("window-exit-full-screen")
+    } else {
+        tr!("window-enter-full-screen")
+    };
     vec![
         MenuItem::action(
             active_id("app-window-minimize", active),
@@ -101,24 +107,12 @@ pub(crate) fn window_controls(active: Option<&ToplevelInfo>) -> Vec<MenuItem> {
         MenuItem::Separator,
         MenuItem::submenu(tr!("window-move-resize"), move_resize_items(active))
             .with_icon(MenuIcon::svg(icons::GRID)),
-        MenuItem::submenu(
-            tr!("window-full-screen-tile"),
-            vec![
-                MenuItem::action("app-window-screen-left", tr!("window-screen-left"))
-                    .with_enabled(false),
-                MenuItem::action("app-window-screen-right", tr!("window-screen-right"))
-                    .with_enabled(false),
-                MenuItem::Separator,
-                MenuItem::action(
-                    active_id("app-window-fullscreen", active),
-                    tr!("window-enter-full-screen"),
-                )
-                .with_shortcut("Ctrl+Super+F")
-                .with_enabled(has_active),
-            ],
+        MenuItem::action(
+            active_id("app-window-fullscreen", active),
+            full_screen_label,
         )
-        .with_enabled(has_active)
-        .with_icon(MenuIcon::svg(icons::SPLIT)),
+        .with_shortcut("Ctrl+Super+F")
+        .with_enabled(has_active),
     ]
 }
 
@@ -252,7 +246,9 @@ fn on_window_action(toplevels: &Toplevels, list: &[ToplevelInfo], verb: &str, id
         "app-window-close" => toplevels.close(id),
         "app-window-activate" => toplevels.activate(id),
         "app-move-restore" => toplevels.restore(id),
-        "app-window-fullscreen" => toplevels.set_fullscreen(id, true),
+        "app-window-fullscreen" => {
+            toplevels.set_fullscreen(id, !toplevels.focus_bar.peek().over_focus());
+        }
         verb => {
             if let Some(layout) = window_layout(verb) {
                 toplevels.arrange(id, layout);
@@ -477,7 +473,7 @@ mod tests {
 
     #[test]
     fn window_menu_lists_only_the_app_windows_with_the_active_checked() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", &toplevels(), false);
         let listed: Vec<&MenuItem> = items
             .iter()
             .filter(|item| matches!(item, MenuItem::Action { id, .. } if id.starts_with("app-window-activate:")))
@@ -503,20 +499,20 @@ mod tests {
 
     #[test]
     fn window_menu_controls_are_enabled() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", &toplevels(), false);
         assert!(enabled(&items, tr!("window-minimize")));
         assert!(enabled(&items, tr!("window-maximize")));
         assert!(enabled(&items, tr!("window-fill")));
         assert!(enabled(&items, tr!("window-center")));
         assert!(enabled(&items, tr!("window-move-resize")));
-        assert!(enabled(&items, tr!("window-full-screen-tile")));
+        assert!(enabled(&items, tr!("window-enter-full-screen")));
         assert!(enabled(&items, tr!("menu-close-window")));
         assert!(enabled(&items, tr!("menu-bring-all-to-front")));
     }
 
     #[test]
     fn move_and_resize_submenu_has_headers_and_enabled_geometry_items() {
-        let items = window_menu_items("Foot", "foot", &toplevels());
+        let items = window_menu_items("Foot", "foot", &toplevels(), false);
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
             .find(|item| item.label() == Some(tr!("window-move-resize")))
@@ -545,7 +541,7 @@ mod tests {
     fn restore_is_enabled_when_the_active_window_is_restorable() {
         let mut toplevels = toplevels();
         toplevels[0].restorable = true;
-        let items = window_menu_items("Foot", "foot", &toplevels);
+        let items = window_menu_items("Foot", "foot", &toplevels, false);
         let Some(MenuItem::Submenu { items: layout, .. }) = items
             .iter()
             .find(|item| item.label() == Some(tr!("window-move-resize")))

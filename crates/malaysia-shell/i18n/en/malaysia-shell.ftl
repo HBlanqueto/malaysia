@@ -97,10 +97,8 @@ window-maximize = Maximize
 window-fill = Fill
 window-center = Center
 window-move-resize = Move & Resize
-window-full-screen-tile = Full Screen Tile
-window-screen-left = Left of Screen
-window-screen-right = Right of Screen
 window-enter-full-screen = Enter Full Screen
+window-exit-full-screen = Exit Full Screen
 
 move-halves = Halves
 move-left = Left

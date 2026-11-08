@@ -97,10 +97,8 @@ window-maximize = Maximizar
 window-fill = Rellenar
 window-center = Centrar
 window-move-resize = Trasladar y redimensionar
-window-full-screen-tile = Ventana a pantalla completa
-window-screen-left = Izquierda de la pantalla
-window-screen-right = Derecha de la pantalla
 window-enter-full-screen = Activar pantalla completa
+window-exit-full-screen = Salir de pantalla completa
 
 move-halves = Mitades
 move-left = Izquierda
