@@ -29,11 +29,11 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
 
 1. **Protocol** `infinity_window_style_v1` (barrierkit): `set_toolbar`
    becomes `set_bar(wl_surface, bar)`, with the `bar` enum: `titlebar`,
-   `compact`, `unified` and `utility`. A later request replaces the
+   `unified_compact`, `unified` and `utility`. A later request replaces the
    earlier one.
 2. **Tokens** (`ctdesign`): `components.window.corner` →
    `WINDOW_CORNER`, with the same names as the `bar` enum: `titlebar`
-   (16), `compact` (20), `unified` (26) and `utility` (15), plus the
+   (16), `unified_compact` (20), `unified` (26) and `utility` (15), plus the
    continuous corner's `expansion` and `exponent`.
 3. **Compositor**, in `window_style::corner_radius`:
 
@@ -51,7 +51,7 @@ ADR 0058 only told "with a toolbar" (26) from "without one" (16).
    0.0076·R (0.2 pt at R = 26); the arc deviated 0.014·R. The shader caps
    the extent at half the shorter side.
 5. **barrierkit:** a `close_only` `Titlebar` sends `titlebar`; with an
-   island sidebar (52 pt), `unified`; the rest (40 pt), `compact`. If the
+   island sidebar (52 pt), `unified`; the rest (40 pt), `unified_compact`. If the
    sidebar style changes, it sends it again.
 6. **User's fixed radius:** `window.corner_radius` in `window.domain`
    wins over the table and over `set_bar`, like macOS

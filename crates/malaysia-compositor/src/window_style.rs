@@ -178,7 +178,7 @@ pub(crate) fn corner_radius(
         return radius;
     }
     match (bar, role) {
-        (Some(Bar::Compact), _) => corner.compact,
+        (Some(Bar::UnifiedCompact), _) => corner.unified_compact,
         (Some(Bar::Unified), _) | (None, Role::Dialog) => corner.unified,
         (Some(Bar::Utility), _) => corner.utility,
         (None, Role::Toplevel) if client_decorated => corner.unified,
@@ -215,7 +215,7 @@ mod tests {
     fn each_bar_gets_the_tahoe_radius() {
         let radius = |bar| corner_radius(None, Some(bar), Role::Toplevel, true);
         assert_eq!(radius(Bar::Titlebar), 16);
-        assert_eq!(radius(Bar::Compact), 20);
+        assert_eq!(radius(Bar::UnifiedCompact), 20);
         assert_eq!(radius(Bar::Unified), 26);
         assert_eq!(radius(Bar::Utility), 15);
     }
