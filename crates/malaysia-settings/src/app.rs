@@ -18,11 +18,7 @@ use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview
 use crate::state::{account_name, initials, save_config};
 
 const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
-const WINDOW_COLORS: [WindowColorMode; 3] = [
-    WindowColorMode::Neutral,
-    WindowColorMode::Accent,
-    WindowColorMode::Wallpaper,
-];
+const WINDOW_COLORS: [WindowColorMode; 2] = [WindowColorMode::Neutral, WindowColorMode::Accent];
 const STRENGTHS: [TintStrength; 4] = [
     TintStrength::Subtle,
     TintStrength::Normal,
@@ -64,13 +60,23 @@ pub fn settings_window(
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
         .sidebar_resizable(false);
-    let window = window.group(PaneGroup::new(None).pane(Pane::new(
-        "appearance",
-        tr!("appearance"),
-        Symbol::CircleHalf,
-        SETTINGS.section_icon_bg,
-        appearance(config, dominant, resolved, error),
-    )));
+    let window = window.group(
+        PaneGroup::new(None)
+            .pane(Pane::new(
+                "appearance",
+                tr!("appearance"),
+                Symbol::CircleHalf,
+                SETTINGS.section_icon_bg,
+                appearance(config, dominant, resolved, error),
+            ))
+            .pane(Pane::new(
+                "accessibility",
+                tr!("accessibility"),
+                Symbol::Accessibility,
+                SETTINGS.section_icon_bg,
+                accessibility(config, error),
+            )),
+    );
     let message = error.read().clone();
     rect()
         .width(Size::fill())
@@ -122,7 +128,6 @@ fn appearance(
                         .control(
                             ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
                                 .selected(accent_index(config))
-                                .disabled(config.window_color == WindowColorMode::Wallpaper)
                                 .on_change(edit(error, |config, index: usize| {
                                     let color = ACCENT_SWATCHES[index].1;
                                     config.accent_color = Some([color.r, color.g, color.b]);
@@ -137,7 +142,6 @@ fn appearance(
                 )
                 .row(
                     Row::new(tr!("tint-strength"))
-                        .detail(tr!("tint-strength-help"))
                         .keywords(tr_list!("tint-strength-keywords"))
                         .control(
                             Slider::stepped(tr!("tint-strength"), STRENGTHS.len())
@@ -150,16 +154,7 @@ fn appearance(
                                 ))
                                 .disabled(tint_disabled)
                                 .on_change(edit(error, |config, index: usize| {
-                                    let strength = STRENGTHS[index];
-                                    match config.window_color {
-                                        WindowColorMode::Accent => {
-                                            config.tint_strength_accent = strength
-                                        }
-                                        WindowColorMode::Wallpaper => {
-                                            config.tint_strength_wallpaper = strength
-                                        }
-                                        WindowColorMode::Neutral => {}
-                                    }
+                                    config.tint_strength_accent = STRENGTHS[index];
                                 })),
                         ),
                 )
@@ -212,8 +207,46 @@ fn appearance(
                                     config.scroll_bars = SCROLL_BARS[index];
                                 })),
                         )),
-                ),
+                )
+                .row(wallpaper_tinting_row(config, error)),
         )
+}
+
+fn wallpaper_tinting_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
+    let accent_tints = config.window_color == WindowColorMode::Accent;
+    let row = Row::new(tr!("wallpaper-tinting"))
+        .keywords(tr_list!("wallpaper-tinting-keywords"))
+        .control(
+            Switch::new(tr!("wallpaper-tinting"))
+                .on(config.wallpaper_tinting)
+                .disabled(accent_tints)
+                .on_toggle(edit(error, |config, on: bool| {
+                    config.wallpaper_tinting = on;
+                })),
+        );
+    if accent_tints {
+        row.detail(tr!("wallpaper-tinting-accent-help"))
+    } else {
+        row
+    }
+}
+
+fn accessibility(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
+    Form::new().section(
+        Section::titled(tr!("display")).row(
+            Row::new(tr!("wallpaper-tinting-in-light"))
+                .detail(tr!("wallpaper-tinting-in-light-help"))
+                .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
+                .control(
+                    Switch::new(tr!("wallpaper-tinting-in-light"))
+                        .on(config.wallpaper_tinting_in_light)
+                        .disabled(!config.wallpaper_tinting)
+                        .on_toggle(edit(error, |config, on: bool| {
+                            config.wallpaper_tinting_in_light = on;
+                        })),
+                ),
+        ),
+    )
 }
 
 fn scheme_cards(
@@ -245,23 +278,19 @@ fn window_color_cards(
     dominant: Option<Rgba>,
     error: State<Option<String>>,
 ) -> ChoiceCards {
-    [
-        tr!("window-color-neutral"),
-        tr!("window-color-accent"),
-        tr!("window-color-wallpaper"),
-    ]
-    .into_iter()
-    .zip(WINDOW_COLORS)
-    .fold(
-        ChoiceCards::new(tr!("window-color")),
-        |cards, (caption, mode)| {
-            cards.option(caption, window_color_preview(config, mode, dominant))
-        },
-    )
-    .selected(position(&WINDOW_COLORS, config.window_color))
-    .on_change(edit(error, |config, index: usize| {
-        config.window_color = WINDOW_COLORS[index];
-    }))
+    [tr!("window-color-neutral"), tr!("window-color-accent")]
+        .into_iter()
+        .zip(WINDOW_COLORS)
+        .fold(
+            ChoiceCards::new(tr!("window-color")),
+            |cards, (caption, mode)| {
+                cards.option(caption, window_color_preview(config, mode, dominant))
+            },
+        )
+        .selected(position(&WINDOW_COLORS, config.window_color))
+        .on_change(edit(error, |config, index: usize| {
+            config.window_color = WINDOW_COLORS[index];
+        }))
 }
 
 fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) -> VStack {
@@ -376,7 +405,6 @@ fn window_color_help(mode: WindowColorMode) -> &'static str {
     match mode {
         WindowColorMode::Neutral => tr!("window-color-neutral-help"),
         WindowColorMode::Accent => tr!("window-color-accent-help"),
-        WindowColorMode::Wallpaper => tr!("window-color-wallpaper-help"),
     }
 }
 
@@ -392,7 +420,6 @@ fn accent_index(config: &AppearanceConfig) -> Option<usize> {
 fn strength_index(config: &AppearanceConfig) -> usize {
     let strength = match config.window_color {
         WindowColorMode::Accent => config.tint_strength_accent,
-        WindowColorMode::Wallpaper => config.tint_strength_wallpaper,
         WindowColorMode::Neutral => TintStrength::default(),
     };
     position(&STRENGTHS, strength)

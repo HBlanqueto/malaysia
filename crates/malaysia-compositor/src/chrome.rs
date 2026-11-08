@@ -909,8 +909,8 @@ fn blend(dst: &mut [u8], src: ctdesign::Rgba, coverage: f32) {
 mod tests {
     use super::*;
     use ctdesign::{
-        BG_WINDOW_LIGHT, ButtonKind, DARK, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
-        TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT, WINDOW_TINT_WALLPAPER,
+        BG_WINDOW_LIGHT, ButtonKind, DARK_TINT, LIGHT, TRAFFIC_CLOSE_MINIMIZE_DARKEN,
+        TRAFFIC_GLYPH_STANDARD, TRAFFIC_ZOOM_LIGHTEN, WINDOW_TINT_ACCENT,
     };
     use malaysia_scene::geometry::Rect;
 
@@ -986,43 +986,6 @@ mod tests {
             accent.darken(TRAFFIC_CLOSE_MINIMIZE_DARKEN)
         );
         assert_eq!(theme.lights[2], accent.lighten(TRAFFIC_ZOOM_LIGHTEN));
-    }
-
-    #[test]
-    fn wallpaper_tinting_uses_the_dominant_colour() {
-        let appearance = AppearanceConfig {
-            color_scheme: ColorScheme::Dark,
-            window_color: WindowColorMode::Wallpaper,
-            ..AppearanceConfig::default()
-        };
-        let wallpaper = Rgba {
-            r: 0.1,
-            g: 0.5,
-            b: 0.9,
-            a: 1.0,
-        };
-        let theme = ChromeTheme::from_parts(&appearance, Some(wallpaper));
-        let factor = WINDOW_TINT_WALLPAPER[1];
-        let accent = theme.palette.accent;
-        assert_ne!(accent, wallpaper);
-        assert!(
-            accent.contrast_ratio(ctdesign::BG_WINDOW_DARK) >= 3.0,
-            "derived accent must contrast with the window background"
-        );
-        assert_eq!(
-            theme.palette.titlebar_bg.focused,
-            ctdesign::BG_WINDOW_DARK.mix(wallpaper, factor)
-        );
-        assert_eq!(
-            theme.palette.titlebar_bg.unfocused,
-            DARK.titlebar_bg.unfocused.mix(wallpaper, factor)
-        );
-        assert_eq!(
-            theme.palette.hairline,
-            DARK.line
-                .mix(wallpaper, factor * ctdesign::LAYER_FACTOR_LINE)
-        );
-        assert_eq!(theme.lights[2], wallpaper.lighten(TRAFFIC_ZOOM_LIGHTEN));
     }
 
     #[test]

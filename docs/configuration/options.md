@@ -102,14 +102,15 @@ They are not domain options; they are fixed and documented here:
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"when_scrolling"` \| `"always"` | `"when_scrolling"` | **active** | the kit's `ScrollView`: the bar shows only while scrolling or always, **System Settings** |
 | `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
-| `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings** |
-| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints menubar/dock (20 % / 26 %), **System Settings** |
+| `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
+| `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **active** | titlebar traffic lights, **System Settings** |
 | `appearance.traffic_light_shape` | `"square"` \| `"round"` | `"square"` | **active** | traffic light shape (radius 4 or circle), **System Settings** |
 | `appearance.tint_strength_accent` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of `window_color = "accent"` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings** |
-| `appearance.tint_strength_wallpaper` | same values | `"normal"` | **active** | strength of `window_color = "wallpaper"`, **System Settings** |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"` | all five | **active** | which surfaces the tint reaches, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
+| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window mixes the wallpaper behind it into its background, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
+| `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility** |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
 macOS: "Appearance: **Light / Dark / Auto**" and "**Accent color**"; "Increase
@@ -139,10 +140,15 @@ background). With `reduce_transparency = true` the island stays opaque, but keep
 its radius, outline and shadow.
 
 `window_color` is Tengen's idea "Settings › Appearance › Window
-color": `neutral` does not tint, `accent` mixes the accent with the titlebar
-background (6 % in light, 8 % in dark, at `normal` strength) and `wallpaper` uses the dominant color of the
-wallpaper (7 % / 9 %). Traffic lights in `auto` follow the mode (standard in neutral,
-derived from the accent/wallpaper in the others).
+color": `neutral` does not tint and `accent` mixes the accent with the titlebar
+background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
+`auto` follow the mode (standard in neutral, derived from the accent in accent).
+
+`wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
+The compositor sends each BarrierKit window the average color of the wallpaper
+behind it, and the window mixes it into its background (9 % in dark, 7 % in
+light with `wallpaper_tinting_in_light`; provisional values, ADR 0065). It
+needs a neutral `window_color` and an accent other than graphite.
 
 ## `language` — language (System Settings → General → Language & Region)
 
@@ -419,13 +425,14 @@ contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 reduce_transparency = true      # Reduce transparency (solid backgrounds; false = future blur)
 scroll_bars = "when_scrolling"  # when_scrolling | always
-window_color = "neutral"        # neutral | accent | wallpaper
+window_color = "neutral"        # neutral | accent
 window_tint_scope = "windows"   # windows | desktop (tints menubar/dock)
 tint_strength_accent = "normal"     # subtle | normal | strong | intense
-tint_strength_wallpaper = "normal"  # subtle | normal | strong | intense
 tint_parts = ["sidebars", "window", "groups", "controls", "menus"]
 traffic_lights = "auto"         # auto | standard | accent | wallpaper
 traffic_light_shape = "square"  # square | round
+wallpaper_tinting = true        # tint windows with the wallpaper behind them
+wallpaper_tinting_in_light = false
 ```
 
 ```toml

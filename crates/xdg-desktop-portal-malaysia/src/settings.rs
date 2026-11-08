@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
 
-use ctappearance::{AppearanceConfig, WindowColorMode, load_dominant, read_appearance, resolve};
+use ctappearance::{AppearanceConfig, TrafficLightStyle, load_dominant, read_appearance, resolve};
 use ctdesign::Rgba;
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use zbus::blocking::Connection;
@@ -55,7 +55,7 @@ impl Values {
     fn from_appearance(appearance: Option<&AppearanceConfig>) -> Self {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
-        let dominant = if appearance.window_color == WindowColorMode::Wallpaper {
+        let dominant = if appearance.traffic_light_style() == TrafficLightStyle::Wallpaper {
             load_dominant()
         } else {
             None
@@ -273,7 +273,7 @@ fn owned(value: Value<'static>) -> OwnedValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ctappearance::ColorScheme;
+    use ctappearance::{ColorScheme, WindowColorMode};
     use ctdesign::{DARK, LIGHT};
 
     #[test]
@@ -295,29 +295,6 @@ mod tests {
             ..AppearanceConfig::default()
         };
         assert_eq!(Values::from_appearance(Some(&tint)).color_scheme, 1);
-    }
-
-    #[test]
-    fn wallpaper_mode_publishes_the_dominant_accent() {
-        let appearance = AppearanceConfig {
-            window_color: WindowColorMode::Wallpaper,
-            ..AppearanceConfig::default()
-        };
-        let wallpaper = Rgba {
-            r: 0.1,
-            g: 0.5,
-            b: 0.9,
-            a: 1.0,
-        };
-        let accent = Values::from_parts(&appearance, Some(wallpaper), true).accent;
-        assert_ne!(
-            accent,
-            (
-                f64::from(wallpaper.r),
-                f64::from(wallpaper.g),
-                f64::from(wallpaper.b)
-            )
-        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use smithay::reexports::wayland_server::backend::{ClientId, GlobalId};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -22,9 +22,11 @@ pub struct FocusNoticeGlobalData;
 pub struct FocusNoticeSurfaceData {
     surface: WlSurface,
     overlay: AtomicBool,
+    wallpaper: AtomicU32,
 }
 
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
+const NO_WALLPAPER: u32 = u32::MAX;
 
 impl FocusNoticeGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -62,6 +64,7 @@ impl Dispatch2<InfinityFocusManagerV1, State> for FocusNoticeGlobalData {
                 FocusNoticeSurfaceData {
                     surface: surface.clone(),
                     overlay: AtomicBool::new(false),
+                    wallpaper: AtomicU32::new(NO_WALLPAPER),
                 },
             );
             state.focus_notices.push(notice);
@@ -91,6 +94,39 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
 }
 
 impl State {
+    pub(crate) fn send_wallpaper_colors(&mut self) {
+        let Some(grid) = self.wallpaper_grid.as_ref() else {
+            return;
+        };
+        let output = self.logical_output_size();
+        let output = (f64::from(output.w), f64::from(output.h));
+        self.focus_notices.retain(|notice| notice.is_alive());
+        for notice in &self.focus_notices {
+            let Some(data) = notice.data::<FocusNoticeSurfaceData>() else {
+                continue;
+            };
+            let Some(window) = self
+                .windows
+                .iter()
+                .find(|window| *window.surface() == data.surface)
+            else {
+                continue;
+            };
+            let outer = window.outer();
+            let Some(color) = grid.behind(
+                output,
+                (outer.x(), outer.y(), outer.width(), outer.height()),
+            ) else {
+                continue;
+            };
+            let [r, g, b, _] = color.to_rgba8();
+            let rgb = u32::from_be_bytes([0, r, g, b]);
+            if notice.version() >= 3 && data.wallpaper.swap(rgb, Ordering::Relaxed) != rgb {
+                notice.wallpaper(rgb);
+            }
+        }
+    }
+
     pub(crate) fn focus_overlay(&self, window: WindowId) -> bool {
         let Some(surface) = self.windows.surface_of(window) else {
             return false;

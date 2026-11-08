@@ -33,7 +33,7 @@ Normal SSD windows (not maximized or fullscreen) are resized from an outer band:
 
 ## Color
 
-`appearance.window_color` tints the titlebar: `neutral` does not tint, `accent` uses the accent (6 %/8 %) and `wallpaper` the dominant color (7 %/9 %). `traffic_lights` forces `standard`, `accent` or `wallpaper`; `window_tint_scope = "desktop"` tints the menubar and the dock (20 %/26 %).
+`appearance.window_color` tints the titlebar: `neutral` does not tint and `accent` uses the accent (6 %/8 %). `traffic_lights` forces `standard`, `accent` or `wallpaper`; `window_tint_scope = "desktop"` also tints the menubar and the dock with the accent. BarrierKit windows also take the wallpaper behind them (`wallpaper_tinting`, ADR 0065).
 
 ## Buttons and double click
 

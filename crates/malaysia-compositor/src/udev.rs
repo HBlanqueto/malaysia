@@ -690,6 +690,7 @@ impl Udev {
         ) {
             self.redraw();
         }
+        self.state.send_wallpaper_colors();
         if let Err(error) = self.display.flush_clients() {
             warn!(%error, "flushing clients");
         }

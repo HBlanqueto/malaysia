@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use ctappearance::tinting::WallpaperGrid;
 use ctdesign::Rgba;
 
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
@@ -61,7 +62,11 @@ pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wall
         None => load_default_image(),
     };
 
-    if let Err(error) = ctappearance::write_dominant(state_path, dominant(&decoded)) {
+    let state = ctappearance::WallpaperState {
+        dominant: dominant(&decoded).map(|color| [color.r, color.g, color.b]),
+        grid: grid(&decoded),
+    };
+    if let Err(error) = ctappearance::write_wallpaper_state(state_path, &state) {
         tracing::error!(%error, "failed to write the state");
     }
     Wallpaper {
@@ -378,6 +383,15 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
         .flat_map(|index| image.rgba8_at(index))
         .collect();
     ctappearance::backdrop::dominant_from_pixels(&samples)
+}
+
+fn grid(image: &DecodedImage) -> Option<WallpaperGrid> {
+    let small = image.downscale_to_fit(ctdesign::BACKDROP.samples);
+    let (width, height) = (small.size.0 as usize, small.size.1 as usize);
+    let rgba8: Vec<u8> = (0..width * height)
+        .flat_map(|pixel| small.rgba8_at(pixel * 4))
+        .collect();
+    WallpaperGrid::from_rgba8(&rgba8, width, height)
 }
 
 #[cfg(test)]

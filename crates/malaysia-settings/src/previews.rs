@@ -219,23 +219,6 @@ mod tests {
     use ctdesign::Rgba;
 
     #[test]
-    fn auto_theme_preview_keeps_window_color_and_uses_dominant() {
-        let dominant = Rgba {
-            r: 0.8,
-            g: 0.2,
-            b: 0.1,
-            a: 1.0,
-        };
-        let config = AppearanceConfig {
-            window_color: WindowColorMode::Wallpaper,
-            ..AppearanceConfig::default()
-        };
-        let preview = preview_for_theme(&config, ColorScheme::Auto, Some(dominant));
-        assert_ne!(preview.accent, dominant);
-        assert!(preview.window_tint.is_some());
-    }
-
-    #[test]
     fn auto_theme_preview_keeps_accent_when_window_color_is_neutral() {
         let accent = Rgba {
             r: 0.0,

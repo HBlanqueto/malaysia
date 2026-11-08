@@ -141,7 +141,7 @@ mod tests {
         std::fs::create_dir_all(&config_dir).expect("create the temp config dir");
         std::fs::write(
             config_dir.join("appearance.domain"),
-            "color_scheme = \"dark\"\nwindow_color = \"wallpaper\"\nwindow_tint_scope = \"desktop\"\ntraffic_lights = \"accent\"\n",
+            "color_scheme = \"dark\"\nwindow_color = \"accent\"\nwindow_tint_scope = \"desktop\"\ntraffic_lights = \"accent\"\n",
         )
         .expect("write appearance.domain");
         std::fs::write(config_dir.join("display.domain"), "scale = 1.5\n")
@@ -154,7 +154,7 @@ mod tests {
 
         let config = Config::load_from_dir(&config_dir);
         assert_eq!(config.appearance.color_scheme, ColorScheme::Dark);
-        assert_eq!(config.appearance.window_color, WindowColorMode::Wallpaper);
+        assert_eq!(config.appearance.window_color, WindowColorMode::Accent);
         assert_eq!(
             config.appearance.window_tint_scope,
             WindowTintScope::Desktop

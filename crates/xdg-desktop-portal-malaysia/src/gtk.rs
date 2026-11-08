@@ -728,17 +728,17 @@ mod tests {
     }
 
     #[test]
-    fn the_wallpaper_mode_tints_the_adwaita_backgrounds() {
+    fn the_accent_mode_tints_the_adwaita_backgrounds() {
         let appearance = AppearanceConfig {
-            window_color: WindowColorMode::Wallpaper,
+            window_color: WindowColorMode::Accent,
+            accent_color: Some([0.125, 0.376, 0.816]),
             ..AppearanceConfig::default()
         };
-        let dominant = Rgba::rgb8(0x20, 0x60, 0xd0);
-        let light = SchemeColors::new(&appearance, Some(dominant), ColorScheme::Light);
+        let light = SchemeColors::new(&appearance, None, ColorScheme::Light);
         let window = light.get("window_bg_color").expect("tinted window");
         assert_ne!(window, ADWAITA_LIGHT.window);
-        assert!(window.b > window.r, "the blue dominant shows in the window");
-        let dark = SchemeColors::new(&appearance, Some(dominant), ColorScheme::Dark);
+        assert!(window.b > window.r, "the blue accent shows in the window");
+        let dark = SchemeColors::new(&appearance, None, ColorScheme::Dark);
         assert!(dark.dark);
         assert!(dark.get("card_bg_color").is_none());
     }

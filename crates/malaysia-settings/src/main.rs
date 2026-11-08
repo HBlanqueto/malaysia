@@ -240,7 +240,8 @@ mod tests {
     fn radios_are_enabled_in_tinted_modes() {
         with_temp_config(|dir| {
             let path = dir.join("appearance.domain");
-            for mode in [WindowColorMode::Accent, WindowColorMode::Wallpaper] {
+            {
+                let mode = WindowColorMode::Accent;
                 let initial = AppearanceConfig {
                     window_color: mode,
                     window_tint_scope: WindowTintScope::Windows,

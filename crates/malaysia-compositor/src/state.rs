@@ -142,6 +142,7 @@ pub struct State {
     pub(crate) fullscreen: HashMap<WindowId, SceneRect<f64, SceneLogical>>,
     pub(crate) focus_desk: HashMap<WindowId, Rectangle<i32, Logical>>,
     pub(crate) infinity_managers: Vec<InfinityWindowManagerV1>,
+    pub(crate) wallpaper_grid: Option<ctappearance::tinting::WallpaperGrid>,
     pub(crate) focus_notices: Vec<
         infinity_protocol::server::focus::infinity_focus_v1::infinity_focus_surface_v1::InfinityFocusSurfaceV1,
     >,
@@ -387,6 +388,7 @@ impl State {
             appmenu: AppMenuState::new(display_handle),
             gtk: GtkShellState::new(display_handle),
             list_handles: Vec::new(),
+            wallpaper_grid: ctappearance::load_wallpaper_grid(),
             focus_notices: Vec::new(),
             minimized: std::collections::HashSet::new(),
             spaces: malaysia_scene::spaces::Spaces::new(),
@@ -426,6 +428,7 @@ impl State {
     pub(crate) fn refresh_theme(&mut self, restyled: bool) {
         self.config = Config::load();
         if restyled {
+            self.wallpaper_grid = ctappearance::load_wallpaper_grid();
             self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);
             self.request_redraw();
         }

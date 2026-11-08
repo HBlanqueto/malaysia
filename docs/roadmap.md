@@ -143,7 +143,7 @@ tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
 (`gtk4-css`, `accent-color`) and the patched libadwaita changes accent and tint
 without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
 `cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
-`window_color = "wallpaper"`. Missing: `Screenshot`/`ScreenCast` and the
+`window_color = "accent"`. Missing: `Screenshot`/`ScreenCast` and the
 permission dialogs. **12b pending:** notifications, polkit, keyring/Secret
 Service and AT-SPI.
 

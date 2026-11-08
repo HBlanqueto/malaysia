@@ -65,5 +65,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0058](0058-window-radius-with-a-toolbar.md) | Window radius with a toolbar | superseded by 0059 |
 | [0059](0059-radius-per-bar-and-continuous-corner.md) | Radius per bar kind and continuous corner | accepted |
 | [0061](0061-shortcut-menus.md) | Shortcut menus for apps without a global menu | accepted |
+| [0065](0065-wallpaper-tinting-per-window.md) | Wallpaper tinting per window | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.
