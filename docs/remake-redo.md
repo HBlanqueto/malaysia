@@ -57,7 +57,7 @@ changelog.
 | `freya-*`, `torin` | `=0.4.3` | `=0.5.0` | `Platform::get().current_window()` | the kit's version | done, `45c67ef` |
 | `smithay-client-toolkit` | 0.19.2 | 0.21.1 | nothing at 0.20 | one sctk, calloop and calloop-wayland-source less | 0.20, barrierkit's, `16d4e13` |
 | Smithay | `023b78b1` (2026-10-15) | `65aa86fa` (2026-11-03), 27 commits | winit `0.31.0-beta.3` → `beta.4`; virtual-keyboard now hands out a `KeymapFile` (`6b37edc0`), which `virtual_input.rs` uses | fixes: GLES y-inverted texture matrix, leaked drm_syncobj timeline handles, libinput queued events, `Rectangle::subtract_rects_many_in_place`, layer kept on unmap, `wl_output.done` for v1, tablet frame order | done, approved 2026-11-08 |
-| `wgpu` | 24.0.5 | 30.0.1 | six majors: `request_adapter` returns `Result` (25), `InstanceDescriptor` takes the display handle (29) and more; the wallpaper uses about six entry points | current ecosystem and fixes | **stop point:** its own step after approval |
+| `wgpu` | 24.0.5 | 30.0.1 | `InstanceDescriptor` by value with its display handle, `request_adapter` returns `Result`, `get_current_texture` returns `CurrentSurfaceTexture`, `Queue::present`, `PollType`, `immediate_size`, `multiview_mask`, `depth_slice`, `color_space`, `MipmapFilterMode`; the Vulkan backend is now a feature | only the Vulkan backend is compiled; fixes of six releases | done, approved 2026-11-08 |
 | `toml`, `png`, `zbus` | 0.8, 0.17, 5 | 1.2, 0.18, 6 | barrierkit pins the old ones | bumping only here compiles both | keep in step with barrierkit |
 | `calloop`, `nix`, `cosmic-text`, `libheif-rs`, `zune-jpeg`, `wayland-*`, `xkbcommon` | latest compatible | — | — | — | nothing to do |
 
@@ -83,9 +83,9 @@ plus this commit.
 | Incremental, touch `input.rs` | 3.9–4.0 s | 4.1–4.2 s |
 | Incremental, touch `bar.rs` | 2.5–2.6 s | 2.5–2.7 s |
 | `cargo clippy` cold | 260 s | 78 s |
-| Crates in the graph | 431 | 417 |
+| Crates in the graph | 431 | 387 (417 before wgpu 30) |
 | `cargo shear` | 6 findings | clean |
-| `cargo deny` duplicates | 49 | 43 |
+| `cargo deny` duplicates | 49 | 37 |
 | `cargo deny` sources and yanked | 5 git sources not allowed, 1 yanked | clean |
 | Files over 1500 lines | `session.rs` 3517, `input.rs` 3199, `window.rs` 1887, `handlers.rs` 1520 | `input.rs` 1598 |
 | Documents | 156 files, every one twice | one English copy each |
@@ -95,17 +95,16 @@ dominate, and neither the profile nor the splits change that.
 
 ## 6. Pending
 
-2. Approve or reject wgpu 30 for the wallpaper (section 3).
-3. Licences: `cargo deny` rejects BSL-1.0, CC0-1.0, MPL-2.0 and
+1. Licences: `cargo deny` rejects BSL-1.0, CC0-1.0, MPL-2.0 and
    Apache-2.0 WITH LLVM-exception, all already in the graph; allow them
    in `deny.toml` or replace the crates. `bandura.jpg` and the solid-colour
    wallpapers need an origin (`debt.md` R-04).
-4. curseterm pins barrierkit `36e5958` (still on its `main`). To move, it
+2. curseterm pins barrierkit `36e5958` (still on its `main`). To move, it
    applies barrierkit's ADR 0062 and 0063 renames and Freya 0.5 to 38
    files.
-5. Not run here: a nested or DRM session, `check-client-dispatch.sh` and
+3. Not run here: a nested or DRM session, `check-client-dispatch.sh` and
    one session test (they need a GPU), `nix build` and the wallpaper
    render tests on hardware.
 
-When 1–3 are decided, this document is deleted.
+When the licences are decided, this document is deleted.
 

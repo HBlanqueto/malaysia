@@ -433,6 +433,7 @@ impl App {
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         output.wgpu_surface.configure(&self.render.device, &config);
         output.configured = true;
@@ -477,21 +478,21 @@ impl App {
         let mut presented = false;
         match render_result {
             Ok(()) => presented = true,
-            Err(wgpu::SurfaceError::Outdated) => {
+            Err(wgpu::CurrentSurfaceTexture::Outdated) => {
                 self.configure_output(&output_id);
                 let output = self.outputs.get(&output_id).expect("output exists");
                 let texture = self.texture.as_ref().expect("texture exists");
                 if let Err(error) = self.render.render(&output.wgpu_surface, format, texture) {
-                    error!(%error, "render failed after reconfigure");
+                    error!(?error, "render failed after reconfigure");
                 } else {
                     presented = true;
                 }
             }
-            Err(wgpu::SurfaceError::Lost) => {
+            Err(wgpu::CurrentSurfaceTexture::Lost) => {
                 anyhow::bail!("wgpu surface lost");
             }
             Err(error) => {
-                anyhow::bail!("wgpu render error: {error}");
+                anyhow::bail!("wgpu render error: {error:?}");
             }
         }
         if presented {

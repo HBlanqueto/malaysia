@@ -43,9 +43,9 @@ const MIP_SHADER: &str = concat!(include_str!("fullscreen.wgsl"), include_str!("
 
 impl RenderContext {
     pub async fn new() -> anyhow::Result<Self> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
         let adapter = instance
@@ -53,9 +53,10 @@ impl RenderContext {
                 compatible_surface: None,
                 power_preference: wgpu::PowerPreference::LowPower,
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await
-            .ok_or_else(|| {
+            .map_err(|_| {
                 let vk_files = std::env::var("VK_DRIVER_FILES")
                     .unwrap_or_else(|_| "(sin definir)".to_string());
                 let mut msg = format!("no Vulkan adapter found; VK_DRIVER_FILES={vk_files}");
@@ -88,15 +89,14 @@ impl RenderContext {
         );
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("malaysia-wallpaper"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: limits.clone(),
-                    memory_hints: wgpu::MemoryHints::MemoryUsage,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("malaysia-wallpaper"),
+                required_features: wgpu::Features::empty(),
+                required_limits: limits.clone(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                trace: wgpu::Trace::Off,
+            })
             .await?;
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -135,7 +135,7 @@ impl RenderContext {
             label: Some("wallpaper sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             ..Default::default()
@@ -172,7 +172,7 @@ impl RenderContext {
         window: RawWindowHandle,
     ) -> anyhow::Result<wgpu::Surface<'static>> {
         let target = wgpu::SurfaceTargetUnsafe::RawHandle {
-            raw_display_handle: display,
+            raw_display_handle: Some(display),
             raw_window_handle: window,
         };
         // SAFETY: the caller keeps both raw handles alive for as long as the surface.
@@ -187,8 +187,8 @@ impl RenderContext {
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("wallpaper pipeline layout"),
-                bind_group_layouts: &[&self.bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&self.bind_group_layout)],
+                immediate_size: 0,
             });
         let shader = self
             .device
@@ -220,7 +220,7 @@ impl RenderContext {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 }),
         );
@@ -364,8 +364,10 @@ impl RenderContext {
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("wallpaper pass"),
+                multiview_mask: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -388,24 +390,25 @@ impl RenderContext {
         surface: &wgpu::Surface<'_>,
         format: wgpu::TextureFormat,
         texture: &WallpaperTexture,
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) -> Result<(), wgpu::CurrentSurfaceTexture> {
         let output = match surface.get_current_texture() {
-            Ok(output) => output,
-            Err(wgpu::SurfaceError::Outdated) => {
+            wgpu::CurrentSurfaceTexture::Success(output)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(output) => output,
+            wgpu::CurrentSurfaceTexture::Outdated => {
                 tracing::warn!("surface outdated, will reconfigure");
-                return Err(wgpu::SurfaceError::Outdated);
+                return Err(wgpu::CurrentSurfaceTexture::Outdated);
             }
-            Err(wgpu::SurfaceError::Lost) => {
+            wgpu::CurrentSurfaceTexture::Lost => {
                 tracing::error!("surface lost");
-                return Err(wgpu::SurfaceError::Lost);
+                return Err(wgpu::CurrentSurfaceTexture::Lost);
             }
-            Err(error) => return Err(error),
+            other => return Err(other),
         };
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         self.draw(&view, format, texture);
-        output.present();
+        self.queue.present(output);
         Ok(())
     }
 }
@@ -486,7 +489,7 @@ fn generate_mipmaps(
     let pipeline = pipelines.entry(format).or_insert_with(|| {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("mipmap pipeline layout"),
-            bind_group_layouts: &[&device.create_bind_group_layout(
+            bind_group_layouts: &[Some(&device.create_bind_group_layout(
                 &wgpu::BindGroupLayoutDescriptor {
                     label: Some("mipmap bind group layout"),
                     entries: &[
@@ -508,8 +511,8 @@ fn generate_mipmaps(
                         },
                     ],
                 },
-            )],
-            push_constant_ranges: &[],
+            ))],
+            immediate_size: 0,
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("mipmap shader"),
@@ -537,7 +540,7 @@ fn generate_mipmaps(
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     });
@@ -588,8 +591,10 @@ fn generate_mipmaps(
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("mipmap pass"),
+                multiview_mask: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &dst_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -689,8 +694,13 @@ mod tests {
 
         let slice = buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
-        ctx.device.poll(wgpu::Maintain::Wait);
-        slice.get_mapped_range().to_vec()
+        ctx.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the readback should finish");
+        slice
+            .get_mapped_range()
+            .expect("the readback buffer is mapped")
+            .to_vec()
     }
 
     fn reference_color(image: &DecodedImage, x: u32, y: u32, surf_w: u32, surf_h: u32) -> [u8; 4] {
