@@ -99,10 +99,7 @@ dominate, and neither the profile nor the splits change that.
    Apache-2.0 WITH LLVM-exception, all already in the graph; allow them
    in `deny.toml` or replace the crates. `bandura.jpg` and the solid-colour
    wallpapers need an origin (`debt.md` R-04).
-2. curseterm pins barrierkit `36e5958` (still on its `main`). To move, it
-   applies barrierkit's ADR 0062 and 0063 renames and Freya 0.5 to 38
-   files.
-3. Not run here: a nested or DRM session, `check-client-dispatch.sh` and
+2. Not run here: a nested or DRM session, `check-client-dispatch.sh` and
    one session test (they need a GPU), `nix build` and the wallpaper
    render tests on hardware.
 

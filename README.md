@@ -35,9 +35,7 @@ The flake exposes `nixosModules.default`:
 }
 ```
 
-`programs.malaysia.enable` installs the package and the
-[CurseTerm](https://github.com/HBlanqueto/curseterm) terminal (the flake's
-`curseterm` input), registers the session in the display
+`programs.malaysia.enable` installs the package, registers the session in the display
 manager, creates `/etc/pam.d/malaysia-lock`, enables `hardware.graphics` and starts
 `malaysia-session.target` with the `menubar` and `dock` components
 (`programs.malaysia.shellComponents`) and the wallpaper

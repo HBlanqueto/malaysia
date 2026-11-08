@@ -9,15 +9,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
-    curseterm = {
-      url = "git+https://github.com/HBlanqueto/curseterm?rev=f4e804c523992f47f33070b79b1cb7e42f3c8509";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.crane.follows = "crane";
-    };
   };
 
   outputs =
-    { self, nixpkgs, crane, barrierkit, curseterm }:
+    { self, nixpkgs, crane, barrierkit }:
     let
       systems = [ "x86_64-linux" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -172,7 +167,6 @@
       in {
         default = malaysia;
         "malaysia-shell" = malaysia;
-        curseterm = curseterm.packages.${system}.default;
         skia-binaries = skia;
         appmenu-gtk-module = pkgs.callPackage ./nix/appmenu-gtk-module.nix { };
         electron-global-menu = pkgs.electron_43.override {

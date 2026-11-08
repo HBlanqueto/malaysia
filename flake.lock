@@ -24,26 +24,6 @@
         "type": "github"
       }
     },
-    "barrierkit_2": {
-      "inputs": {
-        "crane": "crane_2",
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1794009791,
-        "narHash": "sha256-kfig2MZhlL+DYDo8ulBp4LzxCX7em9agKPqLNxnQkyQ=",
-        "ref": "refs/heads/main",
-        "rev": "4e23c81353c68ec4da3333459b41d19eee7dd254",
-        "revCount": 573,
-        "type": "git",
-        "url": "https://github.com/HBlanqueto/barrierkit"
-      },
-      "original": {
-        "rev": "4e23c81353c68ec4da3333459b41d19eee7dd254",
-        "type": "git",
-        "url": "https://github.com/HBlanqueto/barrierkit"
-      }
-    },
     "crane": {
       "locked": {
         "lastModified": 1792350552,
@@ -59,63 +39,7 @@
         "type": "github"
       }
     },
-    "crane_2": {
-      "locked": {
-        "lastModified": 1792350552,
-        "narHash": "sha256-292lvpvxTGKryKxh3/3tcIVi85CwYGdl4oOi113Sob8=",
-        "owner": "ipetkov",
-        "repo": "crane",
-        "rev": "e675a36b7377bebe41d548388a2501cbb16d380d",
-        "type": "github"
-      },
-      "original": {
-        "owner": "ipetkov",
-        "repo": "crane",
-        "type": "github"
-      }
-    },
-    "curseterm": {
-      "inputs": {
-        "barrierkit": "barrierkit_2",
-        "crane": [
-          "crane"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1794012063,
-        "narHash": "sha256-UPc6uFeRVh6hd68UMf7rMVffRJBTsYiI/H1eF8gdh6s=",
-        "ref": "refs/heads/main",
-        "rev": "f4e804c523992f47f33070b79b1cb7e42f3c8509",
-        "revCount": 142,
-        "type": "git",
-        "url": "https://github.com/HBlanqueto/curseterm"
-      },
-      "original": {
-        "rev": "f4e804c523992f47f33070b79b1cb7e42f3c8509",
-        "type": "git",
-        "url": "https://github.com/HBlanqueto/curseterm"
-      }
-    },
     "nixpkgs": {
-      "locked": {
-        "lastModified": 1793110635,
-        "narHash": "sha256-dhoW6VgFWlaodSY5jrBn+CF2FLmaUvDVgM7+C7T2+NM=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "31ecbaca1bdefa45dffc409f0250bd8039ea0010",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
       "locked": {
         "lastModified": 1793110635,
         "narHash": "sha256-dhoW6VgFWlaodSY5jrBn+CF2FLmaUvDVgM7+C7T2+NM=",
@@ -135,8 +59,7 @@
       "inputs": {
         "barrierkit": "barrierkit",
         "crane": "crane",
-        "curseterm": "curseterm",
-        "nixpkgs": "nixpkgs_2"
+        "nixpkgs": "nixpkgs"
       }
     }
   },

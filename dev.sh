@@ -25,10 +25,10 @@ Commands:
     build [--release]   Compile the workspace (debug, or release with --release)
     run [--release]     Start the compositor in the background and write a PID file
     demo [--dark|--light]
-                        Nested session with the shell, CurseTerm, System Settings and demo windows; the flag
+                        Nested session with the shell, System Settings and demo windows; the flag
                         forces that appearance in a temporary config (Ctrl-C ends it)
     lab [--dark|--light]
-                        Nested session with shell + CurseTerm + demo windows + optional real
+                        Nested session with shell + demo windows + optional real
                         apps (nautilus, zenity, kate, telegram, firefox) for manual
                         testing; uses a temporary config (Ctrl-C ends it)
     watch [--release]   Watch sources; rebuild and relaunch on change (Ctrl-C stops)
@@ -126,12 +126,6 @@ barrierkit_dir() {
     if [ -d "$_dir/crates/bk" ]; then
         CDPATH='' cd -- "$_dir" && pwd
     fi
-}
-
-build_curseterm() {
-    printf 'dev.sh: building curseterm from the flake input (the first time takes a few minutes)\n' >&2
-    _curseterm=$(nix build --no-link --print-out-paths "$script_dir#curseterm") ||
-        fail "$EXIT_RUN_FAILED" "could not build curseterm"
 }
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
@@ -687,7 +681,6 @@ demo() {
     _shell_bin="$script_dir/target/debug/malaysia-shell"
     _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
     _settings_bin="$script_dir/target/debug/malaysia-settings"
-    build_curseterm
 
     start
     if ! wait_socket; then
@@ -705,7 +698,6 @@ demo() {
     check_wallpaper_ready demo
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
-    session_client curseterm "$_curseterm/bin/curseterm"
     if command -v foot >/dev/null 2>&1; then
         session_client foot-1 foot -T "Malaysia"
         session_client foot-2 foot -T "Second window"
@@ -772,7 +764,6 @@ lab() {
     _wallpaper_bin="$script_dir/target/debug/malaysia-wallpaper"
     cargo build -p malaysia-compositor -p malaysia-shell -p malaysia-wallpaper -p malaysia-settings ||
         fail "$EXIT_RUN_FAILED" "could not build the lab binaries"
-    build_curseterm
     _settings_bin="$script_dir/target/debug/malaysia-settings"
 
     if ! command -v dbus-daemon >/dev/null 2>&1; then
@@ -832,7 +823,6 @@ lab() {
     _wallpaper_pid=$(cat "$RUNTIME_DIR/demo-wallpaper.pid" 2>/dev/null || true)
     sleep 0.5
 
-    session_client curseterm "$_curseterm/bin/curseterm"
     if command -v foot >/dev/null 2>&1; then
         session_client foot-1 foot -T "Malaysia"
         session_client foot-2 foot -T "Second window"
