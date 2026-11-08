@@ -35,6 +35,8 @@ mod spaces;
 mod spawn;
 mod state;
 mod test_input;
+#[cfg(test)]
+mod test_support;
 mod theme_fade;
 pub mod udev;
 mod virtual_input;

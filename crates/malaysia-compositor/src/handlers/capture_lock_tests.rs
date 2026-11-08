@@ -1,14 +1,10 @@
 use std::os::unix::net::UnixStream;
-use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use smithay::backend::allocator::{Format, Fourcc, Modifier};
-use smithay::reexports::calloop::{self, ping::make_ping};
 use smithay::reexports::wayland_server::Display;
-use smithay::utils::{Physical, Point, Size};
-use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+use smithay::utils::Point;
 
 use sctk::delegate_shm;
 use sctk::reexports::client::globals::{GlobalList, GlobalListContents, registry_queue_init};
@@ -87,51 +83,6 @@ ignore_events![
 
 delegate_shm!(TestClient);
 
-fn test_state() -> (
-    calloop::EventLoop<'static, crate::session::Session>,
-    Display<State>,
-    State,
-) {
-    let event_loop = calloop::EventLoop::<crate::session::Session>::try_new().expect("event loop");
-    let display = Display::<State>::new().expect("display");
-    let feedback = DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("feedback");
-    let state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::<i32, Physical>::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("state");
-    (event_loop, display, state)
-}
-
-fn insert_test_client(display: &Display<State>, server_side: UnixStream) {
-    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-    let (disconnect_ping, _) = make_ping().expect("ping");
-    display
-        .handle()
-        .insert_client(
-            server_side,
-            Arc::new(crate::state::ClientState::new(
-                disconnect_queue,
-                disconnect_ping,
-                false,
-            )),
-        )
-        .expect("insert client");
-}
-
 fn dispatch_client_ack(display: &mut Display<State>, state: &mut State, rx: &mpsc::Receiver<()>) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -151,7 +102,7 @@ where
         + 'static,
 {
     let (client_side, server_side) = UnixStream::pair().expect("socket pair");
-    insert_test_client(display, server_side);
+    crate::test_support::insert_client(display, server_side);
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         let conn = Connection::from_socket(client_side).expect("connection");
@@ -199,7 +150,7 @@ fn request_output_capture(
 
 #[test]
 fn locking_fails_queued_capture_frames_and_rejects_new_ones() {
-    let (_loop, mut display, mut state) = test_state();
+    let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
     let rx = run_client(&display, |conn, globals, qh, client, tx| {
         let (_session, _pool) = request_output_capture(&conn, &globals, &qh, &client);
         conn.roundtrip().expect("first frame roundtrip");
@@ -240,7 +191,7 @@ fn locking_fails_queued_capture_frames_and_rejects_new_ones() {
 
 #[test]
 fn locking_cancels_a_pending_screenshot_selection() {
-    let (_loop, mut display, mut state) = test_state();
+    let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
     state.start_region_screenshot();
     assert!(
         state.screenshot_mode.is_some(),
@@ -271,7 +222,7 @@ fn locking_cancels_a_pending_screenshot_selection() {
 
 #[test]
 fn finishing_a_screenshot_is_blocked_while_locked() {
-    let (_loop, _display, mut state) = test_state();
+    let (_loop, _display, mut state) = crate::test_support::test_state((1280, 720));
 
     state.start_region_screenshot();
     state.screenshot_pointer_press(Point::from((10.0, 10.0)));

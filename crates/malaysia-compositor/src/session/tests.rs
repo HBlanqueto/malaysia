@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use smithay::backend::allocator::{Format, Fourcc, Modifier};
+use smithay::backend::allocator::{Fourcc, Modifier};
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::Kind;
@@ -17,7 +17,6 @@ use crate::cursor::OutputRenderElement;
 use crate::scene_elements::{
     cursor_origin, frame_has_border, frame_order, frame_radius, physical_rect,
 };
-use crate::state::State;
 
 use sctk::output::{OutputHandler, OutputState};
 use sctk::reexports::client::protocol::{
@@ -518,33 +517,8 @@ fn the_global_filter_does_not_stall_the_next_client() {
 
     use sctk::reexports::client::Connection;
     use sctk::reexports::client::globals::registry_queue_init;
-    use smithay::reexports::wayland_server::Display;
 
-    let event_loop = smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
-        .expect("the test needs an event loop");
-    let mut display = Display::<State>::new().expect("the test needs a display");
-    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-    let (disconnect_ping, _disconnect_source) =
-        smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
-    let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let mut state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the state should build");
+    let (_event_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
 
     fn registry_globals(stream: std::os::unix::net::UnixStream) -> Vec<String> {
         let conn = Connection::from_socket(stream).expect("the client should connect");
@@ -558,8 +532,6 @@ fn the_global_filter_does_not_stall_the_next_client() {
             .collect()
     }
 
-    let mut handle = display.handle();
-
     let (first_side, first_server) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
     let (first_tx, first_rx) = mpsc::channel();
     std::thread::spawn(move || {
@@ -567,16 +539,7 @@ fn the_global_filter_does_not_stall_the_next_client() {
             .send(registry_globals(first_side))
             .expect("the main thread should read the globals");
     });
-    handle
-        .insert_client(
-            first_server,
-            std::sync::Arc::new(crate::state::ClientState::new(
-                disconnect_queue.clone(),
-                disconnect_ping.clone(),
-                false,
-            )),
-        )
-        .expect("the server should accept the first client");
+    crate::test_support::insert_client(&display, first_server);
 
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
@@ -600,16 +563,7 @@ fn the_global_filter_does_not_stall_the_next_client() {
             .send(registry_globals(second_side))
             .expect("the main thread should read the globals");
     });
-    handle
-        .insert_client(
-            second_server,
-            std::sync::Arc::new(crate::state::ClientState::new(
-                disconnect_queue.clone(),
-                disconnect_ping.clone(),
-                false,
-            )),
-        )
-        .expect("the server should accept the second client");
+    crate::test_support::insert_client(&display, second_server);
 
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
@@ -642,39 +596,13 @@ fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
 
     use sctk::reexports::client::Connection;
     use sctk::reexports::client::globals::registry_queue_init;
-    use smithay::reexports::wayland_server::Display;
 
-    let event_loop = smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
-        .expect("the test needs an event loop");
-    let mut display = Display::<State>::new().expect("the test needs a display");
-    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-    let (disconnect_ping, _disconnect_source) =
-        smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
     let mut renderer = offscreen_renderer();
 
-    let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let mut state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the state should build");
+    let (_event_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
 
     let (client_side, server_side) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
     let (sent_tx, sent_rx) = mpsc::channel::<bool>();
-    let mut handle = display.handle();
 
     std::thread::spawn(move || {
         let conn = Connection::from_socket(client_side).expect("the client should connect");
@@ -720,16 +648,7 @@ fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
             .expect("the main thread should read the verdict");
     });
 
-    handle
-        .insert_client(
-            server_side,
-            std::sync::Arc::new(crate::state::ClientState::new(
-                disconnect_queue.clone(),
-                disconnect_ping.clone(),
-                false,
-            )),
-        )
-        .expect("the server should accept the client");
+    crate::test_support::insert_client(&display, server_side);
 
     let mut spins = 0;
     loop {
@@ -774,32 +693,7 @@ fn a_failed_create_immed_is_drained_and_posts_the_protocol_error() {
 
 #[test]
 fn without_a_syncobj_device_no_explicit_sync_global_is_announced() {
-    use smithay::backend::allocator::{Format, Fourcc, Modifier};
-    use smithay::reexports::wayland_server::Display;
-    use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
-
-    let event_loop = smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
-        .expect("the test needs an event loop");
-    let display = Display::<State>::new().expect("the test needs a display");
-    let feedback = DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the state should build");
+    let (_event_loop, _display, state) = crate::test_support::test_state((1280, 720));
     assert!(
         state.syncobj_state.is_none(),
         "without a device there must be no wp_linux_drm_syncobj_manager_v1 global"
@@ -813,37 +707,11 @@ fn a_surface_without_a_current_buffer_is_not_visible() {
 
     use sctk::reexports::client::Connection;
     use sctk::reexports::client::globals::registry_queue_init;
-    use smithay::backend::allocator::{Format, Fourcc, Modifier};
-    use smithay::reexports::wayland_server::Display;
+
     use smithay::reexports::wayland_server::Resource;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
-    let event_loop = smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
-        .expect("the test needs an event loop");
-    let mut display = Display::<State>::new().expect("the test needs a display");
-    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-    let (disconnect_ping, _disconnect_source) =
-        smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
-
-    let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let mut state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the state should build");
+    let (_event_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
 
     let (client_side, server_side) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
     let (sent_tx, sent_rx) = mpsc::channel::<bool>();
@@ -897,17 +765,8 @@ fn a_surface_without_a_current_buffer_is_not_visible() {
             .expect("the main thread should read the second signal");
     });
 
-    let mut handle = display.handle();
-    let client = handle
-        .insert_client(
-            server_side,
-            std::sync::Arc::new(crate::state::ClientState::new(
-                disconnect_queue.clone(),
-                disconnect_ping.clone(),
-                false,
-            )),
-        )
-        .expect("the server should accept the client");
+    let handle = display.handle();
+    let client = crate::test_support::insert_client(&display, server_side);
 
     fn surface_of_client(
         handle: &smithay::reexports::wayland_server::DisplayHandle,
@@ -1023,34 +882,8 @@ fn unplaced_toplevel_gets_frame_callbacks() {
     use sctk::reexports::client::protocol::{wl_callback, wl_compositor, wl_registry, wl_surface};
     use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
     use sctk::reexports::protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
-    use smithay::reexports::wayland_server::Display;
-    use smithay::utils::Size;
 
-    let event_loop = smithay::reexports::calloop::EventLoop::<crate::session::Session>::try_new()
-        .expect("the test needs an event loop");
-    let mut display = Display::<State>::new().expect("the test needs a display");
-    let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-    let (disconnect_ping, _disconnect_source) =
-        smithay::reexports::calloop::ping::make_ping().expect("the test needs a ping");
-    let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let mut state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from((1280, 720)),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the state should build");
+    let (_event_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
 
     let (client_side, server_side) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
     let (done_tx, done_rx) = mpsc::channel::<()>();
@@ -1160,17 +993,7 @@ fn unplaced_toplevel_gets_frame_callbacks() {
         }
     });
 
-    let mut handle = display.handle();
-    let _client = handle
-        .insert_client(
-            server_side,
-            std::sync::Arc::new(crate::state::ClientState::new(
-                disconnect_queue.clone(),
-                disconnect_ping.clone(),
-                false,
-            )),
-        )
-        .expect("the server accepts the client");
+    let _client = crate::test_support::insert_client(&display, server_side);
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {

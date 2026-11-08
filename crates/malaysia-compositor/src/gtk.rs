@@ -411,7 +411,7 @@ macro_rules! delegate_gtk {
 #[cfg(test)]
 mod tests {
     use std::os::unix::net::UnixStream;
-    use std::sync::{Arc, mpsc};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -419,11 +419,10 @@ mod tests {
     use sctk::reexports::client::protocol::{wl_compositor, wl_registry, wl_surface};
     use sctk::reexports::client::{Connection, Dispatch, QueueHandle};
     use sctk::reexports::protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
-    use smithay::backend::allocator::{Format, Fourcc, Modifier};
-    use smithay::reexports::calloop::EventLoop;
+
     use smithay::reexports::wayland_server::{Display, Resource};
-    use smithay::utils::{SERIAL_COUNTER, Size};
-    use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+    use smithay::utils::SERIAL_COUNTER;
+
     use smithay::wayland::xdg_activation::XdgActivationTokenData;
 
     use super::{Gesture, GtkDbusProperties, capabilities, decode_gesture};
@@ -493,51 +492,6 @@ mod tests {
         }
     }
 
-    fn test_state() -> (
-        EventLoop<'static, crate::session::Session>,
-        Display<super::State>,
-        super::State,
-    ) {
-        let event_loop = EventLoop::<crate::session::Session>::try_new().expect("event loop");
-        let display = Display::<super::State>::new().expect("display");
-        let feedback = DmabufFeedbackBuilder::new(
-            0,
-            [Format {
-                code: Fourcc::Xrgb8888,
-                modifier: Modifier::Invalid,
-            }],
-        )
-        .build()
-        .expect("feedback");
-        let state = super::State::new(
-            event_loop.get_signal(),
-            &display.handle(),
-            Size::from((1280, 720)),
-            feedback,
-            None,
-            Box::new(event_loop.handle()),
-            Box::new(()),
-        )
-        .expect("state");
-        (event_loop, display, state)
-    }
-
-    fn insert_test_client(display: &Display<super::State>, server_side: UnixStream) {
-        let disconnect_queue = crate::state::ClientDisconnectQueue::default();
-        let (disconnect_ping, _) = smithay::reexports::calloop::ping::make_ping().expect("ping");
-        display
-            .handle()
-            .insert_client(
-                server_side,
-                Arc::new(crate::state::ClientState::new(
-                    disconnect_queue,
-                    disconnect_ping,
-                    false,
-                )),
-            )
-            .expect("insert client");
-    }
-
     fn create_toplevel(
         display: &mut Display<super::State>,
         state: &mut super::State,
@@ -547,7 +501,7 @@ mod tests {
     ) {
         let before: Vec<_> = state.windows.surfaces().map(|s| s.id()).collect();
         let (client_side, server_side) = UnixStream::pair().expect("socket pair");
-        insert_test_client(display, server_side);
+        crate::test_support::insert_client(display, server_side);
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
         thread::spawn(move || {
             client_side
@@ -668,7 +622,7 @@ mod tests {
 
     #[test]
     fn gtk_request_focus_without_token_is_ignored() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (surface, shutdown) = create_toplevel(&mut display, &mut state);
         let id = window_id(&state, &surface);
         state.set_minimized(id, true);
@@ -679,7 +633,7 @@ mod tests {
 
     #[test]
     fn gtk_request_focus_with_unknown_token_is_ignored() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (surface, shutdown) = create_toplevel(&mut display, &mut state);
         let id = window_id(&state, &surface);
         state.set_minimized(id, true);
@@ -690,7 +644,7 @@ mod tests {
 
     #[test]
     fn gtk_request_focus_with_expired_token_is_ignored() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (surface, shutdown) = create_toplevel(&mut display, &mut state);
         let id = window_id(&state, &surface);
         state.set_minimized(id, true);
@@ -705,7 +659,7 @@ mod tests {
 
     #[test]
     fn gtk_request_focus_with_valid_token_activates() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (surface, shutdown) = create_toplevel(&mut display, &mut state);
         let id = window_id(&state, &surface);
         state.set_minimized(id, true);
@@ -720,7 +674,7 @@ mod tests {
 
     #[test]
     fn gtk_present_from_focused_client_activates() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (surface, shutdown) = create_toplevel(&mut display, &mut state);
         let id = window_id(&state, &surface);
         state.set_minimized(id, true);
@@ -732,7 +686,7 @@ mod tests {
 
     #[test]
     fn gtk_present_from_unfocused_client_is_ignored() {
-        let (_loop, mut display, mut state) = test_state();
+        let (_loop, mut display, mut state) = crate::test_support::test_state((1280, 720));
         let (focused_surface, shutdown_focused) = create_toplevel(&mut display, &mut state);
         let (other_surface, shutdown_other) = create_toplevel(&mut display, &mut state);
         let other_id = window_id(&state, &other_surface);

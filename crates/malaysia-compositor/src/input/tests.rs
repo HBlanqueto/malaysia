@@ -8,7 +8,6 @@ use smithay::backend::input::{
     PointerMotionAbsoluteEvent, UnusedEvent,
 };
 use smithay::input::pointer::{ButtonEvent, CursorIcon};
-use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::wayland_server::Display;
 use smithay::utils::{Point, SERIAL_COUNTER, Serial, Size};
 use xkbcommon::xkb::{self, Keycode, keysyms};
@@ -562,31 +561,7 @@ impl AbsolutePositionEvent<TestBackend> for TestMouseMove {
 }
 
 fn test_state(size: (i32, i32)) -> (Display<State>, State) {
-    use smithay::backend::allocator::{Format, Fourcc, Modifier};
-    use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
-
-    let event_loop =
-        EventLoop::<crate::session::Session>::try_new().expect("the test needs an event loop");
-    let display = Display::<State>::new().expect("the test needs a display");
-    let feedback = DmabufFeedbackBuilder::new(
-        0,
-        [Format {
-            code: Fourcc::Xrgb8888,
-            modifier: Modifier::Invalid,
-        }],
-    )
-    .build()
-    .expect("the feedback should build");
-    let state = State::new(
-        event_loop.get_signal(),
-        &display.handle(),
-        Size::from(size),
-        feedback,
-        None,
-        Box::new(event_loop.handle()),
-        Box::new(()),
-    )
-    .expect("the test state should build");
+    let (_, display, state) = crate::test_support::test_state(size);
     (display, state)
 }
 
