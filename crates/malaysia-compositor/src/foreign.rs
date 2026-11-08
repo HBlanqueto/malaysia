@@ -65,20 +65,16 @@ pub(crate) fn toplevel_states(
     maximized: bool,
     fullscreen: bool,
 ) -> Vec<u8> {
-    let mut states = Vec::with_capacity(4);
-    if maximized {
-        states.push(ToplevelState::Maximized as u8);
-    }
-    if minimized {
-        states.push(ToplevelState::Minimized as u8);
-    }
-    if activated {
-        states.push(ToplevelState::Activated as u8);
-    }
-    if fullscreen {
-        states.push(ToplevelState::Fullscreen as u8);
-    }
-    states
+    [
+        (maximized, ToplevelState::Maximized),
+        (minimized, ToplevelState::Minimized),
+        (activated, ToplevelState::Activated),
+        (fullscreen, ToplevelState::Fullscreen),
+    ]
+    .into_iter()
+    .filter(|(set, _)| *set)
+    .flat_map(|(_, state)| (state as u32).to_ne_bytes())
+    .collect()
 }
 
 fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignToplevelManagerV1) {
@@ -339,29 +335,32 @@ macro_rules! delegate_foreign_management {
 mod tests {
     use super::*;
 
-    fn state(value: ToplevelState) -> u8 {
-        value as u8
+    fn states(values: &[ToplevelState]) -> Vec<u8> {
+        values
+            .iter()
+            .flat_map(|value| (*value as u32).to_ne_bytes())
+            .collect()
     }
 
     #[test]
-    fn toplevel_states_carries_the_full_state() {
+    fn toplevel_states_sends_each_state_as_a_32_bit_value() {
         assert!(toplevel_states(false, false, false, false).is_empty());
         assert_eq!(
             toplevel_states(true, false, false, false),
-            vec![state(ToplevelState::Activated)]
+            states(&[ToplevelState::Activated])
         );
         assert_eq!(
             toplevel_states(false, true, false, false),
-            vec![state(ToplevelState::Minimized)]
+            states(&[ToplevelState::Minimized])
         );
         assert_eq!(
             toplevel_states(true, true, true, true),
-            vec![
-                state(ToplevelState::Maximized),
-                state(ToplevelState::Minimized),
-                state(ToplevelState::Activated),
-                state(ToplevelState::Fullscreen),
-            ]
+            states(&[
+                ToplevelState::Maximized,
+                ToplevelState::Minimized,
+                ToplevelState::Activated,
+                ToplevelState::Fullscreen,
+            ])
         );
     }
 }
