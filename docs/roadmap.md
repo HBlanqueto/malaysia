@@ -144,7 +144,7 @@ tint in GTK 3/4 and libadwaita through user CSS; dark GTK 3 through
 without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
 `cargo test -p xdg-desktop-portal-malaysia`, and in a session open Nautilus with
 `window_color = "accent"`. Missing: `Screenshot`/`ScreenCast` and the
-permission dialogs. **12b:** notifications phases 1–2 done (ADR 0068: server, history, banners, panel, Do Not Disturb, Settings › Notifications, portal v2, reply, lock screen); phases 3–4 in progress. Also pending: polkit, keyring/Secret
+permission dialogs. **12b:** notifications phases 1–3 done (ADR 0068: server, history, banners, panel, Focus modes, Settings › Notifications and Focus, portal v2, reply, lock screen, Dock badges and progress); phase 4 in progress. Also pending: polkit, keyring/Secret
 Service and AT-SPI.
 
 ### 13 — Chrome and launcher

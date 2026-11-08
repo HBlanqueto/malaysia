@@ -66,9 +66,10 @@ fn collect_desktop_files(
         let Some(relative) = path.strip_prefix(root).ok() else {
             continue;
         };
+        let relative = relative.to_string_lossy();
         let id = relative
-            .to_string_lossy()
-            .trim_end_matches(".desktop")
+            .strip_suffix(".desktop")
+            .unwrap_or(&relative)
             .replace('/', "-");
         if seen.contains(&id) {
             continue;

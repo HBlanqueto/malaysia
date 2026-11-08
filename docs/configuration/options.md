@@ -36,7 +36,7 @@ directories — preferences and state:
 ├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
 ├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
 │                            `cleared_at` (unix; «Clear Menu»), written by the menubar
-└── notifications.state    ← delivered notifications, `next_id` and `do_not_disturb`,
+└── notifications.state    ← delivered notifications, `next_id` and the active `focus`,
                              written by `malaysia-shell notifications` (ADR 0068)
 ```
 
@@ -378,8 +378,11 @@ System Settings writes it. An app gets the defaults until it has a
 | `notifications.apps.<id>.lock_screen` | bool | `true` | **active**: listed on the lock screen | shell (lock) |
 | `notifications.apps.<id>.style` | `"temporary"` \| `"persistent"` | `"temporary"` | **active** | shell |
 | `notifications.apps.<id>.critical` | bool | `false` | **active**: urgency 2 or `urgent` breaks through Do Not Disturb and mutes | shell |
-| `notifications.apps.<id>.time_sensitive` | bool | `true` | stored; Focus modes will use it | shell |
+| `notifications.apps.<id>.time_sensitive` | bool | `true` | **active**: time-sensitive alerts can break through a Focus | shell |
+| `notifications.focus.<mode>.allowed_apps` | list of app ids | `[]` | **active**: apps a Focus lets through; modes `do-not-disturb`, `sleep`, `personal`, `work` | shell |
+| `notifications.focus.<mode>.time_sensitive` | bool | `true` | **active**: the Focus lets time-sensitive alerts through | shell |
 | `notifications.apps.<id>.sound` | bool | `true` | **active** | shell |
+| `notifications.apps.<id>.badge` | bool | `true` | **active**: the Dock shows the app's `LauncherEntry` count | shell (dock) |
 | `notifications.apps.<id>.grouping` | `"automatic"` \| `"by-app"` \| `"off"` | `"automatic"` | **active** (`automatic` groups by app) | shell |
 | `notifications.apps.<id>.muted_until` | unix time | none | **active**; written by «Mute for 1 Hour» and «Mute for Today» | shell |
 

@@ -110,7 +110,8 @@ pub fn settings_window(
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
             ))
-            .pane(crate::notifications::notifications_pane(error)),
+            .pane(crate::notifications::notifications_pane(error))
+            .pane(crate::notifications::focus_pane(error)),
     );
     let message = error.read().clone();
     rect()

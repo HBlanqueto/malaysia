@@ -1,5 +1,5 @@
 use ctappearance::notifications::{
-    AlertStyle, AppNotifications, Grouping, NotificationsConfig, ShowPreviews,
+    AlertStyle, AppNotifications, Focus, Grouping, NotificationsConfig, ShowPreviews,
 };
 use serde::{Deserialize, Serialize};
 
@@ -100,8 +100,49 @@ pub(crate) struct Presentation {
     pub(crate) sound: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FocusRule {
+    pub(crate) allowed: bool,
+    pub(crate) time_sensitive: bool,
+}
+
+impl FocusRule {
+    pub(crate) fn of(
+        focus: Option<Focus>,
+        config: &NotificationsConfig,
+        app_id: &str,
+    ) -> Option<Self> {
+        focus.map(|focus| {
+            let settings = config.focus(focus);
+            Self {
+                allowed: settings
+                    .allowed_apps
+                    .iter()
+                    .any(|allowed| allowed == app_id),
+                time_sensitive: settings.time_sensitive,
+            }
+        })
+    }
+}
+
+pub(crate) fn focus_name(focus: Option<Focus>) -> &'static str {
+    match focus {
+        None => "",
+        Some(Focus::DoNotDisturb) => "do-not-disturb",
+        Some(Focus::Sleep) => "sleep",
+        Some(Focus::Personal) => "personal",
+        Some(Focus::Work) => "work",
+    }
+}
+
+pub(crate) fn parse_focus(name: &str) -> Option<Focus> {
+    Focus::ALL
+        .into_iter()
+        .find(|focus| focus_name(Some(*focus)) == name)
+}
+
 pub(crate) struct Moment {
-    pub(crate) do_not_disturb: bool,
+    pub(crate) focus: Option<FocusRule>,
     pub(crate) panel_open: bool,
     pub(crate) app_in_front: bool,
     pub(crate) transient: bool,
@@ -122,7 +163,7 @@ pub(crate) fn present(level: Level, app: &AppNotifications, moment: &Moment) -> 
     let kept = (app.center || critical) && !moment.transient;
     let quiet = level == Level::Passive
         || (app.muted(moment.now) && !critical)
-        || (moment.do_not_disturb && !critical);
+        || (!let_through(level, app, moment.focus) && !critical);
     let shown = app.desktop && !moment.panel_open && !moment.app_in_front && !quiet;
     let banner = (shown || critical && !moment.panel_open).then_some(if critical {
         AlertStyle::Persistent
@@ -136,10 +177,17 @@ pub(crate) fn present(level: Level, app: &AppNotifications, moment: &Moment) -> 
     }
 }
 
+// ADR 0068: a Focus lets through its allowed apps and, if both agree, time-sensitive alerts.
+fn let_through(level: Level, app: &AppNotifications, focus: Option<FocusRule>) -> bool {
+    focus.is_none_or(|rule| {
+        rule.allowed || (level == Level::TimeSensitive && rule.time_sensitive && app.time_sensitive)
+    })
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct Center {
-    pub(crate) do_not_disturb: bool,
+    pub(crate) focus: Option<Focus>,
     pub(crate) next_id: u32,
     pub(crate) notifications: Vec<Notification>,
 }
@@ -229,7 +277,7 @@ mod tests {
 
     fn moment() -> Moment {
         Moment {
-            do_not_disturb: false,
+            focus: None,
             panel_open: false,
             app_in_front: false,
             transient: false,
@@ -267,9 +315,13 @@ mod tests {
     }
 
     #[test]
-    fn do_not_disturb_and_mutes_silence_everything_but_allowed_critical_alerts() {
+    fn a_focus_silences_everything_but_allowed_apps_and_critical_alerts() {
+        let dnd = FocusRule {
+            allowed: false,
+            time_sensitive: false,
+        };
         let quiet = Moment {
-            do_not_disturb: true,
+            focus: Some(dnd),
             ..moment()
         };
         let app = AppNotifications::default();
@@ -280,16 +332,60 @@ mod tests {
             critical: true,
             style: AlertStyle::Temporary,
             sound: false,
-            ..app
+            ..app.clone()
         };
         let critical = present(Level::Critical, &allowed, &quiet);
         assert_eq!(critical.banner, Some(AlertStyle::Persistent));
         assert!(critical.sound);
+        let work = Moment {
+            focus: Some(FocusRule {
+                allowed: true,
+                time_sensitive: false,
+            }),
+            ..moment()
+        };
+        assert!(present(Level::Active, &app, &work).banner.is_some());
         let muted = AppNotifications {
             muted_until: Some(2_000),
             ..AppNotifications::default()
         };
         assert_eq!(present(Level::Active, &muted, &moment()).banner, None);
+    }
+
+    #[test]
+    fn time_sensitive_alerts_break_through_when_the_focus_and_the_app_allow_it() {
+        let rule = FocusRule {
+            allowed: false,
+            time_sensitive: true,
+        };
+        let moment = Moment {
+            focus: Some(rule),
+            ..moment()
+        };
+        let app = AppNotifications::default();
+        assert!(
+            present(Level::TimeSensitive, &app, &moment)
+                .banner
+                .is_some()
+        );
+        assert!(present(Level::Active, &app, &moment).banner.is_none());
+        let refused = AppNotifications {
+            time_sensitive: false,
+            ..app
+        };
+        assert!(
+            present(Level::TimeSensitive, &refused, &moment)
+                .banner
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn focus_names_round_trip() {
+        for focus in Focus::ALL {
+            assert_eq!(parse_focus(focus_name(Some(focus))), Some(focus));
+        }
+        assert_eq!(parse_focus(""), None);
     }
 
     #[test]

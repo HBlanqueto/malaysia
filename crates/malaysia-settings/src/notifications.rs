@@ -7,7 +7,7 @@ use bk::popup_button::PopUpButton;
 use bk::prelude::*;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::notifications::{
-    AlertStyle, AppNotifications, Grouping, NotificationsConfig, ShowPreviews,
+    AlertStyle, AppNotifications, Focus, Grouping, NotificationsConfig, ShowPreviews,
 };
 use ctdesign::{ACCENT_SWATCHES, Rgba};
 use serde::Deserialize;
@@ -16,6 +16,7 @@ use crate::localize::{tr, tr_list};
 
 const DOMAIN: &str = "notifications";
 const TINT: Rgba = ACCENT_SWATCHES[3].1;
+const FOCUS_TINT: Rgba = ACCENT_SWATCHES[1].1;
 const PREVIEWS: [ShowPreviews; 3] = [
     ShowPreviews::Always,
     ShowPreviews::WhenUnlocked,
@@ -254,5 +255,100 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                             })),
                     ),
                 ),
+        )
+}
+
+fn focus_parts(focus: Focus) -> (&'static str, &'static str, Symbol) {
+    match focus {
+        Focus::DoNotDisturb => (
+            "focus-do-not-disturb",
+            tr!("focus-do-not-disturb"),
+            Symbol::Moon,
+        ),
+        Focus::Sleep => ("focus-sleep", tr!("focus-sleep"), Symbol::Bed),
+        Focus::Personal => ("focus-personal", tr!("focus-personal"), Symbol::Person),
+        Focus::Work => ("focus-work", tr!("focus-work"), Symbol::Briefcase),
+    }
+}
+
+pub fn focus_pane(error: State<Option<String>>) -> Pane {
+    let config = use_defaults::<NotificationsConfig>(DOMAIN).read().clone();
+    let apps = known_apps(&config);
+    let list = Focus::ALL
+        .into_iter()
+        .fold(Section::new(), |section, focus| {
+            let (id, title, symbol) = focus_parts(focus);
+            section.row(Row::page(title, id).symbol(symbol, FOCUS_TINT))
+        });
+    let pane = Pane::new(
+        "focus",
+        tr!("focus"),
+        Symbol::Moon,
+        FOCUS_TINT,
+        Form::new()
+            .section(Section::new().row(Row::new(tr!("focus")).detail(tr!("focus-about"))))
+            .section(list),
+    );
+    Focus::ALL.into_iter().fold(pane, |pane, focus| {
+        let (id, title, symbol) = focus_parts(focus);
+        pane.page(Pane::new(
+            id,
+            title,
+            symbol,
+            FOCUS_TINT,
+            focus_form(focus, &config, &apps, error),
+        ))
+    })
+}
+
+fn focus_form(
+    focus: Focus,
+    config: &NotificationsConfig,
+    apps: &BTreeMap<String, String>,
+    error: State<Option<String>>,
+) -> Form {
+    let settings = config.focus(focus);
+    let allowed = if apps.is_empty() {
+        Section::titled(tr!("focus-allowed-apps")).row(Row::new(tr!("notifications-no-apps")))
+    } else {
+        apps.iter().fold(
+            Section::titled(tr!("focus-allowed-apps")),
+            |section, (id, name)| {
+                let id = intern(id.clone());
+                let name = intern(name.clone());
+                section.row(
+                    Row::new(name).control(
+                        Checkbox::new(name)
+                            .checked(settings.allowed_apps.iter().any(|allowed| allowed == id))
+                            .on_toggle(edit(error, move |config, on: bool| {
+                                let allowed = &mut config.focus_mut(focus).allowed_apps;
+                                allowed.retain(|app| app != id);
+                                if on {
+                                    allowed.push(id.to_string());
+                                }
+                            })),
+                    ),
+                )
+            },
+        )
+    };
+    Form::new()
+        .section(
+            Section::new()
+                .row(Row::new(tr!("focus-allowed-apps")).detail(tr!("focus-allowed-apps-help"))),
+        )
+        .section(allowed)
+        .section(
+            Section::new().row(
+                Row::new(tr!("focus-time-sensitive"))
+                    .detail(tr!("focus-time-sensitive-help"))
+                    .control(
+                        Switch::new(tr!("focus-time-sensitive"))
+                            .on(settings.time_sensitive)
+                            .on_toggle(edit(error, move |config, on: bool| {
+                                config.focus_mut(focus).time_sensitive = on;
+                            })),
+                    ),
+            ),
         )
 }

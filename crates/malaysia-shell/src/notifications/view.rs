@@ -11,7 +11,7 @@ use bk::shell::{
 };
 use bk::style::Palette;
 use bk::theme;
-use ctappearance::notifications::{AlertStyle, NotificationsConfig, ShowPreviews};
+use ctappearance::notifications::{AlertStyle, Focus, NotificationsConfig, ShowPreviews};
 use ctdesign::{
     BODY, CAPTION, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
     NOTIFICATION_CLOSE_SIZE, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN,
@@ -21,7 +21,8 @@ use ctdesign::{
 use torin::prelude::{Content, Gaps, Position};
 
 use super::server::{self, Link, Reply};
-use super::store::{Notification, Origin};
+use super::store::{Notification, Origin, focus_name, parse_focus};
+use super::{focus_symbol, focus_title};
 use crate::launcher::{app_icon, load_icon, spawn_entry};
 use crate::localize::tr;
 
@@ -39,7 +40,7 @@ struct Snapshot {
     notifications: Vec<Notification>,
     banners: Vec<(u32, AlertStyle)>,
     panel_open: bool,
-    do_not_disturb: bool,
+    focus: Option<Focus>,
 }
 
 impl Snapshot {
@@ -49,7 +50,7 @@ impl Snapshot {
             notifications: hub.center.notifications.clone(),
             banners: hub.banners.clone(),
             panel_open: hub.panel_open,
-            do_not_disturb: hub.center.do_not_disturb,
+            focus: hub.center.focus,
         }
     }
 
@@ -275,7 +276,7 @@ fn panel(
     let mut column = VStack::new()
         .width(Size::fill())
         .spacing(NOTIFICATION_GAP)
-        .child(do_not_disturb_toggle(context, shown.do_not_disturb));
+        .child(focus_toggle(context, shown.focus));
     if groups.is_empty() {
         column = column.child(
             rect()
@@ -300,15 +301,26 @@ fn panel(
         .child(column)
 }
 
-fn do_not_disturb_toggle(context: &Context, on: bool) -> Rect {
-    let link = context.link.clone();
-    let context = context.clone();
+fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
     let palette = Palette::current();
-    let (background, foreground) = if on {
-        (palette.accent, palette.on_accent)
-    } else {
-        (palette.raised_background, palette.label)
+    let (background, foreground) = match focus {
+        Some(_) => (palette.accent, palette.on_accent),
+        None => (palette.raised_background, palette.label),
     };
+    let shown = focus.unwrap_or(Focus::DoNotDisturb);
+    let press = {
+        let context = context.clone();
+        move |_| set_focus(&context, focus.is_none().then_some(Focus::DoNotDisturb))
+    };
+    let menu = Focus::ALL
+        .into_iter()
+        .map(|mode| MenuItem::action(focus_name(Some(mode)), focus_title(mode)))
+        .chain([
+            MenuItem::Separator,
+            MenuItem::action("off", tr!("notifications-focus-off")),
+        ])
+        .collect::<Vec<_>>();
+    let chosen = context.clone();
     rect()
         .width(Size::fill())
         .padding(Gaps::new(
@@ -320,20 +332,36 @@ fn do_not_disturb_toggle(context: &Context, on: bool) -> Rect {
         .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(background))
         .center()
-        .on_press(move |_| {
-            {
-                let mut hub = link.hub();
-                hub.center.do_not_disturb = !hub.center.do_not_disturb;
-                hub.center.save();
-            }
-            link.reply(Reply::DoNotDisturb);
-            context.refresh();
-        })
+        .on_press(press)
         .child(
-            Text::new(tr!("notifications-do-not-disturb"))
-                .font(HEADLINE)
-                .color(theme::color(foreground)),
+            HStack::new()
+                .cross_align(Alignment::Center)
+                .spacing(NOTIFICATION_GAP)
+                .child(
+                    Image::system(focus_symbol(shown))
+                        .size(HEADLINE.size as f32)
+                        .color(foreground),
+                )
+                .child(
+                    Text::new(focus_title(shown))
+                        .font(HEADLINE)
+                        .color(theme::color(foreground)),
+                ),
         )
+        .context_menu(menu, move |command: String| {
+            set_focus(&chosen, parse_focus(&command))
+        })
+        .into_element()
+}
+
+fn set_focus(context: &Context, focus: Option<Focus>) {
+    {
+        let mut hub = context.link.hub();
+        hub.center.focus = focus;
+        hub.center.save();
+    }
+    context.link.reply(Reply::Focus);
+    context.refresh();
 }
 
 fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<String>>) -> Element {

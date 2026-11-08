@@ -9,7 +9,10 @@ use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 
-use super::store::{Action, Center, Level, Moment, Notification, Origin, present};
+use super::store::{
+    Action, Center, FocusRule, Level, Moment, Notification, Origin, focus_name, parse_focus,
+    present,
+};
 use crate::app_scope::app_id_from_cgroup;
 use crate::desktop::{DesktopEntry, read_entries};
 
@@ -57,7 +60,7 @@ pub(crate) enum Reply {
     Closed(Notification, u32),
     Invoked(Notification, String, Option<String>),
     Answered(Notification, String),
-    DoNotDisturb,
+    Focus,
 }
 
 #[derive(Clone)]
@@ -190,7 +193,7 @@ async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()>
                 }
             }
         }
-        Reply::DoNotDisturb => {
+        Reply::Focus => {
             let control = connection
                 .object_server()
                 .interface::<_, Control>(CONTROL_PATH)
@@ -198,7 +201,7 @@ async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()>
             control
                 .get()
                 .await
-                .do_not_disturb_changed(control.signal_emitter())
+                .focus_changed(control.signal_emitter())
                 .await?;
         }
     }
@@ -310,7 +313,7 @@ fn deliver(link: &Link, incoming: Incoming) -> u32 {
         sound,
     } = incoming;
     let moment = Moment {
-        do_not_disturb: hub.center.do_not_disturb,
+        focus: FocusRule::of(hub.center.focus, &config, &notification.app_id),
         panel_open: hub.panel_open,
         app_in_front: hub.front_app.as_deref() == Some(notification.app_id.as_str()),
         transient,
@@ -384,7 +387,8 @@ impl Freedesktop {
                 .as_deref()
                 .and_then(|id| apps.entry(id))
                 .or_else(|| {
-                    hint("desktop-entry").and_then(|id| apps.entry(id.trim_end_matches(".desktop")))
+                    hint("desktop-entry")
+                        .and_then(|id| apps.entry(id.strip_suffix(".desktop").unwrap_or(&id)))
                 })
                 .or_else(|| apps.by_name(&app_name))
         };
@@ -644,14 +648,14 @@ impl Control {
     ) -> zbus::Result<()>;
 
     #[zbus(property)]
-    fn do_not_disturb(&self) -> bool {
-        self.link.hub().center.do_not_disturb
+    fn focus(&self) -> &'static str {
+        focus_name(self.link.hub().center.focus)
     }
 
     #[zbus(property)]
-    fn set_do_not_disturb(&mut self, on: bool) {
+    fn set_focus(&mut self, name: &str) {
         let mut hub = self.link.hub();
-        hub.center.do_not_disturb = on;
+        hub.center.focus = parse_focus(name);
         hub.center.save();
         hub.changed();
     }

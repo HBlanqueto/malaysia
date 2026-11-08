@@ -5,8 +5,12 @@ mod view;
 pub(crate) use store::{Center, Notification};
 pub(crate) use view::lock_card;
 
+use bk::prelude::Symbol;
 use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, run_layer};
+use ctappearance::notifications::Focus;
 use freya_core::integration::AppComponent;
+
+use crate::localize::tr;
 
 use server::{CONTROL_NAME, CONTROL_PATH};
 
@@ -50,23 +54,45 @@ pub(crate) fn toggle_panel() {
     });
 }
 
-pub(crate) fn toggle_do_not_disturb() {
+pub(crate) fn toggle_focus() {
     in_background("toggle Do Not Disturb", || {
         let proxy = control()?;
-        let on: bool = proxy.get_property("DoNotDisturb")?;
-        proxy
-            .set_property("DoNotDisturb", !on)
-            .map_err(zbus::Error::from)
+        let focus: String = proxy.get_property("Focus")?;
+        let next = if focus.is_empty() {
+            store::focus_name(Some(Focus::DoNotDisturb))
+        } else {
+            ""
+        };
+        proxy.set_property("Focus", next).map_err(zbus::Error::from)
     });
 }
 
-pub(crate) fn watch_do_not_disturb(changed: impl Fn(bool) + Send + 'static) {
-    in_background("follow Do Not Disturb", move || {
+pub(crate) fn watch_focus(changed: impl Fn(Option<Focus>) + Send + 'static) {
+    in_background("follow the Focus", move || {
         let proxy = control()?;
-        changed(proxy.get_property("DoNotDisturb")?);
-        for change in proxy.receive_property_changed::<bool>("DoNotDisturb") {
-            changed(change.get()?);
+        let focus: String = proxy.get_property("Focus")?;
+        changed(store::parse_focus(&focus));
+        for change in proxy.receive_property_changed::<String>("Focus") {
+            changed(store::parse_focus(&change.get()?));
         }
         Ok(())
     });
+}
+
+pub(crate) fn focus_symbol(focus: Focus) -> Symbol {
+    match focus {
+        Focus::DoNotDisturb => Symbol::Moon,
+        Focus::Sleep => Symbol::Bed,
+        Focus::Personal => Symbol::Person,
+        Focus::Work => Symbol::Briefcase,
+    }
+}
+
+pub(crate) fn focus_title(focus: Focus) -> &'static str {
+    match focus {
+        Focus::DoNotDisturb => tr!("focus-do-not-disturb"),
+        Focus::Sleep => tr!("focus-sleep"),
+        Focus::Personal => tr!("focus-personal"),
+        Focus::Work => tr!("focus-work"),
+    }
 }

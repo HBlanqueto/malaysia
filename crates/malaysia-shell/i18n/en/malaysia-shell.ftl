@@ -895,7 +895,6 @@ shortcut-zoom-to = Zoom To…
 
 # Notification Center (ADR 0068)
 notifications-empty = No Notifications
-notifications-do-not-disturb = Do Not Disturb
 notifications-show-less = Show Less
 notifications-clear-all = Clear All
 notifications-hidden-preview = Notification
@@ -912,3 +911,8 @@ notifications-minutes = { $count }m ago
 notifications-hours = { $count }h ago
 notifications-reply-placeholder = Write a reply
 notifications-reply-send = Send
+focus-do-not-disturb = Do Not Disturb
+focus-sleep = Sleep
+focus-personal = Personal
+focus-work = Work
+notifications-focus-off = Turn Off Focus

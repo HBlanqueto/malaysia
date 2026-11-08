@@ -1,7 +1,7 @@
 # 0068 — Notification Center
 
-Status: phases 1 and 2 accepted (2026-11-08); each later phase is accepted
-when it ships.
+Status: phases 1 to 3 accepted (2026-11-08); phase 4 is accepted when it
+ships.
 
 ## Goal and scope
 
@@ -292,12 +292,18 @@ Exact names from
    controls and the «More» menu as in Tahoe. Sizes, radii and material are
    tokens in `ctdesign`, calibrated against a real Tahoe screenshot; the
    panel does not use glass until one shows it.
-10. **Do Not Disturb, then Focus.** A secondary click on the clock toggles Do
-    Not Disturb, and the menubar shows a moon. Wayland sends modifiers only to
+10. **Focus.** Four modes as on macOS: Do Not Disturb, Sleep, Personal and
+    Work, each with its allowed apps and a «Time Sensitive Notifications»
+    switch (`[focus.<mode>]` in `notifications.domain`). A mode lets through
+    its allowed apps, time-sensitive alerts when both the mode and the app
+    allow them, and allowed critical alerts; the rest go quietly to the panel.
+    The active mode lives in `notifications.state` and in the `Focus` property
+    of `org.malaysia.Notifications1`. A secondary click on the clock toggles Do
+    Not Disturb, and the menubar shows the mode's symbol. Wayland sends modifiers only to
     the focused surface, so the menubar cannot see Option-click
     ([`wl_keyboard.modifiers`](https://wayland.app/protocols/wayland#wl_keyboard:event:modifiers)).
-    The panel has the same switch at the top. Until Focus modes exist, Do Not
-    Disturb also silences time-sensitive notifications. It turns on by itself while the
+    The panel has the same switch at the top; its secondary-click menu picks
+    any mode. Screen sharing and KDE's `Inhibit` stay for later. It turns on by itself while the
     screen is shared or mirrored, if the setting says so. KDE's `Inhibit`
     lets an app ask for it. Silenced notifications still go to the panel.
     Focus modes with allowed apps come later.
@@ -310,9 +316,12 @@ Exact names from
     field takes the keyboard (`Exclusive`) until it sends or Escape. The text
     goes back as `NotificationReplied` (fdo), as the target of the GTK action,
     or as the portal parameter.
-13. **Badges and progress:** the dock reads `com.canonical.Unity.LauncherEntry`
-    for `count`, `progress` and `urgent`. The badge is the app's number, not
-    a count of notifications.
+13. **Badges and progress:** the dock owns `com.canonical.Unity` and reads
+    `com.canonical.Unity.LauncherEntry` `Update` signals for `count` and
+    `progress` (each with its `-visible` flag); an app's values go away when
+    it leaves the bus. The badge is the app's number, not a count of
+    notifications, and «Badge application icon» hides it
+    (`malaysia-shell/src/launcher_entry.rs`).
 14. **Activation:** a click mints an xdg-activation token, sends
     `ActivationToken` and then `ActionInvoked`, as `bk::notifications`
     already expects.

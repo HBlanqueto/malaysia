@@ -3,6 +3,7 @@ mod desktop;
 mod dialogs;
 mod dock;
 mod launcher;
+mod launcher_entry;
 mod localize;
 mod lock;
 mod menubar;

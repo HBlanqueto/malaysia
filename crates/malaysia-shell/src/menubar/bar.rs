@@ -32,6 +32,7 @@ use crate::menubar::{appmenu, clock, focused, resolve_app_name, shortcuts, statu
 use bk::menu::{RevealRoots, SearchQuery};
 use bk::platform::MainMenuAddress;
 use bk::theme;
+use ctappearance::notifications::Focus;
 
 type TitleAnchor = Rc<Cell<(f32, f32)>>;
 
@@ -171,7 +172,7 @@ impl App for BarApp {
         let status_anchors = use_hook(status::StatusAnchors::default);
 
         let now = self.clock.read().clone();
-        let do_not_disturb = use_do_not_disturb();
+        let focus = use_focus();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
@@ -341,7 +342,7 @@ impl App for BarApp {
 
         bar_root(bar)
             .child(left)
-            .child(right.child(clock::clock_label(now, text, do_not_disturb)))
+            .child(right.child(clock::clock_label(now, text, focus)))
     }
 }
 
@@ -837,10 +838,10 @@ fn now_ms() -> u32 {
         .as_millis() as u32
 }
 
-fn use_do_not_disturb() -> bool {
-    let state = use_state(|| false);
+fn use_focus() -> Option<Focus> {
+    let state = use_state(|| None);
     use_hook(move || {
-        let latest = Arc::new(Mutex::new(false));
+        let latest = Arc::new(Mutex::new(None));
         let shared = latest.clone();
         let wake = Timers::get().wakeup(move || {
             let mut state = state;
@@ -850,10 +851,10 @@ fn use_do_not_disturb() -> bool {
                     .unwrap_or_else(|poisoned| poisoned.into_inner()),
             );
         });
-        crate::notifications::watch_do_not_disturb(move |on| {
+        crate::notifications::watch_focus(move |focus| {
             *latest
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = on;
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = focus;
             wake.wake();
         });
     });
