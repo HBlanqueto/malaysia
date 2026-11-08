@@ -257,11 +257,13 @@ impl Dispatch<GtkSurface1, WlSurface, State> for GtkShellState {
                         info!(window = id.get(), "gtk_surface titlebar double_click");
                         state.apply_titlebar_double_click(id);
                     }
-                    Gesture::Right => {
-                        info!(window = id.get(), "gtk_surface titlebar right_click");
-                    }
-                    Gesture::Middle => {
-                        info!(window = id.get(), "gtk_surface titlebar middle_click");
+                    // macOS titlebars have no right- or middle-click action; GTK delegates them here (v5).
+                    Gesture::Right | Gesture::Middle => {
+                        debug!(
+                            window = id.get(),
+                            ?gesture,
+                            "gtk_surface titlebar gesture ignored"
+                        );
                     }
                 }
             }

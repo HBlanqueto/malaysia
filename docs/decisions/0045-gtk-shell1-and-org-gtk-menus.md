@@ -10,7 +10,7 @@ Block 14 already serves menus through `org_kde_kwin_appmenu` + dbusmenu. The bar
 
 1. **Precedence:** dbusmenu → `org.gtk.Menus` → 14c fallback. The bar decides; the compositor only publishes addresses.
 2. **`gtk_shell1` v5** in the compositor. On bind it sends `capabilities(0)` in 14f-1; in 14f-2, `capabilities(3)` (`global_app_menu | global_menu_bar`). The six strings of `set_dbus_properties` are stored per `wl_surface`; they are cleared on `release`, when the object is destroyed or when the surface dies.
-3. It handles `present`/`request_focus` (activation like xdg-activation) and `titlebar_gesture` (`double_click` applies the configured action; `right_click`/`middle_click` are only logged); unknown values give `invalid_gesture`. It never sends `configure` or `configure_edges`.
+3. It handles `present`/`request_focus` (activation like xdg-activation) and `titlebar_gesture` (`double_click` applies the configured action; `right_click` and `middle_click` do nothing, as on a macOS titlebar: GTK hands every gesture to the compositor once v5 is bound, GTK commit [«Delegate titlebar action to the compositor if possible»](https://lists.gnome.org/archives/commits-list/2021-August/msg00133.html)); unknown values give `invalid_gesture`. It never sends `configure` or `configure_edges`.
 4. **Infinity v3:** event `gtk_menus(toplevel, unique_bus_name, application_id, menubar_path, app_menu_path, application_object_path, window_object_path)`. Empty = no GTK menu. It is emitted when the address changes, when the handle is created and on bind; never when the focus changes. In 14f-1 the bar only logs it.
 5. **14f-2:** `org.gtk.Menus` client in the bar and drawing of the GTK menu.
    - It lives on the dbusmenu zbus thread (`menubar/gtkmenus.rs`). `Start(au)` for
