@@ -1,6 +1,5 @@
 #![deny(unsafe_code)]
 
-mod active;
 mod app_shortcuts;
 mod appmenu;
 mod blockers;

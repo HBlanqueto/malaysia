@@ -22,4 +22,4 @@ The shell **requests** placement; the compositor validates it and decides. Each 
 
 ## Communication
 
-Each component reads `~/.config/malaysia/` and `~/.local/share/malaysia/`; the compositor publishes the active app (`innate.state`), serves layer-shell, foreign-toplevel, session-lock and activation, and wraps the shell surfaces with the ADR 0020 effects.
+Each component reads `~/.config/malaysia/` and `~/.local/share/malaysia/`; the compositor serves layer-shell, foreign-toplevel, session-lock and activation, and wraps the shell surfaces with the ADR 0020 effects.

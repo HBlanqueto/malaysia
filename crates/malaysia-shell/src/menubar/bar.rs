@@ -1,18 +1,17 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use bk::app::{load_defaults, use_defaults, use_watched};
+use bk::app::{load_defaults, use_defaults};
 use bk::menu::{ItemsSource, MenuItem};
 use bk::platform::Timers;
 use bk::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
     ToplevelInfo, Toplevels, run_layer, use_status_items,
 };
-use ctappearance::data_dir;
+use ctappearance::menubar::MenubarConfig;
 use ctdesign::{
     MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
     SANS_FAMILIES,
@@ -28,9 +27,7 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
-use crate::menubar::{
-    appmenu, clock, focused, load_active_window, resolve_app_name, shortcuts, status, system,
-};
+use crate::menubar::{appmenu, clock, focused, resolve_app_name, shortcuts, status, system};
 use bk::menu::{RevealRoots, SearchQuery};
 use bk::platform::MainMenuAddress;
 use bk::theme;
@@ -154,9 +151,7 @@ impl MenuKey {
 
 pub struct BarApp {
     pub clock: State<String>,
-    pub active_app: State<Option<String>>,
     pub app_menus: State<bool>,
-    pub window_store: PathBuf,
     pub entries: Rc<Vec<DesktopEntry>>,
     pub dbus: MenuClient,
     pub menu_snapshot: State<Option<Arc<RemoteMenu>>>,
@@ -168,7 +163,6 @@ impl App for BarApp {
         let clock_state = self.clock;
         use_hook(move || schedule_next_minute(timers, clock_state));
 
-        self.use_published_app();
         self.use_app_menus_setting();
 
         let (generation, open_started) = self.use_snapshot_drain();
@@ -176,7 +170,6 @@ impl App for BarApp {
         let status_anchors = use_hook(status::StatusAnchors::default);
 
         let now = self.clock.read().clone();
-        let active_app = self.active_app.read().clone();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
@@ -189,11 +182,7 @@ impl App for BarApp {
         let dialog_active = toplevels
             .iter()
             .any(|window| window.active && is_shell_dialog(&window.app_id));
-        let active_app = if dialog_active {
-            last_app.borrow().clone()
-        } else {
-            active_app.filter(|id| !is_shell_dialog(id))
-        };
+        let active_app = dialog_active.then(|| last_app.borrow().clone()).flatten();
         let active_info = toplevels
             .iter()
             .find(|window| window.active && !is_shell_dialog(&window.app_id))
@@ -350,18 +339,6 @@ impl App for BarApp {
 }
 
 impl BarApp {
-    fn use_published_app(&self) {
-        let mut active_app = self.active_app;
-        let poll_store = self.window_store.clone();
-        let published_app = use_watched(move || load_active_app(&poll_store));
-        use_side_effect(move || {
-            let id = published_app.read().clone();
-            if *active_app.peek() != id {
-                active_app.set(id);
-            }
-        });
-    }
-
     fn use_snapshot_drain(&self) -> (Rc<Cell<u64>>, Rc<Cell<Option<Instant>>>) {
         let generation = use_hook(|| Rc::new(Cell::new(0u64)));
         let open_started = use_hook(|| Rc::new(Cell::new(None::<Instant>)));
@@ -713,7 +690,7 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
 
 fn bar_colors() -> (Color, Color) {
     let resolved = theme::resolved();
-    if Toplevels::get().space.read().focus_bar.over_focus() {
+    if Toplevels::get().focus_bar.read().over_focus() {
         return (
             theme::color(ctdesign::FOCUS_BAR_TEXT),
             theme::color(ctdesign::FOCUS_BAR_BACKGROUND),
@@ -844,18 +821,6 @@ fn now_ms() -> u32 {
         .as_millis() as u32
 }
 
-#[derive(Clone, PartialEq, serde::Deserialize)]
-#[serde(default)]
-struct MenubarConfig {
-    app_menus: bool,
-}
-
-impl Default for MenubarConfig {
-    fn default() -> Self {
-        Self { app_menus: true }
-    }
-}
-
 fn schedule_next_minute(timers: Timers, clock: State<String>) {
     let retry = timers.clone();
     let seconds = u64::from(60 - chrono::Timelike::second(&chrono::Local::now()));
@@ -878,12 +843,6 @@ fn is_shell_dialog(app_id: &str) -> bool {
         })
 }
 
-fn load_active_app(store_path: &Path) -> Option<String> {
-    let active = load_active_window(store_path);
-    let app_id = active.app_id.trim();
-    (!app_id.is_empty()).then(|| app_id.to_string())
-}
-
 fn surface_spec() -> LayerSpec {
     LayerSpec {
         namespace: "malaysia-menubar".to_string(),
@@ -896,18 +855,14 @@ fn surface_spec() -> LayerSpec {
 }
 
 pub fn run() -> anyhow::Result<()> {
-    let window_store = data_dir().join("innate.state");
     let entries = Rc::new(crate::desktop::read_entries());
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
-    let active_app = State::create_global(load_active_app(&window_store));
     let app_menus = State::create_global(load_defaults::<MenubarConfig>("menubar").app_menus);
     let menu_snapshot = State::create_global(None::<Arc<RemoteMenu>>);
     let dbus = dbusmenu::start(*app_menus.peek());
     let app = AppComponent::new(BarApp {
         clock,
-        active_app,
         app_menus,
-        window_store,
         entries,
         dbus,
         menu_snapshot,
@@ -932,20 +887,6 @@ mod tests {
         assert!(is_shell_dialog(&about));
         assert!(!is_shell_dialog(crate::dialogs::ABOUT_APP_ID));
         assert!(!is_shell_dialog("org.mozilla.firefox"));
-    }
-
-    #[test]
-    fn menubar_domain_defaults_app_menus_to_true() {
-        let dir = std::env::temp_dir().join(format!("malaysia-menubar-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("menubar.domain");
-        let app_menus = |path: &Path| bk::app::read_toml::<MenubarConfig>(path).app_menus;
-        assert!(app_menus(&path));
-        std::fs::write(&path, "app_menus = false\nautohide = true\n").unwrap();
-        assert!(!app_menus(&path));
-        std::fs::write(&path, "autohide = true\n").unwrap();
-        assert!(app_menus(&path));
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

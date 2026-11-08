@@ -33,10 +33,8 @@ directories — preferences and state:
 ├── wallpaper.domain       ← catalog + current selection ([desktops]), like
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
-├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
-│                            `cleared_at` (unix; «Clear Menu»), written by the menubar
-└── innate.state           ← state: the active app, published by the compositor
-                             (Innate Domain, `docs/glossary.md`)
+└── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
+                             `cleared_at` (unix; «Clear Menu»), written by the menubar
 ```
 
 Each file is optional; missing files use their default (like macOS's

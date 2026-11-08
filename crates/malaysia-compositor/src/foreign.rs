@@ -255,7 +255,6 @@ impl State {
                 handle.done();
             }
         }
-        self.publish_active_if_focused(id);
     }
 
     fn foreign_states_for(&self, id: WindowId) -> Vec<u8> {

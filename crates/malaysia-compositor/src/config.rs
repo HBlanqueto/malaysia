@@ -17,7 +17,7 @@ pub enum DecorationPolicy {
 pub struct Config {
     pub appearance: AppearanceConfig,
     pub window: WindowConfig,
-    pub menubar: MenubarConfig,
+    pub menubar: ctappearance::menubar::MenubarConfig,
     pub display: DisplayConfig,
     pub screenshot: ScreenshotConfig,
     pub lock: LockConfig,
@@ -88,18 +88,6 @@ impl Default for WindowConfig {
                 .map(String::from)
                 .to_vec(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct MenubarConfig {
-    pub app_menus: bool,
-}
-
-impl Default for MenubarConfig {
-    fn default() -> Self {
-        Self { app_menus: true }
     }
 }
 

@@ -41,7 +41,7 @@ Close closes, minimize leaves the tile in the dock, maximize saves the rectangle
 
 An app declares a window a panel with `infinity_window_style_v1.set_panel` (version 3), as barrierkit's utility windows do. The compositor reproduces AppKit's `NSPanel`:
 
-1. **It is never the main window.** While the panel holds the keyboard, the topmost window of its app that is not a panel stays `activated` and is the one published in `innate.state` and as active in foreign-toplevel, so the menu bar keeps its menus (`shown_active`).
+1. **It is never the main window.** While the panel holds the keyboard, the topmost window of its app that is not a panel stays `activated` and is the one published as active in foreign-toplevel, so the menu bar keeps its menus (`shown_active`).
 2. **`hides_on_deactivate`:** the panel hides while the active window belongs to another client or there is none, and comes back at the same place and stacking when a window of its app becomes active. It is its own hiding reason, separate from minimizing (`set_deactivated`). Focus on a shell layer does not count as changing app.
 3. **`floating`:** the panel stays above every window that does not float (`raise_order`).
 4. **`key_only_if_needed`:** neither mapping nor a press gives it the keyboard; it only rises. The app asks for it with an xdg-activation token made from that press, which is accepted because the keyboard stays on the same client.

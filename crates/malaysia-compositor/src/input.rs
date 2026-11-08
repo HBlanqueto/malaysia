@@ -679,7 +679,6 @@ impl State {
             let shown_before = self.shown_active_for(previous);
             self.sync_panels();
             let shown = self.shown_active();
-            self.publish_active(shown);
             for window in [previous, shown_before, Some(id), shown]
                 .into_iter()
                 .flatten()
@@ -1070,20 +1069,7 @@ impl State {
                 self.foreign_state_changed(window);
             }
         }
-        self.publish_active(None);
         self.log_focus_stack(None);
-    }
-
-    pub(crate) fn publish_active(&self, id: Option<WindowId>) {
-        let info = id.and_then(|id| self.windows.active_info(id));
-        let active = info.map(|(title, app_id)| crate::active::ActiveWindow { title, app_id });
-        crate::active::publish_to(&ctappearance::data_dir(), active.as_ref());
-    }
-
-    pub(crate) fn publish_active_if_focused(&self, id: WindowId) {
-        if self.shown_active() == Some(id) {
-            self.publish_active(Some(id));
-        }
     }
 
     pub(crate) fn forget_window(&mut self, surface: &WlSurface) {

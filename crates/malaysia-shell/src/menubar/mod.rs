@@ -17,7 +17,7 @@ pub mod system;
 pub use bar::run;
 
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;
@@ -66,22 +66,6 @@ fn exec_matches(entry: &DesktopEntry, stem: &str) -> bool {
         let token = token.to_lowercase();
         token.contains(&needle) || needle.contains(&token)
     })
-}
-
-#[derive(Default, serde::Deserialize)]
-pub struct ActiveWindow {
-    #[serde(default)]
-    pub app_id: String,
-}
-
-#[derive(Default, serde::Deserialize)]
-#[serde(default)]
-struct ActiveWindowStore {
-    active: ActiveWindow,
-}
-
-pub fn load_active_window(store_path: &Path) -> ActiveWindow {
-    bk::app::read_toml::<ActiveWindowStore>(store_path).active
 }
 
 pub fn create_desktop_folder() {

@@ -89,8 +89,7 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
         info!(pid, "infinity bound by trusted shell");
         let manager = data_init.init(resource, self.clone());
         if manager.version() >= 5 {
-            let (index, count, desktop, focus_bar) = state.space_state();
-            manager.space(index, count, desktop, focus_bar);
+            manager.space(state.space_state());
         }
         for id in state.arranged.keys() {
             if let Some(handle) = state.foreign.management.handle_for_client(*id, client.id()) {
@@ -173,7 +172,7 @@ fn window_id_from_handle(handle: &ZwlrForeignToplevelHandleV1) -> Option<WindowI
 
 impl InfinityGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
-        display_handle.create_global::<State, InfinityWindowManagerV1, _>(6, InfinityGlobalData)
+        display_handle.create_global::<State, InfinityWindowManagerV1, _>(7, InfinityGlobalData)
     }
 }
 
@@ -349,30 +348,15 @@ impl State {
         self.send_restorable(id);
     }
 
-    pub(crate) fn space_state(
-        &self,
-    ) -> (
-        u32,
-        u32,
-        u32,
-        protocol::infinity_window_manager_v1::FocusBar,
-    ) {
+    pub(crate) fn space_state(&self) -> protocol::infinity_window_manager_v1::FocusBar {
         use protocol::infinity_window_manager_v1::FocusBar;
-        let current = self.spaces.current();
-        let desktop = self.spaces.desktop_number(current.id).unwrap_or(0);
-        let focus_bar = match current.kind {
+        match self.spaces.current().kind {
             malaysia_scene::spaces::SpaceKind::Desktop => FocusBar::None,
             malaysia_scene::spaces::SpaceKind::Focus { .. } if self.focus_reveal.is_shown() => {
                 FocusBar::Revealed
             }
             malaysia_scene::spaces::SpaceKind::Focus { .. } => FocusBar::Hidden,
-        };
-        (
-            self.spaces.current_index() as u32,
-            self.spaces.len() as u32,
-            desktop as u32,
-            focus_bar,
-        )
+        }
     }
 
     pub(crate) fn send_space_state(&mut self) {
@@ -381,11 +365,10 @@ impl State {
             return;
         }
         self.last_space_state = Some(state);
-        let (index, count, desktop, focus_bar) = state;
         self.infinity_managers.retain(|manager| manager.is_alive());
         for manager in &self.infinity_managers {
             if manager.version() >= 5 {
-                manager.space(index, count, desktop, focus_bar);
+                manager.space(state);
             }
         }
     }
