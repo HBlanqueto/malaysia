@@ -55,7 +55,13 @@ no page in System Settings. The user chose which macOS options to keep:
 ## Consequences
 
 The filter pass costs one full-screen render per frame and turns off direct
-scanout while it is on. Cursors that a client draws itself keep their size.
+scanout while it is on.
+
+`pointer_size` reaches the cursors the compositor draws: its own and the ones
+apps ask for by name (`wp_cursor_shape_v1`). A cursor that an app draws
+itself, as a surface, keeps the app's size. This is intended: like a game
+with its own cursor setting, that app owns its pointer.
+
 Text size reaches only BarrierKit apps.
 
 ## Rejected alternatives

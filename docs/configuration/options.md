@@ -118,7 +118,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | kit: scales `Text` and sidebar items, **System Settings › Accessibility › Display** |
 | `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
 | `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
-| `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws, **System Settings › Accessibility › Display** |
+| `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws; a cursor an app draws itself keeps the app's size (ADR 0066), **System Settings › Accessibility › Display** |
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
