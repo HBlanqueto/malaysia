@@ -13,12 +13,13 @@ report() {
 }
 
 production() {
-    for file in $(find "$@" -name '*.rs' | sort); do
+    for file in $(find "$@" -name '*.rs' ! -name 'tests.rs' ! -name '*_tests.rs' | sort); do
         awk '/#\[cfg\(test\)\]/{exit} {print FILENAME ":" FNR ":" $0}' "$file"
     done
 }
 
-if matches=$(production crates/malaysia-compositor/src crates/malaysia-shell/src |
+if matches=$(production crates/malaysia-compositor/src crates/malaysia-shell/src \
+    crates/malaysia-scene/src crates/malaysia-wallpaper/src |
     grep -E '0x[0-9a-fA-F]{6,8}|Rgba::(rgb8|rgba8)'); then
     report "colour literals must live in ctdesign" "$matches"
 fi
