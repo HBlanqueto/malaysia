@@ -715,6 +715,7 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
             radius: radius_physical,
             exponent,
             focused: is_focused,
+            panel: data.role == crate::decoration::Role::Dialog,
             bordered: frame_has_border(data.state),
             arrow: crate::effects::Arrow::default(),
         },
@@ -729,6 +730,7 @@ pub(crate) struct Frame {
     radius: i32,
     exponent: f32,
     focused: bool,
+    panel: bool,
     bordered: bool,
     arrow: crate::effects::Arrow,
 }
@@ -845,6 +847,7 @@ pub(crate) fn append_popups<R: MalaysiaRenderer>(
                 radius: (crate::window_style::corner_extent(corner) * scale).round() as i32,
                 exponent: ctdesign::POPUP.superellipse_exponent,
                 focused: true,
+                panel: true,
                 bordered: true,
                 arrow: tip.map_or_else(crate::effects::Arrow::default, |tip| {
                     crate::effects::Arrow::popover(tip, scale)
@@ -893,11 +896,15 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
         let palette = &state.chrome_theme.palette;
         let slot = |slot| (frame.owner, slot);
         if let Some(program) = state.border.as_ref() {
-            let inner_line = palette
+            let panel_line = palette
                 .panel_inner_line
-                .map(|line| (line.sides, line.edges))
-                .or(palette.inner_line.map(|color| (color, color)));
-            if let Some((color, edge_color)) = inner_line {
+                .filter(|_| frame.panel && frame.focused);
+            let inner_line = panel_line
+                .map(|line| (line.sides, line.edges, line.glow))
+                .or(palette
+                    .inner_line
+                    .map(|color| (color, color, ctdesign::Rgba::TRANSPARENT)));
+            if let Some((color, edge_color, glow)) = inner_line {
                 let (area, mut uniforms) = border_shader(
                     frame_rect_physical,
                     radius_physical,
@@ -906,6 +913,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
                     false,
                     color,
                     edge_color,
+                    glow,
                 );
                 uniforms.extend(frame.arrow.uniforms(1.0));
                 inner = Some(
@@ -927,6 +935,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
                 true,
                 palette.outer_border,
                 palette.outer_border,
+                ctdesign::Rgba::TRANSPARENT,
             );
             uniforms.extend(frame.arrow.uniforms(1.0));
             outer = Some(
@@ -984,6 +993,7 @@ pub(crate) fn border_shader(
     outer: bool,
     color: ctdesign::Rgba,
     edge_color: ctdesign::Rgba,
+    glow: ctdesign::Rgba,
 ) -> (
     Rectangle<i32, Logical>,
     Vec<smithay::backend::renderer::gles::Uniform<'static>>,
@@ -1006,6 +1016,8 @@ pub(crate) fn border_shader(
         Uniform::new("exponent", exponent),
         Uniform::new("color", color.premultiplied()),
         Uniform::new("edge_color", edge_color.premultiplied()),
+        Uniform::new("glow", glow.premultiplied()),
+        Uniform::new("glow_depth", ctdesign::PANEL_GLOW_DEPTH * scale as f32),
     ];
     (area, uniforms)
 }
@@ -1081,6 +1093,7 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                         .round() as i32,
                     exponent: ctdesign::DIALOG.superellipse_exponent,
                     focused: true,
+                    panel: true,
                     bordered: true,
                     arrow: crate::effects::Arrow::default(),
                 },

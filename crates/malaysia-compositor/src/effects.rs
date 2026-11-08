@@ -501,6 +501,8 @@ pub(crate) fn compile_border(renderer: &mut GlesRenderer) -> Option<GlesPixelPro
                 UniformName::new("exponent", UniformType::_1f),
                 UniformName::new("color", UniformType::_4f),
                 UniformName::new("edge_color", UniformType::_4f),
+                UniformName::new("glow", UniformType::_4f),
+                UniformName::new("glow_depth", UniformType::_1f),
                 UniformName::new("arrow", UniformType::_4f),
                 UniformName::new("arrow_slope", UniformType::_1f),
             ],
