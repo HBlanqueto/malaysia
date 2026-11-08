@@ -27,6 +27,9 @@ rust-embed.workspace = true
 [dev-dependencies]
 freya-testing.workspace = true
 
-# bk::tr! expands to i18n_embed_fl::fl! in this crate.
+# bk::localize! and bk::tr! expand to these crates in this crate.
 [package.metadata.cargo-shear]
-ignored = ["i18n-embed-fl"]
+ignored = ["i18n-embed", "i18n-embed-fl", "rust-embed"]
+
+[package.metadata.cargo-machete]
+ignored = ["i18n-embed", "i18n-embed-fl", "rust-embed"]

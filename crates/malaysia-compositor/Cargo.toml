@@ -40,3 +40,6 @@ sctk.workspace = true
 # The code wayland-scanner generates in gtk.rs names wayland_backend.
 [package.metadata.cargo-shear]
 ignored = ["wayland-backend"]
+
+[package.metadata.cargo-machete]
+ignored = ["wayland-backend"]
