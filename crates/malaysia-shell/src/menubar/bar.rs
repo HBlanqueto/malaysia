@@ -205,6 +205,11 @@ impl App for BarApp {
         let app_id = active_info
             .map(|info| info.app_id.clone())
             .or_else(|| active_app.clone());
+        if *last_app.borrow() != app_id
+            && let Some(id) = &app_id
+        {
+            super::recents::record_app(id);
+        }
         last_app.borrow_mut().clone_from(&app_id);
         let focused = app_id.is_some();
         let key = active_info.map(|info| MenuKey {
@@ -352,9 +357,6 @@ impl BarApp {
         use_side_effect(move || {
             let id = published_app.read().clone();
             if *active_app.peek() != id {
-                if let Some(id) = &id {
-                    super::recents::record_app(id);
-                }
                 active_app.set(id);
             }
         });
@@ -894,7 +896,7 @@ fn surface_spec() -> LayerSpec {
 }
 
 pub fn run() -> anyhow::Result<()> {
-    let window_store = data_dir().join("window.domain");
+    let window_store = data_dir().join("innate.state");
     let entries = Rc::new(crate::desktop::read_entries());
     let clock = State::create_global(chrono::Local::now().format("%H:%M").to_string());
     let active_app = State::create_global(load_active_app(&window_store));

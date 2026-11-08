@@ -27,7 +27,7 @@ pub(crate) fn publish_to(dir: &Path, active: Option<&ActiveWindow>) {
         active: StoredActive { title, app_id },
     };
     if let Ok(text) = toml::to_string(&store) {
-        let _ = std::fs::write(dir.join("window.domain"), text);
+        let _ = std::fs::write(dir.join("innate.state"), text);
     }
 }
 
@@ -45,10 +45,10 @@ mod tests {
                 app_id: "foot".into(),
             }),
         );
-        let text = std::fs::read_to_string(dir.join("window.domain")).expect("store written");
+        let text = std::fs::read_to_string(dir.join("innate.state")).expect("store written");
         assert!(text.contains("title = \"foot\""));
         publish_to(&dir, None);
-        let text = std::fs::read_to_string(dir.join("window.domain")).expect("store written");
+        let text = std::fs::read_to_string(dir.join("innate.state")).expect("store written");
         assert!(text.contains("title = \"\""));
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -65,7 +65,7 @@ mod tests {
                 app_id: "app".into(),
             }),
         );
-        let text = std::fs::read_to_string(dir.join("window.domain")).expect("store written");
+        let text = std::fs::read_to_string(dir.join("innate.state")).expect("store written");
         let value: toml::Value = toml::from_str(&text).expect("the store is valid TOML");
         assert_eq!(value["active"]["title"].as_str(), Some(title));
         assert_eq!(value["active"]["app_id"].as_str(), Some("app"));

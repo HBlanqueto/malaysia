@@ -23,4 +23,4 @@ ADR 0036 is superseded in the channel and in the Otto port.
 
 ## Rejected alternatives
 
-- Publishing the pair in `window.domain`: two windows of the same app share an `app_id` and the file does not distinguish focus.
+- Publishing the pair in `innate.state`: two windows of the same app share an `app_id` and the file does not distinguish focus.
