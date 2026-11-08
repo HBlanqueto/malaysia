@@ -391,6 +391,8 @@ impl State {
         if let Some((surface, _)) = layer_under {
             tracing::info!(?location, "press landed on a layer surface");
             self.clear_chrome_pointer();
+            self.alert_press =
+                crate::window_style::alert_layer(&surface).map(|alert| (alert, location));
             let focused_window = self
                 .seat
                 .get_keyboard()
@@ -1098,7 +1100,7 @@ impl State {
         self.arranged.remove(&id);
         self.minimized.remove(&id);
         self.chrome.remove(crate::chrome::FrameOwner::Window(id));
-        if self.grab.map(Grab::window) == Some(id) {
+        if self.grab.and_then(Grab::window) == Some(id) {
             self.grab = None;
         }
         tracing::info!(
@@ -1169,6 +1171,25 @@ impl State {
             self.windows.set_resizing(window, false, None);
         }
         self.grab = None;
+        self.alert_press = None;
+    }
+
+    fn start_alert_drag(&mut self, location: Point<f64, Logical>) {
+        let Some((alert, press)) = self.alert_press else {
+            return;
+        };
+        if (location.x - press.x).hypot(location.y - press.y)
+            <= ctdesign::TITLEBAR_DOUBLE_CLICK.slop
+        {
+            return;
+        }
+        self.alert_press = None;
+        if let Some(origin) = self.layers.alert_location(alert) {
+            self.grab = Some(Grab::Alert {
+                alert,
+                offset: press - origin.to_f64(),
+            });
+        }
     }
 
     pub(crate) fn pointer_motion(&mut self, location: Point<f64, Logical>, time: InputTime) {
@@ -1189,6 +1210,9 @@ impl State {
             self.keep_cursor_boost_alive(now);
         }
 
+        if self.grab.is_none() {
+            self.start_alert_drag(location);
+        }
         if let Some(grab) = self.grab {
             if let Some(pointer) = self.seat.get_pointer() {
                 let delta = location - pointer.current_location();
@@ -1399,6 +1423,13 @@ impl State {
                 let outer =
                     malaysia_scene::scene::resized(start_outer, edge, dx, dy, minimum, maximum);
                 self.windows.resize(window, outer);
+            }
+            Grab::Alert { alert, offset } => {
+                let target = Point::from((
+                    round(location.x - offset.x),
+                    round(location.y - offset.y).max(self.workspace().0.y),
+                ));
+                self.layers.move_alert(alert, target);
             }
         }
     }

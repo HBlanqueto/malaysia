@@ -25,6 +25,8 @@ The compositor recognizes a BarrierKit app because it binds `infinity_window_sty
 
 While dragged, a window does not go behind the menubar: its top edge stops at the work area (`State::workspace`, which subtracts the top exclusive zones), as on macOS. For a CSD window the visible edge counts: the shadow the app draws inside its surface (`window_geometry`) is subtracted. The sides and the bottom edge may leave the screen.
 
+A shell alert (`malaysia-dialog` layer) opens centered in the work area. Dragging it farther than the double-click slop (`TITLEBAR_DOUBLE_CLICK.slop`) moves it, with the same top limit; the pointer leaves the alert, so the button under it does not fire. Alerts are not resized.
+
 ## Edge resize
 
 Normal SSD windows (not maximized or fullscreen) are resized from an outer band: `window.resize_border` (10 px) on the sides and an «L» of `window.resize_corner` (20 px) at the corners, with 2 px of tolerance inward. The hit test walks the stack: the top window wins and its content blocks the band of a lower one. The traffic lights are checked before the resize. CSD windows handle their own edges.

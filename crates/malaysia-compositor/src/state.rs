@@ -147,6 +147,7 @@ pub struct State {
     >,
     pub config: Config,
     pub(crate) grab: Option<Grab>,
+    pub(crate) alert_press: Option<(u64, Point<f64, Logical>)>,
     pub(crate) test_press: Option<TestPress>,
     pub(crate) test_pointer: Option<crate::test_input::TestPointer>,
     pub(crate) chrome: crate::chrome::ChromeCache,
@@ -400,6 +401,7 @@ impl State {
             infinity_managers: Vec::new(),
             config,
             grab: None,
+            alert_press: None,
             test_press: None,
             test_pointer: crate::test_input::TestPointer::from_env(),
             chrome: crate::chrome::ChromeCache::new(),
@@ -805,12 +807,17 @@ pub(crate) enum Grab {
         start_pointer: ScenePoint<f64, SceneLogical>,
         start_outer: SceneRect<f64, SceneLogical>,
     },
+    Alert {
+        alert: u64,
+        offset: Point<f64, Logical>,
+    },
 }
 
 impl Grab {
-    pub(crate) fn window(self) -> WindowId {
+    pub(crate) fn window(self) -> Option<WindowId> {
         match self {
-            Grab::Move { window, .. } | Grab::Resize { window, .. } => window,
+            Grab::Move { window, .. } | Grab::Resize { window, .. } => Some(window),
+            Grab::Alert { .. } => None,
         }
     }
 }

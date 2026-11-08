@@ -15,6 +15,7 @@ pub struct LayerEntry {
     pub geometry: Rectangle<i32, Logical>,
     pub exclusive_zone: i32,
     pub keyboard_interactivity: KeyboardInteractivity,
+    moved: bool,
 }
 
 impl LayerEntry {
@@ -84,7 +85,10 @@ impl Layers {
             .find(|e| e.surface.wl_surface() == surface)
         {
             let state = cached_state_of(surface);
-            let geometry = geometry_of(&state, output_size, reserved);
+            let mut geometry = geometry_of(&state, output_size, reserved);
+            if entry.moved {
+                geometry.loc = entry.geometry.loc;
+            }
             let exclusive_zone = exclusive_zone_of(&state);
             if geometry != entry.geometry || exclusive_zone != entry.exclusive_zone {
                 entry.surface.with_pending_state(|pending| {
@@ -128,6 +132,7 @@ impl Layers {
             geometry,
             exclusive_zone: exclusive_zone_of(&state),
             keyboard_interactivity: state.keyboard_interactivity,
+            moved: false,
         });
     }
 
@@ -200,6 +205,20 @@ impl Layers {
             })
             .map(|entry| entry.exclusive_zone)
             .sum()
+    }
+
+    pub fn alert_location(&self, alert: u64) -> Option<Point<i32, Logical>> {
+        self.mapped
+            .iter()
+            .find(|entry| is_alert(entry, alert))
+            .map(|entry| entry.geometry.loc)
+    }
+
+    pub fn move_alert(&mut self, alert: u64, location: Point<i32, Logical>) {
+        if let Some(entry) = self.mapped.iter_mut().find(|entry| is_alert(entry, alert)) {
+            entry.geometry.loc = location;
+            entry.moved = true;
+        }
     }
 
     fn reserved(&self) -> (i32, i32) {
@@ -357,6 +376,10 @@ fn cached_state_of(surface: &WlSurface) -> LayerSurfaceCachedState {
             .get::<LayerSurfaceCachedState>()
             .current()
     })
+}
+
+fn is_alert(entry: &LayerEntry, alert: u64) -> bool {
+    crate::window_style::alert_layer(entry.surface.wl_surface()) == Some(alert)
 }
 
 fn geometry_of(
