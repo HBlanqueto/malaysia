@@ -14,6 +14,10 @@ in
   options.programs.malaysia = {
     enable = lib.mkEnableOption "the Malaysia desktop";
 
+    curseterm.enable = lib.mkEnableOption "the CurseTerm terminal" // {
+      default = true;
+    };
+
     globalMenu.libadwaita.enable = lib.mkEnableOption "global menu support for libadwaita applications" // {
       default = true;
     };
@@ -48,9 +52,9 @@ in
     # hwdata: «Acerca de este PC» names the GPU from /run/current-system/sw/share/hwdata/pci.ids.
     environment.systemPackages = [
       cfg.package
-      self.packages.${pkgs.stdenv.hostPlatform.system}.curseterm
       pkgs.hwdata
     ]
+    ++ lib.optional cfg.curseterm.enable self.packages.${pkgs.stdenv.hostPlatform.system}.curseterm
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 
     system.replaceDependencies.replacements =
