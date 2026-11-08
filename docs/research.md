@@ -1,6 +1,6 @@
 # Research: conclusions
 
-Summary of what was decided after studying macOS, GNOME and Otto. The full text lives in git, in the commit before `docs/investigacion/` was deleted.
+Summary of what was decided after studying macOS, GNOME and Otto. The comparison of macOS's processes, preferences and app APIs with Malaysia and barrierkit is in [`macos-desktop-architecture.md`](macos-desktop-architecture.md). The full text lives in git, in the commit before `docs/investigacion/` was deleted.
 
 ## How macOS renders
 
