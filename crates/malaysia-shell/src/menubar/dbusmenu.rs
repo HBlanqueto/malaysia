@@ -179,6 +179,7 @@ impl Registrar {
     }
 }
 
+// Patched Electron announces its Wayland appmenu only while this name has an owner (nix/patches/electron-wayland-appmenu.patch).
 async fn set_registrar(connection: &zbus::Connection, windows: &RegistrarWindows, enabled: bool) {
     if enabled {
         match connection.request_name(REGISTRAR_NAME).await {

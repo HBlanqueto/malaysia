@@ -4,7 +4,7 @@ Status: accepted (2026-10-27). 14f-1 accepted on 2026-10-28; 14f-2 accepted on 2
 
 ## Context
 
-Block 14 already serves menus through `org_kde_kwin_appmenu` + dbusmenu and through `com.canonical.AppMenu.Registrar`.
+Block 14 already serves menus through `org_kde_kwin_appmenu` + dbusmenu. The bar also owns `com.canonical.AppMenu.Registrar`: patched Electron announces its Wayland appmenu only while that name has an owner, but the bar does not match the windows registered there (ADR 0056).
 
 ## Decision
 
