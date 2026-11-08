@@ -40,15 +40,27 @@ runs three kinds of app, and each reads text size its own way:
    `QT_QPA_PLATFORMTHEME=qt6ct` in its session, unless one is set. The
    portal's Qt bridge (`qt_bridge`, default `true`) writes, for each tool and on
    every appearance change:
-   - `colors/malaysia.conf`: the 22 `QPalette` roles from the resolved Tengen
-     surfaces and inks, so Qt follows light, dark and the accent;
+   - `malaysia-colors.conf`: the 22 `QPalette` roles from the resolved Tengen
+     surfaces and inks, so Qt follows light, dark and the accent. It sits next
+     to the config, not in `colors/`, because both tools watch only their own
+     folder;
    - in `qt6ct.conf` and `qt5ct.conf`, only `style = Fusion`,
      `custom_palette`, `color_scheme_path` and the `general` and `fixed` fonts
      (`BODY` and `MONO`, in points, times the Qt size; Qt 5 gets its 10-field
-     font string and 0–99 weight). Other keys stay.
-5. **NixOS.** The module installs qt5ct and qt6ct and enables `qt` so
+     font string and 0–99 weight). Other keys stay;
+   - `icon_theme`: `breeze` or `breeze-dark` by scheme, unless the user chose
+     another theme.
+5. **Qt 6 learns light or dark.** Qt takes `QStyleHints::colorScheme` only from
+   the platform theme (`QStyleHintsPrivate::update`), and qt6ct 0.11 does not
+   report one, so apps read `Unknown`. `nix/patches/qt6ct-color-scheme.patch`
+   reports dark when the palette's window is darker than its text, and calls
+   `QWindowSystemInterface::handleThemeChange` after a reload so
+   `colorSchemeChanged` fires. A PyQt6 probe reads `Dark`, then `Light` after
+   the portal rewrites the palette, with the app open.
+6. **NixOS.** The module installs qt5ct, the patched qt6ct
+   (`qt6ct-color-scheme`) and Breeze icons, and enables `qt` so
    `QT_PLUGIN_PATH` finds them, without a global `QT_QPA_PLATFORMTHEME`.
-6. **System Settings.** Accessibility › Display › Text size is a page: the
+7. **System Settings.** Accessibility › Display › Text size is a page: the
    preferred size slider and, under Apps, a menu per toolkit with «Use
    preferred reading size» or a size.
 

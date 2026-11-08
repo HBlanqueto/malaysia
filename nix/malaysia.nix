@@ -50,7 +50,8 @@ in
       cfg.package
       pkgs.hwdata
       pkgs.libsForQt5.qt5ct
-      pkgs.qt6Packages.qt6ct
+      self.packages.${pkgs.stdenv.hostPlatform.system}.qt6ct-color-scheme
+      pkgs.kdePackages.breeze-icons
     ]
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
 

@@ -178,6 +178,9 @@
             '';
           });
         };
+        qt6ct-color-scheme = pkgs.qt6Packages.qt6ct.overrideAttrs (old: {
+          patches = (old.patches or []) ++ [ ./nix/patches/qt6ct-color-scheme.patch ];
+        });
         libadwaita-global-menu = pkgs.libadwaita.overrideAttrs (old: {
           patches = (old.patches or []) ++ [
             ./nix/patches/libadwaita-global-menu.patch

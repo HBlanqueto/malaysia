@@ -8,7 +8,9 @@ use serde::Deserialize;
 
 use crate::gtk::{is_symlink, set_ini_key, write_if_changed};
 
-const SCHEME_FILE: &str = "malaysia.conf";
+// qt5ct and qt6ct watch only their own folder, so the palette lives there and not in colors/.
+const SCHEME_FILE: &str = "malaysia-colors.conf";
+const ICON_THEMES: [&str; 2] = ["breeze", "breeze-dark"];
 
 #[derive(Debug, Deserialize)]
 #[serde(default)]
@@ -61,15 +63,22 @@ impl Bridge {
 
     fn apply(&self, appearance: &AppearanceConfig, dominant: Option<Rgba>) -> io::Result<()> {
         let scheme = color_scheme(appearance, dominant);
+        let icons = ICON_THEMES[usize::from(appearance.color_scheme.is_dark())];
         for qt in [Qt::Six, Qt::Five] {
-            self.apply_to(qt, appearance, &scheme)?;
+            self.apply_to(qt, appearance, &scheme, icons)?;
         }
         Ok(())
     }
 
-    fn apply_to(&self, qt: Qt, appearance: &AppearanceConfig, scheme_text: &str) -> io::Result<()> {
+    fn apply_to(
+        &self,
+        qt: Qt,
+        appearance: &AppearanceConfig,
+        scheme_text: &str,
+        icons: &str,
+    ) -> io::Result<()> {
         let dir = self.config_home.join(qt.tool());
-        let scheme = dir.join("colors").join(SCHEME_FILE);
+        let scheme = dir.join(SCHEME_FILE);
         write_if_changed(&scheme, scheme_text)?;
         let conf = dir.join(format!("{}.conf", qt.tool()));
         if is_symlink(&conf) {
@@ -78,6 +87,11 @@ impl Bridge {
         }
         let scale = appearance.text_size_for(Toolkit::Qt);
         let mut text = fs::read_to_string(&conf).unwrap_or_default();
+        if ini_value(&text, "Appearance", "icon_theme")
+            .is_none_or(|theme| ICON_THEMES.contains(&theme))
+        {
+            text = set_ini_key(&text, "Appearance", "icon_theme", icons);
+        }
         for (section, key, value) in [
             ("Appearance", "style", "Fusion".to_string()),
             ("Appearance", "custom_palette", "true".to_string()),
@@ -119,6 +133,19 @@ fn font(qt: Qt, face: Font, scale: f32) -> String {
             qt5_weight(face.weight)
         ),
     }
+}
+
+fn ini_value<'a>(ini: &'a str, section: &str, key: &str) -> Option<&'a str> {
+    let header = format!("[{section}]");
+    ini.lines()
+        .map(str::trim)
+        .skip_while(|line| *line != header)
+        .skip(1)
+        .take_while(|line| !line.starts_with('['))
+        .find_map(|line| {
+            let (name, value) = line.split_once('=')?;
+            (name.trim() == key).then_some(value.trim())
+        })
 }
 
 fn qt5_weight(weight: u16) -> u16 {
@@ -225,6 +252,26 @@ mod tests {
     }
 
     #[test]
+    fn icons_follow_the_scheme_unless_the_user_chose_another_theme() {
+        let home = temp_dir("icons");
+        let dark = AppearanceConfig {
+            color_scheme: ColorScheme::Dark,
+            ..AppearanceConfig::default()
+        };
+        Bridge::at(home.clone()).apply(&dark, None).unwrap();
+        let conf = || fs::read_to_string(home.join("qt6ct/qt6ct.conf")).unwrap();
+        assert!(conf().contains("icon_theme=breeze-dark"), "{}", conf());
+        Bridge::at(home.clone())
+            .apply(&AppearanceConfig::default(), None)
+            .unwrap();
+        assert!(conf().contains("icon_theme=breeze\n"), "{}", conf());
+        let custom = conf().replace("icon_theme=breeze", "icon_theme=Papirus");
+        fs::write(home.join("qt6ct/qt6ct.conf"), custom).unwrap();
+        Bridge::at(home.clone()).apply(&dark, None).unwrap();
+        assert!(conf().contains("icon_theme=Papirus"), "{}", conf());
+    }
+
+    #[test]
     fn the_qt_text_size_scales_the_point_size_and_keeps_other_keys() {
         let home = temp_dir("fonts");
         let dir = home.join("qt6ct");
@@ -245,7 +292,7 @@ mod tests {
             conf.contains(&format!("general=\"{},19.5,", BODY.family)),
             "{conf}"
         );
-        assert!(dir.join("colors").join(SCHEME_FILE).exists());
+        assert!(dir.join(SCHEME_FILE).exists());
         let qt5 = fs::read_to_string(home.join("qt5ct/qt5ct.conf")).unwrap();
         assert!(
             qt5.contains(&format!(
