@@ -192,17 +192,23 @@ is_running() {
     pid_is_malaysia_compositor "$_saved"
 }
 
-build() {
-    require_devshell
-    require cargo
+parse_release() {
+    _what=$1
+    shift
     _release=
     if [ "${1:-}" = "--release" ]; then
         _release=1
         shift
     fi
     if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for build: $1"
+        fail "$EXIT_USAGE" "unexpected argument for $_what: $1"
     fi
+}
+
+build() {
+    require_devshell
+    require cargo
+    parse_release "build" "$@"
     if [ -n "$_release" ]; then
         cargo build --release
     else
@@ -211,14 +217,7 @@ build() {
 }
 
 start() {
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for run: $1"
-    fi
+    parse_release "run" "$@"
     if is_running; then
         _saved=$(read_pid)
         fail "$EXIT_ALREADY_RUNNING" "malaysia-compositor is already running (pid $_saved)"
@@ -273,14 +272,7 @@ watch() {
     require_devshell
     require cargo
     require cargo-watch
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for watch: $1"
-    fi
+    parse_release "watch" "$@"
 
     set -- -w "$script_dir/crates" --ignore "$script_dir/target"
     if [ -d "$script_dir/src" ]; then
@@ -523,14 +515,7 @@ move() {
 }
 
 build_probes() {
-    _release=
-    if [ "${1:-}" = "--release" ]; then
-        _release=1
-        shift
-    fi
-    if [ "$#" -ne 0 ]; then
-        fail "$EXIT_USAGE" "unexpected argument for the probes: $1"
-    fi
+    parse_release "the probes" "$@"
     if [ -n "$_release" ]; then
         _profile=release
         cargo build --release -p malaysia-compositor -p sctk-probe ||
