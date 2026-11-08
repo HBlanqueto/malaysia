@@ -910,3 +910,5 @@ notifications-settings = Notification Settings…
 notifications-now = now
 notifications-minutes = { $count }m ago
 notifications-hours = { $count }h ago
+notifications-reply-placeholder = Write a reply
+notifications-reply-send = Send

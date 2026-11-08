@@ -1,4 +1,6 @@
-use ctappearance::notifications::{AlertStyle, AppNotifications, Grouping, NotificationsConfig};
+use ctappearance::notifications::{
+    AlertStyle, AppNotifications, Grouping, NotificationsConfig, ShowPreviews,
+};
 use serde::{Deserialize, Serialize};
 
 const STATE: &str = "notifications";
@@ -41,6 +43,28 @@ pub(crate) enum Origin {
         id: String,
         default_action: Option<Action>,
     },
+    Portal {
+        id: String,
+        default_action: Option<Action>,
+    },
+}
+
+impl Origin {
+    pub(crate) fn gtk_id(&self) -> Option<&str> {
+        match self {
+            Self::Gtk { id, .. } | Self::Portal { id, .. } => Some(id),
+            Self::Freedesktop => None,
+        }
+    }
+
+    pub(crate) fn default_action(&self) -> Option<&Action> {
+        match self {
+            Self::Gtk { default_action, .. } | Self::Portal { default_action, .. } => {
+                default_action.as_ref()
+            }
+            Self::Freedesktop => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,6 +82,12 @@ pub(crate) struct Notification {
     pub(crate) summary: String,
     pub(crate) body: String,
     pub(crate) actions: Vec<Action>,
+    #[serde(default)]
+    pub(crate) reply: Option<Action>,
+    #[serde(default)]
+    pub(crate) hide_on_lock: bool,
+    #[serde(default)]
+    pub(crate) hide_content_on_lock: bool,
     pub(crate) level: Level,
     pub(crate) posted: i64,
     pub(crate) origin: Origin,
@@ -155,11 +185,26 @@ impl Center {
     pub(crate) fn gtk_id(&self, app_id: &str, gtk_id: &str) -> Option<u32> {
         self.notifications
             .iter()
-            .find(|kept| {
-                kept.app_id == app_id
-                    && matches!(&kept.origin, Origin::Gtk { id, .. } if id == gtk_id)
-            })
+            .find(|kept| kept.app_id == app_id && kept.origin.gtk_id() == Some(gtk_id))
             .map(|kept| kept.id)
+    }
+
+    pub(crate) fn on_lock_screen(&self, config: &NotificationsConfig) -> Vec<(Notification, bool)> {
+        if !config.when_locked {
+            return Vec::new();
+        }
+        self.notifications
+            .iter()
+            .filter(|notification| {
+                let app = config.app(&notification.app_id);
+                app.allow && app.lock_screen && !notification.hide_on_lock
+            })
+            .map(|notification| {
+                let hidden = notification.hide_content_on_lock
+                    || config.show_previews != ShowPreviews::Always;
+                (notification.clone(), hidden)
+            })
+            .collect()
     }
 
     pub(crate) fn groups(&self, config: &NotificationsConfig) -> Vec<Vec<Notification>> {
@@ -201,6 +246,9 @@ mod tests {
             summary: String::new(),
             body: String::new(),
             actions: Vec::new(),
+            reply: None,
+            hide_on_lock: false,
+            hide_content_on_lock: false,
             level: Level::Active,
             posted: 0,
             origin: Origin::Freedesktop,
@@ -314,6 +362,33 @@ mod tests {
             sizes,
             vec![("chat".into(), 1), ("mail".into(), 2), ("chat".into(), 1)]
         );
+    }
+
+    #[test]
+    fn the_lock_screen_shows_allowed_apps_and_hides_content_unless_previews_are_always() {
+        let mut center = Center::default();
+        center.keep(note(1, "mail"));
+        center.keep(note(2, "bank"));
+        let mut secret = note(3, "chat");
+        secret.hide_content_on_lock = true;
+        center.keep(secret);
+        let mut config = NotificationsConfig::default();
+        config.app_mut("bank").lock_screen = false;
+        let shown: Vec<(u32, bool)> = center
+            .on_lock_screen(&config)
+            .iter()
+            .map(|(n, hidden)| (n.id, *hidden))
+            .collect();
+        assert_eq!(shown, vec![(3, true), (1, false)]);
+        config.show_previews = ShowPreviews::WhenUnlocked;
+        assert!(
+            center
+                .on_lock_screen(&config)
+                .iter()
+                .all(|(_, hidden)| *hidden)
+        );
+        config.when_locked = false;
+        assert!(center.on_lock_screen(&config).is_empty());
     }
 
     #[test]

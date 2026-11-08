@@ -138,3 +138,5 @@ notifications-summary-off = Desactivadas
 notifications-summary-temporary = Banners temporales
 notifications-summary-persistent = Banners persistentes
 notifications-summary-sound = Sonidos
+notifications-when-locked = Mostrar notificaciones con la pantalla bloqueada
+notifications-lock-screen = Pantalla bloqueada

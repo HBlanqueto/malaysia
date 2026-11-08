@@ -69,6 +69,8 @@ impl App for NotificationsApp {
         let snapshot = use_state(|| Snapshot::read(&link));
         let banner_height = use_state(|| 0.0f32);
         let hovered = use_state(|| None::<u32>);
+        let replying = use_state(|| None::<u32>);
+        let draft = use_state(String::new);
         let expanded = use_state(HashSet::<String>::new);
         let timed = use_hook(|| Rc::new(RefCell::new(HashSet::<u32>::new())));
         let applied = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
@@ -103,7 +105,7 @@ impl App for NotificationsApp {
                     &link,
                     &timers,
                     *id,
-                    hovered,
+                    [hovered, replying],
                     snapshot,
                     Duration::from_millis(NOTIFICATION_BANNER_MS),
                 );
@@ -144,6 +146,14 @@ impl App for NotificationsApp {
                 keyboard: KeyboardInteractivity::None,
             }
         };
+        let geometry = if replying.read().is_some() {
+            LayerGeometry {
+                keyboard: KeyboardInteractivity::Exclusive,
+                ..geometry
+            }
+        } else {
+            geometry
+        };
         if applied.get() != Some(geometry) {
             applied.set(Some(geometry));
             set_layer_geometry(geometry);
@@ -153,6 +163,8 @@ impl App for NotificationsApp {
             link: link.clone(),
             snapshot,
             hovered,
+            replying,
+            draft,
             previews: config.show_previews != ShowPreviews::Never,
             now,
         };
@@ -173,7 +185,13 @@ impl App for NotificationsApp {
             .on_global_key_down({
                 let link = link.clone();
                 move |event: Event<KeyboardEventData>| {
-                    if event.key == Key::Named(NamedKey::Escape) {
+                    if event.key != Key::Named(NamedKey::Escape) {
+                        return;
+                    }
+                    if replying.peek().is_some() {
+                        let mut replying = replying;
+                        replying.set(None);
+                    } else {
                         close_panel(&link, snapshot);
                     }
                 }
@@ -187,6 +205,8 @@ struct Context {
     link: Link,
     snapshot: State<Snapshot>,
     hovered: State<Option<u32>>,
+    replying: State<Option<u32>>,
+    draft: State<String>,
     previews: bool,
     now: i64,
 }
@@ -202,15 +222,15 @@ fn schedule_expiry(
     link: &Link,
     timers: &Timers,
     id: u32,
-    hovered: State<Option<u32>>,
+    held: [State<Option<u32>>; 2],
     snapshot: State<Snapshot>,
     delay: Duration,
 ) {
     let link = link.clone();
     let again = timers.clone();
     timers.after(delay, move || {
-        if *hovered.peek() == Some(id) {
-            schedule_expiry(&link, &again, id, hovered, snapshot, HOVER_GRACE);
+        if held.iter().any(|state| *state.peek() == Some(id)) {
+            schedule_expiry(&link, &again, id, held, snapshot, HOVER_GRACE);
             return;
         }
         server::expire_banner(&link, id);
@@ -456,17 +476,33 @@ fn card(
         .iter()
         .filter(|action| action.key != server::DEFAULT_ACTION)
         .collect();
-    if hovered && !buttons.is_empty() && context.previews {
-        text = text.child(HStack::new().spacing(NOTIFICATION_GAP).children(
-            buttons.into_iter().map(|action| {
-                let context = context.clone();
-                let notification = notification.clone();
-                let key = action.key.clone();
-                Button::new(action.label.clone())
-                    .on_press(move |_| open(&context, &notification, Some(key.clone())))
-                    .into_element()
-            }),
-        ));
+    let replying = *context.replying.read() == Some(id);
+    if replying {
+        text = text.child(reply_field(context, notification));
+    } else if hovered && context.previews && (!buttons.is_empty() || notification.reply.is_some()) {
+        let reply = notification.reply.as_ref().map(|reply| {
+            let mut replying = context.replying;
+            let mut draft = context.draft;
+            Button::new(reply.label.clone())
+                .on_press(move |_| {
+                    draft.set(String::new());
+                    replying.set(Some(id));
+                })
+                .into_element()
+        });
+        text = text.child(
+            HStack::new()
+                .spacing(NOTIFICATION_GAP)
+                .maybe_child(reply)
+                .children(buttons.into_iter().map(|action| {
+                    let context = context.clone();
+                    let notification = notification.clone();
+                    let key = action.key.clone();
+                    Button::new(action.label.clone())
+                        .on_press(move |_| open(&context, &notification, Some(key.clone())))
+                        .into_element()
+                })),
+        );
     }
     let mut hovered_state = context.hovered;
     let mut left = context.hovered;
@@ -522,6 +558,98 @@ fn card(
         .width(Size::fill())
         .child(body)
         .maybe_child(hovered.then(|| close_button(context, id)))
+        .into_element()
+}
+
+fn reply_field(context: &Context, notification: &Notification) -> HStack {
+    let send = {
+        let context = context.clone();
+        let notification = notification.clone();
+        move |text: String| answer(&context, &notification, text)
+    };
+    let press = {
+        let send = send.clone();
+        let draft = context.draft;
+        move |_| send(draft.peek().clone())
+    };
+    HStack::new()
+        .width(Size::fill())
+        .content(Content::flex())
+        .cross_align(Alignment::Center)
+        .spacing(NOTIFICATION_GAP)
+        .child(
+            TextField::new(context.draft, tr!("notifications-reply-placeholder"))
+                .width(Size::flex(1.0))
+                .auto_focus(true)
+                .on_submit(send),
+        )
+        .child(Button::new(tr!("notifications-reply-send")).on_press(press))
+}
+
+fn answer(context: &Context, notification: &Notification, text: String) {
+    if text.trim().is_empty() {
+        return;
+    }
+    {
+        let mut hub = context.link.hub();
+        hub.banners.retain(|(banner, _)| *banner != notification.id);
+        hub.center.remove(notification.id);
+        hub.center.save();
+    }
+    let mut replying = context.replying;
+    replying.set(None);
+    context
+        .link
+        .reply(Reply::Answered(notification.clone(), text));
+    context.refresh();
+}
+
+pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
+    let palette = Palette::current();
+    let (title, body) = if hidden {
+        (
+            notification.app_name.clone(),
+            tr!("notifications-hidden-preview").to_string(),
+        )
+    } else {
+        (notification.summary.clone(), notification.body.clone())
+    };
+    let icon = app_icon(
+        load_icon(Some(notification.icon.as_str())).as_ref(),
+        &notification.app_name,
+        NOTIFICATION_ICON_SIZE,
+    );
+    rect()
+        .width(Size::px(NOTIFICATION_WIDTH as f32))
+        .padding(NOTIFICATION_PADDING)
+        .corner_radius(NOTIFICATION_RADIUS)
+        .background(theme::color(palette.raised_background))
+        .child(
+            HStack::new()
+                .width(Size::fill())
+                .content(Content::flex())
+                .cross_align(Alignment::Start)
+                .spacing(NOTIFICATION_TEXT_GAP)
+                .child(icon)
+                .child(
+                    VStack::new()
+                        .width(Size::flex(1.0))
+                        .cross_align(Alignment::Start)
+                        .spacing(2.0)
+                        .child(
+                            Text::new(title)
+                                .font(HEADLINE)
+                                .line_limit(1)
+                                .color(theme::color(palette.label)),
+                        )
+                        .child(
+                            Text::new(body)
+                                .font(BODY)
+                                .line_limit(NOTIFICATION_BODY_LINES)
+                                .color(theme::color(palette.label)),
+                        ),
+                ),
+        )
         .into_element()
 }
 
@@ -633,9 +761,10 @@ fn invoke(
         hub.center.save();
     }
     let default = match &notification.origin {
-        Origin::Gtk { default_action, .. } => {
-            default_action.as_ref().map(|action| action.key.clone())
-        }
+        Origin::Gtk { .. } | Origin::Portal { .. } => notification
+            .origin
+            .default_action()
+            .map(|action| action.key.clone()),
         Origin::Freedesktop => notification
             .actions
             .iter()
@@ -646,9 +775,11 @@ fn invoke(
         Some(key) => context
             .link
             .reply(Reply::Invoked(notification.clone(), key, token)),
-        None if matches!(notification.origin, Origin::Gtk { .. }) => context
-            .link
-            .reply(Reply::Invoked(notification.clone(), String::new(), token)),
+        None if notification.origin.gtk_id().is_some() => {
+            context
+                .link
+                .reply(Reply::Invoked(notification.clone(), String::new(), token))
+        }
         None => {
             focus_app(&notification.app_id, token.as_deref());
             context.link.reply(Reply::Closed(

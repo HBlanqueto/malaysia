@@ -23,11 +23,15 @@ pub(crate) const DEFAULT_ACTION: &str = "default";
 pub(crate) const CLOSED_DISMISSED: u32 = 2;
 const CLOSED_BY_CALL: u32 = 3;
 const SOUND: &str = "message-new-instant";
-const CAPABILITIES: [&str; 6] = [
+const INLINE_REPLY: &str = "inline-reply";
+const REPLY_PURPOSE: &str = "im.reply-with-text";
+const PORTAL_KEY: &str = "x-malaysia-portal";
+const CAPABILITIES: [&str; 7] = [
     "actions",
     "body",
     "body-markup",
     "icon-static",
+    "inline-reply",
     "persistence",
     "sound",
 ];
@@ -52,6 +56,7 @@ impl Hub {
 pub(crate) enum Reply {
     Closed(Notification, u32),
     Invoked(Notification, String, Option<String>),
+    Answered(Notification, String),
     DoNotDisturb,
 }
 
@@ -157,9 +162,34 @@ async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()>
                 Freedesktop::notification_closed(&fdo, notification.id, CLOSED_DISMISSED).await?;
             }
             Origin::Gtk { .. } => {
-                activate_gtk(connection, &notification.app_id, &key, token).await?
+                activate_gtk(connection, &notification.app_id, &key, None, token).await?
+            }
+            Origin::Portal { id, .. } => {
+                portal_action(connection, &notification.app_id, id, &key, Vec::new()).await?
             }
         },
+        Reply::Answered(notification, text) => {
+            let key = notification
+                .reply
+                .as_ref()
+                .map(|reply| reply.key.clone())
+                .unwrap_or_default();
+            match &notification.origin {
+                Origin::Freedesktop => {
+                    Freedesktop::notification_replied(&fdo, notification.id, &text).await?;
+                    Freedesktop::notification_closed(&fdo, notification.id, CLOSED_DISMISSED)
+                        .await?;
+                }
+                Origin::Gtk { .. } => {
+                    activate_gtk(connection, &notification.app_id, &key, Some(text), None).await?
+                }
+                Origin::Portal { id, .. } => {
+                    let text =
+                        OwnedValue::try_from(Value::from(text)).map_err(zbus::Error::from)?;
+                    portal_action(connection, &notification.app_id, id, &key, vec![text]).await?
+                }
+            }
+        }
         Reply::DoNotDisturb => {
             let control = connection
                 .object_server()
@@ -180,6 +210,7 @@ async fn activate_gtk(
     connection: &zbus::Connection,
     app_id: &str,
     key: &str,
+    target: Option<String>,
     token: Option<String>,
 ) -> zbus::Result<()> {
     let path = format!("/{}", app_id.replace('.', "/").replace('-', "_"));
@@ -201,7 +232,7 @@ async fn activate_gtk(
     .await?;
     match key.strip_prefix("app.") {
         Some(action) => {
-            let target: Vec<Value<'_>> = Vec::new();
+            let target: Vec<Value<'_>> = target.map(Value::from).into_iter().collect();
             proxy
                 .call_method("ActivateAction", &(action, target, platform))
                 .await?;
@@ -211,6 +242,17 @@ async fn activate_gtk(
         }
     }
     Ok(())
+}
+
+async fn portal_action(
+    connection: &zbus::Connection,
+    app_id: &str,
+    id: &str,
+    key: &str,
+    parameter: Vec<OwnedValue>,
+) -> zbus::Result<()> {
+    let emitter = SignalEmitter::new(connection, CONTROL_PATH)?;
+    Control::portal_action(&emitter, app_id, id, key, parameter).await
 }
 
 #[derive(Default)]
@@ -346,7 +388,7 @@ impl Freedesktop {
                 })
                 .or_else(|| apps.by_name(&app_name))
         };
-        let pairs: Vec<Action> = actions
+        let mut pairs: Vec<Action> = actions
             .as_chunks::<2>()
             .0
             .iter()
@@ -355,9 +397,16 @@ impl Freedesktop {
                 label: label.clone(),
             })
             .collect();
+        let reply = pairs
+            .iter()
+            .position(|action| action.key == INLINE_REPLY)
+            .map(|index| pairs.remove(index));
         let id = self.link.hub().center.allocate_id(replaces_id);
         let notification = Notification {
             id,
+            reply,
+            hide_on_lock: false,
+            hide_content_on_lock: false,
             app_id: entry
                 .as_ref()
                 .map_or_else(|| app_name.clone(), |entry| entry.id.clone()),
@@ -414,6 +463,13 @@ impl Freedesktop {
         emitter: &SignalEmitter<'_>,
         id: u32,
         action_key: &str,
+    ) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn notification_replied(
+        emitter: &SignalEmitter<'_>,
+        id: u32,
+        text: &str,
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]
@@ -475,27 +531,47 @@ impl Gtk {
                 .unwrap_or_default()
         };
         let entry = lock(&self.apps).entry(&app_id);
-        let actions = notification
+        let hints: Vec<String> = notification
+            .get("display-hint")
+            .and_then(|value| Vec::<String>::try_from(value.clone()).ok())
+            .unwrap_or_default();
+        let hinted = |hint: &str| hints.iter().any(|given| given == hint);
+        let mut reply = None;
+        let mut actions = Vec::new();
+        for button in notification
             .get("buttons")
             .and_then(|value| Vec::<HashMap<String, OwnedValue>>::try_from(value.clone()).ok())
             .unwrap_or_default()
-            .into_iter()
-            .filter_map(|button| {
-                Some(Action {
-                    key: String::try_from(button.get("action")?.clone()).ok()?,
-                    label: String::try_from(button.get("label")?.clone()).ok()?,
-                })
-            })
-            .collect();
+        {
+            let field = |key: &str| {
+                button
+                    .get(key)
+                    .and_then(|value| String::try_from(value.clone()).ok())
+            };
+            let (Some(key), Some(label)) = (field("action"), field("label")) else {
+                continue;
+            };
+            let action = Action { key, label };
+            if field("purpose").as_deref() == Some(REPLY_PURPOSE) {
+                reply = Some(action);
+            } else {
+                actions.push(action);
+            }
+        }
         let default_action = Some(text("default-action"))
             .filter(|action| !action.is_empty())
             .map(|key| Action {
                 key,
                 label: String::new(),
             });
+        let portal = notification
+            .get(PORTAL_KEY)
+            .and_then(|value| bool::try_from(value).ok())
+            .unwrap_or(false);
         let replaces = self.link.hub().center.gtk_id(&app_id, &id).unwrap_or(0);
         let number = self.link.hub().center.allocate_id(replaces);
         let level = Level::from_priority(&text("priority"));
+        let notification_body = text("body");
         let notification = Notification {
             id: number,
             app_name: entry
@@ -504,18 +580,26 @@ impl Gtk {
             icon: entry.and_then(|entry| entry.icon).unwrap_or_default(),
             app_id,
             summary: text("title"),
-            body: text("body"),
+            body: notification_body,
             actions,
+            reply,
+            hide_on_lock: hinted("hide-on-lock-screen"),
+            hide_content_on_lock: hinted("hide-content-on-lock-screen"),
             level,
             posted: now(),
-            origin: Origin::Gtk { id, default_action },
+            origin: if portal {
+                Origin::Portal { id, default_action }
+            } else {
+                Origin::Gtk { id, default_action }
+            },
         };
+        let silent = text("sound") == "silent";
         deliver(
             &self.link,
             Incoming {
                 notification,
-                transient: false,
-                sound: true,
+                transient: hinted("transient"),
+                sound: !silent,
             },
         );
     }
@@ -549,6 +633,15 @@ impl Control {
     fn close_panel(&self) {
         show_panel(&self.link, false);
     }
+
+    #[zbus(signal)]
+    async fn portal_action(
+        emitter: &SignalEmitter<'_>,
+        app_id: &str,
+        id: &str,
+        action: &str,
+        parameter: Vec<OwnedValue>,
+    ) -> zbus::Result<()>;
 
     #[zbus(property)]
     fn do_not_disturb(&self) -> bool {

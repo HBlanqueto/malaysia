@@ -2,6 +2,9 @@ mod server;
 mod store;
 mod view;
 
+pub(crate) use store::{Center, Notification};
+pub(crate) use view::lock_card;
+
 use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, run_layer};
 use freya_core::integration::AppComponent;
 

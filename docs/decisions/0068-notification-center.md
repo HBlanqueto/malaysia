@@ -1,7 +1,7 @@
 # 0068 — Notification Center
 
-Status: phase 1 accepted (2026-11-08); each later phase is accepted when it
-ships.
+Status: phases 1 and 2 accepted (2026-11-08); each later phase is accepted
+when it ships.
 
 ## Goal and scope
 
@@ -238,11 +238,18 @@ Exact names from
    loses nothing because of step 3.
 2. **Three entry points, one model.**
    1. `org.freedesktop.Notifications` 1.3 with `actions`, `body`,
-      `body-markup` (shown as plain text), `icon-static`, `persistence` and
-      `sound`. KDE's `inline-reply` and `body-images` come with phase 2.
+      `body-markup` (shown as plain text), `icon-static`, `inline-reply`
+      (KDE's `NotificationReplied` signal), `persistence` and `sound`.
    2. `org.gtk.Notifications`, so GApplications post with a real app id.
    3. The portal crate implements `impl.portal.Notification` v2 and forwards
-      to `org.gtk.Notifications`, as xdg-desktop-portal-gnome does.
+      to `org.gtk.Notifications`, as xdg-desktop-portal-gnome does. It turns
+      `markup-body` into text, drops the icon and sound descriptors and marks
+      the notification `x-malaysia-portal`; the shell answers clicks and
+      replies with `org.malaysia.Notifications1.PortalAction`, and the portal
+      sends them to the app as `ActionInvoked`. A button with purpose
+      `im.reply-with-text` becomes the reply field, and the display hints
+      `transient`, `hide-on-lock-screen` and `hide-content-on-lock-screen` are
+      kept.
 3. **Persistent store** in `~/.local/share/malaysia/notifications.state`,
    written atomically. Delivered notifications survive a restart of the
    component or the session, as on macOS.
@@ -295,15 +302,21 @@ Exact names from
     lets an app ask for it. Silenced notifications still go to the panel.
     Focus modes with allowed apps come later.
 11. **Lock screen:** the lock component lists notifications whose app allows
-    the Lock Screen location; «When Unlocked» previews show only icon and
-    app name.
-12. **Badges and progress:** the dock reads `com.canonical.Unity.LauncherEntry`
+    the Lock Screen location, if «Show notifications when screen is locked»
+    is on. Previews other than «Always» and the hint
+    `hide-content-on-lock-screen` show only icon, app name and
+    «Notification». It reads `notifications.state` every 2 s.
+12. **Reply:** a notification with a reply action shows «Reply» on hover; the
+    field takes the keyboard (`Exclusive`) until it sends or Escape. The text
+    goes back as `NotificationReplied` (fdo), as the target of the GTK action,
+    or as the portal parameter.
+13. **Badges and progress:** the dock reads `com.canonical.Unity.LauncherEntry`
     for `count`, `progress` and `urgent`. The badge is the app's number, not
     a count of notifications.
-13. **Activation:** a click mints an xdg-activation token, sends
+14. **Activation:** a click mints an xdg-activation token, sends
     `ActivationToken` and then `ActionInvoked`, as `bk::notifications`
     already expects.
-14. **Live Activities, Malaysia's own.** Linux has no standard, so the
+15. **Live Activities, Malaysia's own.** Linux has no standard, so the
     menubar gets a live area left of the status items, with compact and
     expanded presentations and the ActivityKit lifecycle (start, update,
     stale date, end, dismissal, 8 + 4 hours). The first sources are ones that
@@ -312,7 +325,7 @@ Exact names from
     path is checked against CUPS and gnome-settings-daemon before it is
     built).
     A private interface for bk apps follows only when an app needs it.
-15. **Built with barrierkit.** The component uses what bk already has
+16. **Built with barrierkit.** The component uses what bk already has
     (`Sidebar`, `Form`, `Switch`, `PopUpButton`, `SegmentedControl`,
     `ChoiceCards`, `ContextMenu`, `Button`, `ProgressView`, `Avatar`,
     `Badge`, `Material`, `bk::shell::layer` and `bk::shell::lock`). What bk
@@ -320,14 +333,14 @@ Exact names from
     gesture, Live Activity views and widgets) is written first in
     `malaysia-shell`. Once phase 1 works, each piece moves to bk with its
     SwiftUI or AppKit name and its glossary row.
-16. **Order of work:**
+17. **Order of work:**
     1. Server (fdo + GTK), store, banners, panel, Do Not Disturb and
        Settings › Notifications.
     2. Portal v2, inline reply, lock screen and activation tokens.
     3. Dock badges and progress, Focus modes.
     4. Live Activities, then widgets in the panel.
 
-## Phase 1 as built
+## As built
 
 1. `crates/malaysia-shell/src/notifications/`: `server.rs` serves the three
    D-Bus names, `store.rs` holds the model and the presentation rules,
@@ -339,7 +352,10 @@ Exact names from
 3. `crates/malaysia-shell/src/app_scope.rs` names and reads app scopes.
 4. System Settings › Notifications writes `notifications.domain`
    ([options](../configuration/options.md#notifications--notifications-system-settings--notifications-adr-0068)).
-5. `share/dbus-1/services/` activates the component through
+5. `xdg-desktop-portal-malaysia/src/notification.rs` is the portal backend;
+   `nix/malaysia.nix` routes `org.freedesktop.impl.portal.Notification` to
+   it.
+6. `share/dbus-1/services/` activates the component through
    `malaysia-shell@notifications.service`. `dev.sh` does not start it,
    because in a nested session it would take the host's notification name.
 

@@ -138,3 +138,5 @@ notifications-summary-off = Off
 notifications-summary-temporary = Temporary banners
 notifications-summary-persistent = Persistent banners
 notifications-summary-sound = Sounds
+notifications-when-locked = Show notifications when screen is locked
+notifications-lock-screen = Lock Screen

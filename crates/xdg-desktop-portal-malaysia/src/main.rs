@@ -1,6 +1,7 @@
 #![deny(unsafe_code)]
 
 mod gtk;
+mod notification;
 mod qt;
 mod settings;
 
@@ -38,7 +39,9 @@ fn main() -> Result<()> {
     let connection = zbus::blocking::connection::Builder::session()?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, interface)?
+        .serve_at(OBJECT_PATH, notification::Notification)?
         .build()?;
+    notification::relay_actions(connection.clone(), OBJECT_PATH);
 
     let qt = qt::Bridge::from_env();
     if let (Some(qt), Ok(appearance)) = (&qt, read_appearance()) {

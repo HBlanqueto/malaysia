@@ -91,6 +91,7 @@ in
       config.malaysia = lib.mkDefault {
         default = [ "gtk" ];
         "org.freedesktop.impl.portal.Settings" = [ "malaysia" ];
+        "org.freedesktop.impl.portal.Notification" = [ "malaysia" ];
       };
     };
 

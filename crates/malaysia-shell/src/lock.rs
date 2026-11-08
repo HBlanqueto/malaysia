@@ -1,16 +1,22 @@
+use std::time::Duration;
 use std::{cell::RefCell, rc::Rc};
 
 use async_channel::{Receiver, Sender};
+use bk::app::use_defaults;
 use bk::password::{PasswordField, State as FieldState};
+use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{SessionUnlock, run_lock};
+use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     LOCK_FIELD_HEIGHT, LOCK_FIELD_WIDTH, LOCK_FONT_SIZE, LOCK_LABEL_FONT_SIZE, LOCK_LABEL_OFFSET,
-    LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE,
+    LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE, NOTIFICATION_GAP, NOTIFICATION_MARGIN,
 };
 use freya_core::integration::AppComponent;
+use torin::prelude::Position;
 
 use crate::localize::tr;
+use crate::notifications::{Center, Notification};
 use crate::pam;
 use bk::theme;
 
@@ -98,7 +104,8 @@ impl App for LockApp {
         let accent = theme::color(palette.accent);
         let danger = theme::color(palette.danger);
 
-        VStack::new()
+        let notices = lock_notices();
+        let login = VStack::new()
             .width(Size::fill())
             .height(Size::fill())
             .background(background)
@@ -144,8 +151,48 @@ impl App for LockApp {
             .child(match error {
                 Some(text) => Text::new(text).color(danger),
                 None => Text::new(" ").color(muted),
-            })
+            });
+        rect()
+            .width(Size::fill())
+            .height(Size::fill())
+            .child(login)
+            .child(
+                VStack::new()
+                    .position(
+                        Position::new_absolute()
+                            .top(NOTIFICATION_GAP)
+                            .right(NOTIFICATION_MARGIN as f32),
+                    )
+                    .spacing(NOTIFICATION_GAP)
+                    .children(
+                        notices
+                            .iter()
+                            .take(LOCK_NOTICES)
+                            .map(|(notification, hidden)| {
+                                crate::notifications::lock_card(notification, *hidden)
+                            }),
+                    ),
+            )
     }
+}
+
+const LOCK_NOTICES: usize = 4;
+const LOCK_NOTICES_POLL: Duration = Duration::from_secs(2);
+
+fn lock_notices() -> Vec<(Notification, bool)> {
+    let center = use_state(Center::load);
+    use_hook(move || poll_center(Timers::get(), center));
+    let config = use_defaults::<NotificationsConfig>("notifications");
+    center.read().on_lock_screen(&config.read())
+}
+
+fn poll_center(timers: Timers, center: State<Center>) {
+    let again = timers.clone();
+    timers.after(LOCK_NOTICES_POLL, move || {
+        let mut latest = center;
+        latest.set_if_modified(Center::load());
+        poll_center(again.clone(), center);
+    });
 }
 
 pub fn run() -> anyhow::Result<()> {

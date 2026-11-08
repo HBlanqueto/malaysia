@@ -370,10 +370,12 @@ System Settings writes it. An app gets the defaults until it has a
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `notifications.show_previews` | `"always"` \| `"when-unlocked"` \| `"never"` | `"always"` | **active** (`when-unlocked` acts as `always` until the lock screen lists notifications) | shell |
+| `notifications.when_locked` | bool | `true` | **active**: the lock screen lists notifications | shell (lock) |
+| `notifications.show_previews` | `"always"` \| `"when-unlocked"` \| `"never"` | `"always"` | **active** (`when-unlocked` and `never` hide the content on the lock screen) | shell |
 | `notifications.apps.<id>.allow` | bool | `true` | **active** | shell |
 | `notifications.apps.<id>.desktop` | bool | `true` | **active**: banners on the desktop | shell |
 | `notifications.apps.<id>.center` | bool | `true` | **active**: kept in Notification Center | shell |
+| `notifications.apps.<id>.lock_screen` | bool | `true` | **active**: listed on the lock screen | shell (lock) |
 | `notifications.apps.<id>.style` | `"temporary"` \| `"persistent"` | `"temporary"` | **active** | shell |
 | `notifications.apps.<id>.critical` | bool | `false` | **active**: urgency 2 or `urgent` breaks through Do Not Disturb and mutes | shell |
 | `notifications.apps.<id>.time_sensitive` | bool | `true` | stored; Focus modes will use it | shell |

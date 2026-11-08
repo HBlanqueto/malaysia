@@ -82,29 +82,37 @@ fn known_apps(config: &NotificationsConfig) -> BTreeMap<String, String> {
 pub fn notifications_pane(error: State<Option<String>>) -> Pane {
     let config = use_defaults::<NotificationsConfig>(DOMAIN).read().clone();
     let apps = known_apps(&config);
-    let general = Section::titled(tr!("notification-center")).row(
-        Row::new(tr!("notifications-show-previews")).control(
-            tr_list!(
-                "previews-always",
-                "previews-when-unlocked",
-                "previews-never"
-            )
-            .iter()
-            .fold(
-                PopUpButton::new(tr!("notifications-show-previews")),
-                |popup, name| popup.item(name),
-            )
-            .selected(
-                PREVIEWS
-                    .iter()
-                    .position(|p| *p == config.show_previews)
-                    .unwrap_or(0),
-            )
-            .on_change(edit(error, |config, index: usize| {
-                config.show_previews = PREVIEWS[index]
-            })),
-        ),
-    );
+    let general = Section::titled(tr!("notification-center"))
+        .row(
+            Row::new(tr!("notifications-when-locked")).control(
+                Switch::new(tr!("notifications-when-locked"))
+                    .on(config.when_locked)
+                    .on_toggle(edit(error, |config, on: bool| config.when_locked = on)),
+            ),
+        )
+        .row(
+            Row::new(tr!("notifications-show-previews")).control(
+                tr_list!(
+                    "previews-always",
+                    "previews-when-unlocked",
+                    "previews-never"
+                )
+                .iter()
+                .fold(
+                    PopUpButton::new(tr!("notifications-show-previews")),
+                    |popup, name| popup.item(name),
+                )
+                .selected(
+                    PREVIEWS
+                        .iter()
+                        .position(|p| *p == config.show_previews)
+                        .unwrap_or(0),
+                )
+                .on_change(edit(error, |config, index: usize| {
+                    config.show_previews = PREVIEWS[index]
+                })),
+            ),
+        );
     let list = if apps.is_empty() {
         Section::titled(tr!("notifications-apps")).row(Row::new(tr!("notifications-no-apps")))
     } else {
@@ -189,6 +197,11 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                 .row(place(tr!("notification-center"), app.center, |app, on| {
                     app.center = on
                 }))
+                .row(place(
+                    tr!("notifications-lock-screen"),
+                    app.lock_screen,
+                    |app, on| app.lock_screen = on,
+                ))
                 .row(
                     Row::new(tr!("notifications-style"))
                         .detail(tr!("notifications-style-help"))
