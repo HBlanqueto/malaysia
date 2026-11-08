@@ -128,10 +128,6 @@ barrierkit_dir() {
     fi
 }
 
-kit_is_local() {
-    [ -f "$script_dir/.cargo/config.toml" ]
-}
-
 build_curseterm() {
     printf 'dev.sh: building curseterm from the flake input (the first time takes a few minutes)\n' >&2
     _curseterm=$(nix build --no-link --print-out-paths "$script_dir#curseterm") ||

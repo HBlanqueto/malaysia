@@ -101,7 +101,7 @@
               cargo tree --offline -e features -i freya-skia-bindings --prefix none \
                 | sed -n 's/^freya-skia-bindings feature "\([^"]*\)".*/\1/p' | sort -u > skia-features.txt
               if ! diff -u ${skia}/features.txt skia-features.txt; then
-                echo "las features de Skia cambiaron: actualiza nix/skia-prebuild" >&2
+                echo "las features de Skia cambiaron: actualiza nix/skia-prebuild en barrierkit" >&2
                 exit 1
               fi
             else

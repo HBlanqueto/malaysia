@@ -1,6 +1,6 @@
 # Malaysia
 
-![Malaysia Compositor](docs/assets/marca/malaysia-banner.jpg)
+![Malaysia Compositor](docs/assets/brand/malaysia-banner.jpg)
 
 Wayland desktop for NixOS. Its compositor, *Malaysia Compositor*
 (`malaysia-compositor`), is built on Smithay and is developed block by block. The

@@ -28,6 +28,7 @@ docs/
 │   ├── captures.md            screenshots
 │   └── malaysia-and-shell.svg diagram of the split
 ├── decisions/                 ADRs and their index
+├── assets/brand/              banner (README) and icon, SVG sources and exports
 └── configuration/
     └── options.md             canonical options catalog
 ```

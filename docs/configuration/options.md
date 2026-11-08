@@ -33,16 +33,15 @@ directories — preferences and state:
 ├── wallpaper.domain       ← catalog + current selection ([desktops]), like
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
-├── recents.domain         ← Recent Items of the ❄ menu: `apps` (app ids) and
+├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
 │                            `cleared_at` (unix; «Clear Menu»), written by the menubar
 └── innate.state           ← state: the active app, published by the compositor
                              (Innate Domain, `docs/glossary.md`)
 ```
 
 Each file is optional; missing files use their default (like macOS's
-`com.apple.dock`, `com.apple.menubar`... domains). The same catalog feeds the
-`domain` command and the future settings app (both over D-Bus, interface
-`org.malaysia.Compositor1`).
+`com.apple.dock`, `com.apple.menubar`... domains). Every reader watches the
+directory with inotify and applies changes live, unless its row says otherwise.
 
 `MALAYSIA_CONFIG_DIR` and `MALAYSIA_DATA_DIR` replace the two directories.
 
@@ -55,8 +54,12 @@ Environment variables that change behavior without a domain:
 | `MALAYSIA_SHELL_EXE` | compositor | one more `malaysia-shell` binary that Infinity trusts | none |
 | `MALAYSIA_TERMINAL` | launcher | terminal for `.desktop` entries with `Terminal=true`; then `TERMINAL` | `wezterm` |
 | `MALAYSIA_ICON_THEME` | launcher | icon theme searched before `hicolor` | `Adwaita` |
+| `MALAYSIA_SCALE` | compositor | output scale; wins over `display.scale` | none |
+| `MALAYSIA_POWER_DRY_RUN` | compositor, shell | `1`: Suspend, Restart, Shut Down and Log Out only log the logind call | none (`./dev.sh` sets `1`) |
+| `XDG_DESKTOP_DIR` | compositor | Desktop folder for screenshots; wins over `user-dirs.dirs` | `user-dirs.dirs` |
 
-The `MALAYSIA_TEST_*` variables drive the synthetic input of the probes in
+`MALAYSIA_WALLPAPER_CAPTURE` points `./dev.sh wallpaper-check` at a capture to
+compare with the reference. The `MALAYSIA_TEST_*` variables drive the synthetic input of the probes in
 `tools/sctk-probe` and `dev.sh`; `MALAYSIA_BIN_DIR` and `MALAYSIA_ORIG_*`
 are set by the session and the Nix wrappers, not by hand.
 
@@ -97,14 +100,17 @@ They are not domain options; they are fixed and documented here:
 |---|---|---|---|---|
 | `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings** |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | portal, shell, effects, **System Settings** |
-| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`) |
-| `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`) |
+| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`) |
+| `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"when_scrolling"` \| `"always"` | `"when_scrolling"` | **active** | the kit's `ScrollView`: the bar shows only while scrolling or always, **System Settings** |
 | `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` \| `"wallpaper"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings** |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints menubar/dock (20 % / 26 %), **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **active** | titlebar traffic lights, **System Settings** |
 | `appearance.traffic_light_shape` | `"square"` \| `"round"` | `"square"` | **active** | traffic light shape (radius 4 or circle), **System Settings** |
+| `appearance.tint_strength_accent` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of `window_color = "accent"` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings** |
+| `appearance.tint_strength_wallpaper` | same values | `"normal"` | **active** | strength of `window_color = "wallpaper"`, **System Settings** |
+| `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"` | all five | **active** | which surfaces the tint reaches, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
@@ -136,7 +142,7 @@ its radius, outline and shadow.
 
 `window_color` is Tengen's idea "Settings › Appearance › Window
 color": `neutral` does not tint, `accent` mixes the accent with the titlebar
-background (6 % in light, 8 % in dark) and `wallpaper` uses the dominant color of the
+background (6 % in light, 8 % in dark, at `normal` strength) and `wallpaper` uses the dominant color of the
 wallpaper (7 % / 9 %). Traffic lights in `auto` follow the mode (standard in neutral,
 derived from the accent/wallpaper in the others).
 
@@ -163,7 +169,7 @@ The compositor and the shell pass the language in `LANGUAGE` to the apps they la
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `display.scale` | float `1.0..=4.0` | `1.0` | **active** | `State::scale`, `wl_output`, `wp_fractional_scale_v1` |
+| `display.scale` | float `1.0..=4.0` | `1.0` | **active**, read when the compositor starts | `State::scale`, `wl_output`, `wp_fractional_scale_v1` |
 
 It has no exact macOS equivalent: macOS picks a **display mode** per
 monitor, not a fractional scale. Malaysia follows the Wayland model and publishes the
@@ -251,8 +257,8 @@ follow the Screenshot app ("Show Mouse Pointer", "Show Floating Thumbnail", "Sav
 "Timer", "Remember Last Selection") and `com.apple.screencapture` (`type`,
 `location`, `include-date`, `disable-shadow`).
 
-Status: `show_pointer` and `target = "clipboard"` already apply. The rest is read
-and validated, but the current flow still saves to the Desktop, as PNG and with
+Status: `show_pointer` and `target = "clipboard"` already apply. The rest is not
+parsed yet; the current flow saves to the Desktop, as PNG and with
 date; `preview`/`mail`/`messages`/`other`, thumbnail, timer, formats and
 shadow get wired in the next passes. Window captures never
 include the pointer. The clipboard is `image/png` and the compositor serves it; context in
@@ -322,7 +328,7 @@ The hyphenated keys are **exactly** those of `defaults write com.apple.dock ...`
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `lock.idle_timeout_seconds` | integer (seconds) | `0` | **active** | `ext-idle-notify-v1` / auto-lock; also locks before suspend |
+| `lock.idle_timeout_seconds` | integer (seconds) | `0` | **active**, read when the compositor starts | `ext-idle-notify-v1` / auto-lock; also locks before suspend |
 
 `0` disables automatic locking. When the timeout expires without input, the
 compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhibitor
@@ -376,9 +382,9 @@ compositor forces it for everything it launches.
 
 ## The `domain` command
 
-The compositor's control command, with the same structure as macOS's
-`defaults`. It talks to the compositor over D-Bus (`org.malaysia.Compositor1`); the settings
-app and the shell use the same channel. The domain of each option is its section:
+**Pending (ADR 0021): no code yet.** The planned control command, with the same
+structure as macOS's `defaults`. Today System Settings writes `appearance.domain`
+directly and every reader picks the change up through inotify. The domain of each option is its section:
 `appearance`, `display`, `window`, `screenshot`, `wallpaper`, `dock`,
 `menubar`, `lock`, `effects`, `debug`.
 
@@ -417,6 +423,9 @@ reduce_transparency = true      # Reduce transparency (solid backgrounds; false 
 scroll_bars = "when_scrolling"  # when_scrolling | always
 window_color = "neutral"        # neutral | accent | wallpaper
 window_tint_scope = "windows"   # windows | desktop (tints menubar/dock)
+tint_strength_accent = "normal"     # subtle | normal | strong | intense
+tint_strength_wallpaper = "normal"  # subtle | normal | strong | intense
+tint_parts = ["sidebars", "window", "groups", "controls", "menus"]
 traffic_lights = "auto"         # auto | standard | accent | wallpaper
 traffic_light_shape = "square"  # square | round
 ```

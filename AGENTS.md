@@ -218,7 +218,7 @@ const DURATION: Duration = Duration::from_millis(ctdesign::DURATION_BASE);
 ```rust
 // ✓ el nombre del test es la especificación (malaysia-scene/geometry.rs)
 #[test]
-fn a_fractional_logical_size_is_ceiled() { … }
+fn contains_includes_the_top_left_and_excludes_the_bottom_right() { … }
 ```
 
 - Un módulo por tema (`cursor.rs`, `lock.rs`, `spaces.rs`…). Si un fichero

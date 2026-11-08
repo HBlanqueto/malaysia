@@ -28,7 +28,7 @@ Smithay leaves the lock in `Defunct` (not in `Unlocked`) and a second `lock()` c
 
 - a destruction hook on each lock surface; if the last one disappears while the session is locked, it schedules recovery;
 - a 3 s watchdog when a lock is confirmed, in case the client dies before creating its first surface;
-- clock and launch through the same `TimerSink`/`shell_command` as `idle.rs`;
+- clock and launch through the same `TimerSink`/`spawn::shell_component` as `idle.rs`;
 - backoff of 1, 2, 4, 8 and 16 s, at most 5 attempts. Once exhausted, the session stays locked in a solid color and a manual `malaysia-shell lock` is accepted;
 - neither recovery nor a second lock calls `unlock`.
 

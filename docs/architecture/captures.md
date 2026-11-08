@@ -35,7 +35,7 @@ input.rs → ScreenshotMode (state.rs) → overlay (session.rs)
 
 ## Configuration
 
-`screenshot.domain`; today only `show_pointer` and `target` (`desktop`/`clipboard`) are active. Thumbnail, `location`, `type`, `include_date`, `disable_shadow`, `timer` and `remember_selection` are read and validated, but the flow saves to the Desktop, as PNG and with the date.
+`screenshot.domain`; today only `show_pointer` and `target` (`desktop`/`clipboard`) are active. Thumbnail, `location`, `type`, `include_date`, `disable_shadow`, `timer` and `remember_selection` are not parsed yet; the flow saves to the Desktop, as PNG and with the date.
 
 ## Protocol and limits
 

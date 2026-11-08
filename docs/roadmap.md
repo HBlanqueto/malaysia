@@ -185,7 +185,7 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
 - 14f-1 (`gtk_shell1` v5 + Infinity v3 `gtk_menus` event): accepted
   2026-10-28 in a nested session (`crates/malaysia-compositor/src/gtk.rs`; the
   bar only records the address, `crates/malaysia-shell/src/menubar/bar.rs`).
-- Keyboard in the popups (barrierkit `crates/bk/src/menu.rs`,
+- Keyboard in the popups (barrierkit `crates/bk/src/menu/mod.rs`,
   `on_global_key_down`): ↑↓, Home/End, → opens a submenu, ← closes the level,
   Enter/Space activate, ←→ in the root menu move to the neighboring title
   (`with_navigation`, used in `crates/malaysia-shell/src/menubar/menu.rs`).
@@ -206,7 +206,7 @@ fb02921^:docs/bloques/14-menu-global.md`) and the cited code.
   - `MALAYSIA_POWER_DRY_RUN=1` (default in `./dev.sh`, forced in the
     nested compositor) only writes the call to the log.
   - ❄ menu: About This PC, System Settings… (with icons),
-    Recent Items (focused apps in `recents.domain` and documents from
+    Recent Items (focused apps in `recents.state` and documents from
     `recently-used.xbel`; «Clear Menu» hides the earlier ones), power,
     Lock Screen and «Log Out <name>…» (GECOS).
   - Force Quit… (⌥❖Esc, no longer in the ❄ menu): `malaysia-shell force-quit` lists

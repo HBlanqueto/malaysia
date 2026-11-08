@@ -31,15 +31,15 @@
   <rect x="390" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
   <text x="405" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Menu bar</text>
   <text x="405" y="196" font-size="12" fill="#333">Top layer · exclusive zone</text>
-  <text x="405" y="214" font-size="12" fill="#333">reads menubar.domain (autohide, ...)</text>
+  <text x="405" y="214" font-size="12" fill="#333">reads menubar.domain (app_menus)</text>
   <text x="405" y="232" font-size="11" fill="#777">active app, clock, menus</text>
 
   <!-- Dock -->
   <rect x="720" y="152" width="320" height="110" rx="10" fill="#ffffff" stroke="#64b5f6" stroke-width="1.5"/>
   <text x="735" y="176" font-size="15" font-weight="bold" fill="#0d47a1">Dock</text>
   <text x="735" y="196" font-size="12" fill="#333">Top layer · exclusive zone</text>
-  <text x="735" y="214" font-size="12" fill="#333">reads dock.domain (autohide, mineffect...)</text>
-  <text x="735" y="232" font-size="11" fill="#777">open apps · activate</text>
+  <text x="735" y="214" font-size="12" fill="#333">dock.domain: not read yet</text>
+  <text x="735" y="232" font-size="11" fill="#777">open windows · activate</text>
 
   <!-- Arrow: the shell requests -->
   <line x1="70" y1="282" x2="70" y2="318" stroke="#1e88e5" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
