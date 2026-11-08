@@ -50,6 +50,15 @@ nix develop
 nix build .#default       # installable package
 ```
 
+A real DRM session on hardware runs outside the dev shell, from a text TTY,
+with the packaged binary:
+
+1. `scripts/malaysia-drm.sh setup` builds `.#default` into `result/`.
+2. On a text TTY (Ctrl+Alt+F4), `scripts/malaysia-drm.sh run` starts
+   `malaysia-compositor --drm` and logs to `$XDG_RUNTIME_DIR/malaysia/`.
+3. From another TTY, `client <program>` runs a program in that session,
+   `lock` locks it, `status` reports it and `stop` ends it.
+
 Day-to-day work uses the `dev` profile: our code unoptimized with line
 tables; dependencies at `opt-level = 0` without debug info, except the ones
 that cost at run time (Smithay, the `freya-*` crates, `torin`, `ragnarok`,

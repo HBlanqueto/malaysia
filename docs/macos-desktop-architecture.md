@@ -78,13 +78,12 @@ Takeaways:
    they write the domain. A `domain` command that writes the file atomically
    gives the same result. D-Bus is only needed for actions that are not
    preferences.
-3. The active app written by `active.rs` lived in
-   `~/.local/share/malaysia/window.domain`, the same name as the window
-   preferences in `~/.config/malaysia/`. It is state, so it is now
-   `innate.state` (Innate Domain, `glossary.md`). The watcher only reports
-   configuration domains, so the menubar takes the active app from
-   foreign-toplevel and records Recent Items from it; the file is the
-   fallback before the toplevel list arrives.
+3. The active app lived in `~/.local/share/malaysia/window.domain`, the same
+   name as the window preferences in `~/.config/malaysia/`. The watcher only
+   reports configuration domains, so the menubar never saw it change; it now
+   takes the active app from foreign-toplevel, as macOS apps ask
+   `NSWorkspace`, and the file is gone. State in the data directory is named
+   `.state` (`recents.state`, `wallpaper-selection.state`).
 4. No code parses `dock.domain` or `effects.domain`; `dock.md` now says so.
 
 ## 3. Appearance
@@ -228,7 +227,8 @@ Each item says where it goes. Sections 8.1 and 8.2 are applied; the rest needs t
 
 | Before | After | Reason | Repo |
 |---|---|---|---|
-| `~/.local/share/malaysia/window.domain` (active app) | `innate.state` | clashed with the preferences file `window.domain`; state uses `.state`. macOS: `NSWorkspace.frontmostApplication` | malaysia |
+| `~/.local/share/malaysia/window.domain` (active app) | removed | clashed with the preferences file `window.domain` and had no live reader; the menubar uses foreign-toplevel. macOS: `NSWorkspace.frontmostApplication` | malaysia |
+| `recents.domain`, data `wallpaper.domain` | `recents.state`, `wallpaper-selection.state` | state, not preferences | malaysia, barrierkit |
 | Infinity `set_bar` entry `compact`, `bk` `Bar::Compact`, `WindowCorner::compact` | `unified_compact`, `Bar::UnifiedCompact`, `WindowCorner::unified_compact` | `NSWindow.ToolbarStyle.unifiedCompact`, per barrierkit's naming rule. Entry names are not on the wire, so the protocol version stays | barrierkit, malaysia |
 
 Kept: `titlebar` (a window without a toolbar has no `ToolbarStyle`) and
