@@ -297,7 +297,15 @@ Exact names from
     stale date, end, dismissal, 8 + 4 hours). The first sources are ones that
     exist today: KDE `JobViewServer` transfers and portal `call.ongoing`.
     A private interface for bk apps follows only when an app needs it.
-15. **Order of work:**
+15. **Built with barrierkit.** The component uses what bk already has
+    (`Sidebar`, `Form`, `Switch`, `PopUpButton`, `SegmentedControl`,
+    `ChoiceCards`, `ContextMenu`, `Button`, `ProgressView`, `Avatar`,
+    `Badge`, `Material`, `bk::shell::layer` and `bk::shell::lock`). What bk
+    lacks (notification card, stack, banner queue, sliding panel, swipe
+    gesture, Live Activity views and widgets) is written first in
+    `malaysia-shell`. Once phase 1 works, each piece moves to bk with its
+    SwiftUI or AppKit name and its glossary row.
+16. **Order of work:**
     1. Server (fdo + GTK), store, banners, panel, Do Not Disturb and
        Settings › Notifications.
     2. Portal v2, inline reply, lock screen and activation tokens.
