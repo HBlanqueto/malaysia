@@ -41,6 +41,59 @@ const SHADER: &str = concat!(
 );
 const MIP_SHADER: &str = concat!(include_str!("fullscreen.wgsl"), include_str!("mip.wgsl"));
 
+const TEXTURE_AND_SAMPLER: [wgpu::BindGroupLayoutEntry; 2] = [
+    wgpu::BindGroupLayoutEntry {
+        binding: 0,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    },
+    wgpu::BindGroupLayoutEntry {
+        binding: 1,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+        count: None,
+    },
+];
+
+fn fullscreen_pipeline(
+    device: &wgpu::Device,
+    label: &str,
+    layout: &wgpu::PipelineLayout,
+    shader: &wgpu::ShaderModule,
+    format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some("fs_main"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
 impl RenderContext {
     pub async fn new() -> anyhow::Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -102,22 +155,8 @@ impl RenderContext {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("wallpaper bind group layout"),
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
+                TEXTURE_AND_SAMPLER[0],
+                TEXTURE_AND_SAMPLER[1],
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -196,34 +235,13 @@ impl RenderContext {
                 label: Some("wallpaper shader"),
                 source: wgpu::ShaderSource::Wgsl(SHADER.into()),
             });
-        self.pipeline = Some(
-            self.device
-                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("wallpaper pipeline"),
-                    layout: Some(&pipeline_layout),
-                    vertex: wgpu::VertexState {
-                        module: &shader,
-                        entry_point: Some("vs_main"),
-                        buffers: &[],
-                        compilation_options: Default::default(),
-                    },
-                    fragment: Some(wgpu::FragmentState {
-                        module: &shader,
-                        entry_point: Some("fs_main"),
-                        compilation_options: Default::default(),
-                        targets: &[Some(wgpu::ColorTargetState {
-                            format,
-                            blend: None,
-                            write_mask: wgpu::ColorWrites::ALL,
-                        })],
-                    }),
-                    primitive: wgpu::PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: wgpu::MultisampleState::default(),
-                    multiview_mask: None,
-                    cache: None,
-                }),
-        );
+        self.pipeline = Some(fullscreen_pipeline(
+            &self.device,
+            "wallpaper pipeline",
+            &pipeline_layout,
+            &shader,
+            format,
+        ));
         self.surface_format = Some(format);
     }
 
@@ -492,24 +510,7 @@ fn generate_mipmaps(
             bind_group_layouts: &[Some(&device.create_bind_group_layout(
                 &wgpu::BindGroupLayoutDescriptor {
                     label: Some("mipmap bind group layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
+                    entries: &TEXTURE_AND_SAMPLER,
                 },
             ))],
             immediate_size: 0,
@@ -518,31 +519,7 @@ fn generate_mipmaps(
             label: Some("mipmap shader"),
             source: wgpu::ShaderSource::Wgsl(MIP_SHADER.into()),
         });
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("mipmap pipeline"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        })
+        fullscreen_pipeline(device, "mipmap pipeline", &layout, &shader, format)
     });
 
     let bind_group_layout = pipeline.get_bind_group_layout(0);
