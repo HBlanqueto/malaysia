@@ -14,7 +14,6 @@ docs/
 ├── hardware.md                GPU/EGL baseline of the machine
 ├── research.md                macOS, GNOME and Otto conclusions
 ├── macos-global-menu-guide.md how the macOS global menu behaves
-├── audit-2026-11-03.md        full audit (dead code, performance, niri)
 ├── remake-redo.md             tracking of the running Remake-Redo project
 ├── prompts/remake-redo.md     the Remake-Redo brief
 ├── architecture/              what the UI and the shell look like today

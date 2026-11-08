@@ -1,13 +1,11 @@
 # Open technical debt
 
-Open findings against `d0bba82` (2026-11-03); fixed findings and those of the toolkit moved to barrierkit are not listed. The [2026-11-03 audit](audit-2026-11-03.md) collects the remaining pending items.
+Open findings, checked again on 2026-11-08 (Remake-Redo); fixed findings and those of the toolkit moved to barrierkit are not listed. Missing features live in [`roadmap.md`](roadmap.md#not-in-a-block-yet). The 2026-11-03 audit that found most of them is in git history (`git show 7fa3d19:docs/audit-2026-11-03.md`).
 
 | id | where | what | batch |
 |---|---|---|---|
-| P1-05 | `crates/malaysia-compositor/src/session.rs:1826` | Unneeded `try_clone` of the fence; if it fails, the release retention is lost. | L1b |
-| P1-11 | `crates/malaysia-compositor/src/session.rs:1095-1424` | Chrome helpers in `session.rs` even though `chrome.rs`/`effects.rs` exist. Deferred: move only. | L3c |
-| P1-12 | `crates/malaysia-compositor/src/session.rs:1425-1560` | Capture and window in `session.rs` even though `capture.rs` exists. Deferred: move only. | L3d |
-| P1-13 | `crates/malaysia-compositor/src/session.rs:1764` | `reset_dead_cursor` in `session.rs` even though `cursor.rs` exists. Deferred: move only. | L3e |
+| P1-05 | `crates/malaysia-compositor/src/frame_clock.rs:108` | Unneeded `try_clone` of the fence; if it fails, the release retention is lost. | L1b |
+| P1-13 | `crates/malaysia-compositor/src/session.rs:630` | `reset_dead_cursor` in `session.rs` even though `cursor.rs` exists. Deferred: move only. | L3e |
 | P5-09 | `crates/malaysia-shell/src/menubar/mod.rs:265-278` | `prepare_kit_env` deletes `MALAYSIA_ORIG_*` from the child; the launcher cannot restore them. | L1i |
 | P5-10 | `crates/malaysia-shell/src/menubar/focused.rs:230,639`, `dock.rs:49` and `dialogs.rs:290` | Ids built from a list index; opening/closing windows with the menu open can act on another one. | L1h |
 | P5-12 | `crates/malaysia-shell/src/lock.rs:32,264,318-331` | `theme_revision` is stored but never read. | L2b |
@@ -18,4 +16,8 @@ Open findings against `d0bba82` (2026-11-03); fixed findings and those of the to
 | S-02 | Smithay `023b78b1`, `src/backend/drm/compositor/mod.rs` | `DrmCompositor` does not set the planes' `pixel blend mode` property (grep `blend` in `src/backend/drm`: 0). On Intel i915, overlays with alpha blend wrongly. That is why `debug.overlay_planes` is off by default. nongio's fork fixes it in [`734ebe91`](https://github.com/nongio/smithay/commit/734ebe91) and [`33b10703`](https://github.com/nongio/smithay/commit/33b10703); it is only a reference: the fix belongs in upstream Smithay or in bumping its revision. | upstream |
 | S-03 | `crates/malaysia-compositor/src/virtual_input.rs` | Switching back from a virtual keyboard's keymap restores the configured keymap but not the group or locked modifiers, unlike niri (`src/handlers/virtual_keyboard.rs`). The fix is per-device xkb state. | L6 |
 | G-01 | `crates/xdg-desktop-portal-malaysia/src/gtk.rs:358-381` | `gtk_bridge` is read apart from barrierkit's `AppearanceConfig`; move it there. The base Adwaita backgrounds are pinned to libadwaita 1.6+. | L2b |
-| L3 | `session.rs:2126`, `input.rs:2325`, `handlers.rs:1024`, `gtk.rs:432` | Four test harnesses; unify them and add the PX-06 test. | L3 |
+| L3 | `session/tests.rs`, `input/tests.rs`, `handlers/capture_lock_tests.rs`, `gtk.rs` tests | Four test harnesses that each build a `State`; unify them. None maps a window with a buffer, which the focused-window identity test needed after `bd839e2` (removed in `a450a79`). | L3 |
+| R-01 | `crates/malaysia-compositor/src/session/tests.rs` (`a_failed_create_immed_is_drained_and_posts_the_protocol_error`) | Hangs on llvmpipe (no `EGL_ANDROID_native_fence_sync`); `./dev.sh check` needs a GPU to finish. `check-client-dispatch.sh` stops for the same reason. | — |
+| R-02 | `crates/malaysia-wallpaper/src/render.rs` (`cover_matches_reference_at_1280x800`, `minified_quadrants_keep_orientation`) | Fail on lavapipe; not checked on a hardware GPU after `94e4e9f`. | — |
+| R-03 | `crates/malaysia-compositor/src/input.rs` | 1598 lines after the split; pointer motion (`pointer_motion_raw`, about 180 lines) and the chrome pointer are the next candidates (audit §6.2). | — |
+| R-04 | `NOTICE` | `bandura.jpg` has no origin or licence; the 31 `share/wallpapers/solid-colors/` PNGs carry macOS names and no origin. The author's call. | — |

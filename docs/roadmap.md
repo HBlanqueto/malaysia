@@ -390,3 +390,28 @@ Concept and plan in ADR 0051.
 PAM, `hardware.graphics`, shell units and `xdg.portal` with GTK as fallback.
 Pending: `services.graphical-desktop`, `security.polkit`, keyring/AT-SPI and a
 VM that boots `malaysia-session.target`.
+
+### Not in a block yet
+
+Gaps found by the 2026-11-03 audit and checked again on 2026-11-08 by
+searching `crates/malaysia-compositor/src`.
+
+- **Protocols with a Smithay module, not wired:** tablet-v2 (the events are
+  dropped), pointer-gestures, keyboard-shortcuts-inhibit, pointer-warp,
+  xdg-dialog-v1 (GTK's `modal` flag is dropped today), xdg-toplevel-icon,
+  xdg-toplevel-tag, xdg-foreign, xdg-system-bell, single-pixel-buffer,
+  alpha-modifier, content-type, fifo, commit-timing, drm-lease,
+  ext-data-control (no clipboard managers without it),
+  ext-background-effect and xwayland-keyboard-grab.
+- **Protocols without a Smithay module** (niri implements them):
+  wlr-gamma-control (night light), wlr-output-management (kanshi,
+  wdisplays), ext-workspace (ADR 0051 spaces) and tearing-control.
+- **Configuration:** the `domain` command and the
+  `org.malaysia.Compositor1` D-Bus API (ADR 0021) have no code; the options
+  marked «pending» in [`options.md`](configuration/options.md) arrive with
+  their effect.
+- **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3).
+- **Shell:** supervision and overview (ADR 0023), notifications daemon,
+  StatusNotifierItem tray, polkit agent, volume/network/battery/brightness
+  indicators, OSD and media keys.
+
