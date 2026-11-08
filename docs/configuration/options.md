@@ -379,6 +379,7 @@ System Settings writes it. An app gets the defaults until it has a
 | `notifications.apps.<id>.style` | `"temporary"` \| `"persistent"` | `"temporary"` | **active** | shell |
 | `notifications.apps.<id>.critical` | bool | `false` | **active**: urgency 2 or `urgent` breaks through Do Not Disturb and mutes | shell |
 | `notifications.apps.<id>.time_sensitive` | bool | `true` | **active**: time-sensitive alerts can break through a Focus | shell |
+| `notifications.widgets` | list of `"calendar"`, `"batteries"` | both | **active**: widgets under the notifications, in order | shell |
 | `notifications.focus.<mode>.allowed_apps` | list of app ids | `[]` | **active**: apps a Focus lets through; modes `do-not-disturb`, `sleep`, `personal`, `work` | shell |
 | `notifications.focus.<mode>.time_sensitive` | bool | `true` | **active**: the Focus lets time-sensitive alerts through | shell |
 | `notifications.apps.<id>.sound` | bool | `true` | **active** | shell |

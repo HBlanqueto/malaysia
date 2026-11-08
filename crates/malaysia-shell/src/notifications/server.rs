@@ -1,14 +1,18 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
 use bk::platform::WakeHandle;
 use ctappearance::notifications::{AlertStyle, NotificationsConfig};
+use futures_lite::StreamExt;
 use zbus::fdo::{DBusProxy, RequestNameFlags};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 
+use super::live;
 use super::store::{
     Action, Center, FocusRule, Level, Moment, Notification, Origin, focus_name, parse_focus,
     present,
@@ -22,6 +26,11 @@ const GTK_NAME: &str = "org.gtk.Notifications";
 const GTK_PATH: &str = "/org/gtk/Notifications";
 pub(crate) const CONTROL_NAME: &str = "org.malaysia.Notifications1";
 pub(crate) const CONTROL_PATH: &str = "/org/malaysia/Notifications1";
+const JOBS_NAME: &str = "org.kde.JobViewServer";
+const UI_SERVER_NAME: &str = "org.kde.kuiserver";
+const JOBS_PATH: &str = "/JobViewServer";
+const CALL_CATEGORY: &str = "call.ongoing";
+const HANG_UP_PURPOSE: &str = "call.hang-up";
 pub(crate) const DEFAULT_ACTION: &str = "default";
 pub(crate) const CLOSED_DISMISSED: u32 = 2;
 const CLOSED_BY_CALL: u32 = 3;
@@ -45,6 +54,10 @@ pub(crate) struct Hub {
     pub(crate) banners: Vec<(u32, AlertStyle)>,
     pub(crate) panel_open: bool,
     pub(crate) front_app: Option<String>,
+    pub(crate) activities: Vec<live::Activity>,
+    pub(crate) owners: HashMap<String, String>,
+    pub(crate) calls: HashMap<String, (Notification, Option<String>)>,
+    pub(crate) batteries: Vec<super::batteries::Battery>,
     wake: Option<WakeHandle>,
 }
 
@@ -60,6 +73,10 @@ pub(crate) enum Reply {
     Closed(Notification, u32),
     Invoked(Notification, String, Option<String>),
     Answered(Notification, String),
+    Activities,
+    Ended(String),
+    OwnerGone(String),
+    Ask(String, live::Request),
     Focus,
 }
 
@@ -78,6 +95,14 @@ impl Link {
 
     pub(crate) fn set_wake(&self, wake: WakeHandle) {
         self.hub().wake = Some(wake);
+    }
+
+    pub(crate) fn set_batteries(&self, batteries: Vec<super::batteries::Battery>) {
+        let mut hub = self.hub();
+        if hub.batteries != batteries {
+            hub.batteries = batteries;
+            hub.changed();
+        }
     }
 
     pub(crate) fn reply(&self, reply: Reply) {
@@ -103,30 +128,35 @@ pub(crate) fn start() -> Link {
             }
         })
         .expect("malaysia-notifications thread");
+    super::cups::start(link.clone());
+    super::batteries::start(link.clone());
     link
 }
 
 async fn serve(link: Link, replies: Receiver<Reply>) -> zbus::Result<()> {
-    let apps = Arc::new(Mutex::new(Apps::default()));
+    let jobs = Arc::new(AtomicU32::new(0));
     let connection = zbus::connection::Builder::session()?
-        .serve_at(
-            FDO_PATH,
-            Freedesktop {
-                link: link.clone(),
-                apps: apps.clone(),
-            },
-        )?
-        .serve_at(
-            GTK_PATH,
-            Gtk {
-                link: link.clone(),
-                apps,
-            },
-        )?
+        .serve_at(FDO_PATH, Freedesktop { link: link.clone() })?
+        .serve_at(GTK_PATH, Gtk { link: link.clone() })?
         .serve_at(CONTROL_PATH, Control { link: link.clone() })?
+        .serve_at(
+            JOBS_PATH,
+            live::JobServer {
+                link: link.clone(),
+                next: jobs.clone(),
+            },
+        )?
+        .serve_at(
+            JOBS_PATH,
+            live::JobServerV2(live::JobServer {
+                link: link.clone(),
+                next: jobs,
+            }),
+        )?
+        .serve_at(JOBS_PATH, live::UiServer)?
         .build()
         .await?;
-    for name in [FDO_NAME, GTK_NAME, CONTROL_NAME] {
+    for name in [FDO_NAME, GTK_NAME, CONTROL_NAME, JOBS_NAME, UI_SERVER_NAME] {
         match connection
             .request_name_with_flags(
                 name,
@@ -140,15 +170,30 @@ async fn serve(link: Link, replies: Receiver<Reply>) -> zbus::Result<()> {
             }
         }
     }
-    while let Ok(reply) = replies.recv().await {
-        if let Err(error) = answer(&connection, reply).await {
+    let mut owners = DBusProxy::new(&connection)
+        .await?
+        .receive_name_owner_changed()
+        .await?;
+    loop {
+        let reply = futures_lite::future::or(async { replies.recv().await.ok() }, async {
+            let change = owners.next().await?;
+            let args = change.args().ok()?;
+            if args.new_owner().is_some() {
+                return Some(Reply::Activities);
+            }
+            Some(Reply::OwnerGone(args.name().to_string()))
+        })
+        .await;
+        let Some(reply) = reply else {
+            return Ok(());
+        };
+        if let Err(error) = answer(&link, &connection, reply).await {
             tracing::warn!(%error, "notifications: could not tell the app");
         }
     }
-    Ok(())
 }
 
-async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()> {
+async fn answer(link: &Link, connection: &zbus::Connection, reply: Reply) -> zbus::Result<()> {
     let fdo = SignalEmitter::new(connection, FDO_PATH)?;
     match reply {
         Reply::Closed(notification, reason) => {
@@ -193,6 +238,43 @@ async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()>
                 }
             }
         }
+        Reply::Activities => activities_changed(connection).await?,
+        Reply::Ended(id) => {
+            let link = link.clone();
+            let connection = connection.clone();
+            connection
+                .clone()
+                .executor()
+                .spawn(
+                    async move {
+                        async_io::Timer::after(Duration::from_millis(
+                            ctdesign::LIVE_ACTIVITY_ENDED_MS,
+                        ))
+                        .await;
+                        link.hub().activities.retain(|activity| activity.id != id);
+                        link.hub().owners.remove(&id);
+                        live::forget_job(&connection, &id).await;
+                        if let Err(error) = activities_changed(&connection).await {
+                            tracing::warn!(%error, "notifications: could not drop an activity");
+                        }
+                    },
+                    "end live activity",
+                )
+                .detach();
+        }
+        Reply::OwnerGone(name) => {
+            let gone: Vec<String> = link
+                .hub()
+                .owners
+                .iter()
+                .filter(|(_, owner)| **owner == name)
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in gone {
+                live::end(link, &id);
+            }
+        }
+        Reply::Ask(id, request) => ask(link, connection, &id, request).await?,
         Reply::Focus => {
             let control = connection
                 .object_server()
@@ -204,6 +286,47 @@ async fn answer(connection: &zbus::Connection, reply: Reply) -> zbus::Result<()>
                 .focus_changed(control.signal_emitter())
                 .await?;
         }
+    }
+    Ok(())
+}
+
+async fn activities_changed(connection: &zbus::Connection) -> zbus::Result<()> {
+    let control = connection
+        .object_server()
+        .interface::<_, Control>(CONTROL_PATH)
+        .await?;
+    control
+        .get()
+        .await
+        .activities_changed(control.signal_emitter())
+        .await
+}
+
+async fn ask(
+    link: &Link,
+    connection: &zbus::Connection,
+    id: &str,
+    request: live::Request,
+) -> zbus::Result<()> {
+    if id.starts_with("job-") {
+        return live::ask_job(connection, id, request).await;
+    }
+    if let Some(job) = id.strip_prefix("print-").and_then(|job| job.parse().ok()) {
+        if request == live::Request::Cancel {
+            super::cups::cancel(job);
+        }
+        return Ok(());
+    }
+    let call = link.hub().calls.get(id).cloned();
+    if let Some((notification, Some(hang_up))) = call
+        && request == live::Request::Cancel
+    {
+        Box::pin(answer(
+            link,
+            connection,
+            Reply::Invoked(notification, hang_up, None),
+        ))
+        .await?;
     }
     Ok(())
 }
@@ -256,6 +379,15 @@ async fn portal_action(
 ) -> zbus::Result<()> {
     let emitter = SignalEmitter::new(connection, CONTROL_PATH)?;
     Control::portal_action(&emitter, app_id, id, key, parameter).await
+}
+
+fn apps() -> MutexGuard<'static, Apps> {
+    static APPS: std::sync::OnceLock<Mutex<Apps>> = std::sync::OnceLock::new();
+    lock(APPS.get_or_init(Default::default))
+}
+
+pub(crate) fn desktop_entry(id: &str) -> Option<DesktopEntry> {
+    apps().by_name(id.strip_suffix(".desktop").unwrap_or(id))
 }
 
 #[derive(Default)]
@@ -345,7 +477,6 @@ fn deliver(link: &Link, incoming: Incoming) -> u32 {
 
 struct Freedesktop {
     link: Link,
-    apps: Arc<Mutex<Apps>>,
 }
 
 #[zbus::interface(name = "org.freedesktop.Notifications")]
@@ -382,7 +513,7 @@ impl Freedesktop {
             None => None,
         };
         let entry = {
-            let mut apps = lock(&self.apps);
+            let mut apps = apps();
             sender_app
                 .as_deref()
                 .and_then(|id| apps.entry(id))
@@ -517,7 +648,6 @@ fn strip_markup(body: &str) -> String {
 
 struct Gtk {
     link: Link,
-    apps: Arc<Mutex<Apps>>,
 }
 
 #[zbus::interface(name = "org.gtk.Notifications")]
@@ -534,13 +664,14 @@ impl Gtk {
                 .and_then(|value| String::try_from(value.clone()).ok())
                 .unwrap_or_default()
         };
-        let entry = lock(&self.apps).entry(&app_id);
+        let entry = apps().entry(&app_id);
         let hints: Vec<String> = notification
             .get("display-hint")
             .and_then(|value| Vec::<String>::try_from(value.clone()).ok())
             .unwrap_or_default();
         let hinted = |hint: &str| hints.iter().any(|given| given == hint);
         let mut reply = None;
+        let mut hang_up = None;
         let mut actions = Vec::new();
         for button in notification
             .get("buttons")
@@ -556,10 +687,13 @@ impl Gtk {
                 continue;
             };
             let action = Action { key, label };
-            if field("purpose").as_deref() == Some(REPLY_PURPOSE) {
-                reply = Some(action);
-            } else {
-                actions.push(action);
+            match field("purpose").as_deref() {
+                Some(REPLY_PURPOSE) => reply = Some(action),
+                Some(HANG_UP_PURPOSE) => {
+                    hang_up = Some(action.key.clone());
+                    actions.push(action);
+                }
+                _ => actions.push(action),
             }
         }
         let default_action = Some(text("default-action"))
@@ -597,6 +731,10 @@ impl Gtk {
                 Origin::Gtk { id, default_action }
             },
         };
+        if text("category") == CALL_CATEGORY {
+            start_call(&self.link, notification, hang_up);
+            return;
+        }
         let silent = text("sound") == "silent";
         deliver(
             &self.link,
@@ -609,6 +747,11 @@ impl Gtk {
     }
 
     fn remove_notification(&self, app_id: String, id: String) {
+        let call = call_id(&app_id, &id);
+        if self.link.hub().calls.remove(&call).is_some() {
+            live::end(&self.link, &call);
+            return;
+        }
         let mut hub = self.link.hub();
         if let Some(number) = hub.center.gtk_id(&app_id, &id) {
             hub.center.remove(number);
@@ -648,6 +791,24 @@ impl Control {
     ) -> zbus::Result<()>;
 
     #[zbus(property)]
+    fn activities(&self) -> Vec<live::Activity> {
+        self.link.hub().activities.clone()
+    }
+
+    fn cancel_activity(&self, id: String) {
+        self.link.reply(Reply::Ask(id, live::Request::Cancel));
+    }
+
+    fn pause_activity(&self, id: String, paused: bool) {
+        let request = if paused {
+            live::Request::Pause
+        } else {
+            live::Request::Resume
+        };
+        self.link.reply(Reply::Ask(id, request));
+    }
+
+    #[zbus(property)]
     fn focus(&self) -> &'static str {
         focus_name(self.link.hub().center.focus)
     }
@@ -659,6 +820,32 @@ impl Control {
         hub.center.save();
         hub.changed();
     }
+}
+
+fn call_id(app_id: &str, id: &str) -> String {
+    format!("call-{app_id}-{id}")
+}
+
+fn start_call(link: &Link, notification: Notification, hang_up: Option<String>) {
+    let Some(id) = notification.origin.gtk_id() else {
+        return;
+    };
+    let id = call_id(&notification.app_id, id);
+    let mut activity = live::Activity::new(id.clone(), live::CALL, notification.posted);
+    activity.app_name = notification.app_name.clone();
+    activity.icon = notification.icon.clone();
+    activity.title = notification.summary.clone();
+    activity.detail = notification.body.clone();
+    activity.cancellable = hang_up.is_some();
+    let started = link
+        .hub()
+        .activities
+        .iter()
+        .find(|known| known.id == id)
+        .map(|known| known.started);
+    activity.started = started.unwrap_or(activity.started);
+    link.hub().calls.insert(id, (notification, hang_up));
+    live::upsert(link, activity);
 }
 
 fn show_panel(link: &Link, open: bool) {

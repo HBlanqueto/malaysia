@@ -1,7 +1,6 @@
 # 0068 — Notification Center
 
-Status: phases 1 to 3 accepted (2026-11-08); phase 4 is accepted when it
-ships.
+Status: accepted (2026-11-08), all four phases.
 
 ## Goal and scope
 
@@ -326,14 +325,29 @@ Exact names from
     `ActivationToken` and then `ActionInvoked`, as `bk::notifications`
     already expects.
 15. **Live Activities, Malaysia's own.** Linux has no standard, so the
-    menubar gets a live area left of the status items, with compact and
-    expanded presentations and the ActivityKit lifecycle (start, update,
-    stale date, end, dismissal, 8 + 4 hours). The first sources are ones that
-    exist today: KDE `JobViewServer` transfers, portal `call.ongoing` and
-    CUPS print jobs (pages printed, pause and cancel; the IPP subscription
-    path is checked against CUPS and gnome-settings-daemon before it is
-    built).
-    A private interface for bk apps follows only when an app needs it.
+    menubar gets a live area left of the clock: a compact pill per activity
+    (percentage, pages or call time) that opens the expanded view below it,
+    314 × 132 with radius 20 and 3 under the bar, with Pause or Resume and
+    Cancel or Hang Up. An ended activity says «Done» for
+    `LIVE_ACTIVITY_ENDED_MS` and goes away; one older than 8 hours ends, as
+    in ActivityKit. The notifications component gathers them and publishes
+    the `Activities` property of `org.malaysia.Notifications1`
+    (`CancelActivity`, `PauseActivity`). Sources:
+    1. **File transfers:** it owns `org.kde.JobViewServer` and
+       `org.kde.kuiserver` like Plasma's notification server: `requestView`
+       (V1 and V2) creates `/org/kde/notificationmanager/jobs/JobView_<n>`
+       with `org.kde.JobViewV2` and `V3`, and Cancel or Pause send
+       `cancelRequested` or `suspendRequested`. A job whose app leaves the
+       bus ends.
+    2. **Calls:** a GTK or portal notification with category `call.ongoing`
+       becomes a call activity; its `call.hang-up` button is Hang Up, and
+       `RemoveNotification` ends it.
+    3. **Printing:** every 2 s an IPP `Get-Jobs` (`which-jobs=not-completed`,
+       `my-jobs`) over CUPS's local socket lists the user's jobs with
+       `job-media-sheets-completed` and `job-impressions`
+       ([CUPS IPP](https://www.cups.org/doc/spec-ipp.html)); Cancel sends
+       `Cancel-Job`. Pause is not offered: holding a job that is printing
+       needs the printer, not the job.
 16. **Built with barrierkit.** The component uses what bk already has
     (`Sidebar`, `Form`, `Switch`, `PopUpButton`, `SegmentedControl`,
     `ChoiceCards`, `ContextMenu`, `Button`, `ProgressView`, `Avatar`,
@@ -347,7 +361,10 @@ Exact names from
        Settings › Notifications.
     2. Portal v2, inline reply, lock screen and activation tokens.
     3. Dock badges and progress, Focus modes.
-    4. Live Activities, then widgets in the panel.
+    4. Live Activities, then widgets in the panel: Calendar (the month with
+       today marked) and Batteries (UPower, every 60 s), added and removed
+       with «Edit Widgets» (`widgets` in `notifications.domain`). Widgets
+       from apps need a contract Linux does not have.
 
 ## As built
 

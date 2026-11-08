@@ -1,7 +1,12 @@
+mod batteries;
+mod cups;
+mod live;
 mod server;
 mod store;
 mod view;
+mod widgets;
 
+pub(crate) use live::{Activity, ActivityKind};
 pub(crate) use store::{Center, Notification};
 pub(crate) use view::lock_card;
 
@@ -76,6 +81,31 @@ pub(crate) fn watch_focus(changed: impl Fn(Option<Focus>) + Send + 'static) {
             changed(store::parse_focus(&change.get()?));
         }
         Ok(())
+    });
+}
+
+pub(crate) fn watch_activities(changed: impl Fn(Vec<Activity>) + Send + 'static) {
+    in_background("follow the Live Activities", move || {
+        let proxy = control()?;
+        changed(proxy.get_property("Activities")?);
+        for change in proxy.receive_property_changed::<Vec<Activity>>("Activities") {
+            changed(change.get()?);
+        }
+        Ok(())
+    });
+}
+
+pub(crate) fn cancel_activity(id: String) {
+    in_background("cancel a Live Activity", move || {
+        control()?.call_method("CancelActivity", &(id,)).map(drop)
+    });
+}
+
+pub(crate) fn pause_activity(id: String, paused: bool) {
+    in_background("pause a Live Activity", move || {
+        control()?
+            .call_method("PauseActivity", &(id, paused))
+            .map(drop)
     });
 }
 

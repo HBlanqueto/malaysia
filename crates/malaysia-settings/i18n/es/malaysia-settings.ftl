@@ -150,3 +150,4 @@ focus-allowed-apps = Apps permitidas
 focus-allowed-apps-help = Estas apps muestran sus notificaciones aunque el modo esté activo.
 focus-time-sensitive = Notificaciones urgentes
 focus-time-sensitive-help = Las apps que permiten notificaciones urgentes pueden avisarte de inmediato.
+notifications-badge = Globo en el icono de la app

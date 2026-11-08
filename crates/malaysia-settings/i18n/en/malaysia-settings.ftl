@@ -150,3 +150,4 @@ focus-allowed-apps = Allowed Apps
 focus-allowed-apps-help = These apps show their notifications while the Focus is on.
 focus-time-sensitive = Time Sensitive Notifications
 focus-time-sensitive-help = Apps that allow time sensitive alerts can notify you immediately.
+notifications-badge = Badge application icon

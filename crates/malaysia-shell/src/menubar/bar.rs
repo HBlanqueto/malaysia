@@ -28,7 +28,7 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
-use crate::menubar::{appmenu, clock, focused, resolve_app_name, shortcuts, status, system};
+use crate::menubar::{appmenu, clock, focused, live, resolve_app_name, shortcuts, status, system};
 use bk::menu::{RevealRoots, SearchQuery};
 use bk::platform::MainMenuAddress;
 use bk::theme;
@@ -173,6 +173,7 @@ impl App for BarApp {
 
         let now = self.clock.read().clone();
         let focus = use_focus();
+        let activities = live::use_activities();
         let app_menus_enabled = *self.app_menus.read();
         let last_app_menu = use_hook(|| Rc::new(RefCell::new(None::<MenuKey>)));
         let memory = use_hook(|| Rc::new(RefCell::new(MenuMemory::default())));
@@ -340,9 +341,11 @@ impl App for BarApp {
             });
         }
 
-        bar_root(bar)
-            .child(left)
-            .child(right.child(clock::clock_label(now, text, focus)))
+        bar_root(bar).child(left).child(
+            right
+                .child(live::live_area(activities, text))
+                .child(clock::clock_label(now, text, focus)),
+        )
     }
 }
 

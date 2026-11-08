@@ -236,6 +236,9 @@ fn app_form(id: &'static str, app: &AppNotifications, error: State<Option<String
                 .row(switch(tr!("notifications-sound"), app.sound, |app, on| {
                     app.sound = on
                 }))
+                .row(switch(tr!("notifications-badge"), app.badge, |app, on| {
+                    app.badge = on
+                }))
                 .row(
                     Row::new(tr!("notifications-grouping")).control(
                         tr_list!("grouping-automatic", "grouping-by-app", "grouping-off")

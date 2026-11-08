@@ -41,6 +41,7 @@ struct Snapshot {
     banners: Vec<(u32, AlertStyle)>,
     panel_open: bool,
     focus: Option<Focus>,
+    batteries: Vec<super::batteries::Battery>,
 }
 
 impl Snapshot {
@@ -51,6 +52,7 @@ impl Snapshot {
             banners: hub.banners.clone(),
             panel_open: hub.panel_open,
             focus: hub.center.focus,
+            batteries: hub.batteries.clone(),
         }
     }
 
@@ -73,6 +75,7 @@ impl App for NotificationsApp {
         let replying = use_state(|| None::<u32>);
         let draft = use_state(String::new);
         let expanded = use_state(HashSet::<String>::new);
+        let editing = use_state(|| false);
         let timed = use_hook(|| Rc::new(RefCell::new(HashSet::<u32>::new())));
         let applied = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
         use_hook({
@@ -170,7 +173,7 @@ impl App for NotificationsApp {
             now,
         };
         let content = if shown.panel_open {
-            panel(&context, &shown, &config, expanded).into_element()
+            panel(&context, &shown, &config, expanded, editing).into_element()
         } else {
             banners(&context, &shown, banner_height).into_element()
         };
@@ -266,6 +269,7 @@ fn panel(
     shown: &Snapshot,
     config: &NotificationsConfig,
     expanded: State<HashSet<String>>,
+    editing: State<bool>,
 ) -> ScrollView {
     let center = super::store::Center {
         notifications: shown.notifications.clone(),
@@ -295,6 +299,7 @@ fn panel(
     for group in groups {
         column = column.child(stack(context, group, expanded));
     }
+    column = column.child(super::widgets::section(config, &shown.batteries, editing));
     ScrollView::new()
         .width(Size::fill())
         .height(Size::fill())
