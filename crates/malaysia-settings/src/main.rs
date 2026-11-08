@@ -111,6 +111,9 @@ mod tests {
         );
         test.set_default_fonts(&[std::borrow::Cow::Borrowed("Geist")]);
         test.sync_and_update();
+        let appearance =
+            find_label(&test, tr!("appearance")).expect("the Appearance pane is listed");
+        click_node(&mut test, appearance);
         test
     }
 
@@ -135,6 +138,37 @@ mod tests {
         let y = area.origin.y + area.size.height / 2.0;
         test.click_cursor((x as f64, y as f64));
         test.sync_and_update();
+    }
+
+    #[test]
+    fn the_display_page_opens_from_accessibility_and_writes_invert_colors() {
+        with_temp_config(|dir| {
+            let path = dir.join("appearance.domain");
+            let initial = AppearanceConfig::default();
+            write_appearance(&path, &initial).unwrap();
+
+            let mut test = run_app(initial);
+            let accessibility =
+                find_label(&test, tr!("accessibility")).expect("the Accessibility pane is listed");
+            click_node(&mut test, accessibility);
+            let display = find_label(&test, tr!("display")).expect("Vision lists Display");
+            click_node(&mut test, display);
+            let invert = test
+                .find_many(|node, el| {
+                    (el.accessibility().builder.label() == Some(tr!("invert-colors")))
+                        .then_some(node)
+                })
+                .into_iter()
+                .last()
+                .expect("the Display page shows Invert colors");
+            click_node(&mut test, invert);
+
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(
+                text.contains("invert_colors = true"),
+                "the switch must write invert_colors: {text}"
+            );
+        });
     }
 
     #[test]

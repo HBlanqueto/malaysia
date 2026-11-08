@@ -379,7 +379,8 @@ pub(crate) fn append_revealed_titlebar<R: MalaysiaRenderer>(
         .map(|(_, pointer)| pointer);
     let input = ctappearance::traffic::TrafficInput {
         focused,
-        group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
+        group_hovered: pointer.is_some_and(|pointer| pointer.hovered())
+            || (focused && state.config.appearance.differentiate_without_color),
         pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
         zoom_supported: state.green_button_admitted(id),
     };
@@ -667,7 +668,8 @@ pub(crate) fn append_window_frame<R: MalaysiaRenderer>(
             .map(|(_, pointer)| pointer);
         let input = ctappearance::traffic::TrafficInput {
             focused: is_focused,
-            group_hovered: pointer.is_some_and(|pointer| pointer.hovered()),
+            group_hovered: pointer.is_some_and(|pointer| pointer.hovered())
+                || (is_focused && state.config.appearance.differentiate_without_color),
             pressed: pointer.and_then(|pointer| pointer.pressed_visual()),
             zoom_supported: state.green_button_admitted(id),
         };

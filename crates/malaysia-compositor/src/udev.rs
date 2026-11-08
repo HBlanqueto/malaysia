@@ -16,7 +16,7 @@ use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface}
 use smithay::backend::renderer::ImportDma;
 use smithay::backend::renderer::element::RenderElementStates;
 use smithay::backend::renderer::element::utils::select_dmabuf_feedback;
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::multigpu::GpuManager;
 
 use crate::renderer::GpuApi;
@@ -83,6 +83,7 @@ struct Udev {
     render_feedback: DmabufFeedback,
     scanout_feedback: DmabufFeedback,
     frame_flags: FrameFlags,
+    filter_target: Option<GlesTexture>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -269,9 +270,13 @@ pub fn run(options: DrmOptions) -> Result<()> {
     state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
     state.shadow = crate::effects::compile_shadow(renderer);
     state.border = crate::effects::compile_border(renderer);
+    state.display_filter = crate::display_filter::compile(renderer);
     drop(multi);
 
-    let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
+    let cursor = Cursors::load(
+        state.scale.fractional_scale().ceil() as i32,
+        state.config.appearance.pointer_size,
+    );
 
     let disconnect_queue = crate::state::ClientDisconnectQueue::default();
     let (disconnect_ping, disconnect_source) = smithay::reexports::calloop::ping::make_ping()
@@ -313,6 +318,7 @@ pub fn run(options: DrmOptions) -> Result<()> {
         render_feedback: feedback,
         scanout_feedback,
         frame_flags,
+        filter_target: None,
     };
 
     let appearance_watch = AppearanceWatch::new()
@@ -856,12 +862,30 @@ impl Udev {
                 return RenderResult::Skipped;
             }
         };
-        let elements = crate::scene_elements::build_output_elements(
-            &mut self.state,
-            &mut renderer,
-            &self.cursor,
-            true,
-        );
+        self.cursor
+            .follow_pointer_size(self.state.config.appearance.pointer_size);
+        let size = self
+            .output
+            .current_mode()
+            .map(|mode| smithay::utils::Size::from((mode.size.w, mode.size.h)));
+        let filtered = size.and_then(|size| {
+            crate::display_filter::element(
+                &mut self.state,
+                renderer.as_mut(),
+                &self.cursor,
+                size,
+                &mut self.filter_target,
+            )
+        });
+        let elements = match filtered {
+            Some(filtered) => vec![filtered],
+            None => crate::scene_elements::build_output_elements(
+                &mut self.state,
+                &mut renderer,
+                &self.cursor,
+                true,
+            ),
+        };
         let gles = renderer.as_mut();
         self.state.init_capture_dma(gles);
         let capture_elements = if self.capture_requested || !self.state.pending_captures.is_empty()

@@ -161,6 +161,7 @@ pub struct State {
     pub(crate) rounded_clip: Option<GlesTexProgram>,
     pub(crate) shadow: Option<GlesPixelProgram>,
     pub(crate) border: Option<GlesPixelProgram>,
+    pub(crate) display_filter: Option<GlesTexProgram>,
     pub(crate) chrome_pointer: Option<(WindowId, ctappearance::traffic::TrafficPointer)>,
     pub(crate) titlebar_click: Option<crate::input::TitlebarClick>,
     pub(crate) client_click: Option<crate::input::TitlebarClick>,
@@ -414,6 +415,7 @@ impl State {
             popup_fade_request: None,
             popup_fades: Vec::new(),
             rounded_clip: None,
+            display_filter: None,
             shadow: None,
             border: None,
             chrome_pointer: None,
@@ -427,6 +429,7 @@ impl State {
 
     pub(crate) fn refresh_theme(&mut self, restyled: bool) {
         self.config = Config::load();
+        self.request_redraw();
         if restyled {
             self.wallpaper_grid = ctappearance::load_wallpaper_grid();
             self.chrome_theme = crate::chrome::ChromeTheme::from_config(&self.config);

@@ -8,6 +8,7 @@ mod chrome;
 mod config;
 mod cursor;
 mod decoration;
+mod display_filter;
 mod effects;
 mod focus_notice;
 mod foreign;

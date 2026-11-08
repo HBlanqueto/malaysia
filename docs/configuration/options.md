@@ -98,7 +98,7 @@ They are not domain options; they are fixed and documented here:
 |---|---|---|---|---|
 | `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings** |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | portal, shell, effects, **System Settings** |
-| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`) |
+| `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`; also reduces transparency), **System Settings › Accessibility › Display** |
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
 | `appearance.scroll_bars` | `"when_scrolling"` \| `"always"` | `"when_scrolling"` | **active** | the kit's `ScrollView`: the bar shows only while scrolling or always, **System Settings** |
 | `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
@@ -109,8 +109,19 @@ They are not domain options; they are fixed and documented here:
 | `appearance.tint_strength_accent` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of `window_color = "accent"` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings** |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"` | all five | **active** | which surfaces the tint reaches, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
-| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window mixes the wallpaper behind it into its background, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
-| `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility** |
+| `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window mixes the wallpaper behind it into its sidebar, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
+| `appearance.wallpaper_tinting_in_light` | bool | `false` | **active** | `wallpaper_tinting` also in light mode, **System Settings › Accessibility › Display** |
+| `appearance.invert_colors` | bool | `false` | **active** | compositor: inverts the screen (ADR 0066), **System Settings › Accessibility › Display** |
+| `appearance.show_borders` | bool | `false` | **active** | kit: a border on icon buttons, tool groups and search fields, **System Settings › Accessibility › Display** |
+| `appearance.differentiate_without_color` | bool | `false` | **active** | kit and compositor: the traffic lights keep their symbols in the focused window, **System Settings › Accessibility › Display** |
+| `appearance.display_contrast` | a value of `DISPLAY_CONTRAST` | `1.0` | **active** | compositor: contrast of the whole screen around middle gray, **System Settings › Accessibility › Display** |
+| `appearance.text_size` | a value of `TEXT_SIZES` | `1.0` | **active** | kit: scales `Text` and sidebar items, **System Settings › Accessibility › Display** |
+| `appearance.menu_bar_size` | `"default"` \| `"large"` | `"default"` | **active** | shell: menu bar text size, **System Settings › Accessibility › Display** |
+| `appearance.shake_to_locate` | bool | `true` | **active** | compositor: shaking the pointer enlarges it, **System Settings › Accessibility › Display** |
+| `appearance.pointer_size` | a value of `POINTER_SIZES` | `1.0` | **active** | compositor: size of the cursors it draws, **System Settings › Accessibility › Display** |
+| `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
+| `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
+| `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
 macOS: "Appearance: **Light / Dark / Auto**" and "**Accent color**"; "Increase
@@ -146,7 +157,7 @@ background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
 
 `wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
 The compositor sends each BarrierKit window the average color of the wallpaper
-behind it, and the window mixes it into its background (9 % in dark, 7 % in
+behind it, and the window mixes it into its sidebar (9 % in dark, 7 % in
 light with `wallpaper_tinting_in_light`; provisional values, ADR 0065). It
 needs a neutral `window_color` and an accent other than graphite.
 
@@ -433,6 +444,17 @@ traffic_lights = "auto"         # auto | standard | accent | wallpaper
 traffic_light_shape = "square"  # square | round
 wallpaper_tinting = true        # tint windows with the wallpaper behind them
 wallpaper_tinting_in_light = false
+invert_colors = false
+show_borders = false
+differentiate_without_color = false
+display_contrast = 1.0
+text_size = 1.0
+menu_bar_size = "default"
+shake_to_locate = true
+pointer_size = 1.0
+color_filters = false
+color_filter = "grayscale"
+color_filter_intensity = 1.0
 ```
 
 ```toml

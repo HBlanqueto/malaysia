@@ -78,6 +78,7 @@ pub(crate) struct Session {
     pub(crate) last_frame_duration: Option<Duration>,
     pub(crate) estimated_vblank: Option<RegistrationToken>,
     appearance_watch: Option<AppearanceWatch>,
+    filter_target: Option<smithay::backend::renderer::gles::GlesTexture>,
 }
 
 pub(crate) struct PendingFrameRelease {
@@ -224,7 +225,10 @@ pub fn run() -> Result<(), SessionError> {
         backend.window_size(),
         state.scale.fractional_scale(),
     ));
-    let cursor = Cursors::load(state.scale.fractional_scale().ceil() as i32);
+    let cursor = Cursors::load(
+        state.scale.fractional_scale().ceil() as i32,
+        state.config.appearance.pointer_size,
+    );
     let track_objects = std::env::var_os("MALAYSIA_TEST_OBJECTS").is_some();
     let mut session = Session {
         loop_handle: loop_handle.clone(),
@@ -240,6 +244,7 @@ pub fn run() -> Result<(), SessionError> {
         last_frame_duration: None,
         estimated_vblank: None,
         appearance_watch: None,
+        filter_target: None,
     };
     if session.track_objects {
         session.last_objects = live_objects(&session.display, &session.state);
@@ -250,6 +255,7 @@ pub fn run() -> Result<(), SessionError> {
     session.state.rounded_clip = crate::effects::compile_rounded_clip(renderer);
     session.state.shadow = crate::effects::compile_shadow(renderer);
     session.state.border = crate::effects::compile_border(renderer);
+    session.state.display_filter = crate::display_filter::compile(renderer);
 
     session.backend.window().request_redraw();
 
@@ -521,7 +527,17 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
     let (damage, sync, request_redraw, mut feedback) = {
         let (renderer, mut framebuffer) = session.backend.bind().map_err(DrawError::Bind)?;
 
+        session
+            .cursor
+            .follow_pointer_size(session.state.config.appearance.pointer_size);
         let elements = build_output_elements(&mut session.state, renderer, &session.cursor, true);
+        let filtered = crate::display_filter::element(
+            &mut session.state,
+            renderer,
+            &session.cursor,
+            capture_size,
+            &mut session.filter_target,
+        );
 
         session.state.init_capture_dma(renderer);
 
@@ -556,7 +572,9 @@ fn draw(session: &mut Session) -> Result<(), DrawError> {
                 renderer,
                 &mut framebuffer,
                 age,
-                &elements,
+                filtered
+                    .as_ref()
+                    .map_or(&elements[..], std::slice::from_ref),
                 ctdesign::DESKTOP_CLEAR.premultiplied(),
             )
             .map_err(DrawError::Output)?;

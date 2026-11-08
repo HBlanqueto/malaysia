@@ -10,8 +10,11 @@ describes it in WWDC 2018, session 210 («Introducing Dark Mode»): the system
 samples the part of the desktop behind the window, takes its average color and
 blends it with a gray; that gray is the window background. The color follows
 the window as it moves, and the app never sees it in its `NSColor` values. The
-Graphite accent turns it off. Window, under-page and content backgrounds take
-it; the sidebar does not. macOS 11 added the switch «Allow wallpaper tinting in
+Graphite accent turns it off. That session says window, under-page and content
+backgrounds take it and the sidebar does not. macOS 26 does the opposite: two
+screenshots of System Settings, with the switch off and on and the window in
+the same place, show the sidebar going from `#141414` to `#131418`, while the
+window background (`#232323`) and the groups (`#2a2a2a`) do not change. macOS 11 added the switch «Allow wallpaper tinting in
 windows»; macOS 26 names it «Tint window background with wallpaper color». It
 shows in dark mode only.
 
@@ -38,8 +41,8 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
    of `infinity_focus_surface_v1` version 3. It sends it again only when it
    changes.
 4. **Blend in the kit.** `Resolved::behind_window(color)` mixes the color into
-   `window`, `titlebar_inactive`, `sunken` and `surface` by `WALLPAPER_TINTING`
-   (light 0.07, dark 0.09). Sidebars, controls and menus stay as they are.
+   `sidebar.bg` by `WALLPAPER_TINTING` (light 0.07, dark 0.09), as macOS 26
+   does. The window background, groups, controls and menus stay as they are.
 5. **When it applies.** With the switch on, a neutral `window_color` and any
    accent but graphite. The accent window color wins over it.
 
@@ -50,7 +53,7 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
 2. Open System Settings in dark mode over the wallpaper.
 3. Take a screenshot with «Tint window background with wallpaper color» on,
    then another with it off, without moving the window.
-4. Read the same window pixel in both, `T` (on) and `G` (off), and the
+4. Read the same sidebar pixel in both, `T` (on) and `G` (off), and the
    wallpaper color `W`. The amount is `(T − G) / (W − G)` per channel.
 5. Repeat with a red and a green wallpaper. If the three amounts match, the
    model of step 4 of «Decision» holds; write the value to
@@ -58,7 +61,7 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
 
 ## Consequences
 
-Only BarrierKit windows take the tint; the compositor's server-side titlebars
+Only BarrierKit windows with a sidebar show the tint; the compositor's server-side titlebars
 and GTK apps do not. The grid covers the one output Malaysia draws today.
 
 ## Rejected alternatives

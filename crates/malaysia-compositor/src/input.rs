@@ -1204,7 +1204,7 @@ impl State {
     ) {
         self.request_redraw();
         let now = Instant::now();
-        if self.shake.observe(location.x, now) {
+        if self.config.appearance.shake_to_locate && self.shake.observe(location.x, now) {
             self.trigger_cursor_boost();
         } else {
             self.keep_cursor_boost_alive(now);

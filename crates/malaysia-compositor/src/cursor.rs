@@ -19,6 +19,8 @@ pub struct Cursors {
     fallback: LoadedCursor,
     boosted_icons: Vec<(CursorIcon, LoadedCursor)>,
     boosted_fallback: LoadedCursor,
+    scale: i32,
+    pointer_size: f32,
 }
 
 pub struct LoadedCursor {
@@ -67,8 +69,8 @@ const SHAPES: [CursorIcon; 35] = [
 ];
 
 impl Cursors {
-    pub fn load(scale: i32) -> Self {
-        let target = cursor_target(scale);
+    pub fn load(scale: i32, pointer_size: f32) -> Self {
+        let target = (cursor_target(scale) as f32 * pointer_size).round() as u32;
         let fallback = load_icon(CursorIcon::Default, scale, target, None).unwrap_or_else(|| {
             tracing::warn!("no usable Xcursor theme; drawing the built-in pointer");
             builtin_cursor(scale, None)
@@ -106,6 +108,14 @@ impl Cursors {
             fallback,
             boosted_icons,
             boosted_fallback,
+            scale,
+            pointer_size,
+        }
+    }
+
+    pub(crate) fn follow_pointer_size(&mut self, pointer_size: f32) {
+        if self.pointer_size != pointer_size {
+            *self = Self::load(self.scale, pointer_size);
         }
     }
 
@@ -307,6 +317,7 @@ smithay::render_elements! {
     PixelShader = PrimaryGpu<smithay::backend::renderer::gles::element::PixelShaderElement>,
     Rounded = crate::effects::RoundedTextureElement<R>,
     Texture = PrimaryGpu<smithay::backend::renderer::element::texture::TextureRenderElement<GlesTexture>>,
+    Filtered = PrimaryGpu<smithay::backend::renderer::gles::element::TextureShaderElement>,
 }
 
 #[cfg(test)]

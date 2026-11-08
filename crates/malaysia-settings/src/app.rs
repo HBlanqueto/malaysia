@@ -4,14 +4,20 @@ use bk::patterns::language::system_language_row;
 use bk::patterns::settings::{Pane, PaneGroup, SettingsWindow};
 use bk::popup_button::PopUpButton;
 use bk::prelude::*;
+use bk::styles::{Axis, RadioGroupStyle};
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, ScrollBars, TintParts, TintStrength,
-    TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope, lights_for,
-    load_appearance, palette,
+    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBars, TintParts,
+    TintStrength, TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope,
+    lights_for, load_appearance, palette,
 };
-use ctdesign::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
+use ctdesign::{
+    ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
+    SETTINGS, SPACE_3, TEXT_SIZES,
+};
+use freya_components::svg_viewer::SvgViewer;
+use torin::prelude::Gaps;
 
 use crate::localize::{tr, tr_list};
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
@@ -27,6 +33,16 @@ const STRENGTHS: [TintStrength; 4] = [
 ];
 const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
 const SCROLL_BARS: [ScrollBars; 2] = [ScrollBars::WhenScrolling, ScrollBars::Always];
+const MENU_BAR_SIZES: [MenuBarSize; 2] = [MenuBarSize::Default, MenuBarSize::Large];
+const COLOR_FILTERS: [ColorFilter; 4] = [
+    ColorFilter::Grayscale,
+    ColorFilter::RedGreen,
+    ColorFilter::GreenRed,
+    ColorFilter::BlueYellow,
+];
+const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
+const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
+const COLOR_FILTER_PENCILS_SIZE: (f32, f32) = (349.0, 130.0);
 type Text = fn() -> &'static str;
 
 const SHAPES: [(TrafficLightShape, Text); 2] = [
@@ -62,19 +78,28 @@ pub fn settings_window(
         .sidebar_resizable(false);
     let window = window.group(
         PaneGroup::new(None)
+            .pane(
+                Pane::new(
+                    "accessibility",
+                    tr!("accessibility"),
+                    Symbol::Accessibility,
+                    ACCESSIBILITY_TINT,
+                    accessibility(),
+                )
+                .page(Pane::new(
+                    "display",
+                    tr!("display"),
+                    Symbol::Display,
+                    ACCESSIBILITY_TINT,
+                    display(config, error),
+                )),
+            )
             .pane(Pane::new(
                 "appearance",
                 tr!("appearance"),
                 Symbol::CircleHalf,
                 SETTINGS.section_icon_bg,
                 appearance(config, dominant, resolved, error),
-            ))
-            .pane(Pane::new(
-                "accessibility",
-                tr!("accessibility"),
-                Symbol::Accessibility,
-                SETTINGS.section_icon_bg,
-                accessibility(config, error),
             )),
     );
     let message = error.read().clone();
@@ -231,22 +256,266 @@ fn wallpaper_tinting_row(config: &AppearanceConfig, error: State<Option<String>>
     }
 }
 
-fn accessibility(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
-    Form::new().section(
-        Section::titled(tr!("display")).row(
-            Row::new(tr!("wallpaper-tinting-in-light"))
-                .detail(tr!("wallpaper-tinting-in-light-help"))
-                .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
-                .control(
-                    Switch::new(tr!("wallpaper-tinting-in-light"))
-                        .on(config.wallpaper_tinting_in_light)
-                        .disabled(!config.wallpaper_tinting)
-                        .on_toggle(edit(error, |config, on: bool| {
-                            config.wallpaper_tinting_in_light = on;
-                        })),
+fn accessibility() -> Form {
+    Form::new()
+        .section(
+            Section::new().row(
+                Row::new(tr!("accessibility"))
+                    .symbol(Symbol::Accessibility, ACCESSIBILITY_TINT)
+                    .detail(tr!("accessibility-about")),
+            ),
+        )
+        .section(
+            Section::titled(tr!("vision")).row(
+                Row::page(tr!("display"), "display").symbol(Symbol::Display, ACCESSIBILITY_TINT),
+            ),
+        )
+}
+
+fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
+    let switch = |title: &'static str, on: bool, apply: fn(&mut AppearanceConfig, bool)| {
+        Row::new(title).control(
+            Switch::new(title)
+                .on(on)
+                .on_toggle(edit(error, move |config, on: bool| apply(config, on))),
+        )
+    };
+    let reduce_transparency = Row::new(tr!("reduce-transparency")).control(
+        Switch::new(tr!("reduce-transparency"))
+            .on(config.transparency_reduced())
+            .disabled(config.contrast)
+            .on_toggle(edit(error, |config, on: bool| {
+                config.reduce_transparency = on;
+            })),
+    );
+    let filters_off = !config.color_filters;
+    Form::new()
+        .section(
+            Section::new()
+                .row(switch(
+                    tr!("invert-colors"),
+                    config.invert_colors,
+                    |config, on| {
+                        config.invert_colors = on;
+                        if on && config.color_filter != ColorFilter::Grayscale {
+                            config.color_filters = false;
+                        }
+                    },
+                ))
+                .row(switch(
+                    tr!("increase-contrast"),
+                    config.contrast,
+                    |config, on| {
+                        config.contrast = on;
+                    },
+                ))
+                .row(if config.contrast {
+                    reduce_transparency.detail(tr!("reduce-transparency-contrast-help"))
+                } else {
+                    reduce_transparency
+                })
+                .row(
+                    Row::new(tr!("wallpaper-tinting-in-light"))
+                        .detail(tr!("wallpaper-tinting-in-light-help"))
+                        .keywords(tr_list!("wallpaper-tinting-in-light-keywords"))
+                        .control(
+                            Switch::new(tr!("wallpaper-tinting-in-light"))
+                                .on(config.wallpaper_tinting_in_light)
+                                .disabled(!config.wallpaper_tinting)
+                                .on_toggle(edit(error, |config, on: bool| {
+                                    config.wallpaper_tinting_in_light = on;
+                                })),
+                        ),
+                )
+                .row(switch(
+                    tr!("show-borders"),
+                    config.show_borders,
+                    |config, on| {
+                        config.show_borders = on;
+                    },
+                ))
+                .row(switch(
+                    tr!("differentiate-without-color"),
+                    config.differentiate_without_color,
+                    |config, on| config.differentiate_without_color = on,
+                ))
+                .row(
+                    Row::new(tr!("display-contrast")).control(option_column(
+                        Slider::stepped(tr!("display-contrast"), DISPLAY_CONTRAST.len())
+                            .value(nearest(&DISPLAY_CONTRAST, config.display_contrast))
+                            .labels(tr_list!(
+                                "display-contrast-normal",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "display-contrast-maximum"
+                            ))
+                            .on_change(edit(error, |config, index: usize| {
+                                config.display_contrast = DISPLAY_CONTRAST[index];
+                            })),
+                    )),
                 ),
-        ),
-    )
+        )
+        .section(
+            Section::titled(tr!("text"))
+                .row(
+                    Row::new(tr!("text-size"))
+                        .detail(tr!("text-size-help"))
+                        .control(option_column(
+                            Slider::stepped(tr!("text-size"), TEXT_SIZES.len())
+                                .value(nearest(&TEXT_SIZES, config.text_size))
+                                .labels(tr_list!(
+                                    "text-size-default",
+                                    "step-blank",
+                                    "step-blank",
+                                    "step-blank",
+                                    "step-blank",
+                                    "text-size-largest"
+                                ))
+                                .on_change(edit(error, |config, index: usize| {
+                                    config.text_size = TEXT_SIZES[index];
+                                })),
+                        )),
+                )
+                .row(
+                    Row::new(tr!("menu-bar-size")).control(
+                        RadioGroup::new(tr!("menu-bar-size"))
+                            .style(|style| RadioGroupStyle {
+                                axis: Axis::Horizontal,
+                                ..style
+                            })
+                            .option(tr!("menu-bar-size-default"))
+                            .option(tr!("menu-bar-size-large"))
+                            .selected(position(&MENU_BAR_SIZES, config.menu_bar_size))
+                            .on_change(edit(error, |config, index: usize| {
+                                config.menu_bar_size = MENU_BAR_SIZES[index];
+                            })),
+                    ),
+                ),
+        )
+        .section(
+            Section::titled(tr!("pointer"))
+                .row(
+                    switch(
+                        tr!("shake-to-locate"),
+                        config.shake_to_locate,
+                        |config, on| {
+                            config.shake_to_locate = on;
+                        },
+                    )
+                    .detail(tr!("shake-to-locate-help")),
+                )
+                .row(
+                    Row::new(tr!("pointer-size")).control(option_column(
+                        Slider::stepped(tr!("pointer-size"), POINTER_SIZES.len())
+                            .value(nearest(&POINTER_SIZES, config.pointer_size))
+                            .labels(tr_list!(
+                                "pointer-size-normal",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "step-blank",
+                                "pointer-size-large"
+                            ))
+                            .on_change(edit(error, |config, index: usize| {
+                                config.pointer_size = POINTER_SIZES[index];
+                            })),
+                    )),
+                ),
+        )
+        .section(
+            Section::titled(tr!("color-filters"))
+                .illustration(color_filter_pencils())
+                .row(switch(
+                    tr!("color-filters"),
+                    config.color_filters,
+                    |config, on| {
+                        config.color_filters = on;
+                        if on && config.color_filter != ColorFilter::Grayscale {
+                            config.invert_colors = false;
+                        }
+                    },
+                ))
+                .row(
+                    Row::new(tr!("color-filter-type")).control(
+                        COLOR_FILTER_NAMES
+                            .iter()
+                            .fold(PopUpButton::new(tr!("color-filter-type")), |popup, name| {
+                                popup.item(name())
+                            })
+                            .selected(position(&COLOR_FILTERS, config.color_filter))
+                            .on_change(edit(error, |config, index: usize| {
+                                config.color_filter = COLOR_FILTERS[index];
+                                if COLOR_FILTERS[index] != ColorFilter::Grayscale {
+                                    config.invert_colors = false;
+                                }
+                            })),
+                    ),
+                )
+                .row(
+                    Row::new(tr!("color-filter-intensity")).control(option_column(
+                        Slider::stepped(
+                            tr!("color-filter-intensity"),
+                            COLOR_FILTER_INTENSITY.len(),
+                        )
+                        .value(nearest(
+                            &COLOR_FILTER_INTENSITY,
+                            config.color_filter_intensity,
+                        ))
+                        .labels(tr_list!(
+                            "color-filter-intensity-low",
+                            "step-blank",
+                            "step-blank",
+                            "step-blank",
+                            "step-blank",
+                            "step-blank",
+                            "color-filter-intensity-high"
+                        ))
+                        .disabled(filters_off)
+                        .on_change(edit(error, |config, index: usize| {
+                            config.color_filter_intensity = COLOR_FILTER_INTENSITY[index];
+                        })),
+                    )),
+                ),
+        )
+}
+
+const COLOR_FILTER_NAMES: [Text; 4] = [
+    || tr!("color-filter-grayscale"),
+    || tr!("color-filter-red-green"),
+    || tr!("color-filter-green-red"),
+    || tr!("color-filter-blue-yellow"),
+];
+
+fn color_filter_pencils() -> Rect {
+    let (width, height) = COLOR_FILTER_PENCILS_SIZE;
+    rect()
+        .width(Size::fill())
+        .padding(Gaps::new(SPACE_3, 0.0, 0.0, 0.0))
+        .main_align(Alignment::Center)
+        .direction(Direction::Horizontal)
+        .child(
+            SvgViewer::new((
+                "color-filter-pencils",
+                Bytes::from_static(COLOR_FILTER_PENCILS),
+            ))
+            .width(Size::px(width))
+            .height(Size::px(height))
+            .show_loader(false),
+        )
+}
+
+fn nearest(steps: &[f32], value: f32) -> usize {
+    (0..steps.len())
+        .min_by(|&a, &b| {
+            (steps[a] - value)
+                .abs()
+                .total_cmp(&(steps[b] - value).abs())
+        })
+        .unwrap_or(0)
 }
 
 fn scheme_cards(

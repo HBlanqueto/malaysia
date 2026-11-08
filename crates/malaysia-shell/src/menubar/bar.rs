@@ -12,10 +12,11 @@ use bk::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
     ToplevelInfo, Toplevels, run_layer, use_status_items,
 };
+use ctappearance::MenuBarSize;
 use ctappearance::menubar::MenubarConfig;
 use ctdesign::{
-    MENUBAR_FONT_SIZE, MENUBAR_HEIGHT, MENUBAR_MARGIN, MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT,
-    SANS_FAMILIES,
+    MENUBAR_FONT_SIZE, MENUBAR_FONT_SIZE_LARGE, MENUBAR_HEIGHT, MENUBAR_MARGIN,
+    MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
 use torin::prelude::Gaps;
@@ -571,7 +572,10 @@ fn bar_root(background: Color) -> HStack {
             2.0 * MENUBAR_TEXT_LIFT,
             MENUBAR_MARGIN as f32,
         ))
-        .font_size(MENUBAR_FONT_SIZE);
+        .font_size(match theme::resolved().menu_bar_size {
+            MenuBarSize::Default => MENUBAR_FONT_SIZE,
+            MenuBarSize::Large => MENUBAR_FONT_SIZE_LARGE,
+        });
     for family in SANS_FAMILIES {
         root = root.font_family(family);
     }
