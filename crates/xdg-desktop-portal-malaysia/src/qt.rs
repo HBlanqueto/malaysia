@@ -29,27 +29,51 @@ fn enabled() -> bool {
         .is_none_or(|options| options.qt_bridge)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Qt {
+    Five,
+    Six,
+}
+
+impl Qt {
+    fn tool(self) -> &'static str {
+        match self {
+            Self::Five => "qt5ct",
+            Self::Six => "qt6ct",
+        }
+    }
+}
+
 pub struct Bridge {
-    dir: PathBuf,
+    config_home: PathBuf,
 }
 
 impl Bridge {
     pub fn from_env() -> Option<Self> {
-        let dir = ctappearance::xdg::config_home()?.join("qt6ct");
-        Some(Self { dir })
+        let config_home = ctappearance::xdg::config_home()?;
+        Some(Self { config_home })
     }
 
     #[cfg(test)]
-    fn at(dir: PathBuf) -> Self {
-        Self { dir }
+    fn at(config_home: PathBuf) -> Self {
+        Self { config_home }
     }
 
     fn apply(&self, appearance: &AppearanceConfig, dominant: Option<Rgba>) -> io::Result<()> {
-        let scheme = self.dir.join("colors").join(SCHEME_FILE);
-        write_if_changed(&scheme, &color_scheme(appearance, dominant))?;
-        let conf = self.dir.join("qt6ct.conf");
+        let scheme = color_scheme(appearance, dominant);
+        for qt in [Qt::Six, Qt::Five] {
+            self.apply_to(qt, appearance, &scheme)?;
+        }
+        Ok(())
+    }
+
+    fn apply_to(&self, qt: Qt, appearance: &AppearanceConfig, scheme_text: &str) -> io::Result<()> {
+        let dir = self.config_home.join(qt.tool());
+        let scheme = dir.join("colors").join(SCHEME_FILE);
+        write_if_changed(&scheme, scheme_text)?;
+        let conf = dir.join(format!("{}.conf", qt.tool()));
         if is_symlink(&conf) {
-            tracing::warn!(path = %conf.display(), "qt6ct.conf is a symlink; the Qt bridge leaves it alone");
+            tracing::warn!(path = %conf.display(), "the Qt bridge leaves a symlinked config alone");
             return Ok(());
         }
         let scale = appearance.text_size_for(Toolkit::Qt);
@@ -62,8 +86,8 @@ impl Bridge {
                 "color_scheme_path",
                 scheme.display().to_string(),
             ),
-            ("Fonts", "general", font(BODY, scale)),
-            ("Fonts", "fixed", font(MONO, scale)),
+            ("Fonts", "general", font(qt, BODY, scale)),
+            ("Fonts", "fixed", font(qt, MONO, scale)),
         ] {
             text = set_ini_key(&text, section, key, &value);
         }
@@ -76,20 +100,39 @@ impl Bridge {
         }
         let default = AppearanceConfig::default();
         if let Err(error) = self.apply(appearance.unwrap_or(&default), dominant) {
-            tracing::warn!(%error, "Qt bridge could not update qt6ct");
+            tracing::warn!(%error, "Qt bridge could not update qt5ct and qt6ct");
         }
     }
 }
 
-// QFont::fromString reads Qt 6's 16 fields: family, points, pixels, hint, weight, flags.
-fn font(face: Font, scale: f32) -> String {
-    let points = face.size as f32 * 0.75 * scale;
-    format!(
-        "\"{},{},-1,5,{},0,0,0,0,0,0,0,0,0,0,1\"",
-        face.family,
-        (points * 100.0).round() / 100.0,
-        face.weight
-    )
+// QFont::toString: Qt 6 writes 16 fields with CSS weights, Qt 5 10 fields with its 0–99 weights.
+fn font(qt: Qt, face: Font, scale: f32) -> String {
+    let points = (face.size as f32 * 0.75 * scale * 100.0).round() / 100.0;
+    match qt {
+        Qt::Six => format!(
+            "\"{},{points},-1,5,{},0,0,0,0,0,0,0,0,0,0,1\"",
+            face.family, face.weight
+        ),
+        Qt::Five => format!(
+            "\"{},{points},-1,5,{},0,0,0,0,0\"",
+            face.family,
+            qt5_weight(face.weight)
+        ),
+    }
+}
+
+fn qt5_weight(weight: u16) -> u16 {
+    match weight {
+        ..=150 => 0,
+        151..=250 => 12,
+        251..=350 => 25,
+        351..=450 => 50,
+        451..=550 => 57,
+        551..=650 => 63,
+        651..=750 => 75,
+        751..=850 => 81,
+        _ => 87,
+    }
 }
 
 // QPalette::ColorRole order, Accent last (Qt 6.6); qt6ct reads it in Qt6CT::loadColorScheme.
@@ -183,7 +226,8 @@ mod tests {
 
     #[test]
     fn the_qt_text_size_scales_the_point_size_and_keeps_other_keys() {
-        let dir = temp_dir("fonts");
+        let home = temp_dir("fonts");
+        let dir = home.join("qt6ct");
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("qt6ct.conf"), "[Appearance]\nicon_theme=Papirus\n").unwrap();
         let appearance = AppearanceConfig {
@@ -193,7 +237,7 @@ mod tests {
             },
             ..AppearanceConfig::default()
         };
-        Bridge::at(dir.clone()).apply(&appearance, None).unwrap();
+        Bridge::at(home.clone()).apply(&appearance, None).unwrap();
         let conf = fs::read_to_string(dir.join("qt6ct.conf")).unwrap();
         assert!(conf.contains("icon_theme=Papirus"), "{conf}");
         assert!(conf.contains("custom_palette=true"), "{conf}");
@@ -202,5 +246,13 @@ mod tests {
             "{conf}"
         );
         assert!(dir.join("colors").join(SCHEME_FILE).exists());
+        let qt5 = fs::read_to_string(home.join("qt5ct/qt5ct.conf")).unwrap();
+        assert!(
+            qt5.contains(&format!(
+                "general=\"{},19.5,-1,5,50,0,0,0,0,0\"",
+                BODY.family
+            )),
+            "{qt5}"
+        );
     }
 }

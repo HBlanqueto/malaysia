@@ -123,7 +123,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.color_filters` | bool | `false` | **active** | compositor: applies `color_filter` to the screen, **System Settings › Accessibility › Display** |
 | `appearance.color_filter` | `"grayscale"` \| `"red_green"` \| `"green_red"` \| `"blue_yellow"` | `"grayscale"` | **active** | compositor: grayscale or a color-blindness filter (ADR 0066) |
 | `appearance.color_filter_intensity` | a value of `COLOR_FILTER_INTENSITY` | `1.0` | **active** | compositor: blends the filter with the original colors |
-| `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `~/.config/qt6ct/qt6ct.conf` (Fusion, the Malaysia palette, the Qt text size) and `~/.config/qt6ct/colors/malaysia.conf`; other keys stay (ADR 0067). Only the portal reads it |
+| `appearance.qt_bridge` | bool | `true` | **active** | portal: writes `qt6ct.conf` and `qt5ct.conf` in `~/.config/qt6ct` and `~/.config/qt5ct` (Fusion, the Malaysia palette in `colors/malaysia.conf`, the Qt text size); other keys stay (ADR 0067). Only the portal reads it |
 | `appearance.gtk_bridge` | bool | `true` | **active** | portal: exact accent and tint in GTK 3/4 and libadwaita (`~/.config/gtk-{3,4}.0`, ADR 0050) and live through `org.malaysia.appearance` (ADR 0055). Only the portal reads it |
 
 macOS: "Appearance: **Light / Dark / Auto**" and "**Accent color**"; "Increase

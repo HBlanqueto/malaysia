@@ -22,6 +22,10 @@ runs three kinds of app, and each reads text size its own way:
   `xdgdesktopportal` theme reads only the color scheme and contrast. qt6ct sets
   the font and palette from `~/.config/qt6ct/qt6ct.conf` and reloads it when
   the folder changes (`qt6ctplatformtheme.cpp`).
+- **Qt 5** has qt5ct, by the same author, with the same keys in
+  `~/.config/qt5ct/qt5ct.conf` and the same palette files. Its plugin answers
+  to `qt5ct` and `qt6ct` (`qt5ct.json`), and qt6ct's to both too, so one
+  `QT_QPA_PLATFORMTHEME` serves both versions.
 
 ## Decision
 
@@ -32,23 +36,25 @@ runs three kinds of app, and each reads text size its own way:
    right away.
 3. **GTK 3.** The compositor sets `GDK_DPI_SCALE` on every app it starts,
    unless the session already has one. An app takes it when it opens again.
-4. **Qt 6 through qt6ct.** The compositor sets `QT_QPA_PLATFORMTHEME=qt6ct` in
-   its session, unless one is set. The portal's Qt bridge (`qt_bridge`,
-   default `true`) writes, on every appearance change:
+4. **Qt 5 and 6 through qt5ct and qt6ct.** The compositor sets
+   `QT_QPA_PLATFORMTHEME=qt6ct` in its session, unless one is set. The
+   portal's Qt bridge (`qt_bridge`, default `true`) writes, for each tool and on
+   every appearance change:
    - `colors/malaysia.conf`: the 22 `QPalette` roles from the resolved Tengen
      surfaces and inks, so Qt follows light, dark and the accent;
-   - in `qt6ct.conf`, only `style = Fusion`, `custom_palette`,
-     `color_scheme_path` and the `general` and `fixed` fonts (`BODY` and
-     `MONO`, in points, times the Qt size). Other keys stay.
-5. **NixOS.** The module installs qt6ct and enables `qt` so `QT_PLUGIN_PATH`
-   finds it, without a global `QT_QPA_PLATFORMTHEME`.
+   - in `qt6ct.conf` and `qt5ct.conf`, only `style = Fusion`,
+     `custom_palette`, `color_scheme_path` and the `general` and `fixed` fonts
+     (`BODY` and `MONO`, in points, times the Qt size; Qt 5 gets its 10-field
+     font string and 0–99 weight). Other keys stay.
+5. **NixOS.** The module installs qt5ct and qt6ct and enables `qt` so
+   `QT_PLUGIN_PATH` finds them, without a global `QT_QPA_PLATFORMTHEME`.
 6. **System Settings.** Accessibility › Display › Text size is a page: the
    preferred size slider and, under Apps, a menu per toolkit with «Use
    preferred reading size» or a size.
 
 ## Consequences
 
-Qt 5 apps keep their default theme. Apps started outside the compositor (a
+Apps started outside the compositor (a
 D-Bus activated service, another session) do not get `GDK_DPI_SCALE` or
 `QT_QPA_PLATFORMTHEME`. A Qt style other than Fusion needs `qt_bridge = false`.
 

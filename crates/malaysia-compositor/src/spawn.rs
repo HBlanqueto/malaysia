@@ -55,7 +55,7 @@ pub fn spawn(mut command: Command, config: &Config) -> io::Result<Child> {
 #[cfg(not(test))]
 #[allow(unsafe_code)]
 pub fn export_session_env(config: &Config) {
-    // ADR 0067: Qt 6 apps read their palette and font from qt6ct, which the portal writes.
+    // ADR 0067: qt5ct and qt6ct both answer to this key; the portal writes their palette and font.
     if std::env::var_os("QT_QPA_PLATFORMTHEME").is_none() {
         // SAFETY: runs single-threaded during startup, before any other thread reads the environment.
         unsafe {

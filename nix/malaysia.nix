@@ -49,6 +49,7 @@ in
     environment.systemPackages = [
       cfg.package
       pkgs.hwdata
+      pkgs.libsForQt5.qt5ct
       pkgs.qt6Packages.qt6ct
     ]
     ++ lib.optional cfg.globalMenu.gtk3.enable appmenuGtkModule;
