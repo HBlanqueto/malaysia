@@ -2,14 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use async_channel::{Receiver, Sender};
 use bk::password::{PasswordField, State as FieldState};
+use bk::prelude::*;
 use bk::shell::{SessionUnlock, run_lock};
 use ctdesign::{
     LOCK_FIELD_HEIGHT, LOCK_FIELD_WIDTH, LOCK_FONT_SIZE, LOCK_LABEL_FONT_SIZE, LOCK_LABEL_OFFSET,
     LOCK_MASK_FONT_SIZE, LOCK_TITLE_SCALE,
 };
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Size};
 
 use crate::localize::tr;
 use crate::pam;

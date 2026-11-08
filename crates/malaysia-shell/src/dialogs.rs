@@ -3,25 +3,22 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use bk::controls::{Button, ControlSize};
 use bk::menu::measure_text_weight;
 use bk::patterns::about::AboutView;
-use bk::platform::{Timers, WindowControls, WindowOptions, run_window};
+use bk::platform::{Timers, WindowControls};
+use bk::prelude::*;
 use bk::shell::{
     Anchors, KeyboardInteractivity, Layer, LayerSpec, ToplevelInfo, Toplevels, run_layer,
 };
-use bk::style::Palette;
-use bk::titlebar::Titlebar;
 use ctdesign::{
-    ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP, ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP,
-    ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM, ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP,
-    ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE, ABOUT_VALUE_WIDTH, ABOUT_WIDTH, BODY, CALLOUT, CAPTION,
-    DIALOG_PADDING, HEADLINE, SIDEBAR, SPACE_2, TITLEBAR,
+    ABOUT_APP_HEIGHT, ABOUT_APP_ICON, ABOUT_APP_WIDTH, ABOUT_BUTTON_GAP, ABOUT_COLUMN_GAP,
+    ABOUT_DRAWING_HEIGHT, ABOUT_DRAWING_TOP, ABOUT_DRAWING_WIDTH, ABOUT_FOOTER_BOTTOM,
+    ABOUT_HEIGHT, ABOUT_SPEC_ROW_GAP, ABOUT_SPECS_GAP, ABOUT_TITLE_GAP, ABOUT_TITLE_SIZE,
+    ABOUT_VALUE_WIDTH, ABOUT_WIDTH, DIALOG_PADDING, SIDEBAR, TITLEBAR,
 };
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Content, Direction, Gaps, Size};
+use torin::prelude::{Content, Gaps};
 
 use crate::desktop::{self, DesktopEntry};
 use crate::launcher::{IconData, app_icon, load_icon};
@@ -36,8 +33,7 @@ const FORCE_QUIT_SIZE: (u32, u32) = (420, 400);
 pub const ABOUT_APP_ID: &str = "about";
 pub const ABOUT_APP_INFO_ID: &str = "about-app";
 const ABOUT_SIZE: (u32, u32) = (ABOUT_WIDTH, ABOUT_HEIGHT);
-const ABOUT_APP_SIZE: (u32, u32) = (260, 250);
-const ABOUT_APP_ICON_SIZE: f32 = 64.0;
+const ABOUT_APP_SIZE: (u32, u32) = (ABOUT_APP_WIDTH, ABOUT_APP_HEIGHT);
 const ROW_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 22.0;
 
@@ -870,7 +866,7 @@ impl App for AboutAppInfo {
             .child(Titlebar::new().close_only(true).title("").into_element())
             .child(rect().width(Size::fill()).height(Size::flex(1.0)).child({
                 let about = AboutView::new(
-                    app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON_SIZE),
+                    app_icon(self.icon.as_ref(), &self.name, ABOUT_APP_ICON),
                     self.name.clone(),
                     self.app_id.clone(),
                 );

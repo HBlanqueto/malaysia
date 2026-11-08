@@ -7,14 +7,14 @@ use bk::menu::{
 use bk::platform::{
     PopupAnchor, PopupConstraintAdjustment, PopupGravity, PopupId, PopupSpec, Popups,
 };
+use bk::prelude::*;
 use ctdesign::{
     MENUBAR_APP_NAME_WEIGHT, MENUBAR_HEIGHT, MENUBAR_TEXT_LIFT, MENUBAR_TITLE_BLEED,
     MENUBAR_TITLE_MAX_WIDTH, MENUBAR_TITLE_PADDING_X, MenuPalette, Rgba, SYMBOL,
 };
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Gaps, Position, Size, SizeFnContext};
+use torin::prelude::{Gaps, Position, SizeFnContext};
 
 use crate::menubar::icons;
 use bk::theme;

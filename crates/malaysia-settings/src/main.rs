@@ -4,12 +4,11 @@ mod previews;
 mod state;
 
 use bk::app::{Instance, Launch, launch};
-use bk::platform::{WindowOptions, run_window};
+use bk::prelude::*;
 use bk::theme;
 use ctappearance::{load_appearance, load_dominant};
 use ctdesign::SETTINGS;
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
 
 use crate::app::settings_window;
 use crate::localize::tr;

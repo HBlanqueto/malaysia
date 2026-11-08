@@ -1,10 +1,9 @@
 use bk::choices::{ChoiceCards, ColorWell, RadioGroup};
-use bk::controls::{Checkbox, Slider};
 use bk::menu::MenuIcon;
 use bk::patterns::language::system_language_row;
 use bk::patterns::settings::{Pane, PaneGroup, SettingsWindow};
 use bk::popup_button::PopUpButton;
-use bk::symbol::Symbol;
+use bk::prelude::*;
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
@@ -13,8 +12,6 @@ use ctappearance::{
     load_appearance, palette,
 };
 use ctdesign::{ACCENT_SWATCHES, MENU_POPOVER, Rgba, SETTINGS};
-use freya_core::prelude::*;
-use torin::prelude::{Direction, Size};
 
 use crate::localize::{tr, tr_list};
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};

@@ -1,10 +1,8 @@
 use bk::menu::MenuItem;
-use bk::modifiers::ViewModifiers;
+use bk::prelude::*;
 use bk::shell::{Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer};
 use ctdesign::{DOCK_BAR_HEIGHT, DOCK_FONT_SIZE, DOCK_GAP, DOCK_PADDING, DOCK_TILESIZE};
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Direction, Size};
 
 use bk::theme;
 

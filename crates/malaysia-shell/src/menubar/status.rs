@@ -2,10 +2,10 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use bk::prelude::*;
 use bk::shell::{StatusHost, TrayItem, pixmap_image};
 use ctdesign::{MENUBAR_TITLE_PADDING_X, SYMBOL};
-use freya_core::prelude::*;
-use torin::prelude::{Gaps, Size};
+use torin::prelude::Gaps;
 
 use crate::launcher::{IconData, app_icon, load_icon_in};
 use crate::menubar::menu::MenuTitleSpec;

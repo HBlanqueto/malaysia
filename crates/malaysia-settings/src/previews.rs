@@ -1,6 +1,6 @@
+use bk::prelude::*;
 use ctdesign::{SETTINGS, TITLEBAR};
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Position, Size};
+use torin::prelude::Position;
 
 use bk::theme::color as rgba;
 use ctappearance::{

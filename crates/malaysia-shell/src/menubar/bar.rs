@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use bk::app::{load_defaults, use_defaults};
 use bk::menu::{ItemsSource, MenuItem};
 use bk::platform::Timers;
+use bk::prelude::*;
 use bk::shell::{
     Anchors, GtkMenusAddress, KeyboardInteractivity, Layer as SurfaceLayer, LayerSpec,
     ToplevelInfo, Toplevels, run_layer, use_status_items,
@@ -17,8 +18,7 @@ use ctdesign::{
     SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Gaps, Size};
+use torin::prelude::Gaps;
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;

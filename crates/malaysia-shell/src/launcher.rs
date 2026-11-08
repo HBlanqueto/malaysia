@@ -1,12 +1,11 @@
 use std::{cell::Cell, env, path::PathBuf, rc::Rc, time::Duration};
 
 use bk::animation::Spring;
-use bk::controls::SearchField;
 use bk::platform::Timers;
+use bk::prelude::*;
 use bk::shell::{
     Activation, Anchors, KeyboardInteractivity, Layer, LayerSpec, Toplevels, run_layer,
 };
-use bk::symbol::Symbol;
 use bk::views::feedback::ContentUnavailableView;
 use ctdesign::{
     LAUNCHER_CLOSE_MS, LAUNCHER_CORNER_RADIUS, LAUNCHER_FONT_SIZE, LAUNCHER_HEIGHT,
@@ -18,12 +17,10 @@ use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::svg_viewer::SvgViewer;
 use freya_core::integration::AppComponent;
-use freya_core::prelude::*;
-use torin::prelude::{Alignment, Direction, Gaps, Size};
+use torin::prelude::Gaps;
 
 use crate::desktop::{self, DesktopEntry};
 use crate::localize::tr;
-use bk::style::Palette;
 use bk::theme;
 
 #[derive(Clone, PartialEq)]
