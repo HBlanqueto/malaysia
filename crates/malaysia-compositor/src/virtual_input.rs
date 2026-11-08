@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
 use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::input_method::InputMethodSeat;
@@ -81,7 +79,7 @@ impl State {
             return;
         };
         if let Some((active, active_keymap)) = &mut self.virtual_keymap
-            && *active_keymap == keymap
+            && *active_keymap == keymap.id()
         {
             *active = device.clone();
             return;
@@ -89,11 +87,12 @@ impl State {
         let Some(keyboard) = self.seat.get_keyboard() else {
             return;
         };
-        if let Err(error) = keyboard.set_keymap_from_string(self, keymap.to_string()) {
+        let id = keymap.id();
+        if let Err(error) = keyboard.set_keymap_from_keymap_file(self, keymap) {
             tracing::warn!(?error, "could not apply the virtual keyboard keymap");
             return;
         }
-        self.virtual_keymap = Some((device.clone(), Arc::clone(&keymap)));
+        self.virtual_keymap = Some((device.clone(), id));
     }
 
     pub(crate) fn restore_configured_keymap(&mut self) {

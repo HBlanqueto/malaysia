@@ -56,7 +56,7 @@ changelog.
 | barrierkit | `1a4ef8d`, no longer on its `main` | `7172d25` | crate names (its ADR 0062), view and menu names (0063), Freya 0.5 | a pin that stays on `main`, Vulkan kit, Skia m153 | done, `45c67ef` |
 | `freya-*`, `torin` | `=0.4.3` | `=0.5.0` | `Platform::get().current_window()` | the kit's version | done, `45c67ef` |
 | `smithay-client-toolkit` | 0.19.2 | 0.21.1 | nothing at 0.20 | one sctk, calloop and calloop-wayland-source less | 0.20, barrierkit's, `16d4e13` |
-| Smithay | `023b78b1` (2026-10-15) | `65aa86fa` (2026-11-03), 27 commits | winit `0.31.0-beta.3` → `beta.4`; `KeymapFile::change_keymap` and `inject_text_keysyms(time)` change, neither used here | fixes: GLES y-inverted texture matrix, leaked drm_syncobj timeline handles, libinput queued events, `Rectangle::subtract_rects_many_in_place`, layer kept on unmap, `wl_output.done` for v1, tablet frame order | **stop point:** recommended, waiting for approval |
+| Smithay | `023b78b1` (2026-10-15) | `65aa86fa` (2026-11-03), 27 commits | winit `0.31.0-beta.3` → `beta.4`; virtual-keyboard now hands out a `KeymapFile` (`6b37edc0`), which `virtual_input.rs` uses | fixes: GLES y-inverted texture matrix, leaked drm_syncobj timeline handles, libinput queued events, `Rectangle::subtract_rects_many_in_place`, layer kept on unmap, `wl_output.done` for v1, tablet frame order | done, approved 2026-11-08 |
 | `wgpu` | 24.0.5 | 30.0.1 | six majors: `request_adapter` returns `Result` (25), `InstanceDescriptor` takes the display handle (29) and more; the wallpaper uses about six entry points | current ecosystem and fixes | **stop point:** its own step after approval |
 | `toml`, `png`, `zbus` | 0.8, 0.17, 5 | 1.2, 0.18, 6 | barrierkit pins the old ones | bumping only here compiles both | keep in step with barrierkit |
 | `calloop`, `nix`, `cosmic-text`, `libheif-rs`, `zune-jpeg`, `wayland-*`, `xkbcommon` | latest compatible | — | — | — | nothing to do |
@@ -95,7 +95,6 @@ dominate, and neither the profile nor the splits change that.
 
 ## 6. Pending
 
-1. Approve or reject the Smithay bump (section 3).
 2. Approve or reject wgpu 30 for the wallpaper (section 3).
 3. Licences: `cargo deny` rejects BSL-1.0, CC0-1.0, MPL-2.0 and
    Apache-2.0 WITH LLVM-exception, all already in the graph; allow them

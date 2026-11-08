@@ -12,7 +12,7 @@ Pin Smithay to `master` by revision:
 
 ```
 https://github.com/Smithay/smithay
-023b78b1c5a05ca512767cacc07efca55fae8be4
+65aa86fa5236e41775c313408102a5d5c2d1e2ca
 ```
 
 `smithay-otto` is not adopted; it remains only as a reference.

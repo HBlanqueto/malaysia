@@ -145,7 +145,7 @@ impl CompositorHandler for State {
 
     fn commit(&mut self, surface: &WlSurface) {
         log_committed_buffer_type(surface);
-        // Smithay 023b78b1 renderer/utils/mod.rs:221-226 drops empty damage; a new buffer needs full damage.
+        // Smithay 65aa86fa renderer/utils/mod.rs:221-226 drops empty damage; a new buffer needs full damage.
         with_states(surface, |states| {
             let mut cached = states.cached_state.get::<SurfaceAttributes>();
             let attrs = cached.current();

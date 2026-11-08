@@ -96,7 +96,7 @@ wgpu = { version = "24", default-features = false, features = ["wgsl"] }
 raw-window-handle = "0.6"
 bytemuck = { version = "1", features = ["derive"] }
 
-smithay = { git = "https://github.com/Smithay/smithay", rev = "023b78b1c5a05ca512767cacc07efca55fae8be4", default-features = false, features = [
+smithay = { git = "https://github.com/Smithay/smithay", rev = "65aa86fa5236e41775c313408102a5d5c2d1e2ca", default-features = false, features = [
     "backend_winit",
     "backend_drm",
     "backend_gbm",

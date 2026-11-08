@@ -107,7 +107,7 @@ pub struct State {
     pub(crate) keymap: crate::keymap::Keymap,
     pub(crate) virtual_keymap: Option<(
         smithay::wayland::virtual_keyboard::VirtualKeyboardDevice,
-        std::sync::Arc<str>,
+        smithay::input::keyboard::KeymapFileId,
     )>,
     pub(crate) ime_popups: Vec<smithay::wayland::input_method::PopupSurface>,
     pub(crate) activity_noted: bool,

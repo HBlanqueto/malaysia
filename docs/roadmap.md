@@ -29,7 +29,7 @@ each decision lives in the ADRs; the open findings, in [`debt.md`](debt.md).
 
 ### 0 — Scaffolding
 
-Cargo workspace, Smithay pinned by revision (`023b78b1`), `tracing` and coordinate
+Cargo workspace, Smithay pinned by revision (ADR 0028), `tracing` and coordinate
 types. **Done.** Divergence: the types live in `malaysia-scene`, not
 in the compositor (ADR 0001), and `ctdesign` is not empty. Test: `./dev.sh run`.
 

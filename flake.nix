@@ -70,8 +70,8 @@
 
           cargoLock = ./Cargo.lock;
           outputHashes = {
-            "git+https://github.com/Smithay/smithay?rev=023b78b1c5a05ca512767cacc07efca55fae8be4#023b78b1c5a05ca512767cacc07efca55fae8be4" =
-              "sha256-UZK11JYGEYdrNu/ByRo2U98QzApob+IjT55k9eqRdbE=";
+            "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
+              "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
             "git+https://github.com/HBlanqueto/barrierkit?rev=7172d251e3c047ab512e71e0ea5021a70d4e4c00#7172d251e3c047ab512e71e0ea5021a70d4e4c00" =
               "sha256-eLXwB/PMgfnRIdswoMNm+ILr+in31bSvB1XFiYc4NAo=";
           };
