@@ -77,8 +77,8 @@ Aplica a decoraciones, chrome, sombras, blur, bordes, temas y shell.
   Override con `MALAYSIA_CONFIG_DIR`/`MALAYSIA_DATA_DIR`. Las opciones están
   tipadas en `crates/malaysia-compositor/src/config.rs`; cambia **ambos** sitios. El comando `domain` (sintaxis `defaults`) y
   la app de ajustes hablarán por D-Bus (`org.malaysia.Compositor1`, ADR 0021).
-- **Wallpaper:** `wallpaper.domain` (en `.local/share/malaysia/`) lleva el
-  catálogo y la selección; lo dibuja `malaysia-wallpaper` (ADR 0049,
+- **Wallpaper:** `wallpaper-selection.state` (en `.local/share/malaysia/`) lleva
+  la selección por escritorio; lo dibuja `malaysia-wallpaper` (ADR 0049,
   Vulkan/wgpu por dmabuf) en la capa `Background`.
 - **Investigación:** `docs/research.md` resume macOS, GNOME y Otto.
 - **Interfaz:** `docs/architecture/interface.md` (Tengen, capas, shell,

@@ -404,7 +404,7 @@ mod tests {
     #[test]
     fn without_a_selection_the_default_wallpaper_is_used() {
         let dir = scratch("default");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         let state = dir.join("wallpaper.state");
         let wallpaper = reload(&Wallpaper::default(), &store, &state);
         assert!(
@@ -419,7 +419,7 @@ mod tests {
         let dir = scratch("selection");
         touch(&dir, "bandura.jpg");
         let mint = touch(&dir, "Solid Mint.png");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         std::fs::write(
             &store,
             format!(
@@ -438,7 +438,7 @@ mod tests {
         let dir = scratch("custom");
         touch(&dir, "Black.png");
         touch(&dir, "Yellow.png");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
         let state = dir.join("wallpaper.state");
         let wallpaper = reload(&Wallpaper::default(), &store, &state);
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn a_missing_selection_at_startup_uses_the_embedded_default() {
         let dir = scratch("missing");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         let state = dir.join("wallpaper.state");
         std::fs::write(
             &store,
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn editing_the_store_loads_the_new_selection() {
         let dir = scratch("reload");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         let state = dir.join("wallpaper.state");
         let orange = fixture_path("orange.jpg");
         std::fs::write(
@@ -520,7 +520,7 @@ mod tests {
     #[test]
     fn an_unreadable_wallpaper_keeps_the_previous_image() {
         let dir = scratch("unreadable");
-        let store = dir.join("wallpaper.domain");
+        let store = dir.join("wallpaper-selection.state");
         let state = dir.join("wallpaper.state");
         let orange = fixture_path("orange.jpg");
         std::fs::write(

@@ -93,7 +93,7 @@ impl Drop for OutputSurface {
 
 impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
-        let store_path = data_dir().join("wallpaper.domain");
+        let store_path = data_dir().join("wallpaper-selection.state");
         let state_path = ctappearance::wallpaper_state_path();
         let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
 

@@ -30,7 +30,7 @@ directories — preferences and state:
 └── debug.domain
 
 ~/.local/share/malaysia/       ← ~/Library/Application Support
-├── wallpaper.domain       ← catalog + current selection ([desktops]), like
+├── wallpaper-selection.state ← current wallpaper per desktop ([desktops]), like
 │                            com.apple.wallpaper
 ├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
 └── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
@@ -287,19 +287,19 @@ selection points to a file that does not exist or does not decode. If `wallpaper
 points to another folder and there is no selection, `malaysia-dream.heic` still shows.
 
 **Like macOS, the current selection lives in a separate store**:
-`~/.local/share/malaysia/wallpaper.domain` (the equivalent of `~/Library/Application
+`~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of `~/Library/Application
 Support`, where macOS keeps `com.apple.wallpaper`) — per desktop, with a `file://`
 to the image:
 
 ```toml
-# ~/.local/share/malaysia/wallpaper.domain  (current selection, per desktop)
+# ~/.local/share/malaysia/wallpaper-selection.state  (current selection, per desktop)
 [desktops]
 default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, malaysia-dream.heic
 ```
 
 Editing that file changes the wallpaper **live** (`malaysia-wallpaper` watches the
-store and repaints). The catalog (which wallpapers exist) and the current selection (what
-is shown) are together in the `wallpaper.domain` domain; the catalog is in the
+store and repaints). The preferences above (`dir`, `scale`, `shuffle`) go in
+`~/.config/malaysia/wallpaper.domain` once they are read; the catalog is in the
 system (`share/wallpapers/`). On a wallpaper change, the client writes the dominant
 color to `wallpaper.state` (`dominant = [r, g, b]`) for the window tint
 and the portal's `accent-color`.
@@ -485,12 +485,14 @@ show-recents = true
 ```
 
 ```toml
-# ~/.local/share/malaysia/wallpaper.domain
+# ~/.config/malaysia/wallpaper.domain  (pending: not read yet)
 dir = "/run/current-system/sw/share/wallpapers/solid-colors"
 scale = "fill"                  # fill | stretch | fit | center (macOS words)
 shuffle = false
+```
 
-# Current selection per desktop (like com.apple.wallpaper):
+```toml
+# ~/.local/share/malaysia/wallpaper-selection.state  (current selection per desktop, like com.apple.wallpaper)
 [desktops]
 default = "file:///run/current-system/sw/share/wallpapers/solid-colors/Solid Mint.png"
 ```
