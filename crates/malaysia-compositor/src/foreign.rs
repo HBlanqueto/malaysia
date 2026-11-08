@@ -98,6 +98,18 @@ fn advertise_to_manager(state: &mut State, id: WindowId, manager: &ZwlrForeignTo
     manager.toplevel(&handle);
     handle.title(title);
     handle.app_id(app_id);
+    for output in state.output.client_outputs(&client) {
+        handle.output_enter(&output);
+    }
+    if handle.version() >= 3
+        && let Some(parent) = state.windows.parent_of(id)
+        && let Some(parent) = state
+            .foreign
+            .management
+            .handle_for_client(parent, client.id())
+    {
+        handle.parent(Some(parent));
+    }
     handle.state(state.foreign_states_for(id));
     handle.done();
     state.foreign.management.handles.push((id, handle));
@@ -181,6 +193,12 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
             }
             zwlr_foreign_toplevel_handle_v1::Request::UnsetMaximized => {
                 state.set_maximized(id, false);
+            }
+            zwlr_foreign_toplevel_handle_v1::Request::SetFullscreen { output: _ } => {
+                state.infinity_set_fullscreen(id, true);
+            }
+            zwlr_foreign_toplevel_handle_v1::Request::UnsetFullscreen => {
+                state.infinity_set_fullscreen(id, false);
             }
             _ => {}
         }
