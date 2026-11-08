@@ -103,7 +103,7 @@ fn on_system_action_with(
             }
         }
         "sleep" => {
-            std::thread::spawn(|| power::run(PowerAction::Suspend));
+            std::thread::spawn(power::suspend);
         }
         "restart" => spawn_component_with("power", &[PowerAction::Restart.arg()]),
         "shutdown" => spawn_component_with("power", &[PowerAction::ShutDown.arg()]),

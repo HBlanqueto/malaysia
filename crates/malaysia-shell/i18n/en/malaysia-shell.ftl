@@ -168,12 +168,6 @@ power-log-out-countdown = { $seconds ->
    *[other] If you do nothing, you will be logged out automatically in { $seconds } seconds.
 }
 power-log-out-button = Log Out
-power-sleep-question = Are you sure you want to put your computer to sleep now?
-power-sleep-countdown = { $seconds ->
-    [one] If you do nothing, the computer will sleep automatically in { $seconds } second.
-   *[other] If you do nothing, the computer will sleep automatically in { $seconds } seconds.
-}
-power-sleep-button = Sleep
 
 force-quit-title = Force Quit Applications
 force-quit-body = If an app doesn’t respond, select it and click Force Quit. You’ll lose any unsaved changes.

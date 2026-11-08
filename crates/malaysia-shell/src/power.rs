@@ -4,7 +4,6 @@ const MANAGER: &str = "org.freedesktop.login1.Manager";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PowerAction {
-    Suspend,
     Restart,
     ShutDown,
     LogOut,
@@ -13,7 +12,6 @@ pub enum PowerAction {
 impl PowerAction {
     pub fn from_arg(arg: &str) -> Option<Self> {
         match arg {
-            "suspend" => Some(Self::Suspend),
             "restart" => Some(Self::Restart),
             "shutdown" => Some(Self::ShutDown),
             "logout" => Some(Self::LogOut),
@@ -23,7 +21,6 @@ impl PowerAction {
 
     pub fn arg(self) -> &'static str {
         match self {
-            Self::Suspend => "suspend",
             Self::Restart => "restart",
             Self::ShutDown => "shutdown",
             Self::LogOut => "logout",
@@ -32,7 +29,6 @@ impl PowerAction {
 
     fn call(self) -> (&'static str, Option<String>) {
         match self {
-            Self::Suspend => ("Suspend", None),
             Self::Restart => ("Reboot", None),
             Self::ShutDown => ("PowerOff", None),
             Self::LogOut => ("TerminateSession", std::env::var("XDG_SESSION_ID").ok()),
@@ -46,6 +42,21 @@ fn dry_run() -> bool {
 
 pub fn run(action: PowerAction) {
     let (method, session) = action.call();
+    if action == PowerAction::LogOut && session.is_none() {
+        tracing::error!(
+            method,
+            "power: XDG_SESSION_ID is not set; cannot end the session"
+        );
+        return;
+    }
+    call_logind(method, session);
+}
+
+pub fn suspend() {
+    call_logind("Suspend", None);
+}
+
+fn call_logind(method: &str, session: Option<String>) {
     if dry_run() {
         tracing::info!(
             method = %format!("{MANAGER}.{method}"),
@@ -54,20 +65,16 @@ pub fn run(action: PowerAction) {
         );
         return;
     }
-    let result =
-        zbus::blocking::Connection::system().and_then(|connection| match (action, session) {
-            (PowerAction::LogOut, Some(session)) => connection.call_method(
-                Some(LOGIND),
-                LOGIND_PATH,
-                Some(MANAGER),
-                method,
-                &(session,),
-            ),
-            (PowerAction::LogOut, None) => Err(zbus::Error::Failure(
-                "XDG_SESSION_ID is not set; cannot end the session".to_string(),
-            )),
-            _ => connection.call_method(Some(LOGIND), LOGIND_PATH, Some(MANAGER), method, &(true,)),
-        });
+    let result = zbus::blocking::Connection::system().and_then(|connection| match session {
+        Some(session) => connection.call_method(
+            Some(LOGIND),
+            LOGIND_PATH,
+            Some(MANAGER),
+            method,
+            &(session,),
+        ),
+        None => connection.call_method(Some(LOGIND), LOGIND_PATH, Some(MANAGER), method, &(true,)),
+    });
     match result {
         Ok(_) => tracing::info!(method, "power: logind call sent"),
         Err(error) => tracing::error!(%error, method, "power: logind call failed"),
@@ -81,7 +88,6 @@ mod tests {
     #[test]
     fn arguments_round_trip() {
         for action in [
-            PowerAction::Suspend,
             PowerAction::Restart,
             PowerAction::ShutDown,
             PowerAction::LogOut,
@@ -93,7 +99,6 @@ mod tests {
 
     #[test]
     fn actions_map_to_logind_methods() {
-        assert_eq!(PowerAction::Suspend.call().0, "Suspend");
         assert_eq!(PowerAction::Restart.call().0, "Reboot");
         assert_eq!(PowerAction::ShutDown.call().0, "PowerOff");
         assert_eq!(PowerAction::LogOut.call().0, "TerminateSession");

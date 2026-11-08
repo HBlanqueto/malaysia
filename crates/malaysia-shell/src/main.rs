@@ -20,7 +20,7 @@ components:
   dock        the app dock at the bottom (running apps), Top layer
   lock        the session lock screen (ext-session-lock-v1)
   launcher    the application launcher on the Overlay layer
-  power <suspend|restart|shutdown|logout>
+  power <restart|shutdown|logout>
               confirm a power action (MALAYSIA_POWER_DRY_RUN=1 only logs it)
   force-quit  the «Forzar salida» list of running apps
   about       «Acerca de este PC»

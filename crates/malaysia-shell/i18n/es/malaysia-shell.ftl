@@ -168,12 +168,6 @@ power-log-out-countdown = { $seconds ->
    *[other] Si no haces nada, la sesión se cerrará automáticamente dentro de { $seconds } segundos.
 }
 power-log-out-button = Cerrar sesión
-power-sleep-question = ¿Quieres suspender el equipo?
-power-sleep-countdown = { $seconds ->
-    [one] Si no haces nada, el equipo se suspenderá automáticamente dentro de { $seconds } segundo.
-   *[other] Si no haces nada, el equipo se suspenderá automáticamente dentro de { $seconds } segundos.
-}
-power-sleep-button = Suspender
 
 force-quit-title = Forzar salida de aplicaciones
 force-quit-body = Si una app no responde, selecciónala y pulsa Forzar salida. Se perderán los cambios sin guardar.

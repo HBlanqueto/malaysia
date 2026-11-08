@@ -107,7 +107,6 @@ const COUNTDOWN_SECONDS: u32 = 60;
 const POWER_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M10.2 8.6a10 10 0 1 0 11.6 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M16 4.5v11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>";
 const RESTART_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M25.5 16A9.5 9.5 0 1 1 22.7 9.3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/><path d=\"M23.6 3.8v6.4h-6.4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>";
 const LOGOUT_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><circle cx=\"16\" cy=\"11\" r=\"5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\"/><path d=\"M6.5 26.5a9.5 9.5 0 0 1 19 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\"/></svg>";
-const SLEEP_SVG: &str = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><path d=\"M20.5 5.5a11 11 0 1 0 6 14.5 9 9 0 0 1-6-14.5z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linejoin=\"round\"/></svg>";
 
 struct ConfirmText {
     question: &'static str,
@@ -132,11 +131,6 @@ fn confirm_text(action: PowerAction) -> ConfirmText {
             button: tr!("power-log-out-button"),
             glyph: LOGOUT_SVG,
         },
-        PowerAction::Suspend => ConfirmText {
-            question: tr!("power-sleep-question"),
-            button: tr!("power-sleep-button"),
-            glyph: SLEEP_SVG,
-        },
     }
 }
 
@@ -145,7 +139,6 @@ fn countdown_text(action: PowerAction, seconds: u32) -> String {
         PowerAction::Restart => tr!("power-restart-countdown", seconds = seconds),
         PowerAction::ShutDown => tr!("power-shut-down-countdown", seconds = seconds),
         PowerAction::LogOut => tr!("power-log-out-countdown", seconds = seconds),
-        PowerAction::Suspend => tr!("power-sleep-countdown", seconds = seconds),
     }
 }
 
