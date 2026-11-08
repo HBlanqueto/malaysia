@@ -51,9 +51,9 @@ use crate::config::Config;
 use crate::foreign::{ForeignState, ListHandles};
 use crate::gtk::GtkShellState;
 use crate::infinity::protocol::infinity_window_manager_v1::InfinityWindowManagerV1;
-use crate::input::ShakeDetector;
 use crate::layers::Layers;
 use crate::popup::Popups;
+use crate::shake::ShakeDetector;
 use crate::window::Windows;
 
 const CURSOR_BOOST_ID: u64 = u64::MAX - 1;
@@ -152,7 +152,7 @@ pub struct State {
     pub config: Config,
     pub(crate) grab: Option<Grab>,
     pub(crate) test_press: Option<TestPress>,
-    pub(crate) test_pointer: Option<crate::input::TestPointer>,
+    pub(crate) test_pointer: Option<crate::test_input::TestPointer>,
     pub(crate) chrome: crate::chrome::ChromeCache,
     pub(crate) focus_backdrop: SolidColorBuffer,
     pub(crate) revealed_titlebar_backdrop: SolidColorBuffer,
@@ -406,7 +406,7 @@ impl State {
             config,
             grab: None,
             test_press: None,
-            test_pointer: crate::input::TestPointer::from_env(),
+            test_pointer: crate::test_input::TestPointer::from_env(),
             chrome: crate::chrome::ChromeCache::new(),
             focus_backdrop: SolidColorBuffer::default(),
             revealed_titlebar_backdrop: SolidColorBuffer::default(),

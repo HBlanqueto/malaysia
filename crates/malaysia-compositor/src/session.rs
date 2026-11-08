@@ -273,7 +273,7 @@ pub fn run() -> Result<(), SessionError> {
     if session.state.test_pointer.is_some() {
         loop_handle
             .insert_source(
-                Timer::from_duration(crate::input::test_pointer_delay()),
+                Timer::from_duration(crate::test_input::test_pointer_delay()),
                 |_, _, session: &mut Session| {
                     let action = session.state.test_pointer_step();
                     if let Err(error) = session.display.flush_clients() {
