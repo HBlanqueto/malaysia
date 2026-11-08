@@ -92,6 +92,11 @@ impl smithay::wayland::GlobalDispatch2<InfinityWindowManagerV1, State> for Infin
             let (index, count, desktop, focus_bar) = state.space_state();
             manager.space(index, count, desktop, focus_bar);
         }
+        for id in state.arranged.keys() {
+            if let Some(handle) = state.foreign.management.handle_for_client(*id, client.id()) {
+                manager.restorable(handle, 1);
+            }
+        }
         state.infinity_managers.push(manager);
         let ids: Vec<WindowId> = state.windows.iter().map(|window| window.id()).collect();
         for id in ids {
