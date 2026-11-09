@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Duration;
 
+use bk::animation::{Spring, motion_ms, use_reduced_motion};
 use bk::menu::MenuItem;
 use bk::platform::Timers;
 use bk::prelude::*;
@@ -16,9 +17,11 @@ use ctappearance::notifications::{AlertStyle, Focus, NotificationsConfig, ShowPr
 use ctdesign::{
     BODY, CAPTION, HAIRLINE, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
     NOTIFICATION_CLOSE_SIZE, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN,
-    NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
+    NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_SLIDE_BOUNCE, NOTIFICATION_SLIDE_IN_MS,
+    NOTIFICATION_SLIDE_OUT_MS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
     NOTIFICATION_TEXT_GAP, NOTIFICATION_WIDTH,
 };
+use freya_animation::prelude::{OnCreation, use_animation};
 use freya_components::image_viewer::ImageViewer;
 use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::{Area, Content, Gaps, Position};
@@ -66,6 +69,64 @@ impl Snapshot {
     fn banner(&self, id: u32) -> Option<&Notification> {
         self.notifications.iter().find(|n| n.id == id)
     }
+
+    fn shows_banner(&self, id: u32) -> bool {
+        self.banners.iter().any(|(banner, _)| *banner == id)
+    }
+}
+
+#[derive(Default)]
+struct Departures {
+    banners: Vec<Notification>,
+    leaving: Vec<Notification>,
+    panel_open: bool,
+    panel_closing: bool,
+}
+
+impl Departures {
+    fn track(
+        departures: &Rc<RefCell<Self>>,
+        shown: &Snapshot,
+        timers: &Timers,
+        out: Duration,
+        tick: State<u64>,
+    ) {
+        let mut this = departures.borrow_mut();
+        let current = shown
+            .banners
+            .iter()
+            .filter_map(|(id, _)| shown.banner(*id).cloned())
+            .collect();
+        let previous = std::mem::replace(&mut this.banners, current);
+        this.leaving
+            .retain(|notification| !shown.shows_banner(notification.id));
+        for notification in previous {
+            let id = notification.id;
+            if shown.shows_banner(id) || this.leaving.iter().any(|left| left.id == id) {
+                continue;
+            }
+            this.leaving.push(notification);
+            let departures = departures.clone();
+            timers.after(out, move || {
+                departures.borrow_mut().leaving.retain(|left| left.id != id);
+                let mut tick = tick;
+                *tick.write() += 1;
+            });
+        }
+        if this.panel_open && !shown.panel_open {
+            this.panel_closing = true;
+            let departures = departures.clone();
+            timers.after(out, move || {
+                departures.borrow_mut().panel_closing = false;
+                let mut tick = tick;
+                *tick.write() += 1;
+            });
+        }
+        if shown.panel_open {
+            this.panel_closing = false;
+        }
+        this.panel_open = shown.panel_open;
+    }
 }
 
 pub(crate) struct NotificationsApp {
@@ -85,6 +146,9 @@ impl App for NotificationsApp {
         let editing = use_state(|| false);
         let timed = use_hook(|| Rc::new(RefCell::new(HashSet::<u32>::new())));
         let applied = use_hook(|| Rc::new(Cell::new(None::<LayerGeometry>)));
+        let departures = use_hook(|| Rc::new(RefCell::new(Departures::default())));
+        let departed = use_state(|| 0u64);
+        let reduced_motion = use_reduced_motion();
         use_hook({
             let link = link.clone();
             let timers = timers.clone();
@@ -102,6 +166,18 @@ impl App for NotificationsApp {
         let config = config.read().clone();
         let now = chrono::Utc::now().timestamp();
         let shown = snapshot.read().clone();
+        let _ = *departed.read();
+        Departures::track(
+            &departures,
+            &shown,
+            &timers,
+            Duration::from_millis(motion_ms(reduced_motion, NOTIFICATION_SLIDE_OUT_MS)),
+            departed,
+        );
+        let (leaving, panel_closing) = {
+            let departures = departures.borrow();
+            (departures.leaving.clone(), departures.panel_closing)
+        };
 
         link.hub().front_app = Toplevels::get()
             .list
@@ -123,7 +199,7 @@ impl App for NotificationsApp {
             }
         }
 
-        let geometry = if shown.panel_open {
+        let geometry = if shown.panel_open || panel_closing {
             LayerGeometry {
                 anchors: Anchors {
                     top: true,
@@ -134,7 +210,7 @@ impl App for NotificationsApp {
                 size: (surface_width() + close_room() as u32, 0),
                 keyboard: KeyboardInteractivity::OnDemand,
             }
-        } else if shown.banners.is_empty() || *banner_height.read() < 1.0 {
+        } else if (shown.banners.is_empty() && leaving.is_empty()) || *banner_height.read() < 1.0 {
             LayerGeometry {
                 anchors: Anchors {
                     top: true,
@@ -187,10 +263,16 @@ impl App for NotificationsApp {
             rendered: Rc::new(RefCell::new(Vec::new())),
             relayout,
         };
-        let content = if shown.panel_open {
-            panel(&context, &shown, &config, expanded, editing).into_element()
+        let content = if shown.panel_open || panel_closing {
+            Slide {
+                key: 0,
+                height: Size::fill(),
+                leaving: panel_closing,
+                child: panel(&context, &shown, &config, expanded, editing).into_element(),
+            }
+            .into_element()
         } else {
-            banners(&context, &shown, banner_height).into_element()
+            banners(&context, &shown, &leaving, banner_height).into_element()
         };
         let cards = card_frames(&context, *surface.read());
         if *sent.borrow() != cards {
@@ -297,7 +379,64 @@ fn close_panel(link: &Link, mut snapshot: State<Snapshot>) {
     snapshot.set_if_modified(Snapshot::read(link));
 }
 
-fn banners(context: &Context, shown: &Snapshot, mut height: State<f32>) -> VStack {
+#[derive(PartialEq)]
+struct Slide {
+    key: u64,
+    height: Size,
+    leaving: bool,
+    child: Element,
+}
+
+impl Component for Slide {
+    fn render(&self) -> impl IntoElement {
+        let reduced_motion = use_reduced_motion();
+        let enter = use_animation(|conf| {
+            conf.on_creation(OnCreation::Run);
+            Spring::new(
+                1.0,
+                0.0,
+                Duration::from_millis(NOTIFICATION_SLIDE_IN_MS),
+                NOTIFICATION_SLIDE_BOUNCE,
+            )
+        });
+        let mut leave = use_animation(|_| {
+            Spring::new(
+                0.0,
+                1.0,
+                Duration::from_millis(NOTIFICATION_SLIDE_OUT_MS),
+                0.0,
+            )
+        });
+        use_side_effect_with_deps(&self.leaving, move |leaving| {
+            if *leaving {
+                leave.start();
+            }
+        });
+        let shift = if *reduced_motion.read() {
+            0.0
+        } else if self.leaving {
+            leave.get().current()
+        } else {
+            enter.get().current()
+        };
+        rect()
+            .width(Size::fill())
+            .height(self.height.clone())
+            .offset_x(shift * surface_width() as f32)
+            .child(self.child.clone())
+    }
+
+    fn render_key(&self) -> DiffKey {
+        DiffKey::U64(self.key)
+    }
+}
+
+fn banners(
+    context: &Context,
+    shown: &Snapshot,
+    leaving: &[Notification],
+    mut height: State<f32>,
+) -> VStack {
     VStack::new()
         .width(Size::fill())
         .spacing(NOTIFICATION_GAP)
@@ -309,7 +448,14 @@ fn banners(context: &Context, shown: &Snapshot, mut height: State<f32>) -> VStac
                 .banners
                 .iter()
                 .filter_map(|(id, _)| shown.banner(*id))
-                .map(|notification| card(context, notification, None)),
+                .map(|notification| (notification, false))
+                .chain(leaving.iter().map(|notification| (notification, true)))
+                .map(|(notification, leaving)| Slide {
+                    key: u64::from(notification.id),
+                    height: Size::auto(),
+                    leaving,
+                    child: card(context, notification, None),
+                }),
         )
 }
 

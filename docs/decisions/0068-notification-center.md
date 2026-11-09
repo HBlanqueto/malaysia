@@ -296,7 +296,10 @@ Exact names from
 7. **Grouping:** by app. «Automatic» groups by thread when the portal or GTK
    id carries one; there is no thread key on fdo.
 8. **Banners** at the top right, under the menubar. A Temporary banner closes
-   on its own; a Persistent one waits. The front app's own notifications show
+   on its own; a Persistent one waits. A banner slides in from the right with a
+   spring (`NOTIFICATION_SLIDE_IN_MS`, `NOTIFICATION_SLIDE_BOUNCE`) and slides
+   back out when it leaves (`NOTIFICATION_SLIDE_OUT_MS`); the panel slides the
+   same way. With reduced motion nothing slides. The front app's own notifications show
    no banner and go to the panel, as `willPresent` does by default.
 9. **Panel:** opened by clicking the clock and by a two-finger swipe from the
    right edge (the compositor reports the gesture); closed by a click outside,
