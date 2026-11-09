@@ -23,7 +23,7 @@ use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_pairing_prompt};
 use crate::energy::energy_pane;
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
-use crate::previews::{theme_preview, traffic_shape_preview};
+use crate::previews::theme_preview;
 use crate::state::{account_name, initials, save_config};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::use_menu_action;
@@ -310,7 +310,7 @@ fn appearance(
                         .keywords(tr_list!("traffic-lights-keywords"))
                         .control(traffic_popup(config, dominant, resolved, error)),
                 )
-                .row(traffic_shape_row(config, resolved, error))
+                .row(traffic_shape_row(config, error))
                 .row(
                     Row::new(tr!("scroll-bars"))
                         .keywords(tr_list!("scroll-bars-keywords"))
@@ -367,11 +367,7 @@ fn set_tint_level(config: &mut AppearanceConfig, level: usize) {
     }
 }
 
-fn traffic_shape_row(
-    config: &AppearanceConfig,
-    resolved: &Resolved,
-    error: State<Option<String>>,
-) -> Row {
+fn traffic_shape_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
     let radius = config.traffic_light_shape.radius();
     let round = TrafficLightShape::ROUND.radius();
     let detail = match radius {
@@ -382,33 +378,19 @@ fn traffic_shape_row(
     Row::new(tr!("traffic-shape"))
         .detail(detail)
         .keywords(tr_list!("traffic-shape-keywords"))
-        .stacked()
         .control(
             HStack::new()
-                .main_align(Alignment::Start)
-                .cross_align(Alignment::Center)
+                .cross_align(Alignment::Start)
                 .spacing(SPACE_3)
+                .child(shape_end(Symbol::Square))
                 .child(
-                    rect()
-                        .width(Size::px(SETTINGS.card_width as f32))
-                        .height(Size::px(SETTINGS.card_height as f32))
-                        .child(traffic_shape_preview(resolved, config.traffic_light_shape)),
+                    Slider::stepped(tr!("traffic-shape"), round as usize + 1)
+                        .value(radius as usize)
+                        .on_change(edit(error, |config, radius: usize| {
+                            config.traffic_light_shape = TrafficLightShape::new(radius as u32);
+                        })),
                 )
-                .child(
-                    HStack::new()
-                        .cross_align(Alignment::Start)
-                        .spacing(SPACE_3)
-                        .child(shape_end(Symbol::Square))
-                        .child(
-                            Slider::stepped(tr!("traffic-shape"), round as usize + 1)
-                                .value(radius as usize)
-                                .on_change(edit(error, |config, radius: usize| {
-                                    config.traffic_light_shape =
-                                        TrafficLightShape::new(radius as u32);
-                                })),
-                        )
-                        .child(shape_end(Symbol::Circle)),
-                ),
+                .child(shape_end(Symbol::Circle)),
         )
 }
 

@@ -1,9 +1,9 @@
 use bk::prelude::*;
-use ctdesign::{SETTINGS, TITLEBAR};
+use ctdesign::SETTINGS;
 use torin::prelude::Position;
 
 use bk::theme::color as rgba;
-use ctappearance::{AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, resolve};
+use ctappearance::{AppearanceConfig, ColorScheme, Resolved, resolve};
 use ctdesign::Rgba;
 
 fn preview_for_theme(
@@ -147,27 +147,6 @@ fn preview_app(resolved: &Resolved) -> Rect {
                         .into_element()
                 })),
         )
-}
-
-pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> HStack {
-    let diameter = TITLEBAR.buttons.diameter as f32;
-    let radius = shape.corner_radius(diameter);
-    HStack::new()
-        .width(Size::fill())
-        .height(Size::fill())
-        .corner_radius(SETTINGS.card_radius as f32)
-        .background(rgba(resolved.surfaces.sunken))
-        .main_align(Alignment::Center)
-        .cross_align(Alignment::Center)
-        .spacing(TITLEBAR.buttons.spacing as f32)
-        .children(resolved.lights.map(|light| {
-            rect()
-                .width(Size::px(diameter))
-                .height(Size::px(diameter))
-                .corner_radius(radius)
-                .background(rgba(light))
-                .into_element()
-        }))
 }
 
 #[cfg(test)]

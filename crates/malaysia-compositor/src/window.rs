@@ -784,7 +784,7 @@ impl Windows {
         moved
     }
 
-    fn is_modal(&self, id: WindowId) -> bool {
+    pub(crate) fn is_modal(&self, id: WindowId) -> bool {
         self.index(id).is_some_and(|index| {
             let toplevel = &self.windows[index].toplevel;
             toplevel.parent().is_some()

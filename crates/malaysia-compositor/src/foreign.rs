@@ -203,6 +203,10 @@ impl smithay::reexports::wayland_server::Dispatch<ZwlrForeignToplevelHandleV1, W
 
 impl State {
     pub(crate) fn foreign_window_mapped(&mut self, id: WindowId) {
+        // A modal dialog is part of its window, like an AppKit sheet: the Dock never lists it.
+        if self.windows.is_modal(id) {
+            return;
+        }
         let Some((title, app_id)) = self.windows.active_info(id) else {
             return;
         };
@@ -294,11 +298,16 @@ impl State {
         if was == minimized {
             return;
         }
+        let dialog = self.windows.modal_child(id);
+        if let Some(dialog) = dialog {
+            self.windows.set_hidden(dialog, minimized);
+        }
         if minimized {
             self.minimized.insert(id);
             self.windows.set_hidden(id, true);
             tracing::info!(window = id.get(), "window minimized");
-            if self.focused_window() == Some(id) {
+            let focused = self.focused_window();
+            if focused == Some(id) || (dialog.is_some() && focused == dialog) {
                 match self.focus_fallback(Some(id)) {
                     Some(next) => self.focus_window(next),
                     None => self.clear_keyboard_focus(),

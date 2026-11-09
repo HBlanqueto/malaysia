@@ -112,7 +112,7 @@ They are not domain options; they are fixed and documented here:
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
 | `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
 | `appearance.traffic_light_shape` | integer 0–7 | `4` | **active** | corner radius of the 14 traffic lights, from square (0) to round (7); the old `"square"` reads as 4 and `"round"` as 7, **System Settings** |
-| `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`); the old key `tint_strength_accent` still reads, **System Settings** |
+| `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings**; the retired key `tint_strength_accent` is no longer read and System Settings removes it |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"` | all five | **active** | which surfaces the tint reaches, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
 | `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window mixes the wallpaper behind it into its sidebar, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
