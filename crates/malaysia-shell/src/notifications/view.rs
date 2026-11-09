@@ -472,7 +472,8 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
         rect()
             .width(Size::fill())
             .height(Size::px(NOTIFICATION_STACK_PEEK))
-            .layer(-(layer as i16))
+            // Freya 0.5 adds one layer per nesting level; the offset must exceed the card's depth.
+            .layer(-16 - layer as i16)
             .child(
                 edged(
                     rect()
