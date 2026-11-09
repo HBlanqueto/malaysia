@@ -68,7 +68,7 @@
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
             "git+https://github.com/HBlanqueto/barrierkit?rev=459e9c3c5ad03741f1c9b5823cf0672af477a765#459e9c3c5ad03741f1c9b5823cf0672af477a765" =
-              "";
+              "sha256-cReYH8i7N7dApWmGP2CnV5uHM0ZIqeRwYZ2c3xFdAaw=";
           };
 
           env = {
