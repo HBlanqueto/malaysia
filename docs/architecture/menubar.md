@@ -28,7 +28,7 @@ It is bold (`MENUBAR_APP_NAME_WEIGHT`, 700), color `ink-strong`, 13 px, with the
 
 ## Exclusive zone
 
-The compositor computes the workspace as the output minus the exclusive zones of `Top`/`Overlay` layers anchored to the edges (`Layers::exclusive_top`/`exclusive_bottom`). New windows are placed there: origin `(0, top)` and size `(w, h − top − bottom)`.
+The compositor computes the workspace as the output minus the exclusive zones of `Top`/`Overlay` layers anchored to the edges (`Layers::exclusive_top`/`exclusive_bottom`). New windows are placed there: origin `(0, top)` and size `(w, h − top − bottom)`. A layer surface with `exclusive_zone = 0` that is anchored to an edge is moved out of those zones too, as wlr-layer-shell asks: notification banners start under the menubar. The wallpaper sets `-1` and covers the whole output.
 
 ## Global menu
 

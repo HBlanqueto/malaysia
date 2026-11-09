@@ -391,6 +391,12 @@ fn geometry_of(
 ) -> Rectangle<i32, Logical> {
     let margins = state.margin;
     let anchors = state.anchor;
+    // wlr-layer-shell: a zero exclusive zone moves the surface out of the others' exclusive zones.
+    let (avoided_top, avoided_bottom) = if matches!(state.exclusive_zone, ExclusiveZone::Neutral) {
+        (reserved_top, reserved_bottom)
+    } else {
+        (0, 0)
+    };
 
     let width = if anchors.anchored_horizontally() {
         output_size.w - margins.left - margins.right
@@ -398,7 +404,7 @@ fn geometry_of(
         state.size.w
     };
     let height = if anchors.anchored_vertically() {
-        output_size.h - margins.top - margins.bottom
+        output_size.h - avoided_top - avoided_bottom - margins.top - margins.bottom
     } else {
         state.size.h
     };
@@ -411,9 +417,9 @@ fn geometry_of(
         (output_size.w - width) / 2
     };
     let y = if anchors.contains(Anchor::TOP) {
-        margins.top
+        avoided_top + margins.top
     } else if anchors.contains(Anchor::BOTTOM) {
-        output_size.h - margins.bottom - height
+        output_size.h - avoided_bottom - margins.bottom - height
     } else {
         reserved_top + (output_size.h - reserved_top - reserved_bottom - height) / 2
     };
