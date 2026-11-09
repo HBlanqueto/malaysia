@@ -35,6 +35,10 @@ fn surface_width() -> u32 {
     (NOTIFICATION_WIDTH + 2 * NOTIFICATION_MARGIN) as u32
 }
 
+fn close_room() -> f32 {
+    (NOTIFICATION_CLOSE_SIZE / 2.0).ceil()
+}
+
 #[derive(Clone, PartialEq)]
 struct Snapshot {
     notifications: Vec<Notification>,
@@ -124,7 +128,7 @@ impl App for NotificationsApp {
                     bottom: true,
                     left: false,
                 },
-                size: (surface_width(), 0),
+                size: (surface_width() + close_room() as u32, 0),
                 keyboard: KeyboardInteractivity::OnDemand,
             }
         } else if shown.banners.is_empty() || *banner_height.read() < 1.0 {
@@ -303,7 +307,12 @@ fn panel(
     ScrollView::new()
         .width(Size::fill())
         .height(Size::fill())
-        .child(column)
+        .child(
+            rect()
+                .width(Size::fill())
+                .padding(Gaps::new(0.0, 0.0, 0.0, close_room()))
+                .child(column),
+        )
 }
 
 fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
@@ -415,27 +424,44 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
             .into_element();
     }
     let hidden = group.len() - 1;
-    let mut stacked = VStack::new().width(Size::fill()).spacing(0.0).child(card(
-        context,
-        &group[0],
-        (hidden > 0).then(|| (hidden, expand(app_id, expanded))),
-    ));
-    for layer in 1..=hidden.min(2) {
+    let behind = (1..=hidden.min(2)).map(|layer| {
         let inset = NOTIFICATION_STACK_INSET * layer as f32;
-        stacked = stacked.child(
-            rect()
-                .width(Size::fill())
-                .padding(Gaps::new(0.0, inset, 0.0, inset))
-                .child(
-                    rect()
-                        .width(Size::fill())
-                        .height(Size::px(NOTIFICATION_STACK_PEEK))
-                        .corner_radius((0.0, 0.0, NOTIFICATION_RADIUS, NOTIFICATION_RADIUS))
-                        .background(theme::color(palette.sunken_background)),
-                ),
-        );
-    }
-    stacked.into_element()
+        rect()
+            .width(Size::fill())
+            .height(Size::px(NOTIFICATION_STACK_PEEK))
+            .layer(-(layer as i16))
+            .child(
+                rect()
+                    .position(
+                        Position::new_absolute()
+                            .top(-2.0 * NOTIFICATION_RADIUS)
+                            .left(inset),
+                    )
+                    .width(Size::px(NOTIFICATION_WIDTH as f32 - 2.0 * inset))
+                    .height(Size::px(
+                        2.0 * NOTIFICATION_RADIUS + NOTIFICATION_STACK_PEEK,
+                    ))
+                    .corner_radius(NOTIFICATION_RADIUS)
+                    .background(theme::color(palette.sunken_background))
+                    .border(
+                        Border::new()
+                            .fill(theme::color(palette.card_border))
+                            .width(1.0)
+                            .alignment(BorderAlignment::Inner),
+                    ),
+            )
+            .into_element()
+    });
+    VStack::new()
+        .width(Size::fill())
+        .spacing(0.0)
+        .child(card(
+            context,
+            &group[0],
+            (hidden > 0).then(|| (hidden, expand(app_id, expanded))),
+        ))
+        .children(behind)
+        .into_element()
 }
 
 fn expand(app_id: String, expanded: State<HashSet<String>>) -> Rc<dyn Fn()> {
