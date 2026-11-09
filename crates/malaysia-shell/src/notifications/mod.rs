@@ -1,5 +1,6 @@
 mod batteries;
 mod cups;
+mod image;
 mod live;
 mod server;
 mod store;

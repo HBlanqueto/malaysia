@@ -19,6 +19,7 @@ use ctdesign::{
     NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
     NOTIFICATION_TEXT_GAP, NOTIFICATION_WIDTH,
 };
+use freya_components::image_viewer::ImageViewer;
 use torin::prelude::{Area, Content, Gaps, Position};
 
 use super::server::{self, Link, Reply};
@@ -530,11 +531,13 @@ fn card(
     } else {
         tr!("notifications-hidden-preview").to_string()
     };
-    let icon = app_icon(
-        load_icon(Some(notification.icon.as_str())).as_ref(),
-        &notification.app_name,
-        NOTIFICATION_ICON_SIZE,
-    );
+    let icon = identity(notification, context.previews);
+    let thumbnail = context
+        .previews
+        .then(|| photo(notification))
+        .flatten()
+        .filter(|_| !notification.communication)
+        .map(|path| picture(path, NOTIFICATION_ICON_SIZE / 4.0));
     let title_row = HStack::new()
         .width(Size::fill())
         .content(Content::flex())
@@ -643,7 +646,8 @@ fn card(
                 .cross_align(Alignment::Start)
                 .spacing(NOTIFICATION_TEXT_GAP)
                 .child(icon)
-                .child(text),
+                .child(text)
+                .maybe_child(thumbnail),
         )
         .context_menu(menu, move |command: String| {
             mute(&menu_context, &app_id, &command)
@@ -652,6 +656,74 @@ fn card(
         .width(Size::fill())
         .child(framed(context, id, body))
         .maybe_child(hovered.then(|| close_button(context, id)))
+        .into_element()
+}
+
+// ADR 0068: the app icon always comes from the system; a person's photo carries it as a badge.
+fn identity(notification: &Notification, previews: bool) -> Element {
+    let size = NOTIFICATION_ICON_SIZE;
+    let portrait = previews
+        .then(|| photo(notification))
+        .flatten()
+        .filter(|_| notification.communication);
+    match portrait {
+        Some(path) => rect()
+            .width(Size::px(size))
+            .height(Size::px(size))
+            .child(picture(path, size / 2.0))
+            .child(
+                rect()
+                    .position(Position::new_absolute().left(size / 2.0).top(size / 2.0))
+                    .child(app_symbol(notification, size / 2.0)),
+            )
+            .into_element(),
+        None => app_symbol(notification, size),
+    }
+}
+
+fn app_symbol(notification: &Notification, size: f32) -> Element {
+    match load_icon(Some(notification.icon.as_str())) {
+        Some(icon) => app_icon(Some(&icon), &notification.app_name, size),
+        None => {
+            let palette = Palette::current();
+            rect()
+                .width(Size::px(size))
+                .height(Size::px(size))
+                .corner_radius(bk::style::continuous_corner(size / 4.0))
+                .background(theme::color(palette.sunken_background))
+                .center()
+                .child(
+                    Image::system(Symbol::Bell)
+                        .size(size / 2.0)
+                        .color(palette.secondary_label),
+                )
+                .into_element()
+        }
+    }
+}
+
+fn photo(notification: &Notification) -> Option<std::path::PathBuf> {
+    notification
+        .image
+        .as_ref()
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_file())
+}
+
+fn picture(path: std::path::PathBuf, radius: f32) -> Element {
+    let size = NOTIFICATION_ICON_SIZE;
+    rect()
+        .width(Size::px(size))
+        .height(Size::px(size))
+        .corner_radius(radius)
+        .overflow(Overflow::Clip)
+        .child(
+            ImageViewer::new(path)
+                .width(Size::fill())
+                .height(Size::fill())
+                .aspect_ratio(AspectRatio::Max)
+                .image_cover(ImageCover::Center),
+        )
         .into_element()
 }
 
@@ -708,11 +780,7 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
     } else {
         (notification.summary.clone(), notification.body.clone())
     };
-    let icon = app_icon(
-        load_icon(Some(notification.icon.as_str())).as_ref(),
-        &notification.app_name,
-        NOTIFICATION_ICON_SIZE,
-    );
+    let icon = identity(notification, !hidden);
     let card = rect()
         .width(Size::fill())
         .padding(NOTIFICATION_PADDING)

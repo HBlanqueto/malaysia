@@ -2058,6 +2058,7 @@ dependencies = [
  "i18n-embed",
  "i18n-embed-fl",
  "libc",
+ "png",
  "rust-embed",
  "serde",
  "toml 0.8.23",

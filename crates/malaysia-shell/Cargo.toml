@@ -31,6 +31,7 @@ ctdesign.workspace = true
 libc.workspace = true
 zeroize.workspace = true
 zbus.workspace = true
+png.workspace = true
 i18n-embed.workspace = true
 i18n-embed-fl.workspace = true
 rust-embed.workspace = true

@@ -552,6 +552,8 @@ impl Freedesktop {
                 .as_ref()
                 .and_then(|entry| entry.icon.clone())
                 .unwrap_or(app_icon),
+            image: super::image::from_hints(id, &hints),
+            communication: hint("category").is_some_and(|category| communication(&category)),
             summary,
             body: strip_markup(&body),
             actions: pairs,
@@ -626,6 +628,11 @@ async fn sender_app_id(
         .await
         .ok()?;
     app_id_from_cgroup(&std::fs::read_to_string(format!("/proc/{pid}/cgroup")).ok()?)
+}
+
+// Desktop Notifications spec uses "im" and "im.*"; portal v2 uses "im.message".
+fn communication(category: &str) -> bool {
+    category == "im" || category.starts_with("im.")
 }
 
 fn strip_markup(body: &str) -> String {
@@ -716,6 +723,10 @@ impl Gtk {
                 .as_ref()
                 .map_or_else(|| app_id.clone(), |entry| entry.name.clone()),
             icon: entry.and_then(|entry| entry.icon).unwrap_or_default(),
+            image: notification
+                .get("icon")
+                .and_then(|icon| super::image::from_gicon(number, icon)),
+            communication: communication(&text("category")),
             app_id,
             summary: text("title"),
             body: notification_body,

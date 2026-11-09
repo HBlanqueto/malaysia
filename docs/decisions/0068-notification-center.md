@@ -256,6 +256,18 @@ Exact names from
    For fdo clients the server reads the sender's PID, then its cgroup scope;
    `desktop-entry` and `app_name` are fallbacks. The shell names app scopes
    `app-malaysia-<AppID>-<random>.scope`.
+   1. **Icon:** the card's icon is the app's icon from its desktop entry, as
+      on macOS, so a notification cannot borrow another app's icon. The
+      `app_icon` argument counts only when no entry matches. With neither,
+      the card shows a generic bell, not a letter, which reads as a contact.
+   2. **Content image:** `image-data` (written as PNG), then `image-path`
+      for fdo clients, and a `file` or `bytes` GIcon for GTK clients. It is
+      stored in `~/.local/share/malaysia/notifications/<id>`; saving the
+      history deletes images no kept notification uses.
+   3. **People:** with category `im` or `im.*`, the image is the sender's
+      photo and replaces the icon, with the app icon as a badge at the
+      bottom right, like a Tahoe communication notification. Any other image
+      is a thumbnail at the trailing edge. Hidden previews show neither.
 5. **Levels map to macOS:**
 
    | Linux | Malaysia level |
@@ -295,7 +307,10 @@ Exact names from
    continuous corner and sends its rectangle with
    `infinity_window_style_v1.set_cards` (`bk::shell::set_card_frames`), and
    the compositor adds the window shadow below and the inner and outer
-   borders above (`append_cards` in `scene_elements.rs`). A dark Tahoe call
+   borders above (`append_cards` in `scene_elements.rs`). The Focus pill is
+   framed the same way. Freya fades a continuous corner towards a circle
+   when the shape is short (`compute_smooth_corner` in freya-core 0.5.0), so
+   `window_style::card_corner` repeats that rule for each card's frame. A dark Tahoe call
    notification in the MacStories review shows the same two borders as a
    window. Stack layers and lock cards draw those border colours
    themselves, because a frame above the surface would cross the card in

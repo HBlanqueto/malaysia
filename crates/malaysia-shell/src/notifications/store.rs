@@ -79,6 +79,10 @@ pub(crate) struct Notification {
     pub(crate) app_id: String,
     pub(crate) app_name: String,
     pub(crate) icon: String,
+    #[serde(default)]
+    pub(crate) image: Option<String>,
+    #[serde(default)]
+    pub(crate) communication: bool,
     pub(crate) summary: String,
     pub(crate) body: String,
     pub(crate) actions: Vec<Action>,
@@ -198,6 +202,7 @@ impl Center {
     }
 
     pub(crate) fn save(&self) {
+        super::image::prune(&self.notifications);
         if let Err(error) = bk::app::save_restoration(STATE, self) {
             tracing::warn!(%error, "notifications: could not save the history");
         }
@@ -291,6 +296,8 @@ mod tests {
             app_id: app_id.into(),
             app_name: app_id.into(),
             icon: String::new(),
+            image: None,
+            communication: false,
             summary: String::new(),
             body: String::new(),
             actions: Vec::new(),
