@@ -91,7 +91,7 @@ fn signature(
     add(scheme as u64);
     add(mode as u64);
     add(style as u64);
-    add(shape as u64);
+    add(u64::from(shape.radius()));
     for color in [
         palette.titlebar_bg.focused,
         palette.titlebar_bg.unfocused,

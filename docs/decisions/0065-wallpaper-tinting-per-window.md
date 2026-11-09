@@ -45,6 +45,15 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
    does. The window background, groups, controls and menus stay as they are.
 5. **When it applies.** With the switch on, a neutral `window_color` and any
    accent but graphite. The accent window color wins over it.
+6. **One tint control (2026-11-09).** System Settings joins both tints:
+   «Tint windows» goes from Neutral (both off) to Intense and sets
+   `tint_strength`, which also multiplies `WALLPAPER_TINTING` (×0.5 to ×2);
+   «Tint color» picks the accent or the wallpaper behind each window. The old
+   key `tint_strength_accent` still reads.
+7. **The wallpaper accent comes back as a swatch (2026-11-09).** The first
+   accent swatch, a rainbow like macOS «Multicolor», sets `wallpaper_accent`:
+   the accent is the dominant color of `wallpaper.state`. The traffic-light
+   style `wallpaper` goes away and reads as `accent`, which follows it.
 
 ## Calibration
 

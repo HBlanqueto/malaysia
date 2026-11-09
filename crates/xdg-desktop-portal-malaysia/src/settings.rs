@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::sync::{Arc, RwLock};
 
-use ctappearance::{
-    AppearanceConfig, Toolkit, TrafficLightStyle, load_dominant, read_appearance, resolve,
-};
+use ctappearance::{AppearanceConfig, Toolkit, load_dominant, read_appearance, resolve};
 use ctdesign::Rgba;
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
 use zbus::blocking::Connection;
@@ -59,11 +57,7 @@ impl Values {
     fn from_appearance(appearance: Option<&AppearanceConfig>) -> Self {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
-        let dominant = if appearance.traffic_light_style() == TrafficLightStyle::Wallpaper {
-            load_dominant()
-        } else {
-            None
-        };
+        let dominant = appearance.wallpaper_accent.then(load_dominant).flatten();
         Self::from_parts(appearance, dominant, gtk::enabled())
     }
 

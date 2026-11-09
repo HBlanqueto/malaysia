@@ -102,15 +102,17 @@ They are not domain options; they are fixed and documented here:
 |---|---|---|---|---|
 | `appearance.color_scheme` | `"auto"` \| `"dark"` \| `"dark_tint"` \| `"light"` | `"auto"` | **active** | portal `org.freedesktop.appearance`, shell, **System Settings** |
 | `appearance.accent_color` | `[r,g,b]` in `[0,1]` or `null` | `null` | **active** | portal, shell, effects, **System Settings** |
+| `appearance.wallpaper_accent` | bool | `false` | **active** | the accent is the wallpaper's dominant color (`wallpaper.state`); `accent_color` stays as the fallback, **System Settings › Appearance** («Wallpaper» swatch) |
 | `appearance.contrast` | bool | `false` | **active** | portal (`org.freedesktop.appearance` `contrast`), kit (`ctappearance::resolve`; also reduces transparency), **System Settings › Accessibility › Display** |
 | `appearance.reduced_motion` | bool | `false` | **active** | portal (`reduced-motion`), compositor (cross-fade, spaces, popups), kit (`bk::animation`) |
-| `appearance.scroll_bars` | `"when_scrolling"` \| `"always"` | `"when_scrolling"` | **active** | the kit's `ScrollView`: the bar shows only while scrolling or always, **System Settings** |
+| `appearance.scroll_bars` | `"automatic"` \| `"when_scrolling"` \| `"always"` | `"automatic"` | **active** | the kit's `ScrollView`: always after a mouse wheel and only while scrolling after a touchpad, only while scrolling, or always, **System Settings** |
+| `appearance.scroll_bar_click` | `"next_page"` \| `"clicked_spot"` | `"next_page"` | **active** | a click on the scroll bar track pages toward it or jumps there, **System Settings** |
 | `appearance.reduce_transparency` | bool | `true` | **active** | shell and kit: solid backgrounds; `false` will enable the compositor blur (ADR 0038) |
 | `appearance.window_color` | `"neutral"` \| `"accent"` | `"neutral"` | **active** | compositor titlebar/chrome, **System Settings**; an old `"wallpaper"` reads as `"neutral"` |
 | `appearance.window_tint_scope` | `"windows"` \| `"desktop"` | `"windows"` | **active** | `desktop` also tints the menu bar and the Dock with the accent tint, **System Settings** |
-| `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` \| `"wallpaper"` | `"auto"` | **active** | titlebar traffic lights, **System Settings** |
-| `appearance.traffic_light_shape` | `"square"` \| `"round"` | `"square"` | **active** | traffic light shape (radius 4 or circle), **System Settings** |
-| `appearance.tint_strength_accent` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of `window_color = "accent"` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`), **System Settings** |
+| `appearance.traffic_lights` | `"auto"` \| `"standard"` \| `"accent"` | `"auto"` | **active** | titlebar traffic lights; an old `"wallpaper"` reads as `"accent"`, **System Settings** |
+| `appearance.traffic_light_shape` | integer 0–7 | `4` | **active** | corner radius of the 14 traffic lights, from square (0) to round (7); the old `"square"` reads as 4 and `"round"` as 7, **System Settings** |
+| `appearance.tint_strength` | `"subtle"` \| `"normal"` \| `"strong"` \| `"intense"` | `"normal"` | **active** | strength of the accent tint and of `wallpaper_tinting` (×0.5, ×1, ×1.5, ×2, `TINT_STRENGTH`); the old key `tint_strength_accent` still reads, **System Settings** |
 | `appearance.tint_parts` | list of `"sidebars"`, `"window"`, `"groups"`, `"controls"`, `"menus"` | all five | **active** | which surfaces the tint reaches, **System Settings** |
 | `appearance.sidebar_style` | `"island"` \| `"flat"` | `"island"` | **active** | style of the kit's sidebar |
 | `appearance.wallpaper_tinting` | bool | `true` | **active** | each BarrierKit window mixes the wallpaper behind it into its sidebar, in dark mode and with a neutral window color (ADR 0065), **System Settings › Appearance** |
@@ -164,8 +166,15 @@ background (6 % in light, 8 % in dark, at `normal` strength). Traffic lights in
 `wallpaper_tinting` is macOS's "Tint window background with wallpaper color".
 The compositor sends each BarrierKit window the average color of the wallpaper
 behind it, and the window mixes it into its sidebar (9 % in dark, 7 % in
-light with `wallpaper_tinting_in_light`; provisional values, ADR 0065). It
-needs a neutral `window_color` and an accent other than graphite.
+light with `wallpaper_tinting_in_light`, times `tint_strength`; provisional
+values, ADR 0065). It needs a neutral `window_color` and an accent other than
+graphite.
+
+System Settings › Appearance shows both tints as one control: «Tint windows»
+(Neutral, Subtle, Normal, Strong, Intense) sets `tint_strength`, or turns both
+off with Neutral; «Tint color» picks the accent (`window_color = "accent"`) or
+the wallpaper behind each window (`window_color = "neutral"` with
+`wallpaper_tinting = true`).
 
 ## `language` — language (System Settings → General → Language & Region)
 
@@ -475,16 +484,18 @@ Like macOS, one file per domain in `~/.config/malaysia/`:
 # ~/.config/malaysia/appearance.domain
 color_scheme = "dark"           # auto | dark | dark_tint | light
 accent_color = [0.208, 0.518, 0.894]
+wallpaper_accent = false        # the «Wallpaper» accent swatch
 contrast = false                # Increase contrast
 reduced_motion = false          # Reduce motion
 reduce_transparency = true      # Reduce transparency (solid backgrounds; false = future blur)
-scroll_bars = "when_scrolling"  # when_scrolling | always
+scroll_bars = "automatic"       # automatic | when_scrolling | always
+scroll_bar_click = "next_page"  # next_page | clicked_spot
 window_color = "neutral"        # neutral | accent
 window_tint_scope = "windows"   # windows | desktop (tints menubar/dock)
-tint_strength_accent = "normal"     # subtle | normal | strong | intense
+tint_strength = "normal"        # subtle | normal | strong | intense
 tint_parts = ["sidebars", "window", "groups", "controls", "menus"]
-traffic_lights = "auto"         # auto | standard | accent | wallpaper
-traffic_light_shape = "square"  # square | round
+traffic_lights = "auto"         # auto | standard | accent
+traffic_light_shape = 4         # corner radius, 0 (square) to 7 (round)
 wallpaper_tinting = true        # tint windows with the wallpaper behind them
 wallpaper_tinting_in_light = false
 invert_colors = false

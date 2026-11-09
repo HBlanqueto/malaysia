@@ -8,9 +8,9 @@ use bk::styles::{Axis, RadioGroupStyle};
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
 use ctappearance::{
-    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBars, TintParts,
-    TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode, WindowTintScope,
-    lights_for, load_appearance, palette,
+    AppearanceConfig, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick, ScrollBars,
+    TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle, WindowColorMode,
+    WindowTintScope, lights_for, load_appearance, palette,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -23,7 +23,7 @@ use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_pairing_prompt};
 use crate::energy::energy_pane;
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
-use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
+use crate::previews::{theme_preview, traffic_shape_preview};
 use crate::state::{account_name, initials, save_config};
 use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::use_menu_action;
@@ -42,7 +42,12 @@ const STRENGTHS: [TintStrength; 4] = [
     TintStrength::Intense,
 ];
 const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
-const SCROLL_BARS: [ScrollBars; 2] = [ScrollBars::WhenScrolling, ScrollBars::Always];
+const SCROLL_BARS: [ScrollBars; 3] = [
+    ScrollBars::Automatic,
+    ScrollBars::WhenScrolling,
+    ScrollBars::Always,
+];
+const SCROLL_CLICKS: [ScrollBarClick; 2] = [ScrollBarClick::NextPage, ScrollBarClick::ClickedSpot];
 const MENU_BAR_SIZES: [MenuBarSize; 2] = [MenuBarSize::Default, MenuBarSize::Large];
 const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::Grayscale,
@@ -55,15 +60,10 @@ const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg"
 const COLOR_FILTER_PENCILS_SIZE: (f32, f32) = (349.0, 130.0);
 type Text = fn() -> &'static str;
 
-const SHAPES: [(TrafficLightShape, Text); 2] = [
-    (TrafficLightShape::Square, || tr!("traffic-shape-square")),
-    (TrafficLightShape::Round, || tr!("traffic-shape-round")),
-];
-const TRAFFIC: [(TrafficLightStyle, Text); 4] = [
+const TRAFFIC: [(TrafficLightStyle, Text); 3] = [
     (TrafficLightStyle::Auto, || tr!("lights-auto")),
     (TrafficLightStyle::Standard, || tr!("lights-standard")),
     (TrafficLightStyle::Accent, || tr!("lights-accent")),
-    (TrafficLightStyle::Wallpaper, || tr!("lights-wallpaper")),
 ];
 type Part = fn(&mut TintParts) -> &mut bool;
 
@@ -201,7 +201,22 @@ fn appearance(
     resolved: &Resolved,
     error: State<Option<String>>,
 ) -> Form {
-    let tint_disabled = config.window_color == WindowColorMode::Neutral;
+    let level = tint_level(config);
+    let accent_source = config.window_color == WindowColorMode::Accent;
+    let parts_disabled = level == 0 || !accent_source;
+    let accent = Row::new(tr!("accent-color"))
+        .keywords(tr_list!("accent-color-keywords"))
+        .control(
+            ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
+                .multicolor(tr!("accent-wallpaper"))
+                .selected(accent_index(config))
+                .on_change(edit(error, |config, index: usize| {
+                    config.wallpaper_accent = index == 0;
+                    if let Some((_, color)) = index.checked_sub(1).map(|i| ACCENT_SWATCHES[i]) {
+                        config.accent_color = Some([color.r, color.g, color.b]);
+                    }
+                })),
+        );
     Form::new()
         .section(
             Section::new()
@@ -214,65 +229,78 @@ fn appearance(
         )
         .section(
             Section::titled(tr!("color"))
+                .row(if config.wallpaper_accent {
+                    accent.detail(tr!("accent-wallpaper-help"))
+                } else {
+                    accent
+                })
                 .row(
-                    Row::new(tr!("accent-color"))
-                        .keywords(tr_list!("accent-color-keywords"))
+                    Row::new(tr!("tint-windows"))
+                        .detail(if level == 0 {
+                            tr!("tint-windows-off-help")
+                        } else {
+                            tr!("tint-windows-help")
+                        })
+                        .keywords(tr_list!("tint-windows-keywords"))
                         .control(
-                            ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
-                                .selected(accent_index(config))
-                                .on_change(edit(error, |config, index: usize| {
-                                    let color = ACCENT_SWATCHES[index].1;
-                                    config.accent_color = Some([color.r, color.g, color.b]);
-                                })),
-                        ),
-                )
-                .row(
-                    Row::new(tr!("window-color"))
-                        .detail(window_color_help(config.window_color))
-                        .keywords(tr_list!("window-color-keywords"))
-                        .control(window_color_cards(config, dominant, error)),
-                )
-                .row(
-                    Row::new(tr!("tint-strength"))
-                        .keywords(tr_list!("tint-strength-keywords"))
-                        .control(
-                            Slider::stepped(tr!("tint-strength"), STRENGTHS.len())
-                                .value(strength_index(config))
+                            Slider::stepped(tr!("tint-windows"), STRENGTHS.len() + 1)
+                                .value(level)
                                 .labels(tr_list!(
+                                    "tint-windows-neutral",
                                     "tint-strength-subtle",
                                     "tint-strength-normal",
                                     "tint-strength-strong",
                                     "tint-strength-intense"
                                 ))
-                                .disabled(tint_disabled)
+                                .on_change(edit(error, set_tint_level)),
+                        ),
+                )
+                .row(
+                    Row::new(tr!("tint-source"))
+                        .detail(if accent_source {
+                            tr!("tint-source-accent-help")
+                        } else {
+                            tr!("tint-source-wallpaper-help")
+                        })
+                        .keywords(tr_list!("tint-source-keywords"))
+                        .stacked()
+                        .control(
+                            RadioGroup::new(tr!("tint-source"))
+                                .option(tr!("tint-source-accent"))
+                                .option(tr!("tint-source-wallpaper"))
+                                .selected(usize::from(!accent_source))
+                                .disabled(level == 0)
                                 .on_change(edit(error, |config, index: usize| {
-                                    config.tint_strength_accent = STRENGTHS[index];
+                                    config.window_color = WINDOW_COLORS[usize::from(index == 0)];
+                                    config.wallpaper_tinting = index == 1;
                                 })),
                         ),
                 )
                 .row(
                     Row::new(tr!("tint-parts"))
-                        .detail(tr!("tint-parts-help"))
+                        .detail(if accent_source {
+                            tr!("tint-parts-help")
+                        } else {
+                            tr!("tint-parts-wallpaper-help")
+                        })
                         .keywords(tr_list!("tint-parts-keywords"))
-                        .control(option_column(tint_parts(
-                            config.tint_parts,
-                            tint_disabled,
-                            error,
-                        ))),
+                        .stacked()
+                        .control(tint_parts(config.tint_parts, parts_disabled, error)),
                 )
                 .row(
                     Row::new(tr!("tint-scope"))
                         .keywords(tr_list!("tint-scope-keywords"))
-                        .control(option_column(
+                        .stacked()
+                        .control(
                             RadioGroup::new(tr!("tint-scope"))
                                 .option(tr!("tint-scope-windows"))
                                 .option(tr!("tint-scope-desktop"))
                                 .selected(position(&SCOPES, config.window_tint_scope))
-                                .disabled(tint_disabled)
+                                .disabled(parts_disabled)
                                 .on_change(edit(error, |config, index: usize| {
                                     config.window_tint_scope = SCOPES[index];
                                 })),
-                        )),
+                        ),
                 ),
         )
         .section(
@@ -282,45 +310,110 @@ fn appearance(
                         .keywords(tr_list!("traffic-lights-keywords"))
                         .control(traffic_popup(config, dominant, resolved, error)),
                 )
-                .row(
-                    Row::new(tr!("traffic-shape"))
-                        .keywords(tr_list!("traffic-shape-keywords"))
-                        .control(traffic_shape_cards(config, resolved, error)),
-                )
+                .row(traffic_shape_row(config, resolved, error))
                 .row(
                     Row::new(tr!("scroll-bars"))
                         .keywords(tr_list!("scroll-bars-keywords"))
-                        .control(option_column(
+                        .stacked()
+                        .control(
                             RadioGroup::new(tr!("scroll-bars"))
+                                .option(tr!("scroll-bars-automatic"))
                                 .option(tr!("scroll-bars-when-scrolling"))
                                 .option(tr!("scroll-bars-always"))
                                 .selected(position(&SCROLL_BARS, config.scroll_bars))
                                 .on_change(edit(error, |config, index: usize| {
                                     config.scroll_bars = SCROLL_BARS[index];
                                 })),
-                        )),
+                        ),
                 )
-                .row(wallpaper_tinting_row(config, error)),
+                .row(
+                    Row::new(tr!("scroll-bar-click"))
+                        .keywords(tr_list!("scroll-bar-click-keywords"))
+                        .stacked()
+                        .control(
+                            RadioGroup::new(tr!("scroll-bar-click"))
+                                .option(tr!("scroll-bar-click-next-page"))
+                                .option(tr!("scroll-bar-click-spot"))
+                                .selected(position(&SCROLL_CLICKS, config.scroll_bar_click))
+                                .on_change(edit(error, |config, index: usize| {
+                                    config.scroll_bar_click = SCROLL_CLICKS[index];
+                                })),
+                        ),
+                ),
         )
 }
 
-fn wallpaper_tinting_row(config: &AppearanceConfig, error: State<Option<String>>) -> Row {
-    let accent_tints = config.window_color == WindowColorMode::Accent;
-    let row = Row::new(tr!("wallpaper-tinting"))
-        .keywords(tr_list!("wallpaper-tinting-keywords"))
-        .control(
-            Switch::new(tr!("wallpaper-tinting"))
-                .on(config.wallpaper_tinting)
-                .disabled(accent_tints)
-                .on_toggle(edit(error, |config, on: bool| {
-                    config.wallpaper_tinting = on;
-                })),
-        );
-    if accent_tints {
-        row.detail(tr!("wallpaper-tinting-accent-help"))
+fn tint_level(config: &AppearanceConfig) -> usize {
+    let tinted = config.window_color == WindowColorMode::Accent || config.wallpaper_tinting;
+    if tinted {
+        position(&STRENGTHS, config.tint_strength) + 1
     } else {
-        row
+        0
     }
+}
+
+fn set_tint_level(config: &mut AppearanceConfig, level: usize) {
+    match level.checked_sub(1) {
+        None => {
+            config.window_color = WindowColorMode::Neutral;
+            config.wallpaper_tinting = false;
+        }
+        Some(index) => {
+            config.tint_strength = STRENGTHS[index];
+            if tint_level(config) == 0 {
+                config.wallpaper_tinting = true;
+            }
+        }
+    }
+}
+
+fn traffic_shape_row(
+    config: &AppearanceConfig,
+    resolved: &Resolved,
+    error: State<Option<String>>,
+) -> Row {
+    let radius = config.traffic_light_shape.radius();
+    let round = TrafficLightShape::ROUND.radius();
+    let detail = match radius {
+        0 => tr!("traffic-shape-square"),
+        r if r >= round => tr!("traffic-shape-round"),
+        _ => tr!("traffic-shape-rounded"),
+    };
+    Row::new(tr!("traffic-shape"))
+        .detail(detail)
+        .keywords(tr_list!("traffic-shape-keywords"))
+        .stacked()
+        .control(
+            HStack::new()
+                .main_align(Alignment::Start)
+                .cross_align(Alignment::Center)
+                .spacing(SPACE_3)
+                .child(
+                    rect()
+                        .width(Size::px(SETTINGS.card_width as f32))
+                        .height(Size::px(SETTINGS.card_height as f32))
+                        .child(traffic_shape_preview(resolved, config.traffic_light_shape)),
+                )
+                .child(
+                    HStack::new()
+                        .cross_align(Alignment::Start)
+                        .spacing(SPACE_3)
+                        .child(shape_end(Symbol::Square))
+                        .child(
+                            Slider::stepped(tr!("traffic-shape"), round as usize + 1)
+                                .value(radius as usize)
+                                .on_change(edit(error, |config, radius: usize| {
+                                    config.traffic_light_shape =
+                                        TrafficLightShape::new(radius as u32);
+                                })),
+                        )
+                        .child(shape_end(Symbol::Circle)),
+                ),
+        )
+}
+
+fn shape_end(glyph: Symbol) -> Image {
+    Image::system(glyph).color(palette(bk::theme::resolved().scheme).ink_muted)
 }
 
 fn accessibility() -> Form {
@@ -388,7 +481,10 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
                         .control(
                             Switch::new(tr!("wallpaper-tinting-in-light"))
                                 .on(config.wallpaper_tinting_in_light)
-                                .disabled(!config.wallpaper_tinting)
+                                .disabled(
+                                    !config.wallpaper_tinting
+                                        || config.window_color == WindowColorMode::Accent,
+                                )
                                 .on_toggle(edit(error, |config, on: bool| {
                                     config.wallpaper_tinting_in_light = on;
                                 })),
@@ -669,26 +765,6 @@ fn scheme_cards(
         }))
 }
 
-fn window_color_cards(
-    config: &AppearanceConfig,
-    dominant: Option<Rgba>,
-    error: State<Option<String>>,
-) -> ChoiceCards {
-    [tr!("window-color-neutral"), tr!("window-color-accent")]
-        .into_iter()
-        .zip(WINDOW_COLORS)
-        .fold(
-            ChoiceCards::new(tr!("window-color")),
-            |cards, (caption, mode)| {
-                cards.option(caption, window_color_preview(config, mode, dominant))
-            },
-        )
-        .selected(position(&WINDOW_COLORS, config.window_color))
-        .on_change(edit(error, |config, index: usize| {
-            config.window_color = WINDOW_COLORS[index];
-        }))
-}
-
 fn tint_parts(parts: TintParts, disabled: bool, error: State<Option<String>>) -> VStack {
     VStack::new()
         .main_align(Alignment::Start)
@@ -710,28 +786,6 @@ fn option_column(control: impl IntoElement) -> Rect {
     rect()
         .width(Size::px(SETTINGS.option_column as f32))
         .child(control)
-}
-
-fn traffic_shape_cards(
-    config: &AppearanceConfig,
-    resolved: &Resolved,
-    error: State<Option<String>>,
-) -> ChoiceCards {
-    SHAPES
-        .iter()
-        .fold(
-            ChoiceCards::new(tr!("traffic-shape")),
-            |cards, &(shape, caption)| {
-                cards.option(caption(), traffic_shape_preview(resolved, shape))
-            },
-        )
-        .selected(position(
-            &SHAPES.map(|(shape, _)| shape),
-            config.traffic_light_shape,
-        ))
-        .on_change(edit(error, |config, index: usize| {
-            config.traffic_light_shape = SHAPES[index].0;
-        }))
 }
 
 fn traffic_popup(
@@ -765,13 +819,16 @@ fn traffic_lights(
     resolved: &Resolved,
     dominant: Option<Rgba>,
 ) -> [Rgba; 3] {
-    let normal_accent = config
+    let chosen = config
         .accent_color
         .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
         .unwrap_or(palette(resolved.scheme).accent);
+    let normal_accent = dominant
+        .filter(|_| config.wallpaper_accent)
+        .unwrap_or(chosen);
     match style {
         TrafficLightStyle::Auto => resolved.lights,
-        style => lights_for(style, normal_accent, dominant),
+        style => lights_for(style, normal_accent),
     }
 }
 
@@ -797,28 +854,17 @@ fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
     )
 }
 
-fn window_color_help(mode: WindowColorMode) -> &'static str {
-    match mode {
-        WindowColorMode::Neutral => tr!("window-color-neutral-help"),
-        WindowColorMode::Accent => tr!("window-color-accent-help"),
-    }
-}
-
 fn accent_index(config: &AppearanceConfig) -> Option<usize> {
+    if config.wallpaper_accent {
+        return Some(0);
+    }
     match config.accent_color {
-        None => Some(0),
+        None => Some(1),
         Some(rgb) => ACCENT_SWATCHES
             .iter()
-            .position(|(_, color)| [color.r, color.g, color.b] == rgb),
+            .position(|(_, color)| [color.r, color.g, color.b] == rgb)
+            .map(|index| index + 1),
     }
-}
-
-fn strength_index(config: &AppearanceConfig) -> usize {
-    let strength = match config.window_color {
-        WindowColorMode::Accent => config.tint_strength_accent,
-        WindowColorMode::Neutral => TintStrength::default(),
-    };
-    position(&STRENGTHS, strength)
 }
 
 fn position<T: PartialEq>(options: &[T], value: T) -> usize {
@@ -837,7 +883,7 @@ mod tests {
         let row = 3.0 * MENU_POPOVER.swatch_grid_dot + 2.0 * MENU_POPOVER.swatch_grid_gap;
         assert!(row <= MENU_POPOVER.swatch_grid_size);
         const { assert!(MENU_POPOVER.swatch_grid_size <= MENU_POPOVER.leading_column) };
-        let svg = traffic_row_svg([Rgba::TRANSPARENT; 3], TrafficLightShape::Square);
+        let svg = traffic_row_svg([Rgba::TRANSPARENT; 3], TrafficLightShape::default());
         assert_eq!(svg.matches("<rect").count(), 3);
     }
 }

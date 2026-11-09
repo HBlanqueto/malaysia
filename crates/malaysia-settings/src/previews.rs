@@ -3,9 +3,7 @@ use ctdesign::{SETTINGS, TITLEBAR};
 use torin::prelude::Position;
 
 use bk::theme::color as rgba;
-use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, WindowColorMode, resolve,
-};
+use ctappearance::{AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, resolve};
 use ctdesign::Rgba;
 
 fn preview_for_theme(
@@ -149,46 +147,6 @@ fn preview_app(resolved: &Resolved) -> Rect {
                         .into_element()
                 })),
         )
-}
-
-pub fn window_color_preview(
-    base_config: &AppearanceConfig,
-    mode: WindowColorMode,
-    dominant: Option<Rgba>,
-) -> Rect {
-    let preview_resolved = resolve(
-        &AppearanceConfig {
-            window_color: mode,
-            ..base_config.clone()
-        },
-        dominant,
-    );
-    let window_bg = preview_resolved.surfaces.window;
-    let sunken = preview_resolved.surfaces.sunken;
-    let x = SETTINGS.preview_tint_window_x as f32;
-    let y = SETTINGS.preview_tint_window_y as f32;
-    let side_w = SETTINGS.preview_tint_side_w as f32;
-    let padding = SETTINGS.preview_radius as f32;
-    let width = SETTINGS.card_width as f32 - 2.0 * x;
-    let height = SETTINGS.card_height as f32 - y + SETTINGS.preview_panel_h as f32;
-
-    gradient_background(preview_resolved.accent).child(
-        rect()
-            .position(Position::new_absolute().top(y).left(x))
-            .width(Size::px(width))
-            .height(Size::px(height))
-            .corner_radius(SETTINGS.preview_window_radius as f32)
-            .background(rgba(window_bg))
-            .overflow(Overflow::Clip)
-            .child(
-                rect()
-                    .position(Position::new_absolute().top(padding).left(padding))
-                    .width(Size::px(side_w))
-                    .height(Size::px(height - 2.0 * padding))
-                    .corner_radius(SETTINGS.preview_radius as f32)
-                    .background(rgba(sunken)),
-            ),
-    )
 }
 
 pub fn traffic_shape_preview(resolved: &Resolved, shape: TrafficLightShape) -> HStack {
