@@ -1141,11 +1141,13 @@ fn append_cards<R: MalaysiaRenderer>(
     let mut shadows = Vec::new();
     for (index, card) in cards.rects.iter().enumerate() {
         let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
+        let (extent, exponent) =
+            crate::window_style::card_corner(cards.radius, card.size.w.min(card.size.h));
         let frame = Frame {
             owner: crate::chrome::FrameOwner::Card(cards.id, index),
             rect: physical_rect(card, scale),
-            radius: (crate::window_style::corner_extent(cards.radius) * scale).round() as i32,
-            exponent: ctdesign::DIALOG.superellipse_exponent,
+            radius: (extent * scale).round() as i32,
+            exponent,
             focused: true,
             panel: false,
             bordered: true,

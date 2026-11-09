@@ -256,6 +256,16 @@ pub(crate) fn corner_extent(radius: u32) -> f64 {
     f64::from(radius) * f64::from(ctdesign::WINDOW_CORNER.expansion)
 }
 
+// Freya's compute_smooth_corner fades the smoothing on short shapes; a card's frame must match its clip.
+pub(crate) fn card_corner(radius: u32, short_side: i32) -> (f64, f32) {
+    let half = f64::from(short_side) / 2.0;
+    let round = f64::from(radius).min(half);
+    let fade = ((round - half / 2.0) / (half / 2.0)).clamp(0.0, 1.0);
+    let extent = (corner_extent(1) * round).min(half);
+    let exponent = 2.0 + (ctdesign::DIALOG.superellipse_exponent - 2.0) * (1.0 - fade) as f32;
+    (extent, exponent)
+}
+
 impl State {
     pub(crate) fn window_corner(&self, window: WindowId) -> f64 {
         self.windows
@@ -283,6 +293,14 @@ mod tests {
         let rects = super::card_rects(&bytes);
         assert_eq!(rects.len(), 2);
         assert_eq!((rects[1].loc.y, rects[1].size.h), (106, 120));
+    }
+
+    #[test]
+    fn a_card_shorter_than_its_corners_becomes_a_capsule_and_a_tall_one_keeps_the_squircle() {
+        assert_eq!(super::card_corner(20, 30), (15.0, 2.0));
+        let (extent, exponent) = super::card_corner(20, 200);
+        assert_eq!(exponent, ctdesign::DIALOG.superellipse_exponent);
+        assert!((extent - super::corner_extent(20)).abs() < 1e-9);
     }
 
     use super::*;

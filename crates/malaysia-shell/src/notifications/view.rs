@@ -378,7 +378,7 @@ fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
         ])
         .collect::<Vec<_>>();
     let chosen = context.clone();
-    rect()
+    let pill = rect()
         .width(Size::fill())
         .padding(Gaps::new(
             6.0,
@@ -386,7 +386,6 @@ fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
             6.0,
             NOTIFICATION_PADDING,
         ))
-        .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(background))
         .center()
         .on_press(press)
@@ -404,7 +403,8 @@ fn focus_toggle(context: &Context, focus: Option<Focus>) -> Element {
                         .font(HEADLINE)
                         .color(theme::color(foreground)),
                 ),
-        )
+        );
+    framed(context, FOCUS_FRAME, pill)
         .context_menu(menu, move |command: String| {
             set_focus(&chosen, parse_focus(&command))
         })
@@ -479,7 +479,6 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
                     rect()
                         .width(Size::fill())
                         .height(Size::fill())
-                        .corner_radius(NOTIFICATION_RADIUS)
                         .background(theme::color(palette.sunken_background)),
                 )
                 .position(
@@ -717,7 +716,6 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
     let card = rect()
         .width(Size::fill())
         .padding(NOTIFICATION_PADDING)
-        .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(palette.raised_background))
         .child(
             HStack::new()
@@ -750,6 +748,9 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
         .into_element()
 }
 
+// Notification ids start at 1 (Desktop Notifications spec), so 0 never names a card.
+const FOCUS_FRAME: u32 = 0;
+
 fn framed(context: &Context, id: u32, body: Rect) -> Rect {
     context.rendered.borrow_mut().push(id);
     let frames = context.frames.clone();
@@ -765,17 +766,19 @@ fn framed(context: &Context, id: u32, body: Rect) -> Rect {
 // Stack layers and lock cards draw the window border colours: hairline inside, dark line outside (ADR 0068).
 fn edged(body: Rect) -> Rect {
     let palette = ctappearance::palette(theme::resolved().scheme);
+    let corner = bk::style::continuous_corner(NOTIFICATION_RADIUS);
+    let body = body.corner_radius(corner);
     let body = match palette.inner_line {
         Some(inner) => body.border(
             Border::new()
                 .fill(theme::color(inner))
-                .width(HAIRLINE)
+                .width(HAIRLINE / 2.0)
                 .alignment(BorderAlignment::Inner),
         ),
         None => body,
     };
     rect()
-        .corner_radius(NOTIFICATION_RADIUS)
+        .corner_radius(corner)
         .border(
             Border::new()
                 .fill(theme::color(palette.outer_border))
