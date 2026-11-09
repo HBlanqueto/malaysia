@@ -28,7 +28,9 @@ use crate::menubar::dbusmenu_map;
 use crate::menubar::gtkmenus;
 use crate::menubar::menu::{self, MenuState, MenuTitleSpec, SearchableItems};
 use crate::menubar::remote;
-use crate::menubar::{appmenu, clock, focused, live, resolve_app_name, shortcuts, status, system};
+use crate::menubar::{
+    appmenu, clock, extras, focused, live, resolve_app_name, shortcuts, status, system,
+};
 use bk::menu::{RevealRoots, SearchQuery};
 use bk::platform::MainMenuAddress;
 use bk::theme;
@@ -170,6 +172,8 @@ impl App for BarApp {
         let (generation, open_started) = self.use_snapshot_drain();
         let (status_items, status_host) = use_status_items();
         let status_anchors = use_hook(status::StatusAnchors::default);
+        let extras = extras::use_extras();
+        let menubar_config = use_defaults::<MenubarConfig>("menubar");
 
         let now = self.clock.read().clone();
         let focus = use_focus();
@@ -339,6 +343,21 @@ impl App for BarApp {
             } else {
                 menu::menu_title(index, status_specs.clone(), menu_state.clone(), text)
             });
+        }
+
+        let extra_specs = Rc::new(extras::extra_titles(
+            &extras,
+            &menubar_config.read(),
+            bar_ink(),
+            &status_anchors,
+        ));
+        for index in 0..extra_specs.len() {
+            right = right.child(menu::menu_title(
+                index,
+                extra_specs.clone(),
+                menu_state.clone(),
+                text,
+            ));
         }
 
         bar_root(bar).child(left).child(
@@ -710,19 +729,20 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
 
 fn bar_colors() -> (Color, Color) {
     let resolved = theme::resolved();
+    let background = if Toplevels::get().focus_bar.read().over_focus() {
+        ctdesign::FOCUS_BAR_BACKGROUND
+    } else {
+        theme::surface_background(&resolved, theme::SurfaceKind::LayerShell)
+    };
+    (theme::color(bar_ink()), theme::color(background))
+}
+
+fn bar_ink() -> Rgba {
     if Toplevels::get().focus_bar.read().over_focus() {
-        return (
-            theme::color(ctdesign::FOCUS_BAR_TEXT),
-            theme::color(ctdesign::FOCUS_BAR_BACKGROUND),
-        );
+        ctdesign::FOCUS_BAR_TEXT
+    } else {
+        theme::resolved().shell.text
     }
-    (
-        theme::color(resolved.shell.text),
-        theme::color(theme::surface_background(
-            &resolved,
-            theme::SurfaceKind::LayerShell,
-        )),
-    )
 }
 
 fn title_specs(

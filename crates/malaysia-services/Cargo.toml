@@ -1,0 +1,16 @@
+[package]
+name = "malaysia-services"
+description = "NetworkManager, BlueZ, UPower and power-profiles-daemon for System Settings and the menu bar."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bk.workspace = true
+ctdesign.workspace = true
+async-channel.workspace = true
+tracing.workspace = true
+zbus.workspace = true
+zeroize.workspace = true

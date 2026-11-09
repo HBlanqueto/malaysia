@@ -8,17 +8,15 @@ use ctdesign::{ACCENT_SWATCHES, Rgba, SPACE_2};
 use freya_components::svg_viewer::SvgViewer;
 use zbus::zvariant::OwnedObjectPath;
 
-use crate::bus::{Live, Remote, WhileVisible};
 use crate::localize::{intern, tr};
-use crate::networkmanager::{LinkState, NetworkCommand, NetworkManager, Security, WifiNetwork};
+use crate::menubar::show_in_menu_bar;
+use malaysia_services::bus::{Live, Remote, WhileVisible};
+use malaysia_services::networkmanager::{
+    LinkState, NetworkCommand, NetworkManager, Security, WifiNetwork, signal_svg,
+};
 
 pub const TINT: Rgba = ACCENT_SWATCHES[0].1;
 const SIGNAL_SIZE: f32 = 16.0;
-const ARCS: [&str; 3] = [
-    "M6.5 11.4a2.2 2.2 0 0 1 3 0",
-    "M4.3 9a5.5 5.5 0 0 1 7.4 0",
-    "M2 6.5a9 9 0 0 1 12 0",
-];
 
 #[derive(Clone, PartialEq)]
 pub struct Joining {
@@ -26,7 +24,11 @@ pub struct Joining {
     access_point: OwnedObjectPath,
 }
 
-pub fn wifi_pane(network: &Live<NetworkManager>, joining: State<Option<Joining>>) -> Option<Pane> {
+pub fn wifi_pane(
+    network: &Live<NetworkManager>,
+    joining: State<Option<Joining>>,
+    error: State<Option<String>>,
+) -> Option<Pane> {
     let wifi = network.snapshot.read().clone()?.wifi?;
     let remote = network.remote.clone();
     let scanning = network.remote.clone();
@@ -47,7 +49,14 @@ pub fn wifi_pane(network: &Live<NetworkManager>, joining: State<Option<Joining>>
                 scanning.send(NetworkCommand::Scanning(shown))
             })),
     );
-    let pane = |form: Form| Pane::new("wifi", tr!("wifi"), Symbol::Wifi, TINT, form);
+    let pane = |form: Form| {
+        let form = form.section(Section::new().row(show_in_menu_bar(
+            tr!("show-in-menu-bar"),
+            |config| &mut config.show_wifi,
+            error,
+        )));
+        Pane::new("wifi", tr!("wifi"), Symbol::Wifi, TINT, form)
+    };
     if !wifi.enabled {
         return Some(pane(Form::new().section(header)));
     }
@@ -148,21 +157,6 @@ fn signal(found: &WifiNetwork) -> HStack {
             .height(Size::px(SIGNAL_SIZE))
             .show_loader(false),
     )
-}
-
-fn signal_svg(bars: u8, on: Rgba, off: Rgba) -> String {
-    let arcs: String = ARCS
-        .iter()
-        .enumerate()
-        .map(|(index, path)| {
-            let [r, g, b, a] = if usize::from(bars) > index { on } else { off }.to_rgba8();
-            let alpha = f32::from(a) / 255.0;
-            format!(
-                r#"<path d="{path}" fill="none" stroke="rgba({r},{g},{b},{alpha})" stroke-width="1.6" stroke-linecap="round"/>"#
-            )
-        })
-        .collect();
-    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">{arcs}</svg>"#)
 }
 
 pub fn password_sheet(

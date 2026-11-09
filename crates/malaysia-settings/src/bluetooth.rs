@@ -5,10 +5,11 @@ use bk::views::form::{Form, Row, Section};
 use ctdesign::SPACE_2;
 use freya_components::svg_viewer::SvgViewer;
 
-use crate::bluez::{BlueZ, BluetoothCommand, Device, PROMPTS, Prompt};
-use crate::bus::{Live, WhileVisible};
 use crate::localize::{intern, tr};
+use crate::menubar::show_in_menu_bar;
 use crate::wifi::TINT;
+use malaysia_services::bluez::{BlueZ, BluetoothCommand, Device, PROMPTS, Prompt};
+use malaysia_services::bus::{Live, WhileVisible};
 
 const PICTURE_SIZE: (f32, f32) = (40.0, 32.0);
 
@@ -46,7 +47,7 @@ pub fn use_pairing_prompt() -> State<Option<Prompt>> {
     prompt
 }
 
-pub fn bluetooth_pane(bluetooth: &Live<BlueZ>) -> Option<Pane> {
+pub fn bluetooth_pane(bluetooth: &Live<BlueZ>, error: State<Option<String>>) -> Option<Pane> {
     let adapter = bluetooth.snapshot.read().clone().flatten()?;
     let power = bluetooth.remote.clone();
     let visible = bluetooth.remote.clone();
@@ -62,7 +63,14 @@ pub fn bluetooth_pane(bluetooth: &Live<BlueZ>) -> Option<Pane> {
                 visible.send(BluetoothCommand::Visible(shown))
             })),
     );
-    let pane = |form: Form| Pane::new("bluetooth", tr!("bluetooth"), Symbol::Bluetooth, TINT, form);
+    let pane = |form: Form| {
+        let form = form.section(Section::new().row(show_in_menu_bar(
+            tr!("show-in-menu-bar"),
+            |config| &mut config.show_bluetooth,
+            error,
+        )));
+        Pane::new("bluetooth", tr!("bluetooth"), Symbol::Bluetooth, TINT, form)
+    };
     if !adapter.powered {
         return Some(pane(Form::new().section(header)));
     }

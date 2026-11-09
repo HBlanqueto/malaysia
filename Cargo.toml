@@ -8,6 +8,7 @@ members = [
     "crates/malaysia-shell",
     "crates/malaysia-wallpaper",
     "crates/malaysia-settings",
+    "crates/malaysia-services",
     "crates/xdg-desktop-portal-malaysia",
     "tools/sctk-probe",
 ]
@@ -19,6 +20,7 @@ default-members = [
     "crates/malaysia-shell",
     "crates/malaysia-wallpaper",
     "crates/malaysia-settings",
+    "crates/malaysia-services",
     "crates/xdg-desktop-portal-malaysia",
 ]
 
@@ -55,11 +57,12 @@ chrono = "0.4"
 
 grade-graphics = { path = "crates/grade-graphics" }
 malaysia-scene = { path = "crates/malaysia-scene" }
+malaysia-services = { path = "crates/malaysia-services" }
 
-bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "7972730f4851e57b074244eb596cf7bea5ea6b06" }
-ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "7972730f4851e57b074244eb596cf7bea5ea6b06" }
-ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "7972730f4851e57b074244eb596cf7bea5ea6b06" }
-infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "7972730f4851e57b074244eb596cf7bea5ea6b06" }
+bk = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b91b8dd15ff633d9145f6107e6745221e2a97d82" }
+ctdesign = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b91b8dd15ff633d9145f6107e6745221e2a97d82" }
+ctappearance = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b91b8dd15ff633d9145f6107e6745221e2a97d82" }
+infinity-protocol = { git = "https://github.com/HBlanqueto/barrierkit", rev = "b91b8dd15ff633d9145f6107e6745221e2a97d82" }
 
 freya-animation = "=0.5.0"
 freya-core = "=0.5.0"

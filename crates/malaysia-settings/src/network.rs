@@ -2,10 +2,11 @@ use bk::patterns::settings::Pane;
 use bk::prelude::*;
 use bk::views::form::{Form, Row, Section};
 
-use crate::bus::Live;
 use crate::localize::{intern, tr};
-use crate::networkmanager::{LinkKind, LinkState, NetworkCommand, NetworkManager, Vpn};
+use crate::menubar::show_in_menu_bar;
 use crate::wifi::TINT;
+use malaysia_services::bus::Live;
+use malaysia_services::networkmanager::{LinkKind, LinkState, NetworkCommand, NetworkManager, Vpn};
 
 pub fn network_pane(network: &Live<NetworkManager>) -> Option<Pane> {
     let snapshot = network.snapshot.read().clone()?;
@@ -46,7 +47,7 @@ pub fn network_pane(network: &Live<NetworkManager>) -> Option<Pane> {
     ))
 }
 
-pub fn vpn_pane(network: &Live<NetworkManager>) -> Option<Pane> {
+pub fn vpn_pane(network: &Live<NetworkManager>, error: State<Option<String>>) -> Option<Pane> {
     let snapshot = network.snapshot.read().clone()?;
     let list = if snapshot.vpns.is_empty() {
         Section::new().row(Row::new(tr!("vpn-none")))
@@ -75,7 +76,14 @@ pub fn vpn_pane(network: &Live<NetworkManager>) -> Option<Pane> {
         tr!("vpn"),
         Symbol::Lock,
         TINT,
-        Form::new().section(list).section(import),
+        Form::new()
+            .section(list)
+            .section(import)
+            .section(Section::new().row(show_in_menu_bar(
+                tr!("show-in-menu-bar"),
+                |config| &mut config.show_vpn,
+                error,
+            ))),
     ))
 }
 

@@ -20,15 +20,18 @@ use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
 use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_pairing_prompt};
-use crate::bluez::BlueZ;
-use crate::bus::use_service;
-use crate::energy::{PowerProfiles, UPower, energy_pane};
+use crate::energy::energy_pane;
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
-use crate::networkmanager::NetworkManager;
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
 use crate::wifi::{Joining, password_sheet, wifi_pane};
+use bk::app::use_menu_action;
+use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
+use malaysia_services::bluez::{BlueZ, BluetoothCommand};
+use malaysia_services::bus::use_service;
+use malaysia_services::networkmanager::NetworkManager;
+use malaysia_services::upower::{PowerProfiles, UPower};
 
 const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
 const WINDOW_COLORS: [WindowColorMode; 2] = [WindowColorMode::Neutral, WindowColorMode::Accent];
@@ -82,7 +85,16 @@ pub fn settings_window(
     let profiles = use_service::<PowerProfiles>();
     let network = use_service::<NetworkManager>();
     let bluetooth = use_service::<BlueZ>();
+    let agent = bluetooth.remote.clone();
+    use_hook(move || agent.send(BluetoothCommand::HostAgent));
     let pairing = use_pairing_prompt();
+    let destination = use_state(|| std::env::args().nth(1));
+    use_menu_action(move |action| {
+        if let Some(pane) = action.strip_prefix(PANE_ACTION) {
+            let mut destination = destination;
+            destination.set(Some(pane.to_string()));
+        }
+    });
     let joining = use_state(|| None::<Joining>);
     let password = use_state(bk::password::PasswordField::default);
     let name = account_name();
@@ -90,13 +102,14 @@ pub fn settings_window(
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
         .sidebar_resizable(false)
+        .navigation_destination(destination)
         .group(
             [
-                wifi_pane(&network, joining),
-                bluetooth_pane(&bluetooth),
+                wifi_pane(&network, joining, error),
+                bluetooth_pane(&bluetooth, error),
                 network_pane(&network),
-                vpn_pane(&network),
-                Some(energy_pane(&power, &profiles)),
+                vpn_pane(&network, error),
+                Some(energy_pane(&power, &profiles, error)),
             ]
             .into_iter()
             .flatten()

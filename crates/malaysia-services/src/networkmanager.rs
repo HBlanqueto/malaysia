@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use ctdesign::Rgba;
 use zbus::blocking::Connection;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use zeroize::Zeroizing;
@@ -149,6 +150,7 @@ pub struct Network {
 pub enum NetworkCommand {
     Wifi(bool),
     Scanning(bool),
+    Scan,
     Join {
         access_point: OwnedObjectPath,
         password: Option<Zeroizing<String>>,
@@ -245,6 +247,10 @@ impl Service for NetworkManager {
         match command {
             NetworkCommand::Wifi(on) => {
                 set(bus, NM, NM_PATH, NM, "WirelessEnabled", Value::from(on))
+            }
+            NetworkCommand::Scan => {
+                self.scan(bus);
+                Ok(())
             }
             NetworkCommand::Scanning(on) => {
                 self.scanning = on;
@@ -566,6 +572,27 @@ fn networks(
             .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     networks
+}
+
+const ARCS: [&str; 3] = [
+    "M6.5 11.4a2.2 2.2 0 0 1 3 0",
+    "M4.3 9a5.5 5.5 0 0 1 7.4 0",
+    "M2 6.5a9 9 0 0 1 12 0",
+];
+
+pub fn signal_svg(bars: u8, on: Rgba, off: Rgba) -> String {
+    let arcs: String = ARCS
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            let [r, g, b, a] = if usize::from(bars) > index { on } else { off }.to_rgba8();
+            let alpha = f32::from(a) / 255.0;
+            format!(
+                r#"<path d="{path}" fill="none" stroke="rgba({r},{g},{b},{alpha})" stroke-width="1.6" stroke-linecap="round"/>"#
+            )
+        })
+        .collect();
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">{arcs}</svg>"#)
 }
 
 #[cfg(test)]

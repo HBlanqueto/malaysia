@@ -57,6 +57,7 @@ pub enum BluetoothCommand {
     Disconnect(OwnedObjectPath),
     Pair(OwnedObjectPath),
     Forget(OwnedObjectPath),
+    HostAgent,
 }
 
 #[derive(Clone)]
@@ -76,6 +77,7 @@ pub enum Prompt {
 #[derive(Default)]
 pub struct BlueZ {
     adapter: Option<OwnedObjectPath>,
+    hosts_agent: bool,
     agent: bool,
     visible: bool,
 }
@@ -99,7 +101,7 @@ impl Service for BlueZ {
             .inspect_err(|_| self.agent = false)?
             .body()
             .deserialize()?;
-        if !self.agent {
+        if self.hosts_agent && !self.agent {
             self.agent = register_agent(bus)
                 .inspect_err(|error| tracing::warn!(%error, "no Bluetooth pairing agent"))
                 .is_ok();
@@ -149,6 +151,10 @@ impl Service for BlueZ {
 
     fn run(&mut self, bus: &Connection, command: BluetoothCommand) -> zbus::Result<()> {
         match command {
+            BluetoothCommand::HostAgent => {
+                self.hosts_agent = true;
+                Ok(())
+            }
             BluetoothCommand::Power(on) => self.power(bus, on),
             BluetoothCommand::Visible(visible) => {
                 self.visible = visible;

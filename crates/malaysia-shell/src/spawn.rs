@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
@@ -83,10 +84,55 @@ pub(crate) fn spawn_component_with(component: &str, args: &[&str]) {
 }
 
 pub(crate) fn spawn_settings() {
+    spawn_settings_with(&[]);
+}
+
+fn spawn_settings_with(args: &[&str]) {
     let program = sibling_binary("malaysia-settings")
         .filter(|path| path.is_file())
         .unwrap_or_else(|| PathBuf::from("malaysia-settings"));
-    spawn_kit("malaysia-settings", Command::new(program));
+    let mut command = Command::new(program);
+    command.args(args);
+    spawn_kit("malaysia-settings", command);
+}
+
+pub(crate) fn open_settings(pane: &str) {
+    let pane = pane.to_string();
+    let spawned = std::thread::Builder::new()
+        .name("open-settings".to_string())
+        .spawn(move || {
+            if let Err(error) = forward_to_settings(&pane) {
+                tracing::debug!(%error, "System Settings not running");
+                spawn_settings_with(&[&pane]);
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::warn!(%error, "no thread to open System Settings");
+    }
+}
+
+fn forward_to_settings(pane: &str) -> zbus::Result<()> {
+    let app_id = bk::titlebar::app_id("settings");
+    let path = format!("/{}", app_id.replace('.', "/").replace('-', "_"));
+    let bus = zbus::blocking::Connection::session()?;
+    let platform_data: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+    let action = format!("{}{pane}", malaysia_services::SETTINGS_PANE_ACTION);
+    let no_parameter: Vec<zbus::zvariant::Value> = Vec::new();
+    bus.call_method(
+        Some(app_id.as_str()),
+        path.as_str(),
+        Some("org.freedesktop.Application"),
+        "ActivateAction",
+        &(action, no_parameter, &platform_data),
+    )?;
+    bus.call_method(
+        Some(app_id.as_str()),
+        path.as_str(),
+        Some("org.freedesktop.Application"),
+        "Activate",
+        &(&platform_data,),
+    )?;
+    Ok(())
 }
 
 fn spawn_kit(name: &str, mut command: Command) {

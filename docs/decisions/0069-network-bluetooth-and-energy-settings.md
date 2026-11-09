@@ -1,6 +1,6 @@
 # 0069 — Network, Bluetooth and energy settings
 
-Status: accepted (2026-11-09), phase 1 of 3.
+Status: accepted (2026-11-09); phase 1 and the menu bar part of phase 2 done.
 
 ## Goal and scope
 
@@ -95,10 +95,15 @@ compositor idle code.
 
 ## Consequences
 
-1. **Phase 2:** the menubar gets Wi-Fi, Bluetooth and battery menus, and
-   hosts the NetworkManager secret agent and the BlueZ agent so prompts work
-   with Settings closed; wrong-password retries and VPN one-time passwords
-   need it.
+1. **Phase 2:** the menubar shows VPN, Bluetooth, Wi-Fi and Battery menus
+   ([`menubar.md`](../architecture/menubar.md#system-status-menus)), read
+   through the shared `malaysia-services` crate; each pane of Settings has
+   «Show in menu bar» (`menubar.domain`). Still to do: the menubar hosts the
+   NetworkManager secret agent and the BlueZ agent, with their dialogs, so
+   prompts work with Settings closed; wrong-password retries and VPN one-time
+   passwords need it. Until then only Settings registers the BlueZ agent
+   (`BluetoothCommand::HostAgent`), and a network that needs a password opens
+   Settings.
 2. **Phase 3:** idle timers in the compositor (`ext-idle-notify-v1`) for
    display off and sleep, Low Power Mode only on battery and on low battery,
    network details (TCP/IP, DNS, private address, metered), Wake-on-LAN,

@@ -46,3 +46,14 @@ App icons (`NSStatusItem`, the system tray) go on the right, before the clock. T
 2. The icon comes from the theme (`IconName`, searched in `status`, `panel`, `devices` and `apps`, or in KDE's `IconThemePath`); without one, `IconPixmap` is painted. With `Status = NeedsAttention` the attention ones are used.
 3. An icon with a menu opens it on press, like the bar menus and like an `NSStatusItem` with a menu; a click on an item sends `Event("clicked")` over dbusmenu. An icon without a menu sends `Activate`.
 4. Every signal from the icon or its menu (`NewIcon`, `NewTitle`, `NewStatus`, `LayoutUpdated`…) reads it again; if its name leaves the bus, it is removed.
+
+## System status menus
+
+After the app icons come VPN, Bluetooth, Wi-Fi and Battery (`menubar/extras.rs`, ADR 0069). They read NetworkManager, BlueZ, UPower and power-profiles-daemon through `malaysia-services`, the same workers as System Settings.
+
+1. Each menu shows only if its daemon answers and its `show_*` key in `menubar.domain` is on ([`options.md`](../configuration/options.md#menubar--shell-menu-bar-macos-menu-bar)). VPN shows only with a VPN profile, Battery only with a battery.
+2. The icons take the bar text color: the Wi-Fi arcs show the signal of the current network, the battery fills to its level, green while charging and red from 20 % down.
+3. Wi-Fi turns the radio on or off and lists known and other networks; opening it requests a scan. A known or open network connects from the menu; one that needs a password opens Settings › Wi-Fi.
+4. Bluetooth turns the radio on or off and connects or disconnects paired devices, with their battery.
+5. Battery shows the level, the power source and the time left, and toggles Low Power Mode.
+6. «… Settings…» opens that pane: the bar sends `ActivateAction("pane.<id>")` to a running System Settings, or starts it with the pane id as argument.

@@ -147,7 +147,8 @@ without reopening the app; Flatpak and GTK 3 still need a reopen. Test:
 permission dialogs. **12b:** notifications done (ADR 0068: server, history, banners, panel, Focus modes, Settings › Notifications and Focus, portal v2, reply, lock screen, Dock badges and progress, Live Activities for transfers, calls and printing, Calendar and Batteries widgets). Also pending: polkit, keyring/Secret
 Service and AT-SPI. **12c phase 1 (2026-11-09, ADR 0069):** Settings ›
 Wi-Fi, Bluetooth, Network, VPN and Energy on NetworkManager, BlueZ, UPower
-and power-profiles-daemon. Pending: menubar menus and the secret and pairing
+and power-profiles-daemon. **Phase 2 menu bar (2026-11-09):** VPN, Bluetooth,
+Wi-Fi and Battery menus and «Show in menu bar». Pending: the secret and pairing
 agents in the shell (phase 2), idle timers and network details (phase 3).
 
 ### 13 — Chrome and launcher
@@ -416,6 +417,6 @@ searching `crates/malaysia-compositor/src`.
 - **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3).
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
-  indicators (network, Bluetooth and battery: ADR 0069 phase 2), OSD and
+  indicators (network, Bluetooth and battery done, ADR 0069), OSD and
   media keys.
 

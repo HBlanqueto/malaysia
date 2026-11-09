@@ -3,6 +3,7 @@ pub mod bar;
 pub mod clock;
 pub mod dbusmenu;
 pub mod dbusmenu_map;
+pub mod extras;
 pub mod focused;
 pub mod gtkmenus;
 pub mod help_topics;

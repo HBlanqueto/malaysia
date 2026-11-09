@@ -1,11 +1,9 @@
 mod app;
 mod bluetooth;
-mod bluez;
-mod bus;
 mod energy;
 mod localize;
+mod menubar;
 mod network;
-mod networkmanager;
 mod notifications;
 mod previews;
 mod state;

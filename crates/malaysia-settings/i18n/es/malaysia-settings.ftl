@@ -217,3 +217,6 @@ bluetooth-pair-title = Enlazar «{ $device }»
 bluetooth-pair-confirm = Comprueba que el dispositivo muestra este código.
 bluetooth-pair-type = Escribe este código en el dispositivo y pulsa Retorno.
 bluetooth-pair = Enlazar
+
+show-in-menu-bar = Mostrar en la barra de menús
+show-battery-percentage = Mostrar el porcentaje en la barra de menús

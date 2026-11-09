@@ -217,3 +217,6 @@ bluetooth-pair-title = Pair “{ $device }”
 bluetooth-pair-confirm = Check that the device shows this code.
 bluetooth-pair-type = Type this code on the device and press Return.
 bluetooth-pair = Pair
+
+show-in-menu-bar = Show in menu bar
+show-battery-percentage = Show percentage in menu bar

@@ -360,6 +360,11 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 |---|---|---|---|---|
 | `menubar.autohide` | bool | `false` | pending | shell |
 | `menubar.app_menus` | bool | `true` | **active** | shell (dbusmenu and `org.gtk.Menus`) and compositor (`gtk_shell1` `capabilities` 3/0, ADR 0045) |
+| `menubar.show_wifi` | bool | `true` | **active** | shell (Wi-Fi menu, ADR 0069); System Settings › Wi-Fi writes it |
+| `menubar.show_bluetooth` | bool | `true` | **active** | shell (Bluetooth menu); System Settings › Bluetooth writes it |
+| `menubar.show_battery` | bool | `true` | **active** | shell (Battery menu); System Settings › Battery writes it |
+| `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
+| `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
 
 ## `notifications` — notifications (System Settings → Notifications; ADR 0068)
 
