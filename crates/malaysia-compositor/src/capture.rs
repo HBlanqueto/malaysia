@@ -561,13 +561,12 @@ pub(crate) fn save_screenshot(
         state.set_clipboard_png(png);
         Ok(ScreenshotOutcome::Copied)
     } else {
-        crate::capture::save_png(&png)?;
-        Ok(ScreenshotOutcome::Saved)
+        Ok(ScreenshotOutcome::Saved(crate::capture::save_png(&png)?))
     }
 }
 
 pub(crate) enum ScreenshotOutcome {
-    Saved,
+    Saved(PathBuf),
     Copied,
 }
 
@@ -630,7 +629,7 @@ pub(crate) fn capture_output_png(
 pub(crate) fn log_screenshot(result: std::io::Result<ScreenshotOutcome>) {
     match result {
         Ok(ScreenshotOutcome::Copied) => tracing::info!("screenshot copied to the clipboard"),
-        Ok(ScreenshotOutcome::Saved) => {}
+        Ok(ScreenshotOutcome::Saved(path)) => crate::notification_panel::screenshot_saved(path),
         Err(error) => tracing::warn!(%error, "screenshot failed"),
     }
 }

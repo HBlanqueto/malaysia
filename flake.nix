@@ -143,6 +143,8 @@
               $out/share/applications/io.github.hblanqueto.malaysia.settings.desktop
             install -Dm644 share/icons/hicolor/scalable/apps/io.github.hblanqueto.malaysia.settings.svg \
               $out/share/icons/hicolor/scalable/apps/io.github.hblanqueto.malaysia.settings.svg
+            install -Dm644 share/icons/hicolor/scalable/apps/io.github.hblanqueto.malaysia.screenshot.svg \
+              $out/share/icons/hicolor/scalable/apps/io.github.hblanqueto.malaysia.screenshot.svg
             mkdir -p $out/lib/systemd/user
             for unit in malaysia-shell@.service malaysia-wallpaper.service malaysia-session.target \
                 xdg-desktop-portal-malaysia.service; do

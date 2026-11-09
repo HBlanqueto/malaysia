@@ -44,9 +44,21 @@ pub(crate) fn send(request: Request) {
         Request::Open => "OpenPanel",
         Request::Close => "ClosePanel",
     };
+    call(method, ());
+}
+
+// ADR 0068: the shell posts «Screenshot Saved» with the file as its image; a click opens it.
+pub(crate) fn screenshot_saved(path: std::path::PathBuf) {
+    call("ScreenshotSaved", (path.to_string_lossy().into_owned(),));
+}
+
+fn call<B>(method: &'static str, body: B)
+where
+    B: serde::Serialize + zbus::zvariant::DynamicType + Send + 'static,
+{
     std::thread::spawn(move || {
         let called = zbus::blocking::Connection::session().and_then(|connection| {
-            connection.call_method(Some(SERVICE), PATH, Some(SERVICE), method, &())
+            connection.call_method(Some(SERVICE), PATH, Some(SERVICE), method, &body)
         });
         if let Err(error) = called {
             tracing::warn!(%error, method, "could not reach the notification panel");

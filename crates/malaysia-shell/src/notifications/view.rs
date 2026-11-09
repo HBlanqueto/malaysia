@@ -955,7 +955,13 @@ fn invoke(
         hub.center.remove(notification.id);
         hub.center.save();
     }
+    if let Origin::Shell { open } = &notification.origin {
+        crate::spawn::xdg_open(open);
+        context.refresh();
+        return;
+    }
     let default = match &notification.origin {
+        Origin::Shell { .. } => None,
         Origin::Gtk { .. } | Origin::Portal { .. } => notification
             .origin
             .default_action()

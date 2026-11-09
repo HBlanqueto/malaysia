@@ -30,6 +30,7 @@ const JOBS_NAME: &str = "org.kde.JobViewServer";
 const UI_SERVER_NAME: &str = "org.kde.kuiserver";
 const JOBS_PATH: &str = "/JobViewServer";
 const CALL_CATEGORY: &str = "call.ongoing";
+const SCREENSHOT_APP: &str = "io.github.hblanqueto.malaysia.screenshot";
 const HANG_UP_PURPOSE: &str = "call.hang-up";
 pub(crate) const DEFAULT_ACTION: &str = "default";
 pub(crate) const CLOSED_DISMISSED: u32 = 2;
@@ -215,6 +216,7 @@ async fn answer(link: &Link, connection: &zbus::Connection, reply: Reply) -> zbu
             Origin::Portal { id, .. } => {
                 portal_action(connection, &notification.app_id, id, &key, Vec::new()).await?
             }
+            Origin::Shell { .. } => {}
         },
         Reply::Answered(notification, text) => {
             let key = notification
@@ -236,6 +238,7 @@ async fn answer(link: &Link, connection: &zbus::Connection, reply: Reply) -> zbu
                         OwnedValue::try_from(Value::from(text)).map_err(zbus::Error::from)?;
                     portal_action(connection, &notification.app_id, id, &key, vec![text]).await?
                 }
+                Origin::Shell { .. } => {}
             }
         }
         Reply::Activities => activities_changed(connection).await?,
@@ -790,6 +793,38 @@ impl Control {
 
     fn close_panel(&self) {
         show_panel(&self.link, false);
+    }
+
+    fn screenshot_saved(&self, path: String) {
+        let id = self.link.hub().center.allocate_id(0);
+        let notification = Notification {
+            id,
+            app_id: SCREENSHOT_APP.into(),
+            app_name: crate::localize::tr!("notifications-screenshot").to_string(),
+            icon: SCREENSHOT_APP.into(),
+            image: Some(path.clone()),
+            communication: false,
+            summary: crate::localize::tr!("notifications-screenshot-saved").to_string(),
+            body: std::path::Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            actions: Vec::new(),
+            reply: None,
+            hide_on_lock: false,
+            hide_content_on_lock: false,
+            level: Level::Active,
+            posted: now(),
+            origin: Origin::Shell { open: path },
+        };
+        deliver(
+            &self.link,
+            Incoming {
+                notification,
+                transient: false,
+                sound: false,
+            },
+        );
     }
 
     #[zbus(signal)]

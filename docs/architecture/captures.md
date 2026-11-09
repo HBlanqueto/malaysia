@@ -30,6 +30,7 @@ input.rs → ScreenshotMode (state.rs) → overlay (session.rs)
 - The region is normalized and clipped to the output; a zero-size drag does not capture.
 - Output and region are re-rendered at the output scale; window renders only the client surface.
 - `target = "desktop"` uses `xdg::desktop_dir()` (localized name) and the name `Screenshot YYYY-MM-DD at HH.MM.SS.png`, with ` (2)`… on a clash. Window: transparent PNG; output/region: opaque.
+- After saving, the compositor calls `ScreenshotSaved(path)` on `org.malaysia.Notifications1`. The shell posts «Screenshot Saved» with the screenshot as its thumbnail and the `io.github.hblanqueto.malaysia.screenshot` icon; a click opens the file with `xdg-open` (ADR 0068).
 - `target = "clipboard"` writes no file: it publishes `image/png` in the selection; the compositor serves the bytes in a thread until another client copies.
 - `show_pointer` decides whether the pointer appears in output/region (default `false`).
 

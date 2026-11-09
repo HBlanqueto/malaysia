@@ -270,6 +270,12 @@ Exact names from
       photo and replaces the icon, with the app icon as a badge at the
       bottom right, like a Tahoe communication notification. Any other image
       is a thumbnail at the trailing edge. Hidden previews show neither.
+   4. **Malaysia's own:** the shell posts the notifications of its own
+      components with `Origin::Shell`, whose click opens a file. Today that
+      is «Screenshot Saved» (`ScreenshotSaved` on `org.malaysia.Notifications1`).
+      Their icons live in `share/icons/hicolor/scalable/apps/` on the
+      Settings icon grid. Live Activities and widgets keep monochrome menu
+      bar symbols, as on macOS.
 5. **Levels map to macOS:**
 
    | Linux | Malaysia level |

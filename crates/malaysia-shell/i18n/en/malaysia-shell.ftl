@@ -898,6 +898,8 @@ notifications-empty = No Notifications
 notifications-show-less = Show Less
 notifications-clear-all = Clear All
 notifications-hidden-preview = Notification
+notifications-screenshot = Screenshot
+notifications-screenshot-saved = Screenshot Saved
 notifications-more = { $count ->
     [one] 1 more
    *[other] { $count } more

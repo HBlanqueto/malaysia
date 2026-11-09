@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7d889c"/>
+      <stop offset="0.55" stop-color="#4c566a"/>
+      <stop offset="1" stop-color="#2b313d"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e3e6ec"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fd0ff"/>
+      <stop offset="1" stop-color="#2f7cf6"/>
+    </linearGradient>
+    <linearGradient id="hill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ee06a"/>
+      <stop offset="1" stop-color="#2e9e48"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5fb8a0"/>
+      <stop offset="1" stop-color="#2f7d74"/>
+    </linearGradient>
+    <linearGradient id="bracket" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d4d9e2"/>
+    </linearGradient>
+  </defs>
+  <path d="M100 724 L100 300 C100 185 170 100 300 100 L724 100 C854 100 924 185 924 300 L924 724 C924 839 854 924 724 924 L300 924 C170 924 100 839 100 724 Z" fill="#000000" fill-opacity="0.1" transform="translate(0 14)"/>
+  <path d="M100 724 L100 300 C100 185 170 100 300 100 L724 100 C854 100 924 185 924 300 L924 724 C924 839 854 924 724 924 L300 924 C170 924 100 839 100 724 Z" fill="#000000" fill-opacity="0.12" transform="translate(0 6)"/>
+  <path d="M100 724 L100 300 C100 185 170 100 300 100 L724 100 C854 100 924 185 924 300 L924 724 C924 839 854 924 724 924 L300 924 C170 924 100 839 100 724 Z" fill="url(#body)"/>
+  <path d="M100 470 L100 300 C100 185 170 100 300 100 L724 100 C854 100 924 185 924 300 L924 470 C800 418 660 396 512 396 C364 396 224 418 100 470 Z" fill="url(#sheen)"/>
+  <g fill="#0b0f18">
+    <rect x="300" y="358" width="424" height="344" rx="30" fill-opacity="0.3"/>
+    <rect x="300" y="348" width="424" height="344" rx="30" fill-opacity="0.22"/>
+  </g>
+  <rect x="300" y="340" width="424" height="344" rx="30" fill="url(#frame)"/>
+  <rect x="326" y="366" width="372" height="292" rx="14" fill="url(#sky)"/>
+  <circle cx="620" cy="430" r="34" fill="#ffd84a"/>
+  <path d="M326 580 L440 476 L540 560 L600 512 L698 590 L698 644 C698 652 692 658 684 658 L340 658 C332 658 326 652 326 644 Z" fill="url(#far)"/>
+  <path d="M326 612 C420 560 520 566 698 618 L698 644 C698 652 692 658 684 658 L340 658 C332 658 326 652 326 644 Z" fill="url(#hill)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="28">
+    <g stroke="#0b0f18" stroke-opacity="0.25" transform="translate(0 8)">
+      <path d="M232 342 L232 276 C232 260 244 248 260 248 L326 248"/>
+      <path d="M698 248 L764 248 C780 248 792 260 792 276 L792 342"/>
+      <path d="M792 682 L792 748 C792 764 780 776 764 776 L698 776"/>
+      <path d="M326 776 L260 776 C244 776 232 764 232 748 L232 682"/>
+    </g>
+    <g stroke="url(#bracket)">
+      <path d="M232 342 L232 276 C232 260 244 248 260 248 L326 248"/>
+      <path d="M698 248 L764 248 C780 248 792 260 792 276 L792 342"/>
+      <path d="M792 682 L792 748 C792 764 780 776 764 776 L698 776"/>
+      <path d="M326 776 L260 776 C244 776 232 764 232 748 L232 682"/>
+    </g>
+  </g>
+  <path d="M100 724 L100 300 C100 185 170 100 300 100 L724 100 C854 100 924 185 924 300 L924 724 C924 839 854 924 724 924 L300 924 C170 924 100 839 100 724 Z" fill="none" stroke="#000000" stroke-opacity="0.12" stroke-width="3"/>
+</svg>

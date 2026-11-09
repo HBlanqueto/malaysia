@@ -47,13 +47,16 @@ pub(crate) enum Origin {
         id: String,
         default_action: Option<Action>,
     },
+    Shell {
+        open: String,
+    },
 }
 
 impl Origin {
     pub(crate) fn gtk_id(&self) -> Option<&str> {
         match self {
             Self::Gtk { id, .. } | Self::Portal { id, .. } => Some(id),
-            Self::Freedesktop => None,
+            Self::Freedesktop | Self::Shell { .. } => None,
         }
     }
 
@@ -62,7 +65,7 @@ impl Origin {
             Self::Gtk { default_action, .. } | Self::Portal { default_action, .. } => {
                 default_action.as_ref()
             }
-            Self::Freedesktop => None,
+            Self::Freedesktop | Self::Shell { .. } => None,
         }
     }
 }
