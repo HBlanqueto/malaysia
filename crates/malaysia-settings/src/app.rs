@@ -25,7 +25,7 @@ use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
-use crate::wifi::{Joining, password_sheet, wifi_pane};
+use crate::wifi::{WifiDialog, wifi_dialog, wifi_pane};
 use bk::app::use_menu_action;
 use malaysia_services::SETTINGS_PANE_ACTION as PANE_ACTION;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand};
@@ -95,8 +95,7 @@ pub fn settings_window(
             destination.set(Some(pane.to_string()));
         }
     });
-    let joining = use_state(|| None::<Joining>);
-    let password = use_state(bk::password::PasswordField::default);
+    let wifi_shown = use_state(|| None::<WifiDialog>);
     let name = account_name();
     let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
@@ -105,7 +104,7 @@ pub fn settings_window(
         .navigation_destination(destination)
         .group(
             [
-                wifi_pane(&network, joining, error),
+                wifi_pane(&network, wifi_shown, error),
                 bluetooth_pane(&bluetooth, error),
                 network_pane(&network),
                 vpn_pane(&network, error),
@@ -168,7 +167,7 @@ pub fn settings_window(
                 .confirm(tr!("save-error-ok"), move |_| error.set(None))
                 .cancel(tr!("save-error-close"), move |_| error.set(None))
         }))
-        .maybe_child(password_sheet(joining, password, &network.remote))
+        .maybe_child(wifi_dialog(wifi_shown, &network))
         .maybe_child(pairing_sheet(pairing))
         .children(failures.into_iter().filter_map(failure_alert))
 }

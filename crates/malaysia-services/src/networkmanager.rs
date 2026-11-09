@@ -18,6 +18,13 @@ const WIRELESS: &str = "org.freedesktop.NetworkManager.Device.Wireless";
 const ACCESS_POINT: &str = "org.freedesktop.NetworkManager.AccessPoint";
 const ACTIVE: &str = "org.freedesktop.NetworkManager.Connection.Active";
 const PROFILE: &str = "org.freedesktop.NetworkManager.Settings.Connection";
+const IP4_CONFIG: &str = "org.freedesktop.NetworkManager.IP4Config";
+const WIFI_SECURITY: &str = "802-11-wireless-security";
+// Update2 flag NM_SETTINGS_UPDATE2_FLAG_TO_DISK.
+const UPDATE_TO_DISK: u32 = 0x1;
+// NMMetered: an explicit «yes» is Low Data Mode; 0 lets NetworkManager guess.
+const METERED_YES: i32 = 1;
+const METERED_UNKNOWN: i32 = 0;
 const WIFI_PROFILE: &str = "802-11-wireless";
 const VPN_PROFILES: [&str; 2] = ["vpn", "wireguard"];
 // NMDeviceType values listed in the Network pane; Wi-Fi has its own pane and VPNs theirs.
@@ -83,11 +90,63 @@ pub enum LinkState {
     Disconnected,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrivateAddress {
+    Off,
+    Fixed,
+    Rotating,
+}
+
+impl PrivateAddress {
+    // `assigned-mac-address` values from nm-settings-dbus(5).
+    fn from_setting(value: Option<&str>) -> Self {
+        match value {
+            Some("stable") => Self::Fixed,
+            Some("random") => Self::Rotating,
+            _ => Self::Off,
+        }
+    }
+
+    fn setting(self) -> &'static str {
+        match self {
+            Self::Off => "permanent",
+            Self::Fixed => "stable",
+            Self::Rotating => "random",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WifiOptions {
+    pub autoconnect: bool,
+    pub low_data: bool,
+    pub private_address: PrivateAddress,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Protocol {
+    Wpa2,
+    Wpa3,
+    Wpa2Wpa3,
+}
+
+impl Protocol {
+    fn from_keys(keys: u32) -> Self {
+        match (keys & KEY_PSK != 0, keys & KEY_SAE != 0) {
+            (true, true) => Self::Wpa2Wpa3,
+            (false, true) => Self::Wpa3,
+            _ => Self::Wpa2,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct WifiNetwork {
     pub name: String,
     pub bars: u8,
     pub security: Security,
+    pub protocol: Protocol,
+    pub options: Option<WifiOptions>,
     pub access_point: OwnedObjectPath,
     pub profile: Option<OwnedObjectPath>,
     pub current: bool,
@@ -99,6 +158,9 @@ pub struct Wifi {
     pub switchable: bool,
     pub state: LinkState,
     pub wrong_password: bool,
+    pub hardware_address: String,
+    pub address: Option<String>,
+    pub router: Option<String>,
     pub networks: Vec<WifiNetwork>,
 }
 
@@ -159,6 +221,8 @@ pub enum NetworkCommand {
     Deactivate(OwnedObjectPath),
     Forget(OwnedObjectPath),
     Import(PathBuf),
+    Configure(OwnedObjectPath, WifiOptions),
+    Password(OwnedObjectPath, async_channel::Sender<Zeroizing<String>>),
 }
 
 #[derive(Clone)]
@@ -167,6 +231,7 @@ struct Profile {
     kind: String,
     ssid: Option<Vec<u8>>,
     vpn_service: Option<String>,
+    options: Option<WifiOptions>,
 }
 
 #[derive(Default)]
@@ -180,6 +245,7 @@ struct AccessPoint {
     ssid: Vec<u8>,
     strength: u8,
     security: Security,
+    protocol: Protocol,
     path: OwnedObjectPath,
 }
 
@@ -293,6 +359,11 @@ impl Service for NetworkManager {
                 Ok(())
             }
             NetworkCommand::Import(file) => import(&file),
+            NetworkCommand::Configure(profile, options) => configure(bus, &profile, options),
+            NetworkCommand::Password(profile, reply) => {
+                let _ = reply.send_blocking(password(bus, &profile)?);
+                Ok(())
+            }
             NetworkCommand::Forget(profile) => {
                 bus.call_method(Some(NM), &profile, Some(PROFILE), "Delete", &())?;
                 self.profiles.remove(&profile);
@@ -309,11 +380,11 @@ impl Service for NetworkManager {
 }
 
 impl NetworkManager {
+    // Profiles are read again on every change: Update2 from any client leaves no other trace.
     fn refresh_profiles(&mut self, bus: &Connection, objects: &Objects) {
-        self.profiles
-            .retain(|path, _| has_interface(objects, path, PROFILE));
+        self.profiles.clear();
         for path in objects.keys() {
-            if self.profiles.contains_key(path) || !has_interface(objects, path, PROFILE) {
+            if !has_interface(objects, path, PROFILE) {
                 continue;
             }
             match profile(bus, path) {
@@ -342,11 +413,17 @@ impl NetworkManager {
             .into_iter()
             .filter_map(|path| access_point(objects, path))
             .collect();
-        let known: HashMap<Vec<u8>, OwnedObjectPath> = self
+        let known: HashMap<Vec<u8>, (OwnedObjectPath, Option<WifiOptions>)> = self
             .profiles
             .iter()
-            .filter_map(|(path, profile)| Some((profile.ssid.clone()?, path.clone())))
+            .filter_map(|(path, profile)| {
+                Some((profile.ssid.clone()?, (path.clone(), profile.options)))
+            })
             .collect();
+        let ip4 = device
+            .and_then(|d| property::<OwnedObjectPath>(d, "Ip4Config"))
+            .and_then(|path| interface(objects, path.as_str(), IP4_CONFIG));
+        let connected = state == DEVICE_ACTIVATED;
         Wifi {
             enabled: manager
                 .and_then(|m| property(m, "WirelessEnabled"))
@@ -357,6 +434,19 @@ impl NetworkManager {
             state: device_state(state),
             wrong_password: matches!(state, DEVICE_FAILED | DEVICE_DISCONNECTED)
                 && reason == Some(REASON_NO_SECRETS),
+            // NetworkManager before 1.24 publishes the address only on Device.Wireless.
+            hardware_address: device
+                .and_then(|d| property(d, "HwAddress"))
+                .or_else(|| wireless.and_then(|w| property(w, "HwAddress")))
+                .unwrap_or_default(),
+            address: ip4
+                .filter(|_| connected)
+                .and_then(|ip4| property::<Vec<Properties>>(ip4, "AddressData"))
+                .and_then(|addresses| property(addresses.first()?, "address")),
+            router: ip4
+                .filter(|_| connected)
+                .and_then(|ip4| property::<String>(ip4, "Gateway"))
+                .filter(|gateway| !gateway.is_empty()),
             networks: networks(access_points, &known, current.as_ref()),
         }
     }
@@ -468,6 +558,10 @@ fn access_point(objects: &Objects, path: OwnedObjectPath) -> Option<AccessPoint>
             property(ap, "WpaFlags").unwrap_or(0),
             property(ap, "RsnFlags").unwrap_or(0),
         ),
+        protocol: Protocol::from_keys(
+            property::<u32>(ap, "WpaFlags").unwrap_or(0)
+                | property::<u32>(ap, "RsnFlags").unwrap_or(0),
+        ),
         path,
     })
 }
@@ -488,7 +582,85 @@ fn profile(bus: &Connection, path: &OwnedObjectPath) -> zbus::Result<Profile> {
             .unwrap_or_default(),
         ssid: section(WIFI_PROFILE).and_then(|w| property(w, "ssid")),
         vpn_service: section("vpn").and_then(|v| property(v, "service-type")),
+        options: section(WIFI_PROFILE).map(|wifi| WifiOptions {
+            autoconnect: connection
+                .and_then(|c| property(c, "autoconnect"))
+                .unwrap_or(true),
+            low_data: connection.and_then(|c| property::<i32>(c, "metered")) == Some(METERED_YES),
+            private_address: PrivateAddress::from_setting(
+                property::<String>(wifi, "assigned-mac-address").as_deref(),
+            ),
+        }),
     })
+}
+
+fn settings_with_secrets(
+    bus: &Connection,
+    path: &OwnedObjectPath,
+) -> zbus::Result<ProfileSettings> {
+    let mut settings: ProfileSettings = bus
+        .call_method(Some(NM), path, Some(PROFILE), "GetSettings", &())?
+        .body()
+        .deserialize()?;
+    if settings.contains_key(WIFI_SECURITY) {
+        let secrets: ProfileSettings = bus
+            .call_method(Some(NM), path, Some(PROFILE), "GetSecrets", &WIFI_SECURITY)?
+            .body()
+            .deserialize()?;
+        for (section, values) in secrets {
+            settings.entry(section).or_default().extend(values);
+        }
+    }
+    Ok(settings)
+}
+
+// Update2 replaces the whole profile, so it carries the stored secrets back.
+fn configure(bus: &Connection, path: &OwnedObjectPath, options: WifiOptions) -> zbus::Result<()> {
+    let mut settings = settings_with_secrets(bus, path)?;
+    let owned = |value: Value| OwnedValue::try_from(value).map_err(zbus::Error::from);
+    let connection = settings.entry("connection".to_string()).or_default();
+    connection.insert(
+        "autoconnect".to_string(),
+        owned(Value::from(options.autoconnect))?,
+    );
+    let metered = if options.low_data {
+        METERED_YES
+    } else {
+        METERED_UNKNOWN
+    };
+    connection.insert("metered".to_string(), owned(Value::from(metered))?);
+    let wifi = settings.entry(WIFI_PROFILE.to_string()).or_default();
+    let current =
+        PrivateAddress::from_setting(property::<String>(wifi, "assigned-mac-address").as_deref());
+    if current != options.private_address {
+        wifi.remove("cloned-mac-address");
+        wifi.insert(
+            "assigned-mac-address".to_string(),
+            owned(Value::from(options.private_address.setting()))?,
+        );
+    }
+    let arguments: HashMap<&str, Value> = HashMap::new();
+    bus.call_method(
+        Some(NM),
+        path,
+        Some(PROFILE),
+        "Update2",
+        &(settings, UPDATE_TO_DISK, arguments),
+    )?;
+    Ok(())
+}
+
+fn password(bus: &Connection, path: &OwnedObjectPath) -> zbus::Result<Zeroizing<String>> {
+    let secrets: ProfileSettings = bus
+        .call_method(Some(NM), path, Some(PROFILE), "GetSecrets", &WIFI_SECURITY)?
+        .body()
+        .deserialize()?;
+    Ok(Zeroizing::new(
+        secrets
+            .get(WIFI_SECURITY)
+            .and_then(|security| property(security, "psk"))
+            .unwrap_or_default(),
+    ))
 }
 
 fn vpn_kind(profile: &Profile) -> String {
@@ -532,7 +704,7 @@ fn bars(strength: u8) -> u8 {
 
 fn networks(
     access_points: Vec<AccessPoint>,
-    known: &HashMap<Vec<u8>, OwnedObjectPath>,
+    known: &HashMap<Vec<u8>, (OwnedObjectPath, Option<WifiOptions>)>,
     current: Option<&OwnedObjectPath>,
 ) -> Vec<WifiNetwork> {
     let mut grouped: HashMap<(Vec<u8>, Security), (AccessPoint, bool)> = HashMap::new();
@@ -560,7 +732,9 @@ fn networks(
             name: String::from_utf8_lossy(&ap.ssid).into_owned(),
             bars: bars(ap.strength),
             security: ap.security,
-            profile: known.get(&ap.ssid).cloned(),
+            protocol: ap.protocol,
+            profile: known.get(&ap.ssid).map(|(path, _)| path.clone()),
+            options: known.get(&ap.ssid).and_then(|(_, options)| *options),
             access_point: ap.path,
             current,
         })
@@ -604,6 +778,7 @@ mod tests {
             ssid: ssid.as_bytes().to_vec(),
             strength,
             security,
+            protocol: Protocol::Wpa2,
             path: OwnedObjectPath::try_from(path).unwrap(),
         }
     }

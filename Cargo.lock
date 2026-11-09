@@ -415,7 +415,7 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 [[package]]
 name = "bk"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=b91b8dd15ff633d9145f6107e6745221e2a97d82#b91b8dd15ff633d9145f6107e6745221e2a97d82"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=0c6341143ffe322f82992d16da34191fae5f47a2#0c6341143ffe322f82992d16da34191fae5f47a2"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -774,7 +774,7 @@ dependencies = [
 [[package]]
 name = "ctappearance"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=b91b8dd15ff633d9145f6107e6745221e2a97d82#b91b8dd15ff633d9145f6107e6745221e2a97d82"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=0c6341143ffe322f82992d16da34191fae5f47a2#0c6341143ffe322f82992d16da34191fae5f47a2"
 dependencies = [
  "ctdesign",
  "nix",
@@ -787,7 +787,7 @@ dependencies = [
 [[package]]
 name = "ctdesign"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=b91b8dd15ff633d9145f6107e6745221e2a97d82#b91b8dd15ff633d9145f6107e6745221e2a97d82"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=0c6341143ffe322f82992d16da34191fae5f47a2#0c6341143ffe322f82992d16da34191fae5f47a2"
 dependencies = [
  "serde_json",
 ]
@@ -1676,7 +1676,7 @@ dependencies = [
 [[package]]
 name = "infinity-protocol"
 version = "0.1.0"
-source = "git+https://github.com/HBlanqueto/barrierkit?rev=b91b8dd15ff633d9145f6107e6745221e2a97d82#b91b8dd15ff633d9145f6107e6745221e2a97d82"
+source = "git+https://github.com/HBlanqueto/barrierkit?rev=0c6341143ffe322f82992d16da34191fae5f47a2#0c6341143ffe322f82992d16da34191fae5f47a2"
 dependencies = [
  "bitflags 2.13.2",
  "wayland-backend",
@@ -2037,9 +2037,11 @@ dependencies = [
 name = "malaysia-settings"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "bk",
  "ctappearance",
  "ctdesign",
+ "freya-clipboard",
  "freya-components",
  "freya-core",
  "freya-testing",
@@ -2050,6 +2052,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "torin",
+ "tracing",
  "zbus",
  "zeroize",
 ]

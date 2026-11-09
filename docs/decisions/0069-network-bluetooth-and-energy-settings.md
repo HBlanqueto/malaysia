@@ -54,6 +54,22 @@ compositor idle code.
       from the access point. An 802.1X network points to the connection
       editor.
    5. A refused password (`NO_SECRETS`) shows under the switch.
+   6. Known Networks lists every saved network in range, the current one with
+      a checkmark. Each row has a «⋯» menu: Auto-Join (`connection.autoconnect`),
+      Copy Password (`GetSecrets`), Network Settings… and Forget This Network…
+      (confirmed in an alert). Other networks show «Connect» while the pointer
+      is over the row, and in their «⋯» menu.
+   7. Network Settings… and «Details…» on the current network open a sheet
+      with only what NetworkManager knows: Auto-Join, Private Wi-Fi address
+      (`802-11-wireless.assigned-mac-address`: `permanent` Off, `stable`
+      Fixed, `random` Rotating), the Wi-Fi address (`HwAddress`), Low Data
+      Mode (`connection.metered` = yes) and, while connected, the IP address
+      and router from `IP4Config`. OK saves with `Update2` (to disk) after
+      reading the secrets back, because `Update2` replaces the whole profile.
+   8. The password sheet names the protocol from the access point flags (WPA2,
+      WPA3 or both) and has «Show password». Like every sheet, it is
+      window-modal: the window darkens, minimize and zoom work and close is
+      disabled until the sheet closes (barrierkit `Sheet`).
 4. **Network** lists the Wi-Fi service and the Ethernet, modem, bond, VLAN
    and bridge devices with their state.
 5. **VPN** lists `vpn` and `wireguard` profiles with a connect switch.

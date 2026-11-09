@@ -16,7 +16,10 @@ bk.workspace = true
 ctappearance.workspace = true
 ctdesign.workspace = true
 
+async-channel.workspace = true
+freya-clipboard.workspace = true
 libc.workspace = true
+tracing.workspace = true
 zbus.workspace = true
 malaysia-services.workspace = true
 zeroize.workspace = true
