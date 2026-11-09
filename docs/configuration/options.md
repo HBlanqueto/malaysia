@@ -26,6 +26,7 @@ directories — preferences and state:
 ├── dock.domain
 ├── menubar.domain
 ├── notifications.domain
+├── wifi.domain
 ├── lock.domain
 ├── effects.domain
 └── debug.domain
@@ -365,6 +366,12 @@ compositor launches `malaysia-shell lock`. A `zwp_idle_inhibit_manager_v1` inhib
 | `menubar.show_battery` | bool | `true` | **active** | shell (Battery menu); System Settings › Battery writes it |
 | `menubar.show_battery_percentage` | bool | `true` | **active** | shell (percentage next to the battery); System Settings › Battery writes it |
 | `menubar.show_vpn` | bool | `true` | **active** | shell (VPN menu, only with a VPN profile); System Settings › VPN writes it |
+
+## `wifi` — Wi-Fi (System Settings → Wi-Fi; ADR 0069)
+
+| Option | Type | Default | Status | Consumed by |
+|---|---|---|---|---|
+| `wifi.ask_to_join` | `off` / `notify` / `ask` | `notify` | **active** | shell menubar: with Wi-Fi on, disconnected and only unknown networks in range, `notify` sends a notification and `ask` opens System Settings › Wi-Fi, once per stretch |
 
 ## `notifications` — notifications (System Settings → Notifications; ADR 0068)
 

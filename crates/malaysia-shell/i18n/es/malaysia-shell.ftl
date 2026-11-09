@@ -971,3 +971,8 @@ battery-until-empty = Queda { $time }
 low-power-mode = Modo de bajo consumo
 battery = Batería
 battery-settings = Ajustes de Batería…
+wifi-networks-available = Redes Wi‑Fi disponibles
+wifi-networks-available-body = { $count ->
+    [one] Hay 1 red disponible. Elígela en el menú Wi‑Fi para conectarte.
+   *[other] Hay { $count } redes disponibles. Elige una en el menú Wi‑Fi para conectarte.
+}

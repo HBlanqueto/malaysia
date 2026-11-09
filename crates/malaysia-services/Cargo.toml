@@ -11,6 +11,7 @@ repository.workspace = true
 bk.workspace = true
 ctdesign.workspace = true
 async-channel.workspace = true
+serde.workspace = true
 tracing.workspace = true
 zbus.workspace = true
 zeroize.workspace = true

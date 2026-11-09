@@ -1,3 +1,4 @@
+use bk::app::use_defaults;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -10,8 +11,8 @@ use freya_components::svg_viewer::SvgViewer;
 use malaysia_services::bluez::{BlueZ, Bluetooth, BluetoothCommand, Device};
 use malaysia_services::bus::{Live, Remote, use_service};
 use malaysia_services::networkmanager::{
-    LinkState, Network, NetworkCommand, NetworkManager, Security, Vpn, Wifi, WifiNetwork,
-    signal_svg,
+    AskToJoin, LinkState, Network, NetworkCommand, NetworkManager, Security, Vpn, WIFI_DOMAIN,
+    Wifi, WifiConfig, WifiNetwork, signal_svg,
 };
 use malaysia_services::upower::{Battery, Charge, PowerProfiles, ProfileCommand, Profiles, UPower};
 
@@ -34,11 +35,77 @@ pub struct Extras {
 }
 
 pub fn use_extras() -> Extras {
+    let network = use_service::<NetworkManager>();
+    use_ask_to_join(network.snapshot);
     Extras {
-        network: use_service::<NetworkManager>(),
+        network,
         bluetooth: use_service::<BlueZ>(),
         power: use_service::<UPower>(),
         profiles: use_service::<PowerProfiles>(),
+    }
+}
+
+// macOS «Ask to join networks»: once per stretch without a known network in range.
+fn use_ask_to_join(snapshot: State<Option<Network>>) {
+    let config = use_defaults::<WifiConfig>(WIFI_DOMAIN);
+    let mut asked = use_state(|| false);
+    use_side_effect(move || {
+        let alone = snapshot
+            .read()
+            .as_ref()
+            .and_then(|network| network.wifi.as_ref())
+            .filter(|wifi| wifi.only_unknown_networks_in_range())
+            .map(|wifi| wifi.networks.len());
+        let Some(count) = alone else {
+            if *asked.peek() {
+                asked.set(false);
+            }
+            return;
+        };
+        if *asked.peek() {
+            return;
+        }
+        asked.set(true);
+        match config.read().ask_to_join {
+            AskToJoin::Off => {}
+            AskToJoin::Notify => notify_networks(count),
+            AskToJoin::Ask => open_settings("wifi"),
+        }
+    });
+}
+
+fn notify_networks(count: usize) {
+    let summary = tr!("wifi-networks-available").to_string();
+    let body = tr!("wifi-networks-available-body", count = count);
+    let sent = std::thread::Builder::new()
+        .name("wifi-notify".to_string())
+        .spawn(move || {
+            let notified = zbus::blocking::Connection::session().and_then(|bus| {
+                let hints: std::collections::HashMap<&str, zbus::zvariant::Value> =
+                    std::collections::HashMap::new();
+                bus.call_method(
+                    Some("org.freedesktop.Notifications"),
+                    "/org/freedesktop/Notifications",
+                    Some("org.freedesktop.Notifications"),
+                    "Notify",
+                    &(
+                        tr!("wifi"),
+                        0u32,
+                        "network-wireless",
+                        summary.as_str(),
+                        body.as_str(),
+                        Vec::<&str>::new(),
+                        hints,
+                        -1i32,
+                    ),
+                )
+            });
+            if let Err(error) = notified {
+                tracing::debug!(%error, "no notification for Wi-Fi networks");
+            }
+        });
+    if let Err(error) = sent {
+        tracing::warn!(%error, "no thread for the Wi-Fi notification");
     }
 }
 

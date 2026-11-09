@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -123,6 +124,35 @@ pub struct WifiOptions {
     pub private_address: PrivateAddress,
 }
 
+pub const WIFI_DOMAIN: &str = "wifi";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AskToJoin {
+    Off,
+    #[default]
+    Notify,
+    Ask,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WifiConfig {
+    pub ask_to_join: AskToJoin,
+}
+
+impl Wifi {
+    pub fn only_unknown_networks_in_range(&self) -> bool {
+        self.enabled
+            && self.state == LinkState::Disconnected
+            && !self.networks.is_empty()
+            && self
+                .networks
+                .iter()
+                .all(|network| network.profile.is_none())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Protocol {
     Wpa2,
@@ -131,6 +161,14 @@ pub enum Protocol {
 }
 
 impl Protocol {
+    // A WPA2/WPA3 transition network accepts WPA2-PSK, the one key every driver supports.
+    fn key_management(self) -> &'static str {
+        match self {
+            Self::Wpa2 | Self::Wpa2Wpa3 => "wpa-psk",
+            Self::Wpa3 => "sae",
+        }
+    }
+
     fn from_keys(keys: u32) -> Self {
         match (keys & KEY_PSK != 0, keys & KEY_SAE != 0) {
             (true, true) => Self::Wpa2Wpa3,
@@ -222,6 +260,11 @@ pub enum NetworkCommand {
     Forget(OwnedObjectPath),
     Import(PathBuf),
     Configure(OwnedObjectPath, WifiOptions),
+    JoinHidden {
+        name: String,
+        protocol: Option<Protocol>,
+        password: Option<Zeroizing<String>>,
+    },
     Password(OwnedObjectPath, async_channel::Sender<Zeroizing<String>>),
 }
 
@@ -329,6 +372,11 @@ impl Service for NetworkManager {
                 access_point,
                 password,
             } => self.join(bus, access_point, password),
+            NetworkCommand::JoinHidden {
+                name,
+                protocol,
+                password,
+            } => self.join_hidden(bus, &name, protocol, password),
             NetworkCommand::Activate(profile) => {
                 let device = match self.profiles.get(&profile) {
                     Some(found) if found.kind == WIFI_PROFILE => self.wifi_device.clone(),
@@ -479,16 +527,54 @@ impl NetworkManager {
                 HashMap::from([("psk", Value::from(password.as_str()))]),
             );
         }
-        let options: HashMap<&str, Value> = HashMap::new();
-        bus.call_method(
-            Some(NM),
-            NM_PATH,
-            Some(NM),
-            "AddAndActivateConnection2",
-            &(settings, device.as_ref(), access_point.as_ref(), options),
-        )?;
-        Ok(())
+        add_and_activate(bus, settings, device, &access_point)
     }
+
+    fn join_hidden(
+        &self,
+        bus: &Connection,
+        name: &str,
+        protocol: Option<Protocol>,
+        password: Option<Zeroizing<String>>,
+    ) -> zbus::Result<()> {
+        let Some(device) = &self.wifi_device else {
+            return Ok(());
+        };
+        let mut settings: HashMap<&str, HashMap<&str, Value>> = HashMap::from([(
+            WIFI_PROFILE,
+            HashMap::from([
+                ("ssid", Value::from(name.as_bytes().to_vec())),
+                ("hidden", Value::from(true)),
+            ]),
+        )]);
+        if let Some(protocol) = protocol {
+            let mut security =
+                HashMap::from([("key-mgmt", Value::from(protocol.key_management()))]);
+            if let Some(password) = &password {
+                security.insert("psk", Value::from(password.as_str()));
+            }
+            settings.insert(WIFI_SECURITY, security);
+        }
+        let any = OwnedObjectPath::try_from("/").map_err(zbus::Error::from)?;
+        add_and_activate(bus, settings, device, &any)
+    }
+}
+
+fn add_and_activate(
+    bus: &Connection,
+    settings: HashMap<&str, HashMap<&str, Value>>,
+    device: &OwnedObjectPath,
+    access_point: &OwnedObjectPath,
+) -> zbus::Result<()> {
+    let options: HashMap<&str, Value> = HashMap::new();
+    bus.call_method(
+        Some(NM),
+        NM_PATH,
+        Some(NM),
+        "AddAndActivateConnection2",
+        &(settings, device.as_ref(), access_point.as_ref(), options),
+    )?;
+    Ok(())
 }
 
 // D-Bus has no import call; each VPN plugin parses its own format through nmcli.

@@ -95,12 +95,17 @@ compositor idle code.
    run. Battery health shows `Capacity` (under 75 % is «service
    recommended», per UPower) and `ChargeCycles`. The charge limit calls
    `EnableChargeThreshold` and appears only when `ChargeThresholdSupported`.
+   9. «Other Network…» adds a hidden network: name, security (None, WPA2,
+      WPA2/WPA3 or WPA3 Personal; `wpa-psk` or `sae`) and password, joined
+      with `AddAndActivateConnection2` and `802-11-wireless.hidden`.
+   10. «Ask to join networks» (`wifi.ask_to_join`) is kept by the menubar,
+       which already watches NetworkManager: Off, Notify or Ask.
 
 ## Not possible on Linux
 
 | macOS option | Reason |
 |---|---|
-| Personal Hotspots and Ask to join hotspots | Instant Hotspot is Apple's private protocol over Bluetooth LE and iCloud |
+| Personal Hotspots and «Ask to join hotspots» | Instant Hotspot is Apple's private protocol over Bluetooth LE and iCloud |
 | Limit IP address tracking | It depends on iCloud Private Relay |
 | Start up after a power failure | A firmware setting with no standard interface on Linux |
 | Power Nap | It needs Apple hardware that wakes in the background |

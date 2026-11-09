@@ -971,3 +971,8 @@ battery-until-empty = { $time } remaining
 low-power-mode = Low Power Mode
 battery = Battery
 battery-settings = Battery Settings…
+wifi-networks-available = Wi‑Fi networks available
+wifi-networks-available-body = { $count ->
+    [one] 1 network is available. Choose it in the Wi‑Fi menu to join.
+   *[other] { $count } networks are available. Choose one in the Wi‑Fi menu to join.
+}

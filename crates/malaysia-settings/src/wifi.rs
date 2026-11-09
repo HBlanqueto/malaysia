@@ -1,15 +1,17 @@
+use bk::app::{load_defaults, save_defaults};
 use bk::buttons::MenuButton;
 use bk::menu::{CheckState, MenuItem};
 use bk::password::PasswordField;
 use bk::patterns::settings::Pane;
 use bk::popup_button::PopUpButton;
 use bk::prelude::*;
+use bk::progress::Spinner;
 use bk::views::feedback::{Alert, Sheet};
 use bk::views::form::{Form, Row, Section};
 use ctappearance::palette;
-use ctdesign::{ACCENT_SWATCHES, Rgba, SPACE_2, SPACE_3};
+use ctdesign::{ACCENT_SWATCHES, Rgba, SPACE_2, SPACE_4};
 use freya_components::svg_viewer::SvgViewer;
-use torin::prelude::Content;
+use torin::prelude::{Content, Gaps};
 use zbus::zvariant::OwnedObjectPath;
 use zeroize::Zeroizing;
 
@@ -17,14 +19,18 @@ use crate::localize::{intern, tr};
 use crate::menubar::show_in_menu_bar;
 use malaysia_services::bus::{Live, Remote, WhileVisible};
 use malaysia_services::networkmanager::{
-    LinkState, NetworkCommand, NetworkManager, PrivateAddress, Protocol, Security, Wifi,
-    WifiNetwork, WifiOptions, signal_svg,
+    AskToJoin, LinkState, NetworkCommand, NetworkManager, PrivateAddress, Protocol, Security,
+    WIFI_DOMAIN, Wifi, WifiConfig, WifiNetwork, WifiOptions, signal_svg,
 };
 
 pub const TINT: Rgba = ACCENT_SWATCHES[0].1;
 const SIGNAL_SIZE: f32 = 16.0;
-const DIALOG_ICON: f32 = 32.0;
-const DIALOG_WIDTH: f32 = 460.0;
+const DIALOG_WIDTH: f32 = 430.0;
+// macOS leaves room under the fields before the button bar.
+const DIALOG_GAP: f32 = 40.0;
+const DIALOG_BUTTON_WIDTH: f32 = 84.0;
+const INLINE_FIELD_WIDTH: f32 = 220.0;
+const ASK_TO_JOIN: [AskToJoin; 3] = [AskToJoin::Off, AskToJoin::Notify, AskToJoin::Ask];
 const PRIVATE_ADDRESSES: [PrivateAddress; 3] = [
     PrivateAddress::Off,
     PrivateAddress::Fixed,
@@ -46,6 +52,7 @@ pub enum WifiDialog {
         name: String,
         profile: OwnedObjectPath,
     },
+    Other,
 }
 
 pub fn wifi_pane(
@@ -101,16 +108,47 @@ pub fn wifi_pane(
                 }),
         );
     }
-    if !other.is_empty() {
-        form = form.section(
+    let mut join_other = dialog;
+    form = form
+        .section(
             other
                 .into_iter()
                 .fold(Section::titled(tr!("wifi-other")), |section, found| {
                     section.row(other_row(found, network, dialog))
-                }),
-        );
-    }
+                })
+                .row(Row::navigation(tr!("wifi-join-other"), move |_| {
+                    join_other.set(Some(WifiDialog::Other))
+                })),
+        )
+        .section(Section::new().row(ask_to_join_row(error)));
     Some(pane(form))
+}
+
+fn ask_to_join_row(error: State<Option<String>>) -> Row {
+    let config: WifiConfig = load_defaults(WIFI_DOMAIN);
+    Row::new(tr!("wifi-ask-to-join"))
+        .detail(tr!("wifi-ask-to-join-help"))
+        .control(
+            PopUpButton::new(tr!("wifi-ask-to-join"))
+                .item(tr!("ask-to-join-off"))
+                .item(tr!("ask-to-join-notify"))
+                .item(tr!("ask-to-join-ask"))
+                .selected(
+                    ASK_TO_JOIN
+                        .iter()
+                        .position(|ask| *ask == config.ask_to_join)
+                        .unwrap_or(0),
+                )
+                .on_change(move |index: usize| {
+                    let config = WifiConfig {
+                        ask_to_join: ASK_TO_JOIN[index],
+                    };
+                    if let Err(message) = save_defaults(WIFI_DOMAIN, &config) {
+                        let mut error = error;
+                        error.set(Some(message.to_string()));
+                    }
+                }),
+        )
 }
 
 fn current_row(current: &WifiNetwork, wifi: &Wifi, mut dialog: State<Option<WifiDialog>>) -> Row {
@@ -127,9 +165,15 @@ fn current_row(current: &WifiNetwork, wifi: &Wifi, mut dialog: State<Option<Wifi
             }))
         })
     });
+    let connecting = (wifi.state == LinkState::Connecting).then(|| Spinner::new(status));
     Row::new(intern(current.name.clone()))
         .detail(status)
-        .control(signal(current).maybe_child(details))
+        .control(
+            HStack::new()
+                .spacing(SPACE_2)
+                .maybe_child(connecting)
+                .child(signal(current).maybe_child(details)),
+        )
 }
 
 fn known_row(
@@ -324,6 +368,11 @@ pub fn wifi_dialog(
             }
             .into_element()
         }
+        WifiDialog::Other => OtherNetworkSheet {
+            dialog,
+            remote: RemoteHandle(remote),
+        }
+        .into_element(),
         WifiDialog::Forget { name, profile } => Alert::new(
             intern(tr!("wifi-forget-title", network = name.as_str())),
             tr!("wifi-forget-message"),
@@ -384,12 +433,11 @@ impl Component for PasswordSheet {
         );
         let fields = Form::new().section(
             Section::new()
+                .row(header_row(title, tr!("wifi-password-help")))
                 .row(
                     Row::new(tr!("wifi-password")).control(
-                        SecureField::new(password, tr!("wifi-password"))
-                            .revealed(*revealed.read())
+                        inline_secure_field(password, *revealed.read())
                             .auto_focus(true)
-                            .width(Size::px(DIALOG_WIDTH / 2.0))
                             .on_submit(join),
                     ),
                 )
@@ -401,28 +449,18 @@ impl Component for PasswordSheet {
                     ),
                 ),
         );
-        Sheet::new(
-            VStack::new()
-                .width(Size::px(DIALOG_WIDTH))
-                .spacing(SPACE_3)
-                .cross_align(Alignment::Start)
-                .child(
-                    HStack::new()
-                        .spacing(SPACE_3)
-                        .cross_align(Alignment::Start)
-                        .child(Image::system(Symbol::Wifi).size(DIALOG_ICON).color(TINT))
-                        .child(Text::new(title).font(HEADLINE).width(Size::fill())),
-                )
-                .child(fields)
-                .child(buttons(
-                    None::<fn()>,
-                    move || dialog.set(None),
-                    move || {
-                        if let Some(typed) = field.write().take() {
-                            submit(typed);
-                        }
-                    },
-                )),
+        dialog_sheet(
+            fields,
+            buttons(
+                None::<fn()>,
+                move || dialog.set(None),
+                !password.read().masked().is_empty(),
+                move || {
+                    if let Some(typed) = field.write().take() {
+                        submit(typed);
+                    }
+                },
+            ),
         )
     }
 }
@@ -524,12 +562,130 @@ impl Component for DetailsSheet {
                 }))
             }
         };
-        Sheet::new(
-            VStack::new()
-                .width(Size::px(DIALOG_WIDTH))
-                .spacing(SPACE_3)
-                .child(form)
-                .child(buttons(Some(forget), move || dialog.set(None), save)),
+        dialog_sheet(
+            form,
+            buttons(Some(forget), move || dialog.set(None), true, save),
+        )
+    }
+}
+
+fn header_row(title: String, detail: &'static str) -> Row {
+    Row::new(intern(title))
+        .symbol(Symbol::Wifi, TINT)
+        .detail(detail)
+}
+
+fn inline_secure_field(password: State<PasswordField>, revealed: bool) -> SecureField {
+    SecureField::new(password, tr!("wifi-password"))
+        .revealed(revealed)
+        .width(Size::px(INLINE_FIELD_WIDTH))
+        .style(|s| SecureFieldStyle {
+            background: StateValue::new(ShapeStyle::Color(Rgba::TRANSPARENT)),
+            border: None,
+            ..s
+        })
+}
+
+fn dialog_sheet(form: Form, buttons: HStack) -> Sheet {
+    Sheet::new(
+        VStack::new()
+            .width(Size::px(DIALOG_WIDTH))
+            .spacing(0.0)
+            .child(form)
+            .child(rect().height(Size::px(DIALOG_GAP)))
+            .child(Divider::new())
+            .child(
+                rect()
+                    .width(Size::fill())
+                    .padding(Gaps::new_all(SPACE_4))
+                    .child(buttons),
+            ),
+    )
+    .style(|s| SheetStyle { padding: 0.0, ..s })
+}
+
+const HIDDEN_SECURITY: [Option<Protocol>; 4] = [
+    None,
+    Some(Protocol::Wpa2),
+    Some(Protocol::Wpa2Wpa3),
+    Some(Protocol::Wpa3),
+];
+
+#[derive(PartialEq)]
+struct OtherNetworkSheet {
+    dialog: State<Option<WifiDialog>>,
+    remote: RemoteHandle,
+}
+
+impl Component for OtherNetworkSheet {
+    fn render(&self) -> impl IntoElement {
+        let name = use_state(String::new);
+        let password = use_state(PasswordField::default);
+        let mut security = use_state(|| 2usize);
+        let mut revealed = use_state(|| false);
+        let mut dialog = self.dialog;
+        let protocol = HIDDEN_SECURITY[*security.read()];
+        let ready = !name.read().trim().is_empty()
+            && (protocol.is_none() || !password.read().masked().is_empty());
+        let mut fields = Section::new()
+            .row(header_row(
+                tr!("wifi-other-title").to_string(),
+                tr!("wifi-other-help"),
+            ))
+            .row(
+                Row::new(tr!("wifi-network-name")).control(
+                    TextField::new(name, "")
+                        .auto_focus(true)
+                        .width(Size::px(INLINE_FIELD_WIDTH))
+                        .style(|s| TextFieldStyle {
+                            background: StateValue::new(ShapeStyle::Color(Rgba::TRANSPARENT)),
+                            border: StateValue::new(ShapeStyle::Color(Rgba::TRANSPARENT)),
+                            ..s
+                        }),
+                ),
+            )
+            .row(
+                Row::new(tr!("wifi-security")).control(
+                    PopUpButton::new(tr!("wifi-security"))
+                        .item(tr!("security-none"))
+                        .item(tr!("security-wpa2"))
+                        .item(tr!("security-wpa2-wpa3"))
+                        .item(tr!("security-wpa3"))
+                        .selected(*security.read())
+                        .on_change(move |index: usize| security.set(index)),
+                ),
+            );
+        if protocol.is_some() {
+            fields = fields
+                .row(
+                    Row::new(tr!("wifi-password"))
+                        .control(inline_secure_field(password, *revealed.read())),
+                )
+                .row(
+                    Row::new(tr!("wifi-show-password")).control(
+                        Switch::new(tr!("wifi-show-password"))
+                            .on(*revealed.read())
+                            .on_toggle(move |on| revealed.set(on)),
+                    ),
+                );
+        }
+        let remote = self.remote.0.clone();
+        let mut field = password;
+        let join = move || {
+            let secret = match protocol {
+                Some(_) => field.write().take(),
+                None => None,
+            };
+            remote.send(NetworkCommand::JoinHidden {
+                name: name.peek().trim().to_string(),
+                protocol,
+                password: secret,
+            });
+            dialog.set(None);
+        };
+        dialog_sheet(
+            Form::new().section(fields),
+            buttons(None::<fn()>, move || dialog.set(None), ready, join),
         )
     }
 }
@@ -537,6 +693,7 @@ impl Component for DetailsSheet {
 fn buttons(
     forget: Option<impl FnMut() + 'static>,
     mut cancel: impl FnMut() + 'static,
+    confirm_enabled: bool,
     mut confirm: impl FnMut() + 'static,
 ) -> HStack {
     let leading =
@@ -550,10 +707,18 @@ fn buttons(
         .content(Content::flex())
         .spacing(SPACE_2)
         .child(leading)
-        .child(Button::new(tr!("cancel")).on_press(move |_| cancel()))
+        .child(
+            Button::new(tr!("cancel"))
+                .size(ControlSize::Large)
+                .width(Size::px(DIALOG_BUTTON_WIDTH))
+                .on_press(move |_| cancel()),
+        )
         .child(
             Button::new(tr!("ok"))
+                .size(ControlSize::Large)
+                .width(Size::px(DIALOG_BUTTON_WIDTH))
                 .style(ButtonStyle::bordered_prominent)
+                .disabled(!confirm_enabled)
                 .on_press(move |_| confirm()),
         )
 }
