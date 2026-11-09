@@ -259,7 +259,9 @@ Exact names from
    1. **Icon:** the card's icon is the app's icon from its desktop entry, as
       on macOS, so a notification cannot borrow another app's icon. The
       `app_icon` argument counts only when no entry matches. With neither,
-      the card shows a generic bell, not a letter, which reads as a contact.
+      the card shows `notifications/generic.svg`, a bell drawn on the same
+      macOS icon grid as the Settings icon, not a letter, which reads as a
+      contact.
    2. **Content image:** `image-data` (written as PNG), then `image-path`
       for fdo clients, and a `file` or `bytes` GIcon for GTK clients. It is
       stored in `~/.local/share/malaysia/notifications/<id>`; saving the

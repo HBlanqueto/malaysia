@@ -20,6 +20,7 @@ use ctdesign::{
     NOTIFICATION_TEXT_GAP, NOTIFICATION_WIDTH,
 };
 use freya_components::image_viewer::ImageViewer;
+use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::{Area, Content, Gaps, Position};
 
 use super::server::{self, Link, Reply};
@@ -659,6 +660,8 @@ fn card(
         .into_element()
 }
 
+const GENERIC_ICON: &[u8] = include_bytes!("generic.svg");
+
 // ADR 0068: the app icon always comes from the system; a person's photo carries it as a badge.
 fn identity(notification: &Notification, previews: bool) -> Element {
     let size = NOTIFICATION_ICON_SIZE;
@@ -684,21 +687,10 @@ fn identity(notification: &Notification, previews: bool) -> Element {
 fn app_symbol(notification: &Notification, size: f32) -> Element {
     match load_icon(Some(notification.icon.as_str())) {
         Some(icon) => app_icon(Some(&icon), &notification.app_name, size),
-        None => {
-            let palette = Palette::current();
-            rect()
-                .width(Size::px(size))
-                .height(Size::px(size))
-                .corner_radius(bk::style::continuous_corner(size / 4.0))
-                .background(theme::color(palette.sunken_background))
-                .center()
-                .child(
-                    Image::system(Symbol::Bell)
-                        .size(size / 2.0)
-                        .color(palette.secondary_label),
-                )
-                .into_element()
-        }
+        None => SvgViewer::new(GENERIC_ICON)
+            .width(Size::px(size))
+            .height(Size::px(size))
+            .into_element(),
     }
 }
 
