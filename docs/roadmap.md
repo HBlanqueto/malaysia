@@ -402,7 +402,7 @@ searching `crates/malaysia-compositor/src`.
 
 - **Protocols with a Smithay module, not wired:** tablet-v2 (the events are
   dropped), pointer-gestures, keyboard-shortcuts-inhibit, pointer-warp,
-  xdg-dialog-v1 (GTK's `modal` flag is dropped today), xdg-toplevel-icon,
+  xdg-toplevel-icon,
   xdg-toplevel-tag, xdg-foreign, xdg-system-bell, single-pixel-buffer,
   alpha-modifier, content-type, fifo, commit-timing, drm-lease,
   ext-data-control (no clipboard managers without it),

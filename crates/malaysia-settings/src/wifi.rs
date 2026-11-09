@@ -377,6 +377,7 @@ pub fn wifi_dialog(
             intern(tr!("wifi-forget-title", network = name.as_str())),
             tr!("wifi-forget-message"),
         )
+        .destructive()
         .confirm(tr!("wifi-forget-confirm"), move |_| {
             remote.send(NetworkCommand::Forget(profile.clone()));
             dialog.set(None);

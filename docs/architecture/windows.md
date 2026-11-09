@@ -11,6 +11,10 @@ The SSD titlebar belongs to the compositor (ADR 0020) and uses Tengen: a top bar
 - Centered title, rasterized with `cosmic-text` and colored with `title.focused`/`title.unfocused`.
 - Frame for all windows: continuous corners with their bar's radius: 16 (titlebar or SSD), 20 (compact), 26 (unified, CSD without a hint and dialogs) or 15 (utility) (ADR 0059), also on shell alerts (`malaysia-dialog` layer), shadow (`shadow.frag`), outer border (`border.frag`) and inner hairline. Maximized squares the corners; fullscreen and focus mode remove the frame (ADR 0037).
 - Dialogs use the same frame and are centered over the parent window.
+- A modal dialog (`xdg-dialog-v1` `set_modal`, which BarrierKit sheets and alerts send) is attached to its parent like an AppKit sheet:
+  1. Its position is never stored: after every commit and every move it is centered again over the parent (`attach_modal_dialogs`).
+  2. Moving the parent moves it; dragging the dialog moves the parent.
+  3. Focusing the parent gives the focus to the dialog (`focus_window`), so the parent shows inactive until the dialog closes.
 - A child window (`set_parent`) always stays above its parent and its other ancestors, as [xdg-shell](https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_parent) asks: raising the parent raises its children with it, in the order they had (`raise_order`).
 - In dark mode the inner line follows macOS Golden Gate 27 and depends on the frame. A window without a parent gets the uniform `window-inner` line. A focused dialog (a window with `set_parent`), a popup or a shell alert gets `panel-inner-edge` (26 %) at the top and bottom and `panel-inner` (10 %) on the sides, mixed by how vertical the edge is, so the corners turn smoothly. Under the top and bottom, `panel-glow` (4 %) fades over `PANEL_GLOW_DEPTH` (6 px). An unfocused dialog falls back to `window-inner`.
 - The traffic lights are square (radius 4) or round following `appearance.traffic_light_shape`.

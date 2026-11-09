@@ -270,6 +270,7 @@ impl State {
         OutputManagerState::new_with_xdg_output::<Self>(display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(display_handle);
         XdgDecorationState::new::<Self>(display_handle);
+        smithay::wayland::shell::xdg::dialog::XdgDialogState::new::<Self>(display_handle);
         let kde_decoration_state =
             KdeDecorationState::new::<Self>(display_handle, KdeDefaultMode::Server);
         let layer_shell_state = WlrLayerShellState::new_with_filter::<Self, _>(

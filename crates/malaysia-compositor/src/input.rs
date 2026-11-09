@@ -646,6 +646,10 @@ impl State {
         if self.locked {
             return;
         }
+        // A window with a modal dialog hands its focus to the dialog, like an AppKit sheet.
+        if let Some(dialog) = self.windows.modal_child(id) {
+            return self.focus_window(dialog);
+        }
         if self.layer_focus.blocks_window_focus() {
             tracing::info!(
                 window = id.get(),

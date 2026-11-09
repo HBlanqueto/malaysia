@@ -16,6 +16,7 @@ use smithay::reexports::wayland_server::backend::ObjectId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Rectangle, Serial, Size};
 use smithay::wayland::compositor::{SurfaceAttributes, with_states};
+use smithay::wayland::shell::xdg::dialog::ToplevelDialogHint;
 use smithay::wayland::shell::xdg::{
     Configure, SurfaceCachedState, ToplevelStateSet, ToplevelSurface, XdgToplevelSurfaceData,
 };
@@ -449,6 +450,8 @@ impl Windows {
             }
         }
 
+        self.attach_modal_dialogs();
+
         if needs_configure_after_commit(
             self.windows[index].placed,
             self.windows[index].resizing,
@@ -762,11 +765,72 @@ impl Windows {
         let Some(outer) = self.scene.outer(id) else {
             return false;
         };
+        // A modal dialog is attached to its parent: dragging it moves the parent.
+        if self.is_modal(id)
+            && let Some(parent) = self.dialog_parent(id)
+            && let Some(parent_outer) = self.scene.outer(parent)
+        {
+            let dx = f64::from(location.x) - outer.x();
+            let dy = f64::from(location.y) - outer.y();
+            let target = Point::from((round(parent_outer.x() + dx), round(parent_outer.y() + dy)));
+            return self.move_to(parent, target);
+        }
         let moved = SceneRect::new(
             ScenePoint::new(f64::from(location.x), f64::from(location.y)),
             outer.size(),
         );
-        self.scene.set_outer(id, moved)
+        let moved = self.scene.set_outer(id, moved);
+        self.attach_modal_dialogs();
+        moved
+    }
+
+    fn is_modal(&self, id: WindowId) -> bool {
+        self.index(id).is_some_and(|index| {
+            let toplevel = &self.windows[index].toplevel;
+            toplevel.parent().is_some()
+                && with_states(toplevel.wl_surface(), |states| {
+                    states
+                        .data_map
+                        .get::<XdgToplevelSurfaceData>()
+                        .and_then(|data| data.lock().ok().map(|role| role.dialog_hint))
+                        == Some(ToplevelDialogHint::Modal)
+                })
+        })
+    }
+
+    pub(crate) fn modal_child(&self, id: WindowId) -> Option<WindowId> {
+        self.windows
+            .iter()
+            .map(|data| data.id)
+            .find(|child| self.is_modal(*child) && self.dialog_parent(*child) == Some(id))
+    }
+
+    // macOS sheets stay centered on their window; the position is derived, never stored.
+    fn attach_modal_dialogs(&mut self) {
+        let dialogs: Vec<(WindowId, WindowId)> = self
+            .windows
+            .iter()
+            .map(|data| data.id)
+            .filter(|id| self.is_modal(*id))
+            .filter_map(|id| Some((id, self.dialog_parent(id)?)))
+            .collect();
+        for (dialog, parent) in dialogs {
+            let (Some(outer), Some(parent_outer)) =
+                (self.scene.outer(dialog), self.scene.outer(parent))
+            else {
+                continue;
+            };
+            let centered = SceneRect::new(
+                ScenePoint::new(
+                    (parent_outer.x() + (parent_outer.width() - outer.width()) / 2.0).round(),
+                    (parent_outer.y() + (parent_outer.height() - outer.height()) / 2.0).round(),
+                ),
+                outer.size(),
+            );
+            if centered != outer {
+                self.scene.set_outer(dialog, centered);
+            }
+        }
     }
 
     pub fn resize(&mut self, id: WindowId, outer: SceneRect<f64, SceneLogical>) -> bool {

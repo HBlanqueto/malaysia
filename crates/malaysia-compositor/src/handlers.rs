@@ -698,6 +698,8 @@ impl smithay::wayland::fractional_scale::FractionalScaleHandler for State {
     }
 }
 
+impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for State {}
+
 impl XdgShellHandler for State {
     fn xdg_shell_state(&mut self) -> &mut XdgShellState {
         &mut self.xdg_shell_state
