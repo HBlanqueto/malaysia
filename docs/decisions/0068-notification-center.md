@@ -290,7 +290,11 @@ Exact names from
    menu bar closes it too. Stacks, «Show less», «Clear All», hover
    controls and the «More» menu as in Tahoe. Sizes, radii and material are
    tokens in `ctdesign`, calibrated against a real Tahoe screenshot; the
-   panel does not use glass until one shows it.
+   panel does not use glass until one shows it. Cards, stack layers and lock
+   cards take the window border colours of `ctappearance::palette`: in dark
+   mode a white hairline inside and a dark line outside, as measured on a
+   Tahoe dark call notification in the MacStories review; the expanded Live
+   Activity has neither.
 10. **Focus.** Four modes as on macOS: Do Not Disturb, Sleep, Personal and
     Work, each with its allowed apps and a «Time Sensitive Notifications»
     switch (`[focus.<mode>]` in `notifications.domain`). A mode lets through

@@ -13,7 +13,7 @@ use bk::style::Palette;
 use bk::theme;
 use ctappearance::notifications::{AlertStyle, Focus, NotificationsConfig, ShowPreviews};
 use ctdesign::{
-    BODY, CAPTION, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
+    BODY, CAPTION, HAIRLINE, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
     NOTIFICATION_CLOSE_SIZE, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN,
     NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
     NOTIFICATION_TEXT_GAP, NOTIFICATION_WIDTH,
@@ -431,24 +431,22 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
             .height(Size::px(NOTIFICATION_STACK_PEEK))
             .layer(-(layer as i16))
             .child(
-                rect()
-                    .position(
-                        Position::new_absolute()
-                            .top(-2.0 * NOTIFICATION_RADIUS)
-                            .left(inset),
-                    )
-                    .width(Size::px(NOTIFICATION_WIDTH as f32 - 2.0 * inset))
-                    .height(Size::px(
-                        2.0 * NOTIFICATION_RADIUS + NOTIFICATION_STACK_PEEK,
-                    ))
-                    .corner_radius(NOTIFICATION_RADIUS)
-                    .background(theme::color(palette.sunken_background))
-                    .border(
-                        Border::new()
-                            .fill(theme::color(palette.card_border))
-                            .width(1.0)
-                            .alignment(BorderAlignment::Inner),
-                    ),
+                edged(
+                    rect()
+                        .width(Size::fill())
+                        .height(Size::fill())
+                        .corner_radius(NOTIFICATION_RADIUS)
+                        .background(theme::color(palette.sunken_background)),
+                )
+                .position(
+                    Position::new_absolute()
+                        .top(-2.0 * NOTIFICATION_RADIUS)
+                        .left(inset),
+                )
+                .width(Size::px(NOTIFICATION_WIDTH as f32 - 2.0 * inset))
+                .height(Size::px(
+                    2.0 * NOTIFICATION_RADIUS + NOTIFICATION_STACK_PEEK,
+                )),
             )
             .into_element()
     });
@@ -588,12 +586,6 @@ fn card(
         .padding(NOTIFICATION_PADDING)
         .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(palette.raised_background))
-        .border(
-            Border::new()
-                .fill(theme::color(palette.card_border))
-                .width(1.0)
-                .alignment(BorderAlignment::Inner),
-        )
         .on_pointer_enter(move |_| hovered_state.set(Some(id)))
         .on_pointer_leave(move |_| {
             if *left.peek() == Some(id) {
@@ -615,7 +607,7 @@ fn card(
         });
     rect()
         .width(Size::fill())
-        .child(body)
+        .child(edged(body).width(Size::fill()))
         .maybe_child(hovered.then(|| close_button(context, id)))
         .into_element()
 }
@@ -678,8 +670,8 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
         &notification.app_name,
         NOTIFICATION_ICON_SIZE,
     );
-    rect()
-        .width(Size::px(NOTIFICATION_WIDTH as f32))
+    let card = rect()
+        .width(Size::fill())
         .padding(NOTIFICATION_PADDING)
         .corner_radius(NOTIFICATION_RADIUS)
         .background(theme::color(palette.raised_background))
@@ -708,8 +700,33 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
                                 .color(theme::color(palette.label)),
                         ),
                 ),
-        )
+        );
+    edged(card)
+        .width(Size::px(NOTIFICATION_WIDTH as f32))
         .into_element()
+}
+
+// Notification cards take the window border colours: hairline inside, dark line outside (ADR 0068).
+fn edged(body: Rect) -> Rect {
+    let palette = ctappearance::palette(theme::resolved().scheme);
+    let body = match palette.inner_line {
+        Some(inner) => body.border(
+            Border::new()
+                .fill(theme::color(inner))
+                .width(HAIRLINE)
+                .alignment(BorderAlignment::Inner),
+        ),
+        None => body,
+    };
+    rect()
+        .corner_radius(NOTIFICATION_RADIUS)
+        .border(
+            Border::new()
+                .fill(theme::color(palette.outer_border))
+                .width(HAIRLINE / 2.0)
+                .alignment(BorderAlignment::Outer),
+        )
+        .child(body)
 }
 
 fn close_button(context: &Context, id: u32) -> Rect {
