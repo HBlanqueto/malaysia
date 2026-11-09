@@ -151,3 +151,69 @@ focus-allowed-apps-help = These apps show their notifications while the Focus is
 focus-time-sensitive = Time Sensitive Notifications
 focus-time-sensitive-help = Apps that allow time sensitive alerts can notify you immediately.
 notifications-badge = Badge application icon
+
+action-failed = The action could not be completed
+
+energy = Energy
+battery = Battery
+battery-level = Battery level
+battery-charged = Charged
+battery-charging = Charging
+battery-until-full = Full in { $time }
+battery-until-empty = { $time } remaining
+low-power-mode = Low Power Mode
+low-power-mode-help = Lowers processor performance to use less energy.
+battery-health = Battery Health
+battery-condition = Condition
+battery-normal = Normal
+battery-service = Service recommended
+battery-capacity = Maximum capacity
+battery-cycles = Charge cycles
+charge-limit = Limit charging to { $percent } %
+charge-limit-help = Extends battery life when the computer stays plugged in. The manufacturer sets the limit.
+
+status-connected = Connected
+status-connecting = Connecting…
+status-disconnected = Not connected
+status-off = Off
+cancel = Cancel
+
+wifi = Wi‑Fi
+wifi-about = Connects this computer to the internet without cables. Turn on Wi‑Fi and choose a network.
+wifi-wrong-password = Could not connect: the password is not correct.
+wifi-known = Known Networks
+wifi-other = Other Networks
+wifi-forget = Forget
+wifi-enterprise = This network uses enterprise authentication (802.1X). Set it up with the NetworkManager connection editor.
+wifi-password-title = The network “{ $network }” requires a password
+wifi-password-help = Enter the password for the Wi‑Fi network.
+wifi-password = Password
+wifi-join = Join
+
+network = Network
+network-services = Other Services
+link-ethernet = Ethernet
+link-modem = Modem
+link-bond = Link Aggregate
+link-vlan = VLAN
+link-bridge = Bridge
+
+vpn = VPN
+vpn-none = No VPN configurations
+vpn-import = Import Configuration…
+vpn-import-help = WireGuard (.conf) or OpenVPN (.ovpn).
+
+bluetooth = Bluetooth
+bluetooth-about = Connect accessories to listen to music, type, play and more.
+bluetooth-visible-as = This computer is visible as “{ $name }” while Bluetooth Settings is open.
+bluetooth-my-devices = My Devices
+bluetooth-nearby = Nearby Devices
+bluetooth-searching = Searching…
+bluetooth-connect = Connect
+bluetooth-disconnect = Disconnect
+bluetooth-forget = Forget
+bluetooth-connected-battery = Connected · { $percent } %
+bluetooth-pair-title = Pair “{ $device }”
+bluetooth-pair-confirm = Check that the device shows this code.
+bluetooth-pair-type = Type this code on the device and press Return.
+bluetooth-pair = Pair

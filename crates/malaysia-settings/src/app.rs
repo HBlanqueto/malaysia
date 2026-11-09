@@ -19,9 +19,16 @@ use ctdesign::{
 use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
+use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_pairing_prompt};
+use crate::bluez::BlueZ;
+use crate::bus::use_service;
+use crate::energy::{PowerProfiles, UPower, energy_pane};
 use crate::localize::{tr, tr_list};
+use crate::network::{network_pane, vpn_pane};
+use crate::networkmanager::NetworkManager;
 use crate::previews::{theme_preview, traffic_shape_preview, window_color_preview};
 use crate::state::{account_name, initials, save_config};
+use crate::wifi::{Joining, password_sheet, wifi_pane};
 
 const SCHEMES: [ColorScheme; 3] = [ColorScheme::Auto, ColorScheme::Light, ColorScheme::Dark];
 const WINDOW_COLORS: [WindowColorMode; 2] = [WindowColorMode::Neutral, WindowColorMode::Accent];
@@ -71,11 +78,30 @@ pub fn settings_window(
     resolved: &Resolved,
 ) -> Rect {
     let mut error = use_state(|| None::<String>);
+    let power = use_service::<UPower>();
+    let profiles = use_service::<PowerProfiles>();
+    let network = use_service::<NetworkManager>();
+    let bluetooth = use_service::<BlueZ>();
+    let pairing = use_pairing_prompt();
+    let joining = use_state(|| None::<Joining>);
+    let password = use_state(bk::password::PasswordField::default);
     let name = account_name();
     let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
         .sidebar_toggle(false)
-        .sidebar_resizable(false);
+        .sidebar_resizable(false)
+        .group(
+            [
+                wifi_pane(&network, joining),
+                bluetooth_pane(&bluetooth),
+                network_pane(&network),
+                vpn_pane(&network),
+                Some(energy_pane(&power, &profiles)),
+            ]
+            .into_iter()
+            .flatten()
+            .fold(PaneGroup::new(None), PaneGroup::pane),
+        );
     let window = window.group(
         PaneGroup::new(None)
             .pane(
@@ -114,6 +140,12 @@ pub fn settings_window(
             .pane(crate::notifications::focus_pane(error)),
     );
     let message = error.read().clone();
+    let failures = [
+        power.failure,
+        profiles.failure,
+        network.failure,
+        bluetooth.failure,
+    ];
     rect()
         .width(Size::fill())
         .height(Size::fill())
@@ -123,6 +155,18 @@ pub fn settings_window(
                 .confirm(tr!("save-error-ok"), move |_| error.set(None))
                 .cancel(tr!("save-error-close"), move |_| error.set(None))
         }))
+        .maybe_child(password_sheet(joining, password, &network.remote))
+        .maybe_child(pairing_sheet(pairing))
+        .children(failures.into_iter().filter_map(failure_alert))
+}
+
+fn failure_alert(mut failure: State<Option<String>>) -> Option<Element> {
+    let message = failure.read().clone()?;
+    Some(
+        Alert::new(tr!("action-failed"), message)
+            .confirm(tr!("save-error-ok"), move |_| failure.set(None))
+            .into_element(),
+    )
 }
 
 fn edit<T: 'static>(

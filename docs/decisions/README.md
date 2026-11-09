@@ -69,5 +69,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0066](0066-accessibility-display.md) | Accessibility › Display | accepted |
 | [0067](0067-text-size-per-toolkit-and-qt-bridge.md) | Text size per toolkit and Qt bridge | accepted |
 | [0068](0068-notification-center.md) | Notification Center | accepted |
+| [0069](0069-network-bluetooth-and-energy-settings.md) | Network, Bluetooth and energy settings | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

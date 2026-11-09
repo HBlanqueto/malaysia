@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
-use std::sync::{Mutex, OnceLock};
+use std::collections::BTreeMap;
 
 use bk::app::{load_defaults, load_restoration, save_defaults, use_defaults};
 use bk::patterns::settings::Pane;
@@ -12,7 +11,7 @@ use ctappearance::notifications::{
 use ctdesign::{ACCENT_SWATCHES, Rgba};
 use serde::Deserialize;
 
-use crate::localize::{tr, tr_list};
+use crate::localize::{intern, tr, tr_list};
 
 const DOMAIN: &str = "notifications";
 const TINT: Rgba = ACCENT_SWATCHES[3].1;
@@ -36,21 +35,6 @@ struct History {
 struct Seen {
     app_id: String,
     app_name: String,
-}
-
-// Row and pane titles are &'static str; each app name is leaked once and reused.
-fn intern(text: String) -> &'static str {
-    static TEXTS: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
-    let mut texts = TEXTS
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Some(text) = texts.get(text.as_str()) {
-        return text;
-    }
-    let text: &'static str = Box::leak(text.into_boxed_str());
-    texts.insert(text);
-    text
 }
 
 fn edit<T: 'static>(

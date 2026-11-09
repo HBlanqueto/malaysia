@@ -1,8 +1,15 @@
 mod app;
+mod bluetooth;
+mod bluez;
+mod bus;
+mod energy;
 mod localize;
+mod network;
+mod networkmanager;
 mod notifications;
 mod previews;
 mod state;
+mod wifi;
 
 use bk::app::{Instance, Launch, launch};
 use bk::prelude::*;

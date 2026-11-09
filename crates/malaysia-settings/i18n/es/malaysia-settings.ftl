@@ -151,3 +151,69 @@ focus-allowed-apps-help = Estas apps muestran sus notificaciones aunque el modo 
 focus-time-sensitive = Notificaciones urgentes
 focus-time-sensitive-help = Las apps que permiten notificaciones urgentes pueden avisarte de inmediato.
 notifications-badge = Globo en el icono de la app
+
+action-failed = No se pudo completar la acción
+
+energy = Energía
+battery = Batería
+battery-level = Nivel de la batería
+battery-charged = Cargada
+battery-charging = Cargando
+battery-until-full = Carga completa en { $time }
+battery-until-empty = Queda { $time }
+low-power-mode = Modo de bajo consumo
+low-power-mode-help = Reduce el consumo bajando el rendimiento del procesador.
+battery-health = Estado de la batería
+battery-condition = Estado
+battery-normal = Normal
+battery-service = Se recomienda revisarla
+battery-capacity = Capacidad máxima
+battery-cycles = Ciclos de carga
+charge-limit = Limitar la carga al { $percent } %
+charge-limit-help = Alarga la vida de la batería si el equipo pasa mucho tiempo enchufado. El límite lo fija el fabricante.
+
+status-connected = Conectado
+status-connecting = Conectando…
+status-disconnected = Sin conexión
+status-off = Desactivado
+cancel = Cancelar
+
+wifi = Wi‑Fi
+wifi-about = Conecta este equipo a internet sin cables. Activa la Wi‑Fi y elige una red.
+wifi-wrong-password = No se pudo conectar: la contraseña no es correcta.
+wifi-known = Redes conocidas
+wifi-other = Otras redes
+wifi-forget = Olvidar
+wifi-enterprise = Esta red usa autenticación de empresa (802.1X). Configúrala con el editor de conexiones de NetworkManager.
+wifi-password-title = La red «{ $network }» necesita una contraseña
+wifi-password-help = Escribe la contraseña de la red Wi‑Fi.
+wifi-password = Contraseña
+wifi-join = Conectarse
+
+network = Red
+network-services = Otros servicios
+link-ethernet = Ethernet
+link-modem = Módem
+link-bond = Agregado de enlaces
+link-vlan = VLAN
+link-bridge = Puente
+
+vpn = VPN
+vpn-none = Sin configuraciones de VPN
+vpn-import = Importar configuración…
+vpn-import-help = WireGuard (.conf) u OpenVPN (.ovpn).
+
+bluetooth = Bluetooth
+bluetooth-about = Conecta accesorios para escuchar música, escribir, jugar y más.
+bluetooth-visible-as = Este equipo es visible como «{ $name }» mientras Ajustes de Bluetooth esté abierto.
+bluetooth-my-devices = Mis dispositivos
+bluetooth-nearby = Dispositivos cercanos
+bluetooth-searching = Buscando…
+bluetooth-connect = Conectar
+bluetooth-disconnect = Desconectar
+bluetooth-forget = Olvidar
+bluetooth-connected-battery = Conectado · { $percent } %
+bluetooth-pair-title = Enlazar «{ $device }»
+bluetooth-pair-confirm = Comprueba que el dispositivo muestra este código.
+bluetooth-pair-type = Escribe este código en el dispositivo y pulsa Retorno.
+bluetooth-pair = Enlazar
