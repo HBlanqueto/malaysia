@@ -116,6 +116,7 @@ pub(crate) enum FrameOwner {
     Window(WindowId),
     Popup(PopupId),
     Alert(u64),
+    Card(u64, usize),
 }
 
 pub(crate) struct ChromeCache {
@@ -164,6 +165,11 @@ impl ChromeCache {
             self.entries.remove(&id);
         }
         self.shaders.retain(|(cached, _), _| *cached != owner);
+    }
+
+    pub(crate) fn remove_cards(&mut self, id: u64) {
+        self.shaders
+            .retain(|(cached, _), _| !matches!(cached, FrameOwner::Card(owner, _) if *owner == id));
     }
 
     pub(crate) fn shader(

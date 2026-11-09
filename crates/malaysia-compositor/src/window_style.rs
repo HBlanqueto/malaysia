@@ -1,9 +1,11 @@
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use smithay::reexports::wayland_server::WEnum;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, DataInit, DisplayHandle, New, Resource};
+use smithay::utils::{Logical, Rectangle};
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg::PopupSurface;
 use smithay::wayland::{Dispatch2, GlobalDispatch2};
@@ -30,9 +32,18 @@ struct Popover;
 
 struct PanelStyle(AtomicU32);
 
+struct CardStyle(Mutex<Cards>);
+
+#[derive(Debug, Clone)]
+pub(crate) struct Cards {
+    pub(crate) id: u64,
+    pub(crate) radius: u32,
+    pub(crate) rects: Vec<Rectangle<i32, Logical>>,
+}
+
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 
 impl WindowStyleGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -97,6 +108,33 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 });
                 state.sync_panels();
             }
+            infinity_window_style_v1::Request::SetCards {
+                surface,
+                radius,
+                cards,
+            } => {
+                let id = with_states(&surface, |states| {
+                    states.data_map.insert_if_missing_threadsafe(|| {
+                        CardStyle(Mutex::new(Cards {
+                            id: NEXT_ALERT.fetch_add(1, Ordering::Relaxed),
+                            radius: 0,
+                            rects: Vec::new(),
+                        }))
+                    });
+                    let style = states.data_map.get::<CardStyle>()?;
+                    let mut known = style
+                        .0
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    known.radius = radius;
+                    known.rects = card_rects(&cards);
+                    Some(known.id)
+                });
+                if let Some(id) = id {
+                    state.chrome.remove_cards(id);
+                }
+                state.request_redraw();
+            }
             infinity_window_style_v1::Request::SetPopover { surface } => {
                 with_states(&surface, |states| {
                     states.data_map.insert_if_missing_threadsafe(|| Popover);
@@ -119,6 +157,33 @@ pub(crate) fn panel(surface: &WlSurface) -> Option<Panel> {
     with_states(surface, |states| {
         let style = states.data_map.get::<PanelStyle>()?;
         Some(Panel::from_bits_truncate(style.0.load(Ordering::Relaxed)))
+    })
+}
+
+fn card_rects(bytes: &[u8]) -> Vec<Rectangle<i32, Logical>> {
+    bytes
+        .as_chunks::<16>()
+        .0
+        .iter()
+        .map(|card| {
+            let field =
+                |at: usize| i32::from_ne_bytes(card[at..at + 4].try_into().unwrap_or_default());
+            Rectangle::new((field(0), field(4)).into(), (field(8), field(12)).into())
+        })
+        .filter(|rect| rect.size.w > 0 && rect.size.h > 0)
+        .collect()
+}
+
+pub(crate) fn cards(surface: &WlSurface) -> Option<Cards> {
+    with_states(surface, |states| {
+        let style = states.data_map.get::<CardStyle>()?;
+        Some(
+            style
+                .0
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone(),
+        )
     })
 }
 
@@ -209,6 +274,17 @@ impl State {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn card_rectangles_come_as_int32_quadruples_and_empty_ones_are_dropped() {
+        let bytes: Vec<u8> = [10, 8, 344, 90, 0, 0, 0, 40, 10, 106, 344, 120]
+            .into_iter()
+            .flat_map(i32::to_ne_bytes)
+            .collect();
+        let rects = super::card_rects(&bytes);
+        assert_eq!(rects.len(), 2);
+        assert_eq!((rects[1].loc.y, rects[1].size.h), (106, 120));
+    }
+
     use super::*;
 
     #[test]

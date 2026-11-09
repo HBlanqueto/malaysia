@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -7,7 +7,8 @@ use bk::menu::MenuItem;
 use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{
-    Activation, Anchors, KeyboardInteractivity, LayerGeometry, Toplevels, set_layer_geometry,
+    Activation, Anchors, CardFrames, KeyboardInteractivity, LayerGeometry, Toplevels,
+    set_card_frames, set_layer_geometry,
 };
 use bk::style::Palette;
 use bk::theme;
@@ -18,7 +19,7 @@ use ctdesign::{
     NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
     NOTIFICATION_TEXT_GAP, NOTIFICATION_WIDTH,
 };
-use torin::prelude::{Content, Gaps, Position};
+use torin::prelude::{Area, Content, Gaps, Position};
 
 use super::server::{self, Link, Reply};
 use super::store::{Notification, Origin, focus_name, parse_focus};
@@ -167,6 +168,11 @@ impl App for NotificationsApp {
             set_layer_geometry(geometry);
         }
 
+        let frames = use_hook(|| Rc::new(RefCell::new(HashMap::<u32, Area>::new())));
+        let relayout = use_state(|| 0u64);
+        let surface = use_state(Area::default);
+        let sent = use_hook(|| Rc::new(RefCell::new(CardFrames::default())));
+        let _ = *relayout.read();
         let context = Context {
             link: link.clone(),
             snapshot,
@@ -175,15 +181,25 @@ impl App for NotificationsApp {
             draft,
             previews: config.show_previews != ShowPreviews::Never,
             now,
+            frames: frames.clone(),
+            rendered: Rc::new(RefCell::new(Vec::new())),
+            relayout,
         };
         let content = if shown.panel_open {
             panel(&context, &shown, &config, expanded, editing).into_element()
         } else {
             banners(&context, &shown, banner_height).into_element()
         };
+        let cards = card_frames(&context, *surface.read());
+        if *sent.borrow() != cards {
+            *sent.borrow_mut() = cards.clone();
+            set_card_frames(cards);
+        }
+        let mut measured = surface;
         rect()
             .width(Size::fill())
             .height(Size::fill())
+            .on_sized(move |event: Event<SizedEventData>| measured.set_if_modified(event.area))
             .padding(Gaps::new(
                 NOTIFICATION_GAP,
                 NOTIFICATION_MARGIN as f32,
@@ -217,6 +233,33 @@ struct Context {
     draft: State<String>,
     previews: bool,
     now: i64,
+    frames: Rc<RefCell<HashMap<u32, Area>>>,
+    rendered: Rc<RefCell<Vec<u32>>>,
+    relayout: State<u64>,
+}
+
+// ADR 0068: the compositor gives each card the window frame; only cards fully on the surface count.
+fn card_frames(context: &Context, surface: Area) -> CardFrames {
+    let frames = context.frames.borrow();
+    let cards = context
+        .rendered
+        .borrow()
+        .iter()
+        .filter_map(|id| frames.get(id))
+        .filter(|area| area.min_y() >= surface.min_y() && area.max_y() <= surface.max_y())
+        .map(|area| {
+            (
+                (area.min_x() - surface.min_x()).round() as i32,
+                (area.min_y() - surface.min_y()).round() as i32,
+                area.width().round() as i32,
+                area.height().round() as i32,
+            )
+        })
+        .collect();
+    CardFrames {
+        radius: NOTIFICATION_RADIUS as u32,
+        cards,
+    }
 }
 
 impl Context {
@@ -607,7 +650,7 @@ fn card(
         });
     rect()
         .width(Size::fill())
-        .child(edged(body).width(Size::fill()))
+        .child(framed(context, id, body))
         .maybe_child(hovered.then(|| close_button(context, id)))
         .into_element()
 }
@@ -706,7 +749,19 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
         .into_element()
 }
 
-// Notification cards take the window border colours: hairline inside, dark line outside (ADR 0068).
+fn framed(context: &Context, id: u32, body: Rect) -> Rect {
+    context.rendered.borrow_mut().push(id);
+    let frames = context.frames.clone();
+    let mut relayout = context.relayout;
+    body.corner_radius(bk::style::continuous_corner(NOTIFICATION_RADIUS))
+        .on_sized(move |event: Event<SizedEventData>| {
+            if frames.borrow_mut().insert(id, event.area) != Some(event.area) {
+                *relayout.write() += 1;
+            }
+        })
+}
+
+// Stack layers and lock cards draw the window border colours: hairline inside, dark line outside (ADR 0068).
 fn edged(body: Rect) -> Rect {
     let palette = ctappearance::palette(theme::resolved().scheme);
     let body = match palette.inner_line {

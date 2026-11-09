@@ -872,7 +872,6 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
     let frame_rect_physical = frame.rect;
     let radius_physical = frame.radius;
     let exponent = frame.exponent;
-    let is_focused = frame.focused;
     if let Some(program) = state.rounded_clip.clone().filter(|_| frame.bordered) {
         for element in surface_elements {
             match crate::effects::RoundedTextureElement::from_surface_element(
@@ -891,6 +890,25 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
         content.extend(surface_elements.into_iter().map(|e| e.into()));
     }
 
+    let (outer, inner, shadow) = frame_decorations(state, &frame, scale);
+    elements.extend(frame_order(outer, inner, content, shadow));
+}
+
+type Decorations<R> = (
+    Option<OutputRenderElement<R>>,
+    Option<OutputRenderElement<R>>,
+    Vec<OutputRenderElement<R>>,
+);
+
+fn frame_decorations<R: MalaysiaRenderer>(
+    state: &mut State,
+    frame: &Frame,
+    scale: f64,
+) -> Decorations<R> {
+    let frame_rect_physical = frame.rect;
+    let radius_physical = frame.radius;
+    let exponent = frame.exponent;
+    let is_focused = frame.focused;
     let mut outer = None;
     let mut inner = None;
     let mut shadow = Vec::new();
@@ -966,7 +984,7 @@ pub(crate) fn append_frame<R: MalaysiaRenderer>(
         }
     }
 
-    elements.extend(frame_order(outer, inner, content, shadow));
+    (outer, inner, shadow)
 }
 
 pub(crate) fn frame_order<T>(
@@ -1079,6 +1097,10 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                     1.0,
                     Kind::Unspecified,
                 );
+            if let Some(cards) = crate::window_style::cards(&surface) {
+                append_cards(state, &cards, rect, surface_elements, scale, elements);
+                continue;
+            }
             let Some(alert) = crate::window_style::alert_layer(&surface) else {
                 elements.extend(surface_elements.into_iter().map(|e| e.into()));
                 continue;
@@ -1104,6 +1126,39 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
             );
         }
     }
+}
+
+// ADR 0068: a layer surface's cards get the window frame; the client draws the card itself.
+fn append_cards<R: MalaysiaRenderer>(
+    state: &mut State,
+    cards: &crate::window_style::Cards,
+    surface_rect: Rectangle<i32, Logical>,
+    surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
+    scale: f64,
+    elements: &mut Vec<OutputRenderElement<R>>,
+) {
+    let mut borders = Vec::new();
+    let mut shadows = Vec::new();
+    for (index, card) in cards.rects.iter().enumerate() {
+        let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
+        let frame = Frame {
+            owner: crate::chrome::FrameOwner::Card(cards.id, index),
+            rect: physical_rect(card, scale),
+            radius: (crate::window_style::corner_extent(cards.radius) * scale).round() as i32,
+            exponent: ctdesign::DIALOG.superellipse_exponent,
+            focused: true,
+            panel: false,
+            bordered: true,
+            arrow: crate::effects::Arrow::default(),
+        };
+        let (outer, inner, shadow) = frame_decorations(state, &frame, scale);
+        borders.extend(outer);
+        borders.extend(inner);
+        shadows.extend(shadow);
+    }
+    elements.extend(borders);
+    elements.extend(surface_elements.into_iter().map(|e| e.into()));
+    elements.extend(shadows);
 }
 
 pub(crate) fn append_cursor<R: MalaysiaRenderer>(

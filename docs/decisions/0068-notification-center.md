@@ -290,11 +290,17 @@ Exact names from
    menu bar closes it too. Stacks, «Show less», «Clear All», hover
    controls and the «More» menu as in Tahoe. Sizes, radii and material are
    tokens in `ctdesign`, calibrated against a real Tahoe screenshot; the
-   panel does not use glass until one shows it. Cards, stack layers and lock
-   cards take the window border colours of `ctappearance::palette`: in dark
-   mode a white hairline inside and a dark line outside, as measured on a
-   Tahoe dark call notification in the MacStories review; the expanded Live
-   Activity has neither.
+   panel does not use glass until one shows it. The compositor frames each
+   banner and panel card as a window: the shell draws the card with a
+   continuous corner and sends its rectangle with
+   `infinity_window_style_v1.set_cards` (`bk::shell::set_card_frames`), and
+   the compositor adds the window shadow below and the inner and outer
+   borders above (`append_cards` in `scene_elements.rs`). A dark Tahoe call
+   notification in the MacStories review shows the same two borders as a
+   window. Stack layers and lock cards draw those border colours
+   themselves, because a frame above the surface would cross the card in
+   front, and the lock is not a layer surface. The expanded Live Activity has
+   no border.
 10. **Focus.** Four modes as on macOS: Do Not Disturb, Sleep, Personal and
     Work, each with its allowed apps and a «Time Sensitive Notifications»
     switch (`[focus.<mode>]` in `notifications.domain`). A mode lets through

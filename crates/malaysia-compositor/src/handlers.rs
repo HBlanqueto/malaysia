@@ -673,6 +673,9 @@ impl WlrLayerShellHandler for State {
         if let Some(id) = crate::window_style::alert_layer(surface.wl_surface()) {
             self.chrome.remove(crate::chrome::FrameOwner::Alert(id));
         }
+        if let Some(cards) = crate::window_style::cards(surface.wl_surface()) {
+            self.chrome.remove_cards(cards.id);
+        }
         self.layer_surface_destroyed(surface.wl_surface());
         self.layers.destroy(surface.wl_surface());
         self.request_redraw();
