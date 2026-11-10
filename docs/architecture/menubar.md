@@ -51,7 +51,7 @@ App icons (`NSStatusItem`, the system tray) go on the right, before the clock. T
 
 After the app icons come VPN, Bluetooth, Wi-Fi and Battery (`menubar/extras.rs`, ADR 0069). They read NetworkManager, BlueZ, UPower and power-profiles-daemon through `malaysia-services`, the same workers as System Settings.
 
-1. Each menu shows only if its daemon answers and its `show_*` key in `menubar.domain` is on ([`options.md`](../configuration/options.md#menubar--shell-menu-bar-macos-menu-bar)). VPN shows only with a VPN profile, Battery only with a battery.
+1. Each menu shows only if its daemon answers and its `show_*` key in `menubar.domain` is on ([`options.md`](../configuration/options.md#menubar--shell-menu-bar-macos-menu-bar)). VPN shows only with a VPN profile or a tunnel from another VPN app; its symbol is dimmed until one is up, and the other apps are listed under their own header. Battery shows only with a battery.
 2. The icons take the bar text color: the Wi-Fi arcs show the signal of the current network, the battery fills to its level, green while charging and red from 20 % down.
 3. Wi-Fi turns the radio on or off and lists known and other networks; opening it requests a scan. A known or open network connects from the menu; one that needs a password opens Settings › Wi-Fi.
 4. Bluetooth turns the radio on or off and connects or disconnects paired devices, with their battery.

@@ -31,6 +31,8 @@ components:
   about       «Acerca de este PC»
   about-app <app_id>
               «Acerca de» for an app that has none of its own
+  open-app <desktop_id>
+              launch an installed app, for System Settings
 ";
 
 fn main() -> ExitCode {
@@ -46,6 +48,7 @@ fn main() -> ExitCode {
         Some("force-quit") => dialogs::run_force_quit(),
         Some("about") => dialogs::run_about(),
         Some("about-app") => dialogs::run_about_app(std::env::args().nth(2).as_deref()),
+        Some("open-app") => launcher::open_app(std::env::args().nth(2).as_deref()),
         Some(other) => {
             eprintln!("malaysia-shell: unknown component '{other}'");
             eprintln!("{USAGE}");

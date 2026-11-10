@@ -206,6 +206,15 @@ vpn = VPN
 vpn-none = Sin configuraciones de VPN
 vpn-import = Importar configuración…
 vpn-import-help = WireGuard (.conf) u OpenVPN (.ovpn).
+vpn-import-help-wireguard = WireGuard (.conf). OpenVPN necesita su complemento.
+vpn-openvpn-missing = Este equipo no tiene el complemento de OpenVPN para NetworkManager. Pide a quien lo administra que lo instale, o usa una configuración de WireGuard.
+vpn-plugin-missing = { $kind } · Falta el complemento de { $kind }
+vpn-configurations = Configuraciones
+vpn-external = Otras apps de VPN
+vpn-external-help = Se conectan y desconectan desde su propia app. Aparecen aquí mientras su túnel está activo.
+vpn-tunnel = Túnel
+vpn-active = Activa
+vpn-open = Abrir
 
 bluetooth = Bluetooth
 bluetooth-about = Conecta accesorios para escuchar música, escribir, jugar y más.

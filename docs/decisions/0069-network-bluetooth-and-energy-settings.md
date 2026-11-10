@@ -72,9 +72,25 @@ compositor idle code.
       disabled until the sheet closes (barrierkit `Sheet`).
 4. **Network** lists the Wi-Fi service and the Ethernet, modem, bond, VLAN
    and bridge devices with their state.
-5. **VPN** lists `vpn` and `wireguard` profiles with a connect switch.
-   Import runs `nmcli connection import` for `.conf` (WireGuard) and `.ovpn`
-   (OpenVPN): import has no D-Bus call and each plugin parses its own format.
+5. **VPN** has two lists, as GNOME Shell and plasma-nm read NetworkManager
+   but without their gaps:
+   1. **Configurations** are saved `vpn` and `wireguard` profiles without the
+      `EXTERNAL` flag (0x8), each with a connect switch. Apps that use
+      NetworkManager, such as Proton VPN, land here. A profile whose plugin is
+      missing is dimmed.
+   2. **Other VPN apps** are tunnels another program set up: a `wireguard`
+      or `tun` device whose active connection has the `EXTERNAL` flag (0x80,
+      NetworkManager 1.26), or an unmanaged one whose interface is up. TAP
+      devices are virtual machine ports and are left out. GNOME and KDE hide
+      `tun`; Malaysia shows it, so Tailscale and OpenVPN from a terminal
+      appear. These rows have no switch: the app owns the tunnel and would
+      bring it back. The interface name gives the app's name and, for
+      Mullvad, an «Open» button that runs `malaysia-shell open-app`.
+   3. Import runs `nmcli connection import` for `.conf` (WireGuard) and
+      `.ovpn` (OpenVPN): import has no D-Bus call and each plugin parses its
+      own format. Settings reads the installed plugins from
+      `/etc/NetworkManager/VPN` and `/usr/lib/NetworkManager/VPN`, and
+      refuses a `.ovpn` without the OpenVPN plugin.
 6. **Bluetooth** (`bluez.rs`, `bluetooth.rs`):
    1. Off soft-blocks Bluetooth through `/dev/rfkill`, so systemd-rfkill keeps
       it off after a reboot; on unblocks it and sets `Powered`. Without

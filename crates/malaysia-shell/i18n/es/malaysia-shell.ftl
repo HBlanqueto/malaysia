@@ -962,6 +962,7 @@ bluetooth-devices = Dispositivos
 bluetooth-settings = Ajustes de Bluetooth…
 vpn = VPN
 vpn-settings = Ajustes de VPN…
+vpn-external = Otras apps de VPN
 power-source-adapter = Fuente de energía: adaptador de corriente
 power-source-battery = Fuente de energía: batería
 battery-charged = Cargada

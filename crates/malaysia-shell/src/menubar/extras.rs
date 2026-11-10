@@ -6,13 +6,13 @@ use bk::menu::{CheckState, MenuIcon, MenuItem};
 use bk::prelude::*;
 use bk::style::Palette;
 use ctappearance::menubar::MenubarConfig;
-use ctdesign::{ACCENT_SWATCHES, MENUBAR_MARGIN, Rgba, SYMBOL};
+use ctdesign::{ACCENT_SWATCHES, MENUBAR_FADED_ALPHA, MENUBAR_MARGIN, Rgba, SYMBOL};
 use freya_components::svg_viewer::SvgViewer;
 use malaysia_services::bluez::{BlueZ, Bluetooth, BluetoothCommand, Device};
 use malaysia_services::bus::{Live, Remote, use_service};
 use malaysia_services::networkmanager::{
-    AskToJoin, LinkState, Network, NetworkCommand, NetworkManager, Security, Vpn, WIFI_DOMAIN,
-    Wifi, WifiConfig, WifiNetwork, signal_svg,
+    AskToJoin, ExternalVpn, LinkState, Network, NetworkCommand, NetworkManager, Security, Vpn,
+    WIFI_DOMAIN, Wifi, WifiConfig, WifiNetwork, signal_svg,
 };
 use malaysia_services::upower::{Battery, Charge, PowerProfiles, ProfileCommand, Profiles, UPower};
 
@@ -25,7 +25,6 @@ const CHARGING: Rgba = ACCENT_SWATCHES[6].1;
 // macOS paints the battery red from 20 % down.
 const LOW_BATTERY: f64 = 20.0;
 const BATTERY_ICON: (f32, f32) = (24.0, 12.0);
-const FADED_ALPHA: f32 = 0.3;
 
 pub struct Extras {
     network: Live<NetworkManager>,
@@ -126,7 +125,7 @@ pub fn extra_titles(
     let mut titles = Vec::new();
     if config.show_vpn
         && let Some(network) = &network
-        && !network.vpns.is_empty()
+        && !(network.vpns.is_empty() && network.external_vpns.is_empty())
     {
         titles.push(vpn_title(
             network,
@@ -212,7 +211,7 @@ fn symbol_icon(symbol: Symbol, ink: Rgba) -> Element {
 
 fn faded(ink: Rgba) -> Rgba {
     Rgba {
-        a: ink.a * FADED_ALPHA,
+        a: ink.a * MENUBAR_FADED_ALPHA,
         ..ink
     }
 }
@@ -381,17 +380,38 @@ fn vpn_title(
         .map(|(index, vpn)| {
             MenuItem::action(format!("vpn.{index}"), vpn.name.clone())
                 .with_check(CheckState::Checkbox(vpn.state != LinkState::Disconnected))
+                .with_enabled(vpn.available)
         })
         .collect();
+    let external: Vec<ExternalVpn> = network.external_vpns.clone();
+    if !external.is_empty() {
+        if !items.is_empty() {
+            items.push(MenuItem::Separator);
+        }
+        items.push(MenuItem::header(tr!("vpn-external")));
+        items.extend(external.iter().enumerate().map(|(index, vpn)| {
+            MenuItem::action(format!("vpn-app.{index}"), vpn.name.clone())
+                .with_enabled(vpn.desktop_entry.is_some())
+        }));
+    }
     items.push(MenuItem::Separator);
     items.push(settings_item("vpn", tr!("vpn-settings")));
+    let active = !external.is_empty() || vpns.iter().any(|vpn| vpn.state == LinkState::Connected);
     let remote = remote.clone();
     title(
         tr!("vpn"),
-        symbol_icon(Symbol::Lock, ink),
+        symbol_icon(Symbol::Lock, if active { ink } else { faded(ink) }),
         items,
         move |id| {
             if open_settings_for(id) {
+                return;
+            }
+            if let Some(entry) =
+                indexed(id, "vpn-app.").and_then(|index| external.get(index)?.desktop_entry)
+            {
+                if let Err(error) = crate::launcher::open_app(Some(entry)) {
+                    tracing::warn!(%error, "could not open the VPN app");
+                }
                 return;
             }
             let Some(vpn) = indexed(id, "vpn.").and_then(|index| vpns.get(index)) else {

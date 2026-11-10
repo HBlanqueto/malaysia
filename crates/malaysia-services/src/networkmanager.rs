@@ -16,6 +16,7 @@ const OBJECTS_PATH: &str = "/org/freedesktop";
 const OBJECT_MANAGER: &str = "org.freedesktop.DBus.ObjectManager";
 const DEVICE: &str = "org.freedesktop.NetworkManager.Device";
 const WIRELESS: &str = "org.freedesktop.NetworkManager.Device.Wireless";
+const TUN_DEVICE: &str = "org.freedesktop.NetworkManager.Device.Tun";
 const ACCESS_POINT: &str = "org.freedesktop.NetworkManager.AccessPoint";
 const ACTIVE: &str = "org.freedesktop.NetworkManager.Connection.Active";
 const PROFILE: &str = "org.freedesktop.NetworkManager.Settings.Connection";
@@ -35,6 +36,21 @@ const MODEM: u32 = 8;
 const BOND: u32 = 10;
 const VLAN: u32 = 11;
 const BRIDGE: u32 = 13;
+const TUN: u32 = 16;
+const WIREGUARD: u32 = 29;
+// NMSettingsConnectionFlags and NMActivationStateFlags: a tunnel another program set up (NetworkManager 1.26).
+const PROFILE_EXTERNAL: u32 = 0x8;
+const ACTIVE_EXTERNAL: u32 = 0x80;
+const IFF_UP: u32 = 0x1;
+const VPN_PLUGIN_DIRS: [&str; 2] = ["/etc/NetworkManager/VPN", "/usr/lib/NetworkManager/VPN"];
+const OPENVPN: &str = "org.freedesktop.NetworkManager.openvpn";
+// Interface name fragment, app name and desktop entry of tunnels that apps with their own daemon set up.
+const VPN_APPS: [(&str, &str, Option<&str>); 4] = [
+    ("tailscale", "Tailscale", None),
+    ("mullvad", "Mullvad VPN", Some("mullvad-vpn")),
+    ("nordlynx", "NordVPN", None),
+    ("cscotun", "Cisco Secure Client", None),
+];
 // NMDeviceState and NMActiveConnectionState.
 const DEVICE_PREPARE: u32 = 40;
 const DEVICE_ACTIVATED: u32 = 100;
@@ -238,6 +254,16 @@ pub struct Vpn {
     pub profile: OwnedObjectPath,
     pub active: Option<OwnedObjectPath>,
     pub state: LinkState,
+    pub available: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExternalVpn {
+    pub name: String,
+    pub desktop_entry: Option<&'static str>,
+    pub interface: String,
+    pub wireguard: bool,
+    pub address: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -245,6 +271,8 @@ pub struct Network {
     pub wifi: Option<Wifi>,
     pub links: Vec<Link>,
     pub vpns: Vec<Vpn>,
+    pub external_vpns: Vec<ExternalVpn>,
+    pub openvpn: bool,
 }
 
 pub enum NetworkCommand {
@@ -330,10 +358,13 @@ impl Service for NetworkManager {
                 })
             })
             .collect();
+        let plugins = vpn_plugins();
         let mut vpns: Vec<Vpn> = self
             .profiles
             .iter()
-            .filter(|(_, profile)| VPN_PROFILES.contains(&profile.kind.as_str()))
+            .filter(|(path, profile)| {
+                VPN_PROFILES.contains(&profile.kind.as_str()) && !external_profile(&objects, path)
+            })
             .map(|(path, profile)| {
                 let (active, state) = match active.get(path) {
                     Some((active, state)) => (Some(active.clone()), active_state(*state)),
@@ -345,11 +376,21 @@ impl Service for NetworkManager {
                     profile: path.clone(),
                     active,
                     state,
+                    available: profile
+                        .vpn_service
+                        .as_ref()
+                        .is_none_or(|service| plugins.contains(service)),
                 }
             })
             .collect();
         vpns.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(Network { wifi, links, vpns })
+        Ok(Network {
+            wifi,
+            links,
+            vpns,
+            external_vpns: external_vpns(&objects),
+            openvpn: plugins.iter().any(|service| service == OPENVPN),
+        })
     }
 
     fn run(&mut self, bus: &Connection, command: NetworkCommand) -> zbus::Result<()> {
@@ -487,10 +528,7 @@ impl NetworkManager {
                 .and_then(|d| property(d, "HwAddress"))
                 .or_else(|| wireless.and_then(|w| property(w, "HwAddress")))
                 .unwrap_or_default(),
-            address: ip4
-                .filter(|_| connected)
-                .and_then(|ip4| property::<Vec<Properties>>(ip4, "AddressData"))
-                .and_then(|addresses| property(addresses.first()?, "address")),
+            address: ip4.filter(|_| connected).and_then(first_address),
             router: ip4
                 .filter(|_| connected)
                 .and_then(|ip4| property::<String>(ip4, "Gateway"))
@@ -595,6 +633,84 @@ fn import(file: &Path) -> zbus::Result<()> {
             String::from_utf8_lossy(&output.stderr).trim().to_string(),
         ))
     }
+}
+
+fn vpn_plugins() -> Vec<String> {
+    VPN_PLUGIN_DIRS
+        .iter()
+        .filter_map(|dir| std::fs::read_dir(dir).ok())
+        .flatten()
+        .filter_map(|entry| std::fs::read_to_string(entry.ok()?.path()).ok())
+        .filter_map(|text| {
+            text.lines()
+                .find_map(|line| line.trim().strip_prefix("service=").map(str::to_string))
+        })
+        .collect()
+}
+
+fn external_profile(objects: &Objects, path: &OwnedObjectPath) -> bool {
+    interface(objects, path.as_str(), PROFILE)
+        .and_then(|profile| property::<u32>(profile, "Flags"))
+        .is_some_and(|flags| flags & PROFILE_EXTERNAL != 0)
+}
+
+// Tunnels set up outside NetworkManager: an external activation, or an unmanaged interface that is up.
+fn external_vpns(objects: &Objects) -> Vec<ExternalVpn> {
+    let mut found: Vec<ExternalVpn> = objects
+        .values()
+        .filter_map(|interfaces| {
+            let device = interfaces.get(DEVICE)?;
+            let kind: u32 = property(device, "DeviceType")?;
+            let layer3_tunnel = interfaces
+                .get(TUN_DEVICE)
+                .and_then(|tun| property::<String>(tun, "Mode"))
+                .is_some_and(|mode| mode == "tun");
+            // TAP devices are virtual machine ports, not VPNs.
+            if !(kind == WIREGUARD || kind == TUN && layer3_tunnel) {
+                return None;
+            }
+            let name: String = property(device, "Interface")?;
+            let external = if property(device, "Managed") == Some(true) {
+                property::<OwnedObjectPath>(device, "ActiveConnection")
+                    .and_then(|path| interface(objects, path.as_str(), ACTIVE))
+                    .and_then(|active| property::<u32>(active, "StateFlags"))
+                    .is_some_and(|flags| flags & ACTIVE_EXTERNAL != 0)
+            } else {
+                interface_up(&name)
+            };
+            if !external {
+                return None;
+            }
+            let app = VPN_APPS
+                .iter()
+                .find(|(fragment, ..)| name.contains(fragment));
+            Some(ExternalVpn {
+                name: app.map_or_else(|| name.clone(), |(_, app, _)| app.to_string()),
+                desktop_entry: app.and_then(|(.., entry)| *entry),
+                address: property::<OwnedObjectPath>(device, "Ip4Config")
+                    .and_then(|path| interface(objects, path.as_str(), IP4_CONFIG))
+                    .and_then(first_address),
+                wireguard: kind == WIREGUARD,
+                interface: name,
+            })
+        })
+        .collect();
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    found
+}
+
+fn interface_up(name: &str) -> bool {
+    std::fs::read_to_string(format!("/sys/class/net/{name}/flags"))
+        .ok()
+        .and_then(|flags| u32::from_str_radix(flags.trim().trim_start_matches("0x"), 16).ok())
+        .is_some_and(|flags| flags & IFF_UP != 0)
+}
+
+fn first_address(ip4: &Properties) -> Option<String> {
+    property(
+        property::<Vec<Properties>>(ip4, "AddressData")?.first()?,
+        "address",
+    )
 }
 
 fn interface<'a>(objects: &'a Objects, path: &str, name: &str) -> Option<&'a Properties> {
@@ -858,6 +974,101 @@ pub fn signal_svg(bars: u8, on: Rgba, off: Rgba) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn object(interfaces: &[(&str, Vec<(&str, Value<'static>)>)]) -> HashMap<String, Properties> {
+        interfaces
+            .iter()
+            .map(|(name, properties)| {
+                let properties = properties
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.try_to_owned().unwrap()))
+                    .collect();
+                (name.to_string(), properties)
+            })
+            .collect()
+    }
+
+    fn path(text: &str) -> OwnedObjectPath {
+        OwnedObjectPath::try_from(text).unwrap()
+    }
+
+    fn tunnel(name: &str, kind: u32, active: &str, mode: &str) -> HashMap<String, Properties> {
+        object(&[
+            (
+                DEVICE,
+                vec![
+                    ("DeviceType", Value::from(kind)),
+                    ("Interface", Value::from(name.to_string())),
+                    ("Managed", Value::from(true)),
+                    ("ActiveConnection", Value::from(path(active))),
+                    ("Ip4Config", Value::from(path("/ip4/1"))),
+                ],
+            ),
+            (TUN_DEVICE, vec![("Mode", Value::from(mode.to_string()))]),
+        ])
+    }
+
+    #[test]
+    fn only_tunnels_another_program_set_up_are_external_vpns() {
+        let address: HashMap<String, OwnedValue> = [(
+            "address".to_string(),
+            Value::from("100.101.4.7".to_string())
+                .try_to_owned()
+                .unwrap(),
+        )]
+        .into();
+        let objects: Objects = [
+            (
+                path("/dev/1"),
+                tunnel("tailscale0", TUN, "/active/1", "tun"),
+            ),
+            (path("/dev/2"), tunnel("wg0", WIREGUARD, "/active/2", "")),
+            (path("/dev/3"), tunnel("vnet0", TUN, "/active/3", "tap")),
+            (path("/dev/4"), tunnel("tun9", TUN, "/active/4", "tun")),
+            (
+                path("/active/1"),
+                object(&[(ACTIVE, vec![("StateFlags", Value::from(ACTIVE_EXTERNAL))])]),
+            ),
+            (
+                path("/active/2"),
+                object(&[(ACTIVE, vec![("StateFlags", Value::from(0u32))])]),
+            ),
+            (
+                path("/active/3"),
+                object(&[(ACTIVE, vec![("StateFlags", Value::from(ACTIVE_EXTERNAL))])]),
+            ),
+            (
+                path("/active/4"),
+                object(&[(ACTIVE, vec![("StateFlags", Value::from(ACTIVE_EXTERNAL))])]),
+            ),
+            (
+                path("/ip4/1"),
+                object(&[(
+                    IP4_CONFIG,
+                    vec![("AddressData", Value::from(vec![address]))],
+                )]),
+            ),
+        ]
+        .into();
+        let found = external_vpns(&objects);
+        let names: Vec<(&str, &str, Option<&str>)> = found
+            .iter()
+            .map(|vpn| {
+                (
+                    vpn.name.as_str(),
+                    vpn.interface.as_str(),
+                    vpn.address.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            names,
+            [
+                ("Tailscale", "tailscale0", Some("100.101.4.7")),
+                ("tun9", "tun9", Some("100.101.4.7")),
+            ]
+        );
+    }
 
     fn ap(ssid: &str, strength: u8, security: Security, path: &str) -> AccessPoint {
         AccessPoint {

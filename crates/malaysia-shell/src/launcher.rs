@@ -408,6 +408,17 @@ fn icon_data(path: &std::path::Path) -> Option<IconData> {
     })
 }
 
+pub fn open_app(id: Option<&str>) -> anyhow::Result<()> {
+    let id = id.ok_or_else(|| anyhow::anyhow!("open-app needs a desktop entry id"))?;
+    let entries = crate::desktop::read_entries();
+    let entry = entries
+        .iter()
+        .find(|entry| entry.id == id)
+        .ok_or_else(|| anyhow::anyhow!("no desktop entry {id}"))?;
+    spawn_entry(entry, None);
+    Ok(())
+}
+
 pub(crate) fn spawn_entry(entry: &DesktopEntry, token: Option<&str>) {
     let terminal = env::var("MALAYSIA_TERMINAL")
         .or_else(|_| env::var("TERMINAL"))
