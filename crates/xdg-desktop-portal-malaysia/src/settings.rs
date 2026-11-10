@@ -58,7 +58,7 @@ impl Values {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
         let dominant = appearance.wallpaper_accent.then(load_dominant).flatten();
-        Self::from_parts(appearance, dominant, gtk::enabled())
+        Self::from_parts(appearance, dominant, appearance.gtk_bridge)
     }
 
     fn from_parts(appearance: &AppearanceConfig, dominant: Option<Rgba>, bridge: bool) -> Self {

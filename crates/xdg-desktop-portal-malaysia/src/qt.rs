@@ -2,34 +2,14 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-use ctappearance::{AppearanceConfig, Toolkit, palette, resolve};
+use ctappearance::{AppearanceConfig, Toolkit, ini, palette, resolve};
 use ctdesign::{BODY, Font, MONO, Rgba};
-use serde::Deserialize;
 
-use crate::gtk::{is_symlink, set_ini_key, write_if_changed};
+use crate::gtk::{is_symlink, write_if_changed};
 
 // qt5ct and qt6ct watch only their own folder, so the palette lives there and not in colors/.
 const SCHEME_FILE: &str = "malaysia-colors.conf";
 const ICON_THEMES: [&str; 2] = ["breeze", "breeze-dark"];
-
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-struct BridgeOptions {
-    qt_bridge: bool,
-}
-
-impl Default for BridgeOptions {
-    fn default() -> Self {
-        Self { qt_bridge: true }
-    }
-}
-
-fn enabled() -> bool {
-    fs::read_to_string(ctappearance::appearance_path())
-        .ok()
-        .and_then(|text| toml::from_str::<BridgeOptions>(&text).ok())
-        .is_none_or(|options| options.qt_bridge)
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Qt {
@@ -87,10 +67,10 @@ impl Bridge {
         }
         let scale = appearance.text_size_for(Toolkit::Qt);
         let mut text = fs::read_to_string(&conf).unwrap_or_default();
-        if ini_value(&text, "Appearance", "icon_theme")
+        if ini::value(&text, "Appearance", "icon_theme")
             .is_none_or(|theme| ICON_THEMES.contains(&theme))
         {
-            text = set_ini_key(&text, "Appearance", "icon_theme", icons);
+            text = ini::set(&text, "Appearance", "icon_theme", Some(icons));
         }
         for (section, key, value) in [
             ("Appearance", "style", "Fusion".to_string()),
@@ -103,17 +83,44 @@ impl Bridge {
             ("Fonts", "general", font(qt, BODY, scale)),
             ("Fonts", "fixed", font(qt, MONO, scale)),
         ] {
-            text = set_ini_key(&text, section, key, &value);
+            text = ini::set(&text, section, key, Some(&value));
         }
         write_if_changed(&conf, &text)
     }
 
-    pub fn sync(&self, appearance: Option<&AppearanceConfig>, dominant: Option<Rgba>) {
-        if !enabled() {
-            return;
+    // Off, Qt goes back to the style's palette; the style, icons and fonts stay as they are.
+    fn remove(&self) -> io::Result<()> {
+        for qt in [Qt::Six, Qt::Five] {
+            let dir = self.config_home.join(qt.tool());
+            let conf = dir.join(format!("{}.conf", qt.tool()));
+            if !is_symlink(&conf)
+                && let Ok(text) = fs::read_to_string(&conf)
+                && ini::value(&text, "Appearance", "color_scheme_path")
+                    .is_some_and(|path| path.ends_with(SCHEME_FILE))
+            {
+                let text = ini::set(&text, "Appearance", "custom_palette", None);
+                write_if_changed(
+                    &conf,
+                    &ini::set(&text, "Appearance", "color_scheme_path", None),
+                )?;
+            }
+            match fs::remove_file(dir.join(SCHEME_FILE)) {
+                Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+                _ => {}
+            }
         }
+        Ok(())
+    }
+
+    pub fn sync(&self, appearance: Option<&AppearanceConfig>, dominant: Option<Rgba>) {
         let default = AppearanceConfig::default();
-        if let Err(error) = self.apply(appearance.unwrap_or(&default), dominant) {
+        let appearance = appearance.unwrap_or(&default);
+        let result = if appearance.qt_bridge {
+            self.apply(appearance, dominant)
+        } else {
+            self.remove()
+        };
+        if let Err(error) = result {
             tracing::warn!(%error, "Qt bridge could not update qt5ct and qt6ct");
         }
     }
@@ -133,19 +140,6 @@ fn font(qt: Qt, face: Font, scale: f32) -> String {
             qt5_weight(face.weight)
         ),
     }
-}
-
-fn ini_value<'a>(ini: &'a str, section: &str, key: &str) -> Option<&'a str> {
-    let header = format!("[{section}]");
-    ini.lines()
-        .map(str::trim)
-        .skip_while(|line| *line != header)
-        .skip(1)
-        .take_while(|line| !line.starts_with('['))
-        .find_map(|line| {
-            let (name, value) = line.split_once('=')?;
-            (name.trim() == key).then_some(value.trim())
-        })
 }
 
 fn qt5_weight(weight: u16) -> u16 {
@@ -269,6 +263,23 @@ mod tests {
         fs::write(home.join("qt6ct/qt6ct.conf"), custom).unwrap();
         Bridge::at(home.clone()).apply(&dark, None).unwrap();
         assert!(conf().contains("icon_theme=Papirus"), "{}", conf());
+    }
+
+    #[test]
+    fn turning_the_bridge_off_drops_its_palette_and_keeps_the_rest() {
+        let home = temp_dir("off");
+        let bridge = Bridge::at(home.clone());
+        bridge.apply(&AppearanceConfig::default(), None).unwrap();
+        let off = AppearanceConfig {
+            qt_bridge: false,
+            ..AppearanceConfig::default()
+        };
+        bridge.sync(Some(&off), None);
+        let conf = fs::read_to_string(home.join("qt6ct/qt6ct.conf")).unwrap();
+        assert!(!conf.contains("color_scheme_path"), "{conf}");
+        assert!(!conf.contains("custom_palette"), "{conf}");
+        assert!(conf.contains("icon_theme=breeze"), "{conf}");
+        assert!(!home.join("qt6ct").join(SCHEME_FILE).exists());
     }
 
     #[test]

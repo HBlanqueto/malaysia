@@ -151,36 +151,13 @@ fn external_row(vpn: &ExternalVpn) -> Row {
     let row = Row::new(intern(vpn.name.clone()))
         .symbol(Symbol::Lock, TINT)
         .detail(intern(format!("{kind} · {} · {place}", tr!("vpn-active"))));
-    match vpn.desktop_entry.filter(|entry| installed(entry)) {
-        Some(entry) => row.control(Button::new(tr!("vpn-open")).on_press(move |_| open_app(entry))),
-        None => row,
-    }
-}
-
-fn installed(entry: &str) -> bool {
-    let data_dirs = std::env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/share".to_string());
-    let data_home = std::env::var("XDG_DATA_HOME")
-        .ok()
-        .or_else(|| Some(format!("{}/.local/share", std::env::var("HOME").ok()?)));
-    data_home
-        .into_iter()
-        .chain(data_dirs.split(':').map(str::to_string))
-        .any(|dir| std::path::Path::new(&format!("{dir}/applications/{entry}.desktop")).is_file())
-}
-
-// The shell launches apps in their own scope (ADR 0024); Settings asks it to.
-fn open_app(entry: &str) {
-    let shell = std::env::current_exe()
-        .ok()
-        .and_then(|exe| Some(exe.parent()?.join("malaysia-shell")))
-        .filter(|path| path.is_file())
-        .unwrap_or_else(|| "malaysia-shell".into());
-    if let Err(error) = std::process::Command::new(shell)
-        .args(["open-app", entry])
-        .spawn()
-        .map(|mut child| std::thread::spawn(move || child.wait()))
+    match vpn
+        .desktop_entry
+        .filter(|entry| crate::apps::installed(entry))
     {
-        tracing::warn!(%error, entry, "could not open the VPN app");
+        Some(entry) => row
+            .control(Button::new(tr!("vpn-open")).on_press(move |_| crate::apps::open_app(entry))),
+        None => row,
     }
 }
 

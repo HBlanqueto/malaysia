@@ -1,6 +1,8 @@
 mod app;
+mod apps;
 mod bluetooth;
 mod energy;
+mod freedesktop;
 mod localize;
 mod menubar;
 mod network;

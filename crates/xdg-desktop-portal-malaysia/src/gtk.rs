@@ -5,13 +5,13 @@ use std::path::{Path, PathBuf};
 use ctappearance::backdrop::Oklab;
 use ctappearance::traffic::{ButtonVisual, TrafficInput, glyph_svg, inset, visual};
 use ctappearance::{
-    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, palette, resolve,
+    AppearanceConfig, ColorScheme, Resolved, TrafficLightShape, TrafficLightStyle, ini, palette,
+    resolve,
 };
 use ctdesign::{
     ButtonKind, LAYER_FACTOR_BG_SUNKEN, LAYER_FACTOR_RAISED, LAYER_FACTOR_SURFACE, Rgba, TITLEBAR,
     TITLEBAR_CLIENT_HEIGHT, TRAFFIC_GLYPHS, TRAFFIC_RIM_WIDTH, TrafficRim,
 };
-use serde::Deserialize;
 
 const BEGIN: &str = "/* malaysia:gtk-bridge begin (xdg-desktop-portal-malaysia, ADR 0050) */";
 const END: &str = "/* malaysia:gtk-bridge end */";
@@ -517,51 +517,6 @@ fn install_block(css: &str) -> String {
     out
 }
 
-pub(crate) fn set_ini_key(ini: &str, section: &str, key: &str, value: &str) -> String {
-    let header = format!("[{section}]");
-    let entry = format!("{key}={value}");
-    let mut out = Vec::new();
-    let mut in_settings = false;
-    let mut seen_settings = false;
-    let mut written = false;
-    for line in ini.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            if in_settings && !written {
-                out.push(entry.clone());
-                written = true;
-            }
-            in_settings = trimmed == header;
-            seen_settings |= in_settings;
-            out.push(line.to_string());
-            continue;
-        }
-        if in_settings
-            && let Some((name, _)) = trimmed.split_once('=')
-            && name.trim() == key
-        {
-            if !written {
-                out.push(entry.clone());
-                written = true;
-            }
-            continue;
-        }
-        out.push(line.to_string());
-    }
-    if !written {
-        if !seen_settings {
-            if out.last().is_some_and(|line| !line.trim().is_empty()) {
-                out.push(String::new());
-            }
-            out.push(header);
-        }
-        out.push(entry);
-    }
-    let mut text = out.join("\n");
-    text.push('\n');
-    text
-}
-
 pub(crate) fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
     if fs::read_to_string(path).is_ok_and(|current| current == contents) {
         return Ok(());
@@ -576,29 +531,6 @@ pub(crate) fn write_if_changed(path: &Path, contents: &str) -> io::Result<()> {
 
 pub(crate) fn is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(default)]
-struct BridgeOptions {
-    gtk_bridge: bool,
-}
-
-impl Default for BridgeOptions {
-    fn default() -> Self {
-        Self { gtk_bridge: true }
-    }
-}
-
-pub fn enabled() -> bool {
-    let path = ctappearance::appearance_path();
-    let Ok(text) = fs::read_to_string(&path) else {
-        return true;
-    };
-    match toml::from_str::<BridgeOptions>(&text) {
-        Ok(options) => options.gtk_bridge,
-        Err(_) => true,
-    }
 }
 
 pub struct Bridge {
@@ -642,7 +574,10 @@ impl Bridge {
         } else {
             let current = fs::read_to_string(&ini).unwrap_or_default();
             let value = if dark { "true" } else { "false" };
-            write_if_changed(&ini, &set_ini_key(&current, "Settings", PREFER_DARK, value))?;
+            write_if_changed(
+                &ini,
+                &ini::set(&current, "Settings", PREFER_DARK, Some(value)),
+            )?;
         }
         Ok(())
     }
@@ -672,9 +607,10 @@ impl Bridge {
     }
 
     pub fn sync(&self, appearance: Option<&AppearanceConfig>, dominant: Option<Rgba>) {
-        let result = if enabled() {
-            let default = AppearanceConfig::default();
-            self.apply(appearance.unwrap_or(&default), dominant)
+        let default = AppearanceConfig::default();
+        let appearance = appearance.unwrap_or(&default);
+        let result = if appearance.gtk_bridge {
+            self.apply(appearance, dominant)
         } else {
             self.remove()
         };
@@ -818,29 +754,6 @@ mod tests {
         assert!(once.ends_with(user));
         assert_eq!(install_block(&once), once);
         assert_eq!(strip_block(&once).trim_start(), user);
-    }
-
-    #[test]
-    fn the_ini_key_is_set_in_place() {
-        assert_eq!(
-            set_ini_key("", "Settings", PREFER_DARK, "true"),
-            "[Settings]\ngtk-application-prefer-dark-theme=true\n"
-        );
-        let ini = "[Settings]\ngtk-theme-name=adw-gtk3\ngtk-application-prefer-dark-theme=0\n";
-        assert_eq!(
-            set_ini_key(ini, "Settings", PREFER_DARK, "true"),
-            "[Settings]\ngtk-theme-name=adw-gtk3\ngtk-application-prefer-dark-theme=true\n"
-        );
-        let other = "[Other]\na=1\n";
-        assert_eq!(
-            set_ini_key(other, "Settings", PREFER_DARK, "false"),
-            "[Other]\na=1\n\n[Settings]\ngtk-application-prefer-dark-theme=false\n"
-        );
-        let two = "[Settings]\na=1\n[Other]\nb=2\n";
-        assert_eq!(
-            set_ini_key(two, "Settings", PREFER_DARK, "true"),
-            "[Settings]\na=1\ngtk-application-prefer-dark-theme=true\n[Other]\nb=2\n"
-        );
     }
 
     #[test]

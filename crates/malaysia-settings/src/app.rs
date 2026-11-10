@@ -21,6 +21,7 @@ use torin::prelude::Gaps;
 
 use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_busy_device, use_pairing_prompt};
 use crate::energy::energy_pane;
+use crate::freedesktop::{Themes, confirm, freedesktop, own_themes};
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
 use crate::previews::theme_preview;
@@ -55,7 +56,7 @@ const COLOR_FILTERS: [ColorFilter; 4] = [
     ColorFilter::GreenRed,
     ColorFilter::BlueYellow,
 ];
-const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
+pub(crate) const ACCESSIBILITY_TINT: Rgba = ACCENT_SWATCHES[0].1;
 const COLOR_FILTER_PENCILS: &[u8] = include_bytes!("../assets/color-filters.svg");
 const COLOR_FILTER_PENCILS_SIZE: (f32, f32) = (349.0, 130.0);
 type Text = fn() -> &'static str;
@@ -97,6 +98,12 @@ pub fn settings_window(
     });
     let wifi_shown = use_state(|| None::<WifiDialog>);
     let busy_device = use_busy_device(&bluetooth);
+    let confirming_own_themes = use_state(|| false);
+    let themes_changed = use_state(|| 0u32);
+    let themes = use_memo(move || {
+        themes_changed.read();
+        Themes::read()
+    });
     let name = account_name();
     let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
@@ -123,7 +130,7 @@ pub fn settings_window(
                     tr!("accessibility"),
                     Symbol::Accessibility,
                     ACCESSIBILITY_TINT,
-                    accessibility(),
+                    accessibility(config),
                 )
                 .page(
                     Pane::new(
@@ -140,7 +147,20 @@ pub fn settings_window(
                         ACCESSIBILITY_TINT,
                         text_size(config, error),
                     )),
-                ),
+                )
+                .page(Pane::new(
+                    "freedesktop",
+                    tr!("freedesktop"),
+                    Symbol::SlidersVertical,
+                    ACCESSIBILITY_TINT,
+                    freedesktop(
+                        config,
+                        &themes.read(),
+                        confirming_own_themes,
+                        themes_changed,
+                        error,
+                    ),
+                )),
             )
             .pane(Pane::new(
                 "appearance",
@@ -170,6 +190,7 @@ pub fn settings_window(
         }))
         .maybe_child(wifi_dialog(wifi_shown, &network))
         .maybe_child(pairing_sheet(pairing))
+        .maybe_child(confirm(confirming_own_themes, error))
         .children(failures.into_iter().filter_map(failure_alert))
 }
 
@@ -399,7 +420,7 @@ fn shape_end(glyph: Symbol) -> Image {
     Image::system(glyph).color(palette(bk::theme::resolved().scheme).ink_muted)
 }
 
-fn accessibility() -> Form {
+fn accessibility(config: &AppearanceConfig) -> Form {
     Form::new()
         .section(
             Section::new().row(
@@ -411,6 +432,17 @@ fn accessibility() -> Form {
         .section(
             Section::titled(tr!("vision")).row(
                 Row::page(tr!("display"), "display").symbol(Symbol::Display, ACCESSIBILITY_TINT),
+            ),
+        )
+        .section(
+            Section::titled(tr!("other-environments")).row(
+                Row::page(tr!("freedesktop"), "freedesktop")
+                    .symbol(Symbol::SlidersVertical, ACCESSIBILITY_TINT)
+                    .detail(if own_themes(config) {
+                        tr!("freedesktop-custom")
+                    } else {
+                        tr!("freedesktop-synced")
+                    }),
             ),
         )
 }
