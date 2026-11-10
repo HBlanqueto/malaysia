@@ -18,6 +18,7 @@ const BATTERY: &str = "org.bluez.Battery1";
 const AGENT_MANAGER: &str = "org.bluez.AgentManager1";
 const AGENT_PATH: &str = "/io/github/hblanqueto/malaysia/settings/agent";
 const AGENT_CAPABILITY: &str = "KeyboardDisplay";
+const LEGACY_PIN: &str = "0000";
 const RFKILL_DEVICE: &str = "/dev/rfkill";
 const RFKILL_CLASS: &str = "/sys/class/rfkill";
 // struct rfkill_event from linux/rfkill.h: idx, type, op, soft, hard.
@@ -161,9 +162,11 @@ impl Service for BlueZ {
                 self.discover(bus, visible);
                 Ok(())
             }
-            BluetoothCommand::Connect(device) => call(bus, &device, DEVICE, "Connect"),
+            BluetoothCommand::Connect(device) => {
+                self.paused(bus, || trust_and_connect(bus, &device))
+            }
             BluetoothCommand::Disconnect(device) => call(bus, &device, DEVICE, "Disconnect"),
-            BluetoothCommand::Pair(device) => pair(bus, device),
+            BluetoothCommand::Pair(device) => self.paused(bus, || pair(bus, device)),
             BluetoothCommand::Forget(device) => {
                 let Some(adapter) = &self.adapter else {
                     return Ok(());
@@ -197,6 +200,25 @@ impl BlueZ {
             self.discover(bus, true);
         }
         Ok(())
+    }
+
+    // Most controllers page slowly or fail to connect while they also run an inquiry.
+    fn paused(
+        &self,
+        bus: &Connection,
+        action: impl FnOnce() -> zbus::Result<()>,
+    ) -> zbus::Result<()> {
+        let Some(adapter) = self.adapter.clone() else {
+            return action();
+        };
+        if self.visible {
+            let _ = call(bus, &adapter, ADAPTER, "StopDiscovery");
+        }
+        let result = action();
+        if self.visible {
+            let _ = call(bus, &adapter, ADAPTER, "StartDiscovery");
+        }
+        result
     }
 
     fn discover(&self, bus: &Connection, visible: bool) {
@@ -263,6 +285,11 @@ fn pair(bus: &Connection, device: OwnedObjectPath) -> zbus::Result<()> {
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     let _ = PROMPTS.0.send_blocking(Prompt::Done);
     paired?;
+    trust_and_connect(bus, &device)
+}
+
+// A trusted device reconnects by itself and needs no authorization for its profiles.
+fn trust_and_connect(bus: &Connection, device: &OwnedObjectPath) -> zbus::Result<()> {
     set(
         bus,
         BLUEZ,
@@ -271,7 +298,15 @@ fn pair(bus: &Connection, device: OwnedObjectPath) -> zbus::Result<()> {
         "Trusted",
         Value::from(true),
     )?;
-    call(bus, &device, DEVICE, "Connect")
+    call(bus, device, DEVICE, "Connect")
+}
+
+fn pairing(device: &OwnedObjectPath) -> bool {
+    PAIRING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .as_ref()
+        == Some(device)
 }
 
 fn register_agent(bus: &Connection) -> zbus::Result<()> {
@@ -345,7 +380,7 @@ impl Agent {
     ) -> Result<(), AgentError> {
         let (reply, answer) = async_channel::bounded(1);
         let prompt = Prompt::Confirm {
-            device: device_name(bus, &device).await,
+            device: device_text(bus, &device, "Alias").await,
             passkey: format!("{passkey:06}"),
             reply,
         };
@@ -364,7 +399,7 @@ impl Agent {
         _entered: u16,
     ) {
         let prompt = Prompt::Display {
-            device: device_name(bus, &device).await,
+            device: device_text(bus, &device, "Alias").await,
             passkey: format!("{passkey:06}"),
         };
         let _ = PROMPTS.0.send(prompt).await;
@@ -377,14 +412,31 @@ impl Agent {
         pincode: String,
     ) {
         let prompt = Prompt::Display {
-            device: device_name(bus, &device).await,
+            device: device_text(bus, &device, "Alias").await,
             passkey: pincode,
         };
         let _ = PROMPTS.0.send(prompt).await;
     }
 
-    fn request_pin_code(&self, _device: OwnedObjectPath) -> Result<String, AgentError> {
-        Err(AgentError::Rejected(String::new()))
+    // Legacy pairing: a keyboard types the code we show; other devices use the usual 0000.
+    async fn request_pin_code(
+        &self,
+        #[zbus(connection)] bus: &zbus::Connection,
+        device: OwnedObjectPath,
+    ) -> Result<String, AgentError> {
+        if !pairing(&device) {
+            return Err(AgentError::Rejected(String::new()));
+        }
+        if device_text(bus, &device, "Icon").await != "input-keyboard" {
+            return Ok(LEGACY_PIN.to_string());
+        }
+        let pin = format!("{:06}", random_below(1_000_000));
+        let prompt = Prompt::Display {
+            device: device_text(bus, &device, "Alias").await,
+            passkey: pin.clone(),
+        };
+        let _ = PROMPTS.0.send(prompt).await;
+        Ok(pin)
     }
 
     fn request_passkey(&self, _device: OwnedObjectPath) -> Result<u32, AgentError> {
@@ -392,18 +444,25 @@ impl Agent {
     }
 
     fn request_authorization(&self, device: OwnedObjectPath) -> Result<(), AgentError> {
-        let pairing = PAIRING
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if pairing.as_ref() == Some(&device) {
+        if pairing(&device) {
             Ok(())
         } else {
             Err(AgentError::Rejected(String::new()))
         }
     }
 
-    fn authorize_service(&self, _device: OwnedObjectPath, _uuid: String) -> Result<(), AgentError> {
-        Err(AgentError::Rejected(String::new()))
+    // BlueZ asks only for untrusted devices; one the user paired, or is pairing, may connect.
+    async fn authorize_service(
+        &self,
+        #[zbus(connection)] bus: &zbus::Connection,
+        device: OwnedObjectPath,
+        _uuid: String,
+    ) -> Result<(), AgentError> {
+        if pairing(&device) || device_flag(bus, &device, "Paired").await {
+            Ok(())
+        } else {
+            Err(AgentError::Rejected(String::new()))
+        }
     }
 
     async fn cancel(&self) {
@@ -411,23 +470,49 @@ impl Agent {
     }
 }
 
-async fn device_name(bus: &zbus::Connection, device: &OwnedObjectPath) -> String {
-    let alias = async {
-        let proxy = zbus::fdo::PropertiesProxy::builder(bus)
-            .destination(BLUEZ)?
-            .path(device.as_ref())?
-            .cache_properties(zbus::proxy::CacheProperties::No)
-            .build()
-            .await?;
-        let value = proxy
-            .get(
-                zbus::names::InterfaceName::from_static_str_unchecked(DEVICE),
-                "Alias",
-            )
-            .await?;
-        Ok::<_, zbus::Error>(String::try_from(value)?)
-    };
-    alias.await.unwrap_or_default()
+async fn device_property(
+    bus: &zbus::Connection,
+    device: &OwnedObjectPath,
+    name: &str,
+) -> zbus::Result<zbus::zvariant::OwnedValue> {
+    let proxy = zbus::fdo::PropertiesProxy::builder(bus)
+        .destination(BLUEZ)?
+        .path(device.as_ref())?
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
+        .await?;
+    Ok(proxy
+        .get(
+            zbus::names::InterfaceName::from_static_str_unchecked(DEVICE),
+            name,
+        )
+        .await?)
+}
+
+async fn device_text(bus: &zbus::Connection, device: &OwnedObjectPath, name: &str) -> String {
+    device_property(bus, device, name)
+        .await
+        .ok()
+        .and_then(|value| String::try_from(value).ok())
+        .unwrap_or_default()
+}
+
+async fn device_flag(bus: &zbus::Connection, device: &OwnedObjectPath, name: &str) -> bool {
+    device_property(bus, device, name)
+        .await
+        .ok()
+        .and_then(|value| bool::try_from(value).ok())
+        .unwrap_or(false)
+}
+
+fn random_below(limit: u32) -> u32 {
+    let mut bytes = [0u8; 4];
+    let read = fs::File::open("/dev/urandom")
+        .and_then(|mut file| io::Read::read_exact(&mut file, &mut bytes));
+    if read.is_err() {
+        tracing::warn!("no /dev/urandom for the Bluetooth PIN");
+    }
+    u32::from_ne_bytes(bytes) % limit
 }
 
 #[cfg(test)]

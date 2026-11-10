@@ -1,5 +1,6 @@
 use bk::patterns::settings::Pane;
 use bk::prelude::*;
+use bk::progress::Spinner;
 use bk::views::feedback::Sheet;
 use bk::views::form::{Form, Row, Section};
 use ctdesign::SPACE_2;
@@ -10,6 +11,7 @@ use crate::menubar::show_in_menu_bar;
 use crate::wifi::TINT;
 use malaysia_services::bluez::{BlueZ, BluetoothCommand, Device, PROMPTS, Prompt};
 use malaysia_services::bus::{Live, WhileVisible};
+use zbus::zvariant::OwnedObjectPath;
 
 const PICTURE_SIZE: (f32, f32) = (40.0, 32.0);
 
@@ -47,7 +49,22 @@ pub fn use_pairing_prompt() -> State<Option<Prompt>> {
     prompt
 }
 
-pub fn bluetooth_pane(bluetooth: &Live<BlueZ>, error: State<Option<String>>) -> Option<Pane> {
+// BlueZ answers Connect and Pair only when they finish; until the next snapshot or a failure the row waits.
+pub fn use_busy_device(bluetooth: &Live<BlueZ>) -> State<Option<OwnedObjectPath>> {
+    let mut busy = use_state(|| None);
+    let (snapshot, failure) = (bluetooth.snapshot, bluetooth.failure);
+    use_side_effect(move || {
+        let _ = (snapshot.read(), failure.read());
+        busy.set_if_modified(None);
+    });
+    busy
+}
+
+pub fn bluetooth_pane(
+    bluetooth: &Live<BlueZ>,
+    busy: State<Option<OwnedObjectPath>>,
+    error: State<Option<String>>,
+) -> Option<Pane> {
     let adapter = bluetooth.snapshot.read().clone().flatten()?;
     let power = bluetooth.remote.clone();
     let visible = bluetooth.remote.clone();
@@ -84,32 +101,47 @@ pub fn bluetooth_pane(bluetooth: &Live<BlueZ>, error: State<Option<String>>) -> 
     if !paired.is_empty() {
         form = form.section(paired.into_iter().fold(
             Section::titled(tr!("bluetooth-my-devices")),
-            |section, device| section.row(paired_row(device, bluetooth)),
+            |section, device| section.row(paired_row(device, bluetooth, busy)),
         ));
     }
-    let nearby =
-        if nearby.is_empty() {
-            Section::titled(tr!("bluetooth-nearby")).row(Row::new(tr!("bluetooth-searching")))
-        } else {
-            nearby.into_iter().fold(
-                Section::titled(tr!("bluetooth-nearby")),
-                |section, device| {
-                    let remote = bluetooth.remote.clone();
-                    let path = device.path.clone();
-                    section.row(
-                        Row::new(intern(device.name.clone()))
-                            .icon(device_picture(&device.icon))
-                            .control(Button::new(tr!("bluetooth-connect")).on_press(move |_| {
-                                remote.send(BluetoothCommand::Pair(path.clone()))
-                            })),
-                    )
-                },
-            )
-        };
+    let nearby = if nearby.is_empty() {
+        Section::titled(tr!("bluetooth-nearby")).row(Row::new(tr!("bluetooth-searching")))
+    } else {
+        nearby.into_iter().fold(
+            Section::titled(tr!("bluetooth-nearby")),
+            |section, device| {
+                let remote = bluetooth.remote.clone();
+                let path = device.path.clone();
+                let control = waiting(busy, &device.path).unwrap_or_else(|| {
+                    Button::new(tr!("bluetooth-connect"))
+                        .on_press(move |_| {
+                            let mut busy = busy;
+                            busy.set(Some(path.clone()));
+                            remote.send(BluetoothCommand::Pair(path.clone()))
+                        })
+                        .into_element()
+                });
+                section.row(
+                    Row::new(intern(device.name.clone()))
+                        .icon(device_picture(&device.icon))
+                        .control(control),
+                )
+            },
+        )
+    };
     Some(pane(form.section(nearby)))
 }
 
-fn paired_row(device: &Device, bluetooth: &Live<BlueZ>) -> Row {
+fn waiting(busy: State<Option<OwnedObjectPath>>, device: &OwnedObjectPath) -> Option<Element> {
+    (busy.read().as_ref() == Some(device))
+        .then(|| Spinner::new(tr!("status-connecting")).into_element())
+}
+
+fn paired_row(
+    device: &Device,
+    bluetooth: &Live<BlueZ>,
+    busy: State<Option<OwnedObjectPath>>,
+) -> Row {
     let status = match (device.connected, device.battery) {
         (true, Some(battery)) => tr!("bluetooth-connected-battery", percent = battery),
         (true, None) => tr!("status-connected").to_string(),
@@ -125,13 +157,21 @@ fn paired_row(device: &Device, bluetooth: &Live<BlueZ>) -> Row {
     } else {
         tr!("bluetooth-connect")
     };
+    let waiting = waiting(busy, &device.path);
+    let status = if waiting.is_some() {
+        tr!("status-connecting").to_string()
+    } else {
+        status
+    };
     Row::new(intern(device.name.clone()))
         .icon(device_picture(&device.icon))
         .detail(intern(status))
-        .control(
+        .control(waiting.unwrap_or_else(|| {
             HStack::new()
                 .spacing(SPACE_2)
                 .child(Button::new(action).on_press(move |_| {
+                    let mut busy = busy;
+                    busy.set(Some(path.clone()));
                     toggle.send(if connected {
                         BluetoothCommand::Disconnect(path.clone())
                     } else {
@@ -142,8 +182,9 @@ fn paired_row(device: &Device, bluetooth: &Live<BlueZ>) -> Row {
                     Button::new(tr!("bluetooth-forget")).on_press(move |_| {
                         forget.send(BluetoothCommand::Forget(forget_path.clone()))
                     }),
-                ),
-        )
+                )
+                .into_element()
+        }))
 }
 
 fn device_picture(icon: &str) -> SvgViewer {

@@ -108,6 +108,8 @@ in
       wants =
         map (component: "malaysia-shell@${component}.service") cfg.shellComponents
         ++ lib.optional cfg.wallpaper.enable "malaysia-wallpaper.service"
+        # PipeWire starts on demand; without it BlueZ has no audio profile and headphones fail.
+        ++ lib.optional config.services.pipewire.wireplumber.enable "wireplumber.service"
         ++ [
           "xdg-desktop-portal-malaysia.service"
           "graphical-session.target"

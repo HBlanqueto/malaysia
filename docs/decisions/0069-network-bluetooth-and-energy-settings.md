@@ -85,10 +85,20 @@ compositor idle code.
       their address.
    4. Settings registers an `org.bluez.Agent1` (`KeyboardDisplay`) as the
       default agent. It shows the code to confirm or to type in a sheet and
-      accepts just-works pairing only for the device being paired.
+      accepts just-works pairing only for the device being paired. It
+      authorizes the services of a paired device or of the one being paired.
+      Legacy PIN pairing answers `0000`, or shows a random PIN to type on a
+      keyboard, as GNOME does.
    5. Each device shows a picture by the freedesktop icon name that BlueZ
       derives from its class (`assets/devices/`); macOS uses exact models
       only for Apple products.
+   6. Connect and Pair stop discovery first and start it again after: most
+      controllers page slowly or fail while they also run an inquiry. Both
+      mark the device `Trusted`, so it reconnects by itself, also when it was
+      paired with another tool. The row shows a spinner until BlueZ answers.
+   7. The session starts WirePlumber (`malaysia-session.target`): PipeWire is
+      socket-activated on NixOS, and without it BlueZ has no audio endpoint, so
+      headphones and speakers fail to connect.
 7. **Energy** (`energy.rs`): the pane is «Battery» with a battery and
    «Energy» without one. Low Power Mode writes `ActiveProfile`
    (`power-saver` or `balanced`) and hides when power-profiles-daemon does not

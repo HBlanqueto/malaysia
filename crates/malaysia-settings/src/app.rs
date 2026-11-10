@@ -19,7 +19,7 @@ use ctdesign::{
 use freya_components::svg_viewer::SvgViewer;
 use torin::prelude::Gaps;
 
-use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_pairing_prompt};
+use crate::bluetooth::{bluetooth_pane, pairing_sheet, use_busy_device, use_pairing_prompt};
 use crate::energy::energy_pane;
 use crate::localize::{tr, tr_list};
 use crate::network::{network_pane, vpn_pane};
@@ -96,6 +96,7 @@ pub fn settings_window(
         }
     });
     let wifi_shown = use_state(|| None::<WifiDialog>);
+    let busy_device = use_busy_device(&bluetooth);
     let name = account_name();
     let window = SettingsWindow::new()
         .account(initials(&name), name, tr!("local-account"))
@@ -105,7 +106,7 @@ pub fn settings_window(
         .group(
             [
                 wifi_pane(&network, wifi_shown, error),
-                bluetooth_pane(&bluetooth, error),
+                bluetooth_pane(&bluetooth, busy_device, error),
                 network_pane(&network),
                 vpn_pane(&network, error),
                 Some(energy_pane(&power, &profiles, error)),
