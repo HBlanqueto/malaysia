@@ -15,7 +15,7 @@ use bk::style::Palette;
 use bk::theme;
 use ctappearance::notifications::{AlertStyle, Focus, NotificationsConfig, ShowPreviews};
 use ctdesign::{
-    BODY, CAPTION, HAIRLINE, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
+    BODY, CAPTION, HEADLINE, NOTIFICATION_BANNER_MS, NOTIFICATION_BODY_LINES,
     NOTIFICATION_CLOSE_SIZE, NOTIFICATION_GAP, NOTIFICATION_ICON_SIZE, NOTIFICATION_MARGIN,
     NOTIFICATION_PADDING, NOTIFICATION_RADIUS, NOTIFICATION_SLIDE_BOUNCE, NOTIFICATION_SLIDE_IN_MS,
     NOTIFICATION_SLIDE_OUT_MS, NOTIFICATION_STACK_INSET, NOTIFICATION_STACK_PEEK,
@@ -624,10 +624,8 @@ fn stack(context: &Context, group: Vec<Notification>, expanded: State<HashSet<St
             .layer(-16 - layer as i16)
             .child(
                 edged(
-                    rect()
-                        .width(Size::fill())
-                        .height(Size::fill())
-                        .background(theme::color(palette.sunken_background)),
+                    rect().width(Size::fill()).height(Size::fill()),
+                    palette.sunken_background,
                 )
                 .position(
                     Position::new_absolute()
@@ -922,7 +920,6 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
     let card = rect()
         .width(Size::fill())
         .padding(NOTIFICATION_PADDING)
-        .background(theme::color(palette.raised_background))
         .child(
             HStack::new()
                 .width(Size::fill())
@@ -949,7 +946,7 @@ pub(crate) fn lock_card(notification: &Notification, hidden: bool) -> Element {
                         ),
                 ),
         );
-    edged(card)
+    edged(card, palette.raised_background)
         .width(Size::px(NOTIFICATION_WIDTH as f32))
         .into_element()
 }
@@ -969,29 +966,9 @@ fn framed(context: &Context, id: u32, body: Rect) -> Rect {
         })
 }
 
-// Stack layers and lock cards draw the window border colours: hairline inside, dark line outside (ADR 0068).
-fn edged(body: Rect) -> Rect {
-    let palette = ctappearance::palette(theme::resolved().scheme);
-    let corner = bk::style::continuous_corner(NOTIFICATION_RADIUS);
-    let body = body.corner_radius(corner);
-    let body = match palette.inner_line {
-        Some(inner) => body.border(
-            Border::new()
-                .fill(theme::color(inner))
-                .width(HAIRLINE / 2.0)
-                .alignment(BorderAlignment::Inner),
-        ),
-        None => body,
-    };
-    rect()
-        .corner_radius(corner)
-        .border(
-            Border::new()
-                .fill(theme::color(palette.outer_border))
-                .width(HAIRLINE / 2.0)
-                .alignment(BorderAlignment::Outer),
-        )
-        .child(body)
+// Stack layers and lock cards draw the panel window edges (ADR 0068).
+fn edged(body: Rect, fill: Rgba) -> Rect {
+    bk::style::panel_edges(body, NOTIFICATION_RADIUS, fill)
 }
 
 fn close_button(context: &Context, id: u32) -> Rect {

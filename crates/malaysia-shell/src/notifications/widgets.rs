@@ -71,18 +71,17 @@ fn tile(widget: Widget, batteries: &[Battery], edit: bool) -> Element {
         Widget::Calendar => calendar(Local::now().date_naive()).into_element(),
         Widget::Batteries => battery_list(batteries).into_element(),
     };
-    rect()
+    let body = rect()
         .width(Size::px(NOTIFICATION_WIDGET_SIZE))
         .height(Size::px(NOTIFICATION_WIDGET_SIZE))
         .padding(NOTIFICATION_PADDING)
-        .corner_radius(NOTIFICATION_WIDGET_RADIUS)
-        .background(theme::color(palette.raised_background))
         .child(content)
         .maybe_child(edit.then(|| {
             Button::new(tr!("widgets-remove"))
                 .on_press(move |_| change(|widgets| widgets.retain(|kept| *kept != widget)))
                 .into_element()
-        }))
+        }));
+    bk::style::panel_edges(body, NOTIFICATION_WIDGET_RADIUS, palette.raised_background)
         .into_element()
 }
 
