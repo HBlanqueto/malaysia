@@ -46,6 +46,7 @@ pub(crate) fn compile(renderer: &mut GlesRenderer) -> Option<GlesTexProgram> {
                 UniformName::new("progress", UniformType::_1f),
                 UniformName::new("window_box", UniformType::_4f),
                 UniformName::new("target_box", UniformType::_4f),
+                UniformName::new("stretch", UniformType::_2f),
             ],
         )
         .inspect_err(|error| tracing::warn!(?error, "failed to compile the minimize shader"))
@@ -163,32 +164,53 @@ pub(crate) fn append<R: MalaysiaRenderer>(
         } else {
             1.0 - linear
         };
-        let area = minimizing.from.merge(minimizing.to);
-        let travel = travel(minimizing.to, output);
-        let texture = TextureRenderElement::from_texture_buffer(
-            area.loc.to_f64().to_physical(scale),
-            &minimizing.texture,
-            None,
-            None,
-            Some(area.size),
-            Kind::Unspecified,
-        );
-        let uniforms = vec![
-            Uniform::new("travel", travel as u8 as f32),
-            Uniform::new("effect", effect_index(effect)),
-            Uniform::new("progress", progress as f32),
-            Uniform::new("window_box", in_travel_frame(minimizing.from, area, travel)),
-            Uniform::new("target_box", in_travel_frame(minimizing.to, area, travel)),
-        ];
         elements.push(
-            PrimaryGpu(TextureShaderElement::new(
-                texture,
+            PrimaryGpu(bend(
+                &minimizing.texture,
+                (minimizing.from, minimizing.to),
+                output,
+                (effect, progress as f32),
                 program.clone(),
-                uniforms,
+                scale,
             ))
             .into(),
         );
     }
+}
+
+fn bend(
+    texture: &TextureBuffer<GlesTexture>,
+    (from, to): (Rectangle<i32, Logical>, Rectangle<i32, Logical>),
+    output: Size<i32, Logical>,
+    (effect, progress): (MinimizeEffect, f32),
+    program: GlesTexProgram,
+    scale: f64,
+) -> TextureShaderElement {
+    let area = from.merge(to);
+    let travel = travel(to, output);
+    let element = TextureRenderElement::from_texture_buffer(
+        area.loc.to_f64().to_physical(scale),
+        texture,
+        None,
+        None,
+        Some(area.size),
+        Kind::Unspecified,
+    );
+    let uniforms = vec![
+        Uniform::new("travel", travel as u8 as f32),
+        Uniform::new("effect", effect_index(effect)),
+        Uniform::new("progress", progress),
+        Uniform::new("window_box", in_travel_frame(from, area, travel)),
+        Uniform::new("target_box", in_travel_frame(to, area, travel)),
+        Uniform::new(
+            "stretch",
+            [
+                area.size.w as f32 / from.size.w.max(1) as f32,
+                area.size.h as f32 / from.size.h.max(1) as f32,
+            ],
+        ),
+    ];
+    TextureShaderElement::new(element, program, uniforms)
 }
 
 fn effect_index(effect: MinimizeEffect) -> f32 {
@@ -236,6 +258,107 @@ mod tests {
 
     fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
         Rectangle::new(Point::from((x, y)), Size::from((w, h)))
+    }
+
+    use smithay::backend::renderer::ExportMem;
+
+    #[allow(unsafe_code)]
+    fn try_test_renderer() -> Option<GlesRenderer> {
+        use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+        let device = EGLDevice::enumerate().ok()?.next()?;
+        // SAFETY: the display owns `device`, so the native handle lives as long as the display.
+        let display = unsafe { EGLDisplay::new(device) }.ok()?;
+        let context = EGLContext::new(&display).ok()?;
+        // SAFETY: `context` was just created on this thread and is not shared with another.
+        unsafe { GlesRenderer::new(context) }.ok()
+    }
+
+    // Draws a red 120 × 80 window at (40, 20) on a 200 × 200 output, bent toward (90, 180).
+    fn bent_pixels(renderer: &mut GlesRenderer, effect: MinimizeEffect, progress: f32) -> Vec<u8> {
+        use smithay::backend::renderer::element::solid::{
+            SolidColorBuffer, SolidColorRenderElement,
+        };
+        let program = compile(renderer).expect("the minimize shader compiles");
+        let window = Size::<i32, BufferCoord>::from((120, 80));
+        let red = SolidColorRenderElement::from_buffer(
+            &SolidColorBuffer::new(Size::from((120, 80)), [1.0, 0.0, 0.0, 1.0]),
+            Point::from((0, 0)),
+            1.0,
+            1.0,
+            Kind::Unspecified,
+        );
+        let mut snapshot =
+            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, window).unwrap();
+        {
+            let mut target = renderer.bind(&mut snapshot).unwrap();
+            let elements: Vec<OutputRenderElement<GlesRenderer>> = vec![red.into()];
+            OutputDamageTracker::new(
+                Size::<i32, smithay::utils::Physical>::from((120, 80)),
+                Scale::from(1.0),
+                Transform::Normal,
+            )
+            .render_output(renderer, &mut target, 0, &elements, [0.0; 4])
+            .unwrap()
+            .sync
+            .wait()
+            .unwrap();
+        }
+        let texture = TextureBuffer::from_texture(renderer, snapshot, 1, Transform::Normal, None);
+        let output = Size::from((200, 200));
+        let element = bend(
+            &texture,
+            (rect(40, 20, 120, 80), rect(90, 180, 20, 20)),
+            output,
+            (effect, progress),
+            program,
+            1.0,
+        );
+        let elements: Vec<OutputRenderElement<GlesRenderer>> = vec![PrimaryGpu(element).into()];
+        let size = Size::<i32, BufferCoord>::from((200, 200));
+        let mut frame =
+            Offscreen::<GlesTexture>::create_buffer(renderer, Fourcc::Abgr8888, size).unwrap();
+        let mut target = renderer.bind(&mut frame).unwrap();
+        OutputDamageTracker::new(
+            Size::<i32, smithay::utils::Physical>::from((200, 200)),
+            Scale::from(1.0),
+            Transform::Normal,
+        )
+        .render_output(renderer, &mut target, 0, &elements, [0.0; 4])
+        .unwrap()
+        .sync
+        .wait()
+        .unwrap();
+        let mapping = renderer
+            .copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888)
+            .unwrap();
+        renderer.map_texture(&mapping).unwrap().to_vec()
+    }
+
+    fn red_at(pixels: &[u8], x: usize, y: usize) -> bool {
+        let offset = (y * 200 + x) * 4;
+        pixels[offset] > 200 && pixels[offset + 3] > 200
+    }
+
+    #[test]
+    fn the_genie_starts_as_the_window_and_pours_into_the_target() {
+        let Some(mut renderer) = try_test_renderer() else {
+            eprintln!("skipping: no EGL device");
+            return;
+        };
+        let start = bent_pixels(&mut renderer, MinimizeEffect::Genie, 0.0);
+        assert!(red_at(&start, 45, 25) && red_at(&start, 155, 95));
+        assert!(!red_at(&start, 100, 150));
+
+        let middle = bent_pixels(&mut renderer, MinimizeEffect::Genie, 0.6);
+        assert!(!red_at(&middle, 45, 25), "the top of the window has left");
+        assert!(
+            red_at(&middle, 100, 155),
+            "the window flows toward the target"
+        );
+        assert!(!red_at(&middle, 45, 155), "it narrows toward the target");
+
+        let end = bent_pixels(&mut renderer, MinimizeEffect::Genie, 1.0);
+        assert!(end.chunks(4).all(|pixel| pixel[3] == 0), "nothing is left");
     }
 
     #[test]

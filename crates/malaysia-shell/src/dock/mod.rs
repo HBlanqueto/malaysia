@@ -28,10 +28,10 @@ use ctappearance::dock::{DockConfig, DockOrientation, MinimizeEffect};
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     DOCK_BOUNCE_HEIGHT, DOCK_BOUNCE_MS, DOCK_DOT, DOCK_DOT_MAX, DOCK_DOT_MIN, DOCK_EDGE_MARGIN,
-    DOCK_HIDE_MS, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X, DOCK_LABEL_PADDING_Y,
-    DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS, DOCK_PROGRESS_HEIGHT, DOCK_RADIUS,
-    DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX, DOCK_TILESIZE_MIN,
-    DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG,
+    DOCK_HIDE_MS, DOCK_ICON_BODY, DOCK_LABEL_FONT_SIZE, DOCK_LABEL_GAP, DOCK_LABEL_PADDING_X,
+    DOCK_LABEL_PADDING_Y, DOCK_LABEL_RADIUS, DOCK_LAUNCH_TIMEOUT_MS, DOCK_MAGNIFY_MS,
+    DOCK_PROGRESS_HEIGHT, DOCK_RADIUS, DOCK_REVEAL_STRIP, DOCK_SEPARATOR_LENGTH, DOCK_TILESIZE_MAX,
+    DOCK_TILESIZE_MIN, DOCK_WINDOW_FRAME, DOCK_WINDOW_ICON, DRAG, HAIRLINE,
 };
 use freya_animation::prelude::{AnimNum, OnFinish, use_animation};
 use freya_core::integration::AppComponent;
@@ -63,6 +63,7 @@ struct Drag {
     from: (f32, f32),
     at: (f32, f32),
     moved: bool,
+    order: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -124,6 +125,26 @@ fn placed((x, y, width, height): Area) -> Rect {
         .position(Position::new_absolute().left(x).top(y))
         .width(Size::px(width))
         .height(Size::px(height))
+}
+
+fn inset((x, y, width, height): Area, by: f32) -> Area {
+    (x + by, y + by, width - 2.0 * by, height - 2.0 * by)
+}
+
+// macOS draws every icon on one 1024 grid with an 824 body. Malaysia's app icons already are;
+// other themes' icons and the places fill their canvas, so they shrink to the body.
+fn on_grid(icon: Option<&IconData>, name: &str, size: f32) -> Element {
+    let gridded = icon.is_some_and(|icon| {
+        let path = icon.path.to_string_lossy();
+        path.contains("/icons/Malaysia/") && path.contains("/apps/")
+    });
+    let drawn = if gridded { size } else { size * DOCK_ICON_BODY };
+    rect()
+        .width(Size::px(size))
+        .height(Size::px(size))
+        .center()
+        .child(app_icon(icon, name, drawn))
+        .into_element()
 }
 
 fn region((x, y, width, height): Area) -> (i32, i32, i32, i32) {
@@ -336,12 +357,13 @@ impl App for DockApp {
             height,
         };
         let dock_state = state.read().clone();
-        let list = items::items(
-            &config,
-            &dock_state.persistent_apps,
-            &dock_state.recent_apps,
-            &running,
-        );
+        let drag_now = dragging.read().clone();
+        // While an icon is dragged the others make room for it, as in macOS.
+        let kept_shown = match &drag_now {
+            Some(drag) if drag.moved => &drag.order,
+            _ => &dock_state.persistent_apps,
+        };
+        let list = items::items(&config, kept_shown, &dock_state.recent_apps, &running);
         let slots: Vec<Slot> = list
             .iter()
             .map(|item| match item {
@@ -449,7 +471,6 @@ impl App for DockApp {
         let progress_track = theme::color(resolved.shell.tile);
         let progress_fill = theme::color(resolved.shell.tile_active);
         let dot = (tile * DOCK_DOT).clamp(DOCK_DOT_MIN, DOCK_DOT_MAX);
-        let drag_now = dragging.read().clone();
         let launching_now = launching.read().clone();
 
         let icon = {
@@ -476,7 +497,7 @@ impl App for DockApp {
             let name = entry_for(id, entries)
                 .and_then(|entry| entry.icon.clone())
                 .unwrap_or_else(|| id.to_string());
-            app_icon(icon(&name, &["apps"]).as_ref(), &app_name(id), size)
+            on_grid(icon(&name, &["apps"]).as_ref(), &app_name(id), size)
         };
 
         let open_app = {
@@ -512,8 +533,8 @@ impl App for DockApp {
         };
 
         let mut children: Vec<Element> = vec![
-            placed(bar)
-                .corner_radius(bk::style::continuous_corner(radius))
+            placed(inset(bar, HAIRLINE))
+                .corner_radius(bk::style::continuous_corner(radius - HAIRLINE))
                 .background(glass)
                 .into_element(),
         ];
@@ -614,6 +635,7 @@ impl App for DockApp {
                                     from: at,
                                     at,
                                     moved: false,
+                                    order: state.peek().persistent_apps.clone(),
                                 }));
                             })
                             .on_press(move |_| {
@@ -685,7 +707,7 @@ impl App for DockApp {
                     let folder = downloads_dir();
                     children.push(
                         placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
-                            .child(app_icon(
+                            .child(on_grid(
                                 icon("folder-download", &["places"]).as_ref(),
                                 tr!("dock-downloads"),
                                 slot.size,
@@ -697,7 +719,7 @@ impl App for DockApp {
                 Item::Trash => {
                     children.push(
                         placed(frame.area(slot.start, icon_cross, slot.size, slot.size))
-                            .child(app_icon(
+                            .child(on_grid(
                                 icon("user-trash", &["places"]).as_ref(),
                                 tr!("dock-trash"),
                                 slot.size,
@@ -850,25 +872,40 @@ impl App for DockApp {
                     shown.set(false);
                 }
             })
-            .on_global_pointer_move(move |event: Event<PointerEventData>| {
-                let at = event.global_location();
-                let at = (at.x as f32, at.y as f32);
-                if let Some((start_cross, start_size)) = *resizing.peek() {
-                    let (_, cross) = frame.canonical(at);
-                    let next = (start_size as f32 + cross - start_cross)
-                        .round()
-                        .clamp(DOCK_TILESIZE_MIN as f32, DOCK_TILESIZE_MAX as f32)
-                        as i32;
-                    if next != tilesize && written_size.replace(next) != next {
-                        edit_config(|config| config.tilesize = next);
+            .on_global_pointer_move({
+                let targets = drop_targets.clone();
+                move |event: Event<PointerEventData>| {
+                    let at = event.global_location();
+                    let at = (at.x as f32, at.y as f32);
+                    if let Some((start_cross, start_size)) = *resizing.peek() {
+                        let (_, cross) = frame.canonical(at);
+                        let next = (start_size as f32 + cross - start_cross)
+                            .round()
+                            .clamp(DOCK_TILESIZE_MIN as f32, DOCK_TILESIZE_MAX as f32)
+                            as i32;
+                        if next != tilesize && written_size.replace(next) != next {
+                            edit_config(|config| config.tilesize = next);
+                        }
                     }
-                }
-                let moving = dragging.peek().clone();
-                if let Some(mut drag) = moving {
-                    let (dx, dy) = (at.0 - drag.from.0, at.1 - drag.from.1);
-                    drag.moved |= dx.hypot(dy) > DRAG.threshold;
-                    drag.at = at;
-                    dragging.set(Some(drag));
+                    let moving = dragging.peek().clone();
+                    if let Some(mut drag) = moving {
+                        let (dx, dy) = (at.0 - drag.from.0, at.1 - drag.from.1);
+                        drag.moved |= dx.hypot(dy) > DRAG.threshold;
+                        drag.at = at;
+                        let (main, cross) = frame.canonical(at);
+                        let removing = cross > cross0 + thickness + tile;
+                        let before = targets
+                            .iter()
+                            .find(|(_, center)| main < *center)
+                            .map(|(id, _)| id.clone());
+                        let past_kept = before.is_none()
+                            && targets
+                                .last()
+                                .is_some_and(|(_, center)| main > center + tile * 1.5);
+                        let keep = !removing && !(past_kept && !drag.kept);
+                        drag.order = items::dropped(&drag.order, &drag.id, before.as_deref(), keep);
+                        dragging.set(Some(drag));
+                    }
                 }
             })
             .on_global_pointer_up(move |_| {
@@ -881,21 +918,7 @@ impl App for DockApp {
                     return;
                 }
                 after_drag.set(true);
-                let (main, cross) = frame.canonical(drag.at);
-                let remove = cross > cross0 + thickness + tile;
-                let before = drop_targets
-                    .iter()
-                    .find(|(_, center)| main < *center)
-                    .map(|(id, _)| id.clone());
-                let beyond_kept = before.is_none()
-                    && drop_targets
-                        .last()
-                        .is_some_and(|(_, center)| main > center + tile * 1.5);
-                let keep = !remove && !(beyond_kept && !drag.kept);
-                edit_state(state, |state| {
-                    state.persistent_apps =
-                        items::dropped(&state.persistent_apps, &drag.id, before.as_deref(), keep);
-                });
+                edit_state(state, |state| state.persistent_apps = drag.order);
             })
             .children(children)
     }
@@ -1124,7 +1147,7 @@ pub fn run() -> anyhow::Result<()> {
     run_layer(
         app,
         LayerSpec {
-            namespace: "malaysia-dock".to_string(),
+            namespace: ctdesign::DOCK_LAYER_NAMESPACE.to_string(),
             layer: Layer::Top,
             anchors: geometry.anchors,
             exclusive_zone: geometry.exclusive_zone,

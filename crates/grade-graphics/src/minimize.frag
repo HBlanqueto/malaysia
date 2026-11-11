@@ -17,6 +17,8 @@ uniform float progress;
 // x0, y0, x1, y1 over the drawn area, in the travel frame (travel is +y).
 uniform vec4 window_box;
 uniform vec4 target_box;
+// v_coords runs in texture units over the drawn area: the area's size over the window's.
+uniform vec2 stretch;
 
 vec2 to_travel(vec2 p) {
     if (travel > 2.5) return vec2(p.y, 1.0 - p.x);
@@ -33,7 +35,7 @@ vec2 to_texture(vec2 w) {
 }
 
 void main() {
-    vec2 c = to_travel(v_coords);
+    vec2 c = to_travel(v_coords / stretch);
     vec4 s = window_box;
     vec4 t = target_box;
     vec2 w;

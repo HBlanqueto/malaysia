@@ -661,6 +661,9 @@ impl WlrLayerShellHandler for State {
         if namespace == ctdesign::ALERT_LAYER_NAMESPACE {
             crate::window_style::mark_alert_layer(surface.wl_surface());
         }
+        if namespace == ctdesign::DOCK_LAYER_NAMESPACE {
+            crate::window_style::mark_dock_layer(surface.wl_surface());
+        }
         if namespace == ctdesign::NOTIFICATIONS_LAYER_NAMESPACE {
             crate::notification_panel::mark(surface.wl_surface());
         }

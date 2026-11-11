@@ -1289,8 +1289,14 @@ fn append_cards<R: MalaysiaRenderer>(
         borders.extend(inner);
         shadows.extend(shadow);
     }
-    elements.extend(borders);
-    elements.extend(surface_elements.into_iter().map(|e| e.into()));
+    // macOS: magnified Dock icons rise over the bar's edge, so the Dock's frame goes under its icons.
+    if crate::window_style::is_dock_layer(surface) {
+        elements.extend(surface_elements.into_iter().map(|e| e.into()));
+        elements.extend(borders);
+    } else {
+        elements.extend(borders);
+        elements.extend(surface_elements.into_iter().map(|e| e.into()));
+    }
     elements.extend(backdrops);
     elements.extend(shadows);
 }

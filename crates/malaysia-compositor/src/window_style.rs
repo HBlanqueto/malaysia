@@ -30,6 +30,8 @@ struct AlertLayer(u64);
 
 struct Popover;
 
+struct DockLayer;
+
 struct PanelStyle(AtomicU32);
 
 struct CardStyle(Mutex<Cards>);
@@ -219,6 +221,18 @@ pub(crate) fn mark_alert_layer(surface: &WlSurface) {
 pub(crate) fn alert_layer(surface: &WlSurface) -> Option<u64> {
     with_states(surface, |states| {
         states.data_map.get::<AlertLayer>().map(|alert| alert.0)
+    })
+}
+
+pub(crate) fn mark_dock_layer(surface: &WlSurface) {
+    with_states(surface, |states| {
+        states.data_map.insert_if_missing_threadsafe(|| DockLayer);
+    });
+}
+
+pub(crate) fn is_dock_layer(surface: &WlSurface) -> bool {
+    with_states(surface, |states| {
+        states.data_map.get::<DockLayer>().is_some()
     })
 }
 

@@ -42,9 +42,14 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 5. **Frame.** The bar is a card (ADR 0068): `set_card_frames` gives it the
    window frame, outer border, inner line and shadow, around a continuous
    corner of `DOCK_RADIUS` × its thickness, and the client draws the bar with
-   the same corner. `set_blur_region` blurs behind it, clipped to that corner.
+   the same corner, inset by the hairline. `set_blur_region` blurs behind it,
+   clipped to that corner. The compositor knows the Dock by its namespace
+   (`DOCK_LAYER_NAMESPACE`) and draws its frame under the surface, so
+   magnified icons rise over the bar's edge.
 6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
-   with the `LauncherEntry` badge and progress. A dot under the icon marks an
+   with the `LauncherEntry` badge and progress. Every icon sits on macOS's
+   grid: Malaysia's app icons already keep the 824-on-1024 body; any other
+   icon, and the places, is drawn at `DOCK_ICON_BODY` of the slot. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
 7. **Clicks.** A click on an open app activates its first visible window, or
@@ -60,9 +65,10 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    separator it turns hiding and magnification on or off, sets the position
    and the minimize effect, and opens Dock Settings; these write
    `dock.domain`.
-9. **Dragging.** Dragging the separator changes `tilesize`. Dragging an app
-   along the Dock moves it among the kept apps; dragging it away shows
-   Remove and takes it out of `persistent-apps`. An open app stays until it
+9. **Dragging.** Dragging the separator changes `tilesize`. While an app is
+   dragged the other icons make room where it would land; dropping it there
+   keeps it in the Dock (`persistent-apps`), open or not. Dragging it away
+   shows Remove, closes the gap and takes it out; an open app stays until it
    quits.
 10. **Minimize target.** The Dock sends each window's slot with
     `set_minimize_target` (`zwlr_foreign_toplevel_handle_v1.set_rectangle`):
