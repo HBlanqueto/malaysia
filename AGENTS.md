@@ -229,3 +229,6 @@ fn contains_includes_the_top_left_and_excludes_the_bottom_right() { … }
 - El texto visible de la shell y de Ajustes va en `i18n/{en,es}/<crate>.ftl` y se
   lee con `tr!`; nunca un literal en el código. Guía: `docs/barrierkit/17-languages.md`
   de barrierkit.
+- Los símbolos son SVG, nunca PNG, con `currentColor` o dibujados con
+  `TemplateRenderingMode::Template` de barrierkit: negro en claro y blanco en
+  oscuro. Iconos de apps, fotos e ilustraciones conservan sus colores.

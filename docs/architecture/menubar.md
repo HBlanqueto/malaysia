@@ -54,7 +54,7 @@ Each title measures its text plus `title-padding-x` (10) per side. Its pill (`ti
 App icons (`NSStatusItem`, the system tray) go on the right, before the clock. The bar is the `org.kde.StatusNotifierWatcher` and the host of the [StatusNotifierItem](https://specifications.freedesktop.org/status-notifier-item/latest/) protocol, like plasmashell; the logic lives in `bk::shell::use_status_items` and the bar only draws them (`menubar/status.rs`).
 
 1. If another watcher already runs, the bar does not replace it: it follows its signals.
-2. The icon comes from the theme (`IconName`, searched in `status`, `panel`, `devices` and `apps`, or in KDE's `IconThemePath`); without one, `IconPixmap` is painted. With `Status = NeedsAttention` the attention ones are used.
+2. The icon comes from the theme (`IconName`, searched in `status`, `panel`, `devices` and `apps`, or in KDE's `IconThemePath`), trying `<IconName>-symbolic` first; without one, `IconPixmap` is painted. A `-symbolic` icon, SVG or PNG, is drawn as a template (`TemplateRenderingMode::Template` in barrierkit): black in light, white in dark. Other icons keep their colors. With `Status = NeedsAttention` the attention ones are used.
 3. An icon with a menu opens it on press, like the bar menus and like an `NSStatusItem` with a menu; a click on an item sends `Event("clicked")` over dbusmenu. An icon without a menu sends `Activate`.
 4. Every signal from the icon or its menu (`NewIcon`, `NewTitle`, `NewStatus`, `LayoutUpdated`…) reads it again; if its name leaves the bus, it is removed.
 

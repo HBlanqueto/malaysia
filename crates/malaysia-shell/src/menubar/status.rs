@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use bk::prelude::*;
-use bk::shell::{StatusHost, TrayItem, pixmap_image};
+use bk::shell::{StatusHost, TrayItem};
 use ctdesign::{MENUBAR_TITLE_PADDING_X, SYMBOL};
 use torin::prelude::Gaps;
 
@@ -17,29 +17,55 @@ const SIZES: [&str; 7] = [
 
 pub type StatusAnchors = Rc<RefCell<HashMap<String, Rc<Cell<(f32, f32)>>>>>;
 
-fn themed_icon(item: &TrayItem) -> Option<IconData> {
-    if item.icon_name.is_empty() {
-        return None;
-    }
+fn themed_icon(item: &TrayItem, name: &str) -> Option<IconData> {
     let own = (!item.icon_theme_path.is_empty()).then(|| {
         ["svg", "png"].into_iter().find_map(|extension| {
-            let path = format!("{}/{}.{extension}", item.icon_theme_path, item.icon_name);
+            let path = format!("{}/{name}.{extension}", item.icon_theme_path);
             load_icon_in(Some(path.as_str()), &SIZES, &CONTEXTS)
         })
     });
     own.flatten()
-        .or_else(|| load_icon_in(Some(item.icon_name.as_str()), &SIZES, &CONTEXTS))
+        .or_else(|| load_icon_in(Some(name), &SIZES, &CONTEXTS))
+}
+
+fn status_symbol(item: &TrayItem) -> Option<IconData> {
+    if item.icon_name.is_empty() {
+        return None;
+    }
+    let symbolic = format!("{}-symbolic", item.icon_name);
+    themed_icon(item, &symbolic).or_else(|| themed_icon(item, &item.icon_name))
+}
+
+fn rendering_mode(icon: &IconData) -> TemplateRenderingMode {
+    let symbolic = icon
+        .path
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .is_some_and(|stem| stem.ends_with("-symbolic"));
+    if symbolic {
+        TemplateRenderingMode::Template
+    } else {
+        TemplateRenderingMode::Original
+    }
 }
 
 pub fn status_icon(item: &TrayItem) -> Element {
     let size = SYMBOL.grid;
-    match themed_icon(item) {
-        Some(data) => app_icon(Some(&data), &item.title, size),
-        None => item
-            .pixmap
+    let themed = status_symbol(item).and_then(|icon| {
+        let bytes = icon
+            .svg
+            .clone()
+            .or_else(|| std::fs::read(&icon.path).ok())?;
+        Some(Image::data(bytes).rendering_mode(rendering_mode(&icon)))
+    });
+    let pixmap = || {
+        item.pixmap
             .as_ref()
-            .and_then(|pixmap| pixmap_image(pixmap, size))
-            .unwrap_or_else(|| app_icon(None, &item.title, size)),
+            .map(|pixmap| Image::rgba(pixmap.width, pixmap.height, pixmap.rgba.clone()))
+    };
+    match themed.or_else(pixmap) {
+        Some(image) => image.size(size).into_element(),
+        None => app_icon(None, &item.title, size),
     }
 }
 
