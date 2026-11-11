@@ -44,6 +44,7 @@ pub struct MenuTitleSpec {
     pub enabled: bool,
     pub query_state: Option<Rc<RefCell<bk::menu::SearchQuery>>>,
     pub reveal_roots: Option<RevealRoots>,
+    pub min_width: f32,
 }
 
 impl MenuTitleSpec {
@@ -70,6 +71,7 @@ impl MenuTitleSpec {
             enabled: true,
             query_state: None,
             reveal_roots: None,
+            min_width: 0.0,
         }
     }
 }
@@ -109,8 +111,9 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     }
 
     let items = (spec.items)();
-    let palette =
+    let mut palette =
         bk::theme::menu_palette(&bk::theme::resolved(), bk::theme::SurfaceKind::LayerShell);
+    palette.min_width = palette.min_width.max(spec.min_width);
     let size = MenuView::preferred_size(&items, palette);
     let (anchor_x, anchor_width) = spec.anchor.get();
     let label = spec.label.clone();
@@ -121,11 +124,15 @@ pub fn open_root_menu(titles: &Rc<Vec<MenuTitleSpec>>, title_index: usize, state
     let titles_for_nav = titles.clone();
     let state_for_nav = state.clone();
     let on_activate = spec.on_activate.clone();
-    let mut view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all).with_navigation(
-        move |direction| {
+    let min_width = spec.min_width;
+    let mut view = MenuView::new(items, move |id| on_activate(id), on_dismiss_all)
+        .with_navigation(move |direction| {
             navigate_title(direction, title_index, &titles_for_nav, &state_for_nav);
-        },
-    );
+        })
+        .style(move |style| MenuPalette {
+            min_width: style.min_width.max(min_width),
+            ..style
+        });
     if let Some(source) = &spec.live_items {
         let source = source.clone();
         view = view.with_items_source(move || source());

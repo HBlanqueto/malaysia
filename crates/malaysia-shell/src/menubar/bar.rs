@@ -16,7 +16,7 @@ use ctappearance::MenuBarSize;
 use ctappearance::menubar::MenubarConfig;
 use ctdesign::{
     MENUBAR_FONT_SIZE, MENUBAR_FONT_SIZE_LARGE, MENUBAR_HEIGHT, MENUBAR_MARGIN,
-    MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
+    MENUBAR_MARGIN_RIGHT, MENUBAR_SYSTEM_MENU_MIN_WIDTH, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
 use torin::prelude::Gaps;
@@ -647,6 +647,7 @@ fn system_title(entries: Rc<Vec<DesktopEntry>>, anchor: TitleAnchor) -> MenuTitl
     };
     MenuTitleSpec {
         glyph: Some(system::SNOWFLAKE_SVG),
+        min_width: MENUBAR_SYSTEM_MENU_MIN_WIDTH,
         ..MenuTitleSpec::new(
             tr!("menubar-system").to_string(),
             Rc::new(items),
