@@ -414,7 +414,8 @@ searching `crates/malaysia-compositor/src`.
   `org.malaysia.Compositor1` D-Bus API (ADR 0021) have no code; the options
   marked «pending» in [`options.md`](configuration/options.md) arrive with
   their effect.
-- **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3).
+- **Effects:** blur and vibrancy (`AGENTS.md`, design policy 3); plan in
+  [ADR 0071](decisions/0071-background-blur-and-ext-background-effect.md).
 - **Shell:** supervision and overview (ADR 0023), notifications daemon,
   polkit agent, volume/network/battery/brightness
   indicators (network, Bluetooth and battery done, ADR 0069), OSD and
