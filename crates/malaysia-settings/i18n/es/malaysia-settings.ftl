@@ -395,6 +395,15 @@ wallpaper-only-on = Solo en Escritorio { $desktop }
 wallpaper-play = Reproducir
 wallpaper-show-all = Mostrar todos ({ $count })
 wallpaper-show-less = Mostrar menos
+wallpaper-clear-filter = Quitar el filtro
+wallpaper-folders = { $count ->
+    [one] { $count } carpeta
+   *[other] { $count } carpetas
+}
+wallpaper-collections = { $count ->
+    [one] { $count } colección
+   *[other] { $count } colecciones
+}
 wallpaper-shuffle = Mezclar
 wallpaper-shuffle-colors = Mezclar colores
 wallpaper-random-colors = Colores al azar

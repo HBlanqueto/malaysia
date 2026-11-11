@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use bk::buttons::MenuButton;
 use bk::color_picker::{ColorPicker, hex};
+use bk::compact::IconButton;
 use bk::image_well::is_image;
 use bk::interaction::use_interaction;
 use bk::media::use_artwork;
@@ -20,7 +21,9 @@ use ctappearance::{
     thumbnail_path, wallpaper_colors, wallpaper_config_path, wallpaper_selection_path,
     wallpapers_in, write_wallpaper_config, write_wallpaper_selection,
 };
-use ctdesign::{ACCENT_SWATCHES, DESKTOP_CLEAR, FOCUS_RING, HAIRLINE, LIST_GROUP, SETTINGS};
+use ctdesign::{
+    ACCENT_SWATCHES, DESKTOP_CLEAR, FOCUS_RING, HAIRLINE, HUD_BACKGROUND, LIST_GROUP, SETTINGS,
+};
 use torin::prelude::{Content, Gaps, Position};
 
 use crate::collection::CollectionDraft;
@@ -55,6 +58,7 @@ pub struct Wallpaper {
     adding_color: State<Option<Rgba>>,
     expanded: State<std::collections::BTreeSet<String>>,
     filter: State<String>,
+    filtering: State<bool>,
     scope: State<usize>,
 }
 
@@ -72,6 +76,7 @@ pub fn use_wallpaper() -> Wallpaper {
         adding_color: use_state(|| None),
         expanded: use_state(Default::default),
         filter: use_state(String::new),
+        filtering: use_state(|| false),
         scope: use_state(|| 0),
     }
 }
@@ -231,6 +236,15 @@ pub fn preview(file: Option<&Path>, look: WallpaperAppearance) -> Option<PathBuf
         .or_else(|| thumbnail_path(file))
 }
 
+fn kind_symbol(item: &Item) -> Option<Symbol> {
+    match (item.group, item.file.as_deref().and_then(WallpaperKind::of)) {
+        (_, Some(WallpaperKind::Video)) => Some(Symbol::Play),
+        (_, Some(WallpaperKind::Shader)) => Some(Symbol::ChevronLeftForwardSlashChevronRight),
+        (Group::Dynamic, _) => Some(Symbol::CircleHalf),
+        _ => None,
+    }
+}
+
 fn source_of(item: &Item) -> WallpaperSource {
     item.file
         .clone()
@@ -291,7 +305,12 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
         .appearance_for(desktop)
         .unwrap_or(appearance(dark));
 
+    let [_, _, header_bottom, _] = LIST_GROUP.header_padding;
     let form = Form::new()
+        .style(move |style| FormStyle {
+            section_spacing: SPACE_4 - header_bottom,
+            ..style
+        })
         .section(hero(wallpaper, &selection, &items, dark, error))
         .section(toolbar(wallpaper, &collections));
     let query = wallpaper.filter.read().trim().to_lowercase();
@@ -310,6 +329,7 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
         },
         preview: preview(item.file.as_deref(), look),
         symbol: None,
+        kind: kind_symbol(item),
         on_remove: None,
     };
 
@@ -320,12 +340,51 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
             .filter(|item| query.is_empty() || matches(item, &query, &collections))
             .map(|item| choice(item).into_element())
             .collect();
-        let results = Section::titled(tr!("wallpaper-results"));
-        form.section(if found.is_empty() {
-            results.row(Row::new(tr!("wallpaper-no-match")).detail(tr!("wallpaper-no-match-help")))
+        let mut filter = wallpaper.filter;
+        let mut scope = wallpaper.scope;
+        let head = HStack::new()
+            .width(Size::fill())
+            .content(Content::flex())
+            .cross_align(Alignment::Center)
+            .child(
+                rect()
+                    .width(Size::flex(1.0))
+                    .child(Text::new(tr!("wallpaper-results")).font(HEADLINE)),
+            )
+            .child(muted(tr!("wallpaper-clear-filter")).on_press(move |_| {
+                filter.set(String::new());
+                scope.set(0);
+            }));
+        let body = if found.is_empty() {
+            VStack::new()
+                .width(Size::fill())
+                .padding(Gaps::new(
+                    SETTINGS.empty_padding_y as f32,
+                    0.0,
+                    SETTINGS.empty_padding_y as f32,
+                    0.0,
+                ))
+                .spacing(SETTINGS.empty_gap as f32)
+                .cross_align(Alignment::Center)
+                .child(Text::new(tr!("wallpaper-no-match")).font(HEADLINE))
+                .child(text(
+                    tr!("wallpaper-no-match-help"),
+                    CAPTION,
+                    Palette::current().secondary_label,
+                ))
+                .into_element()
         } else {
-            results.illustration(grid(found))
-        })
+            grid(found).into_element()
+        };
+        form.section(
+            Section::titled(tr!("wallpaper-results")).header(
+                VStack::new()
+                    .width(Size::fill())
+                    .spacing(SPACE_2)
+                    .child(head)
+                    .child(body),
+            ),
+        )
     } else {
         gallery(
             form,
@@ -341,10 +400,18 @@ pub fn wallpaper_pane(wallpaper: Wallpaper, dark: bool, error: State<Option<Stri
 }
 
 pub fn link(label: &'static str) -> Button {
-    Button::new(label).style(|style| ButtonStyle {
-        label: StateValue::new(ShapeStyle::Accent),
+    plain(label, ShapeStyle::Accent)
+}
+
+fn plain(label: &'static str, ink: ShapeStyle) -> Button {
+    Button::new(label).style(move |style| ButtonStyle {
+        label: StateValue::new(ink.clone()),
         ..style.borderless()
     })
+}
+
+fn muted(label: &'static str) -> Button {
+    plain(label, ShapeStyle::Role(Role::SecondaryLabel))
 }
 
 struct Shelf {
@@ -366,7 +433,7 @@ fn shelf(wallpaper: Wallpaper, shelf: Shelf, items: Vec<Element>, height: f32) -
         } else {
             intern(tr!("wallpaper-show-all", count = shelf.count))
         };
-        link(label).on_press(move |_| {
+        muted(label).on_press(move |_| {
             let mut next = expanded.peek().clone();
             if !next.remove(&key) {
                 next.insert(key.clone());
@@ -402,15 +469,21 @@ fn shelf(wallpaper: Wallpaper, shelf: Shelf, items: Vec<Element>, height: f32) -
         .maybe_child(
             shelf
                 .edit
-                .map(|edit| link(tr!("collection-edit")).on_press(move |_| edit.call(()))),
+                .map(|edit| muted(tr!("collection-edit")).on_press(move |_| edit.call(()))),
         )
         .maybe_child(toggle);
-    let section = Section::titled(shelf.title).header(header);
-    match (items.is_empty(), open) {
-        (true, _) => section,
-        (false, true) => section.illustration(grid(items)),
-        (false, false) => section.illustration(strip(items.into_iter(), height)),
-    }
+    let body = match (items.is_empty(), open) {
+        (true, _) => None,
+        (false, true) => Some(grid(items).into_element()),
+        (false, false) => Some(strip(items.into_iter(), height).into_element()),
+    };
+    Section::titled(shelf.title).header(
+        VStack::new()
+            .width(Size::fill())
+            .spacing(SPACE_2)
+            .child(header)
+            .maybe_child(body),
+    )
 }
 
 fn gallery(
@@ -477,6 +550,7 @@ fn gallery(
                     on_press: Callback::new(move |()| pick(wallpaper, shuffled.clone(), error)),
                     preview: preview(Some(&first), WallpaperAppearance::Light),
                     symbol: Some(Symbol::Shuffle),
+                    kind: None,
                     on_remove: None,
                 };
                 let tiles = std::iter::once(shuffle.into_element())
@@ -500,6 +574,7 @@ fn gallery(
             }),
             preview: None,
             symbol: Some(Symbol::Shuffle),
+            kind: None,
             on_remove: None,
         },
         Choice {
@@ -509,6 +584,7 @@ fn gallery(
             on_press: Callback::new(move |()| adding_color.set(Some(TINT))),
             preview: None,
             symbol: Some(Symbol::Plus),
+            kind: None,
             on_remove: None,
         },
     ]
@@ -535,6 +611,7 @@ fn gallery(
         edit: None,
     };
     form.section(shelf(wallpaper, shown, dots, SETTINGS.wallpaper.dot as f32))
+        .section(footer(collections))
 }
 
 fn hero(
@@ -652,20 +729,10 @@ fn hero(
 
 fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
     let mut scope = wallpaper.scope;
-    let scope_button = scopes(collections).iter().fold(
-        PopUpButton::new(tr!("wallpaper-filter-scope")),
-        |button, group| {
-            button.item(group.map_or(tr!("wallpaper-filter-all"), |group| {
-                group_label(group, collections)
-            }))
-        },
-    );
-    let scope_button = scope_button
-        .selected(*wallpaper.scope.read())
-        .on_change(move |index| scope.set(index));
-    let add = MenuButton::system_image(
+    let mut filter = wallpaper.filter;
+    let mut filtering = wallpaper.filtering;
+    let add = MenuButton::new(
         tr!("wallpaper-add"),
-        Symbol::Plus,
         vec![
             MenuItem::action("folder", tr!("wallpaper-add-folder")),
             MenuItem::action("images", tr!("wallpaper-add-images")),
@@ -674,16 +741,85 @@ fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
         ],
     )
     .on_activate(move |action: String| crate::collection::add(wallpaper, &action));
-    let controls = HStack::new()
-        .spacing(SPACE_2)
-        .cross_align(Alignment::Center)
-        .child(
-            SearchField::new(wallpaper.filter, tr!("wallpaper-filter"))
-                .width(Size::px(ctdesign::TOOLBAR_SEARCH_WIDTH)),
-        )
-        .child(scope_button)
-        .child(add);
-    Section::new().row(Row::new(tr!("wallpaper-library")).control(controls))
+    let search = if *filtering.read() {
+        let scope_button = scopes(collections)
+            .iter()
+            .fold(
+                PopUpButton::new(tr!("wallpaper-filter-scope")),
+                |button, group| {
+                    button.item(group.map_or(tr!("wallpaper-filter-all"), |group| {
+                        group_label(group, collections)
+                    }))
+                },
+            )
+            .selected(*wallpaper.scope.read())
+            .on_change(move |index| scope.set(index));
+        HStack::new()
+            .spacing(SPACE_1)
+            .cross_align(Alignment::Center)
+            .child(
+                SearchField::new(wallpaper.filter, tr!("wallpaper-filter"))
+                    .width(Size::px(SETTINGS.wallpaper.filter_width as f32))
+                    .auto_focus(true),
+            )
+            .child(scope_button)
+            .child(
+                IconButton::new(Symbol::XMark, tr!("wallpaper-clear-filter")).on_press(move |()| {
+                    filter.set(String::new());
+                    scope.set(0);
+                    filtering.set(false);
+                }),
+            )
+            .into_element()
+    } else {
+        IconButton::new(Symbol::MagnifyingGlass, tr!("wallpaper-filter"))
+            .style(|style| IconButtonStyle {
+                size: ctdesign::TEXT_FIELD.height,
+                background: StateValue::new(ShapeStyle::Role(Role::ControlBackground))
+                    .hovered(ShapeStyle::Role(Role::ControlHover)),
+                ..style
+            })
+            .on_press(move |()| filtering.set(true))
+            .into_element()
+    };
+    Section::titled(tr!("wallpaper-library")).header(
+        HStack::new()
+            .width(Size::fill())
+            .content(Content::flex())
+            .cross_align(Alignment::Center)
+            .child(add)
+            .child(rect().width(Size::flex(1.0)))
+            .child(search),
+    )
+}
+
+fn footer(collections: &WallpaperConfig) -> Section {
+    let palette = Palette::current();
+    let folders = 1 + collections
+        .collections
+        .iter()
+        .map(|collection| collection.folders.len())
+        .sum::<usize>();
+    let count = collections.collections.len();
+    Section::titled(tr!("wallpaper-library")).header(
+        HStack::new()
+            .width(Size::fill())
+            .content(Content::flex())
+            .cross_align(Alignment::Center)
+            .spacing(SPACE_1)
+            .child(Image::system(Symbol::Folder).color(palette.secondary_label))
+            .child(text(
+                intern(tr!("wallpaper-folders", count = folders)),
+                CALLOUT,
+                palette.secondary_label,
+            ))
+            .child(rect().width(Size::flex(1.0)))
+            .child(text(
+                intern(tr!("wallpaper-collections", count = count)),
+                CALLOUT,
+                palette.secondary_label,
+            )),
+    )
 }
 
 fn shuffle_button(
@@ -836,17 +972,22 @@ fn tile_row_height() -> f32 {
     (SETTINGS.wallpaper.tile_height + SETTINGS.card_caption_gap + CAPTION.line_height) as f32
 }
 
+fn ring_room() -> f32 {
+    FOCUS_RING.width + SETTINGS.swatch_ring_gap as f32
+}
+
 fn strip(items: impl Iterator<Item = Element>, content_height: f32) -> ScrollView {
     let gap = SETTINGS.card_gap as f32;
+    let room = ring_room();
     ScrollView::new()
         .direction(Direction::Horizontal)
         .scroll_bar(false)
         .width(Size::fill())
-        .height(Size::px(content_height + 2.0 * gap))
+        .height(Size::px(content_height + 2.0 * room))
         .child(
             rect()
                 .direction(Direction::Horizontal)
-                .padding(Gaps::new_all(gap))
+                .padding(Gaps::new_all(room))
                 .spacing(gap)
                 .children(items),
         )
@@ -858,7 +999,7 @@ fn grid(items: Vec<Element>) -> Rect {
         .width(Size::fill())
         .direction(Direction::Horizontal)
         .content(Content::wrap_spacing(gap))
-        .padding(Gaps::new_all(gap))
+        .padding(Gaps::new_all(ring_room()))
         .spacing(gap)
         .children(items)
 }
@@ -1028,6 +1169,7 @@ struct Choice {
     on_press: Callback<(), ()>,
     preview: Option<PathBuf>,
     symbol: Option<Symbol>,
+    kind: Option<Symbol>,
     on_remove: Option<Callback<(), ()>>,
 }
 
@@ -1091,7 +1233,27 @@ impl Component for Choice {
                 height,
                 aspect: AspectRatio::Max,
             }))
-            .maybe_child(symbol);
+            .maybe_child(symbol)
+            .maybe_child(self.kind.map(|kind| {
+                // Freya paints by layer (one more per level): the preview's image sits three levels down.
+                rect()
+                    .layer(3)
+                    .position(
+                        Position::new_absolute()
+                            .left(metrics.kind_inset)
+                            .top(height - metrics.kind_inset - metrics.kind_size),
+                    )
+                    .width(Size::px(metrics.kind_size))
+                    .height(Size::px(metrics.kind_size))
+                    .corner_radius(metrics.kind_size / 2.0)
+                    .center()
+                    .background(color(HUD_BACKGROUND))
+                    .child(
+                        Image::system(kind)
+                            .size(metrics.kind_icon)
+                            .color(Rgba::rgb8(0xff, 0xff, 0xff)),
+                    )
+            }));
         let element = interaction
             .attach(rect(), true)
             .a11y_role(AccessibilityRole::Button)
@@ -1105,6 +1267,8 @@ impl Component for Choice {
             .maybe_child((!self.round).then(|| {
                 rect()
                     .width(Size::px(width))
+                    .main_align(Alignment::Center)
+                    .direction(Direction::Horizontal)
                     .child(text(self.label, CAPTION, palette.label))
             }));
         let element = match self.on_remove.clone() {

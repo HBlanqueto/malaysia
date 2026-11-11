@@ -395,6 +395,15 @@ wallpaper-only-on = Only on Desktop { $desktop }
 wallpaper-play = Play
 wallpaper-show-all = Show All ({ $count })
 wallpaper-show-less = Show Less
+wallpaper-clear-filter = Clear Filter
+wallpaper-folders = { $count ->
+    [one] { $count } folder
+   *[other] { $count } folders
+}
+wallpaper-collections = { $count ->
+    [one] { $count } collection
+   *[other] { $count } collections
+}
 wallpaper-shuffle = Shuffle
 wallpaper-shuffle-colors = Shuffle Colors
 wallpaper-random-colors = Colors at Random

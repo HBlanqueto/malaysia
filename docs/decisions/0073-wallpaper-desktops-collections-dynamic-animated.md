@@ -94,10 +94,14 @@ compositor's background layer or the wallpaper files.
 11. **Long rows.** A section with more than `SETTINGS.wallpaper.row_fits`
     wallpapers offers «Show All (N)» in its header, which turns the row into
     a grid, and «Show Less» back. The header (bk `Section::header`) also
-    carries a collection's folder, count and «Edit…».
-12. **The filter.** A search field with a scope (All, a kind or a
-    collection) matches the name, the kind, the collection and the file name;
-    while it filters, the sections merge into one grid of results.
+    carries a collection's folder, count and «Edit…». The gallery sections
+    have no card; each tile shows its name centered and a badge for its kind
+    (video, shader or dynamic). The footer counts the folders and the
+    collections.
+12. **The filter.** The magnifier next to «Add…» opens a search field with a
+    scope (All, a kind or a collection) and a close button. It matches the
+    name, the kind, the collection and the file name; while it filters, the
+    sections merge into one grid of results with «Clear Filter».
 13. **Each desktop tints its windows.** `wallpaper.state` keeps a grid per
     desktop with its own wallpaper; the compositor picks the grid of the
     window's desktop.
