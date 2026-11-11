@@ -19,7 +19,7 @@ lock() ──► input cut, menu bar closes up, desktop fades under the wallpape
 
 1. `lock` asks for the session. The compositor cuts input and captures at once, sends `infinity_session_v1.locking` and starts the fade.
 2. The client creates a surface per output (a role is not reused) and draws it; nothing of it shows yet.
-3. The compositor swaps to the lock surfaces once the fade and the menu bar's settle are over and every surface has a buffer, or after 3 s. It sends `locked` once that frame is presented.
+3. The compositor shows the lock surfaces once the fade and the menu bar's settle are over and every surface has a buffer, or after 3 s. The menu bar stays on screen above them. It sends `locked` once that frame is presented.
 4. On `locked` (`SessionUnlock::locked()`), the client fades in its power button, raises the date and time and fades in the user and the field.
 5. Only a successful PAM call ends the lock: the client fades out its content in `DURATION_FAST_MS` and then calls `unlock_and_destroy`; it never unlocks on its own.
 
@@ -27,13 +27,18 @@ lock() ──► input cut, menu bar closes up, desktop fades under the wallpape
 
 The surface is transparent: the compositor draws the wallpaper under it.
 
-- **Top right:** the status row from `menubar::lock_row` and `extras::lock_icons` (Bluetooth when on, printer while a job is queued, Wi-Fi, battery), then the power button. It opens Suspend, Restart and Shut Down, drawn inside the surface because a lock surface has no pop-ups.
-- **Top center:** the long date and the time, updated every minute; notifications from `on_lock_screen` below them.
+- **Top right:** only the power button, in the slot the menu bar leaves free (`menubar::lock_row::status_row`). It opens Suspend, Restart and Shut Down, drawn inside the surface because a lock surface has no pop-ups. The status icons beside it are the menu bar's own.
+- **Top center:** the long date and the time, `LOCK_TOP_PERCENT` of the screen height from the top, updated every minute; notifications from `on_lock_screen` below them.
 - **Bottom center:** the AccountsService picture (or the initial), the GECOS name, the capsule field and the PAM error. The field shows the PAM prompt while empty and asks the compositor to blur behind it (`set_blur_region`); with «Reduce transparency» it is opaque instead.
 
 ## The menu bar
 
-The menu bar follows `use_screen_lock()`. While locking it draws the lock screen's status row under itself and fades out; then the status row closes up to the power button's slot. Both use the same layout, so the swap does not show. On `unlocked` it plays this back in `DURATION_BASE`, while the compositor fades the desktop back in.
+The menu bar is the only bar on screen; it changes mode and is never replaced. It follows `use_screen_lock()`:
+
+1. On `locking` it fades out its background, its left side, other apps' status items and its clock.
+2. Its own extras slide right until they end at the power button's slot (`POWER_SLOT`), and their ink turns `LOCK_INK`.
+3. The compositor keeps drawing it above the lock surfaces and sends it frame callbacks while locked. It gets no input: the power button belongs to the lock surface.
+4. On `unlocked` it plays this back in `DURATION_BASE`, while the compositor fades the desktop back in.
 
 ## Recovery
 

@@ -9,7 +9,7 @@ use torin::prelude::Gaps;
 
 const POWER_SVG: &[u8] = include_bytes!("power.svg");
 
-// ADR 0074: the bar closes up into these slots, and the lock screen draws its status row in the same place.
+// ADR 0074: the bar keeps this slot free while locked, and the lock screen draws its power button in it.
 pub const POWER_SLOT: f32 = 2.0 * MENUBAR_TITLE_PADDING_X + SYMBOL.grid;
 
 pub struct LockProgress {
@@ -38,13 +38,9 @@ pub fn slot(content: Element) -> Element {
         .into_element()
 }
 
-pub fn status_row(icons: Vec<Element>, trailing: Element) -> Element {
-    icons
-        .into_iter()
-        .fold(
-            super::bar::bar_root(Color::TRANSPARENT).main_align(Alignment::End),
-            |row, icon| row.child(slot(icon)),
-        )
+pub fn status_row(trailing: Element) -> Element {
+    super::bar::bar_root(Color::TRANSPARENT)
+        .main_align(Alignment::End)
         .child(trailing)
         .into_element()
 }

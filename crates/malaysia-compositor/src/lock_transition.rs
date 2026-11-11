@@ -81,6 +81,10 @@ pub(crate) fn kept(surface: &WlSurface) -> Option<Kept> {
     })
 }
 
+pub(crate) fn is_menubar(entry: &crate::layers::LayerEntry) -> bool {
+    kept(entry.surface.wl_surface()) == Some(Kept::Menubar)
+}
+
 impl State {
     pub(crate) fn start_locking(&mut self, confirmation: SessionLocker, relock: bool) {
         let (fade, settle) = if relock || self.idle.locking_for_sleep() {

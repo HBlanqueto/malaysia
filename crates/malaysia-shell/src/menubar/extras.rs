@@ -175,41 +175,6 @@ pub fn extra_titles(
     titles
 }
 
-// ADR 0074: the lock screen's status row; same order as the bar, without menus.
-pub fn lock_icons(extras: &Extras, config: &MenubarConfig, ink: Rgba) -> Vec<Element> {
-    let mut icons = Vec::new();
-    if config.show_bluetooth
-        && extras
-            .bluetooth
-            .snapshot
-            .read()
-            .clone()
-            .flatten()
-            .is_some_and(|adapter| adapter.powered)
-    {
-        icons.push(symbol_icon(Symbol::Bluetooth, ink));
-    }
-    if queued_jobs(extras, config).is_some() {
-        icons.push(symbol_icon(Symbol::Printer, ink));
-    }
-    if config.show_wifi
-        && let Some(wifi) = extras
-            .network
-            .snapshot
-            .read()
-            .clone()
-            .and_then(|network| network.wifi)
-    {
-        icons.push(wifi_icon(&wifi, ink));
-    }
-    if config.show_battery
-        && let Some(battery) = extras.power.snapshot.read().flatten()
-    {
-        icons.push(battery_icon(&battery, config.show_battery_percentage, ink));
-    }
-    icons
-}
-
 fn queued_jobs(extras: &Extras, config: &MenubarConfig) -> Option<usize> {
     (*extras.printer.snapshot.read()).filter(|&jobs| config.show_printer && jobs > 0)
 }

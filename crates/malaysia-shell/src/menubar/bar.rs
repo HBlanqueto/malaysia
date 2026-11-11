@@ -19,7 +19,7 @@ use ctdesign::{
     MENUBAR_MARGIN_RIGHT, MENUBAR_TEXT_LIFT, SANS_FAMILIES,
 };
 use freya_core::integration::AppComponent;
-use torin::prelude::{Gaps, Position};
+use torin::prelude::Gaps;
 
 use crate::desktop::DesktopEntry;
 use crate::localize::tr;
@@ -267,7 +267,12 @@ impl App for BarApp {
         } else {
             None
         };
-        let (text, bar) = bar_colors();
+        let progress = lock_row::use_lock_progress();
+        let (cover, settle) = progress
+            .as_ref()
+            .map_or((0.0, 0.0), |progress| (progress.cover, progress.settle));
+        let shown_desktop = 1.0 - cover;
+        let (text, bar) = bar_colors(shown_desktop);
 
         let menu_state = MenuState::new();
         let help_query = use_hook(|| {
@@ -320,7 +325,8 @@ impl App for BarApp {
         let mut left = HStack::new()
             .cross_align(Alignment::Start)
             .spacing(0.0)
-            .main_align(Alignment::Start);
+            .main_align(Alignment::Start)
+            .opacity(shown_desktop);
         for index in 0..titles.len() {
             left = left.child(menu::menu_title(
                 index,
@@ -337,41 +343,54 @@ impl App for BarApp {
             .cross_align(Alignment::Start)
             .spacing(0.0)
             .height(Size::fill());
+        let mut others = HStack::new()
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
+            .height(Size::fill())
+            .opacity(shown_desktop);
         for (index, item) in shown.iter().enumerate() {
-            right = right.child(if item.menu.is_empty() {
+            others = others.child(if item.menu.is_empty() {
                 status::activate_only(item, &status_host)
             } else {
                 menu::menu_title(index, status_specs.clone(), menu_state.clone(), text)
             });
         }
 
+        let extras_ink = bar_ink().mix(ctdesign::LOCK_INK, cover);
         let extra_specs = Rc::new(extras::extra_titles(
             &extras,
             &menubar_config.read(),
-            bar_ink(),
+            extras_ink,
             &status_anchors,
         ));
+        let mut tail_width = use_state(|| 0.0f32);
+        let mut kept = HStack::new()
+            .cross_align(Alignment::Start)
+            .spacing(0.0)
+            .height(Size::fill())
+            .offset_x((*tail_width.read() - lock_row::POWER_SLOT) * settle);
         for index in 0..extra_specs.len() {
-            right = right.child(menu::menu_title(
+            kept = kept.child(menu::menu_title(
                 index,
                 extra_specs.clone(),
                 menu_state.clone(),
-                text,
+                theme::color(extras_ink),
             ));
         }
 
-        let mut tail_width = use_state(|| 0.0f32);
         let tail = HStack::new()
             .height(Size::fill())
             .cross_align(Alignment::Start)
             .spacing(0.0)
+            .opacity(shown_desktop)
             .on_sized(move |event: Event<SizedEventData>| {
                 tail_width.set_if_modified(event.data().area.width());
             })
             .child(live::live_area(activities, text))
             .child(clock::clock_label(now, text, focus));
-        let bar_view = bar_root(bar).child(left).child(right.child(tail));
-        let progress = lock_row::use_lock_progress();
+        let bar_view = bar_root(bar)
+            .child(left)
+            .child(right.child(others).child(kept).child(tail));
         let locking = progress.is_some();
         let closing_state = menu_state.clone();
         use_side_effect_with_deps(&locking, move |locking| {
@@ -379,27 +398,7 @@ impl App for BarApp {
                 menu::close_root_menu(&closing_state);
             }
         });
-        let Some(progress) = progress else {
-            return bar_view.into_element();
-        };
-        let trailing =
-            *tail_width.read() + (lock_row::POWER_SLOT - *tail_width.read()) * progress.settle;
-        rect()
-            .width(Size::fill())
-            .height(Size::fill())
-            .child(lock_row::status_row(
-                extras::lock_icons(&extras, &menubar_config.read(), ctdesign::LOCK_INK),
-                rect().width(Size::px(trailing)).into_element(),
-            ))
-            .child(
-                rect()
-                    .position(Position::new_absolute())
-                    .width(Size::fill())
-                    .height(Size::fill())
-                    .opacity(1.0 - progress.cover)
-                    .child(bar_view),
-            )
-            .into_element()
+        bar_view.into_element()
     }
 }
 
@@ -762,12 +761,16 @@ fn tick_at(tick: State<u64>, deadline: Instant) {
     });
 }
 
-fn bar_colors() -> (Color, Color) {
+fn bar_colors(shown_desktop: f32) -> (Color, Color) {
     let resolved = theme::resolved();
     let background = if Toplevels::get().focus_bar.read().over_focus() {
         ctdesign::FOCUS_BAR_BACKGROUND
     } else {
         theme::surface_background(&resolved, theme::SurfaceKind::LayerShell)
+    };
+    let background = Rgba {
+        a: background.a * shown_desktop,
+        ..background
     };
     (theme::color(bar_ink()), theme::color(background))
 }

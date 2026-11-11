@@ -9,14 +9,13 @@ use bk::platform::Timers;
 use bk::prelude::*;
 use bk::shell::{BlurRegion, SessionUnlock, run_lock, set_blur_region};
 use chrono::Datelike;
-use ctappearance::menubar::MenubarConfig;
 use ctappearance::notifications::NotificationsConfig;
 use ctdesign::{
     BODY, DURATION_FAST_MS, LOCK_AVATAR_SIZE, LOCK_BOTTOM_MARGIN, LOCK_CLOCK_FONT_SIZE,
     LOCK_DATE_FONT_SIZE, LOCK_FIELD_ERROR, LOCK_FIELD_FILL, LOCK_FIELD_FILL_OPAQUE,
     LOCK_FIELD_HEIGHT, LOCK_FIELD_INK, LOCK_FIELD_MAX_WIDTH, LOCK_FIELD_MIN_WIDTH, LOCK_INK,
     LOCK_LOGIN_MS, LOCK_MASK_FONT_SIZE, LOCK_RISE_MS, LOCK_RISE_OFFSET, LOCK_SPACING,
-    LOCK_TOP_MARGIN, MENUBAR_HEIGHT, NOTIFICATION_GAP, NOTIFICATION_WIDTH, TITLE_2,
+    LOCK_TOP_PERCENT, MENUBAR_HEIGHT, NOTIFICATION_GAP, NOTIFICATION_WIDTH, TITLE_2,
 };
 use freya_animation::prelude::{AnimNum, Function, OnChange, use_animation_with_dependencies};
 use freya_components::image_viewer::ImageViewer;
@@ -27,7 +26,7 @@ use torin::prelude::{Gaps, Position};
 
 use crate::localize::tr;
 use crate::menubar::lock_row::{power_icon, slot, status_row};
-use crate::menubar::{bar::schedule_next_minute, extras, system::user_display_name};
+use crate::menubar::{bar::schedule_next_minute, system::user_display_name};
 use crate::notifications::{Center, Notification};
 use crate::{pam, power};
 use bk::theme;
@@ -149,8 +148,6 @@ impl App for LockApp {
             (1.0 - rise) * LOCK_RISE_OFFSET
         };
 
-        let extras = extras::use_extras();
-        let menubar_config = use_defaults::<MenubarConfig>("menubar");
         let picture = use_service::<Accounts>().snapshot;
         let name = use_hook(|| user_display_name().unwrap_or_else(|| self.user.clone()));
         let notices = lock_notices();
@@ -179,18 +176,17 @@ impl App for LockApp {
             .position(Position::new_absolute())
             .width(Size::fill())
             .height(Size::px(MENUBAR_HEIGHT as f32))
-            .child(status_row(
-                extras::lock_icons(&extras, &menubar_config.read(), LOCK_INK),
-                slot(power_button),
-            ));
+            .child(status_row(slot(power_button)));
 
         let header =
             VStack::new()
-                .position(Position::new_absolute().top(LOCK_TOP_MARGIN))
+                .position(Position::new_absolute())
                 .width(Size::fill())
+                .height(Size::fill())
                 .cross_align(Alignment::Center)
                 .offset_y(rise_offset)
                 .opacity(rise * stay)
+                .child(rect().height(Size::percent(LOCK_TOP_PERCENT)))
                 .child(
                     Text::new(long_date(chrono::Local::now().date_naive()))
                         .font(TITLE_2)

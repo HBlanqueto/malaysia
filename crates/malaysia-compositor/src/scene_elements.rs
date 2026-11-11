@@ -203,6 +203,14 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
         if include_cursor {
             append_cursor(renderer, &mut elements, state, cursor);
         }
+        append_layers(
+            state,
+            renderer,
+            &mut elements,
+            LayerSide::Front,
+            Point::from((0, 0)),
+            crate::lock_transition::is_menubar,
+        );
         for lock_surface in &state.lock_surfaces {
             if !lock_surface.alive() {
                 continue;
@@ -240,7 +248,7 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
             &mut elements,
             LayerSide::Front,
             Point::from((0, 0)),
-            is_menubar,
+            crate::lock_transition::is_menubar,
         );
         crate::lock_transition::append_wallpaper(state, renderer, cover, &mut elements);
         append_desktop(state, renderer, cursor, false, false, &mut elements);
@@ -248,11 +256,6 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
     }
     append_desktop(state, renderer, cursor, include_cursor, true, &mut elements);
     elements
-}
-
-fn is_menubar(entry: &crate::layers::LayerEntry) -> bool {
-    crate::lock_transition::kept(entry.surface.wl_surface())
-        == Some(crate::lock_transition::Kept::Menubar)
 }
 
 fn append_desktop<R: MalaysiaRenderer>(
@@ -315,7 +318,7 @@ fn append_desktop<R: MalaysiaRenderer>(
         |entry| {
             (slide.is_none() || !entry.is_desktop_bar())
                 && !(chrome_hidden && entry.is_shell_chrome())
-                && (with_bar || !is_menubar(entry))
+                && (with_bar || !crate::lock_transition::is_menubar(entry))
         },
     );
     crate::popup_fade::append(state, Instant::now(), elements);

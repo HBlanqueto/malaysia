@@ -66,6 +66,13 @@ pub(crate) fn collect_drawn_buffers(state: &State) -> Vec<Buffer> {
             for entry in state.layers.on_layer(Layer::Background) {
                 collect_tree_buffers(&mut buffers, entry.surface.wl_surface());
             }
+            for entry in state
+                .layers
+                .all()
+                .filter(|entry| crate::lock_transition::is_menubar(entry))
+            {
+                collect_tree_buffers(&mut buffers, entry.surface.wl_surface());
+            }
             return buffers;
         }
     }
@@ -143,9 +150,16 @@ pub(crate) fn for_each_frame_surface(state: &State, mut visit: impl FnMut(&WlSur
         for surface in state.lock_surfaces.iter().filter(|surface| surface.alive()) {
             visit(surface.wl_surface(), true);
         }
-        // ADR 0074: the wallpaper stays under the lock screen; the rest only while it fades.
+        // ADR 0074: the wallpaper and the menubar stay around the lock screen; the rest only while it fades.
         if state.lock_transition.shown() {
             for entry in state.layers.on_layer(Layer::Background) {
+                visit(entry.surface.wl_surface(), false);
+            }
+            for entry in state
+                .layers
+                .all()
+                .filter(|entry| crate::lock_transition::is_menubar(entry))
+            {
                 visit(entry.surface.wl_surface(), false);
             }
             return;

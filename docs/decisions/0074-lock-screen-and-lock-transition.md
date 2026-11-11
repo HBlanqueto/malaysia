@@ -1,6 +1,8 @@
 # 0074 — Lock screen over the wallpaper and the lock transition
 
-Status: accepted and implemented (2026-11-11); not yet tried on hardware.
+Status: accepted and implemented (2026-11-11); revised the same day after the
+first try on hardware: the menu bar stays on screen while locked, so one bar
+changes mode instead of two being swapped, and the date and time sit lower.
 
 ## Goal and scope
 
@@ -88,6 +90,9 @@ The approved mock-up, «Del escritorio al bloqueo»:
       `ctdesign::DESKTOP_CLEAR`, which is opaque, as today.
    4. The wallpaper keeps receiving frame callbacks while locked, so dynamic
       and animated wallpapers (ADR 0073) keep running.
+   5. The menu bar stays too: the compositor draws the layer surface with
+      namespace `malaysia-menubar` of an unrestricted client above the lock
+      surfaces and keeps sending it frame callbacks. It receives no input.
    5. The lock surface paints no background. It draws only its content on a
       transparent buffer.
 2. **Only the password field is blurred.**
@@ -101,16 +106,17 @@ The approved mock-up, «Del escritorio al bloqueo»:
 3. **What the lock screen shows.** All of it is drawn by
    `malaysia-shell lock`. Text and icons are `LOCK_INK` (white).
    1. **Top right: the status row.** From right to left: the power button,
-      the battery (if the machine has one), Wi-Fi, the printer (while CUPS
-      has a queued job) and Bluetooth (if it is on), the bar's own order.
-      They use the menubar's extras and `menubar.show_*` switches,
-      read-only: clicking them opens no menu.
+      then the menu bar's own extras in the bar's order and under its
+      `menubar.show_*` switches. Only the power button belongs to the lock
+      surface; the extras are the menu bar itself (decision 4.3), and
+      clicking them opens no menu because the bar gets no input.
    2. **The power button** opens Suspend, Restart and Shut Down, drawn
       inside the lock surface because a lock surface has no pop-ups. Each
       acts at once through `power.rs`; there is no Log Out while locked.
    3. **Top center:** the long date (for example «martes, 11 de noviembre»)
       and, below it, the time in large type, in the menubar clock's format
-      (`%H:%M`).
+      (`%H:%M`). The block starts `LOCK_TOP_PERCENT` of the screen height
+      from the top, so it keeps its place on any screen size.
    4. **Bottom center:** the user's picture, then their display name, the
       password field and the error line.
       - The picture is AccountsService's `IconFile`. Without one, it is a
@@ -143,34 +149,34 @@ The approved mock-up, «Del escritorio al bloqueo»:
         (decision 6). It carries the duration of the fade.
       - Over `LOCK_FADE`, the menubar fades out its background, its left
         side, other apps' status items and its clock.
-      - Then, in `LOCK_SETTLE`, the kept items slide right to the positions
-        of the lock screen's status row. The menubar keeps drawing that state
-        until it is hidden.
+      - Then, in `LOCK_SETTLE`, its own extras slide right until they end at
+        the power button's slot, and their ink turns `LOCK_INK`. The menubar
+        keeps that state while locked.
    4. **The swap.**
       - The swap happens when `LOCK_FADE + LOCK_SETTLE` has passed and every
         output has a lock surface with a committed buffer.
-      - The compositor then hides the menubar and shows the lock surfaces in
-        the same frame.
+      - The compositor then shows the lock surfaces under the menubar, which
+        stays where it is.
       - Once that frame is presented on every output, it sends `locked`.
         This fixes context item 6.
    5. **The lock screen's own entry.**
-      - The lock surface's first frame draws the status row at the
-        menubar's final positions, without the power button. The swap is
-        therefore invisible.
+      - The lock surface's first frame draws nothing visible: the power
+        button starts transparent. Nothing on screen is swapped.
       - The client starts its entry on `locked`
         (`SessionUnlock::locked()`), the first moment it is on screen.
       - Then the power button fades in, the date and time rise from
         `LOCK_RISE_OFFSET` below their place in `LOCK_RISE`, and the user,
         the field and any notifications fade in in `LOCK_LOGIN`.
-   6. **One layout for both.**
-      - The menubar's final state and the lock screen's status row come from
-        the same functions in `malaysia-shell`, `menubar::lock_row::status_row`
-        and `extras::lock_icons`, fed by the same tokens.
-      - The two processes never exchange positions.
+   6. **One bar.**
+      - The status icons are drawn only by the menubar, on the desktop and
+        while locked; the lock surface draws no copy of them.
+      - The power button's slot, `menubar::lock_row::POWER_SLOT`, is the one
+        position both processes share. The menubar leaves it free and the
+        lock surface draws the button there (`lock_row::status_row`).
    7. **The time limit.**
       - If any output has no lock surface buffer `LOCK_START_GRACE` (3 s)
-        after `lock`, the compositor stops waiting. It hides the menubar and
-        presents the wallpaper alone, or `DESKTOP_CLEAR` where there is none.
+        after `lock`, the compositor stops waiting. It presents the wallpaper
+        and the menubar, or `DESKTOP_CLEAR` where there is no wallpaper.
       - It then sends `locked` and arms recovery as `lock.md` describes.
 5. **Exceptions.**
    1. **Before sleep.** A lock started by `lock_before_sleep` skips the
@@ -198,7 +204,7 @@ The approved mock-up, «Del escritorio al bloqueo»:
       `DURATION_FAST_MS`.
    2. It sends `unlock_and_destroy`. The status row stays on screen until
       then.
-   3. The compositor then sends `unlocked`, and the menubar redraws in its
+   3. The compositor then sends `unlocked`; the menubar is still in its
       locked layout.
    After that:
    - The menubar slides its items back and fades in the rest in
@@ -217,7 +223,8 @@ The approved mock-up, «Del escritorio al bloqueo»:
    | `LOCK_LOGIN_MS` | 600 |
    | `LOCK_CLOCK_FONT_SIZE` | 108 |
    | `LOCK_DATE_FONT_SIZE` | 24 |
-   | `LOCK_TOP_MARGIN`, `LOCK_BOTTOM_MARGIN`, `LOCK_SPACING` | 72, 92, 12 |
+   | `LOCK_TOP_PERCENT` (of the screen height) | 15 |
+   | `LOCK_BOTTOM_MARGIN`, `LOCK_SPACING` | 92, 12 |
    | `LOCK_AVATAR_SIZE` | 52 |
    | `LOCK_FIELD_HEIGHT` | 30 (was 44) |
    | `LOCK_FIELD_MIN_WIDTH`, `LOCK_FIELD_MAX_WIDTH` | 108, 200 |
@@ -239,10 +246,11 @@ The approved mock-up, «Del escritorio al bloqueo»:
 2. A tool that locks and then acts on `locked` (for example
    `loginctl lock-session` before closing a lid) waits for the transition.
    The sleep path skips it (decision 5.1).
-3. The compositor draws one normal client, the wallpaper, while locked.
+3. The compositor draws two normal clients, the wallpaper and the menubar,
+   while locked.
    - An unrestricted client could create its own `malaysia-wallpaper`
-     background and show an image on the lock screen. It still cannot
-     receive input or read the screen.
+     background or `malaysia-menubar` layer and show it on the lock screen.
+     It still cannot receive input or read the screen.
    - An unrestricted client already runs with the user's rights, so this
      adds no new reach.
    - A sandboxed client cannot do it.
@@ -264,11 +272,15 @@ The approved mock-up, «Del escritorio al bloqueo»:
    desktop fades. The menubar has to animate itself.
 4. **The compositor fades the menubar like any other surface.** The status
    icons would vanish and reappear. The design keeps them on screen.
-5. **The menubar stays visible while locked**, as a privileged shell
-   surface. It would need input routing for its menus while locked, and it
-   would show apps' status items. The lock client draws its own status row
-   instead.
-6. **Send `locked` at once and fade afterwards.** This breaks [S] 3 and lets
+5. **The lock client draws its own copy of the status row.** This was the
+   first implementation. On hardware the two copies showed together for a
+   moment around the swap, since the bar and the lock surface do not commit
+   in the same frame. The menubar now stays instead, without input and with
+   other apps' status items faded out.
+6. **The menubar keeps its menus while locked.** It would need input
+   routing for the bar while locked. The power button stays in the lock
+   surface instead.
+7. **Send `locked` at once and fade afterwards.** This breaks [S] 3 and lets
    a suspend race the fade (context item 7).
 
 ## Plan
