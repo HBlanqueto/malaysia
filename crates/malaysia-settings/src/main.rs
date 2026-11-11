@@ -65,9 +65,7 @@ mod tests {
     use std::fs;
     use std::sync::Mutex;
 
-    use ctappearance::{
-        AppearanceConfig, ColorScheme, WindowColorMode, WindowTintScope, resolve, write_appearance,
-    };
+    use ctappearance::{AppearanceConfig, ColorScheme, WindowColorMode, resolve, write_appearance};
     use ctdesign::ACCENT_SWATCHES;
     use freya_components::theming::hooks::use_init_theme;
     use freya_core::integration::AppComponent;
@@ -260,54 +258,54 @@ mod tests {
     }
 
     #[test]
-    fn tint_scope_radios_are_disabled_in_neutral_mode() {
+    fn the_bars_checkbox_is_disabled_at_neutral() {
         with_temp_config(|dir| {
             let path = dir.join("appearance.domain");
             let initial = AppearanceConfig {
                 window_color: WindowColorMode::Neutral,
-                window_tint_scope: WindowTintScope::Windows,
+                wallpaper_tinting: false,
                 ..Default::default()
             };
             write_appearance(&path, &initial).unwrap();
 
             let mut test = run_app(initial);
-            let node =
-                find_label(&test, tr!("tint-scope-desktop")).expect("desktop radio label exists");
+            let node = find_label(&test, tr!("tint-part-bars")).expect("bars checkbox exists");
             click_node(&mut test, node);
 
             let text = fs::read_to_string(&path).unwrap();
             assert!(
-                text.contains("window_tint_scope = \"windows\""),
-                "clicking a disabled radio must not change the scope: {text}"
+                !text.contains("\"bars\""),
+                "clicking a disabled checkbox must not tint the bars: {text}"
             );
         });
     }
 
     #[test]
-    fn radios_are_enabled_in_tinted_modes() {
-        with_temp_config(|dir| {
-            let path = dir.join("appearance.domain");
-            {
-                let mode = WindowColorMode::Accent;
+    fn the_bars_checkbox_works_with_either_tint_source() {
+        for (window_color, wallpaper_tinting) in [
+            (WindowColorMode::Accent, false),
+            (WindowColorMode::Neutral, true),
+        ] {
+            with_temp_config(|dir| {
+                let path = dir.join("appearance.domain");
                 let initial = AppearanceConfig {
-                    window_color: mode,
-                    window_tint_scope: WindowTintScope::Windows,
+                    window_color,
+                    wallpaper_tinting,
                     ..Default::default()
                 };
                 write_appearance(&path, &initial).unwrap();
 
                 let mut test = run_app(initial);
-                let node = find_label(&test, tr!("tint-scope-desktop"))
-                    .expect("desktop radio label exists");
+                let node = find_label(&test, tr!("tint-part-bars")).expect("bars checkbox exists");
                 click_node(&mut test, node);
 
                 let text = fs::read_to_string(&path).unwrap();
                 assert!(
-                    text.contains("window_tint_scope = \"desktop\""),
-                    "clicking an enabled radio must change the scope for {mode:?}: {text}"
+                    text.contains("\"bars\""),
+                    "{window_color:?}: the bars take the tint: {text}"
                 );
-            }
-        });
+            });
+        }
     }
 
     #[test]

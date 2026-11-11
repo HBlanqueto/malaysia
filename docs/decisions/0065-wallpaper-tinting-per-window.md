@@ -1,7 +1,8 @@
 # 0065 — Wallpaper tinting per window
 
-Status: accepted (2026-11-08). The amounts are provisional until they are
-measured on macOS (step 4 of «Calibration»).
+Status: accepted (2026-11-08), amended 2026-11-11 (steps 8 to 10). The
+amounts are provisional until they are measured on macOS (step 4 of
+«Calibration»).
 
 ## Context
 
@@ -54,6 +55,20 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
    accent swatch, a rainbow like macOS «Multicolor», sets `wallpaper_accent`:
    the accent is the dominant color of `wallpaper.state`. The traffic-light
    style `wallpaper` goes away and reads as `accent`, which follows it.
+8. **The rainbow swatch is «Automatic» (2026-11-11).** It replaces step 7:
+   `wallpaper_accent` is retired and «Automatic» is `accent_color` left
+   out. The accent is the theme's blue, and an area with its own accent
+   (`Accent::Own`, `Accent::FromBackdrop`) or an app reading the portal keeps
+   it; the portal reports no accent preference. A chosen color is forced on
+   every app.
+9. **The wallpaper tints like the accent (2026-11-11).** It replaces steps 4
+   and 5: `behind_window` tints every part of `tint_parts`, with the same
+   `LAYER_FACTOR_*` as the accent tint, and any accent allows it, graphite
+   included. The sidebar-only blend tinted too little to see, and users chose
+   the parts anyway.
+10. **The bars are a part (2026-11-11).** `tint_parts` gains `bars`, the menu
+    bar and the Dock, and `window_tint_scope` is retired. With the wallpaper
+    as tint color they take the wallpaper's dominant color.
 
 ## Calibration
 
@@ -70,7 +85,7 @@ switch off gives a neutral `#232323` window and `#2a2a2a` groups, the same as
 
 ## Consequences
 
-Only BarrierKit windows with a sidebar show the tint; the compositor's server-side titlebars
+Only BarrierKit windows show the tint; the compositor's server-side titlebars
 and GTK apps do not. The grid covers the one output Malaysia draws today.
 
 ## Rejected alternatives

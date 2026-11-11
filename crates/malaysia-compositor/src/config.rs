@@ -134,7 +134,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ctappearance::{ColorScheme, TrafficLightStyle, WindowColorMode, WindowTintScope};
+    use ctappearance::{ColorScheme, TrafficLightStyle, WindowColorMode};
 
     #[test]
     fn per_domain_files_are_loaded_separately() {
@@ -143,7 +143,7 @@ mod tests {
         std::fs::create_dir_all(&config_dir).expect("create the temp config dir");
         std::fs::write(
             config_dir.join("appearance.domain"),
-            "color_scheme = \"dark\"\nwindow_color = \"accent\"\nwindow_tint_scope = \"desktop\"\ntraffic_lights = \"accent\"\n",
+            "color_scheme = \"dark\"\nwindow_color = \"accent\"\ntint_parts = [\"bars\"]\ntraffic_lights = \"accent\"\n",
         )
         .expect("write appearance.domain");
         std::fs::write(config_dir.join("display.domain"), "scale = 1.5\n")
@@ -157,10 +157,7 @@ mod tests {
         let config = Config::load_from_dir(&config_dir);
         assert_eq!(config.appearance.color_scheme, ColorScheme::Dark);
         assert_eq!(config.appearance.window_color, WindowColorMode::Accent);
-        assert_eq!(
-            config.appearance.window_tint_scope,
-            WindowTintScope::Desktop
-        );
+        assert!(config.appearance.tint_parts.bars);
         assert_eq!(config.appearance.traffic_lights, TrafficLightStyle::Accent);
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert_eq!(config.display.scale, 1.5);
@@ -177,10 +174,7 @@ mod tests {
         assert!(!config.appearance.contrast);
         assert!(!config.appearance.reduced_motion);
         assert_eq!(config.appearance.window_color, WindowColorMode::Neutral);
-        assert_eq!(
-            config.appearance.window_tint_scope,
-            WindowTintScope::Windows
-        );
+        assert!(!config.appearance.tint_parts.bars);
         assert_eq!(config.appearance.traffic_lights, TrafficLightStyle::Auto);
         assert_eq!(config.window.decorations, DecorationPolicy::Default);
         assert!(config.menubar.app_menus);

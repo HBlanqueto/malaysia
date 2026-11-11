@@ -10,7 +10,7 @@ use bk::views::form::{Form, Row, Section};
 use ctappearance::{
     AppearanceConfig, BlurBehind, ColorFilter, ColorScheme, MenuBarSize, Resolved, ScrollBarClick,
     ScrollBars, TintParts, TintStrength, Toolkit, TrafficLightShape, TrafficLightStyle,
-    WindowColorMode, WindowTintScope, lights_for, load_appearance, palette,
+    WindowColorMode, lights_for, load_appearance, palette,
 };
 use ctdesign::{
     ACCENT_SWATCHES, COLOR_FILTER_INTENSITY, DISPLAY_CONTRAST, MENU_POPOVER, POINTER_SIZES, Rgba,
@@ -46,7 +46,6 @@ const STRENGTHS: [TintStrength; 4] = [
     TintStrength::Strong,
     TintStrength::Intense,
 ];
-const SCOPES: [WindowTintScope; 2] = [WindowTintScope::Windows, WindowTintScope::Desktop];
 const SCROLL_BARS: [ScrollBars; 3] = [
     ScrollBars::Automatic,
     ScrollBars::WhenScrolling,
@@ -77,12 +76,13 @@ const TRAFFIC: [(TrafficLightStyle, Text); 3] = [
 ];
 type Part = fn(&mut TintParts) -> &mut bool;
 
-const PARTS: [(Text, Part); 5] = [
+const PARTS: [(Text, Part); 6] = [
     (|| tr!("tint-part-sidebars"), |p| &mut p.sidebars),
     (|| tr!("tint-part-groups"), |p| &mut p.groups),
     (|| tr!("tint-part-menus"), |p| &mut p.menus),
     (|| tr!("tint-part-window"), |p| &mut p.window),
     (|| tr!("tint-part-controls"), |p| &mut p.controls),
+    (|| tr!("tint-part-bars"), |p| &mut p.bars),
 ];
 
 pub fn settings_window(
@@ -242,20 +242,33 @@ fn appearance(
 ) -> Form {
     let level = tint_level(config);
     let accent_source = config.window_color == WindowColorMode::Accent;
-    let parts_disabled = level == 0 || !accent_source;
+    let automatic_accent = config.accent_color.is_none();
     let accent = Row::new(tr!("accent-color"))
+        .detail(if automatic_accent {
+            tr!("accent-automatic-help")
+        } else {
+            tr!("accent-fixed-help")
+        })
         .keywords(tr_list!("accent-color-keywords"))
         .control(
             ColorWell::new(tr!("accent-color"), &ACCENT_SWATCHES)
-                .multicolor(tr!("accent-wallpaper"))
+                .multicolor(tr!("accent-automatic"))
                 .selected(accent_index(config))
                 .on_change(edit(error, |config, index: usize| {
-                    config.wallpaper_accent = index == 0;
-                    if let Some((_, color)) = index.checked_sub(1).map(|i| ACCENT_SWATCHES[i]) {
-                        config.accent_color = Some([color.r, color.g, color.b]);
-                    }
+                    config.accent_color = index
+                        .checked_sub(1)
+                        .map(|i| ACCENT_SWATCHES[i].1)
+                        .map(|color| [color.r, color.g, color.b]);
                 })),
         );
+    let source_help = match (accent_source, automatic_accent) {
+        (true, true) => tr!("tint-source-accent-automatic-help"),
+        (true, false) => tr!("tint-source-accent-help"),
+        (false, _) if resolved.scheme.is_dark() || config.wallpaper_tinting_in_light => {
+            tr!("tint-source-wallpaper-help")
+        }
+        (false, _) => tr!("tint-source-wallpaper-light-help"),
+    };
     Form::new()
         .section(
             Section::new()
@@ -268,11 +281,7 @@ fn appearance(
         )
         .section(
             Section::titled(tr!("color"))
-                .row(if config.wallpaper_accent {
-                    accent.detail(tr!("accent-wallpaper-help"))
-                } else {
-                    accent
-                })
+                .row(accent)
                 .row(
                     Row::new(tr!("tint-windows"))
                         .detail(if level == 0 {
@@ -296,11 +305,7 @@ fn appearance(
                 )
                 .row(
                     Row::new(tr!("tint-source"))
-                        .detail(if accent_source {
-                            tr!("tint-source-accent-help")
-                        } else {
-                            tr!("tint-source-wallpaper-help")
-                        })
+                        .detail(source_help)
                         .keywords(tr_list!("tint-source-keywords"))
                         .stacked()
                         .control(
@@ -317,29 +322,10 @@ fn appearance(
                 )
                 .row(
                     Row::new(tr!("tint-parts"))
-                        .detail(if accent_source {
-                            tr!("tint-parts-help")
-                        } else {
-                            tr!("tint-parts-wallpaper-help")
-                        })
+                        .detail(tr!("tint-parts-help"))
                         .keywords(tr_list!("tint-parts-keywords"))
                         .stacked()
-                        .control(tint_parts(config.tint_parts, parts_disabled, error)),
-                )
-                .row(
-                    Row::new(tr!("tint-scope"))
-                        .keywords(tr_list!("tint-scope-keywords"))
-                        .stacked()
-                        .control(
-                            RadioGroup::new(tr!("tint-scope"))
-                                .option(tr!("tint-scope-windows"))
-                                .option(tr!("tint-scope-desktop"))
-                                .selected(position(&SCOPES, config.window_tint_scope))
-                                .disabled(parts_disabled)
-                                .on_change(edit(error, |config, index: usize| {
-                                    config.window_tint_scope = SCOPES[index];
-                                })),
-                        ),
+                        .control(tint_parts(config.tint_parts, level == 0, error)),
                 ),
         )
         .section(
@@ -347,7 +333,7 @@ fn appearance(
                 .row(
                     Row::new(tr!("traffic-lights"))
                         .keywords(tr_list!("traffic-lights-keywords"))
-                        .control(traffic_popup(config, dominant, resolved, error)),
+                        .control(traffic_popup(config, resolved, error)),
                 )
                 .row(traffic_shape_row(config, error))
                 .row(
@@ -661,46 +647,37 @@ fn display(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
         )
 }
 
-const TOOLKITS: [(Toolkit, Text, Text); 3] = [
-    (
-        Toolkit::BarrierKit,
-        || tr!("text-size-barrierkit"),
-        || tr!("text-size-barrierkit-help"),
-    ),
-    (
-        Toolkit::Gtk,
-        || tr!("text-size-gtk"),
-        || tr!("text-size-gtk-help"),
-    ),
-    (
-        Toolkit::Qt,
-        || tr!("text-size-qt"),
-        || tr!("text-size-qt-help"),
-    ),
-];
+pub(crate) fn toolkit_text_size(
+    config: &AppearanceConfig,
+    error: State<Option<String>>,
+    toolkit: Toolkit,
+    title: &'static str,
+    help: &'static str,
+) -> Row {
+    let mut sizes = config.text_sizes;
+    let selected = sizes
+        .get_mut(toolkit)
+        .map_or(0, |size| 1 + nearest(&TEXT_SIZES, size));
+    Row::new(title).detail(help).control(
+        text_size_names()
+            .iter()
+            .fold(PopUpButton::new(title), |popup, name| popup.item(name))
+            .selected(selected)
+            .on_change(edit(error, move |config, index: usize| {
+                *config.text_sizes.get_mut(toolkit) =
+                    index.checked_sub(1).map(|step| TEXT_SIZES[step]);
+            })),
+    )
+}
 
 fn text_size(config: &AppearanceConfig, error: State<Option<String>>) -> Form {
-    let apps = TOOLKITS.iter().fold(
-        Section::titled(tr!("text-size-apps")),
-        |section, &(toolkit, title, help)| {
-            let mut sizes = config.text_sizes;
-            let selected = sizes
-                .get_mut(toolkit)
-                .map_or(0, |size| 1 + nearest(&TEXT_SIZES, size));
-            section.row(
-                Row::new(title()).detail(help()).control(
-                    text_size_names()
-                        .iter()
-                        .fold(PopUpButton::new(title()), |popup, name| popup.item(name))
-                        .selected(selected)
-                        .on_change(edit(error, move |config, index: usize| {
-                            *config.text_sizes.get_mut(toolkit) =
-                                index.checked_sub(1).map(|step| TEXT_SIZES[step]);
-                        })),
-                ),
-            )
-        },
-    );
+    let apps = Section::titled(tr!("text-size-apps")).row(toolkit_text_size(
+        config,
+        error,
+        Toolkit::BarrierKit,
+        tr!("text-size-barrierkit"),
+        tr!("text-size-barrierkit-help"),
+    ));
     Form::new()
         .section(
             Section::new().row(
@@ -876,7 +853,6 @@ fn option_column(control: impl IntoElement) -> Rect {
 
 fn traffic_popup(
     config: &AppearanceConfig,
-    dominant: Option<Rgba>,
     resolved: &Resolved,
     error: State<Option<String>>,
 ) -> PopUpButton {
@@ -885,7 +861,7 @@ fn traffic_popup(
         .fold(
             PopUpButton::new(tr!("traffic-lights")),
             |popup, (style, label)| {
-                let lights = traffic_lights(style, config, resolved, dominant);
+                let lights = traffic_lights(style, config, resolved);
                 let svg = traffic_row_svg(lights, config.traffic_light_shape);
                 popup.icon_item(label(), MenuIcon::Svg(svg.into()))
             },
@@ -903,15 +879,11 @@ fn traffic_lights(
     style: TrafficLightStyle,
     config: &AppearanceConfig,
     resolved: &Resolved,
-    dominant: Option<Rgba>,
 ) -> [Rgba; 3] {
-    let chosen = config
+    let normal_accent = config
         .accent_color
         .map(|[r, g, b]| Rgba { r, g, b, a: 1.0 })
         .unwrap_or(palette(resolved.scheme).accent);
-    let normal_accent = dominant
-        .filter(|_| config.wallpaper_accent)
-        .unwrap_or(chosen);
     match style {
         TrafficLightStyle::Auto => resolved.lights,
         style => lights_for(style, normal_accent),
@@ -941,11 +913,8 @@ fn traffic_row_svg(lights: [Rgba; 3], shape: TrafficLightShape) -> String {
 }
 
 fn accent_index(config: &AppearanceConfig) -> Option<usize> {
-    if config.wallpaper_accent {
-        return Some(0);
-    }
     match config.accent_color {
-        None => Some(1),
+        None => Some(0),
         Some(rgb) => ACCENT_SWATCHES
             .iter()
             .position(|(_, color)| [color.r, color.g, color.b] == rgb)

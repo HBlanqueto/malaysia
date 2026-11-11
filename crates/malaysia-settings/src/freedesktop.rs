@@ -7,8 +7,9 @@ use bk::popup_button::PopUpButton;
 use bk::prelude::*;
 use bk::views::feedback::Alert;
 use bk::views::form::{Form, Row, Section};
-use ctappearance::{AppearanceConfig, ini, xdg};
+use ctappearance::{AppearanceConfig, Toolkit, ini, xdg};
 
+use crate::app::toolkit_text_size;
 use crate::localize::{intern, tr};
 
 // GTK 3 compiles these into its own resources, so no folder lists them.
@@ -295,6 +296,23 @@ pub fn freedesktop(
             )
             .section(gtk)
             .section(qt)
+            .section(
+                Section::titled(tr!("text-size"))
+                    .row(toolkit_text_size(
+                        config,
+                        error,
+                        Toolkit::Gtk,
+                        tr!("text-size-gtk"),
+                        tr!("text-size-gtk-help"),
+                    ))
+                    .row(toolkit_text_size(
+                        config,
+                        error,
+                        Toolkit::Qt,
+                        tr!("text-size-qt"),
+                        tr!("text-size-qt-help"),
+                    )),
+            )
             .section(
                 Section::titled(tr!("still-synced"))
                     .row(Row::new(tr!("still-synced-items")).detail(tr!("still-synced-help"))),

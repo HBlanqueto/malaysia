@@ -57,7 +57,7 @@ impl Values {
     fn from_appearance(appearance: Option<&AppearanceConfig>) -> Self {
         let default = AppearanceConfig::default();
         let appearance = appearance.unwrap_or(&default);
-        let dominant = appearance.wallpaper_accent.then(load_dominant).flatten();
+        let dominant = load_dominant();
         Self::from_parts(appearance, dominant, appearance.gtk_bridge)
     }
 
@@ -76,7 +76,12 @@ impl Values {
         };
         Self {
             color_scheme,
-            accent,
+            // An automatic accent is no preference, so an app keeps its own (freedesktop appearance).
+            accent: if resolved.automatic_accent {
+                UNSET_ACCENT
+            } else {
+                accent
+            },
             contrast: u32::from(appearance.contrast),
             reduced_motion: u32::from(appearance.reduced_motion),
             text_scaling_factor: f64::from(appearance.text_size_for(Toolkit::Gtk)),
@@ -311,13 +316,13 @@ mod tests {
             color_scheme: ColorScheme::Light,
             ..AppearanceConfig::default()
         };
-        let light = Values::from_appearance(Some(&light)).accent;
+        let light = Values::from_appearance(Some(&light)).live_accent;
         assert_eq!(light.0, f64::from(LIGHT.accent.r));
         let dark = AppearanceConfig {
             color_scheme: ColorScheme::Dark,
             ..AppearanceConfig::default()
         };
-        let dark = Values::from_appearance(Some(&dark)).accent;
+        let dark = Values::from_appearance(Some(&dark)).live_accent;
         assert_eq!(dark.2, f64::from(DARK.accent.b));
     }
 
@@ -394,6 +399,7 @@ mod tests {
     fn the_live_namespace_follows_the_bridge() {
         let appearance = AppearanceConfig {
             window_color: WindowColorMode::Accent,
+            accent_color: Some([0.125, 0.376, 0.816]),
             ..AppearanceConfig::default()
         };
         let on = Values::from_parts(&appearance, None, true);
@@ -419,6 +425,22 @@ mod tests {
                 (LIVE_NAMESPACE, "accent-color")
             ]
         );
+    }
+
+    #[test]
+    fn only_a_chosen_accent_reaches_the_portal() {
+        let automatic = Values::from_parts(&AppearanceConfig::default(), None, true);
+        assert_eq!(automatic.accent, UNSET_ACCENT);
+        assert_ne!(automatic.live_accent, UNSET_ACCENT);
+        let chosen = Values::from_parts(
+            &AppearanceConfig {
+                accent_color: Some([0.9, 0.3, 0.1]),
+                ..AppearanceConfig::default()
+            },
+            None,
+            true,
+        );
+        assert_ne!(chosen.accent, UNSET_ACCENT);
     }
 
     #[test]
