@@ -149,7 +149,7 @@ impl App for LockApp {
             (1.0 - rise) * LOCK_RISE_OFFSET
         };
 
-        let account = use_service::<Accounts>().snapshot.read().clone().flatten();
+        let account = use_service::<Accounts>().snapshot.read().clone();
         let mut hint_shown = use_state(|| false);
         let keyboard_layout = SessionUnlock::get().keyboard_layout();
         let name = use_hook(|| user_display_name().unwrap_or_else(|| self.user.clone()));

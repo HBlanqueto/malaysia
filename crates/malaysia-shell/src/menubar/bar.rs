@@ -338,7 +338,7 @@ impl App for BarApp {
 
         let shown = status_items.read().clone();
         let status_specs = Rc::new(status::status_titles(&shown, &status_host, &status_anchors));
-        let mut right = HStack::new()
+        let right = HStack::new()
             .main_align(Alignment::Start)
             .cross_align(Alignment::Start)
             .spacing(0.0)
