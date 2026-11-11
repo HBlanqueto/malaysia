@@ -1,3 +1,5 @@
+//! Wayland layer-shell client: one Background surface per output.
+
 use std::collections::HashMap;
 use std::os::fd::AsFd;
 use std::os::raw::c_void;
@@ -41,7 +43,7 @@ use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
 
-use crate::image::{Wallpaper, reload};
+use crate::image::{Wallpaper, load_snapshot, reload};
 use crate::render::{RenderContext, WallpaperTexture};
 use ctappearance::data_dir;
 use ctappearance::watch::{AppearanceEvent, AppearanceWatch};
@@ -49,6 +51,7 @@ use ctappearance::watch::{AppearanceEvent, AppearanceWatch};
 const NAMESPACE: &str = "malaysia-wallpaper";
 const SCALE_DENOMINATOR: f64 = 120.0;
 
+/// State shared by every Wayland/output callback and the event loop.
 pub struct App {
     compositor: CompositorState,
     layer_shell: LayerShell,
@@ -61,41 +64,52 @@ pub struct App {
     loop_signal: Option<calloop::LoopSignal>,
     loop_handle: Option<calloop::LoopHandle<'static, App>>,
     render: RenderContext,
+    /// Current wallpaper texture shared by all outputs.
     texture: Option<WallpaperTexture>,
+    /// Per-output surface state.
     outputs: HashMap<ObjectId, OutputSurface>,
+    /// Wallpaper domain store path.
     store_path: std::path::PathBuf,
+    /// Wallpaper state path (dominant colour).
     state_path: std::path::PathBuf,
+    /// Last loaded wallpaper selection.
     wallpaper: Wallpaper,
+    /// inotify watcher for `wallpaper.domain`.
     appearance_watch: AppearanceWatch,
 }
 
 struct OutputSurface {
-    wgpu_surface: wgpu::Surface<'static>,
     output: WlOutput,
     surface: WlSurface,
     layer_surface: LayerSurface,
     viewport: WpViewport,
-    fractional_scale: WpFractionalScaleV1,
+    #[allow(dead_code)]
+    fractional_scale: Option<WpFractionalScaleV1>,
+    /// Logical size from the last configure.
     logical_size: (u32, u32),
+    /// Fractional scale value from wp_fractional_scale_v1, or 1.0.
     scale: f64,
+    /// The wgpu surface for this output.
+    wgpu_surface: wgpu::Surface<'static>,
+    /// True once the wgpu surface has been configured.
     configured: bool,
+    /// Surface format chosen from the adapter's supported formats.
     surface_format: wgpu::TextureFormat,
+    /// True when a redraw for this surface is already scheduled on the idle
+    /// queue; cleared by the idle callback before rendering.
     pending_redraw: bool,
+    /// True once the first successful present has happened for this output.
     first_frame_presented: bool,
 }
 
-impl Drop for OutputSurface {
-    fn drop(&mut self) {
-        self.viewport.destroy();
-        self.fractional_scale.destroy();
-    }
-}
-
 impl App {
+    /// Connects to the compositor, binds globals and creates the render context.
+    ///
+    /// The returned event queue must be passed to [`App::run`].
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
-        let store_path = data_dir().join("wallpaper-selection.state");
-        let state_path = ctappearance::wallpaper_state_path();
-        let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
+        let store_path = data_dir().join("wallpaper.domain");
+        let state_path = data_dir().join("wallpaper.state");
+        let wallpaper = load_snapshot(&store_path, &state_path);
 
         let connection = Connection::connect_to_env()?;
         let (globals, mut event_queue) = registry_queue_init(&connection)?;
@@ -140,15 +154,18 @@ impl App {
             appearance_watch,
         };
 
-        if let Some(decoded) = app.wallpaper.image.take() {
-            app.texture = Some(app.render.upload_texture(&decoded));
+        // Upload the initial wallpaper if there is one.
+        if let Some(loaded) = app.wallpaper.image.take() {
+            app.texture = Some(app.render.upload_texture(&loaded.decoded));
         }
 
+        // Dispatch the first round of globals so outputs are known.
         event_queue.roundtrip(&mut app)?;
 
         Ok((app, event_queue))
     }
 
+    /// Runs the event loop until SIGTERM/SIGINT.
     pub fn run(&mut self, event_queue: EventQueue<Self>) -> anyhow::Result<()> {
         let mut event_loop: EventLoop<'static, Self> = EventLoop::try_new()?;
         self.loop_signal = Some(event_loop.get_signal());
@@ -212,12 +229,13 @@ impl App {
             return;
         }
         self.wallpaper = next;
-        if let Some(decoded) = self.wallpaper.image.take() {
-            self.texture = Some(self.render.upload_texture(&decoded));
+        if let Some(loaded) = self.wallpaper.image.take() {
+            self.texture = Some(self.render.upload_texture(&loaded.decoded));
         }
         self.schedule_redraw_all();
     }
 
+    /// Renders and commits every configured output immediately.
     fn draw_all_outputs(&mut self) {
         for output in self.outputs.values_mut() {
             output.pending_redraw = false;
@@ -238,6 +256,10 @@ impl App {
         }
     }
 
+    /// Schedules a redraw of every configured output on the next idle tick.
+    ///
+    /// This is used during event dispatch so the layer-surface configure ack is
+    /// flushed before we attach the first buffer.
     fn schedule_redraw_all(&mut self) {
         let any_new =
             self.outputs
@@ -256,6 +278,7 @@ impl App {
         }
     }
 
+    /// Schedules a redraw of one surface on the next idle tick.
     fn schedule_redraw(&mut self, surface: WlSurface) {
         let surface_id = surface.id();
         let Some(output) = self
@@ -298,17 +321,20 @@ impl App {
             Some(&output),
         );
         layer_surface.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
-        layer_surface.set_exclusive_zone(-1);
+        layer_surface.set_exclusive_zone(0);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
         layer_surface.set_size(1, 1);
 
         let viewport = self
             .viewporter
             .get_viewport(&surface, &self.qh, surface.clone());
-        let fractional_scale =
-            self.fractional_manager
-                .get_fractional_scale(&surface, &self.qh, surface.clone());
+        let fractional_scale = Some(self.fractional_manager.get_fractional_scale(
+            &surface,
+            &self.qh,
+            surface.clone(),
+        ));
 
+        // Initial opaque region and commit without a buffer.
         self.set_opaque_region(&surface, 1, 1);
         layer_surface.commit();
 
@@ -319,11 +345,9 @@ impl App {
         ));
         let window_handle =
             RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(surface_ptr).unwrap()));
-        // SAFETY: `OutputSurface` drops `wgpu_surface` before `surface`, and the connection outlives both.
         let wgpu_surface = unsafe { self.render.create_surface(display_handle, window_handle)? };
 
         let output_surface = OutputSurface {
-            wgpu_surface,
             output: output.clone(),
             surface,
             layer_surface,
@@ -331,7 +355,9 @@ impl App {
             fractional_scale,
             logical_size: (1, 1),
             scale: 1.0,
+            wgpu_surface,
             configured: false,
+            // Real format is selected in configure_output from surface capabilities.
             surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,
             pending_redraw: false,
             first_frame_presented: false,
@@ -342,7 +368,9 @@ impl App {
     }
 
     fn destroy_output_surface(&mut self, output: &WlOutput) {
-        if self.outputs.remove(&output.id()).is_some() {
+        if let Some(output) = self.outputs.remove(&output.id()) {
+            output.viewport.destroy();
+            output.surface.destroy();
             info!("output removed, wallpaper surface destroyed");
         }
     }
@@ -354,32 +382,8 @@ impl App {
             };
             (output.logical_size.0, output.logical_size.1, output.scale)
         };
-        let max = self.render.max_texture_dimension_2d;
-        let mut buffer_w = ((f64::from(logical_w) * scale).round() as u32).max(1);
-        let mut buffer_h = ((f64::from(logical_h) * scale).round() as u32).max(1);
-        if buffer_w > max || buffer_h > max {
-            warn!(
-                logical_w,
-                logical_h,
-                scale,
-                buffer_w,
-                buffer_h,
-                max,
-                "output buffer exceeds adapter texture limit; scaling down"
-            );
-            if buffer_w > max {
-                buffer_h =
-                    (f64::from(buffer_h) * f64::from(max) / f64::from(buffer_w)).round() as u32;
-                buffer_w = max;
-            }
-            if buffer_h > max {
-                buffer_w =
-                    (f64::from(buffer_w) * f64::from(max) / f64::from(buffer_h)).round() as u32;
-                buffer_h = max;
-            }
-            buffer_w = buffer_w.max(1);
-            buffer_h = buffer_h.max(1);
-        }
+        let buffer_w = ((f64::from(logical_w) * scale).round() as u32).max(1);
+        let buffer_h = ((f64::from(logical_h) * scale).round() as u32).max(1);
 
         let surface = {
             let Some(output) = self.outputs.get(output_id) else {
@@ -402,6 +406,7 @@ impl App {
                 .into_iter()
                 .find(|f| caps.formats.contains(f))
                 .unwrap_or_else(|| {
+                    // Fall back to the first sRGB-capable format the adapter offers.
                     caps.formats
                         .into_iter()
                         .find(|f| f.is_srgb())
@@ -420,20 +425,19 @@ impl App {
             return;
         };
         output.surface_format = format;
-        output.layer_surface.set_size(logical_w, logical_h);
         output
             .viewport
             .set_destination(logical_w as i32, logical_h as i32);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width: buffer_w,
             height: buffer_h,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
-            color_space: wgpu::SurfaceColorSpace::Auto,
         };
         output.wgpu_surface.configure(&self.render.device, &config);
         output.configured = true;
@@ -478,7 +482,7 @@ impl App {
         let mut presented = false;
         match render_result {
             Ok(()) => presented = true,
-            Err(wgpu::CurrentSurfaceTexture::Outdated) => {
+            Err(wgpu::SurfaceStatus::Outdated) => {
                 self.configure_output(&output_id);
                 let output = self.outputs.get(&output_id).expect("output exists");
                 let texture = self.texture.as_ref().expect("texture exists");
@@ -488,7 +492,7 @@ impl App {
                     presented = true;
                 }
             }
-            Err(wgpu::CurrentSurfaceTexture::Lost) => {
+            Err(wgpu::SurfaceStatus::Lost) => {
                 anyhow::bail!("wgpu surface lost");
             }
             Err(error) => {
@@ -501,7 +505,6 @@ impl App {
                 output.first_frame_presented = true;
                 info!(output = ?output_id, "first frame presented");
             }
-            output.surface.commit();
         }
         Ok(())
     }
@@ -540,6 +543,7 @@ impl CompositorHandler for App {
         _surface: &WlSurface,
         _new_factor: i32,
     ) {
+        // Fractional scale is authoritative; wl_output integer scale is ignored.
     }
 
     fn transform_changed(
@@ -558,6 +562,8 @@ impl CompositorHandler for App {
         _surface: &WlSurface,
         _time: u32,
     ) {
+        // No frame callbacks are requested by this client; the compositor
+        // drives repaints through configure and fractional-scale events.
     }
 
     fn surface_enter(
@@ -682,10 +688,23 @@ impl Dispatch<WpViewport, WlSurface> for App {
     }
 }
 
-sctk::reexports::client::delegate_noop!(App: ignore WlRegion);
+impl Dispatch<WlRegion, ()> for App {
+    fn event(
+        _state: &mut Self,
+        _proxy: &WlRegion,
+        _event: <WlRegion as Proxy>::Event,
+        _data: &(),
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+    ) {
+    }
+}
 
 delegate_registry!(App);
 delegate_compositor!(App);
 delegate_output!(App);
 
+// `delegate_layer!` generates Dispatch for zwlr_layer_shell_v1 and
+// zwlr_layer_surface_v1; the latter acks the configure before calling
+// [`LayerShellHandler::configure`].
 sctk::delegate_layer!(App);
