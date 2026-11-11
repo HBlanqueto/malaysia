@@ -1069,6 +1069,10 @@ impl Windows {
         self.scene.popup_under(scene_point(point))
     }
 
+    pub fn popup_on_layer(&self, id: PopupId) -> bool {
+        self.scene.popup_on_layer(id)
+    }
+
     pub fn topmost_popup(&self) -> Option<PopupId> {
         self.scene.topmost_popup()
     }

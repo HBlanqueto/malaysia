@@ -14,12 +14,13 @@ use bk::adornments::Badge;
 use bk::animation::use_switch_progress;
 use bk::app::{load_defaults, load_restoration, save_defaults, save_restoration, use_defaults};
 use bk::menu::{CheckState, MenuItem};
-use bk::platform::Timers;
+use bk::platform::{PopupAnchor, Timers};
+use bk::popup_button::pop_up_menu;
 use bk::prelude::*;
 use bk::shell::{
-    Activation, Anchors, BlurRegion, InputRegion, KeyboardInteractivity, Layer, LayerGeometry,
-    LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region, set_input_region,
-    set_layer_geometry,
+    Activation, Anchors, BlurRegion, CardFrames, InputRegion, KeyboardInteractivity, Layer,
+    LayerGeometry, LayerSpec, ToplevelInfo, Toplevels, run_layer, set_blur_region, set_card_frames,
+    set_input_region, set_layer_geometry,
 };
 use bk::styles::Animation;
 use bk::theme::{self, SurfaceKind};
@@ -72,7 +73,7 @@ struct Frame {
 }
 
 type Area = (f32, f32, f32, f32);
-type Regions = (Vec<(i32, i32, i32, i32)>, Vec<(i32, i32, i32, i32)>);
+type Regions = (Vec<(i32, i32, i32, i32)>, Vec<(i32, i32, i32, i32)>, u32);
 
 impl Frame {
     fn vertical(self) -> bool {
@@ -112,6 +113,10 @@ impl Frame {
             ),
         }
     }
+}
+
+fn primary(event: &Event<PointerEventData>) -> bool {
+    event.data().button() == Some(MouseButton::Left)
 }
 
 fn placed((x, y, width, height): Area) -> Rect {
@@ -256,6 +261,7 @@ impl App for DockApp {
         let mut size = use_state(|| (0.0f32, 0.0f32));
         let mut pointer = use_state(|| None::<(f32, f32)>);
         let mut hovering = use_state(|| false);
+        let menu_open = use_state(|| false);
         let mut shown = use_state(|| !config.autohide);
         let mut launching = use_state(Vec::<String>::new);
         let mut resizing = use_state(|| None::<(f32, i32)>);
@@ -376,6 +382,7 @@ impl App for DockApp {
         } else {
             bar
         };
+        let radius = (layout.thickness * DOCK_RADIUS).round();
         let regions = (
             vec![region(input)],
             if visible > 0.01 {
@@ -383,6 +390,7 @@ impl App for DockApp {
             } else {
                 Vec::new()
             },
+            radius as u32,
         );
         let applied_regions = use_hook(|| Rc::new(RefCell::new(None::<Regions>)));
         if width > 0.0 && applied_regions.borrow().as_ref() != Some(&regions) {
@@ -391,6 +399,10 @@ impl App for DockApp {
             });
             set_blur_region(BlurRegion {
                 rects: regions.1.clone(),
+            });
+            set_card_frames(CardFrames {
+                radius: regions.2,
+                cards: regions.1.clone(),
             });
             *applied_regions.borrow_mut() = Some(regions);
         }
@@ -467,10 +479,19 @@ impl App for DockApp {
 
         let mut children: Vec<Element> = vec![
             placed(bar)
-                .corner_radius(layout.thickness * DOCK_RADIUS)
+                .corner_radius(bk::style::continuous_corner(radius))
                 .background(glass)
                 .into_element(),
         ];
+        let menu = Menus {
+            frame,
+            cross0,
+            padding: layout.padding,
+            menu_open,
+            hovering,
+            shown,
+            autohide: config.autohide,
+        };
         let mut drop_targets: Vec<(String, f32)> = Vec::new();
         for (item, slot) in list.iter().zip(&layout.placed) {
             let center = slot.start + slot.length / 2.0;
@@ -488,11 +509,18 @@ impl App for DockApp {
                             .center()
                             .child(line.background(separator_ink))
                             .on_pointer_down(move |event: Event<PointerEventData>| {
+                                if !primary(&event) {
+                                    return;
+                                }
                                 let at = event.global_location();
                                 let (_, cross) = frame.canonical((at.x as f32, at.y as f32));
                                 resizing.set(Some((cross, start_size)));
                             })
-                            .context_menu(separator_menu(&config), on_separator_command)
+                            .on_secondary_down({
+                                let items = separator_menu(&config);
+                                let anchor = menu.anchor(slot.start, slot.length, tile);
+                                move |_| menu.open(items.clone(), anchor, on_separator_command)
+                            })
                             .into_element(),
                     );
                 }
@@ -518,12 +546,14 @@ impl App for DockApp {
                     let pressed = app.clone();
                     let after_drag_down = after_drag.clone();
                     let after_drag = after_drag.clone();
-                    let commands = AppCommands {
+                    let commands = Rc::new(AppCommands {
                         app: app.clone(),
                         toplevels: toplevels.clone(),
                         state,
                         open: open_app.clone(),
-                    };
+                    });
+                    let items = app_menu(app);
+                    let anchor = menu.anchor(slot.start, slot.length, slot.size + lift);
                     let (kept, id) = (app.kept, app.id.clone());
                     children.push(
                         placed(frame.area(slot.start, icon_cross + lift, slot.size, slot.size))
@@ -538,6 +568,9 @@ impl App for DockApp {
                                 progress_bar(slot.size, progress, progress_track, progress_fill)
                             }))
                             .on_pointer_down(move |event: Event<PointerEventData>| {
+                                if !primary(&event) {
+                                    return;
+                                }
                                 let at = event.global_location();
                                 let at = (at.x as f32, at.y as f32);
                                 after_drag_down.set(false);
@@ -556,8 +589,11 @@ impl App for DockApp {
                                     open(&pressed);
                                 }
                             })
-                            .context_menu(app_menu(app), move |command: String| {
-                                commands.run(&command)
+                            .on_secondary_down(move |_| {
+                                let commands = commands.clone();
+                                menu.open(items.clone(), anchor, move |command: String| {
+                                    commands.run(&command)
+                                })
                             })
                             .into_element(),
                     );
@@ -597,10 +633,17 @@ impl App for DockApp {
                                 toplevels.unset_minimized(id);
                                 toplevels.activate(id);
                             })
-                            .context_menu(
-                                vec![MenuItem::action("close", tr!("menu-close-window"))],
-                                move |_: String| close.close(id),
-                            )
+                            .on_secondary_down({
+                                let anchor = menu.anchor(slot.start, slot.length, slot.size);
+                                move |_| {
+                                    let close = close.clone();
+                                    menu.open(
+                                        vec![MenuItem::action("close", tr!("menu-close-window"))],
+                                        anchor,
+                                        move |_: String| close.close(id),
+                                    )
+                                }
+                            })
                             .into_element(),
                     );
                 }
@@ -764,6 +807,9 @@ impl App for DockApp {
                 }
             })
             .on_pointer_leave(move |_| {
+                if *menu_open.peek() {
+                    return;
+                }
                 hovering.set(false);
                 leave.set(false);
                 if autohide && dragging.peek().is_none() && resizing.peek().is_none() {
@@ -818,6 +864,54 @@ impl App for DockApp {
                 });
             })
             .children(children)
+    }
+}
+
+// macOS opens an icon's menu beside it, centred, and keeps the Dock up while it is open.
+#[derive(Clone, Copy)]
+struct Menus {
+    frame: Frame,
+    cross0: f32,
+    padding: f32,
+    menu_open: State<bool>,
+    hovering: State<bool>,
+    shown: State<bool>,
+    autohide: bool,
+}
+
+impl Menus {
+    fn anchor(self, start: f32, length: f32, reach: f32) -> (i32, i32, u32, u32) {
+        let (x, y, width, height) = region(self.frame.area(
+            start,
+            self.cross0,
+            length,
+            self.padding + reach + DOCK_LABEL_GAP,
+        ));
+        (x, y, width.max(1) as u32, height.max(1) as u32)
+    }
+
+    fn open(
+        self,
+        items: Vec<MenuItem>,
+        anchor: (i32, i32, u32, u32),
+        run: impl Fn(String) + 'static,
+    ) {
+        let mut menu_open = self.menu_open;
+        menu_open.set(true);
+        let side = match self.frame.orientation {
+            DockOrientation::Bottom => PopupAnchor::Top,
+            DockOrientation::Left => PopupAnchor::Right,
+            DockOrientation::Right => PopupAnchor::Left,
+        };
+        pop_up_menu(items, anchor, side, run, move || {
+            let (mut menu_open, mut hovering, mut shown) =
+                (self.menu_open, self.hovering, self.shown);
+            menu_open.set(false);
+            hovering.set(false);
+            if self.autohide {
+                shown.set(false);
+            }
+        });
     }
 }
 

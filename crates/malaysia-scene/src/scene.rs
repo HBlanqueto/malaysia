@@ -215,6 +215,11 @@ impl Scene {
         chain
     }
 
+    pub fn popup_on_layer(&self, id: PopupId) -> bool {
+        let root = self.popup_ancestors(id).last().copied().unwrap_or(id);
+        self.popup_parent(root) == Some(PopupParent::Layer)
+    }
+
     pub fn popup_subtree(&self, id: PopupId) -> Vec<PopupId> {
         let mut subtree = vec![id];
         loop {
@@ -603,6 +608,28 @@ mod tests {
         assert_eq!(scene.popup_ancestors(sub), vec![root]);
         assert_eq!(scene.popup_ancestors(root), Vec::<PopupId>::new());
         assert_eq!(scene.popup_subtree(root), vec![root, sub]);
+    }
+
+    #[test]
+    fn a_submenu_of_a_shell_menu_is_on_a_layer_and_a_window_menu_is_not() {
+        let mut scene = Scene::new();
+        let window = WindowId::new(1);
+        let (dock_menu, submenu, window_menu) = (PopupId::new(2), PopupId::new(3), PopupId::new(4));
+        scene.insert(window, rect(0.0, 0.0, 200.0, 200.0));
+        scene.insert_popup(dock_menu, PopupParent::Layer, rect(0.0, 0.0, 100.0, 80.0));
+        scene.insert_popup(
+            submenu,
+            PopupParent::Popup(dock_menu),
+            rect(100.0, 0.0, 100.0, 80.0),
+        );
+        scene.insert_popup(
+            window_menu,
+            PopupParent::Window(window),
+            rect(50.0, 50.0, 100.0, 80.0),
+        );
+        assert!(scene.popup_on_layer(dock_menu));
+        assert!(scene.popup_on_layer(submenu));
+        assert!(!scene.popup_on_layer(window_menu));
     }
 
     #[test]

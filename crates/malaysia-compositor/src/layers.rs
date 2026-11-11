@@ -29,10 +29,14 @@ impl LayerEntry {
     }
 
     pub fn is_shell_chrome(&self) -> bool {
+        let side_dock = self.anchors.contains(Anchor::TOP | Anchor::BOTTOM)
+            && self.anchors.contains(Anchor::LEFT) != self.anchors.contains(Anchor::RIGHT)
+            && self.exclusive_zone > 0;
         self.is_desktop_bar()
             || (matches!(self.layer, Layer::Top | Layer::Overlay)
-                && self.anchors.contains(Anchor::BOTTOM)
-                && !self.anchors.contains(Anchor::TOP))
+                && (side_dock
+                    || self.anchors.contains(Anchor::BOTTOM)
+                        && !self.anchors.contains(Anchor::TOP)))
     }
 }
 

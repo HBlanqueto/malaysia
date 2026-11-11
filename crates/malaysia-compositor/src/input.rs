@@ -1298,9 +1298,16 @@ impl State {
         let under = if blocked {
             None
         } else {
-            layer_under
-                .or(popup_under)
-                .or_else(|| self.windows.surface_under(location, &self.minimized))
+            let layer_popup = self
+                .windows
+                .popup_under(location)
+                .is_some_and(|id| self.windows.popup_on_layer(id));
+            if layer_popup {
+                popup_under.or(layer_under)
+            } else {
+                layer_under.or(popup_under)
+            }
+            .or_else(|| self.windows.surface_under(location, &self.minimized))
         };
 
         let serial = SERIAL_COUNTER.next_serial();

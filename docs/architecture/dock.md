@@ -38,27 +38,33 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
    name label. The exclusive zone is only the bar, so windows do not move
    when icons grow; with `autohide` it is 0. `set_input_region` takes the
    pointer on the bar only (on the magnified icons while the pointer is
-   there), so clicks above it reach the windows. `set_blur_region` blurs
-   behind the bar.
-5. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
+   there), so clicks above it reach the windows.
+5. **Frame.** The bar is a card (ADR 0068): `set_card_frames` gives it the
+   window frame, outer border, inner line and shadow, around a continuous
+   corner of `DOCK_RADIUS` × its thickness, and the client draws the bar with
+   the same corner. `set_blur_region` blurs behind it, clipped to that corner.
+6. **Tiles.** The icon comes from the icon theme (`launcher::load_icon`),
    with the `LauncherEntry` badge and progress. A dot under the icon marks an
    open app (`show-process-indicators`). The name label shows over the icon
    under the pointer.
-6. **Clicks.** A click on an open app activates its first visible window, or
+7. **Clicks.** A click on an open app activates its first visible window, or
    restores a minimized one. On a closed app it launches the `.desktop`
    entry with an activation token; with `launchanim` the icon bounces until a
    window of the app appears or `DOCK_LAUNCH_TIMEOUT_MS` passes. A minimized
    window tile restores that window. Downloads and Trash open in the file
    manager (`xdg-open`).
-7. **Menus.** A secondary click on an app lists its windows, Options › Keep
-   in Dock, and Hide and Quit (or Open). On the separator it turns hiding and
-   magnification on or off, sets the position and the minimize effect, and
-   opens Dock Settings. These write `dock.domain`.
-8. **Dragging.** Dragging the separator changes `tilesize`. Dragging an app
+8. **Menus.** A secondary click opens the menu beside the icon, centred on
+   it, toward the screen (`pop_up_menu`): above it on a bottom Dock. The Dock
+   stays up and magnified until the menu closes. On an app it lists the
+   windows, Options › Keep in Dock, and Hide and Quit (or Open). On the
+   separator it turns hiding and magnification on or off, sets the position
+   and the minimize effect, and opens Dock Settings; these write
+   `dock.domain`.
+9. **Dragging.** Dragging the separator changes `tilesize`. Dragging an app
    along the Dock moves it among the kept apps; dragging it away shows
    Remove and takes it out of `persistent-apps`. An open app stays until it
    quits.
-9. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
+10. **Hiding.** With `autohide`, the bar slides off the edge when the pointer
    leaves. A strip of `DOCK_REVEAL_STRIP` px at the edge takes the pointer;
    after `autohide-delay` seconds the bar slides back in. The slide lasts
    `DOCK_HIDE_MS` × `autohide-time-modifier`.
@@ -66,6 +72,12 @@ dock.domain + dock.state ──► items ──► layout ──► bk layer sur
 ## Compositor side
 
 `ext-foreign-toplevel-list-v1` uses Smithay's state; `zwlr_foreign_toplevel_management_v1` is served by hand (Smithay 0.7 does not ship it), announces the existing windows on bind and each request acts on its window.
+
+A popup whose root parent is a layer surface, such as a Dock menu, is drawn
+above the `Top` and `Overlay` layers and takes the pointer before them; the
+popups of windows stay below the shell. A card's blur is clipped to its
+corner. A Dock on the left or right counts as shell chrome while it reserves
+space, so focus spaces hide it like the bottom one.
 
 ## Divergences
 

@@ -309,6 +309,16 @@ fn append_desktop<R: MalaysiaRenderer>(
             elements,
         );
     }
+    // A shell menu (the Dock's) opens over its own layer surface, so it goes above the layers.
+    let layer_popups: Vec<_> = state
+        .windows
+        .iter_popups()
+        .map(|(id, _, _)| id)
+        .filter(|id| state.windows.popup_on_layer(*id))
+        .collect();
+    append_popups(state, renderer, scale, elements, |id| {
+        layer_popups.contains(&id)
+    });
     append_layers(
         state,
         renderer,
@@ -323,7 +333,9 @@ fn append_desktop<R: MalaysiaRenderer>(
     );
     crate::popup_fade::append(state, Instant::now(), elements);
     append_ime_popups(state, renderer, scale, elements);
-    append_popups(state, renderer, scale, elements, |_| true);
+    append_popups(state, renderer, scale, elements, |id| {
+        !layer_popups.contains(&id)
+    });
     if let (Some(frame), Some(drop)) = (reveal, reveal_drop)
         && frame.titlebar
     {
@@ -1178,7 +1190,15 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
                     Kind::Unspecified,
                 );
             if let Some(cards) = crate::window_style::cards(&surface) {
-                append_cards(state, &cards, rect, surface_elements, scale, elements);
+                append_cards(
+                    state,
+                    &surface,
+                    &cards,
+                    rect,
+                    surface_elements,
+                    scale,
+                    elements,
+                );
                 continue;
             }
             let Some(alert) = crate::window_style::alert_layer(&surface) else {
@@ -1231,6 +1251,7 @@ pub(crate) fn append_layers<R: MalaysiaRenderer>(
 // ADR 0068: a layer surface's cards get the window frame; the client draws the card itself.
 fn append_cards<R: MalaysiaRenderer>(
     state: &mut State,
+    surface: &WlSurface,
     cards: &crate::window_style::Cards,
     surface_rect: Rectangle<i32, Logical>,
     surface_elements: Vec<WaylandSurfaceRenderElement<R>>,
@@ -1238,6 +1259,7 @@ fn append_cards<R: MalaysiaRenderer>(
     elements: &mut Vec<OutputRenderElement<R>>,
 ) {
     let mut borders = Vec::new();
+    let mut backdrops = Vec::new();
     let mut shadows = Vec::new();
     for (index, card) in cards.rects.iter().enumerate() {
         let card = Rectangle::new(surface_rect.loc + card.loc, card.size);
@@ -1253,6 +1275,15 @@ fn append_cards<R: MalaysiaRenderer>(
             bordered: true,
             arrow: crate::effects::Arrow::default(),
         };
+        backdrops.extend(crate::blur::backdrop(
+            state,
+            surface,
+            surface_rect.loc,
+            frame.rect,
+            frame.radius,
+            exponent,
+            scale,
+        ));
         let (outer, inner, shadow) = frame_decorations(state, &frame, scale);
         borders.extend(outer);
         borders.extend(inner);
@@ -1260,6 +1291,7 @@ fn append_cards<R: MalaysiaRenderer>(
     }
     elements.extend(borders);
     elements.extend(surface_elements.into_iter().map(|e| e.into()));
+    elements.extend(backdrops);
     elements.extend(shadows);
 }
 
