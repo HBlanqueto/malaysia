@@ -20,7 +20,7 @@ use ctappearance::{
     thumbnail_path, wallpaper_colors, wallpaper_config_path, wallpaper_selection_path,
     wallpapers_in, write_wallpaper_config, write_wallpaper_selection,
 };
-use ctdesign::{ACCENT_SWATCHES, DESKTOP_CLEAR, FOCUS_RING, SETTINGS};
+use ctdesign::{ACCENT_SWATCHES, DESKTOP_CLEAR, FOCUS_RING, HAIRLINE, LIST_GROUP, SETTINGS};
 use torin::prelude::{Content, Gaps, Position};
 
 use crate::collection::CollectionDraft;
@@ -51,6 +51,7 @@ pub struct Wallpaper {
     pub collections: State<WallpaperConfig>,
     pub cropping: State<Option<CropDraft>>,
     pub editing: State<Option<CollectionDraft>>,
+    pub choosing: State<Option<(CollectionDraft, bool)>>,
     adding_color: State<Option<Rgba>>,
     expanded: State<std::collections::BTreeSet<String>>,
     filter: State<String>,
@@ -67,6 +68,7 @@ pub fn use_wallpaper() -> Wallpaper {
         }),
         cropping: use_state(|| None),
         editing: use_state(|| None),
+        choosing: use_state(|| None),
         adding_color: use_state(|| None),
         expanded: use_state(Default::default),
         filter: use_state(String::new),
@@ -568,57 +570,64 @@ fn hero(
     };
     let detail = edited.map(|number| intern(tr!("wallpaper-only-on", desktop = number)));
     let scale = selection.scale_for(desktop);
-    let mut section = Section::new().illustration(Hero {
-        preview: preview(shown.as_deref(), look),
-        name,
-        detail,
-        scale,
-    });
     let kind = shown.as_deref().and_then(WallpaperKind::of);
     let is_color = items
         .iter()
         .any(|item| item.group == Group::Colors && item.file == shown);
     let dynamic = shown.as_deref().is_none_or(is_dynamic);
-    match &source {
-        WallpaperSource::ShuffleColors | WallpaperSource::ShuffleCollection(_) => {
-            section = section.row(Row::new(tr!("wallpaper-change")).control(shuffle_button(
-                selection.shuffle,
-                wallpaper,
-                error,
-            )));
-        }
-        _ if is_color || kind == Some(WallpaperKind::Shader) => {}
-        _ => {
-            if dynamic {
-                section = section.row(
-                    Row::new(tr!("wallpaper-mode")).control(mode_button(still, wallpaper, error)),
-                );
-            }
-            let framed = CropDraft::new(shown.as_deref(), edited, selection, look);
-            section = section.row(
-                Row::new(tr!("wallpaper-scale"))
-                    .control(scale_button(scale, framed, edited, wallpaper, error)),
-            );
-        }
+    let shuffled = matches!(
+        source,
+        WallpaperSource::ShuffleColors | WallpaperSource::ShuffleCollection(_)
+    );
+    let framed = !shuffled && !is_color && kind != Some(WallpaperKind::Shader);
+    let scale_control = || {
+        let draft = CropDraft::new(shown.as_deref(), edited, selection, look);
+        scale_button(scale, draft, edited, wallpaper, error).into_element()
+    };
+    let first = if shuffled {
+        Some(shuffle_button(selection.shuffle, wallpaper, error).into_element())
+    } else if framed && dynamic {
+        Some(mode_button(still, wallpaper, error).into_element())
+    } else if framed {
+        Some(scale_control())
+    } else {
+        None
+    };
+    let mut rows = vec![HeroRow {
+        title: name,
+        detail,
+        control: first,
+    }];
+    if framed && dynamic {
+        rows.push(HeroRow {
+            title: tr!("wallpaper-scale"),
+            detail: None,
+            control: Some(scale_control()),
+        });
     }
     if matches!(kind, Some(WallpaperKind::Video | WallpaperKind::Shader)) {
         let selection_state = wallpaper.selection;
-        section = section.row(
-            Row::new(tr!("wallpaper-play")).control(
+        rows.push(HeroRow {
+            title: tr!("wallpaper-play"),
+            detail: None,
+            control: Some(
                 Switch::new(tr!("wallpaper-play"))
                     .on(!selection.paused_for(desktop))
                     .on_toggle(move |playing: bool| {
                         let mut next = selection_state.peek().clone();
                         next.set_paused(edited_desktop(&next), !playing);
                         save(selection_state, next, error);
-                    }),
+                    })
+                    .into_element(),
             ),
-        );
+        });
     }
     if let Some(number) = desktop {
         let selection_state = wallpaper.selection;
-        section = section.row(
-            Row::new(tr!("wallpaper-all-desktops")).control(
+        rows.push(HeroRow {
+            title: tr!("wallpaper-all-desktops"),
+            detail: None,
+            control: Some(
                 Switch::new(tr!("wallpaper-all-desktops"))
                     .on(edited.is_none())
                     .on_toggle(move |all: bool| {
@@ -629,11 +638,16 @@ fn hero(
                             next.make_own(number);
                         }
                         save(selection_state, next, error);
-                    }),
+                    })
+                    .into_element(),
             ),
-        );
+        });
     }
-    section
+    Section::new().illustration(Hero {
+        preview: preview(shown.as_deref(), look),
+        scale,
+        rows,
+    })
 }
 
 fn toolbar(wallpaper: Wallpaper, collections: &WallpaperConfig) -> Section {
@@ -850,16 +864,23 @@ fn grid(items: Vec<Element>) -> Rect {
 }
 
 #[derive(PartialEq)]
+struct HeroRow {
+    title: &'static str,
+    detail: Option<&'static str>,
+    control: Option<Element>,
+}
+
+#[derive(PartialEq)]
 struct Hero {
     preview: Option<PathBuf>,
-    name: &'static str,
-    detail: Option<&'static str>,
     scale: WallpaperScale,
+    rows: Vec<HeroRow>,
 }
 
 impl Component for Hero {
     fn render(&self) -> impl IntoElement {
         let metrics = SETTINGS.wallpaper;
+        let palette = Palette::current();
         let width = metrics.preview_width as f32;
         let height = width * metrics.tile_height as f32 / metrics.tile_width as f32;
         let aspect = match self.scale {
@@ -867,17 +888,50 @@ impl Component for Hero {
             WallpaperScale::Fit | WallpaperScale::Center => AspectRatio::Min,
             WallpaperScale::Stretch => AspectRatio::None,
         };
-        let gap = SETTINGS.card_gap as f32;
+        let rows = self.rows.iter().enumerate().map(|(index, row)| {
+            let labels = VStack::new()
+                .width(Size::flex(1.0))
+                .cross_align(Alignment::Start)
+                .child(Text::new(row.title))
+                .maybe_child(
+                    row.detail
+                        .map(|detail| text(detail, CAPTION, palette.secondary_label)),
+                );
+            HStack::new()
+                .width(Size::fill())
+                .min_height(Size::px(LIST_GROUP.row_min_height))
+                .content(Content::flex())
+                .cross_align(Alignment::Center)
+                .spacing(SPACE_3)
+                .maybe(index > 0, |row| {
+                    row.border(
+                        Border::new()
+                            .fill(color(palette.separator))
+                            .width(BorderWidth {
+                                top: HAIRLINE,
+                                right: 0.0,
+                                bottom: 0.0,
+                                left: 0.0,
+                            })
+                            .alignment(BorderAlignment::Inner),
+                    )
+                })
+                .child(labels)
+                .maybe_child(row.control.clone())
+                .into_element()
+        });
         HStack::new()
-            .padding(Gaps::new_all(gap))
-            .spacing(gap)
+            .width(Size::fill())
+            .content(Content::flex())
+            .padding(Gaps::new_all(SPACE_3))
+            .spacing(SPACE_3)
             .cross_align(Alignment::Center)
             .child(
                 rect()
                     .key(format!("{:?}", self.preview))
                     .corner_radius(SETTINGS.card_radius as f32)
                     .overflow(Overflow::Clip)
-                    .background(color(DESKTOP_CLEAR))
+                    .background(color(palette.control_background))
                     .width(Size::px(width))
                     .height(Size::px(height))
                     .maybe_child(self.preview.clone().map(|path| Artwork {
@@ -885,18 +939,24 @@ impl Component for Hero {
                         width,
                         height,
                         aspect,
-                    })),
-            )
-            .child(
-                VStack::new()
-                    .spacing(SPACE_1)
-                    .child(Text::new(self.name).font(HEADLINE))
-                    .maybe_child(
-                        self.detail.map(|detail| {
-                            text(detail, CALLOUT, Palette::current().secondary_label)
-                        }),
+                    }))
+                    .child(
+                        // Freya paints by layer (one more per level): the image sits three levels down.
+                        rect()
+                            .layer(3)
+                            .position(Position::new_absolute())
+                            .width(Size::px(width))
+                            .height(Size::px(height))
+                            .corner_radius(SETTINGS.card_radius as f32)
+                            .border(
+                                Border::new()
+                                    .fill(color(SETTINGS.card_outline))
+                                    .width(HAIRLINE / 2.0)
+                                    .alignment(BorderAlignment::Inner),
+                            ),
                     ),
             )
+            .child(VStack::new().width(Size::flex(1.0)).children(rows))
     }
 }
 

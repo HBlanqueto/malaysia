@@ -32,38 +32,61 @@ impl CollectionDraft {
 }
 
 pub fn add(wallpaper: Wallpaper, action: &str) {
-    let mut editing = wallpaper.editing;
-    let folders = action == "folder";
     if action == "empty" {
+        let mut editing = wallpaper.editing;
         editing.set(Some(CollectionDraft::default()));
         return;
     }
-    choose(editing, CollectionDraft::default(), folders);
+    choose(wallpaper, CollectionDraft::default(), action == "folder");
 }
 
-fn choose(mut editing: State<Option<CollectionDraft>>, draft: CollectionDraft, folders: bool) {
+fn choose(wallpaper: Wallpaper, draft: CollectionDraft, folders: bool) {
+    let mut choosing = wallpaper.choosing;
+    choosing.set(Some((draft, folders)));
+}
+
+// A task spawned from a menu dies with the menu's surface; the window owns the portal request.
+#[derive(PartialEq)]
+pub struct FilePicker {
+    pub wallpaper: Wallpaper,
+}
+
+impl Component for FilePicker {
+    fn render(&self) -> impl IntoElement {
+        let wallpaper = self.wallpaper;
+        use_side_effect(move || {
+            let mut choosing = wallpaper.choosing;
+            let Some((draft, folders)) = choosing.read().clone() else {
+                return;
+            };
+            choosing.set(None);
+            spawn_in_window(pick(wallpaper.editing, draft, folders));
+        });
+        rect()
+    }
+}
+
+async fn pick(mut editing: State<Option<CollectionDraft>>, draft: CollectionDraft, folders: bool) {
     let title = if folders {
         tr!("collection-add-folder")
     } else {
         tr!("collection-add-images")
     };
-    spawn(async move {
-        let Some(chosen) = bk::portal::open_files(title, !folders, folders).await else {
-            return;
-        };
-        let mut next = draft;
-        let list = if folders {
-            &mut next.folders
-        } else {
-            &mut next.images
-        };
-        for path in chosen {
-            if !list.contains(&path) {
-                list.push(path);
-            }
+    let Some(chosen) = bk::portal::open_files(title, !folders, folders).await else {
+        return;
+    };
+    let mut next = draft;
+    let list = if folders {
+        &mut next.folders
+    } else {
+        &mut next.images
+    };
+    for path in chosen {
+        if !list.contains(&path) {
+            list.push(path);
         }
-        editing.set(Some(next));
-    });
+    }
+    editing.set(Some(next));
 }
 
 fn fallback_name(draft: &CollectionDraft) -> String {
@@ -325,12 +348,12 @@ impl Component for CollectionEditor {
             .child(
                 Button::system_image(tr!("collection-add-folder"), Symbol::Folder)
                     .size(ControlSize::Small)
-                    .on_press(move |_| choose(editing, with_folder.clone(), true)),
+                    .on_press(move |_| choose(wallpaper, with_folder.clone(), true)),
             )
             .child(
                 Button::system_image(tr!("collection-add-images"), Symbol::Photo)
                     .size(ControlSize::Small)
-                    .on_press(move |_| choose(editing, with_images.clone(), false)),
+                    .on_press(move |_| choose(wallpaper, with_images.clone(), false)),
             );
         let saved = draft.clone();
         let empty = draft.folders.is_empty() && draft.images.is_empty();

@@ -202,6 +202,7 @@ pub fn settings_window(
         .maybe_child(pairing_sheet(pairing))
         .maybe_child(crop_sheet(wallpaper, error))
         .maybe_child(collection_sheet(wallpaper, error))
+        .child(crate::collection::FilePicker { wallpaper })
         .maybe_child(color_sheet(wallpaper, error))
         .maybe_child(confirm(confirming_own_themes, error))
         .children(failures.into_iter().filter_map(failure_alert))
