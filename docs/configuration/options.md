@@ -32,9 +32,11 @@ directories — preferences and state:
 └── debug.domain
 
 ~/.local/share/malaysia/       ← ~/Library/Application Support
-├── wallpaper-selection.state ← current wallpaper per desktop ([desktops]), like
+├── wallpaper-selection.state ← current wallpaper per desktop and display, like
 │                            com.apple.wallpaper
-├── wallpaper.state        ← dominant wallpaper color (written by malaysia-wallpaper)
+├── wallpaper.state        ← dominant color, tint grids, displays and the shuffled
+│                            wallpaper (written by malaysia-wallpaper)
+├── wallpapers/colors/     ← the user's own color wallpapers (System Settings)
 ├── recents.state          ← Recent Items of the ❄ menu: `apps` (app ids) and
 │                            `cleared_at` (unix; «Clear Menu»), written by the menubar
 └── notifications.state    ← delivered notifications, `next_id` and the active `focus`,
@@ -300,62 +302,87 @@ include the pointer. The clipboard is `image/png` and the compositor serves it; 
 
 | Option | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `wallpaper.dir` | string (path) | `/run/current-system/sw/share/wallpapers/solid-colors` | pending | `malaysia-wallpaper`, settings app |
-| `wallpaper.shuffle` | bool | `false` | pending | `malaysia-wallpaper` |
-
-**Malaysia's wallpapers live in the project itself** (`share/wallpapers/solid-colors/`,
-the macOS "Solid Colors" set, vendored in the repo) and the flake installs them as system
-data in `/run/current-system/sw/share/wallpapers/`, just as GNOME installs
-its own in `/usr/share/backgrounds`. `wallpaper.dir` points there by default; a
-development setup can point it at the repo or another folder. The
-**`malaysia-wallpaper`** component draws the wallpaper on the `Background` layer with the
-images from that folder (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
-
-**The default wallpaper is `collapse.heic`**: a square 6016×6016 HEIC with a
-light and a dark image, embedded in the `malaysia-wallpaper` binary (it shows
-the light one; following the appearance is block 16c). `malaysia-wallpaper`
-decodes PNG, JPEG and HEIF (libheif). It is the one shown when the store picks
-none, does not exist yet, or the selection points to a file that does not exist
-or does not decode. If `wallpaper.dir` points to another folder and there is no
-selection, `collapse.heic` still shows.
-
-`malaysia-dream.heic` (one salmon color, `#e16e79`) is an installed wallpaper
-like the others. System Settings cannot decode HEIC, so each HEIC in
-`share/wallpapers/` has a JPEG of the same name in `previews/`, and so does the
-embedded default (`previews/collapse.jpg`).
-
-**Like macOS, the current selection lives in a separate store**:
-`~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of `~/Library/Application
-Support`, where macOS keeps `com.apple.wallpaper`) — per desktop, with a `file://`
-to the image:
+| `wallpaper.collections` | array of `{ name, folders, images }` | none | **active** | `malaysia-wallpaper` (shuffle), **System Settings › Wallpaper** («Add…», «Edit…») |
 
 ```toml
-# ~/.local/share/malaysia/wallpaper-selection.state  (current selection, per desktop)
-scale = "custom"   # "fill" (default), "fit", "stretch", "center" or "custom"
+# ~/.config/malaysia/wallpaper.domain
+[[collections]]
+name = "Viajes"
+folders = ["/home/ana/Pictures/Viajes"]
+images = ["/home/ana/Pictures/faro.jpg"]
+```
+
+**Malaysia's wallpapers live in the project itself** (`share/wallpapers/`,
+with the macOS "Solid Colors" set in `solid-colors/`, vendored in the repo)
+and the flake installs them as system data in
+`/run/current-system/sw/share/wallpapers/`, just as GNOME installs its own in
+`/usr/share/backgrounds`. System Settings lists the first
+`$XDG_DATA_DIRS/wallpapers`: HEIC files with a light and a dark still go to
+Dynamic, videos and GLSL shaders to Animated, the other images to Images,
+`solid-colors/` and the user's colors to Colors (ADR 0073). The
+**`malaysia-wallpaper`** component draws the wallpaper on the `Background`
+layer (ADR 0049; **Vulkan**/wgpu render presented through dmabuf).
+
+**The default wallpaper is `collapse.heic`**: a square 6016×6016 HEIC with a
+light and a dark image, embedded in the `malaysia-wallpaper` binary; it
+follows the appearance. `malaysia-wallpaper` decodes PNG, JPEG, HEIF
+(libheif), MP4, MOV, WebM and MKV (GStreamer) and GLSL shaders (`.frag`,
+`.glsl`, Shadertoy's `mainImage`). Collapse shows when the store picks none,
+does not exist yet, or the selection points to a file that does not exist or
+does not decode. `malaysia-dream.heic` (one salmon color, `#e16e79`) is the
+first color.
+
+System Settings cannot decode HEIC, video or GLSL, so `malaysia-wallpaper`
+writes their previews: freedesktop thumbnails in
+`~/.cache/thumbnails/x-large/` and the light and dark stills of a dynamic HEIC
+in `~/.cache/malaysia/wallpaper-frames/`. The embedded default has
+`previews/collapse-light.jpg` and `previews/collapse-dark.jpg`.
+
+**Like macOS, the current selection lives in a separate store**:
+`~/.local/share/malaysia/wallpaper-selection.state` (the equivalent of
+`~/Library/Application Support`, where macOS keeps `com.apple.wallpaper`).
+Each map is keyed by desktop number, or `default` for every desktop; a crop
+can also be keyed `"<desktop>/<display>"`:
+
+```toml
+# ~/.local/share/malaysia/wallpaper-selection.state
+scale = "custom"     # "fill" (default), "fit", "stretch", "center" or "custom"
+shuffle = "daily"    # "login", "hourly" (default) or "daily"
 
 [desktops]
-default = "file:///home/.../Solid Colors/Solid Mint.png"   # optional; without this line, collapse.heic
+default = "file:///run/current-system/sw/share/wallpapers/bandura.jpg"
+2 = "shuffle:collection:Viajes"   # or "builtin", "shuffle:colors", a file:// URI
+
+[scales]
+2 = "fill"
 
 [crop]
-default = [0.2, 0.15, 0.55, 0.62]   # with "custom": x, y, width, height of the image (0–1)
+default = [0.2, 0.15, 0.55, 0.62]            # x, y, width, height of the image (0–1)
+"default/HDMI-A-1" = [0.3, 0.1, 0.5, 0.62]   # this display only
+
+[appearance]
+default = "dark"   # a dynamic wallpaper kept on its "light" or "dark" image
 ```
 
 | Key | Type | Default | Status | Consumed by |
 |---|---|---|---|---|
-| `scale` | `"fill"` \| `"fit"` \| `"stretch"` \| `"center"` \| `"custom"` | `"fill"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Scale to screen») |
-| `desktops.default` | `file://` URI | none (Malaysia Dream) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** |
-| `crop.default` | `[x, y, width, height]`, fractions of the image | none | **active** | `malaysia-wallpaper` with `custom`, **System Settings › Wallpaper** («Custom framing…») |
+| `scale`, `scales.<desktop>` | `"fill"` \| `"fit"` \| `"stretch"` \| `"center"` \| `"custom"` | `"fill"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Scale to screen») |
+| `desktops.<desktop>` | `builtin`, `file://` URI, `shuffle:colors`, `shuffle:collection:<name>` | none (Collapse) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** |
+| `crop.<desktop>`, `crop."<desktop>/<display>"` | `[x, y, width, height]`, fractions of the image | none | **active** | `malaysia-wallpaper` with `custom`, **System Settings › Wallpaper** («Custom framing…») |
+| `appearance.<desktop>` | `"light"` \| `"dark"` | none (Automatic) | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Mode») |
+| `shuffle` | `"login"` \| `"hourly"` \| `"daily"` | `"hourly"` | **active** | `malaysia-wallpaper`, **System Settings › Wallpaper** («Change Picture») |
 
 `ctappearance::WallpaperSelection` reads and writes this file for both
-(ADR 0072). With `custom`, the crop covers the screen like `fill`. Choosing
-another wallpaper removes the crop and turns `custom` into `fill`.
+(ADRs 0072 and 0073). A desktop without its own line shows the shared
+wallpaper with its scale, crop and appearance. With `custom`, the crop covers
+the screen like `fill`. Choosing another wallpaper removes its crops and
+turns `custom` into `fill`.
 
-Editing that file changes the wallpaper **live** (`malaysia-wallpaper` watches the
-store and repaints). The preferences above (`dir`, `shuffle`) go in
-`~/.config/malaysia/wallpaper.domain` once they are read; the catalog is in the
-system (`share/wallpapers/`). On a wallpaper change, the client writes the dominant
-color to `wallpaper.state` (`dominant = [r, g, b]`) for the window tint
-and the portal's `accent-color`.
+Editing either file changes the wallpaper **live** (`malaysia-wallpaper`
+watches them and repaints). The client writes `wallpaper.state`: the
+dominant color for the window tint and the portal's `accent-color`, a tint
+grid per desktop, the displays (`outputs`) and the shuffled wallpaper of each
+desktop (`shown`, `shuffled_at`).
 
 ## `dock` — shell dock (`malaysia-shell dock`; macOS `com.apple.dock`)
 

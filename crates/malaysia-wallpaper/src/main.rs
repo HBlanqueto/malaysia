@@ -1,6 +1,11 @@
+mod dynamic;
 mod framing;
 mod image;
 mod render;
+mod shader;
+mod source;
+mod thumbnails;
+mod video;
 mod wayland;
 
 use std::io::IsTerminal;

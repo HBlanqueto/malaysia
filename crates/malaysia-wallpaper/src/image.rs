@@ -1,10 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use ctappearance::ALL_DESKTOPS;
 use ctappearance::tinting::WallpaperGrid;
 use ctdesign::Rgba;
-
-use crate::framing::Framing;
 
 pub const DEFAULT_WALLPAPER_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -23,116 +20,10 @@ pub struct DecodedImage {
     pub pixels: Pixels,
 }
 
-#[derive(Clone, Default, PartialEq)]
-pub struct Wallpaper {
-    pub selection: Option<PathBuf>,
-    pub framing: Framing,
-    pub image: Option<DecodedImage>,
-}
-
-pub fn reload(current: &Wallpaper, store_path: &Path, state_path: &Path) -> Wallpaper {
-    let (selection, framing) = match load_wallpaper(store_path) {
-        Ok(selection) => selection,
-        Err(error) => {
-            tracing::error!(%error, "cannot read wallpaper store");
-            return current.clone();
-        }
-    };
-
-    let (selection, decoded) = match selection {
-        Some(path) => {
-            if current.selection.as_ref() == Some(&path) {
-                return Wallpaper {
-                    framing,
-                    ..current.clone()
-                };
-            }
-            tracing::info!(?path, "loading wallpaper");
-            match decode_image(&path) {
-                Ok(decoded) => (Some(path), decoded),
-                Err(error) => {
-                    tracing::error!(?path, %error, "failed to decode wallpaper");
-                    if current.selection.is_some() {
-                        return current.clone();
-                    }
-                    load_default_image()
-                }
-            }
-        }
-        None => load_default_image(),
-    };
-
-    let state = ctappearance::WallpaperState {
-        dominant: dominant(&decoded).map(|color| [color.r, color.g, color.b]),
-        grid: grid(&decoded),
-    };
-    if let Err(error) = ctappearance::write_wallpaper_state(state_path, &state) {
-        tracing::error!(%error, "failed to write the state");
-    }
-    Wallpaper {
-        image: Some(decoded),
-        selection,
-        framing,
-    }
-}
-
-fn load_default_image() -> (Option<PathBuf>, DecodedImage) {
-    match decode_image_bytes(DEFAULT_WALLPAPER_BYTES) {
-        Ok(decoded) => (None, decoded),
-        Err(error) => {
-            panic!("embedded default wallpaper is corrupt: {error}")
-        }
-    }
-}
-
-pub fn load_wallpaper(store_path: &Path) -> anyhow::Result<(Option<PathBuf>, Framing)> {
-    let selection = ctappearance::read_wallpaper_selection(store_path)?;
-    let path = selection
-        .desktops
-        .get(ALL_DESKTOPS)
-        .and_then(|url| file_url_to_path(url));
-    let framing = Framing {
-        scale: selection.scale,
-        crop: selection.crop.get(ALL_DESKTOPS).copied(),
-    };
-    Ok((path, framing))
-}
-
-fn file_url_to_path(url: &str) -> Option<PathBuf> {
-    let rest = url.strip_prefix("file://")?;
-    let bytes = percent_decode(rest.as_bytes());
-    Some(PathBuf::from(String::from_utf8_lossy(&bytes).into_owned()))
-}
-
-fn percent_decode(bytes: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%'
-            && i + 2 < bytes.len()
-            && let (Some(h), Some(l)) = (hex(bytes[i + 1]), hex(bytes[i + 2]))
-        {
-            out.push(h * 16 + l);
-            i += 3;
-            continue;
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    out
-}
-
-fn hex(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
-}
-
-pub fn decode_image(path: &Path) -> anyhow::Result<DecodedImage> {
-    decode_image_bytes(&std::fs::read(path)?)
+pub fn is_heif(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("heic") || ext.eq_ignore_ascii_case("heif"))
 }
 
 pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
@@ -142,7 +33,7 @@ pub fn decode_image_bytes(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
         decode_jpeg(bytes)
     } else if bytes.get(4..8) == Some(b"ftyp") {
-        decode_heif(bytes)
+        decode_heif(bytes, None)
     } else {
         anyhow::bail!("unsupported image format (expected PNG, JPEG or HEIF)")
     };
@@ -249,11 +140,21 @@ pub fn decode_jpeg(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
     })
 }
 
-pub fn decode_heif(bytes: &[u8]) -> anyhow::Result<DecodedImage> {
+pub fn decode_heif(bytes: &[u8], image: Option<usize>) -> anyhow::Result<DecodedImage> {
     use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
 
     let context = HeifContext::read_from_bytes(bytes)?;
-    let handle = context.primary_image_handle()?;
+    let handle = match image {
+        Some(index) => {
+            let id = context
+                .image_ids()
+                .get(index)
+                .copied()
+                .ok_or_else(|| anyhow::anyhow!("the HEIF file has no image {index}"))?;
+            context.image_handle(id)?
+        }
+        None => context.primary_image_handle()?,
+    };
     let image = LibHeif::new().decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None)?;
     let plane = image
         .planes()
@@ -372,7 +273,7 @@ pub fn dominant(image: &DecodedImage) -> Option<Rgba> {
     ctappearance::backdrop::dominant_from_pixels(&samples)
 }
 
-fn grid(image: &DecodedImage) -> Option<WallpaperGrid> {
+pub fn grid(image: &DecodedImage) -> Option<WallpaperGrid> {
     let small = image.downscale_to_fit(ctdesign::BACKDROP.samples);
     let (width, height) = (small.size.0 as usize, small.size.1 as usize);
     let rgba8: Vec<u8> = (0..width * height)
@@ -383,90 +284,10 @@ fn grid(image: &DecodedImage) -> Option<WallpaperGrid> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use super::{Pixels, *};
     use ctdesign::Rgba;
-
-    fn scratch(name: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("malaysia-wallpaper-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    fn touch(dir: &Path, file: &str) -> PathBuf {
-        let path = dir.join(file);
-        std::fs::write(&path, b"").unwrap();
-        path
-    }
-
-    #[test]
-    fn without_a_selection_the_default_wallpaper_is_used() {
-        let dir = scratch("default");
-        let store = dir.join("wallpaper-selection.state");
-        let state = dir.join("wallpaper.state");
-        let wallpaper = reload(&Wallpaper::default(), &store, &state);
-        assert!(
-            wallpaper.image.is_some(),
-            "the embedded default should load"
-        );
-        assert!(wallpaper.selection.is_none());
-    }
-
-    #[test]
-    fn the_store_selection_wins_over_the_default() {
-        let dir = scratch("selection");
-        touch(&dir, "bandura.jpg");
-        let mint = touch(&dir, "Solid Mint.png");
-        let store = dir.join("wallpaper-selection.state");
-        std::fs::write(
-            &store,
-            format!(
-                "dir = {:?}\n[desktops]\ndefault = \"file://{}\"\n",
-                dir.to_str().unwrap(),
-                mint.to_str().unwrap()
-            ),
-        )
-        .unwrap();
-        let (path, _) = load_wallpaper(&store).unwrap();
-        assert_eq!(path, Some(mint));
-    }
-
-    #[test]
-    fn a_folder_without_selection_uses_the_embedded_default() {
-        let dir = scratch("custom");
-        touch(&dir, "Black.png");
-        touch(&dir, "Yellow.png");
-        let store = dir.join("wallpaper-selection.state");
-        std::fs::write(&store, format!("dir = {:?}\n", dir.to_str().unwrap())).unwrap();
-        let state = dir.join("wallpaper.state");
-        let wallpaper = reload(&Wallpaper::default(), &store, &state);
-        assert!(
-            wallpaper.image.is_some(),
-            "the embedded default should load"
-        );
-        assert!(wallpaper.selection.is_none());
-    }
-
-    #[test]
-    fn a_missing_selection_at_startup_uses_the_embedded_default() {
-        let dir = scratch("missing");
-        let store = dir.join("wallpaper-selection.state");
-        let state = dir.join("wallpaper.state");
-        std::fs::write(
-            &store,
-            "[desktops]\ndefault = \"file:///no/such/file.jpg\"\n",
-        )
-        .unwrap();
-        let wallpaper = reload(&Wallpaper::default(), &store, &state);
-        assert!(
-            wallpaper.image.is_some(),
-            "the embedded default should load"
-        );
-        assert!(wallpaper.selection.is_none());
-    }
 
     fn fixture_path(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -475,61 +296,7 @@ mod tests {
     }
 
     fn fixture(name: &str) -> DecodedImage {
-        decode_image(&fixture_path(name)).unwrap()
-    }
-
-    #[test]
-    fn editing_the_store_loads_the_new_selection() {
-        let dir = scratch("reload");
-        let store = dir.join("wallpaper-selection.state");
-        let state = dir.join("wallpaper.state");
-        let orange = fixture_path("orange.jpg");
-        std::fs::write(
-            &store,
-            format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
-        )
-        .unwrap();
-        let first = reload(&Wallpaper::default(), &store, &state);
-        assert_eq!(first.selection.as_ref(), Some(&orange));
-        assert!(first.image.is_some());
-
-        let second = dir.join("second.png");
-        std::fs::copy(fixture_path("orange-16.png"), &second).unwrap();
-        std::fs::write(
-            &store,
-            format!(
-                "scale = \"fit\"\n[desktops]\ndefault = \"file://{}\"\n",
-                second.display()
-            ),
-        )
-        .unwrap();
-        let reloaded = reload(&first, &store, &state);
-        assert_eq!(reloaded.selection.as_ref(), Some(&second));
-        assert_eq!(reloaded.framing.scale, ctappearance::WallpaperScale::Fit);
-        assert!(reloaded.image.is_some());
-    }
-
-    #[test]
-    fn an_unreadable_wallpaper_keeps_the_previous_image() {
-        let dir = scratch("unreadable");
-        let store = dir.join("wallpaper-selection.state");
-        let state = dir.join("wallpaper.state");
-        let orange = fixture_path("orange.jpg");
-        std::fs::write(
-            &store,
-            format!("[desktops]\ndefault = \"file://{}\"\n", orange.display()),
-        )
-        .unwrap();
-        let mut first = reload(&Wallpaper::default(), &store, &state);
-        assert!(first.image.take().is_some());
-
-        let missing = dir.join("missing.png");
-        std::fs::write(
-            &store,
-            format!("[desktops]\ndefault = \"file://{}\"\n", missing.display()),
-        )
-        .unwrap();
-        assert!(reload(&first, &store, &state) == first);
+        decode_image_bytes(&std::fs::read(fixture_path(name)).unwrap()).unwrap()
     }
 
     fn assert_orange(color: Rgba) {
@@ -618,6 +385,15 @@ mod tests {
         let image = decode_image_bytes(DEFAULT_WALLPAPER_BYTES).unwrap();
         let color = dominant(&image).expect("the default should have a dominant colour");
         assert!(color.b > color.r, "expected blue, got {color:?}");
+    }
+
+    #[test]
+    fn collapse_holds_a_dark_image_after_the_light_one() {
+        let dark = decode_heif(DEFAULT_WALLPAPER_BYTES, Some(1)).unwrap();
+        let light = decode_heif(DEFAULT_WALLPAPER_BYTES, Some(0)).unwrap();
+        let luma = |image: &DecodedImage| dominant(image).map(|c| c.r + c.g + c.b);
+        assert_eq!(dark.size, light.size);
+        assert_ne!(luma(&dark), luma(&light));
     }
 
     #[test]

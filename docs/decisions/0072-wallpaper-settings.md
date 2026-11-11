@@ -1,6 +1,7 @@
 # 0072 — Wallpaper in System Settings
 
-Status: accepted (2026-11-11).
+Status: accepted (2026-11-11). [0073](0073-wallpaper-desktops-collections-dynamic-animated.md)
+replaces points 5 and 6 and builds what consequence 2 leaves out.
 
 ## Goal and scope
 

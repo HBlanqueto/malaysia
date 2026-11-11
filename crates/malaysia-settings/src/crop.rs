@@ -3,17 +3,61 @@ use std::path::PathBuf;
 use bk::media::use_artwork;
 use bk::prelude::*;
 use bk::views::feedback::Sheet;
-use ctappearance::{ALL_DESKTOPS, WallpaperScale, WallpaperSelection};
+use ctappearance::{WallpaperOutput, WallpaperSelection, desktop_key, load_wallpaper_state};
 use ctdesign::{HAIRLINE, SETTINGS};
-use torin::prelude::Position;
+use torin::prelude::{Content, Position};
 
-use crate::localize::tr;
-use crate::wallpaper::save;
+use crate::localize::{intern, tr};
+use crate::wallpaper::{Wallpaper, save};
 
 #[derive(Clone, PartialEq)]
 pub struct CropDraft {
-    pub path: PathBuf,
-    pub crop: Option<[f32; 4]>,
+    path: PathBuf,
+    desktop: Option<u32>,
+    outputs: Vec<WallpaperOutput>,
+    crops: Vec<Option<[f32; 4]>>,
+    separate: bool,
+}
+
+impl CropDraft {
+    pub fn new(path: PathBuf, desktop: Option<u32>, selection: &WallpaperSelection) -> Self {
+        let outputs = load_wallpaper_state().outputs;
+        let owner = desktop_key(desktop.filter(|&number| selection.has_own(number)));
+        let separate = outputs.iter().any(|output| {
+            selection
+                .crop
+                .contains_key(&format!("{owner}/{}", output.name))
+        });
+        let crops = if outputs.is_empty() {
+            vec![selection.crop_for(desktop, "")]
+        } else {
+            outputs
+                .iter()
+                .map(|output| selection.crop_for(desktop, &output.name))
+                .collect()
+        };
+        Self {
+            path,
+            desktop,
+            outputs,
+            crops,
+            separate,
+        }
+    }
+
+    fn aspect(&self, output: usize) -> f32 {
+        self.outputs
+            .get(output)
+            .filter(|output| output.height > 0)
+            .map_or(SETTINGS.wallpaper.crop_aspect, |output| {
+                output.width as f32 / output.height as f32
+            })
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct Applied {
+    crops: Vec<(Option<String>, [f32; 4])>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -68,18 +112,18 @@ fn view_of(crop: Option<[f32; 4]>, image: (f32, f32), aspect: f32) -> View {
     }
 }
 
-pub fn crop_sheet(
-    mut draft: State<Option<CropDraft>>,
-    selection: State<WallpaperSelection>,
-    error: State<Option<String>>,
-) -> Option<Sheet> {
+pub fn crop_sheet(wallpaper: Wallpaper, error: State<Option<String>>) -> Option<Sheet> {
+    let mut draft = wallpaper.cropping;
+    let selection = wallpaper.selection;
     let shown = draft.read().clone()?;
+    let desktop = shown.desktop;
     Some(Sheet::new(CropEditor {
         draft: shown,
-        on_apply: Callback::new(move |crop: [f32; 4]| {
+        on_apply: Callback::new(move |applied: Applied| {
             let mut next = selection.peek().clone();
-            next.scale = WallpaperScale::Custom;
-            next.crop.insert(ALL_DESKTOPS.into(), crop);
+            for (output, crop) in &applied.crops {
+                next.set_crop(desktop, output.as_deref(), *crop);
+            }
             save(selection, next, error);
             draft.set(None);
         }),
@@ -90,7 +134,7 @@ pub fn crop_sheet(
 #[derive(PartialEq)]
 struct CropEditor {
     draft: CropDraft,
-    on_apply: Callback<[f32; 4], ()>,
+    on_apply: Callback<Applied, ()>,
     on_cancel: Callback<(), ()>,
 }
 
@@ -98,7 +142,9 @@ impl Component for CropEditor {
     fn render(&self) -> impl IntoElement {
         let metrics = SETTINGS.wallpaper;
         let artwork = use_artwork(self.draft.path.clone());
-        let mut view = use_state(|| None::<View>);
+        let mut views = use_state(|| vec![None::<View>; self.draft.crops.len()]);
+        let mut output = use_state(|| 0usize);
+        let mut separate = use_state(|| self.draft.separate);
         let mut drag = use_state(|| None::<Drag>);
         let mut origin = use_state(|| (0.0f32, 0.0f32));
         let title = Text::new(tr!("crop-title")).font(HEADLINE);
@@ -111,14 +157,25 @@ impl Component for CropEditor {
                 .into_element();
         };
         let image_size = (handle.image.width() as f32, handle.image.height() as f32);
-        let current = (*view.read())
-            .unwrap_or_else(|| view_of(self.draft.crop, image_size, metrics.crop_aspect));
-        let [x, y, w, h] = frame(
-            image_size,
-            metrics.crop_aspect,
-            current.centre,
-            zoom(current.step),
-        );
+        let shown = *output.read();
+        let aspect = self.draft.aspect(shown);
+        let draft = self.draft.clone();
+        let view_at = move |index: usize, views: &[Option<View>]| {
+            views.get(index).copied().flatten().unwrap_or_else(|| {
+                view_of(
+                    draft.crops.get(index).copied().flatten(),
+                    image_size,
+                    draft.aspect(index),
+                )
+            })
+        };
+        let current = view_at(shown, &views.read());
+        let mut view = move |next: View| {
+            if let Some(slot) = views.write().get_mut(shown) {
+                *slot = Some(next);
+            }
+        };
+        let [x, y, w, h] = frame(image_size, aspect, current.centre, zoom(current.step));
         let width = metrics.crop_width as f32;
         let height = width * image_size.1 / image_size.0;
         let local = move |x: f64, y: f64| {
@@ -126,7 +183,7 @@ impl Component for CropEditor {
             [(x as f32 - left) / width, (y as f32 - top) / height]
         };
         let move_to = move |centre: [f32; 2]| {
-            let [x, y, w, h] = frame(image_size, metrics.crop_aspect, centre, zoom(current.step));
+            let [x, y, w, h] = frame(image_size, aspect, centre, zoom(current.step));
             View {
                 centre: [x + w / 2.0, y + h / 2.0],
                 step: current.step,
@@ -179,7 +236,7 @@ impl Component for CropEditor {
                 let point = local(at.x, at.y);
                 let inside = (x..=x + w).contains(&point[0]) && (y..=y + h).contains(&point[1]);
                 let next = if inside { current } else { move_to(point) };
-                view.set(Some(next));
+                view(next);
                 drag.set(Some(Drag {
                     start: point,
                     centre: next.centre,
@@ -191,10 +248,10 @@ impl Component for CropEditor {
                 };
                 let at = event.global_location();
                 let point = local(at.x, at.y);
-                view.set(Some(move_to([
+                view(move_to([
                     held.centre[0] + point[0] - held.start[0],
                     held.centre[1] + point[1] - held.start[1],
-                ])));
+                ]));
             })
             .on_global_pointer_up(move |_| drag.set_if_modified(None))
             .child(
@@ -234,34 +291,77 @@ impl Component for CropEditor {
                 Slider::stepped(tr!("crop-zoom"), steps)
                     .value(current.step)
                     .on_change(move |step| {
-                        view.set(Some(View {
+                        view(View {
                             centre: current.centre,
                             step,
-                        }))
+                        })
                     }),
             );
         let apply = self.on_apply.clone();
+        let draft_for_apply = self.draft.clone();
         let cancel = self.on_cancel.clone();
         let buttons = HStack::new()
             .width(Size::fill())
+            .content(Content::flex())
             .spacing(SPACE_2)
             .child(Button::new(tr!("crop-reset")).on_press(move |_| {
-                view.set(Some(View {
+                view(View {
                     centre: [0.5, 0.5],
                     step: 0,
-                }))
+                })
             }))
-            .child(rect().width(Size::fill()))
+            .child(rect().width(Size::flex(1.0)))
             .child(Button::new(tr!("cancel")).on_press(move |_| cancel.call(())))
             .child(
                 Button::new(tr!("crop-apply"))
                     .style(ButtonStyle::bordered_prominent)
-                    .on_press(move |_| apply.call([x, y, w, h])),
+                    .on_press(move |_| {
+                        let views = views.peek();
+                        let crop_at = |index: usize| {
+                            let view = view_at(index, &views);
+                            frame(
+                                image_size,
+                                draft_for_apply.aspect(index),
+                                view.centre,
+                                zoom(view.step),
+                            )
+                        };
+                        let crops = if *separate.peek() {
+                            draft_for_apply
+                                .outputs
+                                .iter()
+                                .enumerate()
+                                .map(|(index, each)| (Some(each.name.clone()), crop_at(index)))
+                                .collect()
+                        } else {
+                            vec![(None, crop_at(shown))]
+                        };
+                        apply.call(Applied { crops })
+                    }),
             );
+        let displays = (self.draft.outputs.len() > 1).then(|| {
+            let picker = self.draft.outputs.iter().fold(
+                SegmentedControl::new(tr!("crop-display")),
+                |picker, each| picker.segment(intern(each.name.clone())),
+            );
+            VStack::new()
+                .spacing(SPACE_2)
+                .child(
+                    picker
+                        .selected(shown)
+                        .on_change(move |index| output.set(index)),
+                )
+                .child(
+                    Checkbox::new(tr!("crop-all-displays"))
+                        .checked(!*separate.read())
+                        .on_toggle(move |same: bool| separate.set(!same)),
+                )
+        });
         VStack::new()
             .width(Size::px(width))
             .spacing(SPACE_3)
             .child(VStack::new().spacing(SPACE_1).child(title).child(help))
+            .maybe_child(displays)
             .child(canvas)
             .child(zoom_row)
             .child(buttons)

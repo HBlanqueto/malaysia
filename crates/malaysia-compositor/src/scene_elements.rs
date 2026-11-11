@@ -327,18 +327,37 @@ pub(crate) fn build_output_elements<R: MalaysiaRenderer>(
                     &mut elements,
                 );
             } else {
+                let desktop = state.spaces.desktop_number(state.spaces.current().id);
+                let shows = background_of(state, desktop);
                 append_layers(
                     state,
                     renderer,
                     &mut elements,
                     LayerSide::Back,
                     Point::from((0, 0)),
-                    |_| true,
+                    shows,
                 );
             }
         }
     }
     elements
+}
+
+// ADR 0072: a desktop shows its own background surface, or the ones given no desktop.
+pub(crate) fn background_of(
+    state: &State,
+    desktop: Option<usize>,
+) -> impl Fn(&crate::layers::LayerEntry) -> bool + use<> {
+    let own = desktop.filter(|&number| {
+        state
+            .layers
+            .on_layer(Layer::Background)
+            .any(|entry| crate::window_style::desktop(entry.surface.wl_surface()) == Some(number))
+    });
+    move |entry| {
+        entry.layer != Layer::Background
+            || crate::window_style::desktop(entry.surface.wl_surface()) == own
+    }
 }
 
 pub(crate) fn window_content_rect(window: &crate::window::Window<'_>) -> Rectangle<i32, Logical> {
@@ -523,13 +542,14 @@ pub(crate) fn append_sliding_spaces<R: MalaysiaRenderer>(
             );
         }
         if desktop {
+            let shows = background_of(state, state.spaces.desktop_number(space));
             append_layers(
                 state,
                 renderer,
                 elements,
                 LayerSide::Back,
                 Point::from((x, 0)),
-                |_| true,
+                shows,
             );
         }
     }

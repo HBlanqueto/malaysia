@@ -73,5 +73,6 @@ points to each one it inherited. ADRs created in barrierkit after the split
 | [0070](0070-freedesktop-options.md) | Your own themes for GTK and Qt | accepted |
 | [0071](0071-background-blur-and-ext-background-effect.md) | Background blur and ext-background-effect-v1 | accepted |
 | [0072](0072-wallpaper-settings.md) | Wallpaper in System Settings | accepted |
+| [0073](0073-wallpaper-desktops-collections-dynamic-animated.md) | Wallpaper per desktop and display, collections, dynamic and animated wallpapers | accepted |
 
 > ADR 0022 (Quickshell) was removed by 0025.

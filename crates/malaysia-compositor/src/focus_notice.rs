@@ -23,9 +23,11 @@ pub struct FocusNoticeSurfaceData {
     surface: WlSurface,
     overlay: AtomicBool,
     wallpaper: AtomicU32,
+    desktop: AtomicU32,
 }
 
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
+const NO_DESKTOP: u32 = u32::MAX;
 const NO_WALLPAPER: u32 = u32::MAX;
 
 impl FocusNoticeGlobalData {
@@ -65,6 +67,7 @@ impl Dispatch2<InfinityFocusManagerV1, State> for FocusNoticeGlobalData {
                     surface: surface.clone(),
                     overlay: AtomicBool::new(false),
                     wallpaper: AtomicU32::new(NO_WALLPAPER),
+                    desktop: AtomicU32::new(NO_DESKTOP),
                 },
             );
             state.focus_notices.push(notice);
@@ -95,9 +98,6 @@ impl Dispatch2<InfinityFocusSurfaceV1, State> for FocusNoticeSurfaceData {
 
 impl State {
     pub(crate) fn send_wallpaper_colors(&mut self) {
-        let Some(grid) = self.wallpaper_grid.as_ref() else {
-            return;
-        };
         let output = self.logical_output_size();
         let output = (f64::from(output.w), f64::from(output.h));
         self.focus_notices.retain(|notice| notice.is_alive());
@@ -110,6 +110,15 @@ impl State {
                 .iter()
                 .find(|window| *window.surface() == data.surface)
             else {
+                continue;
+            };
+            let desktop = self.spaces.space_of(window.id()).map_or(0, |space| {
+                self.spaces.desktop_number(space).unwrap_or(0) as u32
+            });
+            if notice.version() >= 4 && data.desktop.swap(desktop, Ordering::Relaxed) != desktop {
+                notice.desktop(desktop);
+            }
+            let Some(grid) = self.wallpaper.grid_for((desktop > 0).then_some(desktop)) else {
                 continue;
             };
             let outer = window.outer();

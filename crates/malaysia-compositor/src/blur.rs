@@ -19,7 +19,7 @@ use smithay::wayland::shell::wlr_layer::Layer;
 use crate::cursor::OutputRenderElement;
 use crate::effects::RoundedTextureElement;
 use crate::renderer::MalaysiaRenderer;
-use crate::scene_elements::{LayerSide, append_layers, append_solid, physical_rect};
+use crate::scene_elements::{LayerSide, append_layers, append_solid, background_of, physical_rect};
 use crate::state::State;
 
 // ADR 0071: dual Kawase (Bjørge, SIGGRAPH 2015) over the wallpaper, blurred again only when it changes.
@@ -242,13 +242,15 @@ fn wallpaper_elements(
             &mut elements,
         );
     } else {
+        let desktop = state.spaces.desktop_number(state.spaces.current().id);
+        let shows = background_of(state, desktop);
         append_layers(
             state,
             renderer,
             &mut elements,
             LayerSide::Back,
             Point::default(),
-            |entry| entry.layer == Layer::Background,
+            move |entry| entry.layer == Layer::Background && shows(entry),
         );
     }
     elements

@@ -24,6 +24,14 @@ libheif-rs.workspace = true
 half.workspace = true
 ctappearance.workspace = true
 ctdesign.workspace = true
+infinity-protocol = { workspace = true, features = ["client"] }
+chrono.workspace = true
+plist.workspace = true
+base64.workspace = true
+serde.workspace = true
+gstreamer.workspace = true
+gstreamer-app.workspace = true
+gstreamer-video.workspace = true
 
 wayland-client = { workspace = true, features = ["system"] }
 wayland-protocols = { workspace = true, features = ["client", "staging"] }

@@ -277,17 +277,23 @@ as a historical record (ADR 0043).
 **16a in progress:** `malaysia-wallpaper` is an own client with wgpu/Vulkan
 over layer-shell, fractional scale, mipmaps, zero-copy dmabuf and inotify reload
 of `wallpaper-selection.state` (ADR 0049). **16b in progress:** the default wallpaper is
-`collapse.heic` (decoded with libheif; only its light image for now). **16c** (dynamic wallpapers and
-frame callback throttling) pending. Test:
-`./dev.sh wallpaper-check`.
+`collapse.heic` (decoded with libheif). **16c in progress (2026-11-11, ADR 0073):**
+dynamic HEIC wallpapers follow the appearance (`apr`, `solar`) or the time of
+day (`h24`); videos (GStreamer) and GLSL shaders animate at `WALLPAPER_FPS`
+and wait for the frame callback; `tide.frag` ships as the first animated
+wallpaper. Not tried in a real session yet. Test: `./dev.sh wallpaper-check`.
 
 **16d in progress (2026-11-11, ADR 0072):** System Settings › Wallpaper
 chooses among the installed images and solid colors (Malaysia Dream first),
 sets «Scale to screen» (fill, fit, stretch, center) and frames an image by
 hand («Custom framing…»: drag, click to center, zoom 100–400 %).
-`malaysia-wallpaper` draws every mode. Not built yet, from the mock-up:
-showing a wallpaper on one desktop only, collections and folders, the
-filter, shuffling, custom colors, and per-display crops.
+`malaysia-wallpaper` draws every mode. ADR 0073 adds a wallpaper per
+desktop («Show on all desktops»), a crop per display, collections of folders
+and images, the filter, shuffling of colors and collections, custom colors,
+and the Dynamic and Animated sections, with previews written by
+`malaysia-wallpaper`. Not tried in a real session yet. Left out: «Show all»
+grids, pausing an animated wallpaper by hand, and the desktop preview of the
+crop sheet.
 
 ### 17 — Spaces and focus mode
 

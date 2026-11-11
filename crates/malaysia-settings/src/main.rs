@@ -1,6 +1,7 @@
 mod app;
 mod apps;
 mod bluetooth;
+mod collection;
 mod crop;
 mod energy;
 mod freedesktop;

@@ -5,7 +5,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
     barrierkit = {
-      url = "github:HBlanqueto/barrierkit/6ec9a03c16b28f95dff6acdc078cbf7600283656";
+      url = "github:HBlanqueto/barrierkit/ea936f98c786345a51840658303a3d718b65fb41";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
     };
@@ -32,6 +32,14 @@
         fontconfig
         vulkan-loader
         libheif
+        gst_all_1.gstreamer
+        gst_all_1.gst-plugins-base
+      ];
+      wallpaperPlugins = pkgs: with pkgs.gst_all_1; [
+        gst-plugins-base
+        gst-plugins-good
+        gst-plugins-bad
+        gst-libav
       ];
       hasFreyaSkia = builtins.any (package: package.name == "freya-skia-bindings")
         (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
@@ -67,8 +75,8 @@
           outputHashes = {
             "git+https://github.com/Smithay/smithay?rev=65aa86fa5236e41775c313408102a5d5c2d1e2ca#65aa86fa5236e41775c313408102a5d5c2d1e2ca" =
               "sha256-YD7P5iZAr+0XdeURhq6DkRkFws6Dpn0zSU5Y9qvsyZQ=";
-            "git+https://github.com/HBlanqueto/barrierkit?rev=6ec9a03c16b28f95dff6acdc078cbf7600283656#6ec9a03c16b28f95dff6acdc078cbf7600283656" =
-              "sha256-DN6YiJVJknuwDAkP8KlClrOT0lO8j9rDnQYSTenfrdI=";
+            "git+https://github.com/HBlanqueto/barrierkit?rev=ea936f98c786345a51840658303a3d718b65fb41#ea936f98c786345a51840658303a3d718b65fb41" =
+              "sha256-wLaGtSJfMd3yXquh5SYo7VzbxFptncwXBe1iz8Rffqo=";
           };
 
           env = {
@@ -135,8 +143,8 @@
             cp -r share/wallpapers/solid-colors $out/share/wallpapers/
             install -Dm644 share/wallpapers/bandura.jpg \
               $out/share/wallpapers/bandura.jpg
-            install -Dm644 share/wallpapers/malaysia-dream.heic \
-              $out/share/wallpapers/malaysia-dream.heic
+            install -Dm644 share/wallpapers/tide.frag \
+              $out/share/wallpapers/tide.frag
             cp -r share/wallpapers/previews $out/share/wallpapers/
             install -Dm644 NOTICE \
               $out/share/doc/malaysia/NOTICE
@@ -160,6 +168,7 @@
               --run 'export MALAYSIA_ORIG_VK_DRIVER_FILES="''${MALAYSIA_ORIG_VK_DRIVER_FILES-''${VK_DRIVER_FILES-}}"' \
               --run 'export MALAYSIA_ORIG_LD_LIBRARY_PATH="''${MALAYSIA_ORIG_LD_LIBRARY_PATH-''${LD_LIBRARY_PATH-}}"' \
               --set VK_DRIVER_FILES "${pkgs.mesa}/share/vulkan/icd.d" \
+              --set GST_PLUGIN_SYSTEM_PATH_1_0 "${lib.makeSearchPathOutput "lib" "lib/gstreamer-1.0" (wallpaperPlugins pkgs)}" \
               --prefix LD_LIBRARY_PATH : "${pkgs.lib.makeLibraryPath (nativeDeps pkgs)}"
           '';
           passthru = {

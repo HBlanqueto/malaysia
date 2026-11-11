@@ -26,6 +26,7 @@ pub struct RenderContext {
 pub struct WallpaperTexture {
     pub bind_group: wgpu::BindGroup,
     pub size: (u32, u32),
+    texture: wgpu::Texture,
 }
 
 #[repr(C)]
@@ -61,25 +62,25 @@ const TEXTURE_AND_SAMPLER: [wgpu::BindGroupLayoutEntry; 2] = [
     },
 ];
 
-fn fullscreen_pipeline(
+pub fn fullscreen_pipeline(
     device: &wgpu::Device,
     label: &str,
     layout: &wgpu::PipelineLayout,
-    shader: &wgpu::ShaderModule,
+    [vertex, fragment]: [&wgpu::ShaderModule; 2],
     format: wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
-            module: shader,
-            entry_point: Some("vs_main"),
+            module: vertex,
+            entry_point: None,
             buffers: &[],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: shader,
-            entry_point: Some("fs_main"),
+            module: fragment,
+            entry_point: None,
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
@@ -236,13 +237,13 @@ impl RenderContext {
             &self.device,
             "wallpaper pipeline",
             &pipeline_layout,
-            &shader,
+            [&shader, &shader],
             format,
         ));
         self.surface_format = Some(format);
     }
 
-    pub fn upload_texture(&mut self, image: &DecodedImage) -> WallpaperTexture {
+    pub fn upload_texture(&mut self, image: &DecodedImage, mipmapped: bool) -> WallpaperTexture {
         let original_size = image.size;
         let image = image.downscale_to_fit(self.max_texture_dimension_2d);
         if image.size != original_size {
@@ -261,7 +262,11 @@ impl RenderContext {
             Pixels::Srgb16(_) => wgpu::TextureFormat::Rgba16Float,
         };
         let features = self.device.features();
-        let mip_level_count = mip_level_count(format, features, width, height);
+        let mip_level_count = if mipmapped {
+            mip_level_count(format, features, width, height)
+        } else {
+            1
+        };
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("wallpaper texture"),
             size: wgpu::Extent3d {
@@ -348,7 +353,29 @@ impl RenderContext {
         WallpaperTexture {
             bind_group,
             size: (width, height),
+            texture,
         }
+    }
+
+    pub fn update_texture(&self, texture: &WallpaperTexture, frame: &DecodedImage) -> bool {
+        let Pixels::Srgb8(pixels) = &frame.pixels else {
+            return false;
+        };
+        if frame.size != texture.size || texture.texture.mip_level_count() != 1 {
+            return false;
+        }
+        let (width, height) = frame.size;
+        self.queue.write_texture(
+            texture.texture.as_image_copy(),
+            pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            texture.texture.size(),
+        );
+        true
     }
 
     pub fn set_uniforms(&self, framing: Framing, surface: (u32, u32), image: (u32, u32)) {
@@ -396,11 +423,10 @@ impl RenderContext {
         self.queue.submit(std::iter::once(encoder.finish()));
     }
 
-    pub fn render(
+    pub fn present(
         &mut self,
         surface: &wgpu::Surface<'_>,
-        format: wgpu::TextureFormat,
-        texture: &WallpaperTexture,
+        draw: impl FnOnce(&mut Self, &wgpu::TextureView),
     ) -> Result<(), wgpu::CurrentSurfaceTexture> {
         let output = match surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(output)
@@ -418,7 +444,7 @@ impl RenderContext {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.draw(&view, format, texture);
+        draw(self, &view);
         self.queue.present(output);
         Ok(())
     }
@@ -432,6 +458,68 @@ fn uniforms(framing: Framing, image: (u32, u32), surface: (u32, u32)) -> Uniform
         size,
         background: [clear.r, clear.g, clear.b, 1.0],
     }
+}
+
+pub fn padded_bytes_per_row(width: u32) -> u32 {
+    let unpadded = width * 4;
+    unpadded.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
+}
+
+pub fn offscreen_texture(
+    device: &wgpu::Device,
+    (width, height): (u32, u32),
+    format: wgpu::TextureFormat,
+) -> wgpu::Texture {
+    device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("wallpaper offscreen"),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    })
+}
+
+pub fn read_back(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -> Vec<u8> {
+    let wgpu::Extent3d { width, height, .. } = texture.size();
+    let bytes_per_row = padded_bytes_per_row(width);
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("wallpaper readback"),
+        size: u64::from(bytes_per_row * height),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("wallpaper readback copy"),
+    });
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: Some(height),
+            },
+        },
+        texture.size(),
+    );
+    queue.submit(std::iter::once(encoder.finish()));
+    let slice = buffer.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    if device.poll(wgpu::PollType::wait_indefinitely()).is_err() {
+        return Vec::new();
+    }
+    slice
+        .get_mapped_range()
+        .map(|range| range.to_vec())
+        .unwrap_or_default()
 }
 
 fn max_mip_levels(width: u32, height: u32) -> u32 {
@@ -522,7 +610,13 @@ fn generate_mipmaps(
             label: Some("mipmap shader"),
             source: wgpu::ShaderSource::Wgsl(MIP_SHADER.into()),
         });
-        fullscreen_pipeline(device, "mipmap pipeline", &layout, &shader, format)
+        fullscreen_pipeline(
+            device,
+            "mipmap pipeline",
+            &layout,
+            [&shader, &shader],
+            format,
+        )
     });
 
     let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -603,13 +697,11 @@ mod tests {
         DEFAULT_WALLPAPER_BYTES, DecodedImage, Pixels, decode_image_bytes, decode_png,
     };
 
-    use super::{RenderContext, WallpaperTexture, mip_level_count};
+    use super::{
+        RenderContext, WallpaperTexture, mip_level_count, offscreen_texture, padded_bytes_per_row,
+        read_back,
+    };
     use ctdesign::Rgba;
-
-    fn padded_bytes_per_row(width: u32) -> u32 {
-        let unpadded = width * 4;
-        unpadded.div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT) * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT
-    }
 
     fn draw_offscreen(
         ctx: &mut RenderContext,
@@ -618,70 +710,11 @@ mod tests {
         height: u32,
         format: wgpu::TextureFormat,
     ) -> Vec<u8> {
-        let output = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("wallpaper test offscreen"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
+        let output = offscreen_texture(&ctx.device, (width, height), format);
         let view = output.create_view(&wgpu::TextureViewDescriptor::default());
         ctx.set_uniforms(Framing::default(), (width, height), texture.size);
         ctx.draw(&view, format, texture);
-
-        let bytes_per_row = padded_bytes_per_row(width);
-        let buffer_size = u64::from(bytes_per_row * height);
-        let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("wallpaper test readback"),
-            size: buffer_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        let mut encoder = ctx
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("wallpaper test copy"),
-            });
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &output,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(bytes_per_row),
-                    rows_per_image: Some(height),
-                },
-            },
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-        );
-        ctx.queue.submit(std::iter::once(encoder.finish()));
-
-        let slice = buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        ctx.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .expect("the readback should finish");
-        slice
-            .get_mapped_range()
-            .expect("the readback buffer is mapped")
-            .to_vec()
+        read_back(&ctx.device, &ctx.queue, &output)
     }
 
     fn reference_color(image: &DecodedImage, x: u32, y: u32, surf_w: u32, surf_h: u32) -> [u8; 4] {
@@ -748,7 +781,7 @@ mod tests {
     fn cover_matches_reference_at_1280x800() {
         let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
         let image = quadrants();
-        let texture = ctx.upload_texture(&image);
+        let texture = ctx.upload_texture(&image, true);
 
         let points: [(u32, u32); 9] = [
             (0, 0),
@@ -850,7 +883,7 @@ mod tests {
     fn minified_quadrants_keep_orientation() {
         let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
         let image = quadrants();
-        let texture = ctx.upload_texture(&image);
+        let texture = ctx.upload_texture(&image, true);
         let (w, h) = (270, 152);
         let data = draw_offscreen(
             &mut ctx,
@@ -948,7 +981,7 @@ mod tests {
     fn sixteen_bit_texture_matches_reference() {
         let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
         let image = make_ramp_image(true);
-        let texture = ctx.upload_texture(&image);
+        let texture = ctx.upload_texture(&image, true);
         assert_eq!(texture.size, (1024, 512));
 
         let points: [(u32, u32); 9] = [
@@ -996,7 +1029,7 @@ mod tests {
         for (i, depth16) in [false, true].into_iter().enumerate() {
             let mut ctx = block_on(RenderContext::new()).expect("RenderContext");
             let image = make_ramp_image(depth16);
-            let texture = ctx.upload_texture(&image);
+            let texture = ctx.upload_texture(&image, true);
             assert_eq!(texture.size, (1024, 512));
             let format = if depth16 {
                 wgpu::TextureFormat::Rgba16Float
@@ -1145,7 +1178,7 @@ mod tests {
             size: (width, height),
             pixels: Pixels::Srgb8(rgba),
         };
-        let texture = ctx.upload_texture(&image);
+        let texture = ctx.upload_texture(&image, true);
         assert!(
             texture.size.0 <= max && texture.size.1 <= max,
             "texture {}x{} exceeds limit {max}",

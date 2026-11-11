@@ -34,6 +34,8 @@ struct PanelStyle(AtomicU32);
 
 struct CardStyle(Mutex<Cards>);
 
+struct DesktopStyle(AtomicU32);
+
 #[derive(Debug, Clone)]
 pub(crate) struct Cards {
     pub(crate) id: u64,
@@ -43,7 +45,7 @@ pub(crate) struct Cards {
 
 static NEXT_ALERT: AtomicU64 = AtomicU64::new(0);
 
-const VERSION: u32 = 4;
+const VERSION: u32 = 5;
 
 impl WindowStyleGlobalData {
     pub fn create_global(display_handle: &DisplayHandle) -> GlobalId {
@@ -135,6 +137,17 @@ impl Dispatch2<InfinityWindowStyleV1, State> for WindowStyleGlobalData {
                 }
                 state.request_redraw();
             }
+            infinity_window_style_v1::Request::SetDesktop { surface, desktop } => {
+                with_states(&surface, |states| {
+                    states
+                        .data_map
+                        .insert_if_missing_threadsafe(|| DesktopStyle(AtomicU32::new(0)));
+                    if let Some(style) = states.data_map.get::<DesktopStyle>() {
+                        style.0.store(desktop, Ordering::Relaxed);
+                    }
+                });
+                state.request_redraw();
+            }
             infinity_window_style_v1::Request::SetPopover { surface } => {
                 with_states(&surface, |states| {
                     states.data_map.insert_if_missing_threadsafe(|| Popover);
@@ -150,6 +163,14 @@ pub(crate) fn bar(surface: &WlSurface) -> Option<Bar> {
     with_states(surface, |states| {
         let style = states.data_map.get::<BarStyle>()?;
         Bar::try_from(style.0.load(Ordering::Relaxed)).ok()
+    })
+}
+
+pub(crate) fn desktop(surface: &WlSurface) -> Option<usize> {
+    with_states(surface, |states| {
+        let style = states.data_map.get::<DesktopStyle>()?;
+        let desktop = style.0.load(Ordering::Relaxed);
+        (desktop > 0).then_some(desktop as usize)
     })
 }
 

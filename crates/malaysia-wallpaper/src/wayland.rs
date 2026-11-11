@@ -1,12 +1,17 @@
-use std::collections::HashMap;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
 use std::os::fd::AsFd;
 use std::os::raw::c_void;
+use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use calloop::EventLoop;
 use calloop::PostAction;
 use calloop::generic::Generic;
+use calloop::ping::{Ping, PingSource, make_ping};
 use calloop::signals::{Signal, Signals};
+use calloop::timer::{TimeoutAction, Timer};
 use calloop_wayland_source::WaylandSource;
 use futures_lite::future::block_on;
 use raw_window_handle::{
@@ -41,12 +46,28 @@ use wayland_protocols::wp::viewporter::client::{
     wp_viewport::WpViewport, wp_viewporter::WpViewporter,
 };
 
-use crate::image::{Wallpaper, reload};
+use crate::dynamic::Dynamic;
+use crate::framing::Framing;
+use crate::image::{
+    DEFAULT_WALLPAPER_BYTES, DecodedImage, decode_heif, decode_image_bytes, dominant, grid, is_heif,
+};
 use crate::render::{RenderContext, WallpaperTexture};
+use crate::shader::Shader;
+use crate::source;
+use crate::video::Video;
+use ctappearance::tinting::WallpaperGrid;
 use ctappearance::watch::{AppearanceEvent, AppearanceWatch};
+use ctappearance::{
+    ALL_DESKTOPS, WallpaperKind, WallpaperOutput, WallpaperSelection, WallpaperShuffle,
+    WallpaperSource, WallpaperState, desktop_key, file_path, file_uri, read_wallpaper_selection,
+};
+use ctdesign::{BACKDROP, Rgba, WALLPAPER_FPS};
+use infinity_protocol::client::style::infinity_window_style_v1::infinity_window_style_v1::InfinityWindowStyleV1;
 
 const NAMESPACE: &str = "malaysia-wallpaper";
 const SCALE_DENOMINATOR: f64 = 120.0;
+const WINDOW_STYLE_DESKTOPS: u32 = 5;
+const MINUTE: Duration = Duration::from_secs(60);
 
 pub struct App {
     compositor: CompositorState,
@@ -60,26 +81,74 @@ pub struct App {
     loop_signal: Option<calloop::LoopSignal>,
     loop_handle: Option<calloop::LoopHandle<'static, App>>,
     render: RenderContext,
-    texture: Option<WallpaperTexture>,
     outputs: HashMap<ObjectId, OutputSurface>,
-    store_path: std::path::PathBuf,
-    state_path: std::path::PathBuf,
-    wallpaper: Wallpaper,
+    store_path: PathBuf,
+    state_path: PathBuf,
+    selection: WallpaperSelection,
+    state: WallpaperState,
+    shown: BTreeMap<String, Shown>,
+    window_style: Option<InfinityWindowStyleV1>,
+    wake: Ping,
+    wake_source: Option<PingSource>,
+    dark: bool,
+    reduced_motion: bool,
     appearance_watch: AppearanceWatch,
+}
+
+struct Shown {
+    file: Option<PathBuf>,
+    dynamic: Option<Dynamic>,
+    image: usize,
+    content: Content,
+    grid: Option<WallpaperGrid>,
+    dominant: Option<Rgba>,
+}
+
+enum Content {
+    Image(WallpaperTexture),
+    Video(Video, WallpaperTexture),
+    Shader(Shader, Instant),
+}
+
+impl Shown {
+    fn new(
+        file: Option<&Path>,
+        dynamic: Option<Dynamic>,
+        image: usize,
+        still: &DecodedImage,
+        content: Content,
+    ) -> Self {
+        Self {
+            file: file.map(Path::to_path_buf),
+            dynamic,
+            image,
+            content,
+            grid: grid(still),
+            dominant: dominant(still),
+        }
+    }
+
+    fn animated(&self) -> bool {
+        matches!(self.content, Content::Video(..) | Content::Shader(..))
+    }
 }
 
 struct OutputSurface {
     wgpu_surface: wgpu::Surface<'static>,
     output: WlOutput,
+    desktop: Option<u32>,
     surface: WlSurface,
     layer_surface: LayerSurface,
     viewport: WpViewport,
     fractional_scale: WpFractionalScaleV1,
     logical_size: (u32, u32),
+    buffer_size: (u32, u32),
     scale: f64,
     configured: bool,
     surface_format: wgpu::TextureFormat,
     pending_redraw: bool,
+    awaiting_frame: bool,
+    dirty: bool,
     first_frame_presented: bool,
 }
 
@@ -92,10 +161,6 @@ impl Drop for OutputSurface {
 
 impl App {
     pub fn new() -> anyhow::Result<(Self, EventQueue<Self>)> {
-        let store_path = ctappearance::wallpaper_selection_path();
-        let state_path = ctappearance::wallpaper_state_path();
-        let wallpaper = reload(&Wallpaper::default(), &store_path, &state_path);
-
         let connection = Connection::connect_to_env()?;
         let (globals, mut event_queue) = registry_queue_init(&connection)?;
         let qh = event_queue.handle();
@@ -113,12 +178,25 @@ impl App {
         let viewporter = globals
             .bind::<WpViewporter, _, _>(&qh, 1..=1, GlobalData)
             .map_err(|e| anyhow::anyhow!("wp_viewporter not available: {e}"))?;
+        let window_style = globals
+            .bind::<InfinityWindowStyleV1, _, _>(
+                &qh,
+                WINDOW_STYLE_DESKTOPS..=WINDOW_STYLE_DESKTOPS,
+                (),
+            )
+            .ok();
+        if window_style.is_none() {
+            warn!(
+                "no infinity_window_style_v1 version 5: every desktop shows the shared wallpaper"
+            );
+        }
 
         let appearance_watch = AppearanceWatch::new()?;
 
         let render = block_on(RenderContext::new())
             .map_err(|e| anyhow::anyhow!("failed to create Vulkan render context: {e}"))?;
 
+        let (wake, wake_source) = make_ping()?;
         let mut app = Self {
             compositor,
             layer_shell,
@@ -131,17 +209,21 @@ impl App {
             loop_signal: None,
             loop_handle: None,
             render,
-            texture: None,
             outputs: HashMap::new(),
-            store_path,
-            state_path,
-            wallpaper,
+            store_path: ctappearance::wallpaper_selection_path(),
+            state_path: ctappearance::wallpaper_state_path(),
+            selection: WallpaperSelection::default(),
+            state: ctappearance::load_wallpaper_state(),
+            shown: BTreeMap::new(),
+            window_style,
+            wake,
+            wake_source: Some(wake_source),
+            dark: false,
+            reduced_motion: false,
             appearance_watch,
         };
-
-        if let Some(decoded) = app.wallpaper.image.take() {
-            app.texture = Some(app.render.upload_texture(&decoded));
-        }
+        app.reload(true);
+        app.make_thumbnails();
 
         event_queue.roundtrip(&mut app)?;
 
@@ -170,8 +252,18 @@ impl App {
                 |_, _, app: &mut App| {
                     match app.appearance_watch.drain() {
                         Ok(events) => {
-                            if events.contains(&AppearanceEvent::WallpaperSelection) {
-                                app.reload_wallpaper();
+                            if events.contains(&AppearanceEvent::Defaults) {
+                                app.make_thumbnails();
+                            }
+                            if events.iter().any(|event| {
+                                matches!(
+                                    event,
+                                    AppearanceEvent::WallpaperSelection
+                                        | AppearanceEvent::Appearance
+                                        | AppearanceEvent::Defaults
+                                )
+                            }) {
+                                app.reload(false);
                             }
                         }
                         Err(error) => {
@@ -182,6 +274,25 @@ impl App {
                 },
             )
             .map_err(|e| anyhow::anyhow!("failed to add appearance watch source: {e}"))?;
+
+        if let Some(wake_source) = self.wake_source.take() {
+            loop_handle
+                .insert_source(wake_source, |_, _, app: &mut App| app.show_video_frames())
+                .map_err(|e| anyhow::anyhow!("failed to add video wake source: {e}"))?;
+        }
+        loop_handle
+            .insert_source(Timer::from_duration(MINUTE), |_, _, app: &mut App| {
+                app.reload(false);
+                TimeoutAction::ToDuration(MINUTE)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to add shuffle timer: {e}"))?;
+        let frame = Duration::from_secs(1) / WALLPAPER_FPS;
+        loop_handle
+            .insert_source(Timer::from_duration(frame), move |_, _, app: &mut App| {
+                app.animate_shaders();
+                TimeoutAction::ToDuration(frame)
+            })
+            .map_err(|e| anyhow::anyhow!("failed to add animation timer: {e}"))?;
 
         let signals = Signals::new(&[Signal::SIGTERM, Signal::SIGINT])
             .map_err(|e| anyhow::anyhow!("failed to create signal source: {e}"))?;
@@ -205,17 +316,323 @@ impl App {
         Ok(())
     }
 
-    fn reload_wallpaper(&mut self) {
-        let next = reload(&self.wallpaper, &self.store_path, &self.state_path);
-        let new_image = next.selection != self.wallpaper.selection;
-        if !new_image && next.framing == self.wallpaper.framing {
+    fn reload(&mut self, starting: bool) {
+        let previous_selection = self.selection.clone();
+        match read_wallpaper_selection(&self.store_path) {
+            Ok(selection) => self.selection = selection,
+            Err(error) => error!(%error, "cannot read the wallpaper selection"),
+        }
+        let appearance = ctappearance::load_appearance();
+        self.dark = appearance.color_scheme.resolved().is_dark();
+        self.reduced_motion = appearance.reduced_motion;
+        let now = epoch_seconds();
+        let shuffle = (starting && self.selection.shuffle == WallpaperShuffle::Login)
+            || source::due(self.selection.shuffle, self.state.shuffled_at, now);
+        let own = self
+            .window_style
+            .as_ref()
+            .map(|_| self.selection.own_desktops().map(Some).collect::<Vec<_>>())
+            .unwrap_or_default();
+        let mut changed = self.selection != previous_selection;
+        let mut shown = BTreeMap::new();
+        for desktop in std::iter::once(None).chain(own) {
+            let key = desktop_key(desktop);
+            let previous = self.shown.remove(&key);
+            let file = self.file_for(desktop, shuffle, now);
+            let (next, loaded) = self.show(desktop, file, previous);
+            changed |= loaded;
+            shown.insert(key, next);
+        }
+        changed |= !self.shown.is_empty();
+        self.shown = shown;
+        self.state
+            .shown
+            .retain(|key, _| self.shown.contains_key(key));
+        if self.state.shown.is_empty() {
+            self.state.shuffled_at = None;
+        }
+        for shown in self.shown.values() {
+            if let Content::Video(video, _) = &shown.content {
+                video.set_playing(!self.reduced_motion);
+            }
+        }
+        if changed {
+            self.sync_surfaces();
+            self.write_state();
+            self.schedule_redraw_all();
+        }
+    }
+
+    fn file_for(&mut self, desktop: Option<u32>, shuffle: bool, now: u64) -> Option<PathBuf> {
+        let key = desktop_key(desktop);
+        let source = match self.selection.source(desktop) {
+            None | Some(WallpaperSource::BuiltIn) => None,
+            Some(WallpaperSource::File(path)) => {
+                return Some(path).inspect(|_| {
+                    self.state.shown.remove(&key);
+                });
+            }
+            Some(shuffled) => Some(shuffled),
+        };
+        let Some(source) = source else {
+            self.state.shown.remove(&key);
+            return None;
+        };
+        let choices = source::choices(&source);
+        let previous = self.state.shown.get(&key).and_then(|uri| file_path(uri));
+        if !shuffle && let Some(previous) = previous.as_ref().filter(|file| choices.contains(file))
+        {
+            return Some(previous.clone());
+        }
+        let Some(next) = source::pick(&choices, previous.as_deref(), source::seed()) else {
+            self.state.shown.remove(&key);
+            return None;
+        };
+        self.state.shown.insert(key, file_uri(&next));
+        self.state.shuffled_at = Some(now);
+        Some(next)
+    }
+
+    fn image_of(&self, dynamic: Option<&Dynamic>, desktop: Option<u32>) -> usize {
+        dynamic.map_or(0, |dynamic| {
+            dynamic.image(
+                self.selection.appearance_for(desktop),
+                self.dark,
+                day_fraction(),
+            )
+        })
+    }
+
+    fn show(
+        &mut self,
+        desktop: Option<u32>,
+        file: Option<PathBuf>,
+        previous: Option<Shown>,
+    ) -> (Shown, bool) {
+        let unchanged = previous.as_ref().is_some_and(|previous| {
+            previous.file == file
+                && previous.image == self.image_of(previous.dynamic.as_ref(), desktop)
+        });
+        if unchanged && let Some(previous) = previous {
+            return (previous, false);
+        }
+        match self.load(desktop, file.as_deref()) {
+            Ok(shown) => (shown, true),
+            Err(error) => {
+                error!(?file, %error, "cannot show the wallpaper");
+                match previous {
+                    Some(previous) => (previous, false),
+                    None => (
+                        self.load(desktop, None).unwrap_or_else(|error| {
+                            panic!("the embedded wallpaper is corrupt: {error}")
+                        }),
+                        true,
+                    ),
+                }
+            }
+        }
+    }
+
+    fn load(&mut self, desktop: Option<u32>, file: Option<&Path>) -> anyhow::Result<Shown> {
+        let kind = file.map_or(Some(WallpaperKind::Image), WallpaperKind::of);
+        info!(?file, ?kind, "loading wallpaper");
+        match (kind, file) {
+            (Some(WallpaperKind::Video), Some(file)) => {
+                let video = Video::open(file, Some(self.wake.clone()))?;
+                let first = video
+                    .take()
+                    .ok_or_else(|| anyhow::anyhow!("the video gave no frame"))?;
+                let texture = self.render.upload_texture(&first, false);
+                Ok(Shown::new(
+                    Some(file),
+                    None,
+                    0,
+                    &first,
+                    Content::Video(video, texture),
+                ))
+            }
+            (Some(WallpaperKind::Shader), Some(file)) => {
+                let device = &self.render.device;
+                let mut shader = Shader::new(device, &std::fs::read_to_string(file)?)?;
+                let still = shader.snapshot(device, &self.render.queue, self.sample_size())?;
+                Ok(Shown::new(
+                    Some(file),
+                    None,
+                    0,
+                    &still,
+                    Content::Shader(shader, Instant::now()),
+                ))
+            }
+            (Some(WallpaperKind::Image), _) => {
+                let bytes = match file {
+                    Some(file) => Cow::Owned(std::fs::read(file)?),
+                    None => Cow::Borrowed(DEFAULT_WALLPAPER_BYTES),
+                };
+                let dynamic = file
+                    .is_none_or(is_heif)
+                    .then(|| Dynamic::of(&bytes))
+                    .flatten();
+                let image = self.image_of(dynamic.as_ref(), desktop);
+                let decoded = match dynamic {
+                    Some(_) => decode_heif(&bytes, Some(image))?,
+                    None => decode_image_bytes(&bytes)?,
+                };
+                let texture = self.render.upload_texture(&decoded, true);
+                Ok(Shown::new(
+                    file,
+                    dynamic,
+                    image,
+                    &decoded,
+                    Content::Image(texture),
+                ))
+            }
+            _ => anyhow::bail!("not a wallpaper"),
+        }
+    }
+
+    fn sample_size(&self) -> (u32, u32) {
+        let (width, height) = self
+            .outputs
+            .values()
+            .map(|output| output.logical_size)
+            .max()
+            .unwrap_or((1, 1));
+        let samples = BACKDROP.samples;
+        if width >= height {
+            (samples, (samples * height / width.max(1)).max(1))
+        } else {
+            ((samples * width / height.max(1)).max(1), samples)
+        }
+    }
+
+    fn make_thumbnails(&self) {
+        crate::thumbnails::spawn(
+            source::wallpaper_files(),
+            self.render.device.clone(),
+            self.render.queue.clone(),
+        );
+    }
+
+    fn write_state(&mut self) {
+        let shared = self.shown.get(ALL_DESKTOPS);
+        let mut outputs: Vec<WallpaperOutput> = self
+            .output_state
+            .outputs()
+            .filter_map(|output| {
+                let info = self.output_state.info(&output)?;
+                let (width, height) = info.logical_size?;
+                Some(WallpaperOutput {
+                    name: info.name?,
+                    width: width.max(0) as u32,
+                    height: height.max(0) as u32,
+                })
+            })
+            .collect();
+        outputs.sort_by(|a, b| a.name.cmp(&b.name));
+        outputs.dedup_by(|a, b| a.name == b.name);
+        let state = WallpaperState {
+            dominant: shared
+                .and_then(|shown| shown.dominant)
+                .map(|color| [color.r, color.g, color.b]),
+            grid: shared.and_then(|shown| shown.grid.clone()),
+            grids: self
+                .shown
+                .iter()
+                .filter(|(key, _)| key.as_str() != ALL_DESKTOPS)
+                .filter_map(|(key, shown)| Some((key.clone(), shown.grid.clone()?)))
+                .collect(),
+            outputs,
+            shown: self.state.shown.clone(),
+            shuffled_at: self.state.shuffled_at,
+        };
+        if state == ctappearance::load_wallpaper_state() {
+            self.state = state;
             return;
         }
-        self.wallpaper = next;
-        if new_image && let Some(decoded) = self.wallpaper.image.take() {
-            self.texture = Some(self.render.upload_texture(&decoded));
+        if let Err(error) = ctappearance::write_wallpaper_state(&self.state_path, &state) {
+            error!(%error, "failed to write the wallpaper state");
         }
-        self.schedule_redraw_all();
+        self.state = state;
+    }
+
+    fn sync_surfaces(&mut self) {
+        let desktops: Vec<Option<u32>> = self.shown.keys().map(|key| key.parse().ok()).collect();
+        self.outputs
+            .retain(|_, surface| desktops.contains(&surface.desktop));
+        let outputs: Vec<WlOutput> = self.output_state.outputs().collect();
+        for output in outputs {
+            for &desktop in &desktops {
+                let exists = self
+                    .outputs
+                    .values()
+                    .any(|surface| surface.output == output && surface.desktop == desktop);
+                if !exists && let Err(error) = self.new_output_surface(output.clone(), desktop) {
+                    error!(%error, "failed to create wallpaper surface for output");
+                }
+            }
+        }
+    }
+
+    fn show_video_frames(&mut self) {
+        let mut updated = Vec::new();
+        for (key, shown) in &mut self.shown {
+            let Content::Video(video, texture) = &mut shown.content else {
+                continue;
+            };
+            let Some(frame) = video.take() else {
+                continue;
+            };
+            if !self.render.update_texture(texture, &frame) {
+                *texture = self.render.upload_texture(&frame, false);
+            }
+            updated.push(key.clone());
+        }
+        for key in updated {
+            self.request_frames(&key);
+        }
+    }
+
+    fn animate_shaders(&mut self) {
+        if self.reduced_motion {
+            return;
+        }
+        let keys: Vec<String> = self
+            .shown
+            .iter()
+            .filter(|(_, shown)| matches!(shown.content, Content::Shader(..)))
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in keys {
+            self.request_frames(&key);
+        }
+    }
+
+    fn request_frames(&mut self, key: &str) {
+        let ready: Vec<WlSurface> = self
+            .outputs
+            .values_mut()
+            .filter(|output| output.configured && desktop_key(output.desktop) == key)
+            .filter_map(|output| {
+                if output.awaiting_frame {
+                    output.dirty = true;
+                    None
+                } else {
+                    Some(output.surface.clone())
+                }
+            })
+            .collect();
+        for surface in ready {
+            self.render_or_stop(&surface);
+        }
+    }
+
+    fn render_or_stop(&mut self, surface: &WlSurface) {
+        if let Err(error) = self.render_surface(surface) {
+            error!(%error, "render failed");
+            if let Some(signal) = self.loop_signal.as_ref() {
+                signal.stop();
+            }
+        }
     }
 
     fn draw_all_outputs(&mut self) {
@@ -229,12 +646,7 @@ impl App {
             .map(|o| o.surface.clone())
             .collect();
         for surface in surfaces {
-            if let Err(error) = self.render_surface(&surface) {
-                error!(%error, "render failed");
-                if let Some(signal) = self.loop_signal.as_ref() {
-                    signal.stop();
-                }
-            }
+            self.render_or_stop(&surface);
         }
     }
 
@@ -258,11 +670,7 @@ impl App {
 
     fn schedule_redraw(&mut self, surface: WlSurface) {
         let surface_id = surface.id();
-        let Some(output) = self
-            .outputs
-            .values_mut()
-            .find(|o| o.surface.id() == surface_id)
-        else {
+        let Some(output) = self.outputs.get_mut(&surface_id) else {
             return;
         };
         if output.pending_redraw {
@@ -271,24 +679,15 @@ impl App {
         output.pending_redraw = true;
         if let Some(handle) = self.loop_handle.as_ref() {
             handle.insert_idle(move |app| {
-                if let Some(output) = app
-                    .outputs
-                    .values_mut()
-                    .find(|o| o.surface.id() == surface_id)
-                {
+                if let Some(output) = app.outputs.get_mut(&surface_id) {
                     output.pending_redraw = false;
                 }
-                if let Err(error) = app.render_surface(&surface) {
-                    error!(%error, "render failed");
-                    if let Some(signal) = app.loop_signal.as_ref() {
-                        signal.stop();
-                    }
-                }
+                app.render_or_stop(&surface);
             });
         }
     }
 
-    fn new_output_surface(&mut self, output: WlOutput) -> anyhow::Result<()> {
+    fn new_output_surface(&mut self, output: WlOutput, desktop: Option<u32>) -> anyhow::Result<()> {
         let surface = self.compositor.create_surface(&self.qh);
         let layer_surface = self.layer_shell.create_layer_surface(
             &self.qh,
@@ -301,6 +700,9 @@ impl App {
         layer_surface.set_exclusive_zone(-1);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
         layer_surface.set_size(1, 1);
+        if let (Some(window_style), Some(desktop)) = (self.window_style.as_ref(), desktop) {
+            window_style.set_desktop(&surface, desktop);
+        }
 
         let viewport = self
             .viewporter
@@ -322,34 +724,38 @@ impl App {
         // SAFETY: `OutputSurface` drops `wgpu_surface` before `surface`, and the connection outlives both.
         let wgpu_surface = unsafe { self.render.create_surface(display_handle, window_handle)? };
 
+        let surface_id = surface.id();
         let output_surface = OutputSurface {
             wgpu_surface,
             output: output.clone(),
+            desktop,
             surface,
             layer_surface,
             viewport,
             fractional_scale,
             logical_size: (1, 1),
+            buffer_size: (1, 1),
             scale: 1.0,
             configured: false,
             surface_format: wgpu::TextureFormat::Rgba8UnormSrgb,
             pending_redraw: false,
+            awaiting_frame: false,
+            dirty: false,
             first_frame_presented: false,
         };
-        info!(output = ?output.id(), "output added");
-        self.outputs.insert(output.id(), output_surface);
+        info!(output = ?output.id(), ?desktop, "wallpaper surface added");
+        self.outputs.insert(surface_id, output_surface);
         Ok(())
     }
 
     fn destroy_output_surface(&mut self, output: &WlOutput) {
-        if self.outputs.remove(&output.id()).is_some() {
-            info!("output removed, wallpaper surface destroyed");
-        }
+        self.outputs.retain(|_, surface| surface.output != *output);
+        info!("output removed, wallpaper surfaces destroyed");
     }
 
-    fn configure_output(&mut self, output_id: &ObjectId) {
+    fn configure_output(&mut self, surface_id: &ObjectId) {
         let (logical_w, logical_h, scale) = {
-            let Some(output) = self.outputs.get(output_id) else {
+            let Some(output) = self.outputs.get(surface_id) else {
                 return;
             };
             (output.logical_size.0, output.logical_size.1, output.scale)
@@ -382,7 +788,7 @@ impl App {
         }
 
         let surface = {
-            let Some(output) = self.outputs.get(output_id) else {
+            let Some(output) = self.outputs.get(surface_id) else {
                 return;
             };
             output.surface.clone()
@@ -390,7 +796,7 @@ impl App {
         self.set_opaque_region(&surface, logical_w, logical_h);
 
         let format = {
-            let Some(output) = self.outputs.get(output_id) else {
+            let Some(output) = self.outputs.get(surface_id) else {
                 return;
             };
             let caps = output.wgpu_surface.get_capabilities(&self.render.adapter);
@@ -410,16 +816,17 @@ impl App {
         };
 
         info!(
-            output = ?output_id,
+            output = ?surface_id,
             logical_w, logical_h, scale, buffer_w, buffer_h,
             ?format,
             "output configured"
         );
 
-        let Some(output) = self.outputs.get_mut(output_id) else {
+        let Some(output) = self.outputs.get_mut(surface_id) else {
             return;
         };
         output.surface_format = format;
+        output.buffer_size = (buffer_w, buffer_h);
         output.layer_surface.set_size(logical_w, logical_h);
         output
             .viewport
@@ -448,63 +855,107 @@ impl App {
 
     fn render_surface(&mut self, surface: &WlSurface) -> anyhow::Result<()> {
         let id = surface.id();
-        let output_id = {
-            let Some(output) = self.outputs.values().find(|o| o.surface.id() == id) else {
-                return Ok(());
-            };
-            if !output.configured {
-                return Ok(());
-            }
-            output.output.id()
+        let Some(output) = self.outputs.get(&id) else {
+            return Ok(());
         };
+        if !output.configured {
+            return Ok(());
+        }
+        let desktop = output.desktop;
+        let name = self
+            .output_state
+            .info(&output.output)
+            .and_then(|info| info.name)
+            .unwrap_or_default();
+        let framing = Framing {
+            scale: self.selection.scale_for(desktop),
+            crop: self.selection.crop_for(desktop, &name),
+        };
+        let key = desktop_key(desktop);
+        let presented = match self.draw_surface(&id, &key, framing) {
+            Ok(()) => true,
+            Err(wgpu::CurrentSurfaceTexture::Outdated) => {
+                self.configure_output(&id);
+                match self.draw_surface(&id, &key, framing) {
+                    Ok(()) => true,
+                    Err(error) => {
+                        error!(?error, "render failed after reconfigure");
+                        false
+                    }
+                }
+            }
+            Err(wgpu::CurrentSurfaceTexture::Lost) => anyhow::bail!("wgpu surface lost"),
+            Err(error) => anyhow::bail!("wgpu render error: {error:?}"),
+        };
+        let animated = !self.reduced_motion && self.shown.get(&key).is_some_and(Shown::animated);
+        let Some(output) = self.outputs.get_mut(&id) else {
+            return Ok(());
+        };
+        if !presented {
+            return Ok(());
+        }
+        if animated {
+            output.surface.frame(&self.qh, output.surface.clone());
+            output.awaiting_frame = true;
+        }
+        if !output.first_frame_presented {
+            output.first_frame_presented = true;
+            info!(?desktop, "first frame presented");
+        }
+        output.surface.commit();
+        Ok(())
+    }
 
-        let Some(texture) = self.texture.as_ref() else {
-            let output = self.outputs.get(&output_id).expect("output exists");
+    fn draw_surface(
+        &mut self,
+        id: &ObjectId,
+        key: &str,
+        framing: Framing,
+    ) -> Result<(), wgpu::CurrentSurfaceTexture> {
+        let Some(output) = self.outputs.get(id) else {
+            return Ok(());
+        };
+        let Some(shown) = self.shown.get_mut(key) else {
             output.layer_surface.commit();
             return Ok(());
         };
-
-        let (format, render_result) = {
-            let output = self.outputs.get(&output_id).expect("output exists");
-            self.render
-                .set_uniforms(self.wallpaper.framing, output.logical_size, texture.size);
-            let format = output.surface_format;
-            (
-                format,
-                self.render.render(&output.wgpu_surface, format, texture),
-            )
-        };
-
-        let mut presented = false;
-        match render_result {
-            Ok(()) => presented = true,
-            Err(wgpu::CurrentSurfaceTexture::Outdated) => {
-                self.configure_output(&output_id);
-                let output = self.outputs.get(&output_id).expect("output exists");
-                let texture = self.texture.as_ref().expect("texture exists");
-                if let Err(error) = self.render.render(&output.wgpu_surface, format, texture) {
-                    error!(?error, "render failed after reconfigure");
+        let format = output.surface_format;
+        match &mut shown.content {
+            Content::Image(texture) | Content::Video(_, texture) => {
+                self.render
+                    .set_uniforms(framing, output.logical_size, texture.size);
+                self.render.present(&output.wgpu_surface, |render, view| {
+                    render.draw(view, format, texture);
+                })
+            }
+            Content::Shader(shader, started) => {
+                let seconds = if self.reduced_motion {
+                    0.0
                 } else {
-                    presented = true;
-                }
-            }
-            Err(wgpu::CurrentSurfaceTexture::Lost) => {
-                anyhow::bail!("wgpu surface lost");
-            }
-            Err(error) => {
-                anyhow::bail!("wgpu render error: {error:?}");
+                    started.elapsed().as_secs_f32()
+                };
+                let size = output.buffer_size;
+                self.render.present(&output.wgpu_surface, |render, view| {
+                    let drawn =
+                        shader.draw(&render.device, &render.queue, view, format, size, seconds);
+                    if let Err(error) = drawn {
+                        warn!(%error, "the shader wallpaper cannot draw");
+                    }
+                })
             }
         }
-        if presented {
-            let output = self.outputs.get_mut(&output_id).expect("output exists");
-            if !output.first_frame_presented {
-                output.first_frame_presented = true;
-                info!(output = ?output_id, "first frame presented");
-            }
-            output.surface.commit();
-        }
-        Ok(())
     }
+}
+
+fn epoch_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+fn day_fraction() -> f64 {
+    use chrono::Timelike;
+    f64::from(chrono::Local::now().num_seconds_from_midnight()) / 86_400.0
 }
 
 impl ProvidesRegistryState for App {
@@ -519,16 +970,18 @@ impl OutputHandler for App {
         &mut self.output_state
     }
 
-    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
-        if let Err(error) = self.new_output_surface(output) {
-            error!(%error, "failed to create wallpaper surface for output");
-        }
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
+        self.sync_surfaces();
+        self.write_state();
     }
 
-    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {}
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
+        self.write_state();
+    }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
         self.destroy_output_surface(&output);
+        self.write_state();
     }
 }
 
@@ -555,9 +1008,16 @@ impl CompositorHandler for App {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
+        surface: &WlSurface,
         _time: u32,
     ) {
+        let Some(output) = self.outputs.get_mut(&surface.id()) else {
+            return;
+        };
+        output.awaiting_frame = false;
+        if std::mem::take(&mut output.dirty) {
+            self.render_or_stop(surface);
+        }
     }
 
     fn surface_enter(
@@ -581,8 +1041,7 @@ impl CompositorHandler for App {
 
 impl LayerShellHandler for App {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
-        let id = layer.wl_surface().id();
-        self.outputs.retain(|_, o| o.surface.id() != id);
+        self.outputs.remove(&layer.wl_surface().id());
     }
 
     fn configure(
@@ -595,22 +1054,13 @@ impl LayerShellHandler for App {
     ) {
         let surface = layer.wl_surface();
         let surface_id = surface.id();
-        let output_id = {
-            let Some(output) = self
-                .outputs
-                .values_mut()
-                .find(|o| o.surface.id() == surface_id)
-            else {
-                return;
-            };
-            let width = configure.new_size.0.max(1);
-            let height = configure.new_size.1.max(1);
-            output.logical_size = (width, height);
-            output.output.id()
+        let Some(output) = self.outputs.get_mut(&surface_id) else {
+            return;
         };
-        self.configure_output(&output_id);
+        output.logical_size = (configure.new_size.0.max(1), configure.new_size.1.max(1));
+        self.configure_output(&surface_id);
 
-        if self.outputs.get(&output_id).is_some_and(|o| o.configured) {
+        if self.outputs.get(&surface_id).is_some_and(|o| o.configured) {
             self.schedule_redraw(surface.clone());
         }
     }
@@ -654,17 +1104,12 @@ impl Dispatch<WpFractionalScaleV1, WlSurface> for App {
         };
         let scale = f64::from(scale) / SCALE_DENOMINATOR;
         let surface_id = surface.id();
-        let Some(output) = state
-            .outputs
-            .values_mut()
-            .find(|o| o.surface.id() == surface_id)
-        else {
+        let Some(output) = state.outputs.get_mut(&surface_id) else {
             return;
         };
         if (output.scale - scale).abs() > f64::EPSILON {
             output.scale = scale;
-            let output_id = output.output.id();
-            state.configure_output(&output_id);
+            state.configure_output(&surface_id);
             state.schedule_redraw(surface.clone());
         }
     }
@@ -683,6 +1128,7 @@ impl Dispatch<WpViewport, WlSurface> for App {
 }
 
 sctk::reexports::client::delegate_noop!(App: ignore WlRegion);
+sctk::reexports::client::delegate_noop!(App: ignore InfinityWindowStyleV1);
 
 delegate_registry!(App);
 delegate_compositor!(App);
